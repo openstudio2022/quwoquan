@@ -67,7 +67,12 @@ class HomeFeedLayoutPolicy {
       contentCardPolicy == 'compactVisual' ||
       layoutTemplate == 'dualColumnDiscovery';
 
-  bool get hasIntersectionSpotlight => false;
+  /// 交集 spotlight 是否开启。真相源是频道配置的 `intersectionModulePolicy`
+  /// （`none` / `inlineOnly` / `spotlightSegment`，见 content post `ui_config.yaml`
+  /// 与远程覆盖），不在端上硬编码：`spotlightSegment` 才出横滑模块，
+  /// `inlineOnly` 只在卡片内联句，`none` 完全不出。
+  bool get hasIntersectionSpotlight =>
+      intersectionModulePolicy == 'spotlightSegment';
 
   bool get insertsSegmentCards => false;
 

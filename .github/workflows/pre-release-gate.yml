@@ -106,7 +106,7 @@ jobs:
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 04.pre_release_gate_pr \
             --title "04. Pre-Release Gate (pr_light)" \
-            --critical-path-seconds 0 \
+            --machine-critical-path-seconds 0 \
             --phase profile_resolved=0 \
             --note "pr_light 不访问远端；manual_full/mainline_auto_prod 必须提供 beta/prod base URL 并通过 canonical /search 商业信封探针。hosted gamma 预检保持退役。" \
             --write-step-summary

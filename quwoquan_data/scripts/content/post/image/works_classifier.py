@@ -7,11 +7,13 @@
 - 来源专业度先验：content_source_registry.yaml: sourceTierSignals（sourceClass → baseTier + worksAffinity）。
 - 内容实测信号：core/content_evidence.score_source_markdown 文本质量分 + 结构/事实密度/叙事量/图片数。
 
-阈值版本化于 control_plane/_shared/catalogs/works_classification.yaml；裁决符合
-schema/content/works_classification.schema.json，写入 thresholdsVersion 可审计、可回滚。
+阈值由 control_plane/_shared/catalogs/works_classification.yaml 唯一声明；裁决符合
+schema/content/works_classification.schema.json，并写入完整配置的 policyDigest 以精确审计、回滚。
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -36,6 +38,20 @@ def load_works_classification_config() -> dict[str, Any]:
     if data.get("schema") != _CONFIG_SCHEMA:
         raise ValueError(f"{WORKS_CLASSIFICATION_CONFIG_PATH}: invalid schema")
     return data
+
+
+def works_classification_policy_digest(
+    config: Mapping[str, Any] | None = None,
+) -> str:
+    """Return the immutable identity of the complete classification policy."""
+    policy = config if config is not None else load_works_classification_config()
+    canonical = json.dumps(
+        policy,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
 
 
 def _section_count(text: str, *, config: Mapping[str, Any] | None = None) -> int:
@@ -87,7 +103,7 @@ def _verdict(
     signals: dict[str, Any],
     reasons: list[str],
     abandon_reason: str | None,
-    thresholds_version: int,
+    policy_digest: str,
 ) -> dict[str, Any]:
     return {
         "schema": WORKS_CLASSIFICATION_SCHEMA,
@@ -99,7 +115,7 @@ def _verdict(
         "signals": signals,
         "reasons": reasons,
         "abandonReason": abandon_reason,
-        "thresholdsVersion": int(thresholds_version),
+        "policyDigest": policy_digest,
         "decidedAt": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -147,7 +163,7 @@ def classify_works(
     """
     config = config or load_works_classification_config()
     registry = registry if registry is not None else load_content_source_registry()
-    version = int(config.get("version") or 1)
+    policy_digest = works_classification_policy_digest(config)
 
     tier_info = resolve_source_tier(source_class, data=registry)
     base_tier = tier_info["baseTier"]
@@ -203,19 +219,19 @@ def classify_works(
     if rights_blocked:
         return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier="tier5_reject",
                         signals=base_signals, reasons=reasons + ["rights_blocked"],
-                        abandon_reason="rights_blocked", thresholds_version=version)
+                        abandon_reason="rights_blocked", policy_digest=policy_digest)
 
     # ── 图片作品路径 ──
     if is_image_work:
         if base_tier == "tier5_reject":
             return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier=base_tier,
                             signals=base_signals, reasons=reasons + ["image_source_tier5"],
-                            abandon_reason="insufficient_evidence", thresholds_version=version)
+                            abandon_reason="insufficient_evidence", policy_digest=policy_digest)
         required_image_count = 1 if explicit_image_carrier else min_images
         if image_count < required_image_count:
             return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier=base_tier,
                             signals=base_signals, reasons=reasons + [f"image_count={image_count}<min={required_image_count}"],
-                            abandon_reason="insufficient_evidence", thresholds_version=version)
+                            abandon_reason="insufficient_evidence", policy_digest=policy_digest)
         image_norm = min(1.0, image_count / 8.0)
         works_score = (
             tier_weight * float(score_weights.get("tier", 0.45))
@@ -224,7 +240,7 @@ def classify_works(
         )
         reasons.append(f"image_work imageCount={image_count} score={works_score:.3f}")
         return _verdict(ref, decision="work", carrier="image", score=works_score, source_tier=base_tier,
-                        signals=base_signals, reasons=reasons, abandon_reason=None, thresholds_version=version)
+                        signals=base_signals, reasons=reasons, abandon_reason=None, policy_digest=policy_digest)
 
     # ── 文本/文章路径 ──
     casual_cfg = config.get("casualHeuristics") or {}
@@ -235,16 +251,16 @@ def classify_works(
     if base_tier == "tier5_reject":
         return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier=base_tier,
                         signals=base_signals, reasons=reasons + ["source_tier5"],
-                        abandon_reason="insufficient_evidence", thresholds_version=version)
+                        abandon_reason="insufficient_evidence", policy_digest=policy_digest)
     if quality_tier == reject_tier:
         # 碎片来源(随记倾向)的低质短文是『随记』；其它低质来源是证据不足『丢弃』。
         if casual_affinity:
             return _verdict(ref, decision="moment", carrier=None, score=0.0, source_tier=base_tier,
                             signals=base_signals, reasons=reasons + ["reject_quality+casual_source"],
-                            abandon_reason="casual_moment", thresholds_version=version)
+                            abandon_reason="casual_moment", policy_digest=policy_digest)
         return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier=base_tier,
                         signals=base_signals, reasons=reasons + ["reject_quality"],
-                        abandon_reason="insufficient_evidence", thresholds_version=version)
+                        abandon_reason="insufficient_evidence", policy_digest=policy_digest)
 
     fact_density = min(1.0, quality_score / 7.0)
     narrative_norm = min(1.0, narrative_volume / 6.0)
@@ -300,11 +316,12 @@ def classify_works(
 
     return _verdict(ref, decision=decision, carrier=carrier, score=works_score, source_tier=base_tier,
                     signals=base_signals, reasons=reasons, abandon_reason=abandon_reason,
-                    thresholds_version=version)
+                    policy_digest=policy_digest)
 
 
 __all__ = [
     "WORKS_CLASSIFICATION_SCHEMA",
     "load_works_classification_config",
+    "works_classification_policy_digest",
     "classify_works",
 ]

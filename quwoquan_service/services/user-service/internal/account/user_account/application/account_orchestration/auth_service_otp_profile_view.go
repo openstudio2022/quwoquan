@@ -13,6 +13,7 @@ import (
 	sessiongenerated "quwoquan_service/services/user-service/generated/account/account_session"
 	challengegenerated "quwoquan_service/services/user-service/generated/account/authentication_challenge"
 	"quwoquan_service/services/user-service/generated/account/user_account"
+	sessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	"strings"
@@ -20,7 +21,15 @@ import (
 )
 
 // SendOtp 校验号码、限频后创建 OTP challenge，并通过 integration-service 提交短信发送。
-func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, appVersion, sourceOperation string) (_ *OtpSendResult, err error) {
+func (s *AuthService) SendOtp(
+	ctx context.Context,
+	phone string,
+	deviceID string,
+	platform string,
+	appVersion string,
+	sourceOperation string,
+	bindingTicket string,
+) (_ *OtpSendResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp",
 		attribute.String("platform", strings.TrimSpace(platform)),
 		attribute.String("source.operation", strings.TrimSpace(sourceOperation)))
@@ -41,6 +50,30 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 	if s.otpCodeSealer == nil {
 		return nil, generated.AppErrorFromInternalError("otp code reference sealer unavailable")
 	}
+	purpose := otpChallengePurpose(sourceOperation)
+	bindingTicketRef := ""
+	if purpose == "bind_phone" && strings.TrimSpace(bindingTicket) != "" {
+		if s.federatedBindingTickets == nil {
+			return nil, generated.AppErrorFromInternalError(
+				"federated phone binding ticket store unavailable",
+			)
+		}
+		ticket, ticketErr := s.federatedBindingTickets.ResolveFederatedPhoneBindingTicket(
+			ctx,
+			bindingTicket,
+		)
+		if ticketErr != nil {
+			return nil, mapFederatedPhoneBindingError(ticketErr)
+		}
+		if ticket.DeviceID != strings.TrimSpace(deviceID) ||
+			ticket.Platform != strings.TrimSpace(platform) ||
+			ticket.AppVersion != strings.TrimSpace(appVersion) {
+			return nil, generated.AppErrorFromInvalidArgument(
+				"federated phone binding otp context does not match authorization",
+			)
+		}
+		bindingTicketRef = ticket.ID
+	}
 	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp allow-send: %v", err))
@@ -60,7 +93,10 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 	expiresAt := time.Now().UTC().Add(time.Duration(otpCodeExpirySeconds) * time.Second)
 	canonicalChallengeID := "otp_ch_" + strings.TrimRight(challengeID, "=")
 	destinationHash := hashOTPPhone(normalized)
-	purpose := otpChallengePurpose(sourceOperation)
+	idempotencyScope := normalized
+	if bindingTicketRef != "" {
+		idempotencyScope += ":" + bindingTicketRef
+	}
 	challengeResult, err := s.authenticationChallenges.CreateChallenge(
 		ctx,
 		challengeapp.CreateChallengeCommand{
@@ -73,7 +109,8 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 				destinationHash,
 				[]byte(code),
 			),
-			IdempotencyKey: "otp:" + normalized + ":" +
+			BindingTicketRef: bindingTicketRef,
+			IdempotencyKey: "otp:" + idempotencyScope + ":" +
 				expiresAt.Format("200601021504"),
 			ExpiresAt: expiresAt,
 		},
@@ -121,7 +158,7 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 		PhoneHash:   destinationHash,
 		MaskedPhone: result.MaskedPhone,
 		CodeRef:     codeRef,
-		IdempotencyKey: "otp:" + normalized + ":" +
+		IdempotencyKey: "otp:" + idempotencyScope + ":" +
 			expiresAt.Format("200601021504"),
 		ExpiresAt: expiresAt,
 	}); err != nil {
@@ -141,10 +178,14 @@ func stableOTPRequestID(challengeID string) string {
 
 func otpChallengePurpose(sourceOperation string) string {
 	normalized := strings.ToLower(strings.TrimSpace(sourceOperation))
-	if strings.Contains(normalized, "bind_phone") {
+	switch normalized {
+	case "bind_phone":
 		return "bind_phone"
+	case "account_appeal":
+		return "account_appeal"
+	default:
+		return "phone_login"
 	}
-	return "phone_login"
 }
 
 // OtpSendResult 描述一次发码结果；验证码永不进入 API response。
@@ -165,6 +206,16 @@ func (s *AuthService) verifyOtp(
 	code string,
 	purpose string,
 ) error {
+	return s.verifyOtpChallenge(ctx, phone, code, purpose, "")
+}
+
+func (s *AuthService) verifyOtpChallenge(
+	ctx context.Context,
+	phone string,
+	code string,
+	purpose string,
+	challengeID string,
+) error {
 	if s.authenticationChallenges == nil {
 		return generated.AppErrorFromInternalError(
 			"authentication challenge facade unavailable",
@@ -177,6 +228,7 @@ func (s *AuthService) verifyOtp(
 	_, err := s.authenticationChallenges.VerifyChallenge(
 		ctx,
 		challengeapp.VerifyChallengeCommand{
+			ChallengeID:     strings.TrimSpace(challengeID),
 			Purpose:         purpose,
 			Channel:         "sms",
 			DestinationHash: hashOTPPhone(phone),
@@ -197,7 +249,7 @@ func (s *AuthService) LoginWithPhone(
 	appVersion string,
 	agreementVersion string,
 	privacyVersion string,
-) (*LoginResult, error) {
+) (*sessionapp.AuthSessionGrant, error) {
 	normalized := normalizePhoneCredentialKey(phone)
 	if len(normalized) < 5 {
 		return nil, generated.AppErrorFromInvalidArgument("phone required")
@@ -268,13 +320,15 @@ func GenerateSecureOTPCode() (string, error) {
 	return generateOtpCode()
 }
 
-func buildPublicSubAccountProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
-	view := buildSubAccountProfileView(owner, persona)
+func buildPublicPersonaProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
+	view := buildPersonaProfileView(owner, persona)
 	delete(view, "ownerUserId")
 	return view
 }
 
-func buildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[string]any {
+// BuildCreatorRuntimeProfileView projects an imported creator into its
+// public-safe account query representation.
+func BuildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[string]any {
 	if creator == nil {
 		return map[string]any{}
 	}
@@ -283,10 +337,9 @@ func buildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[st
 	identityTags = append(identityTags, creator.Verticals...)
 	return map[string]any{
 		"subjectType":        "creator",
-		"subAccountId":       creator.SubAccountID,
+		"personaId":          creator.PersonaID,
 		"userId":             creator.CreatorID,
 		"userHandle":         creator.Handle,
-		"username":           creator.Handle,
 		"displayName":        creator.DisplayName,
 		"nickname":           creator.DisplayName,
 		"headline":           creator.Headline,
@@ -320,54 +373,49 @@ func hasPublicLeakage(view map[string]any) bool {
 	return false
 }
 
-func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
+func buildPersonaProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
 	if owner == nil && persona == nil {
 		return map[string]any{}
 	}
 	if owner == nil {
 		owner = &model.UserProfile{UserID: persona.UserID}
 	}
-	subjectType := "user"
-	subAccountID := ""
+	subjectType := "account"
+	personaID := ""
 	userHandle := strings.TrimSpace(owner.UserID)
 	displayName := owner.Nickname
 	avatarURL := owner.AvatarURL
 	avatarVersion := owner.AvatarVersion
 	backgroundURL := owner.BackgroundURL
+	bio := owner.Bio
+	identityTags := parsePgTextArray(owner.IdentityTags)
 	isolationLevel := defaultIsolationLevel
 	overriddenFields := []string{}
 	updatedAt := owner.UpdatedAt
-	// nicknameCustomized 以 owner 基线为真相源；非主分身若自定义过展示名亦视为已定制。
 	nicknameCustomized := owner.NicknameCustomized
+	profileVisibility := "public"
 
 	if persona != nil {
 		subjectType = "persona"
-		subAccountID = persona.SubAccountID
+		personaID = persona.PersonaID
 		userHandle = resolvedPersonaUserHandle(persona)
-		if persona.DisplayName != "" {
-			displayName = persona.DisplayName
-			overriddenFields = append(overriddenFields, "displayName")
-		}
-		if persona.AvatarURL != "" {
-			avatarURL = persona.AvatarURL
-			avatarVersion = resolvedPersonaAvatarVersion(persona)
-			overriddenFields = append(overriddenFields, "avatarUrl")
-		}
-		if persona.BackgroundURL != "" {
-			backgroundURL = persona.BackgroundURL
-			overriddenFields = append(overriddenFields, "backgroundUrl")
-		}
-		if !persona.IsPrimary && strings.TrimSpace(persona.DisplayName) != "" {
-			nicknameCustomized = true
-		}
+		displayName = strings.TrimSpace(persona.DisplayName)
+		avatarURL = strings.TrimSpace(persona.AvatarURL)
+		avatarVersion = resolvedPersonaAvatarVersion(persona)
+		backgroundURL = strings.TrimSpace(persona.BackgroundURL)
+		bio = persona.Bio
+		identityTags = append([]string(nil), persona.IdentityTags...)
+		nicknameCustomized = persona.NicknameCustomized
+		overriddenFields = parseProfileFieldList(persona.OverriddenProfileFields)
 		isolationLevel = defaultString(persona.IsolationLevel, defaultIsolationLevel)
+		profileVisibility = personaProfileVisibility(persona)
 		updatedAt = persona.UpdatedAt
 	}
-	if displayName == "" {
+	if displayName == "" && persona == nil {
 		displayName = owner.OwnerDisplayName
 	}
 	if displayName == "" {
-		displayName = owner.UserID
+		displayName = defaultString(personaID, owner.UserID)
 	}
 	if updatedAt.IsZero() {
 		updatedAt = time.Now().UTC()
@@ -376,25 +424,24 @@ func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona
 	return map[string]any{
 		"ownerUserId":        owner.UserID,
 		"subjectType":        subjectType,
-		"subAccountId":       subAccountID,
-		"userId":             defaultString(subAccountID, owner.UserID),
+		"personaId":          personaID,
+		"userId":             defaultString(personaID, owner.UserID),
 		"userHandle":         userHandle,
-		"username":           userHandle,
 		"displayName":        displayName,
 		"nickname":           displayName,
 		"nicknameCustomized": nicknameCustomized,
 		"avatarUrl":          avatarURLWithVersion(avatarURL, avatarVersion),
 		"avatarVersion":      avatarVersion,
 		"backgroundUrl":      backgroundURL,
-		"bio":                owner.Bio,
-		"identityTags":       parsePgTextArray(owner.IdentityTags),
+		"bio":                bio,
+		"identityTags":       identityTags,
 		"followerCount":      owner.FollowerCount,
 		"followingCount":     owner.FollowingCount,
 		"postCount":          owner.PostCount,
 		"circleCount":        owner.CircleCount,
 		"likeCount":          owner.LikeCount,
 		"isolationLevel":     isolationLevel,
-		"profileVisibility":  profileVisibilityFromIsolation(isolationLevel),
+		"profileVisibility":  profileVisibility,
 		"inheritsFromOwner":  persona != nil && persona.InheritsProfileFromOwner,
 		"overriddenFields":   overriddenFields,
 		"updatedAt":          updatedAt.Format(time.RFC3339),

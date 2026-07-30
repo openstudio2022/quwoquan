@@ -57,10 +57,12 @@ type PostRevisionSliceReader interface {
 // identity/type 在进入 Reader 前已由 Feed application 归一；cursor 只允许
 // 引用上一页最后一个 Post，不能承载任意 Mongo filter 或排序表达式。
 type PostFeedReadRequest struct {
-	identity     ContentIdentity
-	contentType  ContentType
-	cursorPostID PostID
-	limit        int
+	identity        ContentIdentity
+	contentType     ContentType
+	cursorPostID    PostID
+	limit           int
+	activeReleaseID string
+	manifestDigest  string
 }
 
 func NewPostFeedReadRequest(
@@ -68,12 +70,23 @@ func NewPostFeedReadRequest(
 	contentType ContentType,
 	cursorPostID PostID,
 	limit int,
+	activeReleaseBinding ...string,
 ) PostFeedReadRequest {
+	activeReleaseID := ""
+	manifestDigest := ""
+	if len(activeReleaseBinding) > 0 {
+		activeReleaseID = strings.TrimSpace(activeReleaseBinding[0])
+	}
+	if len(activeReleaseBinding) > 1 {
+		manifestDigest = strings.TrimSpace(activeReleaseBinding[1])
+	}
 	return PostFeedReadRequest{
-		identity:     ContentIdentity(strings.TrimSpace(string(identity))),
-		contentType:  ContentType(strings.TrimSpace(string(contentType))),
-		cursorPostID: NewPostID(string(cursorPostID)),
-		limit:        limit,
+		identity:        ContentIdentity(strings.TrimSpace(string(identity))),
+		contentType:     ContentType(strings.TrimSpace(string(contentType))),
+		cursorPostID:    NewPostID(string(cursorPostID)),
+		limit:           limit,
+		activeReleaseID: activeReleaseID,
+		manifestDigest:  manifestDigest,
 	}
 }
 
@@ -81,6 +94,46 @@ func (q PostFeedReadRequest) Identity() ContentIdentity { return q.identity }
 func (q PostFeedReadRequest) ContentType() ContentType  { return q.contentType }
 func (q PostFeedReadRequest) CursorPostID() PostID      { return q.cursorPostID }
 func (q PostFeedReadRequest) Limit() int                { return q.limit }
+func (q PostFeedReadRequest) ActiveReleaseID() string   { return q.activeReleaseID }
+func (q PostFeedReadRequest) ManifestDigest() string    { return q.manifestDigest }
+
+// PostFeedHydrationRequest binds recommendation candidates to the canonical
+// release selected before recall. Production readers must exclude qwq_data
+// Posts from any other release or lifecycle while preserving non-data-owned
+// user-generated content.
+type PostFeedHydrationRequest struct {
+	postIDs         []PostID
+	activeReleaseID string
+	manifestDigest  string
+}
+
+func NewPostFeedHydrationRequest(
+	postIDs []PostID,
+	activeReleaseID string,
+	manifestDigests ...string,
+) PostFeedHydrationRequest {
+	manifestDigest := ""
+	if len(manifestDigests) > 0 {
+		manifestDigest = strings.TrimSpace(manifestDigests[0])
+	}
+	return PostFeedHydrationRequest{
+		postIDs:         append([]PostID(nil), postIDs...),
+		activeReleaseID: strings.TrimSpace(activeReleaseID),
+		manifestDigest:  manifestDigest,
+	}
+}
+
+func (q PostFeedHydrationRequest) PostIDs() []PostID {
+	return append([]PostID(nil), q.postIDs...)
+}
+
+func (q PostFeedHydrationRequest) ActiveReleaseID() string {
+	return q.activeReleaseID
+}
+
+func (q PostFeedHydrationRequest) ManifestDigest() string {
+	return q.manifestDigest
+}
 
 // ViewerContext 是只读查询的认证主体。Post 只判断作者所有权以及
 // public/private 可见性；Circle 分发和成员授权由 CirclePostPlacement 查询面负责。
@@ -211,17 +264,19 @@ type PostSemanticMentionSlice struct {
 
 // PostMediaItemSlice 对齐 Work Browser 的统一媒体序列。
 type PostMediaItemSlice struct {
-	Kind                    string `json:"kind" bson:"kind"`
-	MediaAssetID            string `json:"mediaAssetId,omitempty" bson:"mediaAssetId,omitempty"`
-	MediaAssetVersion       int64  `json:"mediaAssetVersion,omitempty" bson:"mediaAssetVersion,omitempty"`
-	URL                     string `json:"url" bson:"url"`
-	CoverURL                string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	DurationMS              int64  `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
-	Width                   int64  `json:"width,omitempty" bson:"width,omitempty"`
-	Height                  int64  `json:"height,omitempty" bson:"height,omitempty"`
-	PreviewTrackManifestURL string `json:"previewTrackManifestUrl,omitempty" bson:"previewTrackManifestUrl,omitempty"`
-	PreviewTrackVersion     int64  `json:"previewTrackVersion,omitempty" bson:"previewTrackVersion,omitempty"`
-	Title                   string `json:"title,omitempty" bson:"title,omitempty"`
+	Kind                     string `json:"kind" bson:"kind"`
+	MediaAssetID             string `json:"mediaAssetId,omitempty" bson:"mediaAssetId,omitempty"`
+	MediaAssetVersion        int64  `json:"mediaAssetVersion,omitempty" bson:"mediaAssetVersion,omitempty"`
+	URL                      string `json:"url" bson:"url"`
+	CoverURL                 string `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	DurationMS               int64  `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
+	Width                    int64  `json:"width,omitempty" bson:"width,omitempty"`
+	Height                   int64  `json:"height,omitempty" bson:"height,omitempty"`
+	PreviewTrackManifestURL  string `json:"previewTrackManifestUrl,omitempty" bson:"previewTrackManifestUrl,omitempty"`
+	PreviewTrackVersion      int64  `json:"previewTrackVersion,omitempty" bson:"previewTrackVersion,omitempty"`
+	HLSCMAFMasterManifestURL string `json:"hlsCmafMasterManifestUrl,omitempty" bson:"hlsCmafMasterManifestUrl,omitempty"`
+	HLSCMAFDescriptorVersion int64  `json:"hlsCmafDescriptorVersion,omitempty" bson:"hlsCmafDescriptorVersion,omitempty"`
+	Title                    string `json:"title,omitempty" bson:"title,omitempty"`
 }
 
 // PostArticleAssetSlice 是文章 manifest 中可被客户端消费的资源信息。
@@ -330,6 +385,8 @@ type PostDetailSlice struct {
 	CoverFrameTimeMS        int64                          `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
 	Location                *PostLocationSlice             `json:"location,omitempty" bson:"location,omitempty"`
 	LocationName            string                         `json:"locationName,omitempty" bson:"locationName,omitempty"`
+	GeoTagRef               string                         `json:"geoTagRef,omitempty" bson:"geoTagRef,omitempty"`
+	VisitedAt               time.Time                      `json:"visitedAt,omitempty" bson:"visitedAt,omitempty"`
 	PrimaryHomepageID       string                         `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
 	CanonicalEntityID       string                         `json:"canonicalEntityId,omitempty" bson:"canonicalEntityId,omitempty"`
 	PrimaryHomepageType     string                         `json:"primaryHomepageType,omitempty" bson:"primaryHomepageType,omitempty"`
@@ -372,6 +429,7 @@ type AuthorPostItemSlice struct {
 	ArticleFontPreset     string          `json:"articleFontPreset,omitempty" bson:"articleFontPreset,omitempty"`
 	ContentVertical       string          `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
 	LocationName          string          `json:"locationName,omitempty" bson:"locationName,omitempty"`
+	GeoTagRef             string          `json:"geoTagRef,omitempty" bson:"geoTagRef,omitempty"`
 	PrimaryHomepageID     string          `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
 	CanonicalEntityID     string          `json:"canonicalEntityId,omitempty" bson:"canonicalEntityId,omitempty"`
 	Status                PostStatus      `json:"status" bson:"status"`
@@ -399,36 +457,41 @@ type AuthorPostPageSlice struct {
 // 它不暴露聚合 Version、幂等 receipt、outbox、审核内部字段、设备原始信息或
 // 动态 Map；媒体尺寸在 persistence adapter 内归一为显式数值。
 type PostFeedItemSlice struct {
-	PostID             PostID          `json:"postId" bson:"_id"`
-	AuthorPersonaID    PersonaID       `json:"authorId" bson:"authorId"`
-	AuthorDisplayName  string          `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
-	AuthorAvatarURL    string          `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
-	ContentType        ContentType     `json:"contentType" bson:"contentType"`
-	ContentIdentity    ContentIdentity `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
-	AssistantUsePolicy string          `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
-	Title              string          `json:"title,omitempty" bson:"title,omitempty"`
-	Body               string          `json:"body,omitempty" bson:"body,omitempty"`
-	Summary            string          `json:"summary,omitempty" bson:"summary,omitempty"`
-	MediaURLs          []string        `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
-	VideoURL           string          `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
-	CoverURL           string          `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	ThumbnailURL       string          `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
-	CoverStrategy      string          `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
-	CoverFrameTimeMS   int64           `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
-	DurationMS         int64           `json:"durationMs,omitempty" bson:"-"`
-	Width              int64           `json:"width,omitempty" bson:"-"`
-	Height             int64           `json:"height,omitempty" bson:"-"`
-	TagRefs            []string        `json:"tagRefs,omitempty" bson:"tagRefs,omitempty"`
-	EntityRefs         []string        `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
-	Visibility         PostVisibility  `json:"visibility,omitempty" bson:"visibility,omitempty"`
-	ContentVertical    string          `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
-	SourceTaskID       string          `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
-	LikeCount          int64           `json:"likeCount" bson:"likeCount"`
-	CommentCount       int64           `json:"commentCount" bson:"commentCount"`
-	ShareCount         int64           `json:"shareCount" bson:"shareCount"`
-	CreatedAt          time.Time       `json:"createdAt" bson:"createdAt"`
-	UpdatedAt          time.Time       `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt        time.Time       `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
+	PostID             PostID               `json:"postId" bson:"_id"`
+	AuthorPersonaID    PersonaID            `json:"authorId" bson:"authorId"`
+	AuthorDisplayName  string               `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
+	AuthorAvatarURL    string               `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	ContentType        ContentType          `json:"contentType" bson:"contentType"`
+	ContentIdentity    ContentIdentity      `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
+	AssistantUsePolicy string               `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
+	Title              string               `json:"title,omitempty" bson:"title,omitempty"`
+	Body               string               `json:"body,omitempty" bson:"body,omitempty"`
+	Summary            string               `json:"summary,omitempty" bson:"summary,omitempty"`
+	MediaURLs          []string             `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
+	MediaItems         []PostMediaItemSlice `json:"mediaItems,omitempty" bson:"mediaItems,omitempty"`
+	VideoURL           string               `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
+	CoverURL           string               `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	ThumbnailURL       string               `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	CoverStrategy      string               `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
+	CoverFrameTimeMS   int64                `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
+	DurationMS         int64                `json:"durationMs,omitempty" bson:"-"`
+	Width              int64                `json:"width,omitempty" bson:"-"`
+	Height             int64                `json:"height,omitempty" bson:"-"`
+	TagRefs            []string             `json:"tagRefs,omitempty" bson:"tagRefs,omitempty"`
+	EntityRefs         []string             `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
+	Visibility         PostVisibility       `json:"visibility,omitempty" bson:"visibility,omitempty"`
+	ContentVertical    string               `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
+	SourceTaskID       string               `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
+	SourceOwner        string               `json:"-" bson:"sourceOwner,omitempty"`
+	ReleaseID          string               `json:"-" bson:"releaseId,omitempty"`
+	ManifestDigest     string               `json:"-" bson:"manifestDigest,omitempty"`
+	LifecycleStatus    string               `json:"-" bson:"lifecycleStatus,omitempty"`
+	LikeCount          int64                `json:"likeCount" bson:"likeCount"`
+	CommentCount       int64                `json:"commentCount" bson:"commentCount"`
+	ShareCount         int64                `json:"shareCount" bson:"shareCount"`
+	CreatedAt          time.Time            `json:"createdAt" bson:"createdAt"`
+	UpdatedAt          time.Time            `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt        time.Time            `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
 }
 
 type PostFeedSlice struct {
@@ -439,6 +502,15 @@ type PostFeedSlice struct {
 // aggregate store 只能服务命令路径，不能替代任何一个 reader。
 type PostDetailReader interface {
 	FindPostDetail(ctx context.Context, postID PostID) (PostDetailSlice, bool, error)
+}
+
+// HelperReadSlice 是公开辅助阅读接口的最小白名单投影。它只承载已经
+// 通过 Post 发布、审核与可见性门禁的文章摘要，不暴露聚合状态或私有字段。
+type HelperReadSlice struct {
+	PostID      PostID      `json:"postId"`
+	ContentType ContentType `json:"contentType"`
+	Title       string      `json:"title"`
+	Summary     string      `json:"summary"`
 }
 
 // MediaReferencedPostSlice 是原图授权所需的最小 Post 可见性投影。
@@ -477,7 +549,7 @@ type PostFeedReader interface {
 	// FindPublishedFeedPosts 按 ids 批量读取（N3-1 消除 feed 装配 N+1）：
 	// 生产实现必须单次 $in 查询取回；返回 map 以 PostID 为键，未命中
 	// （不存在/未发布/不可见）的 id 直接缺席，调用方按召回顺序自行装配。
-	FindPublishedFeedPosts(ctx context.Context, postIDs []PostID) (map[PostID]PostFeedItemSlice, error)
+	FindPublishedFeedPosts(ctx context.Context, request PostFeedHydrationRequest) (map[PostID]PostFeedItemSlice, error)
 	ListPublishedFeedPosts(ctx context.Context, request PostFeedReadRequest) (PostFeedSlice, error)
 }
 

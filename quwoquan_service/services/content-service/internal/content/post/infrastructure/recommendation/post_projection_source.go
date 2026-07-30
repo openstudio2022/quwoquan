@@ -27,7 +27,7 @@ func (s *PostProjectionSource) Recall(ctx context.Context, req rtrec.RecallReque
 	if limit <= 0 {
 		limit = 20
 	}
-	posts := s.collection.ListPublished(ctx, limit, req.Cursor)
+	posts := s.collection.ListPublished(ctx, limit, "")
 	out := make([]rtrec.ContentCandidate, 0, len(posts))
 	for _, p := range posts {
 		if postsemantic.Present(p.SemanticMentions) {
@@ -64,10 +64,6 @@ func (s *PostProjectionSource) Recall(ctx context.Context, req rtrec.RecallReque
 
 func (s *PostProjectionSource) GetByID(ctx context.Context, id string) (*postmodel.Post, bool) {
 	return s.detail.FindByID(ctx, id)
-}
-
-func (s *PostProjectionSource) ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post {
-	return s.collection.ListPublished(ctx, limit, cursor)
 }
 
 func candidateTagsFromAny(v any) []string {

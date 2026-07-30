@@ -15,13 +15,12 @@ const Set<String> kTranscriptEnvelopeKeys = {
   'senderId',
   'senderName',
   'senderAvatar',
-  'senderSubAccountId',
+  'senderPersonaId',
   'timestamp',
   'status',
   'isRead',
   'isSelf',
   'streaming',
-  'streamFinalAnswer',
   'isError',
 };
 
@@ -61,7 +60,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
     required this.senderId,
     required this.senderName,
     this.senderAvatar = '',
-    this.senderSubAccountId = '',
+    this.senderPersonaId = '',
     this.timestamp = '',
     this.status = '',
     this.isRead = true,
@@ -81,7 +80,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
   final String senderId;
   final String senderName;
   final String senderAvatar;
-  final String senderSubAccountId;
+  final String senderPersonaId;
   final String timestamp;
   final String status;
   final bool isRead;
@@ -90,7 +89,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
 
   UserUtterance get utterance => UserUtterance(
     text: content,
-    subAccountId: senderSubAccountId,
+    personaId: senderPersonaId,
     sendState: sendState,
   );
 }
@@ -108,7 +107,6 @@ final class AssistantAnswerTranscriptRow
     this.timestamp = '',
     this.isRead = true,
     this.streaming = false,
-    this.streamFinalAnswer = '',
     this.anchor = const AssistantAnswerAnchor(),
     this.terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
@@ -131,7 +129,6 @@ final class AssistantAnswerTranscriptRow
   final String timestamp;
   final bool isRead;
   final bool streaming;
-  final String streamFinalAnswer;
   final AssistantAnswerAnchor anchor;
   final AssistantRunTerminalSnapshotView? terminalSnapshot;
   final PersistedAssistantTimelinePayload persisted;
@@ -155,7 +152,6 @@ final class AssistantAnswerTranscriptRow
     String? timestamp,
     bool? isRead,
     bool? streaming,
-    String? streamFinalAnswer,
     AssistantAnswerAnchor? anchor,
     AssistantRunTerminalSnapshotView? terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
@@ -177,7 +173,6 @@ final class AssistantAnswerTranscriptRow
       timestamp: timestamp ?? this.timestamp,
       isRead: isRead ?? this.isRead,
       streaming: streaming ?? this.streaming,
-      streamFinalAnswer: streamFinalAnswer ?? this.streamFinalAnswer,
       anchor: anchor ?? this.anchor,
       terminalSnapshot: terminalSnapshot ?? this.terminalSnapshot,
       persisted: persisted ?? this.persisted,

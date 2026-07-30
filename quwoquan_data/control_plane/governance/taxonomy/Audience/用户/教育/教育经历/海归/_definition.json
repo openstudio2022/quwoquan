@@ -2,6 +2,7 @@
   "label": "海归",
   "labelEn": "Returnee",
   "description": "海归回国人员",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

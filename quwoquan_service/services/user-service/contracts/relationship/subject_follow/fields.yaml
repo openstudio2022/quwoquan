@@ -1,289 +1,321 @@
 description: Persona 对非 Persona 主体（主页/圈子/地点）的版本化关注关系
 fields:
-- name: id
-  type: string
-  constraints:
-  - PK
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: personaId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: subjectType
-  type: enum
-  enum_ref: FollowSubjectType
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: subjectId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: state
-  type: enum
-  enum_ref: SubjectFollowState
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: followedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: id
+    type: string
+    constraints:
+      - PK
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: personaId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: subjectType
+    type: enum
+    enum_ref: FollowSubjectKind
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: subjectId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: state
+    type: enum
+    enum_ref: SubjectFollowState
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: followedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 types:
   FollowSubjectRequest:
     description: follow / unfollow subject 命令请求；主体身份来自 path，body 仅承载来源归因
     fields:
-    - name: source
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 关注来源（homepage_detail / search / recommendation）
+      - name: source
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 关注来源（homepage_detail / search / recommendation）
   SubjectFollowCommandResult:
     description: follow / unfollow subject 命令的版本化返回
     fields:
-    - name: personaId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: subjectType
-      type: enum
-      enum_ref: FollowSubjectType
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: subjectId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: state
-      type: enum
-      enum_ref: SubjectFollowState
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: idempotentReplay
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: subjectType
+        type: enum
+        enum_ref: FollowSubjectKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: subjectId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: state
+        type: enum
+        enum_ref: SubjectFollowState
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: idempotentReplay
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   SubjectFollowCommandReceipt:
     description: 与 SubjectFollow state 和 outbox 同事务提交的幂等命令回执
     fields:
-    - name: receiptId
-      type: string
-      constraints:
-      - PK
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: drop
-      ops_exposure: read
-    - name: personaId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: mask
-      api_exposure: drop
-      ops_exposure: read
-    - name: idempotencyKey
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-    - name: operation
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: aggregateId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: aggregateVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: responseJson
-      type: jsonb
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: metadata_only
-      api_exposure: drop
-      ops_exposure: drop
-    - name: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: receiptId
+        type: string
+        constraints:
+          - PK
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: read
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: read
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: operation
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: aggregateId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: aggregateVersion
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: responseJson
+        type: jsonb
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: drop
+      - name: createdAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
   SubjectFollowOutbox:
     description: SubjectFollow 聚合按版本追加且可 checkpoint/replay 的事件事实
     fields:
-    - name: eventId
-      type: string
-      constraints:
-      - PK
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: aggregateId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: aggregateVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: eventName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: payloadJson
-      type: jsonb
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: metadata_only
-      api_exposure: drop
-      ops_exposure: drop
-    - name: occurredAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: claimOwner
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: drop
-      ops_exposure: read
-    - name: claimedAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: publishedAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: eventId
+        type: string
+        constraints:
+          - PK
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: aggregateId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: aggregateVersion
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: eventName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: payloadJson
+        type: jsonb
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: drop
+      - name: occurredAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: claimOwner
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: read
+      - name: claimedAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: publishedAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+  FollowSubjectCommand:
+    fields:
+      - name: subjectType
+        type: FollowSubjectKind
+        enum_ref: FollowSubjectKind
+        client_dart_type: FollowSubjectKind
+        client_wire: canonicalEnum
+      - name: subjectId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: source
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+  UnfollowSubjectCommand:
+    fields:
+      - name: subjectType
+        type: FollowSubjectKind
+        enum_ref: FollowSubjectKind
+        client_dart_type: FollowSubjectKind
+        client_wire: canonicalEnum
+      - name: subjectId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim

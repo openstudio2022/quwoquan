@@ -2,6 +2,7 @@
   "label": "校园恋爱",
   "labelEn": "Campus Romance",
   "description": "校园恋爱与情感",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

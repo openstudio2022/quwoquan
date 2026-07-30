@@ -2,6 +2,7 @@
   "label": "拔草",
   "labelEn": "Anti-Recommendation",
   "description": "揭示产品或场所缺陷、不符预期的内容视角",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

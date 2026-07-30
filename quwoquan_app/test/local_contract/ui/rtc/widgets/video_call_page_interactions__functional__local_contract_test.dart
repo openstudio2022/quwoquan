@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
-import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/pages/video_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
@@ -45,10 +44,7 @@ void main() {
       find.byKey(const ValueKey<String>('video-call-screen-share-surface')),
       findsOneWidget,
     );
-    expect(
-      find.text(CallText.callScreenShareConnecting),
-      findsOneWidget,
-    );
+    expect(find.text(CallText.callScreenShareConnecting), findsOneWidget);
     expect(find.text(CallText.callStopScreenSharing), findsWidgets);
     expect(
       find.text(UITextConstants.callAdditionalParticipants(2)),
@@ -101,8 +97,8 @@ final class _VideoPageSessionNotifier extends CallSessionNotifier {
     return CallSessionState(
       session: CallSessionDto(
         callId: 'call-video-page',
-        callType: 'video',
-        status: 'in_call',
+        callType: CallType.video,
+        status: CallStatus.inCall,
         initiatorId: 'user-0',
         roomId: 'rtc-room-call-video-page',
         participantCount: 8,

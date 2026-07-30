@@ -8,11 +8,13 @@ manifests.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output"
@@ -25,6 +27,9 @@ DEFAULT_DEPLOY_TARGET_BY_ENV = {
     "gamma": "gamma-local",
     "prod": "prod-hosted",
 }
+ACTIVE_CANDIDATE_SCHEMA = "stackctl-active-deployment-candidate"
+PACKAGE_ROOT_OVERRIDE_ENV = "QWQ_DEPLOY_PACKAGE_ROOT_OVERRIDE"
+_BASELINE_ID = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 def safe_segment(value: str, *, fallback: str = "run") -> str:
@@ -155,7 +160,12 @@ def remove_deployment_tree(target: str, *segments: str) -> Path:
     """Remove only a resolver-derived non-symlink deployment directory."""
     if not segments:
         raise ValueError("refusing to remove a deployment target root")
-    path = deployment_target_path(target, *segments)
+    if segments[0] == "packages":
+        package_root = deployment_package_root(env_for_target(target), target=target)
+        path = package_root.joinpath(*segments[1:])
+        _require_target_scoped_path(path, target_root=deployment_work_root(target))
+    else:
+        path = deployment_target_path(target, *segments)
     if path.exists():
         shutil.rmtree(path)
     return path
@@ -178,9 +188,21 @@ def normalize_env(env_name: str, *, target: str = "") -> str:
     raise ValueError(f"unknown environment {env_name!r}; expected one of {sorted(DEPLOY_ENVS)}")
 
 
-def _timestamped_dir(parent: Path, command_name: str, target: str) -> Path:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return parent / f"{stamp}-{safe_segment(command_name)}-{safe_segment(target, fallback='local')}"
+def run_evidence_dir(parent: Path, command_name: str, target: str) -> Path:
+    """Return a collision-resistant directory for one immutable command run.
+
+    A second-resolution timestamp is not a run identity: concurrent read-only
+    inspections used to resolve to the same directory and could overwrite each
+    other's evidence.  Keep the sortable UTC prefix, add microseconds for
+    readability, and use a random run identity so independent processes never
+    intentionally share an evidence directory.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    run_identity = uuid4().hex
+    return parent / (
+        f"{stamp}-{run_identity}-{safe_segment(command_name)}-"
+        f"{safe_segment(target, fallback='local')}"
+    )
 
 
 def env_root(env_name: str) -> Path:
@@ -192,7 +214,11 @@ def env_runs_root(env_name: str) -> Path:
 
 
 def env_run_dir(env_name: str, command_name: str, *, target: str = "local") -> Path:
-    return _timestamped_dir(env_runs_root(normalize_env(env_name, target=target)), command_name, target)
+    return run_evidence_dir(
+        env_runs_root(normalize_env(env_name, target=target)),
+        command_name,
+        target,
+    )
 
 
 def env_observability_root(env_name: str) -> Path:
@@ -257,19 +283,95 @@ def deployment_target_for_env(env_name: str, *, target: str = "") -> str:
 
 
 def deployment_package_root(env_name: str, *, target: str = "") -> Path:
-    """Return the external deployment-payload root for one environment target."""
+    """Return only the staging or atomically activated candidate package root."""
+    target_name = deployment_target_for_env(env_name, target=target)
+    override = os.environ.get(PACKAGE_ROOT_OVERRIDE_ENV, "").strip()
+    if override:
+        path = Path(override).expanduser().resolve()
+        _require_target_scoped_path(path, target_root=deployment_work_root(target_name))
+        if path.name != "packages":
+            raise ValueError("deployment package root override must end in packages")
+        return path
+    active = active_deployment_candidate(target_name)
+    if active is None:
+        # Read-only callers receive the historical location only until the first
+        # atomic candidate is activated. stackctl up/verify separately reject it.
+        return deployment_target_path(target_name, "packages")
+    return deployment_candidate_dir(target_name, str(active["baselineId"])) / "packages"
+
+
+def deployment_candidate_dir(target: str, baseline_id: str) -> Path:
+    """Return the immutable candidate directory for one baseline digest."""
+    baseline = str(baseline_id or "").strip()
+    if _BASELINE_ID.fullmatch(baseline) is None:
+        raise ValueError("deployment baselineId must be sha256")
     return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
+        target,
+        "candidates",
+        baseline.replace(":", "-"),
     )
+
+
+def active_candidate_manifest_path(target: str) -> Path:
+    return deployment_target_path(target, "active-candidate.json")
+
+
+def active_deployment_candidate(target: str) -> dict[str, str] | None:
+    """Read and validate the only activated package candidate for a target."""
+    path = active_candidate_manifest_path(target)
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"active deployment candidate is unreadable: {exc}") from exc
+    required = {"schema", "target", "baselineId", "candidateDir"}
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("active deployment candidate fields mismatch")
+    baseline = str(payload.get("baselineId") or "")
+    expected = deployment_candidate_dir(target, baseline)
+    if (
+        payload.get("schema") != ACTIVE_CANDIDATE_SCHEMA
+        or payload.get("target") != target
+        or Path(str(payload.get("candidateDir") or "")).resolve() != expected
+        or not (expected / "packages").is_dir()
+        or not (expected / "manifest.json").is_file()
+    ):
+        raise ValueError("active deployment candidate identity mismatch")
+    return {
+        "schema": ACTIVE_CANDIDATE_SCHEMA,
+        "target": target,
+        "baselineId": baseline,
+        "candidateDir": str(expected),
+    }
+
+
+def activate_deployment_candidate(target: str, baseline_id: str) -> Path:
+    """Atomically publish one already-complete candidate as the active input."""
+    candidate = deployment_candidate_dir(target, baseline_id)
+    if not (candidate / "packages").is_dir():
+        raise ValueError("cannot activate a candidate without packages")
+    if not (candidate / "manifest.json").is_file():
+        raise ValueError("cannot activate a candidate without manifest.json")
+    path = active_candidate_manifest_path(target)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema": ACTIVE_CANDIDATE_SCHEMA,
+        "target": target,
+        "baselineId": baseline_id,
+        "candidateDir": str(candidate),
+    }
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
 
 
 def app_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
-        "app",
-    )
+    return deployment_package_root(env_name, target=target) / "app"
 
 
 def service_deployment_package_dir(
@@ -278,20 +380,15 @@ def service_deployment_package_dir(
     *,
     target: str = "",
 ) -> Path:
-    return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
-        "services",
-        _deployment_segment(service, label="service", fallback="service"),
+    return (
+        deployment_package_root(env_name, target=target)
+        / "services"
+        / _deployment_segment(service, label="service", fallback="service")
     )
 
 
 def legal_static_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
-        "legal-static",
-    )
+    return deployment_package_root(env_name, target=target) / "legal-static"
 
 
 def runtime_shared_deployment_package_dir(
@@ -299,27 +396,15 @@ def runtime_shared_deployment_package_dir(
     *,
     target: str = "",
 ) -> Path:
-    return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
-        "runtime-shared",
-    )
+    return deployment_package_root(env_name, target=target) / "runtime-shared"
 
 
 def portal_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
-        "ops-portal",
-    )
+    return deployment_package_root(env_name, target=target) / "ops-portal"
 
 
 def web_deployment_package_dir(env_name: str, *, target: str = "") -> Path:
-    return deployment_target_path(
-        deployment_target_for_env(env_name, target=target),
-        "packages",
-        "public-web",
-    )
+    return deployment_package_root(env_name, target=target) / "public-web"
 
 
 def deployment_render_dir(
@@ -336,7 +421,7 @@ def deployment_render_dir(
 
 
 def certificate_export_dir(target: str) -> Path:
-    """Temporary host copy of a container-managed CA for device trust injection."""
+    """Host path for target-scoped public DNS-01 certificate material."""
     return deployment_target_path(target, "certificates")
 
 
@@ -349,7 +434,7 @@ def repo_runs_root() -> Path:
 
 
 def repo_run_dir(command_name: str, *, target: str = "repo") -> Path:
-    return _timestamped_dir(repo_runs_root(), command_name, target)
+    return run_evidence_dir(repo_runs_root(), command_name, target)
 
 
 def repo_local_dir(name: str) -> Path:

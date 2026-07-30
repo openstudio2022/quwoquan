@@ -1,5 +1,6 @@
 import '../operation_request_payload.dart';
 import 'user_contract_codec.dart';
+part '../generated/requests/user/persona_management_query_contracts.requests.g.dart';
 
 abstract interface class PersonaManagementQueryFacet {
   Future<ListPersonasResult> listPersonas(ListPersonasQuery query);
@@ -17,18 +18,13 @@ abstract interface class PersonaManagementQueryFacet {
   );
 }
 
-final class ListPersonasQuery {
-  const ListPersonasQuery();
 
-  Map<String, Object?> toJson() => const <String, Object?>{};
-}
 
-CloudOperationRequestPayload encodeListPersonasQuery(ListPersonasQuery query) =>
-    const CloudOperationRequestPayload();
+
 
 final class PersonaManagementItemProjection {
   const PersonaManagementItemProjection({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.userHandle,
     required this.isolationLevel,
@@ -53,7 +49,7 @@ final class PersonaManagementItemProjection {
     this.updatedAt,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String displayName;
   final String userHandle;
   final String? phone;
@@ -83,7 +79,7 @@ final class PersonaManagementItemProjection {
       'PersonaManagementItemProjection',
     );
     return PersonaManagementItemProjection(
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       displayName: UserContractCodec.requiredText(source, 'displayName'),
       userHandle: UserContractCodec.requiredText(source, 'userHandle'),
       phone: UserContractCodec.optionalText(source['phone']),
@@ -159,15 +155,9 @@ ListPersonasResult decodeListPersonasResult(Object? value) {
   return ListPersonasResult.fromJson(value);
 }
 
-final class GetPersonaManagementSummaryQuery {
-  const GetPersonaManagementSummaryQuery();
 
-  Map<String, Object?> toJson() => const <String, Object?>{};
-}
 
-CloudOperationRequestPayload encodeGetPersonaManagementSummaryQuery(
-  GetPersonaManagementSummaryQuery query,
-) => const CloudOperationRequestPayload();
+
 
 final class PersonaManagementQuotaProjection {
   const PersonaManagementQuotaProjection({
@@ -209,7 +199,7 @@ final class PersonaManagementQuotaProjection {
 final class ActivePersonaContextProjection {
   const ActivePersonaContextProjection({
     required this.ownerUserId,
-    required this.subAccountId,
+    required this.personaId,
     required this.subjectType,
     required this.displayName,
     required this.avatarUrl,
@@ -225,7 +215,7 @@ final class ActivePersonaContextProjection {
   });
 
   final String ownerUserId;
-  final String subAccountId;
+  final String personaId;
   final String subjectType;
   final String displayName;
   final String avatarUrl;
@@ -246,7 +236,7 @@ final class ActivePersonaContextProjection {
     );
     return ActivePersonaContextProjection(
       ownerUserId: UserContractCodec.requiredText(source, 'ownerUserId'),
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       subjectType: UserContractCodec.textOr(source, 'subjectType', 'persona'),
       displayName: UserContractCodec.textOr(source, 'displayName', ''),
       avatarUrl: UserContractCodec.textOr(source, 'avatarUrl', ''),
@@ -316,15 +306,9 @@ PersonaManagementSummaryProjection decodePersonaManagementSummaryProjection(
   return PersonaManagementSummaryProjection.fromJson(value);
 }
 
-final class GetActivePersonaContextQuery {
-  const GetActivePersonaContextQuery();
 
-  Map<String, Object?> toJson() => const <String, Object?>{};
-}
 
-CloudOperationRequestPayload encodeGetActivePersonaContextQuery(
-  GetActivePersonaContextQuery _,
-) => const CloudOperationRequestPayload();
+
 
 ActivePersonaContextProjection decodeActivePersonaContextProjection(
   Object? value,
@@ -332,32 +316,20 @@ ActivePersonaContextProjection decodeActivePersonaContextProjection(
   return ActivePersonaContextProjection.fromJson(value);
 }
 
-final class GetPersonaLifecycleGuardQuery {
-  const GetPersonaLifecycleGuardQuery({required this.subAccountId});
 
-  final String subAccountId;
 
-  Map<String, Object?> toJson() => <String, Object?>{
-    'subAccountId': subAccountId,
-  };
-}
 
-CloudOperationRequestPayload encodeGetPersonaLifecycleGuardQuery(
-  GetPersonaLifecycleGuardQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'subAccountId': query.subAccountId},
-);
 
 final class PersonaLifecycleGuardProjection {
   const PersonaLifecycleGuardProjection({
-    required this.subAccountId,
+    required this.personaId,
     required this.requestedAction,
     required this.allowed,
     required this.reason,
     required this.requiresSuccessor,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String requestedAction;
   final bool allowed;
   final String reason;
@@ -369,7 +341,7 @@ final class PersonaLifecycleGuardProjection {
       'PersonaLifecycleGuardProjection',
     );
     return PersonaLifecycleGuardProjection(
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       requestedAction: UserContractCodec.textOr(
         source,
         'requestedAction',

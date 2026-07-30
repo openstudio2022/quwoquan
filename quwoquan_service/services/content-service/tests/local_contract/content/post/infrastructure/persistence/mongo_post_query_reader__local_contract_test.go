@@ -50,6 +50,30 @@ func TestMongoPostQueryReaderProjectionMatchesTypedSliceWhitelist(t *testing.T) 
 	assertProjectionExcludes(t, AuthorPostProjection(), "moderationStatus")
 }
 
+func TestPostFeedProjectionReadsOnlyAdaptiveMediaBindingFields(t *testing.T) {
+	projection := PostFeedProjection()
+	for _, field := range []string{
+		"mediaItems.kind",
+		"mediaItems.mediaAssetId",
+		"mediaItems.mediaAssetVersion",
+		"mediaItems.hlsCmafMasterManifestUrl",
+		"mediaItems.hlsCmafDescriptorVersion",
+	} {
+		if got := bsonFieldValue(projection, field); got != 1 {
+			t.Fatalf("feed projection %q = %#v, want explicit inclusion", field, got)
+		}
+	}
+	for _, field := range []string{
+		"mediaItems",
+		"mediaItems.url",
+		"mediaItems.coverUrl",
+		"mediaItems.previewTrackManifestUrl",
+		"mediaItems.title",
+	} {
+		assertProjectionExcludes(t, projection, field)
+	}
+}
+
 func TestPostDetailSliceDropsAggregateOnlyFieldsDuringDirectBSONDecode(t *testing.T) {
 	raw, err := bson.Marshal(bson.D{
 		{Key: "_id", Value: "post-typed-reader"},

@@ -240,7 +240,7 @@ class SkillSubscriptionWire {
       skillId: (json['skillId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       tagRefs: _assistantStringList(json['tagRefs']),
-      status: parseSkillSubscriptionStatus((json['status'] as String?)?.trim() ?? "active"),
+      status: parseSkillSubscriptionStatusStrict((json['status'] as String?)?.trim() ?? ''),
       searchQueryPlan: json['searchQueryPlan'] is Map ? SkillSubscriptionSearchQueryPlanWire.fromJson((json['searchQueryPlan'] as Map).cast<String, dynamic>()) : const SkillSubscriptionSearchQueryPlanWire(),
       trigger: json['trigger'] is Map ? SkillSubscriptionTriggerWire.fromJson((json['trigger'] as Map).cast<String, dynamic>()) : const SkillSubscriptionTriggerWire(),
       destination: json['destination'] is Map ? SkillSubscriptionDestinationWire.fromJson((json['destination'] as Map).cast<String, dynamic>()) : const SkillSubscriptionDestinationWire(),

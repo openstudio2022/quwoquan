@@ -9,7 +9,7 @@ import (
 // enrich；投影本体只持有标识、关注与访问水位。bson tag 供 infrastructure
 // 适配器复用同一形状，本包不依赖任何驱动。
 type Row struct {
-	ViewerSubAccountID string     `bson:"viewerSubAccountId" json:"viewerSubAccountId"`
+	ViewerPersonaID    string     `bson:"viewerPersonaId" json:"viewerPersonaId"`
 	SubjectType        string     `bson:"subjectType" json:"subjectType"`
 	SubjectID          string     `bson:"subjectId" json:"subjectId"`
 	FollowedAt         time.Time  `bson:"followedAt" json:"followedAt"`

@@ -1,4 +1,6 @@
 kind: append_only_fact
+lifecycle:
+  immutable: true
 description: '外部渠道 Webhook 经验签和去重后形成的不可变接收事实。实时投递只消费该事实，
 
   不把外部 ingress 冒充为 Connection 生命周期命令。

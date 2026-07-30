@@ -8,6 +8,8 @@ errors:
   kind: USER
   reason: unavailable
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [GetNearbyLocations, SearchLocations]}
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: locationUnavailable
@@ -20,6 +22,8 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [SearchLocations]}
   recovery_action: surface
   dart_const: invalidArgument
   l10n_key: locationSearchKeywordRequired
@@ -31,6 +35,8 @@ errors:
   kind: USER
   reason: permission_denied
   http_status: 403
+  emitted_by:
+  - {surface: http, operations: [GetNearbyLocations]}
   recovery_action: surface
   dart_const: locationPermissionRequired
   l10n_key: locationAppPermissionRequired
@@ -42,6 +48,8 @@ errors:
   kind: MIDDLEWARE
   reason: timeout
   http_status: 504
+  emitted_by:
+  - {surface: http, operations: [GetNearbyLocations, SearchLocations]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: upstreamTimeout
@@ -54,6 +62,8 @@ errors:
   kind: MIDDLEWARE
   reason: location_provider_unavailable
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [GetNearbyLocations, SearchLocations]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: locationProviderUnavailable
@@ -62,15 +72,17 @@ errors:
   user_message:
     zh: 位置服务暂不可用，请稍后重试
     en: Location provider is temporarily unavailable, please retry
-- code: INTEGRATION.SYSTEM.internal_error
+- code: INTEGRATION.SYSTEM.location_internal_error
   kind: SYSTEM
   reason: internal_error
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [GetNearbyLocations, SearchLocations]}
   recovery_action: retry
   recovery_after_seconds: 5
-  dart_const: internalError
+  dart_const: locationInternalError
   l10n_key: locationInternalError
-  go_const: ErrInternalError
+  go_const: ErrLocationInternalError
   user_message:
     zh: 位置服务异常，请稍后重试
     en: Location service internal error

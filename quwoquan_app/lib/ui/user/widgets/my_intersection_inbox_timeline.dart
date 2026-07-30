@@ -102,6 +102,8 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
     this.iconKey = '',
     this.sourceRef = '',
     this.dimension = '',
+    this.tone = '',
+    this.typeIconUrl = '',
     this.lifecycleState = '',
     this.onTap,
     this.onSpanTap,
@@ -113,6 +115,10 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
   final String iconKey;
   final String sourceRef;
   final String dimension;
+
+  /// 云侧指派的色板 token 名与远程类型图标资源（零发版视觉扩展位）。
+  final String tone;
+  final String typeIconUrl;
 
   /// 生命周期弱标状态（§21.3/§21.6 ④）：真相源为服务端 `lifecycleState` 枚举。
   /// 仅 new/strengthened/reactivated/archived 有短标（见 [DiscoveryFeedText]），
@@ -143,6 +149,8 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
               iconKey: iconKey,
               sourceRef: sourceRef,
               dimension: dimension,
+              tone: tone,
+              assetUrl: typeIconUrl,
               size: AppSpacing.forty,
             ),
             SizedBox(width: AppSpacing.intraGroupSm),

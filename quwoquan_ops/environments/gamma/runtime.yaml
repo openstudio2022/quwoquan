@@ -3,17 +3,17 @@
   "environment": "gamma",
   "dataReleaseTarget": "gamma-local",
   "urlRoles": {
-    "api": {"exposure": "public", "scheme": "https", "host": "api.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.gateway", "data.release-verifier", "ops.health"]},
-    "realtime": {"exposure": "public", "scheme": "wss", "host": "api.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.realtime", "ops.health"]},
-    "rtc": {"exposure": "public", "scheme": "wss", "host": "rtc.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.rtc", "ops.health"]},
-    "productOps": {"exposure": "public", "scheme": "https", "host": "ops.gamma.quwoquan.com", "portRole": "product-ops-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.recovery", "ops.release"]},
-    "publicWeb": {"exposure": "public", "scheme": "https", "host": "gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.public-links", "web.release", "native.app-links"]},
-    "appDownload": {"exposure": "public", "scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/download", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.recovery", "web.download"]},
-    "legal": {"exposure": "public", "scheme": "https", "host": "gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/legal", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.legal", "web.legal"]},
-    "mediaAvatar": {"exposure": "public", "scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.media", "data.release", "service.chat"]},
-    "mediaImage": {"exposure": "public", "scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.media", "data.release", "service.content"]},
-    "mediaVideo": {"exposure": "public", "scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.media", "data.release", "service.content"]},
-    "mediaUpload": {"exposure": "public", "scheme": "https", "host": "upload.gamma.quwoquan.com", "portRole": "object-storage-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma", "consumers": ["app.media-upload", "service.upload-issuer"]}
+    "api": {"scheme": "https", "host": "api.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma"},
+    "realtime": {"scheme": "wss", "host": "api.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma"},
+    "rtc": {"scheme": "wss", "host": "rtc.gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma"},
+    "productOps": {"scheme": "https", "host": "ops.gamma.quwoquan.com", "portRole": "product-ops-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma"},
+    "publicWeb": {"scheme": "https", "host": "gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma"},
+    "appDownload": {"scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/download", "tlsProfile": "acme-dns01-gamma"},
+    "legal": {"scheme": "https", "host": "gamma.quwoquan.com", "portRole": "api-edge", "pathBase": "/legal", "tlsProfile": "acme-dns01-gamma"},
+    "mediaAvatar": {"scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "acme-dns01-gamma"},
+    "mediaImage": {"scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "acme-dns01-gamma"},
+    "mediaVideo": {"scheme": "https", "host": "cdn.gamma.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "acme-dns01-gamma"},
+    "mediaUpload": {"scheme": "https", "host": "upload.gamma.quwoquan.com", "portRole": "object-storage-edge", "pathBase": "/", "tlsProfile": "acme-dns01-gamma"}
   },
   "subnets": {
     "edge": "172.40.10.0/24",

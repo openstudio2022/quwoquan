@@ -1,0 +1,94 @@
+domain: USER
+aggregate: AccountAppealIntake
+description: AccountAppealIntake 单用途凭据、暂停状态、提交与认领的 typed errors。
+errors:
+- code: USER.ACCOUNT.account_appeal_credential_invalid
+  kind: ACCOUNT
+  reason: account_appeal_credential_invalid
+  emitted_by: [{surface: http, operations: [IssueAccountAppealCredential, SubmitAccountAppealIntake]}]
+  http_status: 400
+  recovery: {action: retry, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealCredentialInvalid
+  dart_const: accountAppealCredentialInvalid
+  go_const: ErrAccountAppealCredentialInvalid
+  user_message: {zh: 申诉凭据无效，请重新验证身份, en: Appeal credential is invalid; verify your identity again}
+- code: USER.ACCOUNT.account_appeal_credential_expired
+  kind: ACCOUNT
+  reason: account_appeal_credential_expired
+  emitted_by: [{surface: http, operations: [SubmitAccountAppealIntake]}]
+  http_status: 410
+  recovery: {action: retry, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealCredentialExpired
+  dart_const: accountAppealCredentialExpired
+  go_const: ErrAccountAppealCredentialExpired
+  user_message: {zh: 申诉凭据已失效，请重新验证身份, en: Appeal credential expired; verify your identity again}
+- code: USER.ACCOUNT.account_appeal_credential_consumed
+  kind: ACCOUNT
+  reason: account_appeal_credential_consumed
+  emitted_by: [{surface: http, operations: [SubmitAccountAppealIntake]}]
+  http_status: 409
+  recovery: {action: surface, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealCredentialConsumed
+  dart_const: accountAppealCredentialConsumed
+  go_const: ErrAccountAppealCredentialConsumed
+  user_message: {zh: 申诉凭据已使用, en: Appeal credential has already been used}
+- code: USER.ACCOUNT.account_appeal_not_suspended
+  kind: ACCOUNT
+  reason: account_appeal_not_suspended
+  emitted_by: [{surface: http, operations: [IssueAccountAppealCredential, SubmitAccountAppealIntake, ClaimAccountAppealIntake]}]
+  http_status: 409
+  recovery: {action: surface, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealNotSuspended
+  dart_const: accountAppealNotSuspended
+  go_const: ErrAccountAppealNotSuspended
+  user_message: {zh: 当前账号状态不需要申诉恢复, en: This account state does not allow a restoration appeal}
+- code: USER.ACCOUNT.account_appeal_rate_limited
+  kind: ACCOUNT
+  reason: account_appeal_rate_limited
+  emitted_by: [{surface: http, operations: [IssueAccountAppealCredential]}]
+  http_status: 429
+  recovery: {action: retry, disruptionLevel: inlineCard, afterSeconds: 600}
+  l10n_key: userAccountAppealRateLimited
+  dart_const: accountAppealRateLimited
+  go_const: ErrAccountAppealRateLimited
+  user_message: {zh: 身份验证请求较频繁，请稍后重试, en: Too many appeal identity requests; try again later}
+- code: USER.ACCOUNT.account_appeal_intake_not_found
+  kind: ACCOUNT
+  reason: account_appeal_intake_not_found
+  emitted_by: [{surface: http, operations: [ClaimAccountAppealIntake]}]
+  http_status: 404
+  recovery: {action: surface, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealIntakeNotFound
+  dart_const: accountAppealIntakeNotFound
+  go_const: ErrAccountAppealIntakeNotFound
+  user_message: {zh: 申诉记录不存在或已删除, en: Appeal intake was not found or has been deleted}
+- code: USER.ACCOUNT.account_appeal_intake_account_mismatch
+  kind: ACCOUNT
+  reason: account_appeal_intake_account_mismatch
+  emitted_by: [{surface: http, operations: [ClaimAccountAppealIntake]}]
+  http_status: 409
+  recovery: {action: surface, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealIntakeAccountMismatch
+  dart_const: accountAppealIntakeAccountMismatch
+  go_const: ErrAccountAppealIntakeAccountMismatch
+  user_message: {zh: 申诉记录与账号不一致, en: Appeal intake does not belong to this account}
+- code: USER.ACCOUNT.account_appeal_intake_claimed
+  kind: ACCOUNT
+  reason: account_appeal_intake_claimed
+  emitted_by: [{surface: http, operations: [ClaimAccountAppealIntake]}]
+  http_status: 409
+  recovery: {action: surface, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealIntakeClaimed
+  dart_const: accountAppealIntakeClaimed
+  go_const: ErrAccountAppealIntakeClaimed
+  user_message: {zh: 申诉记录已由其他案件认领, en: Appeal intake was claimed by another case}
+- code: USER.ACCOUNT.account_appeal_idempotency_conflict
+  kind: ACCOUNT
+  reason: account_appeal_idempotency_conflict
+  emitted_by: [{surface: http, operations: [SubmitAccountAppealIntake, ClaimAccountAppealIntake]}]
+  http_status: 409
+  recovery: {action: surface, disruptionLevel: inlineCard}
+  l10n_key: userAccountAppealIdempotencyConflict
+  dart_const: accountAppealIdempotencyConflict
+  go_const: ErrAccountAppealIdempotencyConflict
+  user_message: {zh: 请求标识已用于其他申诉操作, en: Request identity was already used for another appeal operation}

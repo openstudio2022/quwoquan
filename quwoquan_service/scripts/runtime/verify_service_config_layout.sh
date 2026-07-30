@@ -10,23 +10,14 @@ import re
 import yaml
 
 root = Path.cwd()
-service_roots = sorted((root / "quwoquan_service/services").glob("*-service"))
-gateway = root / "quwoquan_service/services/realtime-gateway"
-if gateway.is_dir():
-    service_roots.append(gateway)
-service_roots = sorted(set(service_roots))
+service_roots = sorted(
+    path.parent.parent
+    for path in (root / "quwoquan_service/services").glob("*/contracts/domain.yaml")
+)
+if not service_roots:
+    raise SystemExit("no self-describing domain services found")
 control_plane = root / "quwoquan_service/control-plane/platform-ops"
 all_roots = service_roots + ([control_plane] if control_plane.is_dir() else [])
-
-expected_services = {
-    "assistant-service", "chat-service", "circle-service", "content-service",
-    "entity-service", "integration-service", "notification-service",
-    "product-ops-service", "realtime-gateway", "recommendation-service",
-    "rtc-service", "search-service", "tag-service", "user-service",
-}
-actual_services = {path.name for path in service_roots}
-if actual_services != expected_services:
-    raise SystemExit(f"domain service set mismatch: {sorted(actual_services)}")
 
 global_config_sources = [
     root / "quwoquan_service/contracts/metadata/platform/config.yaml",
@@ -96,5 +87,5 @@ for owner in all_roots:
             if re.search(rf"environments[/\\]{other_env}(?:[/\\]|$)", text):
                 raise SystemExit(f"{path}: environment inheritance/reference to {other_env} is forbidden")
 
-print(f"[verify] OK: {len(all_keys)} unique definitions, 14 services + platform-ops, four autonomous environments")
+print(f"[verify] OK: {len(all_keys)} unique definitions, {len(service_roots)} self-describing services + platform-ops, four autonomous environments")
 PY

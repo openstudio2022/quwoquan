@@ -5,12 +5,14 @@ import (
 	"testing"
 )
 
+func errorHTTPStatus(value int) *int { return &value }
+
 func TestRenderErrorsUsesMetadataMessageAndRecovery(t *testing.T) {
 	generated, err := renderErrors("assistant/assistant/assistant_preference_fact/errors.yaml", []errorEntry{
 		{
 			Code:                 "ASSISTANT.SYSTEM.preference_storage_unavailable",
 			Reason:               "unavailable",
-			HTTPStatus:           503,
+			HTTPStatus:           errorHTTPStatus(503),
 			GoConst:              "ErrPreferenceStorageUnavailable",
 			RecoveryAction:       "retry",
 			RecoveryAfterSeconds: 3,
@@ -40,12 +42,35 @@ func TestRenderErrorsRejectsMissingMetadataMessage(t *testing.T) {
 		{
 			Code:           "ASSISTANT.USER.preference_not_found",
 			Reason:         "not_found",
-			HTTPStatus:     404,
+			HTTPStatus:     errorHTTPStatus(404),
 			GoConst:        "ErrPreferenceNotFound",
 			RecoveryAction: "refresh",
 		},
 	})
 	if err == nil {
 		t.Fatal("renderErrors() must reject missing user_message.zh")
+	}
+}
+
+func TestRenderErrorsSupportsNonHTTPEmission(t *testing.T) {
+	generated, err := renderErrors("assistant/assistant/assistant_run/errors.yaml", []errorEntry{
+		{
+			Code:           "ASSISTANT.MIDDLEWARE.model_provider_unavailable",
+			Reason:         "unavailable",
+			GoConst:        "ErrModelProviderUnavailable",
+			RecoveryAction: "retry",
+			UserMessage: map[string]string{
+				"zh": "助手模型服务暂不可用，请稍后重试",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("renderErrors() non-HTTP error = %v", err)
+	}
+	if !strings.Contains(
+		string(generated),
+		`.WithMetadata("unavailable", 0).WithRecovery("retry", 0)`,
+	) {
+		t.Fatalf("generated non-HTTP error must retain semantic reason without inventing a transport status:\n%s", generated)
 	}
 }

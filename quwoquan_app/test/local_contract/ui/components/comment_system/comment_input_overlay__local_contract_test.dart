@@ -41,7 +41,7 @@ class _AuthenticatedSession extends AuthSessionController {
       accessToken: 'test-token',
       refreshToken: 'test-refresh',
       ownerId: 'test-user',
-      activeSubAccountId: 'test-sub-account',
+      activePersonaId: 'test-persona',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',
@@ -218,9 +218,9 @@ Widget _overlayHarness({
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       activePersonaContextProvider.overrideWith(
         (ref) async => const ActivePersonaContextViewData(
-          subAccountId: 'test-sub-account',
+          personaId: 'test-persona',
           ownerUserId: 'test-user',
-          subjectType: 'subAccount',
+          subjectType: 'persona',
           displayName: '测试用户',
           avatarUrl: '',
           contextVersion: 1,
@@ -263,9 +263,9 @@ Future<void> testCommentSubmitThroughProvider() async {
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       activePersonaContextProvider.overrideWith(
         (ref) async => const ActivePersonaContextViewData(
-          subAccountId: 'test-sub-account',
+          personaId: 'test-persona',
           ownerUserId: 'test-user',
-          subjectType: 'subAccount',
+          subjectType: 'persona',
           displayName: '测试用户',
           avatarUrl: '',
           contextVersion: 1,

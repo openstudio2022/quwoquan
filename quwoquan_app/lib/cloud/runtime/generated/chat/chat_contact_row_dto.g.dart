@@ -3,6 +3,7 @@
 
 class ChatContactRowDto {
   final String userId;
+  final String userHandle;
   final String displayName;
   final String avatarUrl;
   final String bio;
@@ -14,6 +15,7 @@ class ChatContactRowDto {
 
   ChatContactRowDto({
     this.userId = '',
+    this.userHandle = '',
     this.displayName = '',
     this.avatarUrl = '',
     this.bio = '',
@@ -27,6 +29,7 @@ class ChatContactRowDto {
   factory ChatContactRowDto.fromMap(Map<String, dynamic> m) {
     return ChatContactRowDto(
       userId: m['userId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       bio: m['bio']?.toString() ?? '',
@@ -41,6 +44,7 @@ class ChatContactRowDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'userId': userId,
+      'userHandle': userHandle,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'bio': bio,
@@ -54,6 +58,7 @@ class ChatContactRowDto {
 
   ChatContactRowDto copyWith({
     String? userId,
+    String? userHandle,
     String? displayName,
     String? avatarUrl,
     String? bio,
@@ -65,6 +70,7 @@ class ChatContactRowDto {
   }) {
     return ChatContactRowDto(
       userId: userId ?? this.userId,
+      userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       bio: bio ?? this.bio,

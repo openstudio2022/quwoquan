@@ -2,6 +2,7 @@
   "label": "价格敏感型",
   "labelEn": "Price Sensitive",
   "description": "以价格为主要决策因素",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

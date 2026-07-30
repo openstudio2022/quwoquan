@@ -4,14 +4,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 final class AlphaGreetingRequestFacet
     implements GreetingRequestCommandWriter, GreetingRequestQuery {
   AlphaGreetingRequestFacet({
-    this.requesterSubAccountId = 'fixture_user_current',
+    this.requesterPersonaId = 'fixture_user_current',
     Iterable<GreetingRequestRecord> seedInbox = const <GreetingRequestRecord>[],
     Iterable<GreetingRequestRecord> seedOutbox =
         const <GreetingRequestRecord>[],
   }) : _inbox = seedInbox.toList(growable: true),
        _outbox = seedOutbox.toList(growable: true);
 
-  final String requesterSubAccountId;
+  final String requesterPersonaId;
   final List<GreetingRequestRecord> _inbox;
   final List<GreetingRequestRecord> _outbox;
   int _sequence = 0;
@@ -23,8 +23,8 @@ final class AlphaGreetingRequestFacet
     final now = DateTime.now().toUtc();
     final record = GreetingRequestRecord(
       id: 'alpha-greeting-${++_sequence}',
-      requesterSubAccountId: requesterSubAccountId,
-      targetSubAccountId: command.targetSubAccountId,
+      requesterPersonaId: requesterPersonaId,
+      targetPersonaId: command.targetPersonaId,
       requestMessage: command.requestMessage,
       status: 'pending',
       source: command.source.trim().isEmpty ? 'profile' : command.source,
@@ -105,8 +105,8 @@ final class AlphaGreetingRequestFacet
     final now = DateTime.now().toUtc();
     final updated = GreetingRequestRecord(
       id: current.id,
-      requesterSubAccountId: current.requesterSubAccountId,
-      targetSubAccountId: current.targetSubAccountId,
+      requesterPersonaId: current.requesterPersonaId,
+      targetPersonaId: current.targetPersonaId,
       requestMessage: current.requestMessage,
       status: status,
       source: current.source,

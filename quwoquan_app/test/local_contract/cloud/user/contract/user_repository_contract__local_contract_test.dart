@@ -17,13 +17,13 @@ void main() {
     test('listPersonas 返回分身列表', () async {
       final accounts = await query.listPersonas();
       expect(accounts, isNotEmpty);
-      expect(accounts.first.subAccountId, isNotEmpty);
+      expect(accounts.first.personaId, isNotEmpty);
     });
 
     test('getPersonaManagementSummary 返回 quota 与 items', () async {
       final summary = await query.getPersonaManagementSummary();
       expect(summary.items, isNotEmpty);
-      expect(summary.quota.maxSubAccounts, greaterThan(0));
+      expect(summary.quota.maxPersonas, greaterThan(0));
     });
 
     test(
@@ -42,22 +42,22 @@ void main() {
 
     test('getActivePersonaContext 返回活动身份上下文', () async {
       final context = await query.getActivePersonaContext();
-      expect(context.subAccountId, isNotEmpty);
+      expect(context.personaId, isNotEmpty);
     });
 
     test('getActivePersonaContext 与 Query 当前分身对齐', () async {
       final context = await query.getActivePersonaContext();
-      expect(context.subAccountId, 'persona_primary');
+      expect(context.personaId, 'persona_primary');
       expect(context.ownerUserId, 'owner-test');
       expect(context.displayName, isNotEmpty);
     });
 
     test('activatePersona 切换到已存在分身', () async {
       final personas = await query.listPersonas();
-      final target = personas.last.subAccountId;
+      final target = personas.last.personaId;
       await expectLater(
         commandWriter.activatePersona(
-          contracts.ActivatePersonaCommand(subAccountId: target),
+          contracts.ActivatePersonaCommand(personaId: target),
         ),
         completes,
       );
@@ -66,8 +66,8 @@ void main() {
     test('applyPersonaProfileSync 返回已应用数量', () async {
       final result = await commandWriter.applyPersonaProfileSync(
         contracts.ApplyPersonaProfileSyncCommand(
-          subAccountId: 'persona_primary',
-          applyScope: 'all_sub_accounts',
+          personaId: 'persona_primary',
+          applyScope: 'all_personas',
           fieldsMask: const <String>['phone', 'email'],
         ),
       );
@@ -78,14 +78,14 @@ void main() {
   group('Persona Query/Command Facet — 异常/边界契约', () {
     test('activatePersona 空 ID fail-fast', () {
       expect(
-        () => contracts.ActivatePersonaCommand(subAccountId: ''),
+        () => contracts.ActivatePersonaCommand(personaId: ''),
         throwsArgumentError,
       );
     });
 
     test('retirePersona 空 ID fail-fast', () {
       expect(
-        () => contracts.RetirePersonaCommand(subAccountId: ''),
+        () => contracts.RetirePersonaCommand(personaId: ''),
         throwsArgumentError,
       );
     });

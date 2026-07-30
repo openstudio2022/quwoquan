@@ -2,6 +2,7 @@
   "label": "约会用餐",
   "labelEn": "Date Dining",
   "description": "情侣约会用餐场景",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_context_provider.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_reporter.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -137,16 +136,19 @@ final class AppPageExperienceTracker {
     );
   }
 
+  /// [errorCode] 必须来自实际失败对象的 canonical errors 契约；缺失时拒绝记录，
+  /// 观测层不得发明“未分类失败”替代领域事实。
   Future<AppTelemetryRecordResult> recordPageErrorOutcome({
     required String result,
+    required String? errorCode,
     String? surfaceId,
-    String? errorCode,
     String? recoveryAction,
     String? action,
     int? durationMs,
   }) {
     final reporter = _reporter;
-    if (reporter == null) {
+    final normalizedErrorCode = _nonEmpty(errorCode);
+    if (reporter == null || normalizedErrorCode == null) {
       return Future<AppTelemetryRecordResult>.value(
         AppTelemetryRecordResult.rejected,
       );
@@ -156,9 +158,7 @@ final class AppPageExperienceTracker {
       reporter,
       AppTelemetryPayload.pageErrorOutcome(
         surfaceId: _nonEmpty(surfaceId) ?? pageName,
-        errorCode:
-            _nonEmpty(errorCode) ??
-            OpsEventRecordErrorCode.unclassifiedPageFailure.code,
+        errorCode: normalizedErrorCode,
         recoveryAction:
             _nonEmpty(recoveryAction) ?? RuntimeRecoveryAction.absorb.name,
         result: result,
@@ -211,7 +211,7 @@ final class AppPageExperienceTracker {
     DateTime? occurredAt,
   }) {
     final reporter = _reporter;
-    if (reporter == null || sampledFrames <= 0 || jankyFrames <= 0) {
+    if (reporter == null || sampledFrames <= 0 || jankyFrames < 0) {
       return Future<AppTelemetryRecordResult>.value(
         AppTelemetryRecordResult.rejected,
       );

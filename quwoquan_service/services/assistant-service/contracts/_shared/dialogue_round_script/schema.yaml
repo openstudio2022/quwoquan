@@ -18,5 +18,3 @@ fields:
   - { name: passCriteriaRound, type: map, default: {} }
   - { name: statePromptExcerpt, type: string, default: '' }
   - { name: stateMachineExcerpt, type: string, default: '' }
-  - { name: routingCatalogVersion, type: string, default: '' }
-  - { name: eventCatalogVersion, type: string, default: '' }

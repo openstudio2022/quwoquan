@@ -97,7 +97,8 @@ func run(metadataDir, outputDir, serviceDir string) error {
 		return err
 	}
 
-	// Generate content features + training sample from content/content/post/behaviors.yaml
+	// Generate content features + training sample from
+	// content/content/content_behavior_fact/behaviors.yaml
 	behaviorsPath := resolveContentBehaviors(source)
 	if behaviorsPath != "" {
 		beh, err := loadBehaviors(source, behaviorsPath)
@@ -125,7 +126,7 @@ func run(metadataDir, outputDir, serviceDir string) error {
 }
 
 func resolveContentBehaviors(source *contractcodegen.Source) string {
-	p := filepath.Join("content", "content", "post", "behaviors.yaml")
+	p := filepath.Join("content", "content", "content_behavior_fact", "behaviors.yaml")
 	if source.Has(p) {
 		return p
 	}

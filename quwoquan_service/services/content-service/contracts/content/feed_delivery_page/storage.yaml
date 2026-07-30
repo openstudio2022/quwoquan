@@ -1,0 +1,46 @@
+backend: redis
+role: append_only
+description: >-
+  FeedDeliveryPage 使用 rec scene 的固定 quota-shard 同槽 value + sorted-set index
+  + metadata hash。value 固定 600 秒 TTL 且读取不续期；Lua 原子执行 SET NX、
+  过期/缺失清理、scope 淘汰和分片 live key/live byte 准入。
+redis_cache:
+- key: rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  ttl_seconds: 600
+  type: string
+  scene: rec
+  max_value_bytes: 65536
+  max_items: 20
+  max_object_cards: 20
+  quota_shards: 256
+  quota_index: rec:feed_delivery_page_index:{fdp-<quotaShard>}
+  quota_metadata: rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
+  max_active_per_scope: 400
+  max_live_records_per_quota_shard: 512
+  max_live_bytes_per_quota_shard: 33554432
+  global_max_live_records: 131072
+  global_max_live_bytes: 8589934592
+  create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
+  description: >-
+    未压缩 FeedDeliveryPage JSON；同一 key 只允许相同 payload 幂等胜出。
+    分片满只拒绝 contender，禁止跨 scope 淘汰；key 与 payload 不含协议版本信封。
+- key: rec:feed_delivery_page_index:{fdp-<quotaShard>}
+  ttl_seconds: 600
+  type: sorted_set
+  scene: rec
+  max_members: 512
+  member: rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  score: redis_server_expires_at_microseconds
+  description: >-
+    固定 quota shard 的有界索引；scopeHash 只决定自身最多 400 页的淘汰集合。
+- key: rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
+  ttl_seconds: 600
+  type: hash
+  scene: rec
+  max_fields: 512
+  field: rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>
+  value: <scopeHash>:<payloadBytes>
+  description: >-
+    精确 owner/payload bytes 元数据；从有界 index 重算用量，不维护可漂移计数器。
+codegen:
+  enabled: false

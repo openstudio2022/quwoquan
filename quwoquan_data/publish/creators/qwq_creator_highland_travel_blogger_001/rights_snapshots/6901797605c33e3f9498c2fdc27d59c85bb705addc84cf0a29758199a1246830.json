@@ -1,0 +1,46 @@
+{
+  "assetId": "creator-avatar-qwq_creator_highland_travel_blogger_001-6901797605c33e3f",
+  "commercialRights": {
+    "asset": {
+      "bytes": 281734,
+      "height": 1280,
+      "mimeType": "image/webp",
+      "ref": "cas/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.webp",
+      "sha256": "sha256:6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830",
+      "width": 1280
+    },
+    "assetId": "creator-avatar-qwq_creator_highland_travel_blogger_001-6901797605c33e3f",
+    "attribution": "Takashishin / CC BY 4.0",
+    "author": "Takashishin",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg",
+    "canonicalFilePage": "https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg",
+    "caption": "三潭印月与雷峰塔",
+    "captionSource": "entities/地点/景区/杭州西湖/rights_snapshots/d4a55b192100136208b9.json",
+    "fetchedAt": "2026-07-28T01:41:54Z",
+    "licenseName": "CC BY 4.0",
+    "licenseShortName": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+    "modelReleaseStatus": "not_required",
+    "modifications": "deterministic center-square crop [240, 0, 1680, 1440] from 1920x1440; RGB; LANCZOS 1280x1280; WebP quality=85 method=4; derivative_policy_version=1",
+    "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/1/17/West_Lake%2C_Hangzhou_2025.jpg",
+    "pageRevision": "93458353",
+    "rightsAuditIssues": [],
+    "rightsAuditStatus": "verified",
+    "snapshot": {
+      "bytes": 3011,
+      "ref": "entities/地点/景区/杭州西湖/rights_snapshots/d4a55b192100136208b9.json",
+      "sha256": "sha256:3f2fe4d266573182c3892da2f3c057df4d4ab8b0c92a49a0750e270d8452657e"
+    },
+    "snapshotUrl": "https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:West_Lake,_Hangzhou_2025.jpg",
+    "sourceKind": "creator_avatar_derivative",
+    "sourceUseMode": "licensed_adaptation",
+    "usageScope": "app_publish"
+  },
+  "depictsIdentifiablePerson": false,
+  "manifestAsset": {
+    "assetId": "creator-avatar-qwq_creator_highland_travel_blogger_001-6901797605c33e3f",
+    "sha256": "sha256:6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830"
+  },
+  "schema": "quwoquan_data.creator_avatar_rights_snapshot"
+}

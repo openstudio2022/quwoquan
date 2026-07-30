@@ -122,7 +122,7 @@ def test_repository_artifact_policy_rejects_implicit_go_cache() -> None:
     assert verify() == []
 
 
-def test_pr_workflows_do_not_create_isolated_dependency_cache_copies() -> None:
+def test_pr_workflows_use_lock_bound_shared_dependency_caches() -> None:
     recommendation = (
         ROOT / ".github/workflows/recommendation_api_integration.yml"
     ).read_text(encoding="utf-8")
@@ -131,8 +131,9 @@ def test_pr_workflows_do_not_create_isolated_dependency_cache_copies() -> None:
     )
 
     assert "lookup-only: ${{ github.event_name == 'pull_request' }}" in recommendation
-    assert "设置 Node（PR 不写入 Actions cache）" in delivery
-    assert "设置 Node（非 PR 可复用默认分支缓存）" in delivery
+    assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in delivery
+    assert "flutter-version: ${{ steps.flutter_version.outputs.value }}" in delivery
+    assert "quwoquan_app/.flutter-version" in delivery
 
 
 def test_lifecycle_only_spends_a_runner_for_failures_or_service_build_record_audit() -> None:

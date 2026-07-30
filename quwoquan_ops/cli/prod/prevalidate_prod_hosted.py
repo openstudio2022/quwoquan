@@ -53,8 +53,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", required=True)
     parser.add_argument("--release-manifest", required=True, type=Path)
-    parser.add_argument("--image-version", required=True)
-    parser.add_argument("--config-version", required=True)
+    parser.add_argument("--image-transport-tag", required=True)
+    parser.add_argument("--candidate-digest", required=True)
     parser.add_argument("--data-mode", choices=("isolated", "external"), required=True)
     parser.add_argument("--scope", choices=("first-party",), required=True)
     parser.add_argument("--key-dir", type=Path, default=DEFAULT_KEY_DIR)
@@ -361,57 +361,7 @@ def _reclaim_stale_runtime(
     if projection.name != str(policy.get("plane") or ""):
         return {"plane": projection.name, "status": "not-required"}
     key = _resolve_key(projection, key_dir)
-    encoded_policy = base64.b64encode(
-        json.dumps(policy, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    ).decode("ascii")
-    script = f'''
-import base64
-import json
-import os
-import pathlib
-import subprocess
-
-policy = json.loads(base64.b64decode("{encoded_policy}").decode("utf-8"))
-
-def run(argv):
-    return subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-
-listed = run(["podman", "ps", "-a", "--format", "json"])
-if listed.returncode != 0:
-    raise SystemExit(listed.stderr or listed.stdout)
-containers = json.loads(listed.stdout)
-prefixes = tuple(str(item) for item in policy.get("containerNamePrefixes") or [])
-allowed = {{str(item).lower() for item in policy.get("allowedStates") or []}}
-preserved = {{str(item) for item in policy.get("preservedContainers") or []}}
-selected = []
-for item in containers:
-    names = item.get("Names") or []
-    if isinstance(names, str):
-        names = [names]
-    state = str(item.get("State") or "").lower()
-    for name in names:
-        if name in preserved:
-            continue
-        if name.startswith(prefixes) and state in allowed:
-            selected.append(name)
-if selected:
-    removed = run(["podman", "rm", *sorted(set(selected))])
-    if removed.returncode != 0:
-        raise SystemExit(removed.stderr or removed.stdout)
-prune = run(["podman", "image", "prune", "-a", "-f"])
-if prune.returncode != 0:
-    raise SystemExit(prune.stderr or prune.stdout)
-stat = os.statvfs(pathlib.Path.home())
-print(json.dumps({{
-    "plane": "{projection.name}",
-    "status": "completed",
-    "removedContainers": sorted(set(selected)),
-    "preservedContainers": sorted(preserved),
-    "volumesRemoved": False,
-    "containerFreeBytes": stat.f_bavail * stat.f_frsize,
-    "imagePrune": prune.stdout.strip(),
-}}))
-'''
+    script = _remote_reclaim_script(projection=projection, policy=policy)
     result = subprocess.run(
         [
             "ssh",
@@ -448,6 +398,126 @@ print(json.dumps({{
             f"{report.get('containerFreeBytes')} < {required}"
         )
     return report
+
+
+def _remote_reclaim_script(
+    *,
+    projection: PlaneProjection,
+    policy: dict[str, Any],
+) -> str:
+    encoded_policy = base64.b64encode(
+        json.dumps(policy, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).decode("ascii")
+    return f'''
+import base64
+import json
+import os
+import pathlib
+import re
+import subprocess
+import time
+
+policy = json.loads(base64.b64decode("{encoded_policy}").decode("utf-8"))
+
+def run(argv):
+    return subprocess.run(
+        argv,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+listed = run(["podman", "ps", "-a", "--format", "json"])
+if listed.returncode != 0:
+    raise SystemExit(listed.stderr or listed.stdout)
+containers = json.loads(listed.stdout)
+prefixes = tuple(str(item) for item in policy.get("containerNamePrefixes") or [])
+allowed = {{str(item).lower() for item in policy.get("allowedStates") or []}}
+preserved = {{str(item) for item in policy.get("preservedContainers") or []}}
+selected = set()
+for item in containers:
+    names = item.get("Names") or []
+    if isinstance(names, str):
+        names = [names]
+    state = str(item.get("State") or "").lower()
+    for name in names:
+        if name in preserved:
+            continue
+        if name.startswith(prefixes) and state in allowed:
+            selected.add(name)
+
+# Compose-created containers can depend on one another. Remove one at a time
+# and retry dependency-order failures until a pass makes no progress.
+remaining = set(selected)
+removed_names = []
+while remaining:
+    progressed = False
+    failures = []
+    for name in sorted(remaining):
+        removed = run(["podman", "rm", name])
+        if removed.returncode == 0:
+            remaining.remove(name)
+            removed_names.append(name)
+            progressed = True
+        else:
+            failures.append(removed.stderr or removed.stdout)
+    if not progressed:
+        raise SystemExit("dependency-order retries made no progress: " + "; ".join(failures))
+
+external_removed = []
+external = policy.get("externalBuildContainers") or {{}}
+if external.get("enabled"):
+    external_listed = run(["podman", "ps", "--external", "-a", "--format", "json"])
+    if external_listed.returncode != 0:
+        raise SystemExit(external_listed.stderr or external_listed.stdout)
+    external_states = {{str(item).lower() for item in external.get("allowedStates") or []}}
+    require_pid_zero = external.get("requirePidZero") is True
+    minimum_age_seconds = int(external.get("minimumAgeSeconds") or 0)
+    external_name_pattern = re.compile(str(external.get("namePattern") or "(?!)"))
+    now = int(time.time())
+    for item in json.loads(external_listed.stdout):
+        state = str(item.get("State") or "").lower()
+        if state not in external_states:
+            continue
+        pid = int(item.get("Pid") or item.get("PID") or 0)
+        if require_pid_zero and pid != 0:
+            continue
+        created = int(item.get("Created") or 0)
+        if created <= 0 or now - created < minimum_age_seconds:
+            continue
+        names = item.get("Names") or []
+        if isinstance(names, str):
+            names = [names]
+        name = str(names[0]) if names else ""
+        if external_name_pattern.fullmatch(name) is None:
+            continue
+        container_id = str(item.get("Id") or item.get("ID") or "")
+        if not container_id:
+            continue
+        external_removed_result = run(["podman", "rm", container_id])
+        if external_removed_result.returncode != 0:
+            raise SystemExit(external_removed_result.stderr or external_removed_result.stdout)
+        external_removed.append(name)
+
+image_prune_output = ""
+if policy.get("pruneUnusedImages"):
+    prune = run(["podman", "image", "prune", "-a", "-f"])
+    if prune.returncode != 0:
+        raise SystemExit(prune.stderr or prune.stdout)
+    image_prune_output = prune.stdout.strip()
+stat = os.statvfs(pathlib.Path.home())
+print(json.dumps({{
+    "plane": "{projection.name}",
+    "status": "completed",
+    "removedContainers": sorted(removed_names),
+    "removedExternalBuildContainers": sorted(external_removed),
+    "preservedContainers": sorted(preserved),
+    "volumesRemoved": False,
+    "containerFreeBytes": stat.f_bavail * stat.f_frsize,
+    "imagePrune": image_prune_output,
+}}))
+'''
 
 
 def _run(argv: list[str], *, env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -559,10 +629,10 @@ def execute_deployment(
                     name,
                     "--instance",
                     "prevalidate",
-                    "--config-version",
-                    args.config_version,
-                    "--image-version",
-                    args.image_version,
+                    "--candidate-digest",
+                    args.candidate_digest,
+                    "--image-transport-tag",
+                    args.image_transport_tag,
                     "--output-dir",
                     str(render_dir),
                     "--host",
@@ -589,8 +659,8 @@ def execute_deployment(
                 str(args.key_dir),
                 "--services",
                 services,
-                "--image-version",
-                args.image_version,
+                "--image-transport-tag",
+                args.image_transport_tag,
                 "--release-manifest",
                 str(args.release_manifest),
                 "--platform",

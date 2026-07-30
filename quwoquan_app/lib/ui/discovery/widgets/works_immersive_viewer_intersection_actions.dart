@@ -213,7 +213,7 @@ extension _WorksImmersiveViewerIntersectionActions
     required IntersectionTarget target,
     required IntersectionNavAttribution attribution,
   }) {
-    final feedSession = ref.read(feedSessionProvider.notifier);
+    final feedAttribution = _feedAttributionForPost(post);
     ref
         .read(contentBehaviorTrackerProvider)
         .trackTagClick(
@@ -224,10 +224,9 @@ extension _WorksImmersiveViewerIntersectionActions
           authorId: target.objectKind == 'user' ? target.objectId : null,
           referralSource: widget.referralSource,
           tags: attribution.tagRefs,
-          feedRequestId: _effectiveFeedRequestId(),
+          feedRequestId: feedAttribution.feedRequestId,
           channelId: _immersiveChannelId(),
-          rankingVersion: feedSession.currentRankingVersion,
-          reasonVersion: feedSession.currentReasonVersion,
+          policyDigest: feedAttribution.policyDigest,
           recallPath: post.recallPath,
           contentVertical: post.contentVertical,
           supplySource: post.supplySource,

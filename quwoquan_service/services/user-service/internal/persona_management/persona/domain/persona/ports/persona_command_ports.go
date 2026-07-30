@@ -34,9 +34,9 @@ type PersonaCommandMeta struct {
 
 // PersonaCommandResult 是命令的稳定回执。
 type PersonaCommandResult struct {
-	SubAccountID string `json:"subAccountId"`
-	Version      int64  `json:"version"`
-	Replayed     bool   `json:"replayed,omitempty"`
+	PersonaID string `json:"personaId"`
+	Version   int64  `json:"version"`
+	Replayed  bool   `json:"replayed,omitempty"`
 }
 
 // PersonaCommandStore 是 Persona 聚合的对象专属命令提交端口。
@@ -60,7 +60,7 @@ type PersonaCommandStore interface {
 	CommitActivation(
 		ctx context.Context,
 		ownerID string,
-		subAccountID string,
+		personaID string,
 		meta PersonaCommandMeta,
 	) (PersonaCommandResult, error)
 }

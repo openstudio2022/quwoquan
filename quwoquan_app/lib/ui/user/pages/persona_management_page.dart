@@ -124,8 +124,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final pageErrorSemantic = state.rawError == null
         ? null
         : _resolvePageErrorSemantic(state.rawError!);
-    final canCreate =
-        quota == null || quota.usedSubAccounts < quota.maxSubAccounts;
+    final canCreate = quota == null || quota.usedPersonas < quota.maxPersonas;
 
     return AppScaffold(
       backgroundColor: AppColors.iosPageBackground(context),
@@ -225,7 +224,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                         SizedBox(width: AppSpacing.containerSm),
                         Expanded(
                           child: Text(
-                            '${state.items.length}/${quota?.maxSubAccounts ?? 5}',
+                            '${state.items.length}/${quota?.maxPersonas ?? 5}',
                             style: TextStyle(
                               fontSize: AppTypography.iosTitle3,
                               fontWeight: AppTypography.semiBold,
@@ -273,7 +272,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                       persona: persona,
                       isCurrent: _isCurrentPersona(state, persona),
                       onActivate: () =>
-                          notifier.activatePersona(persona.subAccountId),
+                          notifier.activatePersona(persona.personaId),
                       onEdit: () => _showEditDialog(notifier, persona),
                       onRetire: () => _handleRetire(notifier, persona),
                     ),
@@ -288,25 +287,25 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     PersonaManagementState state,
     PersonaManagementItemViewData persona,
   ) {
-    final current = state.activeContext?.subAccountId;
+    final current = state.activeContext?.personaId;
     if (current == null || current.isEmpty) {
       return persona.isActive;
     }
-    return current == persona.subAccountId;
+    return current == persona.personaId;
   }
 
   Future<void> _showCreateDialog(PersonaManagementNotifier notifier) async {
     final quota = ref.read(personaManagementProvider).quota;
     if (quota != null && quota.quotaReached) {
-      await notifier.trackQuotaReached(quota.maxSubAccounts);
+      await notifier.trackQuotaReached(quota.maxPersonas);
       if (!mounted) {
         return;
       }
       AppToast.show(
         context,
-        ProfileText.profileSubAccountMaxReachedTemplate.replaceFirst(
+        ProfileText.profilePersonaMaxReachedTemplate.replaceFirst(
           '%s',
-          '${quota.maxSubAccounts}',
+          '${quota.maxPersonas}',
         ),
       );
       return;
@@ -340,7 +339,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
             isDefaultAction: true,
             onPressed: () async {
               Navigator.of(dialogContext).pop();
-              await notifier.activatePersona(created.subAccountId);
+              await notifier.activatePersona(created.personaId);
             },
             child: const Text(ProfileText.personaSwitchNow),
           ),
@@ -366,7 +365,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     PersonaManagementItemViewData persona,
   ) async {
     try {
-      final guard = await notifier.getLifecycleGuard(persona.subAccountId);
+      final guard = await notifier.getLifecycleGuard(persona.personaId);
       if (!mounted) {
         return;
       }
@@ -398,7 +397,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
         ),
       );
       if (confirmed == true) {
-        await notifier.retirePersona(persona.subAccountId);
+        await notifier.retirePersona(persona.personaId);
       }
     } catch (e) {
       if (mounted) {
@@ -596,14 +595,12 @@ class _PersonaCard extends StatelessWidget {
               ? ProfileText.personaInheritanceSynced
               : ProfileText.personaInheritanceDefault)
         : ProfileText.personaInheritanceCustom;
-    final syncLabel = !persona.hasContactInfo
-        ? ProfileText.personaSyncStatusMissing
-        : (persona.lastProfileSyncAt != null
-              ? ProfileText.personaSyncStatusReady
-              : inheritanceLabel);
+    final syncLabel = persona.lastProfileSyncAt != null
+        ? ProfileText.personaSyncStatusReady
+        : ProfileText.personaSyncStatusMissing;
 
     return ProfileIosSectionCard(
-      key: ValueKey<String>('persona-card-${persona.subAccountId}'),
+      key: ValueKey<String>('persona-card-${persona.personaId}'),
       addShadow: isCurrent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -651,18 +648,6 @@ class _PersonaCard extends StatelessWidget {
                         color: AppColors.iosSecondaryLabel(context),
                       ),
                     ),
-                    Text(
-                      '${ProfileText.personaPhoneLabel}: ${persona.phone.isEmpty ? '-' : persona.phone}',
-                      style: TextStyle(
-                        color: AppColors.iosSecondaryLabel(context),
-                      ),
-                    ),
-                    Text(
-                      '${ProfileText.personaEmailLabel}: ${persona.email.isEmpty ? '-' : persona.email}',
-                      style: TextStyle(
-                        color: AppColors.iosSecondaryLabel(context),
-                      ),
-                    ),
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
                       '$inheritanceLabel · $syncLabel',
@@ -674,7 +659,7 @@ class _PersonaCard extends StatelessWidget {
                 ),
               ),
               Container(
-                key: ValueKey<String>('persona-status-${persona.subAccountId}'),
+                key: ValueKey<String>('persona-status-${persona.personaId}'),
                 padding: EdgeInsets.symmetric(
                   horizontal: AppSpacing.containerSm,
                   vertical: AppSpacing.intraGroupXs,
@@ -708,9 +693,7 @@ class _PersonaCard extends StatelessWidget {
             runSpacing: AppSpacing.intraGroupSm,
             children: <Widget>[
               CupertinoButton(
-                key: ValueKey<String>(
-                  'persona-activate-${persona.subAccountId}',
-                ),
+                key: ValueKey<String>('persona-activate-${persona.personaId}'),
                 padding: EdgeInsets.zero,
                 onPressed: isCurrent || isRetired ? null : onActivate,
                 child: Text(
@@ -722,7 +705,7 @@ class _PersonaCard extends StatelessWidget {
                 ),
               ),
               CupertinoButton(
-                key: ValueKey<String>('persona-edit-${persona.subAccountId}'),
+                key: ValueKey<String>('persona-edit-${persona.personaId}'),
                 padding: EdgeInsets.zero,
                 onPressed: isRetired ? null : onEdit,
                 child: const Text(ProfileText.profileEditLabel),

@@ -480,8 +480,12 @@ class _AssistantManagementPageState
     ].join(' · ');
   }
 
-  String _formattedPreferenceUpdatedAt(String raw) {
-    final parsed = DateTime.tryParse(raw.trim());
+  String _formattedPreferenceUpdatedAt(String? raw) {
+    final normalized = raw?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return '';
+    }
+    final parsed = DateTime.tryParse(normalized);
     if (parsed == null) {
       return '';
     }

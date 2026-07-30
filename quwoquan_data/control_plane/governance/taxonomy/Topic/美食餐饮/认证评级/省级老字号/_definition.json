@@ -2,6 +2,7 @@
   "label": "省级老字号",
   "labelEn": "Provincial Heritage Brand",
   "description": "省级认定老字号",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

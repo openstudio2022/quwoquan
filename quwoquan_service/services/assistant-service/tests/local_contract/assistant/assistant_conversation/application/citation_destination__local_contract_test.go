@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	rtsearch "quwoquan_service/runtime/search"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 )
 
 func TestCanonicalToolReferenceBuildsSingleTrackInternalDestination(t *testing.T) {
-	reference, ok := application.CanonicalToolReference(map[string]any{
+	reference, ok := orchestration.CanonicalToolReference(map[string]any{
 		"title":      "站内文章",
 		"objectType": rtsearch.ObjectTypeContentPost,
 		"objectId":   "post-1",
@@ -31,13 +31,13 @@ func TestCanonicalToolReferenceBuildsSingleTrackInternalDestination(t *testing.T
 }
 
 func TestCanonicalToolReferenceRejectsURLOnlyAndInsecureExternalReferences(t *testing.T) {
-	if reference, ok := application.CanonicalToolReference(map[string]any{
+	if reference, ok := orchestration.CanonicalToolReference(map[string]any{
 		"title": "URL-only",
 		"url":   "https://example.com",
 	}); ok {
 		t.Fatalf("URL-only reference accepted: %#v", reference)
 	}
-	if reference, ok := application.CanonicalToolReference(map[string]any{
+	if reference, ok := orchestration.CanonicalToolReference(map[string]any{
 		"title": "insecure",
 		"destination": map[string]any{
 			"kind": "external",
@@ -66,7 +66,7 @@ func TestMergeReferencesKeepsOnlyToolAuthorizedDestinations(t *testing.T) {
 		},
 	}
 
-	merged := application.MergeReferences(
+	merged := orchestration.MergeReferences(
 		[]map[string]any{hallucinated},
 		[]map[string]any{authorized},
 	)
@@ -81,7 +81,7 @@ func TestMergeReferencesKeepsOnlyToolAuthorizedDestinations(t *testing.T) {
 }
 
 func TestUserProcessReferencePreservesCanonicalDestination(t *testing.T) {
-	references := application.UserProcessReferences([]map[string]any{{
+	references := orchestration.UserProcessReferences([]map[string]any{{
 		"title":  "站内文章",
 		"source": "content",
 		"destination": map[string]any{

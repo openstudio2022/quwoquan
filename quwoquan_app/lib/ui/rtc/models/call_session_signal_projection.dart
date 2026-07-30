@@ -37,7 +37,7 @@ CallSessionDto projectCallSessionEnded(
   return CallSessionDto(
     callId: session.callId,
     callType: data.callType ?? session.callType,
-    status: 'ended',
+    status: CallStatus.ended,
     initiatorId: data.initiatorId ?? session.initiatorId,
     initiatorRingtoneId: session.initiatorRingtoneId,
     conversationId: data.conversationId ?? session.conversationId,

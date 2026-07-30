@@ -32,24 +32,39 @@ class ClientStateSyncConfig {
   }) {
     return ClientStateSyncConfig(
       flushDelay: Duration(
-        seconds: _int(map['flush_delay_sec'], fallback.flushDelay.inSeconds),
+        seconds: _positiveIntOrFallback(
+          map,
+          'flush_delay_sec',
+          fallback.flushDelay.inSeconds,
+        ),
       ),
       retryDelay: Duration(
-        seconds: _int(map['retry_delay_sec'], fallback.retryDelay.inSeconds),
+        seconds: _positiveIntOrFallback(
+          map,
+          'retry_delay_sec',
+          fallback.retryDelay.inSeconds,
+        ),
       ),
-      maxBatchSize: _int(map['max_batch_size'], fallback.maxBatchSize),
+      maxBatchSize: _positiveIntOrFallback(
+        map,
+        'max_batch_size',
+        fallback.maxBatchSize,
+      ),
       maxPendingAge: Duration(
-        seconds: _int(
-          map['max_pending_age_sec'],
+        seconds: _positiveIntOrFallback(
+          map,
+          'max_pending_age_sec',
           fallback.maxPendingAge.inSeconds,
         ),
       ),
-      flushOnForegroundResume: _bool(
-        map['flush_on_foreground_resume'],
+      flushOnForegroundResume: _boolOrFallback(
+        map,
+        'flush_on_foreground_resume',
         fallback.flushOnForegroundResume,
       ),
-      flushOnNetworkRecovered: _bool(
-        map['flush_on_network_recovered'],
+      flushOnNetworkRecovered: _boolOrFallback(
+        map,
+        'flush_on_network_recovered',
         fallback.flushOnNetworkRecovered,
       ),
     );
@@ -83,22 +98,60 @@ class ClientStateSyncOutboxEntry {
       confirmedBoolValue == null || confirmedBoolValue != desiredBoolValue;
 
   factory ClientStateSyncOutboxEntry.fromMap(Map<String, dynamic> map) {
-    final desiredBoolValue = map['desiredBoolValue'] == true;
-    final priorNeedsRemoteSync = map['needsRemoteSync'] != false;
+    const allowedKeys = <String>{
+      'coalesceKey',
+      'objectType',
+      'objectId',
+      'intentType',
+      'desiredBoolValue',
+      'sourceSurfaceId',
+      'nextFlushAt',
+      'confirmedBoolValue',
+      'retryCount',
+    };
+    if (!allowedKeys.containsAll(map.keys)) {
+      throw const FormatException('unknown client state sync outbox field');
+    }
+    final coalesceKey = _requiredText(map, 'coalesceKey');
+    final objectType = _requiredText(map, 'objectType');
+    final objectId = _requiredText(map, 'objectId');
+    final intentType = _requiredText(map, 'intentType');
+    if (coalesceKey != '$objectType:$intentType:$objectId') {
+      throw const FormatException('invalid client state sync coalesceKey');
+    }
+    final desiredBoolValue = map['desiredBoolValue'];
+    if (desiredBoolValue is! bool) {
+      throw const FormatException('invalid desiredBoolValue');
+    }
+    final sourceSurfaceId = map['sourceSurfaceId'];
+    if (sourceSurfaceId != null && sourceSurfaceId is! String) {
+      throw const FormatException('invalid sourceSurfaceId');
+    }
+    final rawNextFlushAt = map['nextFlushAt'];
+    final nextFlushAt = rawNextFlushAt is String
+        ? DateTime.tryParse(rawNextFlushAt)?.toUtc()
+        : null;
+    if (nextFlushAt == null) {
+      throw const FormatException('invalid nextFlushAt');
+    }
+    final confirmedBoolValue = map['confirmedBoolValue'];
+    if (confirmedBoolValue != null && confirmedBoolValue is! bool) {
+      throw const FormatException('invalid confirmedBoolValue');
+    }
+    final retryCount = map['retryCount'];
+    if (retryCount is! int || retryCount < 0) {
+      throw const FormatException('invalid retryCount');
+    }
     return ClientStateSyncOutboxEntry(
-      coalesceKey: (map['coalesceKey'] ?? '').toString(),
-      objectType: (map['objectType'] ?? '').toString(),
-      objectId: (map['objectId'] ?? '').toString(),
-      intentType: (map['intentType'] ?? '').toString(),
+      coalesceKey: coalesceKey,
+      objectType: objectType,
+      objectId: objectId,
+      intentType: intentType,
       desiredBoolValue: desiredBoolValue,
-      sourceSurfaceId: (map['sourceSurfaceId'] ?? '').toString(),
-      nextFlushAt:
-          DateTime.tryParse(map['nextFlushAt']?.toString() ?? '')?.toUtc() ??
-          DateTime.now().toUtc(),
-      confirmedBoolValue:
-          _boolOrNull(map['confirmedBoolValue']) ??
-          (priorNeedsRemoteSync ? !desiredBoolValue : desiredBoolValue),
-      retryCount: _int(map['retryCount'], 0),
+      sourceSurfaceId: sourceSurfaceId as String? ?? '',
+      nextFlushAt: nextFlushAt,
+      confirmedBoolValue: confirmedBoolValue as bool?,
+      retryCount: retryCount,
     );
   }
 
@@ -149,18 +202,19 @@ class ClientStateSyncOutboxState {
   final List<ClientStateSyncOutboxEntry> entries;
 
   factory ClientStateSyncOutboxState.fromMap(Map<String, dynamic> map) {
+    if (map.length != 1 || map['entries'] is! List) {
+      throw const FormatException('invalid client state sync outbox');
+    }
     final rawEntries = map['entries'];
     return ClientStateSyncOutboxState(
-      entries: rawEntries is List
-          ? rawEntries
-                .whereType<Map>()
-                .map(
-                  (entry) => ClientStateSyncOutboxEntry.fromMap(
-                    entry.cast<String, dynamic>(),
-                  ),
-                )
-                .toList(growable: false)
-          : const <ClientStateSyncOutboxEntry>[],
+      entries: (rawEntries! as List<Object?>)
+          .map((entry) {
+            if (entry is! Map<String, dynamic>) {
+              throw const FormatException('invalid client state sync entry');
+            }
+            return ClientStateSyncOutboxEntry.fromMap(entry);
+          })
+          .toList(growable: false),
     );
   }
 
@@ -191,33 +245,28 @@ class ClientStateSyncOutboxState {
   }
 }
 
-int _int(Object? value, int fallback) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  return int.tryParse(value?.toString() ?? '') ?? fallback;
+int _positiveIntOrFallback(Map<String, dynamic> map, String key, int fallback) {
+  final value = map[key];
+  if (value == null) return fallback;
+  if (value is! int || value <= 0) {
+    throw FormatException('invalid $key');
+  }
+  return value;
 }
 
-bool _bool(Object? value, bool fallback) {
-  if (value is bool) return value;
-  if (value is String) {
-    final lower = value.toLowerCase().trim();
-    if (lower == 'true') return true;
-    if (lower == 'false') return false;
+bool _boolOrFallback(Map<String, dynamic> map, String key, bool fallback) {
+  final value = map[key];
+  if (value == null) return fallback;
+  if (value is! bool) {
+    throw FormatException('invalid $key');
   }
-  return fallback;
+  return value;
 }
 
-bool? _boolOrNull(Object? value) {
-  if (value == null) {
-    return null;
+String _requiredText(Map<String, dynamic> map, String key) {
+  final value = map[key];
+  if (value is! String || value.isEmpty || value != value.trim()) {
+    throw FormatException('invalid $key');
   }
-  if (value is bool) {
-    return value;
-  }
-  if (value is String) {
-    final lower = value.toLowerCase().trim();
-    if (lower == 'true') return true;
-    if (lower == 'false') return false;
-  }
-  return null;
+  return value;
 }

@@ -31,6 +31,12 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
 
   final facets = AppProductionComposition.contentFacets(
     httpClient: ref.watch(cloudHttpClientProvider),
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) => _contentQueryInvocationContext(
+      ref,
+      surface: AppUiSurfaces.homeFeed,
+      clientPageId: clientPageId,
+    ),
     blockedKeywordsLoader: loadBlockedKeywords,
     postCache: ref.watch(postObjectCacheProvider),
     querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),

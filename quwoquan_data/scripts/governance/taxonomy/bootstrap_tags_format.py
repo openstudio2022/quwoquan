@@ -405,15 +405,33 @@ def _gen_format_视觉风格():
     ]:
         tag(f"Format/视觉风格/视觉调性/{tone}", tone, en, desc)
 
+    # 后期流派的唯一真相源。Topic/摄影 刻意不建平行的「后期流派」——同一现实概念在两
+    # 个轴上各有一棵树就会出现两个可写入位置，而 Topic 侧没有采集通道能填它。
+    # 采集通道是发布面板的打标 chip：后期手法无法从 EXIF 推断（EXIF 只记录拍摄参数，
+    # 不记录 Lightroom 里做了什么），只能由创作者声明。
     tag("Format/视觉风格/后期风格", "后期风格", "Post-processing Style",
-        "照片/视频后期处理的风格")
-    for style, en in [
-        ("原片直出", "SOOC"), ("重度修图", "Heavy Retouching"),
-        ("HDR效果", "HDR Effect"), ("滤镜风格", "Filter Style"),
-        ("胶片模拟", "Film Simulation"), ("调色风格", "Color Grading"),
+        "照片/视频后期处理的流派，由创作者在发布面板声明",
+        collection_channel="creator_chip",
+        consumed_by=["recall", "scorer", "intersection", "search_facet"])
+    for style, en, desc in [
+        ("原片直出", "SOOC", "不做后期或仅做机内处理"),
+        ("重度修图", "Heavy Retouching", "液化、合成、换天等大幅改动"),
+        ("HDR效果", "HDR Effect", "多帧合成或单帧提亮扩展动态范围"),
+        ("滤镜风格", "Filter Style", "套用成品滤镜或预设"),
+        ("胶片模拟", "Film Simulation", "模拟特定胶片的色彩曲线与颗粒"),
+        ("调色风格", "Color Grading", "手动调色建立整体色彩倾向"),
+        ("青橙调色", "Teal & Orange", "冷青暗部配暖橙肤色的电影常用配色"),
+        ("莫兰迪灰调", "Morandi Muted", "整体降饱和的灰调低对比配色"),
+        ("暗黑质感", "Dark Moody", "压暗高光与阴影强化厚重质感"),
+        ("通透高亮", "Clean & Airy", "提亮阴影降低对比营造通透感"),
+        ("颗粒质感", "Film Grain", "叠加颗粒与漏光模拟胶片物理质感"),
+        ("锐化清晰", "Sharpened", "强化局部对比与边缘清晰度"),
+        ("黑白转档", "Monochrome Conversion", "从彩色原片转黑白并单独控制灰阶"),
+        ("AI增强", "AI Enhanced", "使用 AI 放大、降噪或补全细节"),
     ]:
-        tag(f"Format/视觉风格/后期风格/{style}", style, en,
-            f"{style}风格的后期处理")
+        tag(f"Format/视觉风格/后期风格/{style}", style, en, desc,
+            collection_channel="creator_chip",
+            consumed_by=["recall", "scorer", "intersection", "search_facet"])
 
 
 def _gen_format_互动玩法():

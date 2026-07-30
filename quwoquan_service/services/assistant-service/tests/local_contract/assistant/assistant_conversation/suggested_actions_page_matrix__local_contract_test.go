@@ -6,7 +6,7 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
@@ -14,7 +14,7 @@ import (
 func TestSuggestedActionsCoverEightCanonicalPageTypes(
 	t *testing.T,
 ) {
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)
@@ -77,7 +77,7 @@ func TestSuggestedActionsCoverEightCanonicalPageTypes(
 func TestSuggestedActionsRejectUnknownPageType(
 	t *testing.T,
 ) {
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)
@@ -101,7 +101,7 @@ func TestSuggestedActionsRejectUnknownPageType(
 func TestSuggestedActionsRequireMatchingFreshPageContext(
 	t *testing.T,
 ) {
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)
@@ -141,7 +141,7 @@ func TestSuggestedActionsRequireMatchingFreshPageContext(
 
 func reportSuggestedActionsPageContext(
 	t *testing.T,
-	service *application.AssistantService,
+	service *orchestration.AssistantService,
 	userID string,
 	pageType string,
 	objectID string,

@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan circle API
-    version: v1
+    version: canonical
 paths:
     /circles:
         get:
@@ -16,6 +16,37 @@ paths:
                 method: listCircles
                 reader: CircleDiscoveryReader
                 slice: CircleDiscoveryPageSlice
+            parameters:
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: domainId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: recommendFor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sort
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -54,7 +85,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Circle'
+                            $ref: '#/components/schemas/CreateCircleCommand'
             responses:
                 "200":
                     description: OK
@@ -127,11 +158,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCircleRequest'
+                            $ref: '#/components/schemas/UpdateCircleCommand'
             responses:
                 "200":
                     description: OK
@@ -202,6 +233,31 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: identity
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sort
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -234,6 +290,26 @@ paths:
                 - name: circleId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: groupId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: parentFolderId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
                   schema:
                     type: string
             responses:
@@ -274,11 +350,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CreateCircleFileRequest'
+                            $ref: '#/components/schemas/CreateCircleFileCommand'
             responses:
                 "200":
                     description: OK
@@ -353,24 +429,23 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: If-Match
+                  in: header
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: true
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-                - name: If-Match
-                  in: header
-                  required: true
-                  description: Quoted positive aggregate version for a snapshot overwrite.
-                  schema:
-                    type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCircleFileRequest'
+                            $ref: '#/components/schemas/UpdateCircleFileCommand'
             responses:
                 "200":
                     description: OK
@@ -446,6 +521,36 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: groupType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: visibility
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: parentGroupId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: nodeType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -488,7 +593,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CreateCircleGroupRequest'
+                            $ref: '#/components/schemas/CreateCircleGroupCommand'
             responses:
                 "200":
                     description: OK
@@ -563,16 +668,15 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: If-Match
+                  in: header
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: true
                   description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-                - name: If-Match
-                  in: header
-                  required: true
-                  description: Quoted positive aggregate version for a snapshot overwrite.
                   schema:
                     type: string
             requestBody:
@@ -580,7 +684,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCircleGroupRequest'
+                            $ref: '#/components/schemas/UpdateCircleGroupCommand'
             responses:
                 "200":
                     description: OK
@@ -661,6 +765,21 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: state
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -703,12 +822,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ApplyJoinCircleGroupRequest'
             responses:
                 "200":
                     description: OK
@@ -810,7 +923,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCircleGroupMembershipRoleRequest'
+                            $ref: '#/components/schemas/UpdateCircleGroupMembershipRoleCommand'
             responses:
                 "200":
                     description: OK
@@ -859,12 +972,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ApproveCircleGroupMemberRequest'
             responses:
                 "200":
                     description: OK
@@ -913,12 +1020,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RejectCircleGroupMemberRequest'
             responses:
                 "200":
                     description: OK
@@ -1032,6 +1133,31 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: visibility
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: groupType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1098,6 +1224,16 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1133,12 +1269,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/JoinCircleRequest'
             responses:
                 "200":
                     description: OK
@@ -1187,7 +1317,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCircleMembershipRoleRequest'
+                            $ref: '#/components/schemas/UpdateCircleMembershipRoleCommand'
             responses:
                 "200":
                     description: OK
@@ -1231,12 +1361,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ApproveCircleMemberRequest'
             responses:
                 "200":
                     description: OK
@@ -1280,12 +1404,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RejectCircleMemberRequest'
             responses:
                 "200":
                     description: OK
@@ -1317,6 +1435,16 @@ paths:
                 - name: circleId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
                   schema:
                     type: string
             responses:
@@ -1432,7 +1560,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/PlacePostInCircleRequest'
+                            $ref: '#/components/schemas/PlaceCirclePostCommand'
             responses:
                 "200":
                     description: OK
@@ -1524,7 +1652,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCirclePostPlacementRequest'
+                            $ref: '#/components/schemas/FeatureCirclePostCommand'
             responses:
                 "200":
                     description: OK
@@ -1573,7 +1701,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateCirclePostPlacementRequest'
+                            $ref: '#/components/schemas/PinCirclePostCommand'
             responses:
                 "200":
                     description: OK
@@ -1617,7 +1745,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CircleSectionConfig'
+                            $ref: '#/components/schemas/UpdateCircleSectionsCommand'
             responses:
                 "200":
                     description: OK
@@ -1690,7 +1818,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReportCircleBehaviorRequest'
+                            $ref: '#/components/schemas/AppendCircleBehaviorFactCommand'
             responses:
                 "204":
                     description: No Content
@@ -1715,6 +1843,37 @@ paths:
                 method: listCircleDiscoveryFeed
                 reader: CircleDiscoveryFeedReader
                 slice: CircleDiscoveryFeedPageSlice
+            parameters:
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: subCategory
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: scope
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sort
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1743,6 +1902,32 @@ paths:
                 method: searchCircles
                 reader: CircleSearchReader
                 slice: CircleSearchResultSlice
+            parameters:
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: categoryId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: subCategory
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1815,6 +2000,21 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1836,20 +2036,10 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        ApplyJoinCircleGroupRequest:
+        AppendCircleBehaviorFactCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ApplyJoinCircleGroupRequest
-            x-contract-placeholder: true
-        ApproveCircleGroupMemberRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ApproveCircleGroupMemberRequest
-            x-contract-placeholder: true
-        ApproveCircleMemberRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ApproveCircleMemberRequest
+            x-contract-entity: AppendCircleBehaviorFactCommand
             x-contract-placeholder: true
         Circle:
             type: object
@@ -1941,83 +2131,73 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleSearchResultView
             x-contract-placeholder: true
-        CircleSectionConfig:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CircleSectionConfig
-            x-contract-placeholder: true
         CircleStatsWire:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CircleStatsWire
             x-contract-placeholder: true
-        CreateCircleFileRequest:
+        CreateCircleCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CreateCircleFileRequest
+            x-contract-entity: CreateCircleCommand
             x-contract-placeholder: true
-        CreateCircleGroupRequest:
+        CreateCircleFileCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CreateCircleGroupRequest
+            x-contract-entity: CreateCircleFileCommand
             x-contract-placeholder: true
-        JoinCircleRequest:
+        CreateCircleGroupCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: JoinCircleRequest
+            x-contract-entity: CreateCircleGroupCommand
+            x-contract-placeholder: true
+        FeatureCirclePostCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: FeatureCirclePostCommand
             x-contract-placeholder: true
         PersonaCircleSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PersonaCircleSlice
             x-contract-placeholder: true
-        PlacePostInCircleRequest:
+        PinCirclePostCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PlacePostInCircleRequest
+            x-contract-entity: PinCirclePostCommand
             x-contract-placeholder: true
-        RejectCircleGroupMemberRequest:
+        PlaceCirclePostCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RejectCircleGroupMemberRequest
+            x-contract-entity: PlaceCirclePostCommand
             x-contract-placeholder: true
-        RejectCircleMemberRequest:
+        UpdateCircleCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RejectCircleMemberRequest
+            x-contract-entity: UpdateCircleCommand
             x-contract-placeholder: true
-        ReportCircleBehaviorRequest:
+        UpdateCircleFileCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReportCircleBehaviorRequest
+            x-contract-entity: UpdateCircleFileCommand
             x-contract-placeholder: true
-        UpdateCircleFileRequest:
+        UpdateCircleGroupCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateCircleFileRequest
+            x-contract-entity: UpdateCircleGroupCommand
             x-contract-placeholder: true
-        UpdateCircleGroupMembershipRoleRequest:
+        UpdateCircleGroupMembershipRoleCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateCircleGroupMembershipRoleRequest
+            x-contract-entity: UpdateCircleGroupMembershipRoleCommand
             x-contract-placeholder: true
-        UpdateCircleGroupRequest:
+        UpdateCircleMembershipRoleCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateCircleGroupRequest
+            x-contract-entity: UpdateCircleMembershipRoleCommand
             x-contract-placeholder: true
-        UpdateCircleMembershipRoleRequest:
+        UpdateCircleSectionsCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateCircleMembershipRoleRequest
-            x-contract-placeholder: true
-        UpdateCirclePostPlacementRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateCirclePostPlacementRequest
-            x-contract-placeholder: true
-        UpdateCircleRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateCircleRequest
+            x-contract-entity: UpdateCircleSectionsCommand
             x-contract-placeholder: true

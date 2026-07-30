@@ -2,6 +2,10 @@
   "label": "电影",
   "labelEn": "Movie",
   "description": "喜欢电影、影评与观影记录",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/影视娱乐/电影"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

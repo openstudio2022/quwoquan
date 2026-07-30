@@ -24,6 +24,45 @@
       "type": "string",
       "description": "稳定语义说明，不放热点/时间窗/生命周期等动态属性"
     },
+    "axisRole": {
+      "type": "string",
+      "enum": [
+        "topic",
+        "userInterest",
+        "userAttribute",
+        "creatorIdentity",
+        "audienceGroup",
+        "entityType",
+        "contentAngle",
+        "contentFormat"
+      ],
+      "description": "该标签所在的语义轴。四大分组是正交轴，同名标签跨轴出现是正交、同轴出现即重复。由 group + dimension 推导后落盘，供 verify_tag_tree R13 与下游消费者读取。"
+    },
+    "sameAsRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "指向其他轴上同一现实概念的 tagRef。例如 Audience/用户/兴趣偏好/旅行摄影/摄影 与 Topic/摄影 是同一概念的兴趣轴与主题轴表达。推荐侧据此做跨维度 affinity 传播，修复冷启动断链。"
+    },
+    "collectionChannel": {
+      "type": "string",
+      "enum": [
+        "exif",
+        "poi",
+        "creator_chip",
+        "review_chip",
+        "onboarding",
+        "pipeline_only"
+      ],
+      "description": "该标签的采集通道，即它如何被写到内容或用户上。没有采集通道的标签是孤儿：永远不会被打上，也就永远不会参与召回。"
+    },
+    "consumedBy": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["recall", "scorer", "intersection", "search_facet"]
+      },
+      "description": "该标签的消费方。采集到但无人消费的标签同样是孤儿。"
+    },
     "sourceRefs": {
       "type": "array",
       "items": { "type": "string" },

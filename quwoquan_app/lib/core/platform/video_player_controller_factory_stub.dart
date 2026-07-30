@@ -4,6 +4,7 @@ VideoPlayerController createLocalFileVideoController(
   String path, {
   required VideoViewType viewType,
   required Map<String, String> httpHeaders,
+  required VideoPlayerOptions videoPlayerOptions,
 }) {
   // Web has no local file controllers; callers must gate on capabilities.
   throw UnsupportedError(

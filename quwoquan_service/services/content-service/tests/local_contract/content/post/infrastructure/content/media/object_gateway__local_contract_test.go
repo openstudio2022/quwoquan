@@ -1,7 +1,10 @@
+// spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-002
+
 package media_test
 
 import (
 	"context"
+	"net/url"
 	. "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
 	"strings"
 	"testing"
@@ -13,13 +16,13 @@ import (
 func TestObjectGatewayDeliveryURLUsesPublicSliceWithoutCASPath(t *testing.T) {
 	now := time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
 	gateway, err := NewObjectGateway(ObjectGatewayConfig{
-		Bucket: "media", CDNDomain: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+		Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
 	}, &objectClientStub{})
 	if err != nil {
 		t.Fatalf("new gateway: %v", err)
 	}
 	gateway.SetClock(func() time.Time { return now })
-	const publicSlice = "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+	const publicSlice = "media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4"
 	delivery, err := gateway.DeliveryURL(context.Background(), publicSlice)
 	if err != nil {
 		t.Fatalf("delivery url: %v", err)
@@ -32,10 +35,83 @@ func TestObjectGatewayDeliveryURLUsesPublicSliceWithoutCASPath(t *testing.T) {
 	}
 }
 
+func TestObjectGatewaySignsOnlyCanonicalPrivateMediaKeys(t *testing.T) {
+	now := time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	gateway, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, &objectClientStub{})
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	gateway.SetClock(func() time.Time { return now })
+	privateKey := "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"
+	delivery, err := gateway.DeliveryURLUntil(
+		context.Background(),
+		privateKey,
+		now.Add(time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("private delivery URL: %v", err)
+	}
+	parsed, err := url.Parse(delivery)
+	if err != nil {
+		t.Fatalf("parse private delivery URL: %v", err)
+	}
+	if parsed.Scheme != "https" || parsed.Host != "cdn.example.test" ||
+		parsed.Path != "/"+privateKey || parsed.Query().Get("sign") == "" ||
+		parsed.Query().Get("t") != "1893456060" {
+		t.Fatalf("private delivery URL is not canonical: %q", delivery)
+	}
+	for _, invalid := range []string{
+		"uploads/persona/session/source.jpg",
+		"media/objects/sha256/../../secret",
+		"outside/media/source.jpg",
+	} {
+		if _, err := gateway.DeliveryURLUntil(
+			context.Background(),
+			invalid,
+			now.Add(time.Minute),
+		); err == nil {
+			t.Fatalf("invalid private delivery key %q was accepted", invalid)
+		}
+	}
+}
+
+func TestObjectGatewayRejectsRoleSpecificBaseForPrivateDelivery(t *testing.T) {
+	if _, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test/media/image", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, &objectClientStub{}); err == nil {
+		t.Fatal("private media gateway must require an origin-only delivery base")
+	}
+}
+
+func TestObjectGatewayRejectsNonHTTPSBaseAndUnversionedPublicSlice(t *testing.T) {
+	if _, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", MediaDeliveryBaseURL: "http://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, &objectClientStub{}); err == nil {
+		t.Fatal("media gateway must reject non-HTTPS base instead of rewriting it")
+	}
+
+	now := time.Date(2030, time.January, 1, 0, 0, 0, 0, time.UTC)
+	gateway, err := NewObjectGateway(ObjectGatewayConfig{
+		Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+	}, &objectClientStub{})
+	if err != nil {
+		t.Fatalf("new gateway: %v", err)
+	}
+	gateway.SetClock(func() time.Time { return now })
+	if delivery, err := gateway.DeliveryURL(
+		context.Background(),
+		"media/video/s/asset/video_001/source.mp4",
+	); err == nil || delivery != "" {
+		t.Fatalf("unversioned public slice must fail closed, delivery=%q err=%v", delivery, err)
+	}
+}
+
 func TestObjectGatewayMaterializesPublicSliceWithoutPromotingAwayCASSource(t *testing.T) {
 	client := &objectClientStub{}
 	gateway, err := NewObjectGateway(ObjectGatewayConfig{
-		Bucket: "media", CDNDomain: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+		Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
 	}, client)
 	if err != nil {
 		t.Fatalf("new gateway: %v", err)
@@ -56,7 +132,7 @@ func TestObjectGatewayMaterializesPublicSliceWithoutPromotingAwayCASSource(t *te
 func TestObjectGatewayReclaimsOnlyValidatedClosedAccountArtifacts(t *testing.T) {
 	client := &objectClientStub{}
 	gateway, err := NewObjectGateway(ObjectGatewayConfig{
-		Bucket: "media", CDNDomain: "cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
+		Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test", CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
 	}, client)
 	if err != nil {
 		t.Fatalf("new gateway: %v", err)
@@ -112,7 +188,7 @@ func TestObjectGatewayBlocksCompletionWhenArtifactReadBackFindsResiduals(
 			info: &runtimemedia.ObjectInfo{Exists: true},
 		}
 		gateway, err := NewObjectGateway(ObjectGatewayConfig{
-			Bucket: "media", CDNDomain: "cdn.example.test",
+			Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test",
 			CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
 		}, client)
 		if err != nil {
@@ -133,7 +209,7 @@ func TestObjectGatewayBlocksCompletionWhenArtifactReadBackFindsResiduals(
 	t.Run("prefix", func(t *testing.T) {
 		client := &objectClientStub{prefixRemaining: true}
 		gateway, err := NewObjectGateway(ObjectGatewayConfig{
-			Bucket: "media", CDNDomain: "cdn.example.test",
+			Bucket: "media", MediaDeliveryBaseURL: "https://cdn.example.test",
 			CDNSignKey: "test-sign-key", DeliveryTTL: time.Minute,
 		}, client)
 		if err != nil {

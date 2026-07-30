@@ -18,6 +18,7 @@ type MessageSearchHit struct {
 
 type ContactSearchHit struct {
 	ContactID        string
+	UserHandle       string
 	DisplayName      string
 	AvatarURL        string
 	Bio              string

@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan chat API
-    version: v1
+    version: canonical
 paths:
     /chat/contact-home:
         get:
@@ -16,6 +16,17 @@ paths:
                 method: listContactHome
                 reader: ContactHomeReader
                 slice: ContactHomePageSlice
+            parameters:
+                - name: filter
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -43,6 +54,17 @@ paths:
                 method: listContacts
                 reader: ContactListReader
                 slice: ContactPageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -70,6 +92,17 @@ paths:
                 method: listConversations
                 reader: ConversationListReader
                 slice: ConversationPageSlice
+            parameters:
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -107,7 +140,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Conversation'
+                            $ref: '#/components/schemas/ChatCreateConversationCommand'
             responses:
                 "200":
                     description: OK
@@ -179,11 +212,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateConversationTitleRequest'
+                            $ref: '#/components/schemas/ChatUpdateConversationTitleCommand'
             responses:
                 "200":
                     description: OK
@@ -256,11 +289,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateGroupAdminsRequest'
+                            $ref: '#/components/schemas/ChatUpdateConversationAdminsCommand'
             responses:
                 "204":
                     description: No Content
@@ -296,11 +329,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateAnnouncementRequest'
+                            $ref: '#/components/schemas/ChatUpdateAnnouncementCommand'
             responses:
                 "200":
                     description: OK
@@ -340,11 +373,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/InviteAssistantRequest'
+                            $ref: '#/components/schemas/ChatInviteConversationAssistantCommand'
             responses:
                 "204":
                     description: No Content
@@ -413,11 +446,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateGroupGovernanceSettingsRequest'
+                            $ref: '#/components/schemas/ChatUpdateGroupGovernanceSettingsCommand'
             responses:
                 "200":
                     description: OK
@@ -456,12 +489,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/LeaveConversationRequest'
             responses:
                 "204":
                     description: No Content
@@ -489,6 +516,31 @@ paths:
                 - name: conversationId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: role
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sort
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: query
+                  in: query
+                  required: false
                   schema:
                     type: string
             responses:
@@ -529,11 +581,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AddMembersRequest'
+                            $ref: '#/components/schemas/ChatAddConversationMembersCommand'
             responses:
                 "204":
                     description: No Content
@@ -602,6 +654,21 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: afterSeq
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: beforeSeq
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -644,7 +711,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Message'
+                            $ref: '#/components/schemas/ChatSendMessageCommand'
             responses:
                 "200":
                     description: OK
@@ -688,12 +755,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/MarkAsReadRequest'
             responses:
                 "204":
                     description: No Content
@@ -733,12 +794,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RecallMessageRequest'
             responses:
                 "204":
                     description: No Content
@@ -812,11 +867,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/TransferOwnershipRequest'
+                            $ref: '#/components/schemas/ChatTransferConversationOwnershipCommand'
             responses:
                 "204":
                     description: No Content
@@ -852,11 +907,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateConversationSettingsRequest'
+                            $ref: '#/components/schemas/ChatUpdateConversationSettingsCommand'
             responses:
                 "204":
                     description: No Content
@@ -886,6 +941,12 @@ paths:
                   required: true
                   schema:
                     type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ChatSyncMessagesQuery'
             responses:
                 "200":
                     description: OK
@@ -913,6 +974,12 @@ paths:
                 method: batchGetConversations
                 reader: BatchConversationReader
                 slice: ConversationBatchSlice
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ChatBatchGetConversationsQuery'
             responses:
                 "200":
                     description: OK
@@ -967,6 +1034,17 @@ paths:
                 method: listGroupCandidates
                 reader: GroupCandidateReader
                 slice: GroupCandidatePageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: conversationId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1027,6 +1105,17 @@ paths:
                 method: listInbox
                 reader: ChatInboxReader
                 slice: ChatInboxPageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1054,6 +1143,22 @@ paths:
                 method: listMessageHome
                 reader: MessageHomeReader
                 slice: MessageHomePageSlice
+            parameters:
+                - name: filter
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1081,6 +1186,27 @@ paths:
                 method: listSelectableGroupConversations
                 reader: SelectableGroupConversationReader
                 slice: SelectableGroupConversationPageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: source
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1112,6 +1238,21 @@ paths:
                 - name: conversationId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
                   schema:
                     type: string
             responses:
@@ -1186,6 +1327,21 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: creatorPersonaId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: assistantMemberId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: assistantSkillId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1218,6 +1374,16 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: creatorPersonaId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: assistantSkillId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: true
@@ -1229,7 +1395,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Message'
+                            $ref: '#/components/schemas/ChatSendAssistantDeliveryMessageCommand'
             responses:
                 "200":
                     description: OK
@@ -1263,6 +1429,26 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: creatorPersonaId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: assistantSkillId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: beforeSeq
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1283,11 +1469,6 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        AddMembersRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AddMembersRequest
-            x-contract-placeholder: true
         AssistantDeliveryMembershipView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1316,6 +1497,16 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatAccountClosureDeadLetterRecoveryRequest
             x-contract-placeholder: true
+        ChatAddConversationMembersCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatAddConversationMembersCommand
+            x-contract-placeholder: true
+        ChatBatchGetConversationsQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatBatchGetConversationsQuery
+            x-contract-placeholder: true
         ChatContactListRow:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1331,10 +1522,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatConversationTimestamp
             x-contract-placeholder: true
+        ChatCreateConversationCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatCreateConversationCommand
+            x-contract-placeholder: true
         ChatInbox:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatInbox
+            x-contract-placeholder: true
+        ChatInviteConversationAssistantCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatInviteConversationAssistantCommand
             x-contract-placeholder: true
         ChatMessageClient:
             type: object
@@ -1351,20 +1552,60 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatMessageSyncSlice
             x-contract-placeholder: true
+        ChatSendAssistantDeliveryMessageCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatSendAssistantDeliveryMessageCommand
+            x-contract-placeholder: true
+        ChatSendMessageCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatSendMessageCommand
+            x-contract-placeholder: true
         ChatSendMessageResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ChatSendMessageResult
             x-contract-placeholder: true
+        ChatSyncMessagesQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatSyncMessagesQuery
+            x-contract-placeholder: true
+        ChatTransferConversationOwnershipCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatTransferConversationOwnershipCommand
+            x-contract-placeholder: true
+        ChatUpdateAnnouncementCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatUpdateAnnouncementCommand
+            x-contract-placeholder: true
+        ChatUpdateConversationAdminsCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatUpdateConversationAdminsCommand
+            x-contract-placeholder: true
+        ChatUpdateConversationSettingsCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatUpdateConversationSettingsCommand
+            x-contract-placeholder: true
+        ChatUpdateConversationTitleCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatUpdateConversationTitleCommand
+            x-contract-placeholder: true
+        ChatUpdateGroupGovernanceSettingsCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ChatUpdateGroupGovernanceSettingsCommand
+            x-contract-placeholder: true
         ContactHomeRow:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContactHomeRow
-            x-contract-placeholder: true
-        Conversation:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: Conversation
             x-contract-placeholder: true
         ConversationMemberListRow:
             type: object
@@ -1388,16 +1629,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GroupHome
-            x-contract-placeholder: true
-        InviteAssistantRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: InviteAssistantRequest
-            x-contract-placeholder: true
-        LeaveConversationRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: LeaveConversationRequest
             x-contract-placeholder: true
         ListAssistantGroundingMessagesPage:
             type: object
@@ -1555,58 +1786,13 @@ components:
                     type: string
                     nullable: true
             x-contract-entity: SelectableGroupConversationRow
-        MarkAsReadRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: MarkAsReadRequest
-            x-contract-placeholder: true
-        Message:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: Message
-            x-contract-placeholder: true
         MessageHomeRow:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MessageHomeRow
             x-contract-placeholder: true
-        RecallMessageRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RecallMessageRequest
-            x-contract-placeholder: true
         SelectableGroupConversationRow:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SelectableGroupConversationRow
-            x-contract-placeholder: true
-        TransferOwnershipRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: TransferOwnershipRequest
-            x-contract-placeholder: true
-        UpdateAnnouncementRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateAnnouncementRequest
-            x-contract-placeholder: true
-        UpdateConversationSettingsRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateConversationSettingsRequest
-            x-contract-placeholder: true
-        UpdateConversationTitleRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateConversationTitleRequest
-            x-contract-placeholder: true
-        UpdateGroupAdminsRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateGroupAdminsRequest
-            x-contract-placeholder: true
-        UpdateGroupGovernanceSettingsRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateGroupGovernanceSettingsRequest
             x-contract-placeholder: true

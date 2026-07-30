@@ -15,7 +15,7 @@
     "mentionIds",
     "createdAt",
     "updatedAt",
-    "version"
+    "revision"
   ],
   "properties": {
     "candidateId": {
@@ -66,7 +66,7 @@
       "type": "string",
       "format": "date-time"
     },
-    "version": {
+    "revision": {
       "type": "integer",
       "minimum": 1
     },

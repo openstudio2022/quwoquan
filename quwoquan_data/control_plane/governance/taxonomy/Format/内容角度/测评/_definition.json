@@ -2,6 +2,7 @@
   "label": "测评",
   "labelEn": "Review",
   "description": "对产品、服务、场所进行评测对比的内容视角",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

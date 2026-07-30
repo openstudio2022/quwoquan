@@ -212,7 +212,6 @@ func (s *MongoSink) FlushScorecards(
 			"runId":       scorecard.RunID,
 			"score":       scorecard.Score,
 			"comment":     scorecard.Comment,
-			"version":     scorecard.Version,
 			"createdAt":   now,
 		}
 	}

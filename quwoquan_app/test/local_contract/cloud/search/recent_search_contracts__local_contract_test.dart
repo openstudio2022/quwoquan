@@ -6,13 +6,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('UpsertRecentSearchCommand', () {
     test('wire 只含 query/scope/facet，不含 entryId/updatedAt/版本字段', () {
-      final payload = encodeUpsertRecentSearchCommand(
-        UpsertRecentSearchCommand(
-          query: ' 成都旅行 ',
-          scope: 'all',
-          facet: 'posts',
-        ),
-      );
+      final payload =
+          encodeSearchRecentSearchStateUpsertRecentSearchGeneratedRequest(
+            UpsertRecentSearchCommand(
+              query: ' 成都旅行 ',
+              scope: 'all',
+              facet: 'posts',
+            ),
+          );
       expect(payload.body, <String, Object?>{
         'query': '成都旅行',
         'scope': 'all',
@@ -22,9 +23,10 @@ void main() {
     });
 
     test('facet 缺省时不出现在 wire', () {
-      final payload = encodeUpsertRecentSearchCommand(
-        UpsertRecentSearchCommand(query: 'q', scope: 'all'),
-      );
+      final payload =
+          encodeSearchRecentSearchStateUpsertRecentSearchGeneratedRequest(
+            UpsertRecentSearchCommand(query: 'q', scope: 'all'),
+          );
       final body = payload.body as Map<String, Object?>;
       expect(body.containsKey('facet'), isFalse);
     });
@@ -39,9 +41,10 @@ void main() {
 
   group('Delete/Clear/List 编码', () {
     test('delete 走 entryId path 参数', () {
-      final payload = encodeDeleteRecentSearchCommand(
-        DeleteRecentSearchCommand(entryId: 'recent_abcdef0123456789'),
-      );
+      final payload =
+          encodeSearchRecentSearchStateDeleteRecentSearchGeneratedRequest(
+            DeleteRecentSearchCommand(entryId: 'recent_abcdef0123456789'),
+          );
       expect(payload.pathParameters, <String, String>{
         'entryId': 'recent_abcdef0123456789',
       });
@@ -50,13 +53,13 @@ void main() {
 
     test('list/clear 的 scope 收窄经 query 参数', () {
       expect(
-        encodeListRecentSearchesQuery(
+        encodeSearchRecentSearchStateListRecentSearchesGeneratedRequest(
           ListRecentSearchesQuery(scope: 'all'),
         ).queryParameters,
         <String, String>{'scope': 'all'},
       );
       expect(
-        encodeClearRecentSearchesCommand(
+        encodeSearchRecentSearchStateClearRecentSearchesGeneratedRequest(
           ClearRecentSearchesCommand(),
         ).queryParameters,
         isEmpty,
@@ -102,17 +105,18 @@ void main() {
   });
 
   group('ReportSearchFeedbackCommand', () {
-    test('wire 只含 metadata writable_fields', () {
-      final payload = encodeReportSearchFeedbackCommand(
-        ReportSearchFeedbackCommand(
-          searchRequestId: 'req-1',
-          eventType: SearchFeedbackEventType.click,
-          objectId: 'post-9',
-          target: 'posts',
-          rankPosition: 2,
-          referralSource: 'searchResults',
-        ),
-      );
+    test('wire 只含 request entity body fields', () {
+      final payload =
+          encodeSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
+            ReportSearchFeedbackCommand(
+              searchRequestId: 'req-1',
+              eventType: SearchFeedbackEventType.click,
+              objectId: 'post-9',
+              target: 'posts',
+              rankPosition: 2,
+              referralSource: 'searchResults',
+            ),
+          );
       final body = payload.body as Map<String, Object?>;
       expect(
         body.keys.toSet().difference(<String>{
@@ -147,13 +151,14 @@ void main() {
         ),
         throwsArgumentError,
       );
-      final payload = encodeReportSearchFeedbackCommand(
-        ReportSearchFeedbackCommand(
-          searchRequestId: 'req-1',
-          eventType: SearchFeedbackEventType.dwell,
-          dwellMs: 1,
-        ),
-      );
+      final payload =
+          encodeSearchFeedbackFactReportSearchFeedbackGeneratedRequest(
+            ReportSearchFeedbackCommand(
+              searchRequestId: 'req-1',
+              eventType: SearchFeedbackEventType.dwell,
+              dwellMs: 1,
+            ),
+          );
       expect(payload.body, containsPair('eventType', 'dwell'));
       expect(payload.body, containsPair('dwellMs', 1));
     });
@@ -180,7 +185,9 @@ void main() {
 
   group('ListHotQueriesQuery', () {
     test('limit 经 query parameter 编码且有界', () {
-      final payload = encodeListHotQueriesQuery(ListHotQueriesQuery(limit: 6));
+      final payload = encodeSearchSearchQueryListHotQueriesGeneratedRequest(
+        ListHotQueriesQuery(limit: 6),
+      );
       expect(payload.queryParameters, <String, String>{'limit': '6'});
       expect(() => ListHotQueriesQuery(limit: 21), throwsArgumentError);
     });

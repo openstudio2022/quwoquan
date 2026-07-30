@@ -2,7 +2,6 @@
 // 继承链（CanonicalReference/Summary/Detail）、HomepageShellData、Draft 仍手写；wire 收窄见 [HomepageWireCodec]。
 // 字段与 quwoquan_service/contracts/metadata/entity/entity_homepage/homepage/fields.yaml 对齐。
 // 路由与 operation 常量：entity_api_metadata.g.dart、entity_request_page_ids.g.dart
-// 审核类写请求体：entity_homepage_mutation_wires.g.dart（由 service.yaml writable_fields 生成）。
 // 契约测试：test/cloud/entity/contract/homepage_repository_contract_test.dart
 
 import 'package:quwoquan_app/cloud/runtime/codec/homepage_wire_codec.dart';
@@ -181,7 +180,7 @@ class HomepageDetail extends HomepageCanonicalReference {
     this.city,
     this.location,
     this.ownerUserId,
-    this.ownerSubAccountId,
+    this.ownerPersonaId,
     this.viewerFollowsHomepage = false,
     this.followerCount = 0,
     this.verified = false,
@@ -205,7 +204,7 @@ class HomepageDetail extends HomepageCanonicalReference {
   final String? city;
   final HomepageGeoPoint? location;
   final String? ownerUserId;
-  final String? ownerSubAccountId;
+  final String? ownerPersonaId;
   final bool viewerFollowsHomepage;
   final int followerCount;
 
@@ -252,8 +251,8 @@ class HomepageDetail extends HomepageCanonicalReference {
             : null;
       }(),
       ownerUserId: HomepageWireCodec.optionalTrimmedString(map['ownerUserId']),
-      ownerSubAccountId: HomepageWireCodec.optionalTrimmedString(
-        map['ownerSubAccountId'],
+      ownerPersonaId: HomepageWireCodec.optionalTrimmedString(
+        map['ownerPersonaId'],
       ),
       viewerFollowsHomepage:
           map['viewerFollowsHomepage'] == true ||
@@ -305,7 +304,7 @@ class HomepageDetail extends HomepageCanonicalReference {
     String? city,
     HomepageGeoPoint? location,
     String? ownerUserId,
-    String? ownerSubAccountId,
+    String? ownerPersonaId,
     bool? viewerFollowsHomepage,
     int? followerCount,
     bool? verified,
@@ -336,7 +335,7 @@ class HomepageDetail extends HomepageCanonicalReference {
       city: city ?? this.city,
       location: location ?? this.location,
       ownerUserId: ownerUserId ?? this.ownerUserId,
-      ownerSubAccountId: ownerSubAccountId ?? this.ownerSubAccountId,
+      ownerPersonaId: ownerPersonaId ?? this.ownerPersonaId,
       viewerFollowsHomepage:
           viewerFollowsHomepage ?? this.viewerFollowsHomepage,
       followerCount: followerCount ?? this.followerCount,

@@ -32,5 +32,7 @@ local_identity_reasons:
 capabilities:
 - queryable
 - searchable
+lifecycle:
+  immutable: true
 taggable: false
 vector_enabled: false

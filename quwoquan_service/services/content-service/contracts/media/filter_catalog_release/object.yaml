@@ -59,6 +59,7 @@ business_rules:
 - 目标已 active 的 Activate/Rollback 为 no-op receipt，不递增 version、不生成伪事件
 - public Reader 只返回完整 active release，不返回 staged、retired 或半写入目录
 lifecycle:
+  state_field: status
   states:
   - staged
   - active

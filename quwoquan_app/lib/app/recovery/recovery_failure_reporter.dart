@@ -229,11 +229,6 @@ final class RecoveryFailureReporter {
         origin.userInfo.isNotEmpty) {
       return null;
     }
-    final host = origin.host.toLowerCase();
-    if (host != 'quwoquan.com' &&
-        !host.endsWith('.quwoquan.com')) {
-      return null;
-    }
     return origin.replace(
       path: OpsApiMetadata.reportRecoveryFailurePath,
       query: null,

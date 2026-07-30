@@ -29,9 +29,7 @@ type redisSceneCfg struct {
 
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 	Service struct {
 		HTTP struct {
@@ -139,7 +137,7 @@ func applyEnvOverrides(cfg *config) {
 	}
 }
 
-func validateRuntimeCompatibility(cfg config, _, _ string) error {
+func validateRuntimeConfigurationIdentity(cfg config, _ string) error {
 	if cfg.Postgres.DSN == "" {
 		return fmt.Errorf("postgres.dsn is required")
 	}

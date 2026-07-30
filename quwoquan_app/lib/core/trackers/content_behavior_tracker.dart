@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -20,12 +21,18 @@ class ContentBehaviorTracker {
     Duration flushInterval = const Duration(seconds: 5),
     int maxBatchSize = 20,
     bool enablePeriodicFlush = true,
+    int impressionDedupCapacity = 2048,
+    Duration impressionDedupTtl = const Duration(minutes: 30),
+    DateTime Function()? now,
   }) {
     return ContentBehaviorTracker._(
       reporter,
       flushInterval,
       maxBatchSize,
       enablePeriodicFlush,
+      impressionDedupCapacity,
+      impressionDedupTtl,
+      now ?? DateTime.now,
     );
   }
 
@@ -34,7 +41,13 @@ class ContentBehaviorTracker {
     this._flushInterval,
     this._maxBatchSize,
     bool enablePeriodicFlush,
-  ) {
+    this._impressionDedupCapacity,
+    this._impressionDedupTtl,
+    this._now,
+  ) : assert(_flushInterval > Duration.zero),
+      assert(_maxBatchSize > 0),
+      assert(_impressionDedupCapacity > 0),
+      assert(_impressionDedupTtl > Duration.zero) {
     if (enablePeriodicFlush) {
       _startTimer();
     }
@@ -43,12 +56,20 @@ class ContentBehaviorTracker {
   final BehaviorReporter _reporter;
   final Duration _flushInterval;
   final int _maxBatchSize;
+  final int _impressionDedupCapacity;
+  final Duration _impressionDedupTtl;
+  final DateTime Function() _now;
 
   final List<BehaviorEvent> _buffer = <BehaviorEvent>[];
   final Set<String> _bufferDedupKeys = <String>{};
-  // 同一页面 impression 去重：同一 contentId 只上报一次
-  final Set<String> _impressionSeen = <String>{};
+  // 30 分钟滚动窗口 + LRU 数量上限；淘汰后再次真实曝光可重新计量。
+  final LinkedHashMap<String, DateTime> _impressionSeen =
+      LinkedHashMap<String, DateTime>();
   Timer? _timer;
+
+  int get debugImpressionDedupEntryCount => _impressionSeen.length;
+
+  int get debugPendingEventCount => _buffer.length;
 
   void _startTimer() {
     _timer = Timer.periodic(_flushInterval, (_) => flush());
@@ -66,8 +87,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -88,8 +108,7 @@ class ContentBehaviorTracker {
       position: position,
       referralSource: referralSource,
       channelId: channelId,
-      rankingVersion: rankingVersion,
-      reasonVersion: reasonVersion,
+      policyDigest: policyDigest,
       recallPath: recallPath,
       contentVertical: contentVertical,
       supplySource: supplySource,
@@ -111,8 +130,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -128,8 +146,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -148,8 +165,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -170,16 +186,14 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
       );
       return;
     }
-    if (_impressionSeen.contains(contentId)) return;
-    _impressionSeen.add(contentId);
+    if (!_markImpressionSeen(contentId)) return;
     _add(
       BehaviorEvent(
         contentId: contentId,
@@ -191,8 +205,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -216,8 +229,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -235,8 +247,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -253,8 +264,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -276,8 +286,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -307,8 +316,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -331,8 +339,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -386,8 +393,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -404,8 +410,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -422,8 +427,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -439,8 +443,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -458,8 +461,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -478,8 +480,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -497,8 +498,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -517,8 +517,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -535,8 +534,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -552,8 +550,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -571,8 +568,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -589,8 +585,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -607,7 +602,7 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
+    String? policyDigest,
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
@@ -621,7 +616,7 @@ class ContentBehaviorTracker {
         feedRequestId: feedRequestId,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
+        policyDigest: policyDigest,
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
@@ -635,7 +630,7 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
+    String? policyDigest,
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
@@ -648,7 +643,7 @@ class ContentBehaviorTracker {
         feedRequestId: feedRequestId,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
+        policyDigest: policyDigest,
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
@@ -662,7 +657,7 @@ class ContentBehaviorTracker {
     String? feedRequestId,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
+    String? policyDigest,
     String? intersectionDimension,
     String? intersectionSourceRef,
     List<String>? intersectionTagRefs,
@@ -676,7 +671,7 @@ class ContentBehaviorTracker {
         feedRequestId: feedRequestId,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
+        policyDigest: policyDigest,
         intersectionDimension: intersectionDimension,
         intersectionSourceRef: intersectionSourceRef,
         intersectionTagRefs: intersectionTagRefs,
@@ -699,29 +694,6 @@ class ContentBehaviorTracker {
       BehaviorEvent(
         contentId: '',
         action: BehaviorAction.assistantInterest,
-        state: 'interaction',
-        tags: normalized,
-      ),
-    );
-  }
-
-  /// 记录新用户首启兴趣采集（onboarding_interest，W11 interest-onboarding-prior）。
-  ///
-  /// 四维标签选择（topic/audience/format/entity）合成上报；不绑定具体 post，
-  /// 仅回流路径制 tagRefs。云侧强正权重（2.5）写入 HotPath tag weights +
-  /// rm_recommend_feature 先验，首刷 TagRecall 立即可用。独立 action 使
-  /// onboarding 转化漏斗可与对话兴趣（assistant_interest）分开归因。
-  void trackOnboardingInterest(List<String> tagRefs) {
-    final normalized = tagRefs
-        .map((tag) => tag.trim())
-        .where((tag) => tag.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
-    if (normalized.isEmpty) return;
-    _add(
-      BehaviorEvent(
-        contentId: '',
-        action: BehaviorAction.onboardingInterest,
         state: 'interaction',
         tags: normalized,
       ),
@@ -778,7 +750,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
+    String? policyDigest,
   }) {
     _trackWishlistIntent(
       objectId,
@@ -790,7 +762,7 @@ class ContentBehaviorTracker {
       position: position,
       referralSource: referralSource,
       channelId: channelId,
-      rankingVersion: rankingVersion,
+      policyDigest: policyDigest,
     );
   }
 
@@ -803,7 +775,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
+    String? policyDigest,
   }) {
     _trackWishlistIntent(
       objectId,
@@ -814,7 +786,7 @@ class ContentBehaviorTracker {
       position: position,
       referralSource: referralSource,
       channelId: channelId,
-      rankingVersion: rankingVersion,
+      policyDigest: policyDigest,
     );
   }
 
@@ -830,8 +802,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -852,8 +823,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
-        reasonVersion: reasonVersion,
+        policyDigest: policyDigest,
         recallPath: recallPath,
         contentVertical: contentVertical,
         supplySource: supplySource,
@@ -876,7 +846,7 @@ class ContentBehaviorTracker {
     int? position,
     ReferralSource? referralSource,
     String? channelId,
-    String? rankingVersion,
+    String? policyDigest,
   }) {
     final normalizedObjectId = objectId.trim();
     final normalizedObjectKind = objectKind.trim();
@@ -900,7 +870,7 @@ class ContentBehaviorTracker {
         position: position,
         referralSource: referralSource,
         channelId: channelId,
-        rankingVersion: rankingVersion,
+        policyDigest: policyDigest,
       ),
     );
   }
@@ -913,6 +883,23 @@ class ContentBehaviorTracker {
     if (_buffer.length >= _maxBatchSize) {
       flush();
     }
+  }
+
+  bool _markImpressionSeen(String contentId) {
+    final now = _now().toUtc();
+    _impressionSeen.removeWhere(
+      (_, seenAt) => now.difference(seenAt) >= _impressionDedupTtl,
+    );
+    final existing = _impressionSeen.remove(contentId);
+    if (existing != null) {
+      _impressionSeen[contentId] = now;
+      return false;
+    }
+    _impressionSeen[contentId] = now;
+    while (_impressionSeen.length > _impressionDedupCapacity) {
+      _impressionSeen.remove(_impressionSeen.keys.first);
+    }
+    return true;
   }
 
   /// 立即将缓冲区内容上报，并清空缓冲区。
@@ -932,8 +919,22 @@ class ContentBehaviorTracker {
         error: error,
         stackTrace: stackTrace,
       );
-      if (_buffer.length < _maxBatchSize * 3) {
-        _buffer.insertAll(0, toSend);
+      _restoreFailedBatch(toSend);
+    }
+  }
+
+  void _restoreFailedBatch(List<BehaviorEvent> failed) {
+    final pending = <BehaviorEvent>[...failed, ..._buffer];
+    final maxPending = _maxBatchSize * 3;
+    _buffer.clear();
+    _bufferDedupKeys.clear();
+    for (final event in pending) {
+      if (_buffer.length >= maxPending) {
+        break;
+      }
+      final dedupKey = _dedupKey(event);
+      if (_bufferDedupKeys.add(dedupKey)) {
+        _buffer.add(event);
       }
     }
   }

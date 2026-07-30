@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/services/cache/user_profile_cache_service.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 详情与作者作品列表的缓存 Reader。
 ///
@@ -38,7 +39,15 @@ final class CachedContentPostReader
   final Set<String> _inflightRefreshes = <String>{};
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    throwIfCloudOperationInterrupted(
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
     final cached = postCache.getDetail(postId);
     if (cached != null) {
       _recordCacheHit(key: 'post:$postId', result: cached);
@@ -47,7 +56,11 @@ final class CachedContentPostReader
       }
       return cached.value;
     }
-    final payload = await detailDelegate.getPost(postId: postId);
+    final payload = await detailDelegate.getPost(
+      postId: postId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
     _storePostDetail(payload);
     return payload;
   }
@@ -130,9 +143,7 @@ final class CachedContentPostReader
   void _registerAuthorSnapshot(PostBaseDto post) {
     final avatarUrl = post.avatarUrl.trim();
     userProfileCache?.putAuthorSnapshot(
-      userId: post.subAccountId.trim().isNotEmpty
-          ? post.subAccountId
-          : post.authorId,
+      userId: post.personaId.trim().isNotEmpty ? post.personaId : post.authorId,
       displayName: post.displayName,
       avatarUrl: avatarUrl,
       backgroundUrl: post.authorBackgroundUrl,

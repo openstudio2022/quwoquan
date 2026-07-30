@@ -9,7 +9,7 @@
 ## 1. 用户价值
 
 作为浏览对象主页的用户，
-我希望标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致，
+我希望标题统一为「圈子打动的人」，文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致，
 从而理解对象并继续探索其关系与内容。
 
 ## 2. 范围与非目标
@@ -32,12 +32,12 @@
 <a id="req-001"></a>
 ### REQ-001 圈子主页交集重做
 
-- 标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+- 标题统一为「圈子打动的人」，文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 
 <a id="req-002"></a>
-### REQ-002 统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致
+### REQ-002 统一为「圈子打动的人」，文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致
 
-- 标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+- 标题统一为「圈子打动的人」，文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 
 <a id="req-003"></a>
 ### REQ-003 过滤与用户主页同一实现模式
@@ -72,7 +72,7 @@
 
 - GIVEN 浏览对象主页的用户具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“圈子主页交集重做”对应的公开行为。
-- THEN 标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+- THEN 标题统一为「圈子打动的人」，文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

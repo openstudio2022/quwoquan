@@ -17,7 +17,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'fixture_user_current',
-    activeSubAccountId: 'fixture_user_current',
+    activePersonaId: 'fixture_user_current',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -27,7 +27,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
 void main() {
   testWidgets('拉黑用户可在设置列表查看并解除（UAT 旅程）', (tester) async {
     final facet = AlphaPersonaRelationshipFacet();
-    await facet.blockUser(BlockUserCommand(targetSubAccountId: 'ps_target'));
+    await facet.blockUser(BlockUserCommand(targetPersonaId: 'ps_target'));
 
     await tester.pumpWidget(
       ProviderScope(

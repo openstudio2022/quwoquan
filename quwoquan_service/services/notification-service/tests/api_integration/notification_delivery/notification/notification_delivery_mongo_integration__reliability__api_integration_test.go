@@ -365,7 +365,7 @@ func TestNotificationDeliveryOperatorFacadesListRecoverAndConvergeMetrics(t *tes
 	if err := json.Unmarshal(newKeyRecorder.Body.Bytes(), &failure); err != nil {
 		t.Fatalf("decode non-dead recovery failure: %v", err)
 	}
-	if failure.Code != "NOTIFICATION.USER.delivery_not_found" {
+	if failure.Code != "NOTIFICATION.USER.delivery_job_not_found" {
 		t.Fatalf("repeated recovery stable code=%q", failure.Code)
 	}
 	removedRouteRecorder := httptest.NewRecorder()

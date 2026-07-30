@@ -94,7 +94,7 @@ func (r *CounterReconciler) ReconcileBatch(
 			SELECT unnest($1::text[]) AS owner_id
 		),
 		active_personas AS (
-			SELECT selected.owner_id, personas.sub_account_id AS persona_id
+			SELECT selected.owner_id, personas.persona_id AS persona_id
 			FROM selected_owners AS selected
 			JOIN personas ON personas.user_id = selected.owner_id
 				AND personas.status <> 'retired'

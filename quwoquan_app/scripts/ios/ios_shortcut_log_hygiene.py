@@ -404,7 +404,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     flutter_args = list(args.flutter_args)
     if flutter_args and flutter_args[0] == "--":
         flutter_args = flutter_args[1:]
-    cmd = ["flutter", "run", *flutter_args]
+    cmd = ["bash", str(APP_ROOT / "run.sh"), *flutter_args]
     print(f"[ios_shortcut_log_hygiene] running: {' '.join(cmd)}", file=sys.stderr)
 
     process = subprocess.Popen(
@@ -452,13 +452,13 @@ def build_parser() -> argparse.ArgumentParser:
     filter_parser.set_defaults(handler=cmd_filter_log)
 
     run_parser = subparsers.add_parser(
-        "run", help="Run flutter run with a narrow benign WF log filter."
+        "run", help="Run the canonical App launcher with a narrow benign WF log filter."
     )
     run_parser.add_argument("--ios-root", default=str(DEFAULT_IOS_ROOT))
     run_parser.add_argument(
         "--skip-audit",
         action="store_true",
-        help="Skip source audit before launching flutter run.",
+        help="Skip source audit before launching the canonical App launcher.",
     )
     run_parser.add_argument("flutter_args", nargs=argparse.REMAINDER)
     run_parser.set_defaults(handler=cmd_run)

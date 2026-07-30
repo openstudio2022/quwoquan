@@ -3,498 +3,270 @@ part of 'login_page.dart';
 class LoginFrame extends StatelessWidget {
   const LoginFrame({
     super.key,
-    required this.reason,
-    required this.presentation,
-    required this.agreementAccepted,
-    required this.showAgreementError,
+    required this.state,
+    required this.phoneEntryHasParent,
     required this.socialMethodAvailability,
-    required this.socialMethodFeedback,
     required this.onAgreementToggle,
-    required this.onDismiss,
-    required this.onPrimary,
+    required this.onNavigate,
+    required this.onOneTap,
+    required this.onOtherPhone,
+    required this.onPhonePrimary,
     required this.onAgreementTap,
     required this.onPrivacyTap,
-    required this.onOtherMethod,
+    required this.onSocialMethod,
     required this.phoneController,
     required this.otpController,
     required this.onPhoneChanged,
     required this.onPhoneEditingComplete,
     required this.onOtpChanged,
     required this.onResendOtp,
+    required this.onRetryOtpVerify,
     required this.onChangePhone,
+    required this.onRetrySocial,
+    required this.onCancelSocial,
+    required this.onAccountRestrictionSupport,
+    required this.accountRestrictionSupportBusy,
     this.dismissPolicy = LoginDismissPolicy.popPrevious,
     this.isInline = false,
   });
 
-  final String? reason;
-  final LoginEntryPresentation presentation;
-  final bool agreementAccepted;
-  final bool showAgreementError;
+  final LoginFlowState state;
+  final bool phoneEntryHasParent;
   final Map<String, NativeAuthCapability> socialMethodAvailability;
-  final String socialMethodFeedback;
   final VoidCallback onAgreementToggle;
-  final VoidCallback onDismiss;
-  final VoidCallback onPrimary;
+  final VoidCallback onNavigate;
+  final VoidCallback onOneTap;
+  final VoidCallback onOtherPhone;
+  final VoidCallback onPhonePrimary;
   final VoidCallback onAgreementTap;
   final VoidCallback onPrivacyTap;
-  final ValueChanged<String> onOtherMethod;
+  final ValueChanged<String> onSocialMethod;
   final TextEditingController phoneController;
   final TextEditingController otpController;
   final ValueChanged<String> onPhoneChanged;
   final VoidCallback onPhoneEditingComplete;
   final ValueChanged<String> onOtpChanged;
   final VoidCallback onResendOtp;
+  final VoidCallback onRetryOtpVerify;
   final VoidCallback onChangePhone;
-
-  /// 导航语义由入口决定；错误状态不得改变返回或关闭图标。
+  final VoidCallback onRetrySocial;
+  final VoidCallback onCancelSocial;
+  final VoidCallback onAccountRestrictionSupport;
+  final bool accountRestrictionSupportBusy;
   final LoginDismissPolicy dismissPolicy;
   final bool isInline;
 
   @override
   Widget build(BuildContext context) {
-    final copy = _loginHeroCopyForPresentation(presentation, reason);
-    final content = DecoratedBox(
+    final frame = DecoratedBox(
       decoration: BoxDecoration(color: AppColors.loginPageBackground(context)),
-      // 单屏布局：内容按设计已收紧到常见 iPhone 一屏可容纳，弹性 Spacer 把
-      // "其他登录方式"贴底完整展示；ClampingScrollPhysics 去掉 iOS 回弹/阻尼，
-      // 内容适配时不可滑动，仅在极小屏作为兜底（不裁切）。
       child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: AppSpacing.loginFrameMaxWidth,
-                    minHeight: constraints.maxHeight,
+        child: Column(
+          children: <Widget>[
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppSpacing.loginFrameMaxWidth,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
                   ),
-                  child: IntrinsicHeight(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.loginFrameHorizontalPadding,
-                        vertical: AppSpacing.loginFrameVerticalPadding,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.max,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: <Widget>[
-                          _LoginTopBar(
-                            onDismiss: onDismiss,
-                            dismissPolicy: dismissPolicy,
-                          ),
-                          const SizedBox(
-                            height: AppSpacing.loginTopBarToHeroGap,
-                          ),
-                          LoginHeroBrand(
-                            title: copy.title,
-                            subtitle: copy.subtitle,
-                          ),
-                          const SizedBox(
-                            height: AppSpacing.loginHeroToAccountGap,
-                          ),
-                          LoginAccountArea(
-                            presentation: presentation,
-                            phoneController: phoneController,
-                            otpController: otpController,
-                            onPhoneChanged: onPhoneChanged,
-                            onPhoneEditingComplete: onPhoneEditingComplete,
-                            onOtpChanged: onOtpChanged,
-                            onResendOtp: onResendOtp,
-                            onChangePhone: onChangePhone,
-                          ),
-                          if (_showsProcessFeedback(presentation)) ...<Widget>[
-                            const SizedBox(height: AppSpacing.sm),
-                            _TopLevelErrorBanner(
-                              message:
-                                  presentation.feedback?.message ??
-                                  presentation.message,
-                            ),
-                          ],
-                          const SizedBox(
-                            height: AppSpacing.loginAccountToButtonGap,
-                          ),
-                          PrimaryLoginButton(
-                            label: presentation.primaryLabel,
-                            isSubmitting:
-                                presentation.kind == LoginEntryKind.submitting,
-                            enabled: presentation.canSubmit,
-                            onPressed: onPrimary,
-                          ),
-                          const SizedBox(
-                            height: AppSpacing.loginButtonToAgreementGap,
-                          ),
-                          LoginAgreementRow(
-                            accepted: agreementAccepted,
-                            showError: showAgreementError,
-                            onToggle: onAgreementToggle,
-                            onAgreementTap: onAgreementTap,
-                            onPrivacyTap: onPrivacyTap,
-                          ),
-                          const Spacer(),
-                          const SizedBox(
-                            height: AppSpacing.loginAgreementToOtherGap,
-                          ),
-                          if (socialMethodFeedback
-                              .trim()
-                              .isNotEmpty) ...<Widget>[
-                            AppFormErrorCard(
-                              key: const ValueKey<String>(
-                                'login-social-method-feedback',
-                              ),
-                              semantic: UiErrorSemantic(
-                                category: UiErrorCategory.submit,
-                                scope: UiErrorScope.form,
-                                title: '',
-                                message: socialMethodFeedback,
-                                presentation:
-                                    UiErrorPresentation.formInlineCard,
-                              ),
-                              density: AppFormErrorCardDensity.compact,
-                            ),
-                            const SizedBox(height: AppSpacing.sm),
-                          ],
-                          OtherLoginMethodGrid(
-                            onTap: onOtherMethod,
-                            enabled:
-                                presentation.kind != LoginEntryKind.submitting,
-                            availableMethods: socialMethodAvailability,
-                            excludedMethod:
-                                presentation.resolvedPrimaryAction ==
-                                    LoginPrimaryAction.socialReauth
-                                ? presentation.primaryProvider
-                                : '',
-                            mode: presentation.kind == LoginEntryKind.phoneOtp
-                                ? OtherLoginMethodMode.phoneOtp
-                                : OtherLoginMethodMode.returning,
-                          ),
-                        ],
-                      ),
-                    ),
+                  child: _LoginTopBar(
+                    onNavigate: onNavigate,
+                    showBack: _showsBackNavigation,
+                    enabled: state.step != LoginStep.completing,
                   ),
                 ),
               ),
-            );
-          },
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    key: const ValueKey<String>('loginMainScroll'),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    physics: const ClampingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                    ),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: AppSpacing.loginFrameMaxWidth,
+                          minHeight: constraints.maxHeight - AppSpacing.lg,
+                        ),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: _buildStep(context),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            LoginMethodFooter(
+              onTap: onSocialMethod,
+              availableMethods: socialMethodAvailability,
+              disabledProvider: _disabledFooterProvider,
+            ),
+          ],
         ),
       ),
     );
-    if (!isInline) {
-      return content;
-    }
+    if (!isInline) return frame;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.loginPageBackground(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
         boxShadow: const <BoxShadow>[
           BoxShadow(
             color: AppColors.webPcLoginSurfaceShadow,
             blurRadius: AppSpacing.webPcToolbarElevationBlurRadius,
-            offset: Offset(AppSpacing.zero, AppSpacing.ten),
+            offset: Offset(0, AppSpacing.ten),
           ),
         ],
       ),
-      child: content,
-    );
-  }
-}
-
-/// 历史会话与一键登录失败共用 Account Area 下方的唯一流程反馈槽。
-bool _showsProcessFeedback(LoginEntryPresentation presentation) {
-  final feedback = presentation.feedback;
-  final message = feedback?.message ?? presentation.message;
-  if (message.trim().isEmpty || feedback?.isSilent == true) {
-    return false;
-  }
-  return feedback == null ||
-      feedback.surface == LoginErrorSurface.topLevel ||
-      feedback.surface == LoginErrorSurface.fallbackNotice;
-}
-
-class _TopLevelErrorBanner extends StatelessWidget {
-  const _TopLevelErrorBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppFormErrorCard(
-      key: const ValueKey<String>('login-process-feedback'),
-      semantic: UiErrorSemantic(
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.form,
-        title: '',
-        message: message,
-        presentation: UiErrorPresentation.formInlineCard,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        child: frame,
       ),
-      density: AppFormErrorCardDensity.compact,
+    );
+  }
+
+  bool get _showsBackNavigation => switch (state.step) {
+    LoginStep.phoneEntry => phoneEntryHasParent,
+    LoginStep.otp ||
+    LoginStep.socialAuthorizing ||
+    LoginStep.socialFailed ||
+    LoginStep.socialPhoneEntry ||
+    LoginStep.socialPhoneOtp ||
+    LoginStep.blocked => true,
+    _ => false,
+  };
+
+  String get _disabledFooterProvider => switch (state.step) {
+    LoginStep.socialAuthorizing ||
+    LoginStep.socialFailed ||
+    LoginStep.socialPhoneEntry ||
+    LoginStep.socialPhoneOtp => state.provider,
+    _ => '',
+  };
+
+  Widget _buildStep(BuildContext context) {
+    return KeyedSubtree(
+      key: ValueKey<String>('loginStep-${state.step.name}'),
+      child: switch (state.step) {
+        LoginStep.resolving => const _ResolvingLoginStep(),
+        LoginStep.oneTap => _OneTapLoginStep(
+          state: state,
+          onOneTap: onOneTap,
+          onOtherPhone: onOtherPhone,
+          onAgreementToggle: onAgreementToggle,
+          onAgreementTap: onAgreementTap,
+          onPrivacyTap: onPrivacyTap,
+        ),
+        LoginStep.phoneEntry => _PhoneEntryLoginStep(
+          state: state,
+          controller: phoneController,
+          onChanged: onPhoneChanged,
+          onEditingComplete: onPhoneEditingComplete,
+          onPrimary: onPhonePrimary,
+          onAgreementToggle: onAgreementToggle,
+          onAgreementTap: onAgreementTap,
+          onPrivacyTap: onPrivacyTap,
+          showAgreement: true,
+        ),
+        LoginStep.otp => _OtpLoginStep(
+          state: state,
+          controller: otpController,
+          onChanged: onOtpChanged,
+          onResend: onResendOtp,
+          onRetryVerify: onRetryOtpVerify,
+          onChangePhone: onChangePhone,
+        ),
+        LoginStep.socialAuthorizing => _SocialAuthorizingStep(
+          state: state,
+          onCancel: onCancelSocial,
+        ),
+        LoginStep.socialFailed => _SocialFailedStep(
+          state: state,
+          onRetry: onRetrySocial,
+        ),
+        LoginStep.socialPhoneEntry => _PhoneEntryLoginStep(
+          state: state,
+          controller: phoneController,
+          onChanged: onPhoneChanged,
+          onEditingComplete: onPhoneEditingComplete,
+          onPrimary: onPhonePrimary,
+          onAgreementToggle: onAgreementToggle,
+          onAgreementTap: onAgreementTap,
+          onPrivacyTap: onPrivacyTap,
+          showAgreement: false,
+          showProvider: true,
+        ),
+        LoginStep.socialPhoneOtp => _OtpLoginStep(
+          state: state,
+          controller: otpController,
+          onChanged: onOtpChanged,
+          onResend: onResendOtp,
+          onRetryVerify: onRetryOtpVerify,
+          onChangePhone: onChangePhone,
+          showProvider: true,
+        ),
+        LoginStep.blocked => _BlockedLoginStep(
+          state: state,
+          onChangeMethod: onOtherPhone,
+          onSupport: onAccountRestrictionSupport,
+          supportBusy: accountRestrictionSupportBusy,
+        ),
+        LoginStep.completing => const _CompletingLoginStep(),
+      },
     );
   }
 }
 
-LoginReasonCopy _loginHeroCopyForPresentation(
-  LoginEntryPresentation presentation,
-  String? routeReason,
-) {
-  return loginReasonCopyForName(routeReason);
-}
-
-class LoginHeroBrand extends StatelessWidget {
-  const LoginHeroBrand({
-    super.key,
+class _LoginHeading extends StatelessWidget {
+  const _LoginHeading({
     required this.title,
     required this.subtitle,
+    this.provider = '',
   });
 
   final String title;
   final String subtitle;
+  final String provider;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        Semantics(
-          image: true,
-          label: FoundationText.loginBrandIconSemanticLabel,
-          child: Container(
-            width: AppSpacing.loginBrandMarkSize,
-            height: AppSpacing.loginBrandMarkSize,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(
-                AppSpacing.loginBrandMarkRadius,
-              ),
-              boxShadow: const <BoxShadow>[
-                BoxShadow(
-                  color: AppColors.webPcLoginSurfaceShadow,
-                  blurRadius: AppSpacing.ten,
-                  offset: Offset(AppSpacing.zero, AppSpacing.six),
-                ),
-              ],
-            ),
-            child: CustomPaint(
-              painter: WelcomeAppIconPainter(
-                appearance: WelcomeAppearance.brandMark(),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.ten),
-        Text(
-          FoundationText.loginBrandName,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosTitle3,
-            fontWeight: AppTypography.bold,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.loginBrandToTitleGap),
+        if (provider.isNotEmpty) ...<Widget>[
+          LoginProviderMark(provider: provider),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         Text(
           title,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: AppTypography.iosBody,
-            fontWeight: AppTypography.semiBold,
-            height: AppTypography.lineHeightTight,
             color: AppColors.iosLabel(context),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.six),
-        Text(
-          subtitle,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            height: AppSpacing.textLineHeightBody,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class LoginAccountArea extends StatelessWidget {
-  const LoginAccountArea({
-    super.key,
-    required this.presentation,
-    required this.phoneController,
-    required this.otpController,
-    required this.onPhoneChanged,
-    required this.onPhoneEditingComplete,
-    required this.onOtpChanged,
-    required this.onResendOtp,
-    required this.onChangePhone,
-  });
-
-  final LoginEntryPresentation presentation;
-  final TextEditingController phoneController;
-  final TextEditingController otpController;
-  final ValueChanged<String> onPhoneChanged;
-  final VoidCallback onPhoneEditingComplete;
-  final ValueChanged<String> onOtpChanged;
-  final VoidCallback onResendOtp;
-  final VoidCallback onChangePhone;
-
-  @override
-  Widget build(BuildContext context) {
-    final child = switch (presentation.kind) {
-      LoginEntryKind.returningAccount => ReturningAccountPanel(
-        hint: presentation.accountHint ?? presentation.carrierHint?.accountHint,
-      ),
-      LoginEntryKind.carrierPhone => CarrierPhonePanel(
-        hint: presentation.carrierHint,
-      ),
-      LoginEntryKind.phoneOtp =>
-        (presentation.phoneOtpState?.isBlocked ?? false)
-            ? AccountBlockedPanel(
-                state:
-                    presentation.phoneOtpState ??
-                    const LoginPhoneOtpState.idle(),
-              )
-            : PhoneOtpPanel(
-                state:
-                    presentation.phoneOtpState ??
-                    const LoginPhoneOtpState.idle(),
-                phoneController: phoneController,
-                otpController: otpController,
-                onPhoneChanged: onPhoneChanged,
-                onPhoneEditingComplete: onPhoneEditingComplete,
-                onOtpChanged: onOtpChanged,
-                onResend: onResendOtp,
-                onChangePhone: onChangePhone,
-              ),
-      LoginEntryKind.submitting => _submittingPanel(),
-      LoginEntryKind.resolving => const _ResolvingPanel(),
-    };
-    final areaHeight = _heightForPresentation(presentation);
-    if (areaHeight == null) {
-      return child;
-    }
-    return SizedBox(height: areaHeight, child: child);
-  }
-
-  Widget _submittingPanel() {
-    if (presentation.accountHint != null) {
-      return ReturningAccountPanel(hint: presentation.accountHint);
-    }
-    if (presentation.carrierHint != null) {
-      return CarrierPhonePanel(hint: presentation.carrierHint);
-    }
-    if (presentation.phoneOtpState != null) {
-      return PhoneOtpPanel(
-        state: presentation.phoneOtpState!,
-        phoneController: phoneController,
-        otpController: otpController,
-        onPhoneChanged: onPhoneChanged,
-        onPhoneEditingComplete: onPhoneEditingComplete,
-        onOtpChanged: onOtpChanged,
-        onResend: onResendOtp,
-        onChangePhone: onChangePhone,
-      );
-    }
-    return const _ResolvingPanel();
-  }
-
-  double? _heightForPresentation(LoginEntryPresentation presentation) {
-    if (presentation.kind == LoginEntryKind.phoneOtp) {
-      return null;
-    }
-    return AppSpacing.loginAccountAreaHeight;
-  }
-}
-
-class AccountBlockedPanel extends StatelessWidget {
-  const AccountBlockedPanel({super.key, required this.state});
-
-  final LoginPhoneOtpState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppFormErrorCard(
-      key: const ValueKey<String>('loginAccountBlocked'),
-      semantic: UiErrorSemantic(
-        category: UiErrorCategory.validation,
-        scope: UiErrorScope.form,
-        title: '',
-        message: state.message,
-        presentation: UiErrorPresentation.formInlineCard,
-      ),
-    );
-  }
-}
-
-class ReturningAccountPanel extends StatelessWidget {
-  const ReturningAccountPanel({super.key, required this.hint});
-
-  final LoginAccountHint? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final displayName =
-        hint?.nicknameCustomized == true && hint?.displayName.isNotEmpty == true
-        ? hint!.displayName
-        : FoundationText.loginReturningDefaultName;
-    final maskedPhone = hint?.maskedPhone ?? '';
-    return Column(
-      key: const ValueKey<String>('returningAccount'),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        _Avatar(avatarUrl: hint?.avatarUrl ?? ''),
-        Text(
-          displayName,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.xl,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        if (maskedPhone.isNotEmpty) ...<Widget>[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            maskedPhone,
-            style: TextStyle(
-              fontSize: AppTypography.iosBody,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class CarrierPhonePanel extends StatelessWidget {
-  const CarrierPhonePanel({super.key, required this.hint});
-
-  final CarrierPhoneHint? hint;
-
-  @override
-  Widget build(BuildContext context) {
-    final phone = hint?.maskedPhone ?? '';
-    return Column(
-      key: const ValueKey<String>('carrierPhone'),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        Text(
-          phone.isEmpty ? FoundationText.loginCarrierDefaultPhone : phone,
-          textAlign: TextAlign.center,
-          style: TextStyle(
             fontSize: AppTypography.iosProfileTitle,
-            fontWeight: AppTypography.semiBold,
-            color: AppColors.iosLabel(context),
+            fontWeight: AppTypography.bold,
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          FoundationText.loginCarrierCreateHint,
+          subtitle,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
             color: AppColors.iosSecondaryLabel(context),
+            fontSize: AppTypography.base,
+            height: AppTypography.lineHeightCompact,
           ),
         ),
       ],
@@ -502,204 +274,452 @@ class CarrierPhonePanel extends StatelessWidget {
   }
 }
 
-class PhoneOtpPanel extends StatelessWidget {
-  const PhoneOtpPanel({
-    super.key,
-    required this.state,
-    required this.phoneController,
-    required this.otpController,
-    required this.onPhoneChanged,
-    required this.onOtpChanged,
-    required this.onResend,
-    required this.onChangePhone,
-    this.onPhoneEditingComplete,
-  });
-
-  final LoginPhoneOtpState state;
-  final TextEditingController phoneController;
-  final TextEditingController otpController;
-  final ValueChanged<String> onPhoneChanged;
-  final ValueChanged<String> onOtpChanged;
-  final VoidCallback onResend;
-  final VoidCallback onChangePhone;
-  final VoidCallback? onPhoneEditingComplete;
+class _ResolvingLoginStep extends StatelessWidget {
+  const _ResolvingLoginStep();
 
   @override
   Widget build(BuildContext context) {
-    final showsDestination = state.otpWasDelivered;
-    final showsCode = state._showsCode || state.code.isNotEmpty;
-    final fieldError = _fieldErrorForState();
-    final statusMessage = _statusMessageForState();
-    final formError = _formErrorForState();
-    return AutofillGroup(
-      child: Column(
-        key: const ValueKey<String>('phoneOtp-panel'),
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          if (!showsDestination)
-            PhoneNumberField(
-              controller: phoneController,
-              enabled: state.isPhoneEditable,
-              hasError: state.phase == LoginPhoneOtpPhase.invalid,
-              onChanged: onPhoneChanged,
-              onEditingComplete: onPhoneEditingComplete,
-            )
-          else
-            _OtpDestinationSummary(
-              message: _otpSentLine(),
-              onChangePhone: onChangePhone,
-            ),
-          if (!showsDestination &&
-              state.phase == LoginPhoneOtpPhase.invalid &&
-              fieldError.isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: AppInlineFieldError(message: fieldError),
-            ),
-          ],
-          if (showsCode) ...<Widget>[
-            const SizedBox(height: AppSpacing.ten),
-            OtpCodeBoxes(
-              controller: otpController,
-              enabled: !state.isCodeDisabled,
-              hasError: state.phase == LoginPhoneOtpPhase.codeError,
-              onChanged: onOtpChanged,
-            ),
-            if (state.phase == LoginPhoneOtpPhase.codeError &&
-                fieldError.isNotEmpty) ...<Widget>[
-              const SizedBox(height: AppSpacing.xs),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppInlineFieldError(message: fieldError),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.sm),
-            _OtpResendAction(
-              resendSeconds: state.resendSeconds,
-              enabled: state.canSendCode,
-              onResend: onResend,
-            ),
-          ],
-          if (formError != null) ...<Widget>[
-            const SizedBox(height: AppSpacing.sm),
-            AppFormErrorCard(
-              key: const ValueKey<String>('login-phone-form-error'),
-              semantic: formError,
-              density: AppFormErrorCardDensity.compact,
-            ),
-          ] else if (statusMessage.isNotEmpty) ...<Widget>[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              statusMessage,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosCaption1,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-          ],
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.forty),
+        const _LoginHeading(
+          title: FoundationText.login,
+          subtitle: FoundationText.loginResolvingHint,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppRequestFeedback.inline(indicatorColor: AppColors.iosAccent(context)),
+      ],
+    );
+  }
+}
+
+class _OneTapLoginStep extends StatelessWidget {
+  const _OneTapLoginStep({
+    required this.state,
+    required this.onOneTap,
+    required this.onOtherPhone,
+    required this.onAgreementToggle,
+    required this.onAgreementTap,
+    required this.onPrivacyTap,
+  });
+
+  final LoginFlowState state;
+  final VoidCallback onOneTap;
+  final VoidCallback onOtherPhone;
+  final VoidCallback onAgreementToggle;
+  final VoidCallback onAgreementTap;
+  final VoidCallback onPrivacyTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = state.maskedPhone;
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.twenty),
+        _LoginHeading(
+          title: FoundationText.loginReturningDefaultName,
+          subtitle: phone.isEmpty
+              ? FoundationText.loginCarrierDefaultPhone
+              : '${FoundationText.loginCarrierDefaultPhone} $phone',
+        ),
+        const SizedBox(height: AppSpacing.forty),
+        LoginActionButton(
+          key: const ValueKey<String>('loginOneTapPrimary'),
+          label: FoundationText.loginOneTapPrimary,
+          busy: state.isBusy,
+          onPressed: onOneTap,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        LoginActionButton(
+          key: const ValueKey<String>('loginOtherPhoneButton'),
+          label: FoundationText.loginMethodPhone,
+          outlined: true,
+          enabled: !state.isBusy,
+          onPressed: onOtherPhone,
+        ),
+        if (state.feedback case final feedback?) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          _LoginFeedbackText(feedback: feedback),
         ],
+        const SizedBox(height: AppSpacing.md),
+        LoginAgreementRow(
+          accepted: state.consentState == LoginConsentState.accepted,
+          onToggle: onAgreementToggle,
+          onAgreementTap: onAgreementTap,
+          onPrivacyTap: onPrivacyTap,
+        ),
+      ],
+    );
+  }
+}
+
+class _PhoneEntryLoginStep extends StatelessWidget {
+  const _PhoneEntryLoginStep({
+    required this.state,
+    required this.controller,
+    required this.onChanged,
+    required this.onEditingComplete,
+    required this.onPrimary,
+    required this.onAgreementToggle,
+    required this.onAgreementTap,
+    required this.onPrivacyTap,
+    required this.showAgreement,
+    this.showProvider = false,
+  });
+
+  final LoginFlowState state;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onEditingComplete;
+  final VoidCallback onPrimary;
+  final VoidCallback onAgreementToggle;
+  final VoidCallback onAgreementTap;
+  final VoidCallback onPrivacyTap;
+  final bool showAgreement;
+  final bool showProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    final binding = state.step == LoginStep.socialPhoneEntry;
+    final sendFailed = state.feedback?.copyKey == 'loginOtpSendFailed';
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.twenty),
+        _LoginHeading(
+          title: binding
+              ? FoundationText.loginBindPhoneTitle
+              : FoundationText.loginPhoneTitle,
+          subtitle: binding
+              ? FoundationText.loginBindPhoneSubtitle
+              : FoundationText.loginPhoneSubtitle,
+          provider: showProvider ? state.provider : '',
+        ),
+        const SizedBox(height: AppSpacing.forty),
+        LoginPhoneField(
+          controller: controller,
+          enabled: state.canEditPhone,
+          onChanged: onChanged,
+          onEditingComplete: onEditingComplete,
+        ),
+        if (state.feedback case final feedback?) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          _LoginFeedbackText(feedback: feedback),
+        ],
+        const SizedBox(height: AppSpacing.twenty),
+        LoginActionButton(
+          key: const ValueKey<String>('loginPhonePrimary'),
+          label: sendFailed
+              ? FoundationText.loginOtpRequestRetry
+              : FoundationText.loginSendOtp,
+          enabled: state.hasValidPhone,
+          busy: state.operation == LoginOperation.sendingOtp,
+          onPressed: onPrimary,
+        ),
+        if (showAgreement) ...<Widget>[
+          const SizedBox(height: AppSpacing.md),
+          LoginAgreementRow(
+            accepted: state.consentState == LoginConsentState.accepted,
+            onToggle: onAgreementToggle,
+            onAgreementTap: onAgreementTap,
+            onPrivacyTap: onPrivacyTap,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _OtpLoginStep extends StatelessWidget {
+  const _OtpLoginStep({
+    required this.state,
+    required this.controller,
+    required this.onChanged,
+    required this.onResend,
+    required this.onRetryVerify,
+    required this.onChangePhone,
+    this.showProvider = false,
+  });
+
+  final LoginFlowState state;
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onResend;
+  final VoidCallback onRetryVerify;
+  final VoidCallback onChangePhone;
+  final bool showProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    final verifying =
+        state.operation == LoginOperation.verifyingOtp ||
+        state.operation == LoginOperation.completingBinding;
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.twenty),
+        _LoginHeading(
+          title: FoundationText.loginOtpTitle,
+          subtitle: FoundationText.loginOtpSentTo.replaceFirst(
+            '%s',
+            state.maskedPhone,
+          ),
+          provider: showProvider ? state.provider : '',
+        ),
+        const SizedBox(height: AppSpacing.forty),
+        OtpCodeBoxes(
+          controller: controller,
+          enabled: state.canEditOtp,
+          onChanged: onChanged,
+          focusRequestSerial: state.otpFocusSerial,
+          shakeSerial: state.otpShakeSerial,
+        ),
+        SizedBox(
+          height: AppSpacing.forty,
+          child: Center(
+            child: verifying
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      AppRequestFeedback.inline(
+                        indicatorColor: AppColors.iosAccent(context),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        FoundationText.loginOtpVerifying,
+                        style: TextStyle(
+                          color: AppColors.iosAccent(context),
+                          fontSize: AppTypography.base,
+                        ),
+                      ),
+                    ],
+                  )
+                : state.feedback == null
+                ? const SizedBox.shrink()
+                : _LoginFeedbackText(feedback: state.feedback!),
+          ),
+        ),
+        _OtpResendAction(state: state, onPressed: onResend),
+        if (state.feedback?.preserveOtp == true) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          CupertinoButton(
+            key: const ValueKey<String>('loginOtpRetryVerify'),
+            onPressed: onRetryVerify,
+            child: Text(FoundationText.loginOtpVerifyRetry),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.xs),
+        CupertinoButton(
+          key: const ValueKey<String>('loginChangePhone'),
+          onPressed: state.isBusy ? null : onChangePhone,
+          child: Text(FoundationText.loginPhoneChange),
+        ),
+      ],
+    );
+  }
+}
+
+class _OtpResendAction extends StatelessWidget {
+  const _OtpResendAction({required this.state, required this.onPressed});
+
+  final LoginFlowState state;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = state.remainingResendSeconds(DateTime.now());
+    final ready = seconds <= 0 && !state.isBusy;
+    final label = ready
+        ? FoundationText.loginOtpResend
+        : FoundationText.loginOtpResendCountdown.replaceFirst(
+            '%d',
+            seconds.toString(),
+          );
+    return SizedBox(
+      key: const ValueKey<String>('loginOtpResendSlot'),
+      height: AppSpacing.minInteractiveSize,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: ready ? onPressed : null,
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: ready
+                ? AppColors.iosAccent(context)
+                : AppColors.iosSecondaryLabel(context),
+            fontSize: AppTypography.base,
+          ),
+        ),
       ),
     );
   }
-
-  String _fieldErrorForState() {
-    if (state.phase != LoginPhoneOtpPhase.invalid &&
-        state.phase != LoginPhoneOtpPhase.codeError) {
-      return '';
-    }
-    if (state.message.isNotEmpty) return state.message;
-    return state.phase == LoginPhoneOtpPhase.invalid
-        ? FoundationText.loginPhoneInvalid
-        : FoundationText.loginOtpMismatch;
-  }
-
-  String _statusMessageForState() {
-    if (state.phase == LoginPhoneOtpPhase.success) {
-      return FoundationText.loginRedirecting;
-    }
-    return state.phase == LoginPhoneOtpPhase.sendingCode
-        ? FoundationText.loginSendOtpSubmitting
-        : '';
-  }
-
-  UiErrorSemantic? _formErrorForState() {
-    final isFormError = switch (state.phase) {
-      LoginPhoneOtpPhase.sendFailed ||
-      LoginPhoneOtpPhase.rateLimited ||
-      LoginPhoneOtpPhase.codeExpired ||
-      LoginPhoneOtpPhase.loginLocked ||
-      LoginPhoneOtpPhase.accountSuspended ||
-      LoginPhoneOtpPhase.accountDeleted => true,
-      _ => false,
-    };
-    if (!isFormError) return null;
-    final fallback = switch (state.phase) {
-      LoginPhoneOtpPhase.rateLimited => FoundationText.loginOtpRateLimited,
-      LoginPhoneOtpPhase.codeExpired => FoundationText.loginOtpExpired,
-      LoginPhoneOtpPhase.loginLocked => FoundationText.loginPhoneLoginLocked,
-      LoginPhoneOtpPhase.accountSuspended =>
-        FoundationText.loginAccountSuspended,
-      LoginPhoneOtpPhase.accountDeleted => FoundationText.loginAccountDeleted,
-      _ => FoundationText.loginOtpSendFailed,
-    };
-    return UiErrorSemantic(
-      category: state.phase == LoginPhoneOtpPhase.rateLimited
-          ? UiErrorCategory.rateLimited
-          : UiErrorCategory.submit,
-      scope: UiErrorScope.form,
-      title: '',
-      message: state.message.isEmpty ? fallback : state.message,
-      presentation: UiErrorPresentation.formInlineCard,
-    );
-  }
-
-  String _otpSentLine() {
-    final maskedPhone = state.maskedPhone.isEmpty
-        ? _maskPhone(state.phone)
-        : state.maskedPhone;
-    final base = FoundationText.loginOtpSentTo.replaceFirst('%s', maskedPhone);
-    return base;
-  }
 }
 
-class _OtpDestinationSummary extends StatelessWidget {
-  const _OtpDestinationSummary({
-    required this.message,
-    required this.onChangePhone,
-  });
+class _SocialAuthorizingStep extends StatelessWidget {
+  const _SocialAuthorizingStep({required this.state, required this.onCancel});
 
-  final String message;
-  final VoidCallback onChangePhone;
+  final LoginFlowState state;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    final providerLabel = _providerLabel(state.provider);
+    final title = switch (state.provider) {
+      'wechat' => FoundationText.loginSocialAuthorizingWechat,
+      'qq' => FoundationText.loginSocialAuthorizingQq,
+      _ => FoundationText.loginSocialAuthorizingAlipay,
+    };
+    return Column(
       children: <Widget>[
-        Flexible(
-          child: Text(
-            message,
-            key: const ValueKey<String>('loginOtpDestinationSummary'),
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
+        const SizedBox(height: AppSpacing.forty),
+        _LoginHeading(
+          title: title,
+          subtitle: FoundationText.loginSocialAuthorizingSubtitle.replaceFirst(
+            '%s',
+            providerLabel,
           ),
+          provider: state.provider,
         ),
-        const SizedBox(width: AppSpacing.xs),
+        const SizedBox(height: AppSpacing.xl),
+        AppRequestFeedback.inline(indicatorColor: AppColors.iosAccent(context)),
+        const SizedBox(height: AppSpacing.md),
         CupertinoButton(
-          key: const ValueKey<String>('loginChangePhoneAction'),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-          minimumSize: const Size(
-            AppSpacing.minInteractiveSize,
-            AppSpacing.minInteractiveSize,
-          ),
-          onPressed: onChangePhone,
-          child: const Text(FoundationText.loginPhoneChange),
+          key: const ValueKey<String>('loginSocialCancel'),
+          onPressed: onCancel,
+          child: Text(FoundationText.loginSocialAuthorizationCancel),
         ),
       ],
     );
   }
 }
+
+class _SocialFailedStep extends StatelessWidget {
+  const _SocialFailedStep({required this.state, required this.onRetry});
+
+  final LoginFlowState state;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.forty),
+        _LoginHeading(
+          title: FoundationText.loginSocialAuthorizationFailed,
+          subtitle: FoundationText.loginSocialAuthorizationFailedSubtitle,
+          provider: state.provider,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        LoginActionButton(
+          key: const ValueKey<String>('loginSocialRetry'),
+          label: FoundationText.loginSocialAuthorizationRetry,
+          busy: state.isBusy,
+          onPressed: onRetry,
+        ),
+      ],
+    );
+  }
+}
+
+class _BlockedLoginStep extends StatelessWidget {
+  const _BlockedLoginStep({
+    required this.state,
+    required this.onChangeMethod,
+    required this.onSupport,
+    required this.supportBusy,
+  });
+
+  final LoginFlowState state;
+  final VoidCallback onChangeMethod;
+  final VoidCallback onSupport;
+  final bool supportBusy;
+
+  @override
+  Widget build(BuildContext context) {
+    final isAccountSuspended =
+        state.feedback?.sourceCode == UserErrorCode.accountSuspended.code;
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.forty),
+        _LoginHeading(
+          title: isAccountSuspended
+              ? FoundationText.loginAccountSuspensionTitle
+              : FoundationText.login,
+          subtitle: isAccountSuspended
+              ? FoundationText.loginAccountSuspensionSubtitle
+              : FoundationText.loginServiceUnavailable,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (state.feedback case final feedback?)
+          _LoginFeedbackText(feedback: feedback),
+        const SizedBox(height: AppSpacing.lg),
+        if (isAccountSuspended) ...<Widget>[
+          LoginActionButton(
+            key: const ValueKey<String>('loginAccountSuspensionSupport'),
+            label: FoundationText.loginAccountSuspensionSupport,
+            busy: supportBusy,
+            onPressed: onSupport,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CupertinoButton(
+            key: const ValueKey<String>('loginAccountSuspensionOtherAccount'),
+            onPressed: supportBusy ? null : onChangeMethod,
+            child: Text(FoundationText.loginAccountSuspensionUseOtherAccount),
+          ),
+        ] else
+          LoginActionButton(
+            label: FoundationText.loginMethodPhone,
+            onPressed: onChangeMethod,
+          ),
+      ],
+    );
+  }
+}
+
+class _CompletingLoginStep extends StatelessWidget {
+  const _CompletingLoginStep();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: <Widget>[
+        const SizedBox(height: AppSpacing.forty),
+        const _LoginHeading(
+          title: FoundationText.loginSubmitting,
+          subtitle: FoundationText.loginRedirecting,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        AppRequestFeedback.inline(indicatorColor: AppColors.iosAccent(context)),
+      ],
+    );
+  }
+}
+
+class _LoginFeedbackText extends StatelessWidget {
+  const _LoginFeedbackText({required this.feedback});
+
+  final LoginFeedback feedback;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      label: feedback.message,
+      child: Text(
+        feedback.message,
+        key: ValueKey<String>('loginFeedback-${feedback.copyKey}'),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.errorForeground(context),
+          fontSize: AppTypography.inlineError,
+          fontWeight: AppTypography.inlineErrorWeight,
+        ),
+      ),
+    );
+  }
+}
+
+String _providerLabel(String provider) => switch (provider) {
+  'wechat' => FoundationText.loginMethodWechat,
+  'qq' => FoundationText.loginMethodQq,
+  _ => FoundationText.loginMethodAlipay,
+};

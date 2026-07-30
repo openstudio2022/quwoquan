@@ -1,5 +1,6 @@
 import '../operation_cancellation.dart';
 import '../operation_request_payload.dart';
+part '../generated/requests/search/search_query_contracts.requests.g.dart';
 
 enum CanonicalSearchMode {
   suggest('suggest'),
@@ -7,37 +8,6 @@ enum CanonicalSearchMode {
 
   const CanonicalSearchMode(this.wireValue);
   final String wireValue;
-}
-
-final class CanonicalSearchQuery {
-  CanonicalSearchQuery({
-    required String query,
-    this.mode = CanonicalSearchMode.result,
-    Iterable<String> objectTypes = const <String>[],
-    Iterable<String> ids = const <String>[],
-    this.limit = 20,
-  }) : query = _requiredText(query, 'query'),
-       objectTypes = List<String>.unmodifiable(
-         objectTypes
-             .map((item) => item.trim())
-             .where((item) => item.isNotEmpty),
-       ),
-       ids = List<String>.unmodifiable(
-         ids.map((item) => item.trim()).where((item) => item.isNotEmpty),
-       ) {
-    if (limit <= 0 || limit > 50) {
-      throw ArgumentError.value(limit, 'limit', 'must be between 1 and 50');
-    }
-    if (this.ids.length > 20) {
-      throw ArgumentError.value(ids, 'ids', 'must contain at most 20 items');
-    }
-  }
-
-  final String query;
-  final CanonicalSearchMode mode;
-  final List<String> objectTypes;
-  final List<String> ids;
-  final int limit;
 }
 
 final class CanonicalSearchIntersectionReason {
@@ -150,7 +120,6 @@ final class CanonicalSearchResult {
   CanonicalSearchResult({
     required Iterable<CanonicalSearchHit> hits,
     required this.requestId,
-    required this.rankingVersion,
     this.experimentBucket,
     Iterable<String> relatedTerms = const <String>[],
     Iterable<CanonicalSearchDegradeSignal> degradeSignals =
@@ -163,7 +132,6 @@ final class CanonicalSearchResult {
 
   final List<CanonicalSearchHit> hits;
   final String requestId;
-  final String rankingVersion;
   final String? experimentBucket;
   final List<String> relatedTerms;
   final List<CanonicalSearchDegradeSignal> degradeSignals;
@@ -177,18 +145,6 @@ abstract interface class CanonicalSearchQueryFacet {
   });
 }
 
-CloudOperationRequestPayload encodeCanonicalSearchQuery(
-  CanonicalSearchQuery query,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'query': query.query,
-    'mode': query.mode.wireValue,
-    'objectTypes': query.objectTypes,
-    if (query.ids.isNotEmpty) 'ids': query.ids,
-    'limit': query.limit,
-  },
-);
-
 CanonicalSearchResult decodeCanonicalSearchResult(Object? value) {
   final root = _object(value, 'CanonicalSearchResult');
   final hits = _list(
@@ -198,7 +154,6 @@ CanonicalSearchResult decodeCanonicalSearchResult(Object? value) {
   return CanonicalSearchResult(
     hits: hits,
     requestId: _requiredText(root['requestId'], 'requestId'),
-    rankingVersion: _requiredText(root['rankingVersion'], 'rankingVersion'),
     experimentBucket: _optionalText(root['experimentBucket']),
     relatedTerms: _stringList(root['relatedTerms'], 'relatedTerms'),
     degradeSignals: _list(

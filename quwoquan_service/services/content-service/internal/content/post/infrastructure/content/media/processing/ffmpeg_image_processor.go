@@ -17,7 +17,9 @@ import (
 	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 )
 
-const ImageProcessorProfile = "content_processing_image_baseline_v1"
+// ImageProcessorProfile is the stable semantic identity of the sole image
+// normalization pipeline. Output bytes retain their own SHA256 identity.
+const ImageProcessorProfile = "content_processing_image_baseline"
 
 func (p *FFmpegMediaProcessor) processImage(
 	ctx context.Context,
@@ -35,7 +37,7 @@ func (p *FFmpegMediaProcessor) processImage(
 	}
 	defer os.RemoveAll(workDir)
 
-	sourcePath := filepath.Join(workDir, "source"+sourceExtension(request.ContentType))
+	sourcePath := filepath.Join(workDir, "source"+sourceExtension(request.MimeType))
 	if err := p.downloadObject(ctx, request.SourceObjectKey, sourcePath); err != nil {
 		return mediaprocessing.ProcessOutcome{}, err
 	}
@@ -64,8 +66,8 @@ func (p *FFmpegMediaProcessor) processImage(
 		}
 	}
 
-	deliveryContentType, extension := normalizedImageFormat(
-		request.ContentType,
+	deliveryMimeType, extension := normalizedImageFormat(
+		request.MimeType,
 		sourceProbe.PixelFormat,
 	)
 	deliveryPath := filepath.Join(workDir, "delivery"+extension)
@@ -73,7 +75,7 @@ func (p *FFmpegMediaProcessor) processImage(
 		ctx,
 		sourcePath,
 		deliveryPath,
-		deliveryContentType,
+		deliveryMimeType,
 	); err != nil {
 		return mediaprocessing.ProcessOutcome{}, err
 	}
@@ -96,7 +98,7 @@ func (p *FFmpegMediaProcessor) processImage(
 		ctx,
 		deliveryPath,
 		workDir,
-		deliveryContentType,
+		deliveryMimeType,
 	)
 	if err != nil {
 		return mediaprocessing.ProcessOutcome{}, err
@@ -112,7 +114,7 @@ func (p *FFmpegMediaProcessor) processImage(
 		"image",
 		request.AssetID,
 		request.AssetVersion,
-		deliveryContentType,
+		deliveryMimeType,
 	)
 	if publicSliceKey == "" {
 		return mediaprocessing.ProcessOutcome{}, fmt.Errorf(
@@ -124,7 +126,7 @@ func (p *FFmpegMediaProcessor) processImage(
 		ctx,
 		deliveryPath,
 		privateObjectKey,
-		deliveryContentType,
+		deliveryMimeType,
 	); err != nil {
 		return mediaprocessing.ProcessOutcome{}, err
 	}
@@ -132,7 +134,7 @@ func (p *FFmpegMediaProcessor) processImage(
 		ctx,
 		deliveryPath,
 		publicSliceKey,
-		deliveryContentType,
+		deliveryMimeType,
 	); err != nil {
 		return mediaprocessing.ProcessOutcome{}, fmt.Errorf(
 			"publish image delivery slice: %w",
@@ -155,7 +157,7 @@ func (p *FFmpegMediaProcessor) processImage(
 				ProcessorProfile:         ImageProcessorProfile,
 				ImageWidth:               deliveryProbe.Width,
 				ImageHeight:              deliveryProbe.Height,
-				ImageDeliveryContentType: deliveryContentType,
+				ImageDeliveryMimeType:    deliveryMimeType,
 				ImageNormalizedObjectKey: privateObjectKey,
 				ImagePublicSliceKey:      publicSliceKey,
 				ImageDominantColor:       dominantColor,
@@ -202,7 +204,7 @@ func (p *FFmpegMediaProcessor) imageDeliveryPresentation(
 	ctx context.Context,
 	deliveryPath string,
 	workDir string,
-	deliveryContentType string,
+	deliveryMimeType string,
 ) (string, string, string, error) {
 	handle, err := os.Open(deliveryPath)
 	if err != nil {
@@ -260,7 +262,7 @@ func (p *FFmpegMediaProcessor) imageDeliveryPresentation(
 		}
 	}
 	contentProfile := "photographic"
-	if deliveryContentType == "image/png" {
+	if deliveryMimeType == "image/png" {
 		contentProfile = "alpha_graphic"
 	}
 	return dominantColor, lqip, contentProfile, nil
@@ -301,7 +303,7 @@ func (p *FFmpegMediaProcessor) normalizeImage(
 	ctx context.Context,
 	sourcePath string,
 	deliveryPath string,
-	deliveryContentType string,
+	deliveryMimeType string,
 ) error {
 	filter := fmt.Sprintf(
 		"scale=w='min(%d,iw)':h='min(%d,ih)':force_original_aspect_ratio=decrease,setsar=1",
@@ -314,7 +316,7 @@ func (p *FFmpegMediaProcessor) normalizeImage(
 		"-map", "0:v:0",
 		"-frames:v", "1",
 	}
-	switch deliveryContentType {
+	switch deliveryMimeType {
 	case "image/png":
 		args = append(
 			args,
@@ -349,11 +351,11 @@ func (p *FFmpegMediaProcessor) normalizeImage(
 	return nil
 }
 
-func normalizedImageFormat(contentType string, pixelFormat string) (string, string) {
-	contentType = strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+func normalizedImageFormat(mimeType string, pixelFormat string) (string, string) {
+	mimeType = strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
 	pixelFormat = strings.ToLower(strings.TrimSpace(pixelFormat))
-	if contentType == "image/png" ||
-		contentType == "image/gif" ||
+	if mimeType == "image/png" ||
+		mimeType == "image/gif" ||
 		strings.Contains(pixelFormat, "rgba") ||
 		strings.Contains(pixelFormat, "bgra") ||
 		strings.Contains(pixelFormat, "argb") ||

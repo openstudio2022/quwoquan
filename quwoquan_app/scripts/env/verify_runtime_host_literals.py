@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import ipaddress
 import re
 import sys
 from pathlib import Path
@@ -15,7 +14,6 @@ URL_RE = re.compile(
     r"(?::[0-9]+)?[^\s'\"`)>]*"
 )
 ALLOWED_PUBLIC_HOSTS = {"schema.org", "quwoquan.com"}
-ALLOWED_PRIVATE_HOSTS = {"localhost", "127.0.0.1", "::1", "10.0.2.2"}
 ALLOWED_PUBLIC_HOST_SUFFIXES = (".quwoquan.com",)
 
 
@@ -26,19 +24,13 @@ def _is_comment_only_line(line: str) -> bool:
 
 def _is_allowed_host(host: str) -> bool:
     normalized = host.strip("[]").lower()
-    if normalized in ALLOWED_PUBLIC_HOSTS or normalized in ALLOWED_PRIVATE_HOSTS:
+    if normalized in ALLOWED_PUBLIC_HOSTS:
         return True
-    if any(
+    return any(
         normalized.endswith(suffix)
         and normalized[: -len(suffix)].strip(".")
         for suffix in ALLOWED_PUBLIC_HOST_SUFFIXES
-    ):
-        return True
-    try:
-        ipaddress.ip_address(normalized)
-        return True
-    except ValueError:
-        return False
+    )
 
 
 def _self_test() -> None:

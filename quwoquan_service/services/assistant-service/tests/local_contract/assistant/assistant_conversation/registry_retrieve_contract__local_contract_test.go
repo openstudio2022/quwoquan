@@ -13,7 +13,7 @@ func TestRetrieveToolsDoNotRequireCompatQuery(t *testing.T) {
 	if !ok {
 		t.Fatal(`tool "app_search" not registered`)
 	}
-	for _, key := range appSearch.RequiredInputKeys {
+	for _, key := range appSearch.RequiredInputKeys() {
 		if key == "query" || key == "mode" || key == "strategy" || key == "type" || key == "relation" {
 			t.Fatalf("tool %q must not require compat key %q", appSearch.ToolName, key)
 		}
@@ -22,8 +22,8 @@ func TestRetrieveToolsDoNotRequireCompatQuery(t *testing.T) {
 	if !ok {
 		t.Fatal(`tool "web_search" not registered`)
 	}
-	if !migratedRegistryRetrieveContractContainsString(webSearch.RequiredInputKeys, "query") {
-		t.Fatalf("web_search required inputs=%#v, want query", webSearch.RequiredInputKeys)
+	if !migratedRegistryRetrieveContractContainsString(webSearch.RequiredInputKeys(), "query") {
+		t.Fatalf("web_search required inputs=%#v, want query", webSearch.RequiredInputKeys())
 	}
 	for _, forbidden := range []string{"mode", "type", "relation"} {
 		if strings.Contains(webSearch.Description, "\""+forbidden+"\"") {
@@ -78,7 +78,10 @@ func TestSearchToolQueryCanonicalInput(t *testing.T) {
 func migratedRegistryRetrieveContractRetrievalContractTestRegistry() Registry {
 	registry := BaseRegistry()
 	appSearchMetadata := AppSearchMetadata()
-	appSearchMetadata.RequiredInputKeys = []string{"targets", "terms"}
+	appSearchMetadata.InputSchema = ObjectSchema(map[string]any{
+		"targets": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"terms":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+	}, "targets", "terms")
 	registry.Register(appSearchMetadata, func(_ context.Context, request Request) (Result, error) {
 		targets := migratedRegistryRetrieveContractToTestStringSlice(request.Input["targets"])
 		results := make([]map[string]any, 0, len(targets))
@@ -95,8 +98,7 @@ func migratedRegistryRetrieveContractRetrievalContractTestRegistry() Registry {
 			"results":   results,
 			"citations": []map[string]any{},
 			"provenance": map[string]any{
-				"provider":     "test_search_adapter",
-				"indexVersion": "test",
+				"provider": "test_search_adapter",
 			},
 		}}, nil
 	})

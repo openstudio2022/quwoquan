@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/persona_contracts.requests.g.dart';
 
 enum PersonaIsolationLevel {
   open('open'),
@@ -15,139 +16,10 @@ enum PersonaIsolationLevel {
       );
 }
 
-/// Persona（分身/子账号）聚合命令的 pure contracts。
-/// 真相源：quwoquan_service/services/user-service/contracts/persona_management/persona/{service,fields}.yaml 与
-/// user_profile/fields.yaml 的 persona 管理视图。
-/// userHandle 由服务端系统分配，客户端不提交；激活切换为强一致排他写。
-
-final class CreatePersonaCommand {
-  CreatePersonaCommand({
-    required String displayName,
-    this.avatarUrl,
-    this.isolationLevel,
-    this.purposeHint,
-  }) : displayName = _required(displayName, 'displayName');
-
-  final String displayName;
-  final String? avatarUrl;
-  final String? isolationLevel;
-  final String? purposeHint;
-}
-
-/// PATCH 语义：仅编码非 null 字段。
-final class UpdatePersonaCommand {
-  UpdatePersonaCommand({
-    required String subAccountId,
-    this.displayName,
-    this.phone,
-    this.email,
-    this.avatarUrl,
-    this.backgroundUrl,
-    this.isolationLevel,
-    this.purposeHint,
-    this.applyScope,
-    this.syncTargetIds,
-    this.fieldsMask,
-  }) : subAccountId = _required(subAccountId, 'subAccountId');
-
-  final String subAccountId;
-  final String? displayName;
-  final String? phone;
-  final String? email;
-  final String? avatarUrl;
-  final String? backgroundUrl;
-  final String? isolationLevel;
-  final String? purposeHint;
-  final String? applyScope;
-  final List<String>? syncTargetIds;
-  final List<String>? fieldsMask;
-}
-
-final class ApplyPersonaProfileSyncCommand {
-  ApplyPersonaProfileSyncCommand({
-    required String subAccountId,
-    required String applyScope,
-    this.syncTargetIds,
-    this.fieldsMask,
-  }) : subAccountId = _required(subAccountId, 'subAccountId'),
-       applyScope = _required(applyScope, 'applyScope');
-
-  final String subAccountId;
-  final String applyScope;
-  final List<String>? syncTargetIds;
-  final List<String>? fieldsMask;
-}
-
-final class RetirePersonaCommand {
-  RetirePersonaCommand({required String subAccountId})
-    : subAccountId = _required(subAccountId, 'subAccountId');
-
-  final String subAccountId;
-}
-
-final class ActivatePersonaCommand {
-  ActivatePersonaCommand({required String subAccountId})
-    : subAccountId = _required(subAccountId, 'subAccountId');
-
-  final String subAccountId;
-}
-
-/// 资料保存命令（PATCH /user/profile）。仅编码非 null 字段。
-final class UpdateUserProfileCommand {
-  UpdateUserProfileCommand({
-    this.nickname,
-    this.displayName,
-    this.avatarAssetId,
-    this.avatarUrl,
-    this.backgroundAssetId,
-    this.backgroundUrl,
-    this.bio,
-    this.gender,
-    this.birthDate,
-    this.regionTagRef,
-    this.occupationTagRef,
-    this.interestTagRefs,
-    String? expectedTaxonomyReleaseId,
-    this.identityTags,
-    this.profileVisibility,
-    this.applyScope,
-    this.syncTargetIds,
-    this.fieldsMask,
-  }) : expectedTaxonomyReleaseId = expectedTaxonomyReleaseId?.trim() {
-    if ((occupationTagRef != null || interestTagRefs != null) &&
-        (this.expectedTaxonomyReleaseId?.isEmpty ?? true)) {
-      throw ArgumentError.value(
-        expectedTaxonomyReleaseId,
-        'expectedTaxonomyReleaseId',
-        'required when occupationTagRef or interestTagRefs is provided',
-      );
-    }
-  }
-
-  final String? nickname;
-  final String? displayName;
-  final String? avatarAssetId;
-  final String? avatarUrl;
-  final String? backgroundAssetId;
-  final String? backgroundUrl;
-  final String? bio;
-  final String? gender;
-  final String? birthDate;
-  final String? regionTagRef;
-  final String? occupationTagRef;
-  final List<String>? interestTagRefs;
-  final String? expectedTaxonomyReleaseId;
-  final List<String>? identityTags;
-  final String? profileVisibility;
-  final String? applyScope;
-  final List<String>? syncTargetIds;
-  final List<String>? fieldsMask;
-}
-
 /// 分身管理列表项视图（owner 私有）。
 final class PersonaManagementItem {
   const PersonaManagementItem({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.isolationLevel,
     required this.isActive,
@@ -157,8 +29,6 @@ final class PersonaManagementItem {
     required this.profileVisibility,
     required this.updatedAt,
     this.userHandle,
-    this.phone,
-    this.email,
     this.avatarUrl,
     this.backgroundUrl,
     this.bio,
@@ -170,11 +40,9 @@ final class PersonaManagementItem {
     this.lastActivatedAt,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String displayName;
   final String? userHandle;
-  final String? phone;
-  final String? email;
   final String? avatarUrl;
   final String? backgroundUrl;
   final String? bio;
@@ -197,7 +65,7 @@ final class PersonaManagementItem {
 final class ActivePersonaContext {
   const ActivePersonaContext({
     required this.ownerUserId,
-    required this.subAccountId,
+    required this.personaId,
     required this.isolationLevel,
     required this.profileVisibility,
     required this.contextVersion,
@@ -208,7 +76,7 @@ final class ActivePersonaContext {
   });
 
   final String ownerUserId;
-  final String subAccountId;
+  final String personaId;
   final String isolationLevel;
   final String profileVisibility;
   final int contextVersion;
@@ -221,14 +89,14 @@ final class ActivePersonaContext {
 /// 退役命令回执：生命周期保护判定视图。
 final class PersonaLifecycleGuard {
   const PersonaLifecycleGuard({
-    required this.subAccountId,
+    required this.personaId,
     required this.requestedAction,
     required this.allowed,
     required this.reason,
     required this.requiresSuccessor,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String requestedAction;
   final bool allowed;
   final String reason;
@@ -310,98 +178,12 @@ abstract interface class ProfileCommandWriter {
   );
 }
 
-CloudOperationRequestPayload encodeCreatePersonaCommand(
-  CreatePersonaCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'displayName': command.displayName,
-    if (command.avatarUrl != null) 'avatarUrl': command.avatarUrl,
-    if (command.isolationLevel != null)
-      'isolationLevel': command.isolationLevel,
-    if (command.purposeHint != null) 'purposeHint': command.purposeHint,
-  },
-);
-
-CloudOperationRequestPayload encodeUpdatePersonaCommand(
-  UpdatePersonaCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'subAccountId': command.subAccountId},
-  body: <String, Object?>{
-    if (command.displayName != null) 'displayName': command.displayName,
-    if (command.phone != null) 'phone': command.phone,
-    if (command.email != null) 'email': command.email,
-    if (command.avatarUrl != null) 'avatarUrl': command.avatarUrl,
-    if (command.backgroundUrl != null) 'backgroundUrl': command.backgroundUrl,
-    if (command.isolationLevel != null)
-      'isolationLevel': command.isolationLevel,
-    if (command.purposeHint != null) 'purposeHint': command.purposeHint,
-    if (command.applyScope != null) 'applyScope': command.applyScope,
-    if (command.syncTargetIds != null) 'syncTargetIds': command.syncTargetIds,
-    if (command.fieldsMask != null) 'fieldsMask': command.fieldsMask,
-  },
-);
-
-CloudOperationRequestPayload encodeApplyPersonaProfileSyncCommand(
-  ApplyPersonaProfileSyncCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'subAccountId': command.subAccountId},
-  body: <String, Object?>{
-    'applyScope': command.applyScope,
-    if (command.syncTargetIds != null) 'syncTargetIds': command.syncTargetIds,
-    if (command.fieldsMask != null) 'fieldsMask': command.fieldsMask,
-  },
-);
-
-CloudOperationRequestPayload encodeRetirePersonaCommand(
-  RetirePersonaCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'subAccountId': command.subAccountId},
-);
-
-CloudOperationRequestPayload encodeActivatePersonaCommand(
-  ActivatePersonaCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'subAccountId': command.subAccountId},
-);
-
-CloudOperationRequestPayload encodeUpdateUserProfileCommand(
-  UpdateUserProfileCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    if (command.nickname != null) 'nickname': command.nickname,
-    if (command.displayName != null) 'displayName': command.displayName,
-    if (command.avatarAssetId != null) 'avatarAssetId': command.avatarAssetId,
-    if (command.avatarUrl != null) 'avatarUrl': command.avatarUrl,
-    if (command.backgroundAssetId != null)
-      'backgroundAssetId': command.backgroundAssetId,
-    if (command.backgroundUrl != null) 'backgroundUrl': command.backgroundUrl,
-    if (command.bio != null) 'bio': command.bio,
-    if (command.gender != null) 'gender': command.gender,
-    if (command.birthDate != null) 'birthDate': command.birthDate,
-    if (command.regionTagRef != null) 'regionTagRef': command.regionTagRef,
-    if (command.occupationTagRef != null)
-      'occupationTagRef': command.occupationTagRef,
-    if (command.interestTagRefs != null)
-      'interestTagRefs': command.interestTagRefs,
-    if (command.expectedTaxonomyReleaseId != null)
-      'expectedTaxonomyReleaseId': command.expectedTaxonomyReleaseId,
-    if (command.identityTags != null) 'identityTags': command.identityTags,
-    if (command.profileVisibility != null)
-      'profileVisibility': command.profileVisibility,
-    if (command.applyScope != null) 'applyScope': command.applyScope,
-    if (command.syncTargetIds != null) 'syncTargetIds': command.syncTargetIds,
-    if (command.fieldsMask != null) 'fieldsMask': command.fieldsMask,
-  },
-);
-
 PersonaManagementItem decodePersonaManagementItem(Object? value) {
   final map = _object(value, 'PersonaManagementItem');
   return PersonaManagementItem(
-    subAccountId: _string(map, 'subAccountId'),
+    personaId: _string(map, 'personaId'),
     displayName: _stringOr(map, 'displayName', ''),
     userHandle: _optionalString(map, 'userHandle'),
-    phone: _optionalString(map, 'phone'),
-    email: _optionalString(map, 'email'),
     avatarUrl: _optionalString(map, 'avatarUrl'),
     backgroundUrl: _optionalString(map, 'backgroundUrl'),
     bio: _optionalString(map, 'bio'),
@@ -425,7 +207,7 @@ ActivePersonaContext decodeActivePersonaContext(Object? value) {
   final map = _object(value, 'ActivePersonaContext');
   return ActivePersonaContext(
     ownerUserId: _string(map, 'ownerUserId'),
-    subAccountId: _string(map, 'subAccountId'),
+    personaId: _string(map, 'personaId'),
     isolationLevel: _stringOr(map, 'isolationLevel', 'open'),
     profileVisibility: _stringOr(map, 'profileVisibility', 'public'),
     contextVersion: _intOr(map, 'contextVersion', 1),
@@ -439,7 +221,7 @@ ActivePersonaContext decodeActivePersonaContext(Object? value) {
 PersonaLifecycleGuard decodePersonaLifecycleGuard(Object? value) {
   final map = _object(value, 'PersonaLifecycleGuard');
   return PersonaLifecycleGuard(
-    subAccountId: _string(map, 'subAccountId'),
+    personaId: _string(map, 'personaId'),
     requestedAction: _stringOr(map, 'requestedAction', ''),
     allowed: _boolOr(map, 'allowed', false),
     reason: _stringOr(map, 'reason', ''),
@@ -528,10 +310,4 @@ bool _boolOr(Map<String, Object?> map, String key, bool fallback) {
   final value = map[key];
   if (value is bool) return value;
   return fallback;
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }

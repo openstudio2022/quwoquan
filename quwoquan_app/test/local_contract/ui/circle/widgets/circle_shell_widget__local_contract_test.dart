@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/application/rtc/call_session/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/rtc/rtc_call_entry_presenter.dart';
@@ -25,60 +24,18 @@ import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 import '../typed_circle_query_test_double.dart';
 
-class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+class _AuthenticatedCircleSession extends AuthSessionController {
   @override
-  bool build() => true;
-}
-
-class _AuthedSessionStore implements AuthSessionStore {
-  const _AuthedSessionStore();
-
-  @override
-  Future<StoredAuthSession> read() async => const StoredAuthSession(
-    accessToken: 'access-token',
-    refreshToken: 'refresh-token',
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'circle-shell-test-token',
+    refreshToken: 'circle-shell-test-refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
-    identityOrigin: 'phone',
-    installId: 'install-id',
-    lastRefreshAtEpochMs: 0,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    manualLoggedOut: false,
-    launchPromptDismissed: true,
+    identityOrigin: 'widget-test',
+    installId: 'circle-shell-widget-test-install',
   );
-
-  @override
-  Future<void> saveLoginGrant(
-    AuthSessionGrant result, {
-    AuthRememberedLoginMethod rememberedLoginMethod =
-        AuthRememberedLoginMethod.unknown,
-    String? rememberedLoginMaskedIdentifier,
-    String? rememberedLoginIdentifier,
-  }) async {}
-
-  @override
-  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
-
-  @override
-  Future<void> saveRefreshedAccountHint(
-    AccountHintSnapshot? accountHint,
-  ) async {}
-
-  @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
-
-  @override
-  Future<void> clearSession({required bool manualLogout}) async {}
-
-  @override
-  Future<void> softLogout() async {}
-
-  @override
-  Future<void> markLaunchPromptDismissed() async {}
-
-  @override
-  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 final class _FixtureCircleGroupQuery implements CircleGroupQueryReader {
@@ -220,7 +177,9 @@ Widget _scopedApp({
         );
   return ProviderScope(
     overrides: [
-      startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
+      authSessionControllerProvider.overrideWith(
+        _AuthenticatedCircleSession.new,
+      ),
       circlesListQueryProvider.overrideWithValue(query),
       circleDetailQueryProvider.overrideWithValue(query),
       circlesListDiscoveryFeedQueryProvider.overrideWithValue(discoveryQuery),
@@ -235,14 +194,13 @@ Widget _scopedApp({
       ),
       activePersonaContextProvider.overrideWith(
         (_) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'user_001',
+          personaId: 'user_001',
           ownerUserId: 'user_001',
           displayName: '圈子测试用户',
           avatarUrl: '',
           contextVersion: 1,
         ),
       ),
-      authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       circleDetailBehaviorFactWriterProvider.overrideWithValue(
         _NoopCircleBehaviorFactWriter(),
       ),
@@ -292,12 +250,6 @@ Future<void> _pumpShell(
       overrides: overrides,
     ),
   );
-  final container = ProviderScope.containerOf(
-    tester.element(find.byType(CircleShell)),
-  );
-  // CircleShell 不主动 watch 登录态，这里显式触发 auth session 构建并 hydrate，
-  // 让加入/关注按钮的 requireLogin 在已登录态下放行。
-  await container.read(authSessionControllerProvider.notifier).restore();
   await tester.pumpAndSettle();
   await tester.pump(const Duration(milliseconds: 350));
 }
@@ -318,6 +270,11 @@ void main() {
       expect(find.text(ObjectHomepageText.objectTabRecord), findsWidgets);
       expect(find.text('讨论'), findsWidgets);
       expect(find.text('成员'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey<String>('circle-header-verified-badge')),
+        findsNothing,
+        reason: 'CircleStatus.active 只表示生命周期，不能推断官方认证',
+      );
       expect(
         find.byKey(const ValueKey<String>('circle-creations-filter-bar')),
         findsOneWidget,
@@ -684,7 +641,7 @@ class _PrivateVisitorCircleQuery extends CircleQueryReaderTestDouble {
         circleId: query.circleId,
         name: '私密测试圈子',
         ownerId: 'fixture_user_owner',
-        visibility: 'private',
+        visibility: CircleVisibility.private,
         viewerRole: 'visitor',
         joinStatus: 'none',
         isFollowed: false,
@@ -698,8 +655,8 @@ class _ApprovalVisitorCircleQuery extends CircleQueryReaderTestDouble {
         circleId: query.circleId,
         name: '审批测试圈子',
         ownerId: 'fixture_user_owner',
-        visibility: 'public',
-        joinPolicy: 'approval',
+        visibility: CircleVisibility.public,
+        joinPolicy: CircleJoinPolicy.approval,
         viewerRole: 'visitor',
         joinStatus: 'none',
         isFollowed: false,

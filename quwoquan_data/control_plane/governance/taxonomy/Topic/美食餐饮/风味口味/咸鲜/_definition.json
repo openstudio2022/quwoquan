@@ -2,6 +2,7 @@
   "label": "咸鲜",
   "labelEn": "Savory",
   "description": "咸味鲜味为主",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

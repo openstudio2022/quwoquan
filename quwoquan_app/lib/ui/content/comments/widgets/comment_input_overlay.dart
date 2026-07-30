@@ -124,10 +124,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   void initState() {
     super.initState();
     _draftActorScope = ref.read(currentUserIdProvider).trim();
-    _effectiveConfig = _resolveComposerConfig(
-      ref.read(commentRemoteConfigProvider),
-      widget.config,
-    );
+    _effectiveConfig = widget.config;
     _mentionCandidates = List<ContentCommentMention>.of(
       widget.mentionCandidates,
     );
@@ -143,7 +140,13 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         );
     unawaited(_restoreDraft());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+      if (!mounted) return;
+      final resolved = _resolveComposerConfig(
+        ref.read(commentRemoteConfigProvider),
+        widget.config,
+      );
+      setState(() => _effectiveConfig = resolved);
+      _focusNode.requestFocus();
     });
   }
 
@@ -294,8 +297,8 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
   Future<void> _loadFollowingMentionCandidates() async {
     if (_mentionCandidatesLoading || _followingCandidatesLoaded) return;
     final session = ref.read(authSessionControllerProvider);
-    final subAccountId = session.activeSubAccountId.trim();
-    if (!session.isAuthenticated || subAccountId.isEmpty) {
+    final personaId = session.activePersonaId.trim();
+    if (!session.isAuthenticated || personaId.isEmpty) {
       return;
     }
     setState(() {
@@ -305,14 +308,14 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
     try {
       final page = await ref
           .read(personaRelationshipQueryProvider(widget.sourceSurface))
-          .listFollowing(subAccountId: subAccountId, limit: 20);
+          .listFollowing(personaId: personaId, limit: 20);
       if (!mounted) return;
       final merged = <String, ContentCommentMention>{
         for (final candidate in _mentionCandidates)
           candidate.subjectId: candidate,
       };
       for (final relation in page.items) {
-        final subjectId = relation.subAccountId.trim();
+        final subjectId = relation.personaId.trim();
         final displayName = relation.displayName.trim();
         if (subjectId.isEmpty || displayName.isEmpty) continue;
         merged.putIfAbsent(
@@ -516,6 +519,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
       if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
         if (remainingFrames > 0) {
           _maybeResumeContinuation(remainingFrames: remainingFrames - 1);
+          WidgetsBinding.instance.scheduleFrame();
         }
         return;
       }

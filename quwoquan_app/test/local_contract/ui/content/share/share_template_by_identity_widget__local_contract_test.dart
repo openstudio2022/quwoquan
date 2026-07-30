@@ -510,8 +510,14 @@ void main() {
     await tester.pump();
 
     expect(outboundShares.lastCommand?.postId, 'share_wechat_completed');
-    expect(outboundShares.lastCommand?.channel, 'wechat_friend');
-    expect(outboundShares.lastCommand?.destinationKind, 'external_app');
+    expect(
+      outboundShares.lastCommand?.channel,
+      OutboundShareChannel.wechatFriend,
+    );
+    expect(
+      outboundShares.lastCommand?.destinationKind,
+      OutboundShareDestinationKind.externalApp,
+    );
     expect(outboundShares.lastCommand?.destination, 'wechatFriend');
     expect(
       outboundShares.lastCommand?.providerReceiptId,
@@ -578,7 +584,7 @@ void main() {
           resolvedOwnerUserIdProvider.overrideWithValue('owner_share'),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'persona_share',
+              personaId: 'persona_share',
               ownerUserId: 'owner_share',
               displayName: '分享测试分身',
               avatarUrl: '',
@@ -708,7 +714,7 @@ final class _CircleMembershipQuery implements CircleMembershipQuery {
             memberCount: circle.memberCount,
             postCount: circle.postCount,
             weeklyActiveCount: circle.weeklyActiveCount,
-            state: circle.status,
+            status: circle.status,
             visibility: circle.visibility,
             joinPolicy: circle.joinPolicy,
             kind: circle.kind,
@@ -716,7 +722,7 @@ final class _CircleMembershipQuery implements CircleMembershipQuery {
             followEnabled: circle.followEnabled,
             defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
             linkedHomepageId: '',
-            linkedHomepageType: '',
+            linkedHomepageType: null,
             linkedHomepageTitle: '',
             createdAt: circle.createdAt,
             updatedAt: circle.updatedAt,
@@ -856,7 +862,7 @@ class _RecordingOutboundShareWriter
     return ContentOutboundShareFactResult(
       eventId: 'outbound-share-event-1',
       postId: command.postId,
-      channel: command.channel,
+      channel: command.channel.wireValue,
       referralId: command.referralId,
       occurredAt: command.clientConfirmedAt,
       replayed: false,
@@ -870,7 +876,8 @@ class _AuthenticatedSession extends AuthSessionController {
     return const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'share-test-token',
-      activeSubAccountId: 'share_persona',
+      refreshToken: 'share-test-refresh-token',
+      activePersonaId: 'share_persona',
       ownerId: 'share_owner',
     );
   }

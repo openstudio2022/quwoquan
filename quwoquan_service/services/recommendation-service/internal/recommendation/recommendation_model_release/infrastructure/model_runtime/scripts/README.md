@@ -24,7 +24,10 @@ From `quwoquan_service`, run the training lane through the service-owned scripts
 
 ## Docker
 
-See Dockerfile; run with `train.py --scenario content_feed`.
+从 `quwoquan_service/` 根构建，确保训练镜像与 Serving 同时打包 canonical
+`intersection_kind_registry.yaml` 和同一 matched-edge encoder：
+
+`docker build -f services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/Dockerfile .`
 
 ## Operations
 

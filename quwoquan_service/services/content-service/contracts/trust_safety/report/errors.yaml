@@ -10,6 +10,9 @@ errors:
   kind: USER
   reason: report_not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [GetReport, BeginReportReview, ResolveReport, DismissReport]
   recovery_action: surface
   dart_const: reportNotFound
   go_const: ErrReportNotFound

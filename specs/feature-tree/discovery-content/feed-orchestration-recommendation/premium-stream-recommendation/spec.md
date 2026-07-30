@@ -33,6 +33,7 @@
 ### REQ-001 精品流式体验路由与解释契约
 
 - 精品流必须统一路由、排序与解释；全局精品必须先经 product-ops 写入，未启用 PremiumPoolSource 时不得返回伪精品结果。
+- premium_stream/similar 首刷必须读取当前环境 canonical active release snapshot；健康零 active release 或同 release eligible playable-video 计数为零时返回 canonical 成功空结果，依赖读取/绑定/硬过滤/召回/scorer/hydration 故障返回 `CONTENT.SYSTEM.required_dependency_unavailable`。任何成功空态都不能替代发布门要求的当前 release 非空可播放视频精品。
 
 <a id="req-002"></a>
 ### REQ-002 精品池全局召回读路径闭环
@@ -50,6 +51,8 @@
 - PremiumPoolSource 启用前必须证明 product-ops 全局 featured/质量准入、审计、过期、回滚和下架剔除，并完成 content-service 投影读取。
 - `premium_pool` 候选必须与其他召回源共享负反馈、下架、过期、频控、near-dup、作者屏蔽和类型屏蔽过滤；回滚开关 `disable_premium_pool_source` 生效时精品流退回 premium preset + 通用候选，不退回圈内精选。
 - `rm_premium_pool` 无 eligible 投影、投影过期、回滚、下架或质量准入失败时必须 fail closed，不能退回圈内 featured、普通 `Post.Featured` 或 App 本地列表。
+- `rm_premium_pool` 读取链健康且首刷确实无 eligible 候选时返回 canonical 成功空结果；投影读取、资格判定或同 release hydration 链异常仍 fail closed。
+- active supply 的 premium playable-video 计数必须复用 PremiumPoolSource 的 global/active/eligible/approved/quality/expiry/takedown 资格谓词，并进一步证明同一内容 ID 在 `rm_discovery_feed` 与 `posts` 均属于当前 `qwq_data` release、active lifecycle；`posts` 必须是 published/public/approved 的 `work + video` 且具有非空 video URL 与正时长。
 
 ## 4. 契约引用
 
@@ -74,6 +77,7 @@
 - GIVEN content-service 拥有内容 published/approved/visible 与推荐质量分投影。
 - WHEN 用户进入 premium_stream/similar 精品流。
 - THEN content-service 只读本地精品池推荐投影，装配 RecallPath=premium_pool 候选并交给 Engine 统一过滤、排序和曝光治理。
+- AND 健康零 eligible 视频返回 canonical 成功空结果；依赖异常返回 canonical failure 及闭集 `failureStage`。商业准出另行强制至少一条通过 release-bound supply、负反馈/隐藏/拉黑、published/safety、playable-video 与 same-release hydration 检查的当前 canonical release 视频。
 
 ## 6. 依赖
 

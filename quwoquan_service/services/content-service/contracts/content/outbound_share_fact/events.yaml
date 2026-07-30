@@ -1,19 +1,14 @@
 events:
 - name: OutboundShareRecorded
-  description: 站外渠道成功回执已经以幂等方式记录
+  description: 站外渠道成功回执已作为不可变事实幂等追加；当前消费者只包含仓内可证明的发布与投影链路。
   producer: content-service
   consumers:
-  - recommendation-engine
-  - attribution-projector
-  - content-counter-projector
-  - profile-interaction-activity-projector
-  channel: outbox
-  payload_fields:
-  - eventId
-  - postId
-  - actorDimension
-  - actorId
-  - channel
-  - referralId
-  - occurredAt
+  - content-outbound-share-runtime-events
+  - content-outbound-share-profile-interaction
+  - content-outbound-share-post-count
+  - content-outbound-share-discovery-count
+  channel: transactional_outbox
+  payload_entity: OutboundShareRecordedPayload
+  payload_shape: exact
+  payload_fields: [eventId, postId, actorDimension, actorId, channel, destinationKind, destinationDigest, referralId, providerReceiptDigest, occurredAt]
   recommend_impact: engagement_signal

@@ -1,0 +1,13 @@
+{
+  "label": "经济",
+  "labelEn": "Budget",
+  "description": "以性价比为先，住经济型住宿、以公共交通为主",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

@@ -29,7 +29,6 @@ func (store *memoryLearningFactStore) Append(
 		}
 		return model.Receipt{
 			EventID:        existing.EventID,
-			EventVersion:   existing.EventVersion,
 			Accepted:       true,
 			Deduplicated:   true,
 			AppendSequence: existing.AppendSequence,
@@ -42,7 +41,6 @@ func (store *memoryLearningFactStore) Append(
 	store.facts[fact.StorageID] = fact
 	return model.Receipt{
 		EventID:        fact.EventID,
-		EventVersion:   fact.EventVersion,
 		Accepted:       true,
 		AppendSequence: fact.AppendSequence,
 		PayloadDigest:  fact.PayloadDigest,
@@ -82,7 +80,6 @@ func TestLearningFactAppendIsDurablyIdempotentAndRejectsConflict(
 	)
 	command := model.AppendCommand{
 		EventID:          "feedback-1",
-		EventVersion:     1,
 		FactType:         model.FactTypeUserFeedback,
 		AssistantTurnID:  "turn-1",
 		ReferralSource:   "article",
@@ -120,7 +117,7 @@ func TestLearningFactAppendIsDurablyIdempotentAndRejectsConflict(
 		len(store.facts) != 1 {
 		t.Fatalf("first=%+v replayed=%+v facts=%d", first, replayed, len(store.facts))
 	}
-	stored := store.facts[model.Identity(command.EventID, command.EventVersion)]
+	stored := store.facts[model.Identity(command.EventID)]
 	if stored.AssistantTurnID != "turn-1" ||
 		stored.ReferralSource != "article" {
 		t.Fatalf("fact provenance=%+v", stored)
@@ -153,7 +150,6 @@ func TestLearningFactFailsClosedForOwnerAndRestrictedTraining(
 	)
 	command := model.AppendCommand{
 		EventID:          "feedback-sensitive",
-		EventVersion:     1,
 		FactType:         model.FactTypeUserFeedback,
 		AssistantTurnID:  "turn-1",
 		ReferralSource:   "article",

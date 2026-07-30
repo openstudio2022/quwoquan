@@ -461,10 +461,10 @@ func TestPolicyCatalogLoaderAndShardLease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load policy catalog: %v", err)
 	}
-	if policies.Policies["reliabletask.retention.standard.v1"].DLQ.TTL <= 0 {
+	if policies.Policies["reliabletask.retention.standard"].DLQ.TTL <= 0 {
 		t.Fatalf("expected standard dlq ttl")
 	}
-	if policies.RateLimits["reliabletask.rate.chat_avatar.v1"].ClaimPerSecond <= 0 {
+	if policies.RateLimits["reliabletask.rate.chat_avatar"].ClaimPerSecond <= 0 {
 		t.Fatalf("expected chat avatar rate limit")
 	}
 	catalog, err := LoadCatalogWithPolicies(

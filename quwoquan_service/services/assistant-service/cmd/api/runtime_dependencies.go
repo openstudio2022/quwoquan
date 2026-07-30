@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	conversationports "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
 	learningpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/persistence"
 	learningprojection "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/infrastructure/projection"
@@ -30,9 +30,9 @@ func validateRuntimeDependenciesConfig(cfg config) error {
 }
 
 type persistentDependencies struct {
-	subscriptionStore    application.SkillSubscriptionStore
-	consentStore         application.ConsentStore
-	conversationRunStore application.ConversationRunStore
+	subscriptionStore    conversationports.SkillSubscriptionStore
+	consentStore         conversationports.ConsentStore
+	conversationRunStore conversationports.ConversationRunStore
 	preferenceStore      preferenceports.Store
 	preferenceReader     preferenceports.Reader
 	policyReleaseStore   *policyreleasepersistence.MongoStore

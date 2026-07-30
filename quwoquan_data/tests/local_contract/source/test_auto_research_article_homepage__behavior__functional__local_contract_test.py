@@ -204,12 +204,10 @@ def test_homepage_auto_research_rejects_provider_without_repeatable_fetch_contra
         / "homepage_source_plan.json"
     )
     sources = read_json(plan)["payload"]["sources"]
-    assert sources == []
-    assert any(
-        row["ref"] == entity
-        and row["code"] == DataIssueCode.SOURCE_PRIMARY_AUTHORITY_MISSING.value
-        for row in report["sourceUnavailable"]
-    )
+    assert len(sources) == 1
+    assert sources[0]["sourceKind"] == "toutiao_baike"
+    assert sources[0]["url"] == "https://www.baike.com/wikiid/test-entity"
+    assert not any(row["ref"] == entity for row in report["sourceUnavailable"])
 
 
 

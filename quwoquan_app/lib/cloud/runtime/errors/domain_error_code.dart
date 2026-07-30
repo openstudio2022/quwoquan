@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
+import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/rtc/generated/rtc_errors.g.dart';
@@ -60,7 +61,11 @@ class DomainErrorCodeRegistry {
     }
     if (code.startsWith('CIRCLE.')) {
       final value = CircleErrorCode.fromCode(code);
-      return value == CircleErrorCode.unknown ? null : _fromCircle(value);
+      if (value != CircleErrorCode.unknown) return _fromCircle(value);
+      final membershipValue = CircleMembershipErrorCode.fromCode(code);
+      return membershipValue == CircleMembershipErrorCode.unknown
+          ? null
+          : _fromCircleMembership(membershipValue);
     }
     if (code.startsWith('ENTITY.')) {
       final value = EntityErrorCode.fromCode(code);
@@ -142,6 +147,18 @@ class DomainErrorCodeRegistry {
   }
 
   static DomainErrorCode _fromCircle(CircleErrorCode value) {
+    return DomainErrorCode(
+      domain: 'circle',
+      code: value.code,
+      defaultMessage: value.defaultMessage,
+      httpStatus: value.httpStatus,
+      value: value,
+    );
+  }
+
+  static DomainErrorCode _fromCircleMembership(
+    CircleMembershipErrorCode value,
+  ) {
     return DomainErrorCode(
       domain: 'circle',
       code: value.code,

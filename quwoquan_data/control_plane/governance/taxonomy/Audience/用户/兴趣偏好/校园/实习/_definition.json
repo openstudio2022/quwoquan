@@ -2,6 +2,10 @@
   "label": "实习",
   "labelEn": "Internship",
   "description": "关注实习、校招与职业准备",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/教育成长/实习求职"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

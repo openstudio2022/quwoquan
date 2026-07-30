@@ -1,4 +1,3 @@
-version: 1
 # 实体主页 introduction / bundle / search 读路径 SLI/SLO 声明（单一真相源：本文件 + 指标）。
 #   1) HTTP 边界（延迟/错误/可用性）：runtime/observability http_server_* 中间件按
 #      route 自动产出，无需服务自埋；分位数取自 histogram（禁止算术平均代替分位数）。

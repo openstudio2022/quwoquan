@@ -3,9 +3,10 @@ package local_contract
 import (
 	"context"
 	"fmt"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
 	"sync"
 	"testing"
+
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 // migratedNotificationCommandWriterRecordingNotificationCommandWriter is a local-contract spy, not a runtime
@@ -13,14 +14,14 @@ import (
 // seam and intentionally exposes no lifecycle/query/storage behavior.
 type migratedNotificationCommandWriterRecordingNotificationCommandWriter struct {
 	mu       sync.Mutex
-	commands []NotificationAppMessageCommand
+	commands []ports.NotificationAppMessageCommand
 }
 
 func TestRecordingNotificationCommandWriterKeepsTypedUserBoundary(t *testing.T) {
 	t.Parallel()
 
 	writer := migratedNotificationCommandWriterNewRecordingNotificationCommandWriter()
-	first, err := writer.CreateAppMessage(context.Background(), NotificationAppMessageCommand{
+	first, err := writer.CreateAppMessage(context.Background(), ports.NotificationAppMessageCommand{
 		IdempotencyKey: "assistant-notification-user-a",
 		UserID:         "user-a",
 		MessageType:    "assistant",
@@ -30,7 +31,7 @@ func TestRecordingNotificationCommandWriterKeepsTypedUserBoundary(t *testing.T) 
 	if err != nil {
 		t.Fatalf("CreateAppMessage(user-a): %v", err)
 	}
-	second, err := writer.CreateAppMessage(context.Background(), NotificationAppMessageCommand{
+	second, err := writer.CreateAppMessage(context.Background(), ports.NotificationAppMessageCommand{
 		IdempotencyKey: "assistant-notification-user-b",
 		UserID:         "user-b",
 		MessageType:    "assistant",
@@ -59,22 +60,22 @@ func migratedNotificationCommandWriterNewRecordingNotificationCommandWriter() *m
 
 func (w *migratedNotificationCommandWriterRecordingNotificationCommandWriter) CreateAppMessage(
 	_ context.Context,
-	command NotificationAppMessageCommand,
-) (NotificationAppMessageReceipt, error) {
+	command ports.NotificationAppMessageCommand,
+) (ports.NotificationAppMessageReceipt, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.commands = append(w.commands, command)
-	return NotificationAppMessageReceipt{
+	return ports.NotificationAppMessageReceipt{
 		MessageID: fmt.Sprintf("notification-test-%d", len(w.commands)),
 	}, nil
 }
 
 func (w *migratedNotificationCommandWriterRecordingNotificationCommandWriter) CommandsForUser(
 	userID string,
-) []NotificationAppMessageCommand {
+) []ports.NotificationAppMessageCommand {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	out := make([]NotificationAppMessageCommand, 0, len(w.commands))
+	out := make([]ports.NotificationAppMessageCommand, 0, len(w.commands))
 	for _, command := range w.commands {
 		if command.UserID == userID {
 			out = append(out, command)

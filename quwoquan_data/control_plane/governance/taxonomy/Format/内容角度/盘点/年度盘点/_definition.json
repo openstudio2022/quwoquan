@@ -2,6 +2,7 @@
   "label": "年度盘点",
   "labelEn": "Annual Roundup",
   "description": "年度总结盘点",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

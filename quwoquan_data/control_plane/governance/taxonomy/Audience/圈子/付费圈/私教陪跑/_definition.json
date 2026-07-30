@@ -2,6 +2,7 @@
   "label": "私教陪跑",
   "labelEn": "Coaching Circle",
   "description": "小班私教/陪跑群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

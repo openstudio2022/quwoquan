@@ -56,6 +56,7 @@ func newObjectCardFeedService(t *testing.T, provider ObjectCardProvider, cfg rec
 		engine,
 		fixtureFeedReader{posts: posts},
 		WithObjectCardProvider(provider, objectCardPolicy(cfg)),
+		readyActiveSupplyOption(),
 	)
 }
 

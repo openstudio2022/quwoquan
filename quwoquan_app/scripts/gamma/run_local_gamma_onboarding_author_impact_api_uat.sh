@@ -16,8 +16,7 @@ fi
 
 REPORT="${LOCAL_GAMMA_ONBOARDING_AUTHOR_IMPACT_API_UAT_REPORT:-$QWQ_RUN_ROOT/onboarding_author_impact_api_uat_report.json}"
 RELEASE_REPORT="$QWQ_RUN_ROOT/onboarding_author_impact_release_report.json"
-RELEASE_ID="${QWQ_DATA_RELEASE_ID:-}"
-IMPORT_RUN_ID="${QWQ_GAMMA_IMPORT_RUN_ID:-}"
+READINESS_RECEIPT="${DATA_RELEASE_READINESS_RECEIPT:-}"
 SESSION_DEFINES="$(mktemp "${TMPDIR:-/tmp}/qwq-gamma-api-uat-defines.XXXXXX.json")"
 chmod 600 "$SESSION_DEFINES"
 trap 'rm -f "$SESSION_DEFINES"' EXIT
@@ -26,8 +25,8 @@ if [[ ! -f "$RUNTIME_TOPOLOGY" ]]; then
   echo "[local-gamma:onboarding-author-impact-api] GATE_BLOCK: gamma runtime topology is missing" >&2
   exit 2
 fi
-if [[ -z "$RELEASE_ID" || -z "$IMPORT_RUN_ID" ]]; then
-  echo "[local-gamma:onboarding-author-impact-api] GATE_BLOCK: QWQ_DATA_RELEASE_ID and QWQ_GAMMA_IMPORT_RUN_ID are required" >&2
+if [[ -z "$READINESS_RECEIPT" ]]; then
+  echo "[local-gamma:onboarding-author-impact-api] GATE_BLOCK: DATA_RELEASE_READINESS_RECEIPT is required" >&2
   exit 2
 fi
 
@@ -57,8 +56,7 @@ fi
 
 if [[ "$health_status" -eq 0 ]]; then
   if ! python3 "$ROOT/quwoquan_app/scripts/gamma/run_local_gamma_t3.py" \
-    --release-id "$RELEASE_ID" \
-    --import-run-id "$IMPORT_RUN_ID" \
+    --release-readiness "$READINESS_RECEIPT" \
     --report "$RELEASE_REPORT"; then
     release_status=1
   fi

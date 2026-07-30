@@ -2,6 +2,7 @@
   "label": "活跃创作者",
   "labelEn": "Active Creator",
   "description": "频繁发布原创内容",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

@@ -55,6 +55,8 @@ type MongoUserAccountClosedProjection struct {
 	commandReceipts  *mongo.Collection
 	deliveryOutbox   *mongo.Collection
 	providerAttempts *mongo.Collection
+	restrictions     *mongo.Collection
+	restrictionInbox *mongo.Collection
 	inbox            *mongo.Collection
 	failures         *mongo.Collection
 }
@@ -77,6 +79,8 @@ func NewMongoUserAccountClosedProjection(
 		commandReceipts:  db.Collection(closedAccountDeliveryReceiptCollection),
 		deliveryOutbox:   db.Collection(closedAccountDeliveryOutboxCollection),
 		providerAttempts: db.Collection("external_provider_attempt_ledger"),
+		restrictions:     db.Collection("notification_user_account_restrictions"),
+		restrictionInbox: db.Collection("notification_user_account_restriction_inbox"),
 		inbox:            db.Collection(UserAccountClosedInboxCollection),
 		failures:         db.Collection(UserAccountClosedFailureCollection),
 	}, nil
@@ -234,6 +238,13 @@ func (projection *MongoUserAccountClosedProjection) ApplyUserAccountClosed(
 				result = replayed
 				return nil, replayErr
 			}
+			if err := finalizeNotificationAccountRestrictionClosure(
+				txCtx,
+				projection.db,
+				event,
+			); err != nil {
+				return nil, err
+			}
 			cleanup, cleanupErr := projection.cleanupClosedSubjects(
 				txCtx,
 				event,
@@ -367,6 +378,23 @@ func (projection *MongoUserAccountClosedProjection) cleanupClosedSubjects(
 				"delete closed-account delivery recipient projection: %w",
 				err,
 			)
+	}
+	if _, err := projection.restrictions.DeleteMany(
+		ctx,
+		bson.M{"$or": bson.A{
+			bson.M{"_id": event.UserID},
+			bson.M{"subjects": bson.M{"$in": subjects}},
+		}},
+	); err != nil {
+		return userAccountClosedCleanupResult{},
+			fmt.Errorf("delete closed notification account restriction state: %w", err)
+	}
+	if _, err := projection.restrictionInbox.DeleteMany(
+		ctx,
+		bson.M{"accountId": event.UserID},
+	); err != nil {
+		return userAccountClosedCleanupResult{},
+			fmt.Errorf("delete closed notification account restriction inbox: %w", err)
 	}
 	return userAccountClosedCleanupResult{
 		DeletedAppMessages:       messageResult.DeletedCount,

@@ -16,7 +16,7 @@ final class AlphaContactDiscoveryFacet
     final result = ContactDiscoveryResult(
       id: 'alpha-contact-discovery-${++_sequence}',
       status: 'completed',
-      matchedSubAccountIds: const <String>[],
+      matchedPersonaIds: const <String>[],
       matchCount: 0,
       matches: const <ContactDiscoveryMatchResult>[],
       completedAt: now,
@@ -33,7 +33,7 @@ final class AlphaContactDiscoveryFacet
         const ContactDiscoveryResult(
           id: '',
           status: 'completed',
-          matchedSubAccountIds: <String>[],
+          matchedPersonaIds: <String>[],
           matchCount: 0,
           matches: <ContactDiscoveryMatchResult>[],
         );

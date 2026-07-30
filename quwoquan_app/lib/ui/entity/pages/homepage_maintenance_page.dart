@@ -369,13 +369,13 @@ class _HomepageMaintenancePageState
         return;
       }
       final ownerUserId = (detail.ownerUserId ?? '').trim();
-      final ownerSubAccountId = (detail.ownerSubAccountId ?? '').trim();
+      final ownerPersonaId = (detail.ownerPersonaId ?? '').trim();
       final isOwner =
           (detail.claimStatus ?? '').trim() == 'claimed' &&
           ((ownerUserId.isNotEmpty &&
                   ownerUserId == activeContext.ownerUserId.trim()) ||
-              (ownerSubAccountId.isNotEmpty &&
-                  ownerSubAccountId == activeContext.subAccountId.trim()));
+              (ownerPersonaId.isNotEmpty &&
+                  ownerPersonaId == activeContext.personaId.trim()));
       if (!isOwner) {
         setState(() {
           _detail = detail;

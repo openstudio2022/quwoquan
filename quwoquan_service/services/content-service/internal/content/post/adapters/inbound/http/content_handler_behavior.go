@@ -1,8 +1,11 @@
 package http
 
 import (
+	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +14,8 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 )
 
 func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Request) {
@@ -26,8 +30,14 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		FeedSessionID string                           `json:"feedSessionId"`
 		Events        []behaviorapp.BehaviorEventInput `json:"events"`
 	}
-	if err := json.Unmarshal(raw, &batch); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&batch); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	if err := requireJSONEOF(decoder); err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	if len(batch.Events) == 0 {
@@ -78,10 +88,25 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if err := h.behaviorService.ProcessBatch(r.Context(), batch.Events); err != nil {
-		writeHTTPError(w, r, err)
+		writeHTTPError(w, r, mapBehaviorCommandError(err))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func mapBehaviorCommandError(err error) error {
+	var appError *rterr.AppError
+	if errors.As(err, &appError) {
+		return err
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return contentgenerated.AppErrorFromUpstreamTimeout(
+			"report behaviors dependency timed out: " + err.Error(),
+		)
+	}
+	return contentgenerated.AppErrorFromStorageWriteFailed(
+		"persist report behaviors batch: " + err.Error(),
+	)
 }
 
 const maxBehaviorRequestBytes = 128 * 1024

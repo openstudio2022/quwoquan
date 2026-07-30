@@ -114,6 +114,7 @@ business_rules:
 - maxSeq 只由 MessageCommitted 事件单调推进，不由客户端提交
 - dissolved 为终态且通过 outbox 通知成员与投影收敛
 lifecycle:
+  state_field: status
   states:
   - active
   - dissolved

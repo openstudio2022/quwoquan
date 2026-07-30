@@ -23,7 +23,6 @@ export 'video_post_dto.g.dart';
 export 'article_post_dto.g.dart';
 export 'micro_post_dto.g.dart';
 export 'feed_item_dto.g.dart';
-export 'content_post_mutation_wires.g.dart';
 export 'content_media_asset_wire_dto.g.dart';
 export 'content_video_cover_selection_wire_dto.g.dart';
 export 'content_article_summary_generate_response_dto.g.dart';

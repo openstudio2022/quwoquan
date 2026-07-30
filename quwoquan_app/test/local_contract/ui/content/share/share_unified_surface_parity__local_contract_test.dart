@@ -10,8 +10,11 @@ void main() {
         surfaceView: ContentSurfaceViewMapper.fromDto(dto, wire: wire),
         enableIdentityTemplate: true,
       );
-      expect(template.shareTitle, isNotEmpty,
-          reason: 'shareTitle 必须由 surfaceView 种子产出');
+      expect(
+        template.shareTitle,
+        isNotEmpty,
+        reason: 'shareTitle 必须由 surfaceView 种子产出',
+      );
       expect(template.coverUrl, isNotNull);
       expect(template.layout, isNotEmpty);
       expect(template.permission, 'public');
@@ -42,8 +45,8 @@ void main() {
     test('video 帖同源', () {
       expectSurfaceTemplate(
         VideoPostDto.fromMap(<String, dynamic>{
-          '_id': 'v1',
-          'postId': 'v1',
+          '_id': 'video-post',
+          'postId': 'video-post',
           'type': 'video',
           'contentType': 'video',
           'identity': 'work',

@@ -2,14 +2,11 @@ package recommendation
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"quwoquan_service/runtime/id"
@@ -30,35 +27,51 @@ const (
 	FeedSearch    FeedType = "search"
 )
 
-var ErrInvalidFeedCursor = errors.New("invalid or expired recommendation feed cursor")
+var (
+	ErrInvalidFeedCursor                   = errors.New("invalid or expired recommendation feed cursor")
+	ErrRecallSourceCandidateBudgetExceeded = errors.New("recall source candidate budget exceeded")
+	ErrRecallSourceInflightBudgetExceeded  = errors.New("recall source inflight budget exceeded")
+	ErrRecallGlobalInflightBudgetExceeded  = errors.New("recall global inflight budget exceeded")
+	ErrRecallSourceCountBudgetExceeded     = errors.New("recall source count budget exceeded")
+)
 
 const (
 	FeedSortRecommend = "recommend"
-	defaultCursorTTL  = 10 * time.Minute
-
-	// RankingVersion 标识当前精排/打分管线版本，随 feed envelope 下发，
-	// 供观测与 AB 把命中归因到具体排序修订（对齐 search-service 的 RankingVersion 约定）。
-	RankingVersion = "rec-v1"
-	// ReasonVersion 标识交集理由生成管线版本，随 feed envelope 下发。
-	ReasonVersion = "reason-v1"
 )
 
 // GetFeedRequest defines input for feed generation.
 type GetFeedRequest struct {
-	UserID        string
-	PersonaID     string
-	SessionID     string
-	FeedType      FeedType
-	Sort          string
-	CircleID      string
-	TopicID       string
-	HomepageID    string
-	Surface       string
-	ChannelID     string
-	Vertical      string
-	FeedRequestID string
-	Cursor        string
-	Limit         int
+	UserID    string
+	PersonaID string
+	SessionID string
+	// RankedWindowSubjectID is an internal, namespaced storage/quota subject
+	// derived by the content owner. It is the canonical actor for named or
+	// verified-device traffic and the session for identity-less public traffic.
+	// It is never accepted from the public feed wire contract.
+	RankedWindowSubjectID string
+	FeedType              FeedType
+	Sort                  string
+	CircleID              string
+	TopicID               string
+	HomepageID            string
+	Surface               string
+	ChannelID             string
+	Vertical              string
+	FeedRequestID         string
+	// ActiveReleaseID binds the request to the environment-scoped canonical
+	// supply snapshot selected by content-service. Recall sources that consume
+	// data-engineering projections must use this release identifier rather than
+	// independently selecting an active release.
+	ActiveReleaseID      string
+	ActiveManifestDigest string
+	// Continuation is decoded only by content-service's request-scoped AEAD
+	// cursor. The engine never accepts an offset or a client-visible inner token.
+	Continuation *RankedFeedContinuation
+	Limit        int
+	// FeedbackExclusions is the request-start snapshot of non-bypassable Redis
+	// filters. content-service loads it fail-closed and reuses it across recall,
+	// hydration and explicit PostReader paths.
+	FeedbackExclusions *FeedbackExclusions
 	// DeferDeliveryAccounting（N3-3 served 口径）：调用方在装配层还会过滤候选
 	// （hydration 失败/不可见跳过）时置 true——engine 跳过 served/learning
 	// impression 记账，由调用方按最终下发集调用 RecordDelivery。否则被丢弃的
@@ -72,9 +85,10 @@ type DeliveryAttribution struct {
 	PersonaID      string
 	ChannelID      string
 	ModelBucket    string
-	ModelVersion   string
+	ModelChannel   string
 	ModelReleaseID string
 	ScoringBucket  string
+	PolicyDigest   string
 }
 
 // NewFeedRequestID 生成服务端权威 feedRequestId（frq_ 前缀 ULID）。
@@ -83,16 +97,38 @@ func NewFeedRequestID() string {
 	return id.MustGenerate(id.PrefixFeedRequest)
 }
 
+func (e *Engine) healthyEmptyFeedResponse(req GetFeedRequest, policyDigest string) *FeedResponse {
+	policyDigest = strings.TrimSpace(policyDigest)
+	if policyDigest == "" {
+		policyDigest = e.policyStore.EffectiveHash()
+	}
+	RecordPipelineResult("rule", true)
+	return &FeedResponse{
+		Items:           []FeedItem{},
+		FeedRequestID:   req.FeedRequestID,
+		PolicyDigest:    policyDigest,
+		TerminalOutcome: FeedTerminalEmpty,
+		FailureStage:    FailureStageNone,
+		Attribution: DeliveryAttribution{
+			FeedRequestID: req.FeedRequestID,
+			PersonaID:     req.PersonaID,
+			ChannelID:     req.ChannelID,
+			PolicyDigest:  policyDigest,
+		},
+	}
+}
+
 // FeedResponse holds the recommendation result.
 type FeedResponse struct {
-	Items      []FeedItem `json:"items"`
-	NextCursor string     `json:"nextCursor,omitempty"`
+	Items []FeedItem `json:"items"`
+	// NextContinuation is sealed by content-service's outer AEAD cursor. It is
+	// never serialized directly and contains no recomputable offset.
+	NextContinuation *RankedFeedContinuation `json:"-"`
 	// FeedRequestID 为服务端权威生成的归因 id（frq_ 前缀 ULID）。
 	// 首刷由 engine 生成；分页时回显请求携带的同一 id 以保持归因连续。
 	FeedRequestID string `json:"feedRequestId,omitempty"`
-	// RankingVersion / ReasonVersion 为本次结果的排序与理由管线版本，随 envelope 下发。
-	RankingVersion string `json:"rankingVersion,omitempty"`
-	ReasonVersion  string `json:"reasonVersion,omitempty"`
+	// PolicyDigest 是本次结果唯一的推荐策略身份，供行为与观测归因。
+	PolicyDigest string `json:"policyDigest,omitempty"`
 	// Attribution 仅在 DeferDeliveryAccounting 模式下回传（RecordDelivery 输入）。
 	Attribution DeliveryAttribution `json:"-"`
 	// TerminalOutcome / FailureStage 仅在服务内用于 feed 终态观测，不进入 wire。
@@ -112,19 +148,16 @@ type FeedItem struct {
 	QualityScore    float64  `json:"qualityScore,omitempty"`
 	ContentVertical string   `json:"contentVertical,omitempty"`
 	SupplySource    string   `json:"supplySource,omitempty"`
+	SourceOwner     string   `json:"-"`
+	ReleaseID       string   `json:"-"`
+	ManifestDigest  string   `json:"-"`
+	LifecycleStatus string   `json:"-"`
 	// trainingFeatures 只在进程内随最终下发集流转，不进入客户端 wire。
 	// FeedbackRecorder 将其写入不可变曝光事实，训练不得再回查当前可变宽表。
 	trainingFeatures *trainingFeatureSnapshot
 	// rank 是本次服务端重排后的全局一基序位，仅供不可变曝光事实使用。
 	// 它不进入客户端 wire，不能由端侧行为 position 回写覆盖。
 	rank int
-}
-
-type feedCursorState struct {
-	Version   int    `json:"v"`
-	SessionID string `json:"sid"`
-	Offset    int    `json:"off"`
-	ExpiresAt int64  `json:"exp"`
 }
 
 // ContentCandidate is a candidate from the recall layer.
@@ -144,6 +177,10 @@ type ContentCandidate struct {
 	QualityScore                float64
 	ContentVertical             string
 	SupplySource                string
+	SourceOwner                 string
+	ReleaseID                   string
+	ManifestDigest              string
+	LifecycleStatus             string
 	IntersectionFactStrength    float64
 	IntersectionFreshness       float64
 	AffinityIntersectionScore   float64
@@ -158,24 +195,25 @@ type CandidateSource interface {
 }
 
 type RecallRequest struct {
-	FeedType       FeedType
-	UserID         string
-	CircleID       string
-	TopicID        string
-	HomepageID     string
-	Surface        string
-	Vertical       string
-	FeedRequestID  string
-	SeedContentIDs []string
-	Tags           []string
-	Limit          int
-	Cursor         string
+	FeedType             FeedType
+	UserID               string
+	CircleID             string
+	TopicID              string
+	HomepageID           string
+	Surface              string
+	Vertical             string
+	FeedRequestID        string
+	ActiveReleaseID      string
+	ActiveManifestDigest string
+	SeedContentIDs       []string
+	Tags                 []string
+	// Limit is the hard per-source admitted-output budget. A release-aware
+	// source may place one active-release anchor in the immediately following,
+	// equally bounded handoff window when its primary window contains no
+	// canonical candidate. The engine never scans beyond 2*Limit; farther output
+	// is rejected fail-closed.
+	Limit int
 }
-
-// ScoringWeights controls the relative importance of each scoring dimension.
-// It is an alias for recpolicy.WeightPreset: scoring weights are policy data
-// (metadata-driven, hot-reloadable), never hand-coded constants.
-type ScoringWeights = recpolicy.WeightPreset
 
 // Engine orchestrates the full recommendation pipeline:
 //
@@ -192,6 +230,15 @@ type Engine struct {
 
 	recallTimeout  time.Duration
 	featureTimeout time.Duration
+	// recallSourceSlots bounds goroutines whose dependency ignores context.
+	// Production binds its capacity to content-service's canonical feed
+	// max_inflight; the runtime default is fail-closed at one per source.
+	recallSourceMaxInflight        int
+	recallSourceSlots              []chan struct{}
+	recallGlobalMaxInflight        int
+	recallGlobalSlots              chan struct{}
+	recallSourceMaximumCount       int
+	recallSourceConfigurationError error
 
 	socialMiner *SocialInterestMiner
 
@@ -204,6 +251,7 @@ type Engine struct {
 	feedback       *FeedbackRecorder
 	exposureFilter ExposureFilter
 	exposureMemory ExposureMemory
+	rankedWindows  RankedFeedWindowStore
 }
 
 // EngineOption configures the Engine.
@@ -239,6 +287,38 @@ func WithRecallTimeout(d time.Duration) EngineOption {
 	return func(e *Engine) { e.recallTimeout = d }
 }
 
+// WithRecallSourceMaxInflight binds each recall source to the owning feed
+// operation's canonical inflight budget. It prevents repeated timed-out calls
+// from leaking an unbounded number of goroutines when a dependency violates the
+// CandidateSource context contract.
+func WithRecallSourceMaxInflight(limit int) EngineOption {
+	return func(e *Engine) {
+		if limit > 0 {
+			e.recallSourceMaxInflight = limit
+		}
+	}
+}
+
+// WithRecallGlobalMaxInflight caps all unfinished recall dependency calls
+// across sources and concurrent feed requests for this engine instance.
+func WithRecallGlobalMaxInflight(limit int) EngineOption {
+	return func(e *Engine) {
+		if limit > 0 {
+			e.recallGlobalMaxInflight = limit
+		}
+	}
+}
+
+// WithRecallSourceMaximumCount rejects an oversized production composition;
+// sources are never silently truncated because ordering affects recall fusion.
+func WithRecallSourceMaximumCount(limit int) EngineOption {
+	return func(e *Engine) {
+		if limit > 0 {
+			e.recallSourceMaximumCount = limit
+		}
+	}
+}
+
 // WithScorer sets the model scorer (RuleScorer, RemoteModelScorer, CascadeScorer).
 func WithScorer(s ModelScorer) EngineOption {
 	return func(e *Engine) { e.scorer = s }
@@ -259,35 +339,53 @@ func WithSocialMiner(m *SocialInterestMiner) EngineOption {
 	return func(e *Engine) { e.socialMiner = m }
 }
 
+// WithRankedFeedWindowStore overrides provider discovery for focused tests or
+// alternative recommendation Redis adapters. Production normally discovers
+// the store from HotPath/SessionCache.
+func WithRankedFeedWindowStore(store RankedFeedWindowStore) EngineOption {
+	return func(e *Engine) { e.rankedWindows = store }
+}
+
 // NewEngine creates a recommendation engine.
 // sessions accepts *HotPath, *SessionCache, or any SessionReader.
 func NewEngine(sessions SessionReader, sources []CandidateSource, opts ...EngineOption) *Engine {
 	e := &Engine{
-		sessions:       sessions,
-		sources:        sources,
-		scorer:         &RuleScorer{},
-		features:       &NullFeatureProvider{},
-		preRanker:      &NullPreRanker{},
-		policyStore:    recpolicy.NewStoreFromBaseline(),
-		recallTimeout:  150 * time.Millisecond,
-		featureTimeout: 50 * time.Millisecond,
+		sessions:                 sessions,
+		sources:                  sources,
+		scorer:                   &RuleScorer{},
+		features:                 &NullFeatureProvider{},
+		preRanker:                &NullPreRanker{},
+		policyStore:              recpolicy.NewStoreFromBaseline(),
+		recallTimeout:            150 * time.Millisecond,
+		featureTimeout:           50 * time.Millisecond,
+		recallSourceMaxInflight:  1,
+		recallGlobalMaxInflight:  12,
+		recallSourceMaximumCount: 12,
+	}
+	if provider, ok := sessions.(RankedFeedWindowStoreProvider); ok {
+		e.rankedWindows = provider.RankedFeedWindowStore()
 	}
 	for _, opt := range opts {
 		opt(e)
 	}
+	if len(e.sources) > e.recallSourceMaximumCount {
+		e.recallSourceConfigurationError = fmt.Errorf(
+			"%w: actual=%d maximum=%d",
+			ErrRecallSourceCountBudgetExceeded,
+			len(e.sources),
+			e.recallSourceMaximumCount,
+		)
+	}
+	e.recallGlobalSlots = make(chan struct{}, e.recallGlobalMaxInflight)
+	e.recallSourceSlots = make([]chan struct{}, len(e.sources))
+	for index := range e.recallSourceSlots {
+		e.recallSourceSlots[index] = make(chan struct{}, e.recallSourceMaxInflight)
+	}
 	return e
 }
 
-// NegativeFeedbackReader exposes a user's full explicit-negative content set so
-// feed paths that bypass recall (repository fallback) can honor it. *HotPath
-// implements this; session readers that do not track negatives simply return
-// nothing and the engine recall filter remains the primary enforcement point.
-type NegativeFeedbackReader interface {
-	NegativeContentIDs(ctx context.Context, userID string) ([]string, error)
-}
-
 // FeedbackExclusions is the strong negative-feedback set every feed path must
-// honor regardless of recall vs fallback: explicitly disliked/hidden content,
+// honor regardless of recall vs explicit PostReader query: disliked/hidden content,
 // hidden authors and hidden content types. Repeat-exposure governance
 // (served/impressed) stays inside the recall pipeline and is deliberately not
 // part of this product-level hard rule.
@@ -297,30 +395,41 @@ type FeedbackExclusions struct {
 	HiddenContentTypes map[string]bool
 }
 
-// LoadFeedbackExclusions resolves the strong negative-feedback exclusions for a
-// user from the same source of truth the recall filter uses (session hidden
-// sets + negative content set), so engine and fallback feed paths converge on
-// one truth instead of diverging per path.
-func (e *Engine) LoadFeedbackExclusions(ctx context.Context, userID, sessionID string) FeedbackExclusions {
-	excl := FeedbackExclusions{
+func emptyFeedbackExclusions() FeedbackExclusions {
+	return FeedbackExclusions{
 		NegativeContentIDs: map[string]bool{},
 		HiddenAuthors:      map[string]bool{},
 		HiddenContentTypes: map[string]bool{},
 	}
+}
+
+// LoadFeedbackExclusions resolves the strong negative-feedback exclusions from
+// the dedicated hard-fact reader. Errors are returned instead of becoming an
+// empty set, so recall and explicit PostReader paths fail closed together.
+func (e *Engine) LoadFeedbackExclusions(ctx context.Context, userID, _ string) (FeedbackExclusions, error) {
+	excl := emptyFeedbackExclusions()
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return excl
+		return excl, nil
 	}
-	if session, err := e.sessions.GetSessionState(ctx, userID, sessionID); err == nil && session != nil {
-		excl.HiddenAuthors = toSet(session.HiddenAuthorIDs)
-		excl.HiddenContentTypes = toSet(session.HiddenContentTypes)
+	reader, ok := e.sessions.(HardExclusionReader)
+	if !ok {
+		return excl, fmt.Errorf("hard exclusion reader is unavailable")
 	}
-	if reader, ok := e.sessions.(NegativeFeedbackReader); ok {
-		if ids, err := reader.NegativeContentIDs(ctx, userID); err == nil {
-			excl.NegativeContentIDs = toSet(ids)
-		}
+	loaded, err := reader.LoadHardExclusions(ctx, userID)
+	if err != nil {
+		return excl, err
 	}
-	return excl
+	if loaded.NegativeContentIDs == nil {
+		loaded.NegativeContentIDs = map[string]bool{}
+	}
+	if loaded.HiddenAuthors == nil {
+		loaded.HiddenAuthors = map[string]bool{}
+	}
+	if loaded.HiddenContentTypes == nil {
+		loaded.HiddenContentTypes = map[string]bool{}
+	}
+	return loaded, nil
 }
 
 // GetFeed generates a personalized feed.
@@ -332,9 +441,17 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		req.Limit = 20
 	}
 	req.Sort = normalizeSort(req.Sort)
-	initialRecommend := req.FeedType == FeedDiscovery &&
-		req.Sort == FeedSortRecommend &&
-		strings.TrimSpace(req.Cursor) == ""
+	if req.Continuation != nil {
+		return e.getRankedFeedWindowPage(ctx, req)
+	}
+	if e.recallSourceConfigurationError != nil {
+		return nil, NewFeedFailure(
+			FailureStageRecallAllFailed,
+			e.recallSourceConfigurationError,
+		)
+	}
+	initialRecommend := (req.FeedType == FeedDiscovery || req.FeedType == FeedSimilar) &&
+		req.Sort == FeedSortRecommend
 	terminalOutcome := FeedTerminalSuccess
 	terminalStage := FailureStageNone
 
@@ -344,24 +461,15 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	if req.FeedRequestID == "" {
 		req.FeedRequestID = NewFeedRequestID()
 	}
+	req.SessionID = strings.TrimSpace(req.SessionID)
 
-	pagingOffset := 0
-	sessionID := strings.TrimSpace(req.SessionID)
-	rawCursor := strings.TrimSpace(req.Cursor)
-	if req.Sort == FeedSortRecommend && rawCursor != "" {
-		state, ok := decodeFeedCursor(rawCursor, pipelineStart)
-		if !ok {
-			return nil, ErrInvalidFeedCursor
+	hardExclusions := req.FeedbackExclusions
+	if hardExclusions == nil {
+		loaded, hardErr := e.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
+		if hardErr != nil {
+			return nil, NewFeedFailure(FailureStageHardExclusionStateUnavailable, hardErr)
 		}
-		pagingOffset = state.Offset
-		if sessionID == "" {
-			sessionID = state.SessionID
-		}
-		// recommend 模式下的 cursor 为 opaque token，不下传给 recall 层。
-		req.Cursor = ""
-	}
-	if sessionID != "" {
-		req.SessionID = sessionID
+		hardExclusions = &loaded
 	}
 
 	// Stage 1: Load session state (from SessionCache or HotPath)
@@ -371,6 +479,8 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		// 降级必须可观测（N1-2）。
 		RecordRedisDegraded("session_state")
 		session = &SessionState{UserID: req.UserID, SessionID: req.SessionID}
+		terminalOutcome = FeedTerminalDegraded
+		terminalStage = FailureStagePersonalizationUnavailable
 	}
 
 	// Stage 2: Parallel recall from all sources
@@ -379,13 +489,30 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	defer releaseCandidates(recallBuf)
 	recallStats := e.parallelRecallInto(ctx, req, session, recallBuf)
 	allCandidates := *recallBuf
+	allCandidates = bindCandidatesToActiveRelease(
+		allCandidates,
+		req.ActiveReleaseID,
+		req.ActiveManifestDigest,
+	)
 	// Stable order for cursor pagination: same candidate set yields same order across requests.
 	sort.Slice(allCandidates, func(i, j int) bool {
 		return allCandidates[i].ContentID < allCandidates[j].ContentID
 	})
+	// applySourceQuota compacts its input slice in place. Preserve the complete,
+	// release-bound recall set so an approved canonical release candidate cannot
+	// be crowded out solely by source quota or pre-rank window truncation.
+	releaseBoundRecall := append([]ContentCandidate(nil), allCandidates...)
 	// Stage 2.5: Recall fusion source quota (W9/B10 轻量融合)：按 policy 源配额
 	// 截断单源候选占比，防单源霸屏；boost 在打分后应用（applyRecallSourceBoost）。
-	allCandidates = applySourceQuota(allCandidates, e.policyStore.Current().RecallFusion, req.Limit*3)
+	rankedWindowLimit := rankedFeedWindowLimit(req.Limit)
+	allCandidates = applySourceQuota(allCandidates, e.policyStore.Current().RecallFusion, rankedWindowLimit)
+	allCandidates = retainActiveReleaseAnchor(
+		allCandidates,
+		releaseBoundRecall,
+		req.ActiveReleaseID,
+		req.ActiveManifestDigest,
+		rankedWindowLimit,
+	)
 	recallLatency := time.Since(recallStart)
 	if len(allCandidates) == 0 {
 		switch {
@@ -400,10 +527,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 				fmt.Errorf("%d recall sources failed and healthy sources returned no candidates", recallStats.failed),
 			)
 		case initialRecommend:
-			return nil, NewFeedFailure(
-				FailureStageRecallEmptyOutput,
-				fmt.Errorf("healthy recall completed without candidates"),
-			)
+			return e.healthyEmptyFeedResponse(req, ""), nil
 		}
 	}
 	if recallStats.failed > 0 && len(allCandidates) > 0 {
@@ -412,16 +536,23 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	// Stage 3: Pre-rank (lightweight filter before expensive scoring)
-	windowLimit := req.Limit*5 + pagingOffset + req.Limit
+	windowLimit := rankedWindowLimit
 	preranked := e.preRanker.PreRank(ctx, allCandidates, windowLimit)
+	preranked = retainActiveReleaseAnchor(
+		preranked,
+		releaseBoundRecall,
+		req.ActiveReleaseID,
+		req.ActiveManifestDigest,
+		windowLimit,
+	)
 
 	// Stage 4: Filter served + impressed + negative + dedup.
 	// Long-window exposure memory is resolved by candidate membership point
 	// lookups, not by loading per-user SMembers into SessionState.
 	exposedSet := toSet(session.ExposedIDs)
-	negativeSet := toSet(session.NegativeIDs)
-	hiddenAuthors := toSet(session.HiddenAuthorIDs)
-	hiddenTypes := toSet(session.HiddenContentTypes)
+	negativeSet := hardExclusions.NegativeContentIDs
+	hiddenAuthors := hardExclusions.HiddenAuthors
+	hiddenTypes := hardExclusions.HiddenContentTypes
 	filteredBuf := acquireCandidates()
 	defer releaseCandidates(filteredBuf)
 	seen := make(map[string]bool, len(preranked))
@@ -441,9 +572,12 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	if e.exposureFilter != nil {
 		exposureFiltered, filterErr := e.exposureFilter.FilterCandidates(ctx, req.UserID, filtered, pipelineStart)
 		if filterErr != nil {
-			// 曝光过滤 Redis 失败 fail-open（不过滤继续下发）——重复曝光风险
-			// 上升，降级必须可观测（N1-2）。
+			// 本请求已在上方应用 fail-closed 的 hardExclusions snapshot；
+			// served/impressed 曝光记忆读取失败只允许放宽重复曝光，不能把
+			// negative/hide 内容重新放回候选。
 			RecordRedisDegraded("exposure_filter")
+			terminalOutcome = FeedTerminalDegraded
+			terminalStage = FailureStageExposureMemoryUnavailable
 			if e.logger != nil {
 				e.logger.Warn("rec.exposure_filter.error", slog.String("err", filterErr.Error()))
 			}
@@ -462,6 +596,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 					)
 					if relaxedErr != nil {
 						RecordRedisDegraded("exposure_relaxed_filter")
+						// eligibleBeforeLongTermExposure 已经应用本请求的硬排除快照；
+						// relaxed Redis 读失败时可以恢复该集合并标记软降级。
+						filtered = eligibleBeforeLongTermExposure
+						terminalOutcome = FeedTerminalDegraded
+						terminalStage = FailureStageExposureMemoryUnavailable
 						if e.logger != nil {
 							e.logger.Warn("rec.exposure_relaxed_filter.error", slog.String("err", relaxedErr.Error()))
 						}
@@ -475,10 +614,15 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		}
 	}
 	if initialRecommend && len(filtered) == 0 {
-		return nil, NewFeedFailure(
-			FailureStageExposureExhausted,
-			fmt.Errorf("no eligible candidates remain after hard-negative and exposure filters"),
-		)
+		return e.healthyEmptyFeedResponse(req, ""), nil
+	}
+	if initialRecommend && strings.TrimSpace(req.ActiveReleaseID) != "" &&
+		!containsActiveReleaseCandidate(
+			filtered,
+			req.ActiveReleaseID,
+			req.ActiveManifestDigest,
+		) {
+		return e.healthyEmptyFeedResponse(req, ""), nil
 	}
 
 	// Stage 5: Feature assembly (user features from feature store, with timeout)
@@ -532,7 +676,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	scoringBucket := policy.ResolveBucketOr(recpolicy.ExpScoringWeights, req.UserID, userSegments, scenarioBasePreset)
 	resolved := policy.ResolveWeights(scoringBucket, userSegments)
 	modelBucket := policy.ResolveBucketOr(recpolicy.ExpModelVsRule, req.UserID, userSegments, "rule")
-	modelVersion := policy.ResolveBucketOr(recpolicy.ExpModelVersion, req.UserID, userSegments, "champion")
+	modelChannel := policy.ResolveBucketOr(recpolicy.ExpModelChannel, req.UserID, userSegments, "champion")
 
 	scoringFeatures := &ScoringFeatures{
 		Session:           session,
@@ -546,7 +690,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 
 	// Stage 6: Model scoring (RuleScorer, RemoteModelScorer, or CascadeScorer)
 	// model_vs_rule experiment: "model" uses primary scorer; "rule" uses fallback.
-	// model_version experiment: when "challenger", ask model service for canary version.
+	// model_channel experiment: when "challenger", ask model service for the canary channel.
 	scoreStart := time.Now()
 	activeScorer := e.scorer
 	// actualScorerPath 是真实使用的打分路径（区别于实验分桶）：
@@ -557,11 +701,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		if cascade, ok := e.scorer.(*CascadeScorer); ok {
 			activeScorer = cascade.Fallback
 		}
-	} else if modelVersion == "challenger" {
+	} else if modelChannel == "challenger" {
 		if cascade, ok := e.scorer.(*CascadeScorer); ok {
 			if remote, ok := cascade.Primary.(*RemoteModelScorer); ok {
 				activeScorer = &CascadeScorer{
-					Primary:  remote.WithModelVersion("challenger"),
+					Primary:  remote.WithModelChannel("challenger"),
 					Fallback: cascade.Fallback,
 					Timeout:  cascade.Timeout,
 					Logger:   cascade.Logger,
@@ -605,6 +749,17 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			fmt.Errorf("scorer returned no output for %d candidates", len(filtered)),
 		)
 	}
+	if initialRecommend && strings.TrimSpace(req.ActiveReleaseID) != "" &&
+		!containsActiveReleaseScoredCandidate(
+			scored,
+			req.ActiveReleaseID,
+			req.ActiveManifestDigest,
+		) {
+		return nil, NewFeedFailure(
+			FailureStageScorerEmptyOutput,
+			fmt.Errorf("scorer omitted the eligible active-release candidate"),
+		)
+	}
 	modelReleaseID := ""
 	if actualScorerPath == "model" {
 		for _, candidate := range scored {
@@ -627,8 +782,8 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 				switch {
 				case modelBucket == "rule":
 					shadowScorer = remote
-				case modelVersion == "champion":
-					shadowScorer = remote.WithModelVersion("challenger")
+				case modelChannel == "champion":
+					shadowScorer = remote.WithModelChannel("challenger")
 				}
 				if shadowScorer != nil {
 					RecordShadowScore("attempted")
@@ -666,6 +821,14 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	// is the hot-reloadable policy; empty/disabled is a zero-cost no-op. Applied
 	// before rerank so pins lead and demoted/blocked items respect diversity caps.
 	scored = applyOpsInterventions(scored, policy.OpsIntervention, string(req.FeedType), pipelineStart)
+	if initialRecommend && strings.TrimSpace(req.ActiveReleaseID) != "" &&
+		!containsActiveReleaseScoredCandidate(
+			scored,
+			req.ActiveReleaseID,
+			req.ActiveManifestDigest,
+		) {
+		return e.healthyEmptyFeedResponse(req, resolved.PolicyDigest), nil
+	}
 
 	// Stage 7: Rerank (diversity + author dedup) — diversity/cold-start
 	// thresholds come from the resolved policy, not hand-coded constants.
@@ -673,6 +836,22 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	reranked := e.rerank(scored, windowLimit, resolved.Scorer)
 	reranked = applyFrequencyAndNearDupCaps(reranked, windowLimit, policy.ExposureGovernance.FrequencyAndNearDup)
 	reranked = applyDynamicExposureBudget(reranked, windowLimit, policy.ExposureGovernance.DynamicBudget, modelBucket)
+	if initialRecommend && strings.TrimSpace(req.ActiveReleaseID) != "" {
+		reranked = retainActiveReleaseScoredAnchor(
+			reranked,
+			scored,
+			req.ActiveReleaseID,
+			req.ActiveManifestDigest,
+			req.Limit,
+		)
+		if !containsActiveReleaseScoredCandidate(
+			reranked,
+			req.ActiveReleaseID,
+			req.ActiveManifestDigest,
+		) {
+			return e.healthyEmptyFeedResponse(req, resolved.PolicyDigest), nil
+		}
+	}
 	rerankLatency := time.Since(rerankStart)
 
 	topicEntropy := computeTopicEntropy(reranked)
@@ -684,7 +863,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	for index, s := range reranked {
 		trainingFeatures := newTrainingFeatureSnapshot(
 			userFeatures,
-			candidateInputAt(s.Candidate, scoringFeatures.FeatureSnapshotAt),
+			candidateInputAt(
+				s.Candidate,
+				scoringFeatures.FeatureSnapshotAt,
+				userFeatures,
+			),
 			scoringFeatures.FeatureSnapshotAt,
 		)
 		allItems = append(allItems, FeedItem{
@@ -698,53 +881,35 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			QualityScore:     s.Candidate.QualityScore,
 			ContentVertical:  s.Candidate.ContentVertical,
 			SupplySource:     s.Candidate.SupplySource,
+			SourceOwner:      s.Candidate.SourceOwner,
+			ReleaseID:        s.Candidate.ReleaseID,
+			ManifestDigest:   s.Candidate.ManifestDigest,
+			LifecycleStatus:  s.Candidate.LifecycleStatus,
 			trainingFeatures: trainingFeatures,
-			rank:             pagingOffset + index + 1,
+			rank:             index + 1,
 		})
 	}
+	if len(allItems) > RankedFeedWindowMaxItems {
+		allItems = allItems[:RankedFeedWindowMaxItems]
+	}
 
-	start := pagingOffset
-	if start < 0 {
-		start = 0
-	}
-	if start > len(allItems) {
-		start = len(allItems)
-	}
-	end := start + req.Limit
+	end := req.Limit
 	if end > len(allItems) {
 		end = len(allItems)
 	}
-	items := allItems[start:end]
+	items := allItems[:end]
 	if initialRecommend && len(items) == 0 {
-		return nil, NewFeedFailure(
-			FailureStageExposureExhausted,
-			fmt.Errorf("recommendation pipeline produced no deliverable initial-page items"),
-		)
+		return e.healthyEmptyFeedResponse(req, resolved.PolicyDigest), nil
 	}
 	if len(items) == 0 {
 		terminalOutcome = FeedTerminalEmpty
 		terminalStage = FailureStageNone
 	}
 
-	var nextCursor string
-	if req.Sort == FeedSortRecommend && end < len(allItems) {
-		nextCursor = encodeFeedCursor(feedCursorState{
-			Version:   1,
-			SessionID: req.SessionID,
-			Offset:    end,
-			ExpiresAt: time.Now().Add(defaultCursorTTL).Unix(),
-		})
-	}
-	if req.Sort != FeedSortRecommend && end < len(allItems) && len(items) > 0 {
-		nextCursor = items[len(items)-1].ContentID
-	}
-
 	resp := &FeedResponse{
 		Items:           items,
-		NextCursor:      nextCursor,
 		FeedRequestID:   req.FeedRequestID,
-		RankingVersion:  RankingVersion,
-		ReasonVersion:   ReasonVersion,
+		PolicyDigest:    resolved.PolicyDigest,
 		TerminalOutcome: terminalOutcome,
 		FailureStage:    terminalStage,
 	}
@@ -769,7 +934,7 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			SourceBreakdown:    sourceBreakdown,
 			ModelUsed:          actualScorerPath,
 			ExperimentBucket:   scoringBucket,
-			PolicyVersion:      resolved.PolicyVersion,
+			PolicyDigest:       resolved.PolicyDigest,
 			ScoringPreset:      resolved.Preset,
 			Segment:            resolved.AppliedSegment,
 			TopicEntropy:       topicEntropy,
@@ -797,9 +962,74 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		ModelBucket:    modelBucket,
 		ModelReleaseID: modelReleaseID,
 		ScoringBucket:  scoringBucket,
+		PolicyDigest:   resolved.PolicyDigest,
 	}
 	if modelBucket == "model" {
-		attribution.ModelVersion = modelVersion
+		attribution.ModelChannel = modelChannel
+	}
+	if end < len(allItems) {
+		windowItems := make([]rankedFeedWindowItem, 0, len(allItems))
+		windowValid := true
+		for index, item := range allItems {
+			windowItem, windowErr := newRankedFeedWindowItem(item, index+1)
+			if windowErr != nil {
+				windowValid = false
+				if e.logger != nil {
+					e.logger.Error(
+						"rec.ranked_window.snapshot_invalid",
+						slog.String("feedRequestId", req.FeedRequestID),
+						slog.String("error", windowErr.Error()),
+					)
+				}
+				break
+			}
+			windowItems = append(windowItems, windowItem)
+		}
+		if windowValid && e.rankedWindows != nil {
+			createdWindow, windowErr := e.rankedWindows.Create(ctx, rankedFeedWindow{
+				Binding: rankedFeedBindingFromRequest(req),
+				Provenance: rankedFeedWindowProvenance{
+					CandidateWatermark: rankedFeedCandidateWatermark(allCandidates),
+					PolicyDigest:       resolved.PolicyDigest,
+					ModelReleaseID:     modelReleaseID,
+					FeatureSnapshotAt:  scoringFeatures.FeatureSnapshotAt.UTC().Format(time.RFC3339Nano),
+					ScorerPath:         actualScorerPath,
+				},
+				Items:           windowItems,
+				Attribution:     attribution,
+				TerminalOutcome: terminalOutcome,
+				FailureStage:    terminalStage,
+			})
+			if windowErr == nil {
+				resp.NextContinuation = &RankedFeedContinuation{
+					WindowID:       createdWindow.WindowID,
+					AfterOrdinal:   end,
+					AfterContentID: allItems[end-1].ContentID,
+					ExpiresAt:      createdWindow.ExpiresAt,
+				}
+			} else {
+				windowValid = false
+				if e.logger != nil {
+					e.logger.Warn(
+						"rec.ranked_window.create_failed",
+						slog.String("feedRequestId", req.FeedRequestID),
+						slog.String("error", windowErr.Error()),
+					)
+				}
+			}
+		} else if e.rankedWindows == nil {
+			windowValid = false
+		}
+		if !windowValid {
+			// The first page remains usable, but issuing a continuation would
+			// invite live recomputation. Surface a degraded terminal and stop.
+			RecordRedisDegraded("ranked_feed_window")
+			terminalOutcome = FeedTerminalDegraded
+			terminalStage = FailureStageRankedWindowUnavailable
+			resp.NextContinuation = nil
+			resp.TerminalOutcome = terminalOutcome
+			resp.FailureStage = terminalStage
+		}
 	}
 	if req.DeferDeliveryAccounting {
 		// N3-3 served 口径：装配层还会过滤候选，记账推迟到最终下发集
@@ -812,6 +1042,92 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	return resp, nil
+}
+
+func (e *Engine) getRankedFeedWindowPage(
+	ctx context.Context,
+	req GetFeedRequest,
+) (*FeedResponse, error) {
+	continuation := req.Continuation
+	if continuation == nil ||
+		strings.TrimSpace(req.FeedRequestID) == "" ||
+		strings.TrimSpace(continuation.WindowID) == "" ||
+		continuation.AfterOrdinal <= 0 ||
+		strings.TrimSpace(continuation.AfterContentID) == "" ||
+		continuation.ExpiresAt.IsZero() ||
+		!continuation.ExpiresAt.After(time.Now().UTC()) {
+		return nil, ErrInvalidFeedCursor
+	}
+	if e.rankedWindows == nil {
+		return nil, NewFeedFailure(
+			FailureStageRankedWindowUnavailable,
+			fmt.Errorf("ranked feed window store is unavailable"),
+		)
+	}
+	if strings.TrimSpace(req.RankedWindowSubjectID) == "" {
+		return nil, ErrInvalidFeedCursor
+	}
+	window, err := e.rankedWindows.Load(
+		ctx,
+		req.RankedWindowSubjectID,
+		continuation.WindowID,
+	)
+	if err != nil {
+		if errors.Is(err, ErrRankedFeedWindowNotFound) ||
+			errors.Is(err, ErrRankedFeedWindowBindingMismatch) ||
+			errors.Is(err, ErrRankedFeedWindowAnchorMismatch) {
+			return nil, ErrInvalidFeedCursor
+		}
+		return nil, NewFeedFailure(FailureStageRankedWindowUnavailable, err)
+	}
+	if !rankedFeedWindowMatchesRequest(window, req) ||
+		window.ExpiresAt.UnixMilli() != continuation.ExpiresAt.UnixMilli() {
+		return nil, ErrInvalidFeedCursor
+	}
+	anchorIndex := continuation.AfterOrdinal - 1
+	if anchorIndex < 0 || anchorIndex >= len(window.Items)-1 ||
+		window.Items[anchorIndex].Ordinal != continuation.AfterOrdinal ||
+		window.Items[anchorIndex].Item.ContentID != strings.TrimSpace(continuation.AfterContentID) {
+		return nil, ErrInvalidFeedCursor
+	}
+	start := continuation.AfterOrdinal
+	end := start + req.Limit
+	if end > len(window.Items) {
+		end = len(window.Items)
+	}
+	items := make([]FeedItem, 0, end-start)
+	for _, entry := range window.Items[start:end] {
+		items = append(items, entry.feedItem())
+	}
+	response := &FeedResponse{
+		Items:           items,
+		FeedRequestID:   window.Binding.FeedRequestID,
+		PolicyDigest:    window.Provenance.PolicyDigest,
+		Attribution:     window.Attribution,
+		TerminalOutcome: window.TerminalOutcome,
+		FailureStage:    window.FailureStage,
+	}
+	if end < len(window.Items) {
+		response.NextContinuation = &RankedFeedContinuation{
+			WindowID:       window.WindowID,
+			AfterOrdinal:   end,
+			AfterContentID: window.Items[end-1].Item.ContentID,
+			ExpiresAt:      window.ExpiresAt,
+		}
+	}
+	if req.DeferDeliveryAccounting {
+		return response, nil
+	}
+	if err := e.RecordDelivery(
+		ctx,
+		window.Binding.ActorID,
+		window.Binding.SessionID,
+		window.Attribution,
+		items,
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // RecordDelivery 按最终下发集记账（N3-3 served 口径）：learning impression
@@ -834,7 +1150,7 @@ func (e *Engine) RecordDelivery(
 			FeedRequestID:  attribution.FeedRequestID,
 			PersonaID:      attribution.PersonaID,
 			ModelBucket:    attribution.ModelBucket,
-			ModelVersion:   attribution.ModelVersion,
+			ModelChannel:   attribution.ModelChannel,
 			ModelReleaseID: attribution.ModelReleaseID,
 		}
 		// 训练事实必须在响应返回前进入进程内可靠缓冲；不能把 enqueue 本身
@@ -861,7 +1177,7 @@ func (e *Engine) RecordDelivery(
 		servedItems := make([]FeedItem, len(items))
 		copy(servedItems, items)
 		RecordServedItems(len(servedItems))
-		RecordServedItemsByAttribution(servedItems, attribution.ChannelID, RankingVersion, ReasonVersion, attribution.ScoringBucket)
+		RecordServedItemsByAttribution(servedItems, attribution.ChannelID, attribution.PolicyDigest, attribution.ScoringBucket)
 		go func() {
 			servedCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -882,30 +1198,198 @@ func normalizeSort(raw string) string {
 	}
 }
 
-func decodeFeedCursor(raw string, now time.Time) (feedCursorState, bool) {
-	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(raw))
-	if err != nil {
-		return feedCursorState{}, false
+func bindCandidatesToActiveRelease(
+	candidates []ContentCandidate,
+	activeReleaseID string,
+	activeManifestDigest string,
+) []ContentCandidate {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	activeManifestDigest = strings.TrimSpace(activeManifestDigest)
+	if activeReleaseID == "" || len(candidates) == 0 {
+		return candidates
 	}
-	var state feedCursorState
-	if err := json.Unmarshal(decoded, &state); err != nil {
-		return feedCursorState{}, false
+	filtered := make([]ContentCandidate, 0, len(candidates))
+	removed := 0
+	for _, candidate := range candidates {
+		owner := strings.TrimSpace(candidate.SourceOwner)
+		supplySource := strings.TrimSpace(strings.ToLower(candidate.SupplySource))
+		isCanonicalData := owner == "qwq_data" || supplySource == "data_engineering"
+		if isCanonicalData &&
+			(strings.TrimSpace(candidate.ReleaseID) != activeReleaseID ||
+				(activeManifestDigest != "" &&
+					strings.TrimSpace(candidate.ManifestDigest) != activeManifestDigest) ||
+				strings.TrimSpace(candidate.LifecycleStatus) != "active") {
+			removed++
+			continue
+		}
+		filtered = append(filtered, candidate)
 	}
-	if state.Version <= 0 || state.Offset < 0 {
-		return feedCursorState{}, false
-	}
-	if state.ExpiresAt > 0 && now.Unix() > state.ExpiresAt {
-		return feedCursorState{}, false
-	}
-	return state, true
+	RecordFeedGateFiltered("active_release", removed)
+	return filtered
 }
 
-func encodeFeedCursor(state feedCursorState) string {
-	raw, err := json.Marshal(state)
-	if err != nil {
-		return ""
+func isActiveReleaseCandidate(
+	candidate ContentCandidate,
+	activeReleaseID string,
+	activeManifestDigest string,
+) bool {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	activeManifestDigest = strings.TrimSpace(activeManifestDigest)
+	if activeReleaseID == "" {
+		return false
 	}
-	return base64.RawURLEncoding.EncodeToString(raw)
+	owner := strings.TrimSpace(candidate.SourceOwner)
+	supplySource := strings.TrimSpace(strings.ToLower(candidate.SupplySource))
+	return (owner == "qwq_data" || supplySource == "data_engineering") &&
+		strings.TrimSpace(candidate.ReleaseID) == activeReleaseID &&
+		(activeManifestDigest == "" ||
+			strings.TrimSpace(candidate.ManifestDigest) == activeManifestDigest) &&
+		strings.TrimSpace(candidate.LifecycleStatus) == "active"
+}
+
+func containsActiveReleaseCandidate(
+	candidates []ContentCandidate,
+	activeReleaseID string,
+	activeManifestDigest string,
+) bool {
+	for _, candidate := range candidates {
+		if isActiveReleaseCandidate(candidate, activeReleaseID, activeManifestDigest) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsActiveReleaseScoredCandidate(
+	candidates []ScoredCandidate,
+	activeReleaseID string,
+	activeManifestDigest string,
+) bool {
+	for _, candidate := range candidates {
+		if isActiveReleaseCandidate(candidate.Candidate, activeReleaseID, activeManifestDigest) {
+			return true
+		}
+	}
+	return false
+}
+
+// retainActiveReleaseAnchor keeps one candidate from the currently active
+// immutable release when a generic quota or pre-rank window would otherwise
+// select only UGC/non-canonical candidates. It never resurrects stale release
+// candidates: recalled has already passed bindCandidatesToActiveRelease.
+func retainActiveReleaseAnchor(
+	selected []ContentCandidate,
+	recalled []ContentCandidate,
+	activeReleaseID string,
+	activeManifestDigest string,
+	limit int,
+) []ContentCandidate {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	if activeReleaseID == "" {
+		return selected
+	}
+	for _, candidate := range selected {
+		if isActiveReleaseCandidate(candidate, activeReleaseID, activeManifestDigest) {
+			return selected
+		}
+	}
+
+	var anchor ContentCandidate
+	found := false
+	for _, candidate := range recalled {
+		if isActiveReleaseCandidate(candidate, activeReleaseID, activeManifestDigest) {
+			anchor = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		return selected
+	}
+
+	if limit <= 0 || len(selected) < limit {
+		return append(selected, anchor)
+	}
+	if len(selected) == 0 {
+		return []ContentCandidate{anchor}
+	}
+	out := append([]ContentCandidate(nil), selected...)
+	out[len(out)-1] = anchor
+	return out
+}
+
+// retainActiveReleaseScoredAnchor reserves one slot on the initial page for an
+// active-release candidate that has already passed hard exclusions, exposure,
+// scoring and operational policy. It does not revive candidates rejected by
+// any of those gates; it only prevents generic diversity/budget truncation from
+// crowding every canonical item out of the first page.
+func retainActiveReleaseScoredAnchor(
+	selected []ScoredCandidate,
+	eligible []ScoredCandidate,
+	activeReleaseID string,
+	activeManifestDigest string,
+	firstPageLimit int,
+) []ScoredCandidate {
+	if strings.TrimSpace(activeReleaseID) == "" || firstPageLimit <= 0 {
+		return selected
+	}
+	pageEnd := firstPageLimit
+	if pageEnd > len(selected) {
+		pageEnd = len(selected)
+	}
+	if containsActiveReleaseScoredCandidate(
+		selected[:pageEnd],
+		activeReleaseID,
+		activeManifestDigest,
+	) {
+		return selected
+	}
+
+	anchorIndex := -1
+	for index, candidate := range selected {
+		if isActiveReleaseCandidate(
+			candidate.Candidate,
+			activeReleaseID,
+			activeManifestDigest,
+		) {
+			anchorIndex = index
+			break
+		}
+	}
+	if anchorIndex >= 0 {
+		out := append([]ScoredCandidate(nil), selected...)
+		target := pageEnd - 1
+		anchor := out[anchorIndex]
+		copy(out[target+1:anchorIndex+1], out[target:anchorIndex])
+		out[target] = anchor
+		return out
+	}
+
+	var anchor ScoredCandidate
+	found := false
+	for _, candidate := range eligible {
+		if isActiveReleaseCandidate(
+			candidate.Candidate,
+			activeReleaseID,
+			activeManifestDigest,
+		) {
+			anchor = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		return selected
+	}
+	if len(selected) < firstPageLimit {
+		return append(selected, anchor)
+	}
+	if pageEnd == 0 {
+		return []ScoredCandidate{anchor}
+	}
+	out := append([]ScoredCandidate(nil), selected...)
+	out[pageEnd-1] = anchor
+	return out
 }
 
 type recallTerminalStats struct {
@@ -925,18 +1409,19 @@ func (e *Engine) parallelRecallInto(
 ) recallTerminalStats {
 	interestTags := topNTags(session.TagWeights, 10)
 	recallReq := RecallRequest{
-		FeedType:       req.FeedType,
-		UserID:         req.UserID,
-		CircleID:       req.CircleID,
-		TopicID:        req.TopicID,
-		HomepageID:     req.HomepageID,
-		Surface:        req.Surface,
-		Vertical:       req.Vertical,
-		FeedRequestID:  req.FeedRequestID,
-		SeedContentIDs: recentSeedContentIDs(session.ExposedIDs, 20),
-		Tags:           interestTags,
-		Limit:          req.Limit * 3,
-		Cursor:         req.Cursor,
+		FeedType:             req.FeedType,
+		UserID:               req.UserID,
+		CircleID:             req.CircleID,
+		TopicID:              req.TopicID,
+		HomepageID:           req.HomepageID,
+		Surface:              req.Surface,
+		Vertical:             req.Vertical,
+		FeedRequestID:        req.FeedRequestID,
+		ActiveReleaseID:      req.ActiveReleaseID,
+		ActiveManifestDigest: req.ActiveManifestDigest,
+		SeedContentIDs:       recentSeedContentIDs(session.ExposedIDs, 20),
+		Tags:                 interestTags,
+		Limit:                rankedFeedWindowLimit(req.Limit),
 	}
 
 	recallCtx := ctx
@@ -947,30 +1432,114 @@ func (e *Engine) parallelRecallInto(
 	}
 
 	type result struct {
+		index      int
 		candidates []ContentCandidate
 		err        error
 	}
 	results := make([]result, len(e.sources))
-	var wg sync.WaitGroup
+	completed := make([]bool, len(e.sources))
+	resultCh := make(chan result, len(e.sources))
 	for i, src := range e.sources {
-		wg.Add(1)
-		go func(idx int, s CandidateSource) {
-			defer wg.Done()
+		slot := e.recallSourceSlots[i]
+		select {
+		case slot <- struct{}{}:
+		default:
+			resultCh <- result{
+				index: i,
+				err: fmt.Errorf(
+					"%w: source=%s maximum=%d",
+					ErrRecallSourceInflightBudgetExceeded,
+					recallSourceLabel(src),
+					e.recallSourceMaxInflight,
+				),
+			}
+			continue
+		}
+		select {
+		case e.recallGlobalSlots <- struct{}{}:
+		default:
+			<-slot
+			resultCh <- result{
+				index: i,
+				err: fmt.Errorf(
+					"%w: maximum=%d",
+					ErrRecallGlobalInflightBudgetExceeded,
+					e.recallGlobalMaxInflight,
+				),
+			}
+			continue
+		}
+		go func(idx int, s CandidateSource, sourceSlot chan struct{}) {
+			defer func() {
+				<-sourceSlot
+				<-e.recallGlobalSlots
+			}()
 			if s == nil {
-				results[idx] = result{err: SkipRecall("nil source")}
+				resultCh <- result{index: idx, err: SkipRecall("nil source")}
 				return
 			}
 			candidates, err := s.Recall(recallCtx, recallReq)
-			results[idx] = result{candidates: candidates, err: err}
-		}(i, src)
+			candidates, admissionErr := admitRecallSourceOutput(
+				recallCtx,
+				candidates,
+				recallReq,
+				recallSourceLabel(s),
+			)
+			err = errors.Join(err, admissionErr)
+			resultCh <- result{index: idx, candidates: candidates, err: err}
+		}(i, src, slot)
 	}
-	wg.Wait()
+
+	// CandidateSource is required to honor recallCtx, but the orchestrator must
+	// still reach a terminal state when a broken dependency ignores cancellation.
+	// Each source sends at most one result into a fanout-sized buffer, so a late
+	// return never blocks after this request has stopped collecting.
+	remaining := len(e.sources)
+	accept := func(r result) {
+		if r.index < 0 || r.index >= len(results) || completed[r.index] {
+			return
+		}
+		results[r.index] = r
+		completed[r.index] = true
+		remaining--
+	}
+	deadlineReached := false
+	for remaining > 0 && !deadlineReached {
+		select {
+		case r := <-resultCh:
+			accept(r)
+		case <-recallCtx.Done():
+			// Preserve results that completed before the deadline and are already
+			// queued; never wait for a non-cooperative source after this drain.
+			for {
+				select {
+				case r := <-resultCh:
+					accept(r)
+				default:
+					deadlineReached = true
+				}
+				if deadlineReached {
+					break
+				}
+			}
+		}
+	}
+	if recallErr := recallCtx.Err(); recallErr != nil {
+		for i := range results {
+			if !completed[i] {
+				results[i] = result{index: i, err: recallErr}
+			}
+		}
+	}
 
 	stats := recallTerminalStats{}
 	for i, r := range results {
 		*out = append(*out, r.candidates...)
 		switch {
-		case IsRecallSkipped(r.err):
+		case IsRecallSkipped(r.err) &&
+			!errors.Is(r.err, ErrRecallSourceCandidateBudgetExceeded) &&
+			!errors.Is(r.err, ErrRecallSourceInflightBudgetExceeded) &&
+			!errors.Is(r.err, ErrRecallGlobalInflightBudgetExceeded):
 			stats.skipped++
 		case r.err != nil:
 			stats.failed++
@@ -987,6 +1556,86 @@ func (e *Engine) parallelRecallInto(
 		}
 	}
 	return stats
+}
+
+// admitRecallSourceOutput enforces the CandidateSource output contract before
+// candidates enter any sorting, quota or ranking work. Work and retained memory
+// are bounded by the primary req.Limit window plus one equally bounded
+// release-anchor handoff window. A source cannot force an unbounded scan by
+// placing an anchor at an arbitrary position in an oversized slice.
+func admitRecallSourceOutput(
+	ctx context.Context,
+	candidates []ContentCandidate,
+	req RecallRequest,
+	source string,
+) ([]ContentCandidate, error) {
+	maximum := req.Limit
+	if maximum <= 0 {
+		maximum = rankedFeedWindowLimit(20)
+	}
+	if len(candidates) <= maximum {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return candidates, nil
+	}
+
+	budgetErr := fmt.Errorf(
+		"%w: source=%s actual=%d maximum=%d",
+		ErrRecallSourceCandidateBudgetExceeded,
+		source,
+		len(candidates),
+		maximum,
+	)
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(budgetErr, err)
+	}
+
+	bounded := make([]ContentCandidate, maximum)
+	for index := range bounded {
+		if index%32 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, errors.Join(budgetErr, err)
+			}
+		}
+		bounded[index] = candidates[index]
+	}
+
+	// Source contract permits one equally sized handoff window for an anchor
+	// crowded out of the primary source window. Never search candidates beyond
+	// that second bounded window: arbitrary-position recovery would restore the
+	// unbounded scan this admission boundary exists to prevent.
+	if strings.TrimSpace(req.ActiveReleaseID) != "" &&
+		!containsActiveReleaseCandidate(
+			bounded,
+			req.ActiveReleaseID,
+			req.ActiveManifestDigest,
+		) {
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Join(budgetErr, err)
+		}
+		handoffEnd := maximum * 2
+		if handoffEnd > len(candidates) {
+			handoffEnd = len(candidates)
+		}
+		for index := maximum; index < handoffEnd; index++ {
+			if index%32 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, errors.Join(budgetErr, err)
+				}
+			}
+			handoff := candidates[index]
+			if isActiveReleaseCandidate(
+				handoff,
+				req.ActiveReleaseID,
+				req.ActiveManifestDigest,
+			) {
+				bounded[len(bounded)-1] = handoff
+				break
+			}
+		}
+	}
+	return bounded, budgetErr
 }
 
 // recallSourceLabel 从源类型派生低基数指标标签（去包路径与指针前缀）。
@@ -1178,7 +1827,7 @@ func (e *Engine) recordShadowScores(ctx context.Context, userID, sessionID strin
 			TargetID:   s.Candidate.ContentID,
 			Labels: map[string]string{
 				"sessionId":    sessionID,
-				"modelVersion": "challenger",
+				"modelChannel": "challenger",
 			},
 			Context: map[string]any{
 				"shadowScore": s.Score,

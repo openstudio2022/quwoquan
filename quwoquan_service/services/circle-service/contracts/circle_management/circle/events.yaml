@@ -46,23 +46,17 @@ events:
   - notification-service
   - circle-search-index-projector
   channel: event_store
+  payload_entity: Circle
   payload_fields:
   - _id
   - status
-- name: CircleConversationLinked
-  description: 兼容字段回写：圈子默认公共群关联的 Conversation
-  producer: chat-service
-  consumers:
-  - circle-service
-  channel: event_store
-  payload_fields:
-  - circleId
-  - conversationId
 - name: CircleSectionsUpdated
   description: 圈子板块配置更新
   producer: circle-service
   consumers: []
   channel: event_store
+  no_consumer_reason: Circle aggregate state is the only read source; the event is retained for audit/replay and has no independent service projection.
+  payload_entity: Circle
   payload_fields:
   - circleId
   - sectionConfig

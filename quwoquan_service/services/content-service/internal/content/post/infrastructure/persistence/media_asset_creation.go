@@ -41,7 +41,7 @@ func (s *MongoMediaStore) AppendCreated(
 		ObjectKey:        commit.Asset.ObjectKey,
 		SHA256:           commit.Asset.SHA256,
 		MediaType:        commit.Asset.MediaType,
-		ContentType:      commit.Asset.ContentType,
+		MimeType:         commit.Asset.MimeType,
 		FileSize:         commit.Asset.FileSize,
 		AccessPolicy:     mediamodel.AccessPolicy(commit.Asset.AccessPolicy),
 		ProcessingStatus: mediamodel.ProcessingStatus(commit.Asset.ProcessingStatus),
@@ -113,7 +113,7 @@ func validateMediaAssetCreationCommit(commit assetports.CreateCommit) error {
 		strings.TrimSpace(asset.ObjectKey) == "" ||
 		strings.TrimSpace(asset.SHA256) == "" ||
 		strings.TrimSpace(asset.MediaType) == "" ||
-		strings.TrimSpace(asset.ContentType) == "" ||
+		strings.TrimSpace(asset.MimeType) == "" ||
 		asset.FileSize <= 0 ||
 		strings.TrimSpace(asset.AccessPolicy) == "" ||
 		strings.TrimSpace(asset.ProcessingStatus) == "" ||

@@ -95,7 +95,6 @@ func (s *Sealer) Seal(secret Secret, binding Binding) (string, error) {
 	ciphertext := gcm.Seal(nil, nonce, plaintext, additionalData(binding))
 	return strings.Join([]string{
 		"otpref",
-		"v1",
 		s.activeVersion,
 		base64.RawURLEncoding.EncodeToString(nonce),
 		base64.RawURLEncoding.EncodeToString(ciphertext),
@@ -113,18 +112,18 @@ func (s *Sealer) Open(reference string, binding Binding) (Secret, error) {
 		return Secret{}, ErrExpiredReference
 	}
 	parts := strings.Split(strings.TrimSpace(reference), ".")
-	if len(parts) != 5 || parts[0] != "otpref" || parts[1] != "v1" {
+	if len(parts) != 4 || parts[0] != "otpref" {
 		return Secret{}, ErrInvalidReference
 	}
-	gcm, err := s.gcm(parts[2])
+	gcm, err := s.gcm(parts[1])
 	if err != nil {
 		return Secret{}, err
 	}
-	nonce, err := decodeCanonicalRawURL(parts[3])
+	nonce, err := decodeCanonicalRawURL(parts[2])
 	if err != nil || len(nonce) != gcm.NonceSize() {
 		return Secret{}, ErrInvalidReference
 	}
-	ciphertext, err := decodeCanonicalRawURL(parts[4])
+	ciphertext, err := decodeCanonicalRawURL(parts[3])
 	if err != nil {
 		return Secret{}, ErrInvalidReference
 	}

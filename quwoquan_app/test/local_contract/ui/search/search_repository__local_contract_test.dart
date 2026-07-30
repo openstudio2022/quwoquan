@@ -9,7 +9,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   test('suggest 与 result 都只调用 canonical Search Facet', () async {
     final facet = _RecordingCanonicalSearchFacet();
-    final repository = RemoteSearchRepository(remoteQuery: facet);
+    final repository = RemoteSearchRepository(
+      remoteQuery: facet,
+      sessionIdProvider: () => 'search-session',
+    );
 
     await repository.search(
       const SearchRequest(query: '川西', mode: SearchMode.suggest),
@@ -28,7 +31,6 @@ void main() {
     final facet = _RecordingCanonicalSearchFacet(
       result: CanonicalSearchResult(
         requestId: 'search-request-1',
-        rankingVersion: 'search-current',
         relatedTerms: const <String>['川西徒步'],
         hits: <CanonicalSearchHit>[
           CanonicalSearchHit(
@@ -51,13 +53,17 @@ void main() {
         ],
       ),
     );
-    final response = await RemoteSearchRepository(remoteQuery: facet).search(
-      const SearchRequest(
-        query: '川西',
-        mode: SearchMode.result,
-        objectTypes: <SearchObjectType>{SearchObjectType.contentPost},
-      ),
-    );
+    final response =
+        await RemoteSearchRepository(
+          remoteQuery: facet,
+          sessionIdProvider: () => 'search-session',
+        ).search(
+          const SearchRequest(
+            query: '川西',
+            mode: SearchMode.result,
+            objectTypes: <SearchObjectType>{SearchObjectType.contentPost},
+          ),
+        );
 
     expect(response.searchRequestId, 'search-request-1');
     expect(response.relatedTerms, <String>['川西徒步']);
@@ -72,6 +78,7 @@ void main() {
   test('relatedTerms 为空时不在客户端合成词', () async {
     final response = await RemoteSearchRepository(
       remoteQuery: _RecordingCanonicalSearchFacet(),
+      sessionIdProvider: () => 'search-session',
     ).search(const SearchRequest(query: '川西', mode: SearchMode.result));
 
     expect(response.relatedTerms, isEmpty);
@@ -80,6 +87,7 @@ void main() {
   test('canonical Facet 错误保持失败，不伪装空结果', () async {
     final repository = RemoteSearchRepository(
       remoteQuery: _ThrowingCanonicalSearchFacet(),
+      sessionIdProvider: () => 'search-session',
     );
 
     await expectLater(
@@ -99,7 +107,6 @@ final class _RecordingCanonicalSearchFacet
           CanonicalSearchResult(
             hits: const <CanonicalSearchHit>[],
             requestId: 'search-request-empty',
-            rankingVersion: 'search-current',
           );
 
   final CanonicalSearchResult result;

@@ -12,7 +12,9 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.environment_topology import (
+    URL_GOVERNANCE_FIELDS,
     URL_FIELDS,
+    URL_SHAPE_FIELDS,
     load_environment_topology,
 )
 from quwoquan_ops.cli.print_local_port_profile import ENV_EXPORTS
@@ -23,6 +25,24 @@ from quwoquan_ops.cli.stackctl import (
 
 
 class RtcMediaTopologyContractTest(unittest.TestCase):
+    def test_endpoint_governance_and_environment_url_shape_are_disjoint(self) -> None:
+        self.assertEqual(
+            URL_GOVERNANCE_FIELDS,
+            {
+                "name",
+                "role",
+                "classification",
+                "owner",
+                "exposure",
+                "consumers",
+            },
+        )
+        self.assertEqual(
+            URL_SHAPE_FIELDS,
+            {"scheme", "host", "portRole", "pathBase", "tlsProfile"},
+        )
+        self.assertTrue(URL_GOVERNANCE_FIELDS.isdisjoint(URL_SHAPE_FIELDS))
+
     def test_gamma_realtime_media_ports_are_manifest_driven_and_collision_free(self) -> None:
         ports = profile_ports(load_port_manifest(), "gamma-local")
         roles = (

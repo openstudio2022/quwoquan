@@ -40,6 +40,7 @@
 - 重试期间 body、顺序和 digest 不得变化；服务端重算摘要并全批校验。
 - sessionId 为可逆账号用户键会话标识，必须按 `SENSITIVE` 管理：raw 3d、Portal 默认掩码、完整查询审计。
 - callStack 只允许方法名数组，最多十层、单层 256 字符；禁止路径、token、用户输入，且不建全文索引。
+- VisitRecord 使用独立 MongoDB 权威聚合与 actor-scoped 幂等回执；聚合更新与回执同事务提交，不复用 EventBatch ledger、不写 PostgreSQL 访问副本、不发布第二路推荐事件。
 
 ## 4. 契约引用
 
@@ -56,6 +57,7 @@
 - GIVEN 产品运营或增长角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“事件 Schema 治理”对应的公开行为。
 - THEN `page_error_outcome`：统一阻塞错误面依次记录 `shown/recovery_started/recovered/recovery_failed`。
+- AND 相同 actor 与 Idempotency-Key 的 VisitRecord 重放只计数一次，且推荐只接收 canonical BehaviorSignal。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

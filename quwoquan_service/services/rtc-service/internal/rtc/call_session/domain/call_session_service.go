@@ -2,6 +2,7 @@ package call_session
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/domain/model"
@@ -13,17 +14,43 @@ func NewCallSessionService() *CallSessionService {
 	return &CallSessionService{}
 }
 
-func (s *CallSessionService) InitiateCall(initiatorID, callType, conversationID, circleID string, inviteeIDs []string) (*model.CallSession, error) {
+func (s *CallSessionService) InitiateCall(
+	initiatorID string,
+	callType string,
+	conversationID string,
+	circleID string,
+	inviteeIDs []string,
+	maxParticipants int,
+) (*model.CallSession, error) {
+	initiatorID = strings.TrimSpace(initiatorID)
 	if initiatorID == "" {
 		return nil, errors.New("initiator ID required")
 	}
 	if callType != model.CallTypeAudio && callType != model.CallTypeVideo {
 		return nil, errors.New("invalid call type")
 	}
-
-	maxP := model.MaxParticipantsGroup
-	if len(inviteeIDs) == 1 && circleID == "" {
-		maxP = model.MaxParticipants1v1
+	if maxParticipants < model.MaxParticipants1v1 ||
+		maxParticipants > model.MaxParticipantsGroup {
+		return nil, errors.New("max participants must be between 2 and 32")
+	}
+	if len(inviteeIDs) == 0 {
+		return nil, errors.New("at least one invitee required")
+	}
+	if len(inviteeIDs)+1 > maxParticipants {
+		return nil, errors.New("invitees exceed max participants")
+	}
+	seen := map[string]struct{}{initiatorID: {}}
+	normalizedInvitees := make([]string, 0, len(inviteeIDs))
+	for _, raw := range inviteeIDs {
+		inviteeID := strings.TrimSpace(raw)
+		if inviteeID == "" {
+			return nil, errors.New("invitee ID required")
+		}
+		if _, exists := seen[inviteeID]; exists {
+			return nil, errors.New("invitee IDs must be unique and exclude initiator")
+		}
+		seen[inviteeID] = struct{}{}
+		normalizedInvitees = append(normalizedInvitees, inviteeID)
 	}
 
 	now := time.Now()
@@ -33,7 +60,7 @@ func (s *CallSessionService) InitiateCall(initiatorID, callType, conversationID,
 		InitiatorID:     initiatorID,
 		ConversationID:  conversationID,
 		CircleID:        circleID,
-		MaxParticipants: maxP,
+		MaxParticipants: maxParticipants,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -46,7 +73,7 @@ func (s *CallSessionService) InitiateCall(initiatorID, callType, conversationID,
 			JoinedAt: &now,
 		},
 	}
-	for _, id := range inviteeIDs {
+	for _, id := range normalizedInvitees {
 		session.Participants = append(session.Participants, model.Participant{
 			UserID: id,
 			Role:   model.RoleInvitee,
@@ -212,24 +239,55 @@ func (s *CallSessionService) InviteToCall(session *model.CallSession, inviteeIDs
 	if session.Status == model.StatusEnded {
 		return errors.New("cannot invite to an ended call")
 	}
+	if len(inviteeIDs) == 0 {
+		return errors.New("at least one invitee required")
+	}
+	seen := make(map[string]struct{}, len(inviteeIDs))
+	normalized := make([]string, 0, len(inviteeIDs))
+	additions := 0
+	for _, raw := range inviteeIDs {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			return errors.New("invitee ID required")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return errors.New("invitee IDs must be unique")
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+		existing := findParticipant(session, id)
+		if existing == nil ||
+			existing.Status == model.ParticipantLeft ||
+			existing.Status == model.ParticipantTimeout {
+			additions++
+		}
+	}
 	active := countActiveParticipants(session)
-	if active+len(inviteeIDs) > session.MaxParticipants {
+	if active+additions > session.MaxParticipants {
 		return errors.New("exceeds max participants")
 	}
-	now := time.Now()
-	for _, id := range inviteeIDs {
+	for _, id := range normalized {
 		existing := findParticipant(session, id)
-		if existing != nil && existing.Status != model.ParticipantLeft {
+		if existing != nil &&
+			existing.Status != model.ParticipantLeft &&
+			existing.Status != model.ParticipantTimeout {
 			continue
 		}
-		session.Participants = append(session.Participants, model.Participant{
-			UserID: id,
-			Role:   model.RoleInvitee,
-			Status: model.ParticipantInvited,
-		})
+		if existing == nil {
+			session.Participants = append(session.Participants, model.Participant{
+				UserID: id,
+				Role:   model.RoleInvitee,
+				Status: model.ParticipantInvited,
+			})
+			continue
+		}
+		existing.Role = model.RoleInvitee
+		existing.Status = model.ParticipantInvited
+		existing.JoinedAt = nil
+		existing.LeftAt = nil
 	}
 	session.ParticipantCount = countActiveParticipants(session)
-	session.UpdatedAt = now
+	session.UpdatedAt = time.Now()
 	return nil
 }
 

@@ -2,3 +2,8 @@ read_model: ReportCommandResult
 description: 举报状态迁移后的版本化命令结果。
 consumers:
 - platform-ops
+fields:
+- id
+- version
+- status
+- replayed

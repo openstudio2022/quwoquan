@@ -211,6 +211,10 @@
           {
             "expr": "max(content_media_processing_dlq_event_age_seconds) by (reason)",
             "legendFormat": "DLQ admission age {{ reason }}"
+          },
+          {
+            "expr": "sum(rate(content_media_hls_cmaf_packaging_total[5m])) by (result)",
+            "legendFormat": "HLS/CMAF {{ result }}"
           }
         ]
       },

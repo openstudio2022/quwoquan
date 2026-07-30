@@ -2,6 +2,7 @@
   "label": "升学深造",
   "labelEn": "Further Education",
   "description": "考研保研考博等升学相关内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

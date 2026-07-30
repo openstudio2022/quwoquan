@@ -26,7 +26,7 @@ void main() {
     dimension: 'location',
     objectKind: 'place',
     actionTargetId: 'fixture_homepage_travel_route_erhai',
-    primaryText: '联系人林清越等3人来过「洱海环线」',
+    primaryText: '联系人林清越等3人也看过「洱海环线」',
     displayBinding: 'explicit_link',
     actorEvidenceTotalCount: 3,
     actorEvidenceCompleteness: 'complete',
@@ -54,7 +54,7 @@ void main() {
           routeId: 'userProfile',
         ),
       ),
-      IntersectionTextSpan(text: '等3人来过', role: 'plain'),
+      IntersectionTextSpan(text: '等3人也看过', role: 'plain'),
       IntersectionTextSpan(
         text: '「洱海环线」',
         role: 'object',

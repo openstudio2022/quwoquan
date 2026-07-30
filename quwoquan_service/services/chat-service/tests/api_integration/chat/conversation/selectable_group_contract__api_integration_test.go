@@ -57,7 +57,8 @@ func socialMutualServer(viewer string, contactIDs ...string) *httptest.Server {
 	items := make([]map[string]any, 0, len(contactIDs))
 	for _, id := range contactIDs {
 		items = append(items, map[string]any{
-			"subAccountId":  id,
+			"personaId":     id,
+			"userHandle":    "handle_" + id,
 			"displayName":   "Display_" + id,
 			"avatarUrl":     "media/avatar/s/mock/user/" + id + "/avatar.png",
 			"followedAt":    "2026-06-06T12:00:00Z",
@@ -67,14 +68,14 @@ func socialMutualServer(viewer string, contactIDs ...string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/user/sub-accounts/" + viewer + "/following",
-			"/user/sub-accounts/" + viewer + "/followers":
+		case "/user/personas/" + viewer + "/following",
+			"/user/personas/" + viewer + "/followers":
 			_ = json.NewEncoder(w).Encode(map[string]any{"items": items, "cursor": ""})
 		case "/user/contact-discovery/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"matchedSubAccountIds": []string{},
-				"status":               "completed",
-				"createdAt":            time.Date(2026, 6, 6, 12, 4, 0, 0, time.UTC),
+				"matchedPersonaIds": []string{},
+				"status":            "completed",
+				"createdAt":         time.Date(2026, 6, 6, 12, 4, 0, 0, time.UTC),
 			})
 		default:
 			writeTestUserNotFound(w, r, "unexpected "+r.Method+" "+r.URL.Path)
@@ -113,6 +114,7 @@ func seedSelectableGroup(
 		ID:             conversationID + "_owner",
 		ConversationId: conversationID,
 		UserId:         viewer,
+		UserHandle:     "handle_" + viewer,
 		DisplayName:    "Display_" + viewer,
 		AvatarUrl:      "media/avatar/s/mock/user/" + viewer + "/avatar.png",
 		MemberType:     "user",
@@ -127,6 +129,7 @@ func seedSelectableGroup(
 			ID:             conversationID + "_" + id,
 			ConversationId: conversationID,
 			UserId:         id,
+			UserHandle:     "handle_" + id,
 			DisplayName:    "Display_" + id,
 			AvatarUrl:      "media/avatar/s/mock/user/" + id + "/avatar.png",
 			MemberType:     "user",
@@ -216,7 +219,7 @@ func getSelectableJSON(t *testing.T, handler http.Handler, path, viewer string) 
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("X-Client-User-Id", viewer)
-	req.Header.Set("X-Client-Sub-Account-Id", viewer)
+	req.Header.Set("X-Client-Persona-Id", viewer)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	var payload map[string]any
@@ -397,6 +400,12 @@ func TestListSelectableGroupContactMembers_IntersectsMutualMembers(t *testing.T)
 	for _, raw := range items {
 		row := raw.(map[string]any)
 		got[row["userId"].(string)] = true
+		if row["userHandle"] != "handle_"+row["userId"].(string) {
+			t.Fatalf("expected canonical userHandle for selectable member, got %#v", row)
+		}
+		if _, ok := row["contactId"]; ok {
+			t.Fatalf("selectable member must not expose retired contactId alias: %#v", row)
+		}
 		if row["relationState"] != "mutual" {
 			t.Fatalf("expected relationState mutual, got %v", row["relationState"])
 		}

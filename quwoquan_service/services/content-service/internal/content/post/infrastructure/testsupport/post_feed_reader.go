@@ -32,8 +32,9 @@ func (r *PostFeedReader) FindPublishedFeedPost(
 // FindPublishedFeedPosts 与生产 Mongo $in 批量读同语义（N3-1）：未命中缺席。
 func (r *PostFeedReader) FindPublishedFeedPosts(
 	ctx context.Context,
-	postIDs []postports.PostID,
+	request postports.PostFeedHydrationRequest,
 ) (map[postports.PostID]postports.PostFeedItemSlice, error) {
+	postIDs := request.PostIDs()
 	out := make(map[postports.PostID]postports.PostFeedItemSlice, len(postIDs))
 	for _, id := range postIDs {
 		if _, exists := out[id]; exists {
@@ -44,6 +45,12 @@ func (r *PostFeedReader) FindPublishedFeedPosts(
 			return nil, err
 		}
 		if ok {
+			if activeReleaseID := strings.TrimSpace(request.ActiveReleaseID()); activeReleaseID != "" {
+				slice.SourceOwner = "qwq_data"
+				slice.ReleaseID = activeReleaseID
+				slice.ManifestDigest = strings.TrimSpace(request.ManifestDigest())
+				slice.LifecycleStatus = "active"
+			}
 			out[id] = slice
 		}
 	}
@@ -70,7 +77,14 @@ func (r *PostFeedReader) ListPublishedFeedPosts(
 			}
 			continue
 		}
-		items = append(items, postFeedSliceFromModel(post))
+		item := postFeedSliceFromModel(post)
+		if activeReleaseID := strings.TrimSpace(request.ActiveReleaseID()); activeReleaseID != "" {
+			item.SourceOwner = "qwq_data"
+			item.ReleaseID = activeReleaseID
+			item.ManifestDigest = strings.TrimSpace(request.ManifestDigest())
+			item.LifecycleStatus = "active"
+		}
+		items = append(items, item)
 		if len(items) >= request.Limit() {
 			break
 		}
@@ -117,6 +131,7 @@ func postFeedSliceFromModel(post postmodel.Post) postports.PostFeedItemSlice {
 		ThumbnailURL:     post.ThumbnailUrl,
 		CoverStrategy:    post.CoverStrategy,
 		CoverFrameTimeMS: post.CoverFrameTimeMs,
+		DurationMS:       post.DurationMs,
 		TagRefs:          append([]string(nil), post.TagRefs...),
 		EntityRefs:       append([]string(nil), post.EntityRefs...),
 		ContentVertical:  post.ContentVertical,

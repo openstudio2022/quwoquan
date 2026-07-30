@@ -4,10 +4,39 @@ description: 'HomepageClaimRequest 聚合专属错误码。通用命令错误复
 
   '
 errors:
+- code: ENTITY.USER.claim_material_missing
+  kind: USER
+  reason: invalid_argument
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateHomepageClaimRequest]
+  recovery_action: surface
+  dart_const: claimMaterialMissing
+  go_const: ErrClaimMaterialMissing
+  user_message:
+    zh: 认领材料不完整，请补充后重试
+    en: Claim materials are incomplete
+- code: ENTITY.USER.already_claimed
+  kind: USER
+  reason: conflict
+  http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CreateHomepageClaimRequest]
+  recovery_action: surface
+  dart_const: alreadyClaimed
+  go_const: ErrAlreadyClaimed
+  user_message:
+    zh: 该主页已被认领
+    en: Homepage has already been claimed
 - code: ENTITY.USER.claim_not_found
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [ReviewHomepageClaimRequest]
   recovery_action: surface
   dart_const: claimNotFound
   go_const: ErrClaimNotFound
@@ -18,6 +47,9 @@ errors:
   kind: USER
   reason: conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CreateHomepageClaimRequest]
   recovery_action: surface
   dart_const: duplicatePendingClaim
   go_const: ErrDuplicatePendingClaim
@@ -28,6 +60,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateHomepageClaimRequest]
   recovery_action: surface
   dart_const: invalidClaimMaterialUrl
   go_const: ErrInvalidClaimMaterialURL

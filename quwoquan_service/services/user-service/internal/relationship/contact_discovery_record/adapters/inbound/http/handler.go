@@ -85,20 +85,20 @@ func (handler *Handler) handleGetLatestContactDiscovery(w http.ResponseWriter, r
 }
 
 // buildContactDiscoveryResponse assembles the sanitized wire body: the privacy
-// baseline (matchedSubAccountIds) plus the enriched matches[] projection
+// baseline (matchedPersonaIds) plus the enriched matches[] projection
 // (ContactDiscoveryMatchWire) carrying the initiator's own hashedPhone, a
 // trimmed profile, and the viewer-scoped relationship capability that drives
 // the "添加 / 已添加" button. ownerAccountId and the raw uploaded hashes never
 // leave the server (json:"-" on the record + this explicit allow-list).
 func (handler *Handler) buildContactDiscoveryResponse(r *http.Request, viewerID string, record *model.ContactDiscoveryRecord) map[string]any {
 	resp := map[string]any{
-		"id":                   record.ID,
-		"status":               record.Status,
-		"matchedSubAccountIds": nonNilStrings(record.MatchedSubAccountIds),
-		"matchCount":           record.MatchCount,
-		"expireAt":             record.ExpireAt,
-		"completedAt":          record.CompletedAt,
-		"matches":              []map[string]any{},
+		"id":                record.ID,
+		"status":            record.Status,
+		"matchedPersonaIds": nonNilStrings(record.MatchedPersonaIds),
+		"matchCount":        record.MatchCount,
+		"expireAt":          record.ExpireAt,
+		"completedAt":       record.CompletedAt,
+		"matches":           []map[string]any{},
 	}
 	if record.Status == "dismissed" || record.Status == "expired" {
 		return resp
@@ -116,16 +116,13 @@ func (handler *Handler) buildContactDiscoveryResponse(r *http.Request, viewerID 
 
 	wire := make([]map[string]any, 0, len(matches))
 	for _, m := range matches {
-		rel, _ := handler.relationship.GetRelationship(r.Context(), relationViewerID, m.SubAccountID)
-		isBlocked, _ := handler.relationship.CheckBlocked(r.Context(), relationViewerID, m.SubAccountID)
-		isBlockedBy, _ := handler.relationship.CheckBlocked(r.Context(), m.SubAccountID, relationViewerID)
-		capability := handler.buildRelationshipCapabilityView(r.Context(), relationViewerID, m.SubAccountID, rel, isBlocked, isBlockedBy)
-		if m.SubAccountID != "" {
-			capability["targetSubAccountId"] = m.SubAccountID
-		}
+		rel, _ := handler.relationship.GetRelationship(r.Context(), relationViewerID, m.PersonaID)
+		isBlocked, _ := handler.relationship.CheckBlocked(r.Context(), relationViewerID, m.PersonaID)
+		isBlockedBy, _ := handler.relationship.CheckBlocked(r.Context(), m.PersonaID, relationViewerID)
+		capability := handler.relationshipCapabilityView(r.Context(), relationViewerID, m.PersonaID, rel, isBlocked, isBlockedBy)
 		item := map[string]any{
 			"hashedPhone":            m.HashedPhone,
-			"subAccountId":           m.SubAccountID,
+			"personaId":              m.PersonaID,
 			"userHandle":             m.UserHandle,
 			"displayName":            m.DisplayName,
 			"avatarVersion":          m.AvatarVersion,
@@ -164,53 +161,25 @@ func (handler *Handler) handleDismissContactDiscovery(w http.ResponseWriter, r *
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
-func (handler *Handler) buildRelationshipCapabilityView(
+func (handler *Handler) relationshipCapabilityView(
 	ctx context.Context,
 	viewerID, targetID string,
 	rel relmodel.RelationshipState,
 	isBlocked, isBlockedBy bool,
-) map[string]any {
-	relationState := "not_following"
-	canFollow, canUnfollow, canFollowBack := true, false, false
-	canGreet, canCreateDirectConversation := true, false
-	canSendMessage, canStartVoiceCall, canStartVideoCall := false, false, false
-	isMutual := false
-	switch {
-	case viewerID == targetID:
-		relationState, canFollow, canGreet = "self", false, false
-	case rel.IsMutual:
-		relationState, isMutual = "mutual", true
-		canFollow, canUnfollow, canGreet = false, true, false
-		canCreateDirectConversation, canSendMessage = true, true
-		canStartVoiceCall, canStartVideoCall = true, true
-	case rel.IsFollowing:
-		relationState, canFollow, canUnfollow = "following", false, true
-	case rel.IsFollowedBy:
-		relationState, canFollowBack = "followed_by", true
-	}
+) relationshipapp.RelationshipCapabilityView {
 	hasPendingGreeting, _ := handler.greeting.HasPendingBetween(ctx, viewerID, targetID)
 	hasFormalConversation, _ := handler.greeting.HasFormalConversation(ctx, viewerID, targetID)
-	if hasFormalConversation {
-		canSendMessage = true
-	}
-	if hasPendingGreeting {
-		canGreet = false
-	}
-	if isBlocked || isBlockedBy {
-		canFollow, canFollowBack, canGreet = false, false, false
-		canCreateDirectConversation, canSendMessage = false, false
-		canStartVoiceCall, canStartVideoCall = false, false
-	}
-	return map[string]any{
-		"viewerSubAccountId": viewerID, "targetSubAccountId": targetID,
-		"relationState": relationState, "isMutual": isMutual,
-		"canFollow": canFollow, "canUnfollow": canUnfollow, "canFollowBack": canFollowBack,
-		"canGreet": canGreet, "canOpenConversation": canCreateDirectConversation || hasFormalConversation,
-		"canCreateDirectConversation": canCreateDirectConversation, "canSendMessage": canSendMessage,
-		"hasPendingGreeting": hasPendingGreeting, "hasFormalConversation": hasFormalConversation,
-		"canStartVoiceCall": canStartVoiceCall, "canStartVideoCall": canStartVideoCall,
-		"isBlocked": isBlocked, "isBlockedBy": isBlockedBy,
-	}
+	return relationshipapp.NewRelationshipCapabilityView(
+		relmodel.RelationshipCapabilityFacts{
+			ViewerPersonaID:       viewerID,
+			TargetPersonaID:       targetID,
+			Relationship:          rel,
+			IsBlocked:             isBlocked,
+			IsBlockedBy:           isBlockedBy,
+			HasPendingGreeting:    hasPendingGreeting,
+			HasFormalConversation: hasFormalConversation,
+		},
+	)
 }
 
 func actorAccountID(r *http.Request) string {

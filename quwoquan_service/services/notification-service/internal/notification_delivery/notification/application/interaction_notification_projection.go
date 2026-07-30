@@ -388,8 +388,8 @@ func projectFollowChanged(event InteractionStreamEvent) (*CreateAppMessageComman
 
 func projectGreetingSent(event InteractionStreamEvent) (*CreateAppMessageCommand, error) {
 	greetingID := strings.TrimSpace(event.Values["id"])
-	requester := strings.TrimSpace(event.Values["requesterSubAccountId"])
-	target := strings.TrimSpace(event.Values["targetSubAccountId"])
+	requester := strings.TrimSpace(event.Values["requesterPersonaId"])
+	target := strings.TrimSpace(event.Values["targetPersonaId"])
 	if greetingID == "" || requester == "" || target == "" {
 		return nil, fmt.Errorf("GreetingRequestSent event identity is incomplete")
 	}

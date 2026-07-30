@@ -97,6 +97,8 @@ def _run_lane(
             "PYTHONDONTWRITEBYTECODE": "1",
             "QWQ_OUTPUT_ROOT": str(runtime.output_root),
             "QWQ_PUBLISH_ROOT": str(runtime.publish_root),
+            "QWQ_CAMPAIGN_ROOT_EXECUTION_ID": root_execution_id,
+            "QWQ_FROZEN_MAIN_BRANCH": str(submission["gitBranch"]),
         }
     )
     command = [sys.executable, "-B", str(cli), *_lane_argv(submission, stage=stage)]

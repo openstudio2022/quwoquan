@@ -5,6 +5,8 @@ errors:
   kind: USER
   reason: release_not_found
   http_status: 404
+  emitted_by:
+  - {surface: http, operations: [ActivateTagTaxonomyRelease]}
   recovery_action: surface
   dart_const: tagReleaseNotFound
   go_const: ErrTagReleaseNotFound
@@ -15,6 +17,8 @@ errors:
   kind: USER
   reason: release_invalid_argument
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [StageTagTaxonomyRelease]}
   recovery_action: surface
   dart_const: tagReleaseInvalidArgument
   go_const: ErrTagReleaseInvalidArgument
@@ -25,6 +29,8 @@ errors:
   kind: USER
   reason: release_invalid_transition
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [ActivateTagTaxonomyRelease]}
   recovery_action: refresh
   dart_const: tagReleaseInvalidTransition
   go_const: ErrTagReleaseInvalidTransition
@@ -35,6 +41,8 @@ errors:
   kind: USER
   reason: release_snapshot_incomplete
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [ActivateTagTaxonomyRelease]}
   recovery_action: retry
   dart_const: tagReleaseSnapshotIncomplete
   go_const: ErrTagReleaseSnapshotIncomplete
@@ -45,6 +53,8 @@ errors:
   kind: USER
   reason: release_version_conflict
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [ActivateTagTaxonomyRelease]}
   recovery_action: refresh
   dart_const: tagReleaseVersionConflict
   go_const: ErrTagReleaseVersionConflict
@@ -55,6 +65,8 @@ errors:
   kind: USER
   reason: release_idempotency_conflict
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [StageTagTaxonomyRelease, ActivateTagTaxonomyRelease]}
   recovery_action: refresh
   dart_const: tagReleaseIdempotencyConflict
   go_const: ErrTagReleaseIdempotencyConflict
@@ -65,6 +77,8 @@ errors:
   kind: SYSTEM
   reason: release_storage_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [StageTagTaxonomyRelease, ActivateTagTaxonomyRelease]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: tagReleaseStorageFailed

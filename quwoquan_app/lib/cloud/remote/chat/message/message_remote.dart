@@ -68,12 +68,15 @@ final class RemoteChatMessageMutationWriter
   final ChatMessageInvocationContextFactory invocationContext;
 
   @override
-  Future<ChatCommandAck> recallMessage(ChatRecallMessageCommand command) {
+  Future<ChatCommandAck> recallMessage(
+    ChatRecallMessageCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatMessageRecallMessage(
       command,
       context: invocationContext(
         ChatRequestPageIds.recallMessage,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }

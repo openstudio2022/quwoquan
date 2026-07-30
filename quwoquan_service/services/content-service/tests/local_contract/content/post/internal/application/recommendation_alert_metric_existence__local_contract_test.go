@@ -30,19 +30,20 @@ var runtimeRegisteredRecMetrics = map[string]bool{
 	"rec_pipeline_model_timeouts_total":  true,
 	"rec_pipeline_total_latency_seconds": true,
 	// feed 七态与曝光治理
-	"recommendation_feed_served_total":                       true,
-	"recommendation_feed_served_by_attribution_total":        true,
-	"recommendation_feed_impressed_total":                    true,
-	"recommendation_feed_engagement_total":                   true,
-	"recommendation_feed_completion_total":                   true,
-	"recommendation_feed_negative_feedback_total":            true,
-	"recommendation_feed_duplicate_exposure_total":           true,
-	"recommendation_behavior_ingest_total":                   true,
-	"recommendation_behavior_ingest_dropped_total":           true,
-	"recommendation_behavior_by_attribution_total":           true,
-	"rec_hotpath_dropped_total":                              true,
-	"recommendation_exposure_filter_smembers_fallback_total": true,
-	"recommendation_feed_ab_experiment_validity_total":       true,
+	"recommendation_feed_terminal_total":               true,
+	"recommendation_feed_served_total":                 true,
+	"recommendation_feed_served_by_attribution_total":  true,
+	"recommendation_feed_impressed_total":              true,
+	"recommendation_feed_engagement_total":             true,
+	"recommendation_feed_completion_total":             true,
+	"recommendation_feed_negative_feedback_total":      true,
+	"recommendation_feed_duplicate_exposure_total":     true,
+	"recommendation_behavior_ingest_total":             true,
+	"recommendation_behavior_ingest_dropped_total":     true,
+	"recommendation_behavior_by_attribution_total":     true,
+	"rec_hotpath_dropped_total":                        true,
+	"recommendation_feed_ab_experiment_validity_total": true,
+	"recommendation_ranked_feed_window_create_total":   true,
 }
 
 var recMetricNamePattern = regexp.MustCompile(`\b(rec_[a-z0-9_]+|recommendation_[a-z0-9_]+)\b`)
@@ -102,6 +103,7 @@ func TestRuntimeRegisteredRecMetricsHaveSourceEvidence(t *testing.T) {
 		// Namespace rec + Subsystem pipeline + Name 短名两种形态。
 		fullDecl := `"` + metric + `"`
 		shortName := strings.TrimPrefix(metric, "rec_pipeline_")
+		shortName = strings.TrimPrefix(shortName, "recommendation_")
 		shortDecl := `"` + shortName + `"`
 		if !strings.Contains(source, fullDecl) && !strings.Contains(source, shortDecl) {
 			t.Errorf(

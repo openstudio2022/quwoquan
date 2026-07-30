@@ -108,7 +108,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
       final thanked = _thankedActivityIds.contains(item.activityId);
       final dmSent = _directMessageSentActivityIds.contains(item.activityId);
       final dmBusy = _directMessageInFlight.contains(item.activityId);
-      final canDirectMessage = item.displaySubAccountId.trim().isNotEmpty;
+      final canDirectMessage = item.displayPersonaId.trim().isNotEmpty;
       return <Widget>[
         Padding(
           padding: actionPadding,
@@ -247,17 +247,14 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
       return;
     }
     setState(() => _thankedActivityIds.add(item.activityId));
-    AppToast.show(
-      context,
-      ProfileText.profileInteractionThanksAcknowledged,
-    );
+    AppToast.show(context, ProfileText.profileInteractionThanksAcknowledged);
   }
 
   /// 点赞类活动「私信」：经 chat 仓库直接发送一条预置感谢私信。
   Future<void> _sendThanksDirectMessage(
     ProfileInteractionActivityViewData item,
   ) async {
-    final userId = item.displaySubAccountId.trim();
+    final userId = item.displayPersonaId.trim();
     if (userId.isEmpty ||
         _directMessageInFlight.contains(item.activityId) ||
         _directMessageSentActivityIds.contains(item.activityId)) {
@@ -297,10 +294,7 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
         _directMessageInFlight.remove(item.activityId);
         _directMessageSentActivityIds.add(item.activityId);
       });
-      AppToast.show(
-        context,
-        ProfileText.profileInteractionDirectMessageSent,
-      );
+      AppToast.show(context, ProfileText.profileInteractionDirectMessageSent);
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(

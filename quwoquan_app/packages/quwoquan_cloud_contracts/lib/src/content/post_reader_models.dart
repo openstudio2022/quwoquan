@@ -1,95 +1,6 @@
-/// 纯 Dart 内容投影，不依赖 App DTO 或 JSON Map。
-final class ContentPostProjection {
-  ContentPostProjection({
-    required this.postId,
-    required this.contentType,
-    this.contentIdentity,
-    this.assistantUsePolicy = 'inherit',
-    this.authorId,
-    this.authorDisplayName,
-    this.authorAvatarUrl,
-    this.authorBackgroundUrl,
-    this.authorRoleLabel,
-    Iterable<String> authorIdentityTags = const <String>[],
-    this.authorVerified = false,
-    this.title,
-    this.body,
-    this.summary,
-    this.coverUrl,
-    this.articleTemplate,
-    this.articleFontPreset,
-    Iterable<String> mediaUrls = const <String>[],
-    this.videoUrl,
-    this.thumbnailUrl,
-    this.width,
-    this.height,
-    this.durationMs,
-    this.likeCount = 0,
-    this.commentCount = 0,
-    this.shareCount = 0,
-    this.createdAt,
-    this.updatedAt,
-    this.publishedAt,
-    this.contentVertical,
-    this.recallPath,
-    this.supplySource,
-    Iterable<ContentPostIntersectionReason>? intersectionReasons,
-  }) : authorIdentityTags = List<String>.unmodifiable(authorIdentityTags),
-       mediaUrls = List<String>.unmodifiable(mediaUrls),
-       intersectionReasons = intersectionReasons == null
-           ? null
-           : List<ContentPostIntersectionReason>.unmodifiable(
-               intersectionReasons,
-             );
+import 'content_post_projection.dart';
 
-  final String postId;
-  final String contentType;
-  final String? contentIdentity;
-  final String assistantUsePolicy;
-  final String? authorId;
-  final String? authorDisplayName;
-  final String? authorAvatarUrl;
-  final String? authorBackgroundUrl;
-  final String? authorRoleLabel;
-  final List<String> authorIdentityTags;
-  final bool authorVerified;
-  final String? title;
-  final String? body;
-  final String? summary;
-  final String? coverUrl;
-  final String? articleTemplate;
-  final String? articleFontPreset;
-  final List<String> mediaUrls;
-  final String? videoUrl;
-  final String? thumbnailUrl;
-  final int? width;
-  final int? height;
-  final int? durationMs;
-  final int likeCount;
-  final int commentCount;
-  final int shareCount;
-  final DateTime? createdAt;
-  final DateTime? updatedAt;
-  final DateTime? publishedAt;
-  final String? contentVertical;
-  final String? recallPath;
-  final String? supplySource;
-  final List<ContentPostIntersectionReason>? intersectionReasons;
-}
-
-final class ContentPostIntersectionReason {
-  const ContentPostIntersectionReason({
-    this.kind = '',
-    this.primaryText = '',
-    this.secondaryText = '',
-    this.strength = 0,
-  });
-
-  final String kind;
-  final String primaryText;
-  final String secondaryText;
-  final double strength;
-}
+export 'content_post_projection.dart';
 
 /// 单篇内容详情中的统一媒体序列项。
 ///
@@ -99,6 +10,10 @@ final class ContentPostMediaItem {
   const ContentPostMediaItem({
     required this.kind,
     required this.url,
+    this.mediaAssetId,
+    this.mediaAssetVersion,
+    this.hlsCmafMasterManifestUrl,
+    this.hlsCmafDescriptorVersion,
     this.coverUrl,
     this.durationMs,
     this.width,
@@ -108,6 +23,10 @@ final class ContentPostMediaItem {
 
   final String kind;
   final String url;
+  final String? mediaAssetId;
+  final int? mediaAssetVersion;
+  final String? hlsCmafMasterManifestUrl;
+  final int? hlsCmafDescriptorVersion;
   final String? coverUrl;
   final int? durationMs;
   final int? width;
@@ -238,15 +157,27 @@ final class ContentAuthorPostPageSlice {
 }
 
 /// 首页发现流的强类型分页投影与服务端归因上下文。
+enum ContentDiscoveryFeedOutcome { content, empty }
+
+enum ContentDiscoveryFeedEmptyReason {
+  noActiveRelease,
+  noEligibleContent,
+  followingEmpty,
+  continuationEnd,
+}
+
 final class ContentDiscoveryFeedPageSlice {
   ContentDiscoveryFeedPageSlice({
     required Iterable<ContentPostProjection> items,
+    required this.outcome,
+    this.emptyReason,
     Iterable<ContentPostStructuredObject> objectCards =
         const <ContentPostStructuredObject>[],
     this.nextCursor,
+    this.previousCursor,
+    this.paginationExpiresAt,
     this.feedRequestId,
-    this.rankingVersion,
-    this.reasonVersion,
+    this.policyDigest,
     this.hasMore,
   }) : items = List<ContentPostProjection>.unmodifiable(items),
        objectCards = List<ContentPostStructuredObject>.unmodifiable(
@@ -254,10 +185,13 @@ final class ContentDiscoveryFeedPageSlice {
        );
 
   final List<ContentPostProjection> items;
+  final ContentDiscoveryFeedOutcome outcome;
+  final ContentDiscoveryFeedEmptyReason? emptyReason;
   final List<ContentPostStructuredObject> objectCards;
   final String? nextCursor;
+  final String? previousCursor;
+  final DateTime? paginationExpiresAt;
   final String? feedRequestId;
-  final String? rankingVersion;
-  final String? reasonVersion;
+  final String? policyDigest;
   final bool? hasMore;
 }

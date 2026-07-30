@@ -2,6 +2,7 @@
   "label": "职业技能",
   "labelEn": "Professional Skills",
   "description": "职场技能与资格证书",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

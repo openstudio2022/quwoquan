@@ -1,0 +1,30 @@
+kind: aggregate_root
+description: Content 对 UserAccountClosed 的耐久消费、媒体与搜索物理撤销、审计以及永久防复活工作流。
+identity:
+  fields:
+  - _id
+  version_source: field
+  version_field: accountVersion
+access:
+  commands: aggregate_facade
+  cross_context: event_only
+  queries: none
+relationships: []
+capabilities:
+- consume_event
+- idempotent_command
+- outbox
+- privacy_cleanup
+business_rules:
+- 工作流只消费 canonical UserAccountClosed；不得从 DLQ 摘要或客户端请求重建原始主体 payload。
+- Mongo、Search 与媒体公开切片全部完成后才能推进 completedAt 并 ACK source PEL。
+- 失败按有限重试收敛；terminal marker 不设 TTL，只能由受控恢复操作释放。
+- 防复活 tombstone 只存独立密钥 HMAC-SHA256(subjectId)，禁止保存 userId/personaId 原值且永久保留。
+lifecycle:
+  state_field: state
+  states:
+  - received
+  - external_cleanup_pending
+  - completed
+  terminal_states:
+  - completed

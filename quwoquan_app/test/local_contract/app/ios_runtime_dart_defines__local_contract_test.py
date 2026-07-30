@@ -44,7 +44,6 @@ def _build_handoff(
     environment: str,
     *,
     launch_mode: str = "xcode_build",
-    direct_alpha: bool = False,
 ) -> dict[str, object]:
     command = [
         "python3",
@@ -56,15 +55,6 @@ def _build_handoff(
         "--launch-mode",
         launch_mode,
     ]
-    if direct_alpha:
-        command.extend(
-            [
-                "--app-instance-id",
-                "xcode-direct-alpha",
-                "--app-instance-namespace",
-                "xcode-direct-alpha",
-            ]
-        )
     result = subprocess.run(
         command,
         cwd=APP_DIR,
@@ -165,7 +155,11 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             )
             self.assertEqual(
                 manifest["publicWebURL"],
-                "https://alpha.quwoquan.com",
+                "https://alpha.quwoquan.com:17000",
+            )
+            self.assertEqual(
+                manifest["appDownloadBaseURL"],
+                "https://cdn.alpha.quwoquan.com:17100/download",
             )
 
     def test_invalid_environment_fails_before_flutter_build(self) -> None:
@@ -182,7 +176,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("must be alpha|beta|gamma|prod", result.stderr)
 
-    def test_missing_environment_outside_direct_debug_fails_closed(self) -> None:
+    def test_missing_canonical_handoff_fails_closed(self) -> None:
         env = dict(os.environ)
         env.pop("QWQ_APP_RUNTIME_ENV", None)
         env.pop("DART_DEFINES", None)
@@ -198,12 +192,10 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 2)
-        self.assertIn("explicit QWQ_APP_RUNTIME_ENV", result.stderr)
-        self.assertIn("outside direct iOS Simulator Debug", result.stderr)
+        self.assertIn("canonical runtime handoff is required", result.stderr)
+        self.assertIn("./run.sh -d <device>", result.stderr)
 
-    def test_direct_ios_simulator_debug_uses_one_canonical_alpha_handoff(
-        self,
-    ) -> None:
+    def test_direct_ios_simulator_debug_is_rejected_before_install(self) -> None:
         flutter_define = base64.b64encode(b"FLUTTER_VERSION=test").decode("ascii")
         env = dict(os.environ)
         for key in (
@@ -221,52 +213,17 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         env["TARGET_DEVICE_IDENTIFIER"] = (
             "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB"
         )
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            env["TARGET_BUILD_DIR"] = temporary_directory
-            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
-            result = subprocess.run(
-                ["bash", str(SCRIPT)],
-                cwd=APP_DIR,
-                env=env,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            values = _decode_export(result.stdout)
-            expected_handoff = _build_handoff(
-                "alpha",
-                launch_mode="canonical_launcher",
-                direct_alpha=True,
-            )
-            manifest_path = (
-                Path(temporary_directory)
-                / "Runner.app"
-                / "QWQNativeRuntime.plist"
-            )
-            with manifest_path.open("rb") as stream:
-                manifest = plistlib.load(stream)
-
-        self.assertEqual(values["APP_RUNTIME_ENV"], "alpha")
-        self.assertEqual(values["QWQ_APP_LAUNCH_MODE"], "canonical_launcher")
-        self.assertEqual(values["FLUTTER_VERSION"], "test")
-        self.assertIn(
-            f"export FLUTTER_TARGET={APP_DIR / 'lib/main_prod.dart'}",
-            result.stdout,
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
         )
-        self.assertEqual(manifest["launchTarget"], "alpha-local")
-        self.assertEqual(
-            manifest["dartDefinesDigest"],
-            expected_handoff["dartDefinesDigest"],
-        )
-        self.assertEqual(
-            manifest["runtimeConfigDigest"],
-            expected_handoff["runtimeConfigDigest"],
-        )
-        self.assertEqual(
-            manifest["effectiveLaunchManifestDigest"],
-            expected_handoff["effectiveLaunchManifestDigest"],
-        )
-        self.assertIn("using canonical Alpha handoff", result.stderr)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("canonical runtime handoff is required", result.stderr)
+        self.assertIn("./run.sh -d <device>", result.stderr)
 
     def test_direct_debug_does_not_synthesize_non_alpha_handoff(self) -> None:
         runtime_env = base64.b64encode(b"APP_RUNTIME_ENV=beta").decode("ascii")
@@ -291,9 +248,8 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        self.assertEqual(result.returncode, 5)
-        self.assertIn("canonical QWQ_LAUNCH_TARGET is required", result.stderr)
-        self.assertNotIn("using canonical Alpha handoff", result.stderr)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("canonical launch mode is required", result.stderr)
 
     def test_release_without_canonical_launcher_fails_closed(self) -> None:
         env = dict(os.environ)
@@ -318,8 +274,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             text=True,
         )
         self.assertEqual(result.returncode, 2)
-        self.assertIn("explicit QWQ_APP_RUNTIME_ENV", result.stderr)
-        self.assertNotIn("using canonical Alpha handoff", result.stderr)
+        self.assertIn("canonical runtime handoff is required", result.stderr)
 
     def test_xcode_wrapper_propagates_prepare_failure_before_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -353,7 +308,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertIn("GATE_BLOCK", result.stderr)
 
-    def test_xcode_wrapper_direct_debug_compiles_canonical_entrypoint(self) -> None:
+    def test_xcode_wrapper_direct_debug_never_invokes_backend(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             flutter_root = Path(temporary_directory) / "flutter"
             backend = (
@@ -387,18 +342,17 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB"
             )
             env["FLUTTER_ROOT"] = str(flutter_root)
-            subprocess.run(
+            result = subprocess.run(
                 ["bash", str(BUILD_WRAPPER)],
                 cwd=APP_DIR,
                 env=env,
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(
-                marker.read_text(encoding="utf-8").strip(),
-                str(APP_DIR / "lib/main_prod.dart"),
-            )
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse(marker.exists())
+            self.assertIn("use quwoquan_app/run.sh -d <simulator>", result.stderr)
 
     def test_xcode_wrapper_runs_backend_only_after_verified_defines(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

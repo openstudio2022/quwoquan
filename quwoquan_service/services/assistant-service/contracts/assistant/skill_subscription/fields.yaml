@@ -1,276 +1,418 @@
 description: M8 Skill 订阅 wire 体（与 skill_subscription 契约字段对齐）
 fields:
-- name: subscriptionId
-  source: subscriptionId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: owner
-  source: owner
-  type: object
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: createdByUserId
-  source: createdByUserId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: createdByPersonaId
-  source: createdByPersonaId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: metadata_only
-  api_exposure: read
-  ops_exposure: read
-  description: 创建订阅时的 Persona；conversation/group 投递必须持久化并在每次投递前复核成员资格。
-  role: authoritative_state
-  reference: true
-- name: skillId
-  source: skillId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: domainId
-  source: domainId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: tagRefs
-  source: tagRefs
-  type: '[]string'
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: status
-  source: status
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: searchQueryPlan
-  source: searchQueryPlan
-  type: object
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: trigger
-  source: trigger
-  type: object
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: destination
-  source: destination
-  type: object
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: deliveryState
-  source: deliveryState
-  type: SkillSubscriptionDeliveryState
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: metadata_only
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: subscriptionId
+    source: subscriptionId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: owner
+    source: owner
+    type: object
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: createdByUserId
+    source: createdByUserId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: createdByPersonaId
+    source: createdByPersonaId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: metadata_only
+    api_exposure: read
+    ops_exposure: read
+    description: 创建订阅时的 Persona；conversation/group 投递必须持久化并在每次投递前复核成员资格。
+    role: authoritative_state
+    reference: true
+  - name: skillId
+    source: skillId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: domainId
+    source: domainId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: tagRefs
+    source: tagRefs
+    type: '[]string'
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: SkillSubscriptionStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: searchQueryPlan
+    source: searchQueryPlan
+    type: object
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: trigger
+    source: trigger
+    type: object
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: destination
+    source: destination
+    type: object
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: deliveryState
+    source: deliveryState
+    type: SkillSubscriptionDeliveryState
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: metadata_only
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 types:
+  CreateSkillSubscriptionRequest:
+    description: 创建主动式 Skill 订阅的请求体；owner 与 createdByPersonaId 只从已验证主体注入。
+    fields:
+      - name: skillId
+        source: skillId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: none
+      - name: domainId
+        source: domainId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: none
+      - name: tagRefs
+        source: tagRefs
+        type: '[]string'
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: none
+      - name: searchQueryPlan
+        source: searchQueryPlan
+        type: object
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: none
+      - name: trigger
+        source: trigger
+        type: object
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: none
+      - name: destination
+        source: destination
+        type: object
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: none
+      - name: clientRequestId
+        source: clientRequestId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: none
+  SkillSubscriptionCronTickRequest:
+    description: 内部调度扫描的可选逻辑时钟；空请求体时服务使用当前 UTC 时间。
+    fields:
+      - name: now
+        source: now
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: write
   SkillSubscriptionDeliveryState:
     description: 主动订阅投递重试、幂等与运维审计状态；pendingDeliveryId 在成功或业务抑制后清空。
     fields:
-    - name: pendingDeliveryId
-      source: pendingDeliveryId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-    - name: lastAttemptAt
-      source: lastAttemptAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastDeliveredAt
-      source: lastDeliveredAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: nextAttemptAt
-      source: nextAttemptAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: consecutiveFailures
-      source: consecutiveFailures
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastErrorCode
-      source: lastErrorCode
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
+      - name: pendingDeliveryId
+        source: pendingDeliveryId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: lastAttemptAt
+        source: lastAttemptAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastDeliveredAt
+        source: lastDeliveredAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: nextAttemptAt
+        source: nextAttemptAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: consecutiveFailures
+        source: consecutiveFailures
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastErrorCode
+        source: lastErrorCode
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
   SkillSubscriptionListView:
     description: M8 主动式 Skill 订阅列表响应体
     fields:
-    - name: items
-      source: items
-      type: '[]SkillSubscription'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: items
+        source: items
+        type: '[]SkillSubscription'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   SkillSubscriptionStatusUpdateRequest:
     description: M8 主动式 Skill 订阅状态更新请求
     fields:
-    - name: status
-      source: status
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-      description: active | paused | archived
+      - name: status
+        source: status
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+        description: active | paused | archived
   SkillSubscriptionCronTickResult:
     description: M8 cron 调度扫描结果
     fields:
-    - name: processedCount
-      source: processedCount
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: suppressedCount
-      source: suppressedCount
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: failedCount
-      source: failedCount
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: createdTurnIds
-      source: createdTurnIds
-      type: '[]string'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: createdMessageIds
-      source: createdMessageIds
-      type: '[]string'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: processedCount
+        source: processedCount
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: suppressedCount
+        source: suppressedCount
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: failedCount
+        source: failedCount
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: createdTurnIds
+        source: createdTurnIds
+        type: '[]string'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: createdMessageIds
+        source: createdMessageIds
+        type: '[]string'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  AssistantSkillSubscriptionListQuery:
+    fields:
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+      - name: status
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+  CreateAssistantSkillSubscriptionCommand:
+    fields:
+      - name: skillId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: domainId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: tagRefs
+        type: '[]string'
+        client_dart_type: List<String>
+        client_default: const <String>[]
+        client_normalization: trim_dedupe_drop_empty
+      - name: searchQueryPlan
+        type: object
+        client_dart_type: AssistantSkillSubscriptionSearchPlan
+        client_wire: toJson
+      - name: trigger
+        type: object
+        client_dart_type: AssistantSkillSubscriptionTrigger
+        client_wire: toJson
+      - name: destination
+        type: object
+        client_dart_type: AssistantSkillSubscriptionDestination
+        client_wire: toJson
+      - name: clientRequestId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  UpdateAssistantSkillSubscriptionStatusCommand:
+    fields:
+      - name: subscriptionId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: status
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  AssistantSkillSubscriptionByIdQuery:
+    fields:
+      - name: subscriptionId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim

@@ -17,6 +17,7 @@ SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 WORKFLOW_PATH = (
     ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 )
+MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 
 
 class UserProfileGammaPatrolMatrixContractTest(unittest.TestCase):
@@ -48,10 +49,13 @@ class UserProfileGammaPatrolMatrixContractTest(unittest.TestCase):
             )
 
     def test_self_hosted_workflow_resolves_registered_target(self) -> None:
-        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        workflow = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (WORKFLOW_PATH, MATRIX_RUNNER_PATH)
+        )
 
         self.assertIn(
-            'matrix_kind}" = "user-profile"',
+            '[[ "$matrix_kind" == "user-profile" ]]',
             workflow,
             "self-hosted workflow 必须识别 user-profile matrix kind",
         )

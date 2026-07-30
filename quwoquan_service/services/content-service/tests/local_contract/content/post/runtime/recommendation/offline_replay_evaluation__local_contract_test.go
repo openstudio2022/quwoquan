@@ -2,6 +2,7 @@
 package recommendationlocalcontract
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -14,9 +15,7 @@ func TestOfflineReplayEvaluationCommercialReportLocalContract(t *testing.T) {
 		EligibleContentCount:      5,
 		DataWindowStart:           start,
 		DataWindowEnd:             start.Add(24 * time.Hour),
-		PolicyVersion:             "policy-v2",
-		RankingVersion:            "rec-v2",
-		ReasonVersion:             "reason-v2",
+		PolicyDigest:              "sha256:" + strings.Repeat("a", 64),
 		ScorerVariant:             "rule-commercial",
 		TimeDecayFeatureFreshness: 0.98,
 		Requests: []recommendation.ReplayRequest{{
@@ -42,8 +41,8 @@ func TestOfflineReplayEvaluationCommercialReportLocalContract(t *testing.T) {
 	if report.Invalid || !report.PromotionAllowed {
 		t.Fatalf("commercial replay report should be promotable: %+v", report)
 	}
-	if report.PolicyVersion == "" || report.RankingVersion == "" || report.ReasonVersion == "" || report.ScorerVariant == "" {
-		t.Fatalf("replay report must carry version attribution: %+v", report)
+	if report.PolicyDigest == "" || report.ScorerVariant == "" {
+		t.Fatalf("replay report must carry policy attribution: %+v", report)
 	}
 	if report.MAPAtK <= 0 || report.CollaborativeRecallLift <= 0 {
 		t.Fatalf("replay report must compute MAP and collaborative lift: %+v", report)

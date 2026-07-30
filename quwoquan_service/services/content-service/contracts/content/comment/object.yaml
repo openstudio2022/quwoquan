@@ -70,6 +70,7 @@ business_rules:
 - CreateComment 受 authorId 滑动窗口频控（配置驱动），超限返回 comment_rate_limited。
 - 读端只返回 named typed slices，禁止返回 Comment aggregate 或解码完整 Post。
 lifecycle:
+  state_field: status
   states:
   - active
   - hidden

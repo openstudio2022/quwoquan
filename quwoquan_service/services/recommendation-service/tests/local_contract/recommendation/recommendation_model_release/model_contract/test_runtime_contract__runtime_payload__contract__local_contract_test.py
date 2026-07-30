@@ -24,8 +24,6 @@ def test_bootstrap_loads_one_autonomous_config_and_env_overrides(
         f"""
 config:
   version: "{version}"
-  min_image_version: "1.0.0"
-  max_image_version: "2.0.0"
 runtime:
   model_profile: "release"
 """.strip(),
@@ -35,7 +33,7 @@ runtime:
     monkeypatch.setenv("SERVICE_NAME", service)
     monkeypatch.setenv("CONFIG_ROOT", str(tmp_path))
     monkeypatch.setenv("CONFIG_VERSION", version)
-    monkeypatch.setenv("IMAGE_VERSION", "1.2.3")
+    monkeypatch.setenv("IMAGE_VERSION", "sha256:" + "b" * 64)
     monkeypatch.setenv("REC_SERVICE_HTTP_ADDR", ":19090")
     monkeypatch.setenv("REC_MODEL_CONTENT_FEED_PATH", "/tmp/model.bin")
 
@@ -56,7 +54,7 @@ def test_bootstrap_fail_fast_when_version_file_missing(
     monkeypatch.setenv("SERVICE_NAME", service)
     monkeypatch.setenv("CONFIG_ROOT", str(tmp_path))
     monkeypatch.setenv("CONFIG_VERSION", "sha256:" + "b" * 64)
-    monkeypatch.setenv("IMAGE_VERSION", "1.0.0")
+    monkeypatch.setenv("IMAGE_VERSION", "sha256:" + "c" * 64)
 
     with pytest.raises(RuntimeError, match="missing config file"):
         bootstrap_runtime_contract_or_die()
@@ -85,8 +83,6 @@ def test_bootstrap_config_loading_matrix(
         f"""
 config:
   version: "{version}"
-  min_image_version: "1.0.0"
-  max_image_version: "2.0.0"
 runtime:
   model_profile: "{expected_profile}"
 """.strip(),
@@ -96,18 +92,18 @@ runtime:
     monkeypatch.setenv("SERVICE_NAME", service)
     monkeypatch.setenv("CONFIG_ROOT", str(tmp_path))
     monkeypatch.setenv("CONFIG_VERSION", version)
-    monkeypatch.setenv("IMAGE_VERSION", "1.2.3")
+    monkeypatch.setenv("IMAGE_VERSION", "sha256:" + "b" * 64)
 
     cfg = bootstrap_runtime_contract_or_die()
     assert cfg["runtime"]["model_profile"] == expected_profile
 
 
-def test_bootstrap_prod_requires_runtime_contract_envs(
+def test_bootstrap_every_environment_requires_runtime_contract_envs(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     service = "recommendation-service"
 
-    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("APP_ENV", "alpha")
     monkeypatch.setenv("SERVICE_NAME", service)
     monkeypatch.delenv("CONFIG_VERSION", raising=False)
     monkeypatch.delenv("IMAGE_VERSION", raising=False)

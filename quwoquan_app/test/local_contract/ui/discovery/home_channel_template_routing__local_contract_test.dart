@@ -59,7 +59,7 @@ Widget _buildHome(List<HomeChannelConfig> channels) {
             ),
             GoRoute(path: '/search', builder: (_, _) => const SizedBox()),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (_, _) => const SizedBox(),
             ),
           ],

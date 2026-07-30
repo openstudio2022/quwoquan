@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/content/media_contracts.requests.g.dart';
 
 enum ContentMediaType { image, video, audio, file }
 
@@ -9,114 +10,6 @@ enum ContentMediaUploadStatus { pending, completed, aborted }
 enum ContentMediaProcessingStatus { processing, ready, rejected, deleted }
 
 enum ContentMediaOriginalAccessPurpose { view, save }
-
-extension on ContentMediaAccessPolicy {
-  String get wireName => switch (this) {
-    ContentMediaAccessPolicy.ownerOnly => 'owner_only',
-    ContentMediaAccessPolicy.referencedPost => 'referenced_post',
-    ContentMediaAccessPolicy.public => 'public',
-  };
-}
-
-final class InitContentMediaUploadCommand {
-  InitContentMediaUploadCommand({
-    required this.mediaType,
-    required String contentType,
-    required this.fileSize,
-    required String expectedSha256,
-  }) : contentType = _requiredText(contentType, 'contentType'),
-       expectedSha256 = _normalizeSHA256(expectedSha256) {
-    if (fileSize <= 0) {
-      throw ArgumentError.value(fileSize, 'fileSize', 'must be > 0');
-    }
-  }
-
-  final ContentMediaType mediaType;
-  final String contentType;
-  final int fileSize;
-  final String expectedSha256;
-}
-
-final class CompleteContentMediaUploadCommand {
-  CompleteContentMediaUploadCommand({
-    required String sessionId,
-    this.accessPolicy = ContentMediaAccessPolicy.ownerOnly,
-  }) : sessionId = _requiredText(sessionId, 'sessionId');
-
-  final String sessionId;
-  final ContentMediaAccessPolicy accessPolicy;
-}
-
-final class AbortContentMediaUploadCommand {
-  AbortContentMediaUploadCommand({required String sessionId})
-    : sessionId = _requiredText(sessionId, 'sessionId');
-
-  final String sessionId;
-}
-
-final class GetContentMediaUploadSessionQuery {
-  GetContentMediaUploadSessionQuery({required String sessionId})
-    : sessionId = _requiredText(sessionId, 'sessionId');
-
-  final String sessionId;
-}
-
-final class GetContentMediaAssetQuery {
-  GetContentMediaAssetQuery({required String mediaId})
-    : mediaId = _requiredText(mediaId, 'mediaId');
-
-  final String mediaId;
-}
-
-final class DiscardContentMediaAssetCommand {
-  DiscardContentMediaAssetCommand({required String mediaId})
-    : mediaId = _requiredText(mediaId, 'mediaId');
-
-  final String mediaId;
-}
-
-final class RequestContentMediaOriginalAccessCommand {
-  RequestContentMediaOriginalAccessCommand({
-    required String mediaId,
-    this.purpose = ContentMediaOriginalAccessPurpose.view,
-  }) : mediaId = _requiredText(mediaId, 'mediaId');
-
-  final String mediaId;
-  final ContentMediaOriginalAccessPurpose purpose;
-}
-
-final class SelectAutoContentMediaCoverCommand {
-  SelectAutoContentMediaCoverCommand({required String mediaId})
-    : mediaId = _requiredText(mediaId, 'mediaId');
-
-  final String mediaId;
-}
-
-final class SelectManualContentMediaCoverCommand {
-  SelectManualContentMediaCoverCommand({
-    required String mediaId,
-    String? coverAssetId,
-    this.coverFrameTimeMs = 0,
-  }) : mediaId = _requiredText(mediaId, 'mediaId'),
-       coverAssetId = _optionalText(coverAssetId) {
-    if (this.coverAssetId == null && coverFrameTimeMs < 0) {
-      throw ArgumentError.value(
-        coverFrameTimeMs,
-        'coverFrameTimeMs',
-        'must be >= 0',
-      );
-    }
-    if (this.coverAssetId != null && coverFrameTimeMs != 0) {
-      throw ArgumentError(
-        'coverAssetId and coverFrameTimeMs are mutually exclusive',
-      );
-    }
-  }
-
-  final String mediaId;
-  final String? coverAssetId;
-  final int coverFrameTimeMs;
-}
 
 final class ContentMediaUploadSessionCommandResult {
   const ContentMediaUploadSessionCommandResult({
@@ -251,71 +144,6 @@ final class ContentMediaCoverSelectionResult {
   final Uri thumbnailUrl;
   final Uri coverUrl;
 }
-
-CloudOperationRequestPayload encodeInitContentMediaUploadCommand(
-  InitContentMediaUploadCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'mediaType': command.mediaType.name,
-    'contentType': command.contentType,
-    'fileSize': command.fileSize,
-    'expectedSha256': command.expectedSha256,
-  },
-);
-
-CloudOperationRequestPayload encodeCompleteContentMediaUploadCommand(
-  CompleteContentMediaUploadCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'sessionId': command.sessionId},
-  body: <String, Object?>{'accessPolicy': command.accessPolicy.wireName},
-);
-
-CloudOperationRequestPayload encodeAbortContentMediaUploadCommand(
-  AbortContentMediaUploadCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'sessionId': command.sessionId},
-);
-
-CloudOperationRequestPayload encodeGetContentMediaUploadSessionQuery(
-  GetContentMediaUploadSessionQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'sessionId': query.sessionId},
-);
-
-CloudOperationRequestPayload encodeGetContentMediaAssetQuery(
-  GetContentMediaAssetQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'mediaId': query.mediaId},
-);
-
-CloudOperationRequestPayload encodeDiscardContentMediaAssetCommand(
-  DiscardContentMediaAssetCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'mediaId': command.mediaId},
-);
-
-CloudOperationRequestPayload encodeRequestContentMediaOriginalAccessCommand(
-  RequestContentMediaOriginalAccessCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'mediaId': command.mediaId},
-  body: <String, Object?>{'purpose': command.purpose.name},
-);
-
-CloudOperationRequestPayload encodeSelectAutoContentMediaCoverCommand(
-  SelectAutoContentMediaCoverCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'mediaId': command.mediaId},
-);
-
-CloudOperationRequestPayload encodeSelectManualContentMediaCoverCommand(
-  SelectManualContentMediaCoverCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'mediaId': command.mediaId},
-  body: <String, Object?>{
-    if (command.coverAssetId != null) 'coverAssetId': command.coverAssetId,
-    'coverFrameTimeMs': command.coverFrameTimeMs,
-  },
-);
 
 ContentMediaUploadSessionCommandResult
 decodeContentMediaUploadSessionCommandResult(Object? value) {
@@ -538,25 +366,6 @@ T _enumValue<T extends Enum>(List<T> values, String raw, String key) {
     if (value.name == raw) return value;
   }
   throw FormatException('$key has unsupported value $raw');
-}
-
-String _normalizeSHA256(String value) {
-  final normalized = value.trim().toLowerCase();
-  final raw = normalized.startsWith('sha256:')
-      ? normalized.substring('sha256:'.length)
-      : normalized;
-  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(raw)) {
-    throw ArgumentError.value(value, 'expectedSha256', 'must be SHA-256');
-  }
-  return 'sha256:$raw';
-}
-
-String _requiredText(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return normalized;
 }
 
 String? _optionalText(String? value) {

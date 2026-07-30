@@ -105,23 +105,42 @@ void main() {
     },
   );
 
-  test('page error outcome always has canonical fallback semantics', () async {
+  test(
+    'page error outcome records only an explicit canonical source code',
+    () async {
+      final context = AppPageContextStore.instance..setPageName('chat');
+      final recorder = _CapturingRecorder();
+      final tracker = AppPageExperienceTracker(pageContextStore: context)
+        ..attachReporter(recorder);
+
+      await tracker.recordPageErrorOutcome(
+        result: 'shown',
+        errorCode: OpsEventRecordErrorCode.startupRouterUnavailable.code,
+      );
+
+      final payload = recorder.records.single.payload;
+      expect(payload.eventType, 'page_error_outcome');
+      expect(payload.extensions['surfaceId'], 'chat');
+      expect(
+        payload.extensions['errorCode'],
+        OpsEventRecordErrorCode.startupRouterUnavailable.code,
+      );
+      expect(payload.extensions['recoveryAction'], 'absorb');
+      expect(payload.extensions['result'], 'shown');
+    },
+  );
+
+  test('page error outcome rejects a missing source code', () async {
     final context = AppPageContextStore.instance..setPageName('chat');
     final recorder = _CapturingRecorder();
     final tracker = AppPageExperienceTracker(pageContextStore: context)
       ..attachReporter(recorder);
 
-    await tracker.recordPageErrorOutcome(result: 'shown');
-
-    final payload = recorder.records.single.payload;
-    expect(payload.eventType, 'page_error_outcome');
-    expect(payload.extensions['surfaceId'], 'chat');
     expect(
-      payload.extensions['errorCode'],
-      OpsEventRecordErrorCode.unclassifiedPageFailure.code,
+      await tracker.recordPageErrorOutcome(result: 'shown', errorCode: null),
+      AppTelemetryRecordResult.rejected,
     );
-    expect(payload.extensions['recoveryAction'], 'absorb');
-    expect(payload.extensions['result'], 'shown');
+    expect(recorder.records, isEmpty);
   });
 
   test(
@@ -173,6 +192,37 @@ void main() {
   );
 
   test(
+    'frame outcome accepts a complete batch with zero janky frames',
+    () async {
+      final context = AppPageContextStore.instance..setPageName('home');
+      final recorder = _CapturingRecorder();
+      final tracker = AppPageExperienceTracker(pageContextStore: context)
+        ..attachReporter(recorder);
+
+      expect(
+        await tracker.recordFrameJankOutcome(
+          sampledFrames: 120,
+          jankyFrames: 0,
+          worstFrameMs: 16,
+          jankThresholdMs: 50,
+          result: 'ok',
+        ),
+        AppTelemetryRecordResult.accepted,
+      );
+
+      final payload = recorder.records.single.payload;
+      expect(payload.eventType, 'app_frame_jank_outcome');
+      expect(payload.extensions, <String, Object?>{
+        'sampledFrames': 120,
+        'jankyFrames': 0,
+        'worstFrameMs': 16,
+        'jankThresholdMs': 50,
+        'result': 'ok',
+      });
+    },
+  );
+
+  test(
     'telemetry persistence failures never escape into product flows',
     () async {
       final context = AppPageContextStore.instance..setPageName('home');
@@ -191,7 +241,10 @@ void main() {
         AppTelemetryRecordResult.rejected,
       );
       expect(
-        await tracker.recordPageErrorOutcome(result: 'shown'),
+        await tracker.recordPageErrorOutcome(
+          result: 'shown',
+          errorCode: OpsEventRecordErrorCode.startupRouterUnavailable.code,
+        ),
         AppTelemetryRecordResult.rejected,
       );
       expect(

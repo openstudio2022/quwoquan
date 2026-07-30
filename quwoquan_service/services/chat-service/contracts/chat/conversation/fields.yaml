@@ -1,419 +1,655 @@
 description: 会话聚合根
 fields:
-- name: id
-  source: _id
-  type: ObjectId
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: type
-  source: type
-  type: enum
-  enum_ref: ConversationType
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: direct/group/encrypted（既有 circle 输入与存量记录按 group 主语义解析；assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
-  role: authoritative_state
-- name: title
-  source: title
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  search_field: true
-  role: authoritative_state
-- name: avatarUrl
-  source: avatarUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: groupAvatarAssetId
-  source: groupAvatarAssetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 群头像预合成结果资产 ID；仅群聊会话使用
-  role: authoritative_state
-  reference: true
-- name: groupAvatarVersion
-  source: groupAvatarVersion
-  type: int64
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 群头像版本号；服务端每次预合成成功后单调递增
-  role: authoritative_state
-- name: groupAvatarSourceHash
-  source: groupAvatarSourceHash
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 基于 top9 成员与头像版本计算的输入哈希；未变化则可跳过重算
-  role: authoritative_state
-- name: creatorId
-  source: creatorId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: initialMemberIds
-  source: initialMemberIds
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: write
-  ops_exposure: read
-  description: 建群时一次性写入的初始成员 ID 列表（不包含创建者）
-  role: authoritative_state
-  reference: true
-- name: circleId
-  source: circleId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 关联圈子；有值时表示该会话为圈子发起/绑定的默认群，但会话主类型仍为 group
-  role: authoritative_state
-  reference: true
-- name: circleGroupId
-  source: circleGroupId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 关联 CircleGroup（默认公共群 / 自建群 / 组织节点）；仅由 CircleGroupCreated durable event provisioner 写入
-  role: authoritative_state
-  reference: true
-- name: entityId
-  source: entityId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 关联共享实体 / Homepage；仅作为服务端群来源快照，主页仍通过 relatedGroups 间接进入群会话，不直接拥有 conversation
-  role: authoritative_state
-  reference: true
-- name: originType
-  source: originType
-  type: enum
-  enum_ref: ConversationOriginType
-  constraints:
-  - NOT_NULL
-  - DEFAULT_DIRECT_INIT
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 会话创建来源；由服务端或 durable event provisioner 决定，用于区分直接私信、打招呼升级、临时群、圈子默认群、圈子自建群、组织节点群、主页相关群和助手邀请等来源语义
-  role: authoritative_state
-- name: bindingType
-  source: bindingType
-  type: enum
-  enum_ref: ConversationBindingType
-  constraints:
-  - NOT_NULL
-  - DEFAULT_NONE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 会话绑定对象类型；仅由服务端或 durable event provisioner 写入，主页仅通过 related groups 间接进入群会话，不直接拥有 conversation
-  role: authoritative_state
-- name: lifecyclePolicy
-  source: lifecyclePolicy
-  type: enum
-  enum_ref: ConversationLifecyclePolicy
-  constraints:
-  - NOT_NULL
-  - DEFAULT_PERSISTENT
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 会话生命周期策略；仅由服务端或 durable event provisioner 写入，临时群、自建群、圈子绑定群和组织节点群通过该字段表达生命周期差异
-  role: authoritative_state
-- name: maxSeq
-  source: maxSeq
-  type: int64
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前会话最大消息 seq（冗余，加速 gap 判定）
-  role: authoritative_state
-- name: memberCount
-  source: memberCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前成员数（冗余，避免 count 查询）
-  role: authoritative_state
-- name: membersRosterRevision
-  source: membersRosterRevision
-  type: int64
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: '群 roster/设置影响面修订号，仅由 chat-service 在事务内单调递增。
+  - name: id
+    source: _id
+    type: ObjectId
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: type
+    source: type
+    type: enum
+    enum_ref: ConversationType
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: direct/group/encrypted（既有 circle 输入与存量记录按 group 主语义解析；assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
+    role: authoritative_state
+  - name: title
+    source: title
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    search_field: true
+    role: authoritative_state
+  - name: avatarUrl
+    source: avatarUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 会话聚合只持有 path-versioned canonical public slice key；公开读取由 runtime media 与注入的 HTTPS delivery base 构建 query-free URL，禁止 absolute URL、版本 query、无版本 alias 或 CAS/object key 作为权威值。
+    role: authoritative_state
+  - name: groupAvatarAssetId
+    source: groupAvatarAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 群头像预合成结果资产 ID；仅群聊会话使用
+    role: authoritative_state
+    reference: true
+  - name: groupAvatarVersion
+    source: groupAvatarVersion
+    type: int64
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 群头像版本号；服务端每次预合成成功后单调递增
+    role: authoritative_state
+  - name: groupAvatarSourceHash
+    source: groupAvatarSourceHash
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 基于 top9 成员与头像版本计算的输入哈希；未变化则可跳过重算
+    role: authoritative_state
+  - name: creatorId
+    source: creatorId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: initialMemberIds
+    source: initialMemberIds
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    description: 建群时一次性写入的初始成员 ID 列表（不包含创建者）
+    role: authoritative_state
+    reference: true
+  - name: circleId
+    source: circleId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 关联圈子；有值时表示该会话为圈子发起/绑定的默认群，但会话主类型仍为 group
+    role: authoritative_state
+    reference: true
+  - name: circleGroupId
+    source: circleGroupId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 关联 CircleGroup（默认公共群 / 自建群 / 组织节点）；仅由 CircleGroupCreated durable event provisioner 写入
+    role: authoritative_state
+    reference: true
+  - name: entityId
+    source: entityId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 关联共享实体 / Homepage；仅作为服务端群来源快照，主页仍通过 relatedGroups 间接进入群会话，不直接拥有 conversation
+    role: authoritative_state
+    reference: true
+  - name: originType
+    source: originType
+    type: enum
+    enum_ref: ConversationOriginType
+    constraints:
+      - NOT_NULL
+      - DEFAULT_DIRECT_INIT
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 会话创建来源；由服务端或 durable event provisioner 决定，仅区分直接私信、打招呼升级、临时群和圈群来源
+    role: authoritative_state
+  - name: maxSeq
+    source: maxSeq
+    type: int64
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 当前会话最大消息 seq（冗余，加速 gap 判定）
+    role: authoritative_state
+  - name: memberCount
+    source: memberCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 当前成员数（冗余，避免 count 查询）
+    role: authoritative_state
+  - name: membersRosterRevision
+    source: membersRosterRevision
+    type: int64
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: '群 roster/设置影响面修订号，仅由 chat-service 在事务内单调递增。
 
-    任意影响「成员列表、群名称、群管理规则（可见设置项）」的变更均须与 Conversation.updatedAt 一并更新。
+      任意影响「成员列表、群名称、群管理规则（可见设置项）」的变更均须与 Conversation.updatedAt 一并更新。
 
-    客户端用其与本地缓存比对，决定重拉 GetConversation / ListMembers / 群设置。
+      客户端用其与本地缓存比对，决定重拉 GetConversation / ListMembers / 群设置。
 
-    '
-  role: authoritative_state
-- name: maxGroupSize
-  source: maxGroupSize
-  type: int
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  description: 群上限（默认 1000，可配置）
-  role: authoritative_state
-- name: receiptEnabled
-  source: receiptEnabled
-  type: bool
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  description: 是否启用已读回执（≤50 人默认 true，>50 默认 false，可配置覆盖）
-  role: authoritative_state
-- name: announcement
-  source: announcement
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 群公告正文（仅群聊；由 UpdateAnnouncement 命令维护，发布同事务写入 system_announcement 消息触达全员）
-  role: authoritative_state
-- name: announcementUpdatedBy
-  source: announcementUpdatedBy
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 最近一次群公告更新人
-  role: authoritative_state
-  reference: true
-- name: announcementUpdatedAt
-  source: announcementUpdatedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 最近一次群公告更新时间
-  role: authoritative_state
-- name: nameEditableByAdminOnly
-  source: nameEditableByAdminOnly
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 群治理开关：仅群主/管理员可修改群名（false 时任意成员可改）；由 UpdateGroupGovernanceSettings 命令维护并被 UpdateConversationTitle
-    授权消费
-  role: authoritative_state
-- name: lastMessageId
-  source: lastMessageId
-  type: ObjectId
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: lastMessagePreview
-  source: lastMessagePreview
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: lastMessageType
-  source: lastMessageType
-  type: string
-  constraints:
-  - NOT_NULL
-  - DEFAULT_TEXT
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 最近一条消息的内容类型，驱动 ChatInbox 列表副标题图标
-  role: authoritative_state
-- name: lastMessageTime
-  source: lastMessageTime
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: messageCount
-  source: messageCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: active/dissolved（与 aggregate lifecycle 单轨一致；dissolved 为终态）
-  role: authoritative_state
-- name: originRequestId
-  source: originRequestId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 升级来源的 GreetingRequest.id（originType=greeting_reply 时有值）
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+'
+    role: authoritative_state
+  - name: maxGroupSize
+    source: maxGroupSize
+    type: int
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    description: 群上限（默认 1000，可配置）
+    role: authoritative_state
+  - name: receiptEnabled
+    source: receiptEnabled
+    type: bool
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    description: 是否启用已读回执（≤50 人默认 true，>50 默认 false，可配置覆盖）
+    role: authoritative_state
+  - name: announcement
+    source: announcement
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 群公告正文（仅群聊；由 UpdateAnnouncement 命令维护，发布同事务写入 system_announcement 消息触达全员）
+    role: authoritative_state
+  - name: announcementUpdatedBy
+    source: announcementUpdatedBy
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 最近一次群公告更新人
+    role: authoritative_state
+    reference: true
+  - name: announcementUpdatedAt
+    source: announcementUpdatedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 最近一次群公告更新时间
+    role: authoritative_state
+  - name: nameEditableByAdminOnly
+    source: nameEditableByAdminOnly
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 群治理开关：仅群主/管理员可修改群名（false 时任意成员可改）；由 UpdateGroupGovernanceSettings 命令维护并被 UpdateConversationTitle 授权消费
+    role: authoritative_state
+  - name: lastMessageId
+    source: lastMessageId
+    type: ObjectId
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: lastMessagePreview
+    source: lastMessagePreview
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: lastMessageType
+    source: lastMessageType
+    type: enum
+    enum_ref: MessageType
+    constraints:
+      - NOT_NULL
+      - DEFAULT_TEXT
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 最近一条消息的内容类型，驱动 ChatInbox 列表副标题图标
+    role: authoritative_state
+  - name: lastMessageTime
+    source: lastMessageTime
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: messageCount
+    source: messageCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: ConversationStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: active/dissolved（与 aggregate lifecycle 单轨一致；dissolved 为终态）
+    role: authoritative_state
+  - name: originRequestId
+    source: originRequestId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 升级来源的 GreetingRequest.id（originType=greeting_reply 时有值）
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 types:
   ChatAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Chat 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:
-    - name: sourceStreamId
-      source: sourceStreamId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: write
+      - name: sourceStreamId
+        source: sourceStreamId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: write
   ChatAccountClosureDeadLetterRecoveryAccepted:
     description: Chat 注销清理 source PEL 已受理重新消费。
     fields:
-    - name: sourceStreamId
-      source: sourceStreamId
-      type: string
-      constraints:
-      - PK
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: recoveryAccepted
-      source: recoveryAccepted
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: sourceStreamId
+        source: sourceStreamId
+        type: string
+        constraints:
+          - PK
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: recoveryAccepted
+        source: recoveryAccepted
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  ChatListSelectableGroupConversationsQuery:
+    fields:
+      - name: query
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: source
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "50"
+  ChatListInboxQuery:
+    fields:
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "50"
+  ChatCreateConversationCommand:
+    fields:
+      - name: type
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        client_wire_name: Idempotency-Key
+      - name: title
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: maxGroupSize
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+      - name: initialMemberIds
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim
+        client_omit_empty: true
+  ChatGetGroupHomeQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  ChatListContactsQuery:
+    fields:
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  ChatListContactHomeQuery:
+    fields:
+      - name: filter
+        type: string
+        client_dart_type: String
+        client_default: '''all'''
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "50"
+  ChatBatchGetConversationsQuery:
+    fields:
+      - name: ids
+        type: '[]string'
+        constraints:
+          - NOT_BLANK
+        client_dart_name: conversationIds
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_normalization: trim
+  ChatGetConversationQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  ChatUpdateAnnouncementCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        client_wire_name: Idempotency-Key
+      - name: announcement
+        type: string
+        client_dart_type: String
+  ChatDissolveConversationCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        client_wire_name: Idempotency-Key
+  ChatListConversationTimestampsQuery:
+    fields: []
+  ChatListConversationsQuery:
+    fields:
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_omit_empty: true
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  ChatGetMessageReceiptsQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: messageId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  ChatUpdateConversationTitleCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        client_wire_name: Idempotency-Key
+      - name: title
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  ChatListMessageHomeQuery:
+    fields:
+      - name: filter
+        type: string
+        client_dart_type: String
+        client_default: '''all'''
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  ChatListSelectableGroupContactMembersQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: query
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "100"
+  ChatUpdateGroupGovernanceSettingsCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        client_wire_name: Idempotency-Key
+      - name: nameEditableByAdminOnly
+        type: bool
+        client_dart_type: bool
+  ChatListGroupCandidatesQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "100"

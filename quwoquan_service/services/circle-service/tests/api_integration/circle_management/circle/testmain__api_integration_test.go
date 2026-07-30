@@ -293,6 +293,8 @@ func cleanCollections(t *testing.T) {
 		"circle_projection_checkpoints",
 		"circle_user_account_closed_inbox", "circle_user_account_closed_failures",
 		"circle_closed_account_subjects",
+		"circle_user_account_restrictions", "circle_user_account_restriction_inbox",
+		"circle_user_account_restriction_watermarks",
 	} {
 		mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{})
 	}

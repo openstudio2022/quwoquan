@@ -245,13 +245,18 @@ class _MutualCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerSubAccountId': 'fixture_user_current',
-      'targetSubAccountId': targetUserId,
+      'viewerPersonaId': 'fixture_user_current',
+      'targetPersonaId': targetUserId,
       'relationState': 'mutual',
+      'canFollow': false,
+      'canUnfollow': true,
+      'canFollowBack': false,
       'canGreet': false,
       'canCreateDirectConversation': true,
       'canSendMessage': true,
       'canOpenConversation': true,
+      'hasPendingGreeting': false,
+      'hasFormalConversation': false,
       'canStartVoiceCall': true,
       'canStartVideoCall': true,
       'isBlocked': false,
@@ -268,13 +273,18 @@ class _FollowingOnlyCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto.fromMap(<String, dynamic>{
-      'viewerSubAccountId': 'fixture_user_current',
-      'targetSubAccountId': targetUserId,
+      'viewerPersonaId': 'fixture_user_current',
+      'targetPersonaId': targetUserId,
       'relationState': 'following',
+      'canFollow': false,
+      'canUnfollow': true,
+      'canFollowBack': false,
       'canGreet': true,
       'canCreateDirectConversation': false,
       'canSendMessage': false,
       'canOpenConversation': false,
+      'hasPendingGreeting': false,
+      'hasFormalConversation': false,
       'canStartVoiceCall': false,
       'canStartVideoCall': false,
       'isBlocked': false,

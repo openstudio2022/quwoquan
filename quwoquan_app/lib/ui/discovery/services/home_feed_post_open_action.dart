@@ -8,9 +8,9 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
 
@@ -24,6 +24,7 @@ Future<void> openHomeFeedPost(
   WidgetRef ref, {
   required PostBaseDto post,
   required int mediaIndex,
+  required String channelId,
   List<PostBaseDto>? feedPosts,
 }) async {
   final viewerPosts = (feedPosts ?? const <PostBaseDto>[])
@@ -33,11 +34,10 @@ Future<void> openHomeFeedPost(
     return;
   }
 
-  // 复用服务端权威下发并已采纳的 feedRequestId（首页发现流唯一归因 id），
-  // 不再在打开动作处客户端另造新 id，保证曝光→点击→打开归因一致。
-  final navFeedRequestId = ref
-      .read(feedSessionProvider.notifier)
-      .currentFeedRequestId;
+  // 从被点击频道自己的状态读取同源归因，禁止跨频道复用全局最后一次摘要。
+  final feedAttribution = ref.read(discoveryFeedProvider(channelId)).value;
+  final navFeedRequestId = feedAttribution?.feedRequestId;
+  final navPolicyDigest = feedAttribution?.policyDigest;
   // 入口 post 在 feed 中的位置（推荐归因；-1 → null 不上报）。
   final feedPosition = (feedPosts ?? const <PostBaseDto>[]).indexWhere(
     (item) => item.id == post.id,
@@ -51,18 +51,17 @@ Future<void> openHomeFeedPost(
             action: BehaviorAction.click,
             state: 'click',
             clientEventId:
-                'home_click:${navFeedRequestId.trim()}:${post.id}:${DateTime.now().toUtc().microsecondsSinceEpoch}',
+                'home_click:${post.id}:${DateTime.now().toUtc().microsecondsSinceEpoch}',
             authorId: post.authorId,
             referralSource: ReferralSource.organicFeed,
             feedRequestId: navFeedRequestId,
+            policyDigest: navPolicyDigest,
             position: feedPosition >= 0 ? feedPosition : null,
           ),
         ],
       );
 
-  final rawPostsById = homeFollowingMediaViewerRaws(
-    viewerPosts: viewerPosts,
-  );
+  final rawPostsById = homeFollowingMediaViewerRaws(viewerPosts: viewerPosts);
   final postViews = viewerPosts
       .map(
         (dto) => ContentSurfaceViewMapper.fromDto(
@@ -100,6 +99,7 @@ Future<void> openHomeFeedPost(
       rawPostsById: rawPostsById,
       interactionSnapshot: interactionSnapshot,
       feedRequestId: navFeedRequestId,
+      policyDigest: navPolicyDigest,
       position: feedPosition >= 0 ? feedPosition : null,
     ),
   );

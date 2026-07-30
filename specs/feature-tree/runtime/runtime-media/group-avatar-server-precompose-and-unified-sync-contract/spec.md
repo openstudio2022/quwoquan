@@ -35,7 +35,7 @@
 - 需要基于统一对象模型实施头像、媒体和同步链路的服务开发者。
 - **统一会话头像主链路**：`chat-service` 返回非空、可访问的 `avatarUrl`；单聊为对方用户头像，群聊先返回稳定默认头像，再由服务端异步预合成群头像并通过 sync patch 覆盖。
 - **对象标识合同**：群头像、用户头像与聊天/内容媒体统一使用 `AssetRef / MediaAsset`，数据库主存 `assetId + version`。
-- **URL 合同**：统一对外 `{cdnBaseUrl}/{objectKey}?v={version}`，`cdnBaseUrl` 必须显式包含 `http/https` scheme。
+- **URL 合同**：群头像与成员头像只以 path-versioned canonical public slice 表达资产版本，由 runtime media 使用注入的 HTTPS delivery base 构建 query-free URL；禁止 absolute URL 原样透传、`?v=` 版本信封、无版本 alias、CAS/object key 和失败后回原 source。
 - 头像变化传播不能依赖单次推送，必须具备补偿拉取。
 - URL 规范必须由 runtime 统一，而不是各服务自行拼接。
 - 不为分享链路生成单独头像逻辑；分享如需头像，仍消费统一资产引用。

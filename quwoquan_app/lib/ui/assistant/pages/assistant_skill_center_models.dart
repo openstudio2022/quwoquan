@@ -3,7 +3,7 @@ part of 'assistant_skill_center_page.dart';
 class AssistantSkillCenterItem {
   const AssistantSkillCenterItem({required this.catalog, this.subscription});
 
-  final AssistantSkillCatalogItemView catalog;
+  final AssistantSkillCatalogItemProjection catalog;
   final SkillSubscriptionWire? subscription;
 
   String get skillId => catalog.skillId;

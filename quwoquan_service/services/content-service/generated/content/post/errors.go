@@ -11,49 +11,42 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrAssistantMentionContextMissing      = errors.New("CONTENT.USER.assistant_mention_context_missing")
-	ErrCircleDistributionForbidden         = errors.New("CONTENT.USER.circle_distribution_forbidden")
-	ErrContentTooLong                      = errors.New("CONTENT.USER.content_too_long")
-	ErrForbiddenDelete                     = errors.New("CONTENT.USER.forbidden_delete")
-	ErrForbiddenEdit                       = errors.New("CONTENT.USER.forbidden_edit")
-	ErrIdempotencyConflict                 = errors.New("CONTENT.USER.idempotency_conflict")
-	ErrInteractionCursorInvalid            = errors.New("CONTENT.USER.interaction_cursor_invalid")
-	ErrInteractionOwnerForbidden           = errors.New("CONTENT.USER.interaction_owner_forbidden")
-	ErrInteractionReadModelUnavailable     = errors.New("CONTENT.SYSTEM.interaction_read_model_unavailable")
-	ErrInteractionTypeInvalid              = errors.New("CONTENT.USER.interaction_type_invalid")
-	ErrInternalError                       = errors.New("CONTENT.SYSTEM.internal_error")
-	ErrInvalidArgument                     = errors.New("CONTENT.USER.invalid_argument")
-	ErrInvalidContentType                  = errors.New("CONTENT.USER.invalid_content_type")
-	ErrInvalidMomentPayload                = errors.New("CONTENT.USER.invalid_moment_payload")
-	ErrPostImmutableAfterPublish           = errors.New("CONTENT.USER.post_immutable_after_publish")
-	ErrPostNotFound                        = errors.New("CONTENT.USER.post_not_found")
-	ErrPublicRequiredForCircleDistribution = errors.New("CONTENT.USER.public_required_for_circle_distribution")
-	ErrPublicationRejected                 = errors.New("CONTENT.USER.publication_rejected")
-	ErrRateLimited                         = errors.New("CONTENT.USER.rate_limited")
-	ErrRequiredDependencyUnavailable       = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
-	ErrStorageReadFailed                   = errors.New("CONTENT.SYSTEM.storage_read_failed")
-	ErrStorageWriteFailed                  = errors.New("CONTENT.SYSTEM.storage_write_failed")
-	ErrUnauthorized                        = errors.New("CONTENT.USER.unauthorized")
-	ErrUpstreamTimeout                     = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
-	ErrVersionConflict                     = errors.New("CONTENT.USER.version_conflict")
+	ErrContentDeleted                = errors.New("CONTENT.USER.content_deleted")
+	ErrContentTooLong                = errors.New("CONTENT.USER.content_too_long")
+	ErrFeedCapacityUnavailable       = errors.New("CONTENT.SYSTEM.feed_capacity_unavailable")
+	ErrForbiddenDelete               = errors.New("CONTENT.USER.forbidden_delete")
+	ErrForbiddenEdit                 = errors.New("CONTENT.USER.forbidden_edit")
+	ErrIdempotencyConflict           = errors.New("CONTENT.USER.idempotency_conflict")
+	ErrInternalError                 = errors.New("CONTENT.SYSTEM.internal_error")
+	ErrInvalidArgument               = errors.New("CONTENT.USER.invalid_argument")
+	ErrInvalidContentType            = errors.New("CONTENT.USER.invalid_content_type")
+	ErrPostNotFound                  = errors.New("CONTENT.USER.post_not_found")
+	ErrPublicationRejected           = errors.New("CONTENT.USER.publication_rejected")
+	ErrRateLimited                   = errors.New("CONTENT.USER.rate_limited")
+	ErrRequiredDependencyUnavailable = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
+	ErrStorageReadFailed             = errors.New("CONTENT.SYSTEM.storage_read_failed")
+	ErrStorageWriteFailed            = errors.New("CONTENT.SYSTEM.storage_write_failed")
+	ErrUnauthorized                  = errors.New("CONTENT.USER.unauthorized")
+	ErrUpstreamTimeout               = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
+	ErrVersionConflict               = errors.New("CONTENT.USER.version_conflict")
 )
 
-// AppErrorFromAssistantMentionContextMissing returns *AppError for CONTENT.USER.assistant_mention_context_missing (user_message from errors.yaml).
-func AppErrorFromAssistantMentionContextMissing(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.assistant_mention_context_missing")
-	return rterr.NewAppError(code, "小趣暂时无法识别这条评论的上下文", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromCircleDistributionForbidden returns *AppError for CONTENT.USER.circle_distribution_forbidden (user_message from errors.yaml).
-func AppErrorFromCircleDistributionForbidden(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.circle_distribution_forbidden")
-	return rterr.NewAppError(code, "无权修改圈子分发关系", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+// AppErrorFromContentDeleted returns *AppError for CONTENT.USER.content_deleted (user_message from errors.yaml).
+func AppErrorFromContentDeleted(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.content_deleted")
+	return rterr.NewAppError(code, "内容已删除", debugMessage).WithMetadata("content_deleted", 410).WithRecovery("surface", 0)
 }
 
 // AppErrorFromContentTooLong returns *AppError for CONTENT.USER.content_too_long (user_message from errors.yaml).
 func AppErrorFromContentTooLong(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.content_too_long")
 	return rterr.NewAppError(code, "内容超出长度限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromFeedCapacityUnavailable returns *AppError for CONTENT.SYSTEM.feed_capacity_unavailable (user_message from errors.yaml).
+func AppErrorFromFeedCapacityUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.feed_capacity_unavailable")
+	return rterr.NewAppError(code, "内容服务繁忙，请稍后重试", debugMessage).WithMetadata("feed_capacity_unavailable", 503).WithRecovery("retry", 1)
 }
 
 // AppErrorFromForbiddenDelete returns *AppError for CONTENT.USER.forbidden_delete (user_message from errors.yaml).
@@ -74,30 +67,6 @@ func AppErrorFromIdempotencyConflict(debugMessage string) *rterr.AppError {
 	return rterr.NewAppError(code, "重复请求与原操作不一致，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
 }
 
-// AppErrorFromInteractionCursorInvalid returns *AppError for CONTENT.USER.interaction_cursor_invalid (user_message from errors.yaml).
-func AppErrorFromInteractionCursorInvalid(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.interaction_cursor_invalid")
-	return rterr.NewAppError(code, "列表状态已更新，请刷新后重试", debugMessage).WithMetadata("interaction_cursor_invalid", 400).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromInteractionOwnerForbidden returns *AppError for CONTENT.USER.interaction_owner_forbidden (user_message from errors.yaml).
-func AppErrorFromInteractionOwnerForbidden(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.interaction_owner_forbidden")
-	return rterr.NewAppError(code, "无权查看该互动记录", debugMessage).WithMetadata("interaction_owner_forbidden", 403).WithRecovery("surface", 0)
-}
-
-// AppErrorFromInteractionReadModelUnavailable returns *AppError for CONTENT.SYSTEM.interaction_read_model_unavailable (user_message from errors.yaml).
-func AppErrorFromInteractionReadModelUnavailable(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.SYSTEM.interaction_read_model_unavailable")
-	return rterr.NewAppError(code, "互动记录暂时不可用，请稍后重试", debugMessage).WithMetadata("interaction_read_model_unavailable", 503).WithRecovery("retry", 3)
-}
-
-// AppErrorFromInteractionTypeInvalid returns *AppError for CONTENT.USER.interaction_type_invalid (user_message from errors.yaml).
-func AppErrorFromInteractionTypeInvalid(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.interaction_type_invalid")
-	return rterr.NewAppError(code, "不支持的互动类型", debugMessage).WithMetadata("interaction_type_invalid", 400).WithRecovery("surface", 0)
-}
-
 // AppErrorFromInternalError returns *AppError for CONTENT.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.internal_error")
@@ -116,28 +85,10 @@ func AppErrorFromInvalidContentType(debugMessage string) *rterr.AppError {
 	return rterr.NewAppError(code, "不支持的内容类型", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromInvalidMomentPayload returns *AppError for CONTENT.USER.invalid_moment_payload (user_message from errors.yaml).
-func AppErrorFromInvalidMomentPayload(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.invalid_moment_payload")
-	return rterr.NewAppError(code, "微趣内容为空，正文/图片/视频至少填写一项", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromPostImmutableAfterPublish returns *AppError for CONTENT.USER.post_immutable_after_publish (user_message from errors.yaml).
-func AppErrorFromPostImmutableAfterPublish(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.post_immutable_after_publish")
-	return rterr.NewAppError(code, "内容发布后不可修改", debugMessage).WithMetadata("forbidden", 409).WithRecovery("surface", 0)
-}
-
 // AppErrorFromPostNotFound returns *AppError for CONTENT.USER.post_not_found (user_message from errors.yaml).
 func AppErrorFromPostNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.post_not_found")
 	return rterr.NewAppError(code, "内容不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
-}
-
-// AppErrorFromPublicRequiredForCircleDistribution returns *AppError for CONTENT.USER.public_required_for_circle_distribution (user_message from errors.yaml).
-func AppErrorFromPublicRequiredForCircleDistribution(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.public_required_for_circle_distribution")
-	return rterr.NewAppError(code, "发布到圈子前需设置为公开", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromPublicationRejected returns *AppError for CONTENT.USER.publication_rejected (user_message from errors.yaml).

@@ -2,6 +2,7 @@
   "label": "普通健康",
   "labelEn": "Generally Healthy",
   "description": "无特殊健康状况",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

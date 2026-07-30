@@ -136,7 +136,7 @@ final class LocalPostPublicationIntent {
 
   Map<String, Object?> toStorageMap() {
     return <String, Object?>{
-      'commandBody': encodeSubmitContentPostPublicationCommand(command).body,
+      'commandBody': encodeContentPostSubmitPostPublicationGeneratedRequest(command).body,
       'authorPersonaId': authorPersonaId,
       'circleIds': circleIds,
       'createdAt': createdAt.toUtc().toIso8601String(),

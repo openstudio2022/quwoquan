@@ -16,7 +16,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'fixture_user_current',
-    activeSubAccountId: 'fixture_user_current',
+    activePersonaId: 'fixture_user_current',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -49,10 +49,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text(ContentText.blockedKeywordsRemove).last);
     await tester.pumpAndSettle();
-    expect(
-      find.text(ContentText.blockedKeywordsEmptyTitle),
-      findsOneWidget,
-    );
+    expect(find.text(ContentText.blockedKeywordsEmptyTitle), findsOneWidget);
 
     await tester.tap(find.text(ContentText.blockedKeywordsAdd));
     await tester.pumpAndSettle();

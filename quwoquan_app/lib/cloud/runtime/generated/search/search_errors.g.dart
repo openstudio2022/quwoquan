@@ -3,9 +3,7 @@
 
 enum SearchErrorCode {
   searchInvalidArgument('SEARCH.USER.invalid_argument', '搜索请求格式不正确', 400),
-  searchFeedbackConflict('SEARCH.USER.feedback_conflict', '该搜索反馈已记录', 409),
   searchUnavailable('SEARCH.MIDDLEWARE.unavailable', '搜索暂时不可用，请稍后再试', 503),
-  searchStorageWriteFailed('SEARCH.SYSTEM.storage_write_failed', '搜索反馈暂时无法记录，请稍后重试', 500),
   searchInternalError('SEARCH.SYSTEM.internal_error', '搜索服务暂时无法完成该操作', 500),
   recentEntryNotFound('SEARCH.USER.recent_entry_not_found', '最近搜索记录不存在或已删除', 404),
   recentVersionConflict('SEARCH.USER.recent_version_conflict', '最近搜索已更新，请刷新后重试', 409),
@@ -33,9 +31,7 @@ class SearchErrorMessages {
 
   static const Map<SearchErrorCode, String> zh = <SearchErrorCode, String>{
     SearchErrorCode.searchInvalidArgument: '搜索请求格式不正确',
-    SearchErrorCode.searchFeedbackConflict: '该搜索反馈已记录',
     SearchErrorCode.searchUnavailable: '搜索暂时不可用，请稍后再试',
-    SearchErrorCode.searchStorageWriteFailed: '搜索反馈暂时无法记录，请稍后重试',
     SearchErrorCode.searchInternalError: '搜索服务暂时无法完成该操作',
     SearchErrorCode.recentEntryNotFound: '最近搜索记录不存在或已删除',
     SearchErrorCode.recentVersionConflict: '最近搜索已更新，请刷新后重试',
@@ -45,9 +41,7 @@ class SearchErrorMessages {
 
   static const Map<SearchErrorCode, String> en = <SearchErrorCode, String>{
     SearchErrorCode.searchInvalidArgument: 'Invalid search request',
-    SearchErrorCode.searchFeedbackConflict: 'This search feedback has already been recorded',
     SearchErrorCode.searchUnavailable: 'Search is temporarily unavailable, please retry later',
-    SearchErrorCode.searchStorageWriteFailed: 'Unable to record search feedback, please retry',
     SearchErrorCode.searchInternalError: 'Search service could not complete the operation',
     SearchErrorCode.recentEntryNotFound: 'Recent search entry not found',
     SearchErrorCode.recentVersionConflict: 'Recent searches changed, refresh and retry',

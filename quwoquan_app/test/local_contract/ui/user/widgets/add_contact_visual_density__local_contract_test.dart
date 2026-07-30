@@ -15,7 +15,6 @@ const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://mock.quwoquan.local/u/current',
   qrPayload: 'https://mock.quwoquan.local/u/current?qr=mock_current',
   qrTokenId: 'qr_current',
-  styleVersion: 'v1',
   avatarUrl: '',
   displayName: 'fixture_user_current',
   region: '杭州',

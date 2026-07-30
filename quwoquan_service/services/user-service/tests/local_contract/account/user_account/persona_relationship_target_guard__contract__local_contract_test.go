@@ -72,11 +72,11 @@ func (r *fakePersonaReader) FindByUserHandle(_ context.Context, _ string) (*user
 	return nil, nil
 }
 
-func (r *fakePersonaReader) FindBySubAccountID(
+func (r *fakePersonaReader) FindByPersonaID(
 	_ context.Context,
-	subAccountID string,
+	personaID string,
 ) (*usermodel.Persona, error) {
-	return r.personas[subAccountID], nil
+	return r.personas[personaID], nil
 }
 
 // TestFollowTargetGuard 锁定 metadata error_codes 契约：
@@ -108,7 +108,7 @@ func TestFollowTargetGuard_MissingTargetRejected(t *testing.T) {
 func TestFollowTargetGuard_RetiredTargetRejected(t *testing.T) {
 	store := &fakeRelationshipStore{}
 	personas := &fakePersonaReader{personas: map[string]*usermodel.Persona{
-		"ps_retired": {SubAccountID: "ps_retired", UserID: "owner", Status: "retired"},
+		"ps_retired": {PersonaID: "ps_retired", UserID: "owner", Status: "retired"},
 	}}
 	service := relationshipapp.NewPersonaRelationshipService(
 		store, personas, nil, nil,
@@ -127,8 +127,8 @@ func TestFollowTargetGuard_RetiredTargetRejected(t *testing.T) {
 func TestFollowTargetGuard_ActiveTargetPasses(t *testing.T) {
 	store := &fakeRelationshipStore{}
 	personas := &fakePersonaReader{personas: map[string]*usermodel.Persona{
-		"ps_active": {SubAccountID: "ps_active", UserID: "owner", Status: "active"},
-		"ps_actor":  {SubAccountID: "ps_actor", UserID: "actor", Status: "active"},
+		"ps_active": {PersonaID: "ps_active", UserID: "owner", Status: "active"},
+		"ps_actor":  {PersonaID: "ps_actor", UserID: "actor", Status: "active"},
 	}}
 	service := relationshipapp.NewPersonaRelationshipService(
 		store, personas, nil, nil,

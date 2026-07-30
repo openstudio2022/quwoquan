@@ -10,6 +10,8 @@ class WorkBrowserMediaItemDto {
   final int? mediaAssetVersion;
   final String? previewTrackManifestUrl;
   final int? previewTrackVersion;
+  final String? hlsCmafMasterManifestUrl;
+  final int? hlsCmafDescriptorVersion;
   final int? width;
   final int? height;
   final String? title;
@@ -23,6 +25,8 @@ class WorkBrowserMediaItemDto {
     this.mediaAssetVersion,
     this.previewTrackManifestUrl,
     this.previewTrackVersion,
+    this.hlsCmafMasterManifestUrl,
+    this.hlsCmafDescriptorVersion,
     this.width,
     this.height,
     this.title,
@@ -38,6 +42,8 @@ class WorkBrowserMediaItemDto {
       mediaAssetVersion: (m['mediaAssetVersion'] as num?)?.toInt() ?? null,
       previewTrackManifestUrl: m['previewTrackManifestUrl']?.toString() ?? null,
       previewTrackVersion: (m['previewTrackVersion'] as num?)?.toInt() ?? null,
+      hlsCmafMasterManifestUrl: m['hlsCmafMasterManifestUrl']?.toString() ?? null,
+      hlsCmafDescriptorVersion: (m['hlsCmafDescriptorVersion'] as num?)?.toInt() ?? null,
       width: (m['width'] as num?)?.toInt() ?? null,
       height: (m['height'] as num?)?.toInt() ?? null,
       title: m['title']?.toString() ?? null,
@@ -54,6 +60,8 @@ class WorkBrowserMediaItemDto {
       'mediaAssetVersion': mediaAssetVersion,
       'previewTrackManifestUrl': previewTrackManifestUrl,
       'previewTrackVersion': previewTrackVersion,
+      'hlsCmafMasterManifestUrl': hlsCmafMasterManifestUrl,
+      'hlsCmafDescriptorVersion': hlsCmafDescriptorVersion,
       'width': width,
       'height': height,
       'title': title,
@@ -69,6 +77,8 @@ class WorkBrowserMediaItemDto {
     int? mediaAssetVersion,
     String? previewTrackManifestUrl,
     int? previewTrackVersion,
+    String? hlsCmafMasterManifestUrl,
+    int? hlsCmafDescriptorVersion,
     int? width,
     int? height,
     String? title,
@@ -82,6 +92,8 @@ class WorkBrowserMediaItemDto {
       mediaAssetVersion: mediaAssetVersion ?? this.mediaAssetVersion,
       previewTrackManifestUrl: previewTrackManifestUrl ?? this.previewTrackManifestUrl,
       previewTrackVersion: previewTrackVersion ?? this.previewTrackVersion,
+      hlsCmafMasterManifestUrl: hlsCmafMasterManifestUrl ?? this.hlsCmafMasterManifestUrl,
+      hlsCmafDescriptorVersion: hlsCmafDescriptorVersion ?? this.hlsCmafDescriptorVersion,
       width: width ?? this.width,
       height: height ?? this.height,
       title: title ?? this.title,

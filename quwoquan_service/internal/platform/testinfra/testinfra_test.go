@@ -98,6 +98,9 @@ func TestPostgresFixtureReusesOneProcessAndCleansBetweenSuites(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start shared postgres fixture: %v", err)
 	}
+	if fixture.DSN() == "" {
+		t.Fatal("shared postgres fixture must expose its pgx connection string")
+	}
 	defer func() {
 		if err := fixture.Close(); err != nil {
 			t.Fatalf("close shared postgres fixture: %v", err)

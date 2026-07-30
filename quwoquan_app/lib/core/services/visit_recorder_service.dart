@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_append_writer.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/services/hive_runtime.dart';
@@ -10,6 +9,12 @@ import 'package:quwoquan_app/core/services/hive_runtime.dart';
 const String kVisitRecordsBoxName = 'visit_records';
 const String kVisitPendingSyncBoxName = 'visit_records_pending_sync';
 const Duration kVisitDedupWindow = Duration(minutes: 5);
+
+/// Local experience hints are rebuildable and must not grow with every entity
+/// ever opened during a long-lived account session. The most recently visited
+/// targets survive; an evicted target is treated as first-time locally until a
+/// later authoritative projection is loaded or it is visited again.
+const int kVisitRecordRetentionLimit = 2048;
 
 class VisitRecorderService {
   VisitRecorderService({String? boxName, OpsVisitAppendWriter? remoteWriter})
@@ -60,6 +65,7 @@ class VisitRecorderService {
         lastSeenTimestamps: <String>[now.toIso8601String()],
       );
       await box.put(key, jsonEncode(record.toJson()));
+      await _pruneRetainedRecords(box, protectedKey: key);
       shouldSyncRemote = true;
     } else {
       final withinDedup =
@@ -131,6 +137,39 @@ class VisitRecorderService {
     }
   }
 
+  static Future<void> _pruneRetainedRecords(
+    Box<String> box, {
+    required String protectedKey,
+  }) async {
+    if (box.length <= kVisitRecordRetentionLimit) {
+      return;
+    }
+    final candidates = <({String key, DateTime lastSeenAt})>[];
+    for (final rawKey in box.keys) {
+      final key = rawKey.toString();
+      if (key == protectedKey) {
+        continue;
+      }
+      final record = _getRecordFromBox(box, key);
+      candidates.add((
+        key: key,
+        lastSeenAt:
+            record?.lastSeenAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+      ));
+    }
+    candidates.sort((left, right) {
+      final byLastSeen = left.lastSeenAt.compareTo(right.lastSeenAt);
+      if (byLastSeen != 0) {
+        return byLastSeen;
+      }
+      return left.key.compareTo(right.key);
+    });
+    final overflow = box.length - kVisitRecordRetentionLimit;
+    await box.deleteAll(
+      candidates.take(overflow).map((candidate) => candidate.key),
+    );
+  }
+
   /// 为本次真实访问派生稳定幂等键：网络重试与断网补传复用同一 key，
   /// 服务端据此不重复累加 visitCount。
   static String _newVisitIdempotencyKey(String targetKey) {
@@ -150,13 +189,10 @@ class VisitRecorderService {
     if (writer == null) {
       return;
     }
-    final trace = AppTraceContextStore.instance;
     final input = OpsVisitReportInput(
       idempotencyKey: _newVisitIdempotencyKey(target.targetKey),
       targetType: _targetTypeFor(target),
       targetKey: target.targetKey,
-      sessionId: trace.sessionId,
-      source: _sourceFor(target),
     );
     try {
       await writer.recordVisit(input);
@@ -272,15 +308,6 @@ class VisitRecorderService {
           case null:
             return 'entity';
         }
-    }
-  }
-
-  String _sourceFor(VisitTarget target) {
-    switch (target.type) {
-      case VisitTargetType.page:
-        return 'page_access';
-      case VisitTargetType.entity:
-        return 'entity_visit';
     }
   }
 }

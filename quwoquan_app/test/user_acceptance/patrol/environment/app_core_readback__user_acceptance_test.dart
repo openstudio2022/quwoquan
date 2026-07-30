@@ -1,3 +1,7 @@
+// spec_ref: specs/feature-tree/spec.md#uat-003
+// spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 /// user_acceptance Patrol: 四核心 Remote readback 组合旅程。
 ///
 /// 覆盖首页非空卡片、视频书首帧、消息收件箱（先 Remote provision）与我的会话一致。
@@ -46,7 +50,6 @@ void main() {
   patrolTest(
     'environment_app_core_readback',
     tags: ['t4', 'app-core-readback', 'environment-smoke'],
-    skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 12)),
     ($) async {
       await launchEnvironmentPatrolApp($);
@@ -227,7 +230,7 @@ Future<void> _expectProfileMatchesSession(PatrolIntegrationTester $) async {
     reason: 'profile journey requires authenticated owner id',
   );
   expect(
-    session.activeSubAccountId.trim(),
+    session.activePersonaId.trim(),
     isNotEmpty,
     reason: 'profile journey requires authenticated persona id',
   );

@@ -1,0 +1,14 @@
+{
+  "label": "高速快门",
+  "labelEn": "Fast Shutter",
+  "description": "shutterSpeedSeconds <= 1/1000",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

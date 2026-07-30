@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -12,27 +13,56 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_REPORT = (
-    ROOT
-    / ".qwq_output"
-    / "env"
-    / "gamma"
-    / "runs"
-    / "release-consumer"
-    / "t3.json"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.release_video_delivery import (
+    ReleaseVideoDeliveryError,
+    load_release_content_identity,
+    resolve_readiness_path,
 )
+from quwoquan_ops.cli.lib.output_paths import output_root
+
+
+def default_t3_report_path() -> Path:
+    return (
+        output_root()
+        / "env"
+        / "gamma"
+        / "runs"
+        / "release-consumer"
+        / "t3.json"
+    )
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def resolve_t3_report_path(raw_value: str) -> Path:
+    """Keep T3 evidence in the immutable-run evidence plane."""
+
+    evidence_root = (output_root() / "env" / "gamma" / "runs").resolve()
+    candidate = Path(raw_value).expanduser()
+    if not candidate.is_absolute():
+        candidate = ROOT / candidate
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError(
+            "Gamma T3 report must stay below QWQ_OUTPUT_ROOT/env/gamma/runs"
+        ) from exc
+    return candidate
+
+
 def run_release_consumer(
     *,
-    release_id: str,
-    import_run_id: str,
-    verification_run_id: str,
+    identity: dict[str, object],
 ) -> dict[str, object]:
+    release_id = str(identity["releaseId"])
+    import_run_id = str(identity["importRunId"])
+    verification_run_id = str(identity["verifyRunId"])
     command = [
         sys.executable,
         "-B",
@@ -46,8 +76,7 @@ def run_release_consumer(
         "--import-run-id",
         import_run_id,
     ]
-    if verification_run_id:
-        command.extend(["--run-id", verification_run_id])
+    command.extend(["--run-id", verification_run_id])
     result = subprocess.run(
         command,
         cwd=ROOT,
@@ -66,29 +95,61 @@ def run_release_consumer(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--release-id", required=True)
-    parser.add_argument("--import-run-id", required=True)
-    parser.add_argument("--verification-run-id", default="")
-    parser.add_argument("--report", default=str(DEFAULT_REPORT))
+    parser.add_argument(
+        "--release-readiness",
+        default=os.environ.get("DATA_RELEASE_READINESS_RECEIPT", "").strip(),
+        help=(
+            "canonical Gamma Data release-readiness.json; release/import/verify "
+            "identity may not be supplied independently"
+        ),
+    )
+    parser.add_argument("--report", default=str(default_t3_report_path()))
     args = parser.parse_args()
 
-    report_path = Path(args.report)
-    if not report_path.is_absolute():
-        report_path = ROOT / report_path
+    try:
+        report_path = resolve_t3_report_path(args.report)
+    except ValueError as exc:
+        print(f"Gamma T3 GATE_BLOCK: {exc}", file=sys.stderr)
+        return 2
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
-    consumer = run_release_consumer(
-        release_id=args.release_id,
-        import_run_id=args.import_run_id,
-        verification_run_id=args.verification_run_id,
-    )
+    try:
+        identity = load_release_content_identity(
+            resolve_readiness_path(args.release_readiness),
+            expected_environment="gamma",
+        )
+    except (ReleaseVideoDeliveryError, ValueError) as exc:
+        report = {
+            "schema": "gamma-t3-release-consumer",
+            "status": "gate_block",
+            "environment": "gamma",
+            "composition": "production_remote",
+            "mutationPolicy": "read_only",
+            "reason": str(exc),
+            "startedAt": utc_now(),
+            "endedAt": utc_now(),
+        }
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Gamma T3 GATE_BLOCK report written: {report_path}", file=sys.stderr)
+        return 2
+
+    consumer = run_release_consumer(identity=identity)
     report = {
-        "schema": "gamma-t3-release-consumer-v1",
+        "schema": "gamma-t3-release-consumer",
         "status": consumer["status"],
         "environment": "gamma",
-        "releaseId": args.release_id,
-        "importRunId": args.import_run_id,
-        "verificationRunId": args.verification_run_id,
+        "release": {
+            "releaseId": identity["releaseId"],
+            "sourceOwner": identity["sourceOwner"],
+            "manifestDigest": identity["manifestDigest"],
+            "mediaManifestDigest": identity["mediaManifestDigest"],
+            "importRunId": identity["importRunId"],
+            "verifyRunId": identity["verifyRunId"],
+            "readinessReceiptRef": identity["readinessReceiptRef"],
+        },
         "composition": "production_remote",
         "mutationPolicy": "read_only",
         "startedAt": utc_now(),

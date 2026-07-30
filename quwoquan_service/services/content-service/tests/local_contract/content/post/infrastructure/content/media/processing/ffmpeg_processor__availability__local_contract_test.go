@@ -220,7 +220,7 @@ func TestFFmpegInvalidNALDiagnosticIsRejectedAfterSuccessfulProbe(t *testing.T) 
 		AssetVersion:    2,
 		SourceObjectKey: "media/source/invalid.mp4",
 		MediaType:       "video",
-		ContentType:     "video/mp4",
+		MimeType:        "video/mp4",
 		FileSize:        128,
 	})
 	var rejection *mediaprocessing.RejectionError

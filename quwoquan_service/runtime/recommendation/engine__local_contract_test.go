@@ -4,12 +4,14 @@ package recommendation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/boundedrecord"
 	learning "quwoquan_service/runtime/learning"
 	"quwoquan_service/runtime/recpolicy"
 )
@@ -32,17 +34,21 @@ func containsString(values []string, target string) bool {
 }
 
 type mockRedisClient struct {
-	mu     sync.RWMutex
-	data   map[string]string
-	sets   map[string]map[string]bool
-	hashes map[string]map[string]string
+	mu                      sync.RWMutex
+	data                    map[string]string
+	sets                    map[string]map[string]bool
+	hashes                  map[string]map[string]string
+	rankedFeedWindowIndexes map[string][]string
+	rankedFeedWindowOwners  map[string]map[string]string
 }
 
 func newMockRedis() *mockRedisClient {
 	return &mockRedisClient{
-		data:   make(map[string]string),
-		sets:   make(map[string]map[string]bool),
-		hashes: make(map[string]map[string]string),
+		data:                    make(map[string]string),
+		sets:                    make(map[string]map[string]bool),
+		hashes:                  make(map[string]map[string]string),
+		rankedFeedWindowIndexes: make(map[string][]string),
+		rankedFeedWindowOwners:  make(map[string]map[string]string),
 	}
 }
 
@@ -71,6 +77,92 @@ func (m *mockRedisClient) SetNX(_ context.Context, key, value string, _ time.Dur
 	}
 	m.data[key] = value
 	return true, nil
+}
+func (m *mockRedisClient) CreateBoundedImmutableRecordAtomic(
+	_ context.Context,
+	request boundedrecord.Request,
+) (boundedrecord.Result, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if winner, exists := m.data[request.RecordKey]; exists {
+		index := m.rankedFeedWindowIndexes[request.ShardIndexKey]
+		var liveBytes int64
+		for _, key := range index {
+			liveBytes += int64(len(m.data[key]))
+		}
+		return boundedrecord.Result{
+			Winner:        winner,
+			UsageMeasured: true,
+			LiveRecords:   int64(len(index)),
+			LiveBytes:     liveBytes,
+		}, nil
+	}
+	index := append(
+		[]string(nil),
+		m.rankedFeedWindowIndexes[request.ShardIndexKey]...,
+	)
+	owners := m.rankedFeedWindowOwners[request.ShardIndexKey]
+	if owners == nil {
+		owners = make(map[string]string)
+		m.rankedFeedWindowOwners[request.ShardIndexKey] = owners
+	}
+	var ownerKeys []string
+	for _, key := range index {
+		if owners[key] == request.OwnerDigest {
+			ownerKeys = append(ownerKeys, key)
+		}
+	}
+	ownerEvictionCount := len(ownerKeys) -
+		request.Policy.MaximumLiveRecordsPerOwner + 1
+	if ownerEvictionCount < 0 {
+		ownerEvictionCount = 0
+	}
+	ownerVictims := ownerKeys[:ownerEvictionCount]
+	projectedRecords := len(index) - len(ownerVictims) + 1
+	var liveBytes int64
+	for _, key := range index {
+		liveBytes += int64(len(m.data[key]))
+	}
+	var ownerEvictionBytes int64
+	for _, key := range ownerVictims {
+		ownerEvictionBytes += int64(len(m.data[key]))
+	}
+	projectedBytes := liveBytes - ownerEvictionBytes + int64(len(request.Value))
+	if projectedRecords > request.Policy.MaximumLiveRecordsPerShard {
+		return boundedrecord.Result{
+			UsageMeasured: true,
+			LiveRecords:   int64(len(index)),
+			LiveBytes:     liveBytes,
+		}, boundedrecord.ErrShardKeyQuota
+	}
+	if projectedBytes > request.Policy.MaximumLiveBytesPerShard {
+		return boundedrecord.Result{
+			UsageMeasured: true,
+			LiveRecords:   int64(len(index)),
+			LiveBytes:     liveBytes,
+		}, boundedrecord.ErrShardByteQuota
+	}
+	for _, victim := range ownerVictims {
+		delete(m.data, victim)
+		delete(owners, victim)
+		for position, key := range index {
+			if key == victim {
+				index = append(index[:position], index[position+1:]...)
+				break
+			}
+		}
+	}
+	m.data[request.RecordKey] = request.Value
+	owners[request.RecordKey] = request.OwnerDigest
+	index = append(index, request.RecordKey)
+	m.rankedFeedWindowIndexes[request.ShardIndexKey] = index
+	return boundedrecord.Result{
+		Created:       true,
+		OwnerEvicted:  int64(len(ownerVictims)),
+		UsageMeasured: true,
+		LiveRecords:   int64(len(index)),
+		LiveBytes:     projectedBytes,
+	}, nil
 }
 func (m *mockRedisClient) Del(_ context.Context, keys ...string) error {
 	m.mu.Lock()
@@ -164,6 +256,11 @@ func (m *mockRedisClient) PipelineRead(_ context.Context, ops []PipelineOp) erro
 			ops[i].Set = result
 		case PipelineSIsMember:
 			ops[i].Bool = m.sets[ops[i].Key][ops[i].Member]
+		default:
+			return fmt.Errorf(
+				"unsupported recommendation pipeline operation: %d",
+				ops[i].Type,
+			)
 		}
 	}
 	return nil
@@ -1223,37 +1320,11 @@ func TestSessionCache_Invalidate(t *testing.T) {
 	}
 }
 
-// compile-time guarantee: SessionCache must satisfy NegativeFeedbackReader so
-// Engine.LoadFeedbackExclusions (production wiring wraps HotPath in SessionCache)
-// can honor dislike/not_interested on the repository fallback feed path.
-var _ NegativeFeedbackReader = (*SessionCache)(nil)
+var _ HardExclusionReader = (*SessionCache)(nil)
 
-func TestSessionCache_NegativeContentIDs_ForwardsToInner(t *testing.T) {
-	redis := newMockRedis()
-	hp := NewHotPath(redis)
-	ctx := context.Background()
-
-	hp.ProcessSignal(ctx, BehaviorSignal{
-		UserID: "u1", SessionID: "s1", ContentID: "c_disliked", Action: "dislike",
-	})
-
-	cache := NewSessionCache(hp, 5*time.Second, 100)
-	ids, err := cache.NegativeContentIDs(ctx, "u1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !containsString(ids, "c_disliked") {
-		t.Fatalf("SessionCache should forward negative content from inner HotPath, got %+v", ids)
-	}
-}
-
-// TestEngine_LoadFeedbackExclusions_FallbackPath reproduces the T3 dislike gap:
-// the production engine wraps *HotPath in *SessionCache, and the repository
-// fallback feed path relies on LoadFeedbackExclusions.NegativeContentIDs. Before
-// the fix, *SessionCache did not implement NegativeFeedbackReader, so disliked
-// content leaked through the fallback path even though rec:negative:{user} held
-// it. This asserts the fallback exclusion truth source is now populated.
-func TestEngine_LoadFeedbackExclusions_FallbackPath(t *testing.T) {
+// TestEngine_LoadFeedbackExclusions_PostReaderPath locks the single hard-fact
+// reader used by both recommendation recall and explicit PostReader queries.
+func TestEngine_LoadFeedbackExclusions_PostReaderPath(t *testing.T) {
 	redis := newMockRedis()
 	hp := NewHotPath(redis)
 	ctx := context.Background()
@@ -1275,18 +1346,21 @@ func TestEngine_LoadFeedbackExclusions_FallbackPath(t *testing.T) {
 	cache := NewSessionCache(hp, 5*time.Second, 100)
 	engine := NewEngine(cache, []CandidateSource{&mockCandidateSource{}}, WithExposureGovernance(cache, cache))
 
-	excl := engine.LoadFeedbackExclusions(ctx, "u1", "s1")
+	excl, err := engine.LoadFeedbackExclusions(ctx, "u1", "s1")
+	if err != nil {
+		t.Fatalf("LoadFeedbackExclusions: %v", err)
+	}
 	if !excl.NegativeContentIDs["c_disliked"] {
-		t.Errorf("fallback exclusions must contain disliked content, got %+v", excl.NegativeContentIDs)
+		t.Errorf("hard exclusions must contain disliked content, got %+v", excl.NegativeContentIDs)
 	}
 	if !excl.NegativeContentIDs["c_reported"] {
-		t.Errorf("fallback exclusions must contain reported content, got %+v", excl.NegativeContentIDs)
+		t.Errorf("hard exclusions must contain reported content, got %+v", excl.NegativeContentIDs)
 	}
 	if !excl.HiddenAuthors["a_hidden"] {
-		t.Errorf("fallback exclusions must contain hidden author, got %+v", excl.HiddenAuthors)
+		t.Errorf("hard exclusions must contain hidden author, got %+v", excl.HiddenAuthors)
 	}
 	if !excl.HiddenContentTypes["video"] {
-		t.Errorf("fallback exclusions must contain hidden content type, got %+v", excl.HiddenContentTypes)
+		t.Errorf("hard exclusions must contain hidden content type, got %+v", excl.HiddenContentTypes)
 	}
 }
 
@@ -1383,6 +1457,245 @@ func TestEngine_RecallTimeout(t *testing.T) {
 	}
 }
 
+func TestEngine_RecallTimeoutDoesNotWaitForSourceIgnoringContext(t *testing.T) {
+	release := make(chan struct{})
+	calls := make(chan struct{}, 2)
+	blockedSource := &ignoringContextCandidateSource{
+		release: release,
+		calls:   calls,
+	}
+	fastSource := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "fast1", ContentType: "video", PublishedAt: time.Now()},
+		},
+	}
+	engine := NewEngine(
+		NewHotPath(newMockRedis()),
+		[]CandidateSource{blockedSource, fastSource},
+		WithRecallTimeout(30*time.Millisecond),
+		WithRecallSourceMaxInflight(1),
+	)
+	type feedResult struct {
+		response *FeedResponse
+		err      error
+	}
+	resultCh := make(chan feedResult, 1)
+	go func() {
+		response, err := engine.GetFeed(
+			context.Background(),
+			GetFeedRequest{UserID: "u1", Limit: 10},
+		)
+		resultCh <- feedResult{response: response, err: err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			close(release)
+			t.Fatal(result.err)
+		}
+		if result.response == nil || len(result.response.Items) == 0 {
+			close(release)
+			t.Fatal("fast source result must survive a non-cooperative source timeout")
+		}
+	case <-time.After(300 * time.Millisecond):
+		close(release)
+		t.Fatal("feed waited beyond recall budget for a source ignoring context")
+	}
+
+	secondStart := time.Now()
+	second, err := engine.GetFeed(
+		context.Background(),
+		GetFeedRequest{UserID: "u1", Limit: 10},
+	)
+	close(release)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second == nil || len(second.Items) == 0 {
+		t.Fatal("inflight rejection must not suppress the healthy recall source")
+	}
+	if elapsed := time.Since(secondStart); elapsed > 100*time.Millisecond {
+		t.Fatalf("full recall source slot must fail fast, took %v", elapsed)
+	}
+	if got := len(calls); got != 1 {
+		t.Fatalf("non-cooperative source invocations = %d, want bounded at 1", got)
+	}
+}
+
+func TestEngine_RecallSourceOutputIsAdmittedBeforeDownstreamWork(t *testing.T) {
+	const pageLimit = 20
+	sourceCandidates := make([]ContentCandidate, rankedFeedWindowLimit(pageLimit)+1)
+	for index := range sourceCandidates {
+		sourceCandidates[index] = ContentCandidate{
+			ContentID:   fmt.Sprintf("candidate_%03d", index),
+			ContentType: "photo",
+			PublishedAt: time.Now(),
+		}
+	}
+	engine := NewEngine(
+		NewHotPath(newMockRedis()),
+		[]CandidateSource{&mockCandidateSource{candidates: sourceCandidates}},
+	)
+	out := make([]ContentCandidate, 0, len(sourceCandidates))
+	stats := engine.parallelRecallInto(
+		context.Background(),
+		GetFeedRequest{UserID: "u1", Limit: pageLimit},
+		&SessionState{UserID: "u1"},
+		&out,
+	)
+
+	if got, want := len(out), rankedFeedWindowLimit(pageLimit); got != want {
+		t.Fatalf("bounded recall candidates = %d, want %d", got, want)
+	}
+	if stats.failed != 1 || stats.succeeded != 0 {
+		t.Fatalf("oversized source terminal stats = %+v, want one failure", stats)
+	}
+}
+
+func TestEngineRejectsRecallSourceCompositionOverCanonicalMaximum(t *testing.T) {
+	sources := make([]CandidateSource, 13)
+	for index := range sources {
+		sources[index] = &mockCandidateSource{candidates: []ContentCandidate{{
+			ContentID:   fmt.Sprintf("candidate_%02d", index),
+			ContentType: "photo",
+		}}}
+	}
+	engine := NewEngine(
+		NewHotPath(newMockRedis()),
+		sources,
+		WithRecallSourceMaximumCount(12),
+	)
+
+	_, err := engine.GetFeed(
+		context.Background(),
+		GetFeedRequest{UserID: "u1", Limit: 20},
+	)
+	if !errors.Is(err, ErrRecallSourceCountBudgetExceeded) {
+		t.Fatalf("source composition error = %v, want count budget", err)
+	}
+}
+
+func TestAdmitRecallSourceOutputUsesOnlyBoundedReleaseAnchorHandoff(t *testing.T) {
+	const maximum = 60
+	const actual = 100_000
+	releaseID := "rel_current"
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	candidates := make([]ContentCandidate, actual)
+	for index := range candidates {
+		candidates[index] = ContentCandidate{ContentID: fmt.Sprintf("candidate_%06d", index)}
+	}
+	candidates[maximum*2-1] = ContentCandidate{
+		ContentID:       "canonical_handoff",
+		SourceOwner:     "qwq_data",
+		ReleaseID:       releaseID,
+		ManifestDigest:  digest,
+		LifecycleStatus: "active",
+	}
+	// This farther candidate must never be searched or selected. Only the
+	// bounded source-contract handoff window ending before 2*maximum is
+	// admissible.
+	candidates[actual-1] = ContentCandidate{
+		ContentID:       "canonical_far_beyond_budget",
+		SourceOwner:     "qwq_data",
+		ReleaseID:       releaseID,
+		ManifestDigest:  digest,
+		LifecycleStatus: "active",
+	}
+
+	admitted, err := admitRecallSourceOutput(
+		context.Background(),
+		candidates,
+		RecallRequest{
+			Limit:                maximum,
+			ActiveReleaseID:      releaseID,
+			ActiveManifestDigest: digest,
+		},
+		"hugeSource",
+	)
+	if !errors.Is(err, ErrRecallSourceCandidateBudgetExceeded) {
+		t.Fatalf("admission error = %v, want candidate budget failure", err)
+	}
+	if len(admitted) != maximum {
+		t.Fatalf("admitted candidates = %d, want %d", len(admitted), maximum)
+	}
+	if got := admitted[maximum-1].ContentID; got != "canonical_handoff" {
+		t.Fatalf("release anchor handoff = %q, want canonical_handoff", got)
+	}
+	for _, candidate := range admitted {
+		if candidate.ContentID == "canonical_far_beyond_budget" {
+			t.Fatal("candidate beyond the bounded handoff window was admitted")
+		}
+	}
+}
+
+func TestAdmitRecallSourceOutputRejectsFarReleaseAnchorAndHonorsTimeout(t *testing.T) {
+	const maximum = 60
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	candidates := make([]ContentCandidate, 100_000)
+	for index := range candidates {
+		candidates[index] = ContentCandidate{ContentID: fmt.Sprintf("candidate_%06d", index)}
+	}
+	candidates[len(candidates)-1] = ContentCandidate{
+		ContentID:       "canonical_far_beyond_budget",
+		SourceOwner:     "qwq_data",
+		ReleaseID:       "rel_current",
+		ManifestDigest:  digest,
+		LifecycleStatus: "active",
+	}
+
+	admitted, err := admitRecallSourceOutput(
+		context.Background(),
+		candidates,
+		RecallRequest{
+			Limit:                maximum,
+			ActiveReleaseID:      "rel_current",
+			ActiveManifestDigest: digest,
+		},
+		"hugeSource",
+	)
+	if !errors.Is(err, ErrRecallSourceCandidateBudgetExceeded) {
+		t.Fatalf("admission error = %v, want candidate budget failure", err)
+	}
+	if containsActiveReleaseCandidate(admitted, "rel_current", digest) {
+		t.Fatal("far release anchor must fail closed instead of triggering an unbounded scan")
+	}
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	timedOut, timeoutErr := admitRecallSourceOutput(
+		canceled,
+		candidates,
+		RecallRequest{Limit: maximum},
+		"hugeSource",
+	)
+	if timedOut != nil {
+		t.Fatalf("canceled admission retained %d candidates", len(timedOut))
+	}
+	if !errors.Is(timeoutErr, context.Canceled) {
+		t.Fatalf("canceled admission error = %v, want context canceled", timeoutErr)
+	}
+	if !errors.Is(timeoutErr, ErrRecallSourceCandidateBudgetExceeded) {
+		t.Fatalf("canceled admission masked candidate budget error: %v", timeoutErr)
+	}
+}
+
+type ignoringContextCandidateSource struct {
+	release <-chan struct{}
+	calls   chan<- struct{}
+}
+
+func (s *ignoringContextCandidateSource) Recall(
+	context.Context,
+	RecallRequest,
+) ([]ContentCandidate, error) {
+	if s.calls != nil {
+		s.calls <- struct{}{}
+	}
+	<-s.release
+	return nil, nil
+}
+
 type slowCandidateSource struct {
 	delay      time.Duration
 	candidates []ContentCandidate
@@ -1465,90 +1778,6 @@ func TestHotPath_UndoDislikeRestoresOnlyExactContent(t *testing.T) {
 	if len(filtered) != 1 || filtered[0].ContentID != "c1" {
 		t.Fatalf("undo must restore only c1, got %+v", filtered)
 	}
-}
-
-func TestHotPath_PipelineVsParallel_Consistent(t *testing.T) {
-	redis := newMockRedis()
-	hp := NewHotPath(redis)
-	ctx := context.Background()
-
-	for i := 0; i < 20; i++ {
-		hp.ProcessSignal(ctx, BehaviorSignal{
-			UserID: "u1", SessionID: "s1",
-			ContentID: fmt.Sprintf("c%d", i), Action: "click",
-			Tags: []string{fmt.Sprintf("tag%d", i%5)},
-		})
-	}
-	hp.ProcessSignal(ctx, BehaviorSignal{
-		UserID: "u1", SessionID: "s1", ContentID: "bad1", Action: "dislike",
-	})
-
-	// Pipeline path
-	statePipeline, err := hp.GetSessionState(ctx, "u1", "s1")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Force parallel path by wrapping in a non-pipeliner reader
-	parallelHP := &nonPipelinerHotPath{hp: hp}
-	stateParallel, err := parallelHP.GetSessionState(ctx, "u1", "s1")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(statePipeline.TagWeights) != len(stateParallel.TagWeights) {
-		t.Errorf("tag weights count mismatch: pipeline=%d parallel=%d",
-			len(statePipeline.TagWeights), len(stateParallel.TagWeights))
-	}
-}
-
-// nonPipelinerHotPath wraps HotPath with a redis that does NOT implement RedisPipeliner.
-type nonPipelinerHotPath struct {
-	hp *HotPath
-}
-
-func (n *nonPipelinerHotPath) GetSessionState(ctx context.Context, userID, sessionID string) (*SessionState, error) {
-	wrapped := &nonPipelinerRedis{inner: n.hp.redis}
-	tmp := NewHotPath(wrapped)
-	return tmp.GetSessionState(ctx, userID, sessionID)
-}
-
-type nonPipelinerRedis struct {
-	inner RedisClient
-}
-
-func (r *nonPipelinerRedis) Get(ctx context.Context, key string) (string, error) {
-	return r.inner.Get(ctx, key)
-}
-func (r *nonPipelinerRedis) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	return r.inner.Set(ctx, key, value, ttl)
-}
-func (r *nonPipelinerRedis) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
-	return r.inner.SetNX(ctx, key, value, ttl)
-}
-func (r *nonPipelinerRedis) Del(ctx context.Context, keys ...string) error {
-	return r.inner.Del(ctx, keys...)
-}
-func (r *nonPipelinerRedis) SAdd(ctx context.Context, key string, members ...string) error {
-	return r.inner.SAdd(ctx, key, members...)
-}
-func (r *nonPipelinerRedis) SRem(ctx context.Context, key string, members ...string) error {
-	return r.inner.SRem(ctx, key, members...)
-}
-func (r *nonPipelinerRedis) SMembers(ctx context.Context, key string) ([]string, error) {
-	return r.inner.SMembers(ctx, key)
-}
-func (r *nonPipelinerRedis) SIsMember(ctx context.Context, key, member string) (bool, error) {
-	return r.inner.SIsMember(ctx, key, member)
-}
-func (r *nonPipelinerRedis) HIncrByFloat(ctx context.Context, key, field string, incr float64) error {
-	return r.inner.HIncrByFloat(ctx, key, field, incr)
-}
-func (r *nonPipelinerRedis) HGetAll(ctx context.Context, key string) (map[string]string, error) {
-	return r.inner.HGetAll(ctx, key)
-}
-func (r *nonPipelinerRedis) Expire(ctx context.Context, key string, ttl time.Duration) error {
-	return r.inner.Expire(ctx, key, ttl)
 }
 
 func TestPool_AcquireRelease(t *testing.T) {
@@ -1676,9 +1905,14 @@ func TestEngine_ConcurrentFeedRequests(t *testing.T) {
 	}
 	source := &mockCandidateSource{candidates: candidates}
 	cache := NewSessionCache(hp, 2*time.Second, 1000)
-	engine := NewEngine(cache, []CandidateSource{source})
-
 	const goroutines = 100
+	engine := NewEngine(
+		cache,
+		[]CandidateSource{source},
+		WithRecallSourceMaxInflight(goroutines),
+		WithRecallGlobalMaxInflight(goroutines),
+	)
+
 	errs := make(chan error, goroutines)
 	for i := 0; i < goroutines; i++ {
 		go func(userIdx int) {

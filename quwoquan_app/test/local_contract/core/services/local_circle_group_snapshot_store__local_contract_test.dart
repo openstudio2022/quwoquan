@@ -29,7 +29,7 @@ void main() {
       );
       ownerNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          subAccountId: 'user_owner',
+          personaId: 'user_owner',
           ownerUserId: 'user_owner',
           subjectType: 'owner',
           displayName: '主账号',
@@ -39,10 +39,10 @@ void main() {
       );
       subNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          subAccountId: 'sub_001',
+          personaId: 'sub_001',
           ownerUserId: 'user_owner',
-          subjectType: 'sub_account',
-          displayName: '子账号',
+          subjectType: 'persona',
+          displayName: 'Persona',
           avatarUrl: '',
           contextVersion: 2,
         ),
@@ -156,7 +156,7 @@ void main() {
       final index = SqfliteLocalCircleGroupSearchIndex(
         store,
         () async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'user_owner',
+          personaId: 'user_owner',
           ownerUserId: 'user_owner',
           subjectType: 'owner',
           displayName: '主账号',

@@ -23,7 +23,6 @@ var (
 	ErrMessageInvalid                    = errors.New("CHAT.USER.message_invalid")
 	ErrMessageMediaInvalid               = errors.New("CHAT.USER.message_media_invalid")
 	ErrMessageMediaUnavailable           = errors.New("CHAT.SYSTEM.message_media_unavailable")
-	ErrRateLimited                       = errors.New("CHAT.USER.rate_limited")
 	ErrNotMutual                         = errors.New("CHAT.USER.not_mutual")
 	ErrGreetingRequired                  = errors.New("CHAT.USER.greeting_required")
 	ErrBlocked                           = errors.New("CHAT.USER.blocked")
@@ -116,12 +115,6 @@ func AppErrorFromMessageMediaUnavailable(debugMessage string) *rerrors.AppError 
 	return rerrors.NewAppError(code, "媒体服务暂时不可用，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 3)
 }
 
-// AppErrorFromRateLimited returns *AppError for CHAT.USER.rate_limited (user_message from errors.yaml).
-func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "发送太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 5)
-}
-
 // AppErrorFromNotMutual returns *AppError for CHAT.USER.not_mutual (user_message from errors.yaml).
 func AppErrorFromNotMutual(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrNotMutual.Error()))
@@ -167,7 +160,7 @@ func AppErrorFromCircleGroupManagedByCircle(debugMessage string) *rerrors.AppErr
 // AppErrorFromCircleGroupBindingConflict returns *AppError for CHAT.SYSTEM.circle_group_binding_conflict (user_message from errors.yaml).
 func AppErrorFromCircleGroupBindingConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCircleGroupBindingConflict.Error()))
-	return rerrors.NewAppError(code, "圈群会话绑定状态异常，请稍后重试", debugMessage).WithMetadata("projection_conflict", 409).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "圈群会话绑定状态异常，请稍后重试", debugMessage).WithMetadata("projection_conflict", 0).WithRecovery("retry", 0)
 }
 
 // AppErrorFromGroupFull returns *AppError for CHAT.USER.group_full (user_message from errors.yaml).

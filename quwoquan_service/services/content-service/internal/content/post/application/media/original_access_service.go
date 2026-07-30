@@ -164,7 +164,7 @@ func (s *MediaService) RequestOriginalMediaAccess(
 	}
 	return OriginalMediaAccessResult{
 		AssetID: asset.AssetID, Status: "granted", OriginalURL: originalURL,
-		ContentType: asset.ContentType, FileSize: asset.FileSize,
+		MimeType: asset.MimeType, FileSize: asset.FileSize,
 		ExpiresAt:  appended.Fact.ExpiresAt,
 		TTLSeconds: contentgenerated.ContentMediaOriginalAccessGrantTTLSeconds,
 		AuditID:    appended.Fact.AuditID,

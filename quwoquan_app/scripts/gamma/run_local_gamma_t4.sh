@@ -8,28 +8,24 @@ if [[ ! -f "$runtime_topology" ]]; then
   exit 2
 fi
 
-topology_public_bases="$(python3 - "$runtime_topology" <<'PY'
-import json
-import sys
-from pathlib import Path
+topology_public_bases="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 
-path = Path(sys.argv[1])
-try:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    bases = payload["publicBases"]
-    values = [
-        bases["api"],
-        bases["productOps"],
-        bases["mediaAvatar"],
-        bases["mediaImage"],
-        bases["mediaVideo"],
-        bases["mediaUpload"],
-        bases["rtc"],
-    ]
-except (KeyError, OSError, json.JSONDecodeError, TypeError) as exc:
-    raise SystemExit(f"invalid gamma runtime topology: {exc}")
+bases = get_target(load_environment_topology(), "gamma-local")["publicBases"]
+values = [
+    bases["api"],
+    bases["productOps"],
+    bases["mediaAvatar"],
+    bases["mediaImage"],
+    bases["mediaVideo"],
+    bases["mediaUpload"],
+    bases["rtc"],
+]
 if any(not isinstance(value, str) or not value.strip() for value in values):
-    raise SystemExit("invalid gamma runtime topology: publicBases contains an empty value")
+    raise SystemExit("resolved gamma-local publicBases contains an empty value")
 print("\t".join(values))
 PY
 )"
@@ -55,7 +51,7 @@ RTC_MEDIA_CONNECTION_URL="$topology_rtc_media_connection_url"
 # Local Gamma owns its anonymous session inside the device runtime through the
 # public user-service boundary. Never inherit host credentials: Flutter expands
 # Dart defines into child process arguments, which would expose a bearer token.
-unset TEST_AUTH_TOKEN TEST_REFRESH_TOKEN APP_CURRENT_OWNER_ID APP_CURRENT_SUB_ACCOUNT_ID
+unset TEST_AUTH_TOKEN TEST_REFRESH_TOKEN APP_CURRENT_OWNER_ID APP_CURRENT_PERSONA_ID
 PATROL_TARGET="${LOCAL_GAMMA_T4_TARGET:-test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart}"
 PATROL_INSTALL_ID="${QWQ_PATROL_INSTALL_ID:-}"
 RELEASE_UAT_CASES=""
@@ -110,6 +106,23 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+require_canonical_endpoint() {
+  local name="$1"
+  local actual="$2"
+  local expected="$3"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "[local-gamma:t4] GATE_BLOCK: $name must equal gamma-local topology projection" >&2
+    exit 2
+  fi
+}
+require_canonical_endpoint gateway "$GATEWAY_BASE_URL" "$topology_gateway_base_url"
+require_canonical_endpoint productOps "$PRODUCT_OPS_BASE_URL" "$topology_product_ops_base_url"
+require_canonical_endpoint mediaAvatar "$MEDIA_AVATAR_BASE_URL" "$topology_media_avatar_base_url"
+require_canonical_endpoint mediaImage "$MEDIA_IMAGE_BASE_URL" "$topology_media_image_base_url"
+require_canonical_endpoint mediaVideo "$MEDIA_VIDEO_BASE_URL" "$topology_media_video_base_url"
+require_canonical_endpoint mediaUpload "$MEDIA_UPLOAD_BASE_URL" "$topology_media_upload_base_url"
+require_canonical_endpoint rtc "$RTC_MEDIA_CONNECTION_URL" "$topology_rtc_media_connection_url"
 
 if [[ -n "$RELEASE_UAT_CASES" ]]; then
   release_homepage_target="test/user_acceptance/patrol/entity/release_homepage__consumer_render__functional__user_acceptance_test.dart"

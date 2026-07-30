@@ -1,4 +1,4 @@
-/// L1a Entity/Homepage：Mock DTO 形状 + Remote review 请求体与 metadata writable_fields 对齐
+/// L1a Entity/Homepage：Mock DTO 形状 + Remote review 请求体与 canonical request entity 对齐
 library;
 
 import 'dart:convert';
@@ -26,7 +26,7 @@ void main() {
       'ownerUserId': 'fixture_user_owner',
       'ownerDisplayNameSnapshot': '契约摄影社主理人',
       'ownerAvatarUrlSnapshot': '',
-      'evidenceSnapshotId': 'circle:fixture_circle_photo:members:v1',
+      'evidenceSnapshotId': 'circle:fixture_circle_photo:members',
     });
     expect(group.circleId, 'fixture_circle_photo');
     expect(group.ownerUserId, 'fixture_user_owner');

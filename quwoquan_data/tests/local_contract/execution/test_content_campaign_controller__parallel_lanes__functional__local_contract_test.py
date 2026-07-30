@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from core.control_types import TargetSelector
+from core.execution_branch import current_git_branch, stamp_execution_branch
 from core.io import read_json
 from content.execution import campaign_controller, campaign_submission
 from content.execution.campaign_workspace import CampaignRuntimePaths
@@ -35,6 +36,11 @@ quota = int(value("--quota"))
 carrier = next(item for item in ("homepage", "article", "image", "video") if f"-{item}-" in execution_id)
 phase = "review" if stage == "review-only" else "publish"
 event_path = Path(os.environ["CAMPAIGN_EVENT_LOG"])
+if (
+    os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") != root_id
+    or not os.environ.get("QWQ_FROZEN_MAIN_BRANCH")
+):
+    raise SystemExit(32)
 
 def event(kind):
     event_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,7 +58,7 @@ def event(kind):
 
 campaign = (
     Path(os.environ["QWQ_OUTPUT_ROOT"])
-    / "data/local/content-campaign-submissions"
+    / "data/local/workspace/content-campaign-submissions"
     / root_id
 )
 receipts = campaign / "receipts"
@@ -153,10 +159,10 @@ def _runtime(tmp_path: Path, repo: Path) -> CampaignRuntimePaths:
         output_root=output,
         publish_root=tmp_path / "publish",
         campaigns_root=(
-            output / "data/local/content-campaign-submissions"
+            output / "data/local/workspace/content-campaign-submissions"
         ),
         workspaces_root=(
-            output / "data/local/content-campaign-workspaces"
+            output / "data/local/cache/content-campaign-workspaces"
         ),
     )
 
@@ -228,6 +234,40 @@ def _assert_clones_cleaned(
         ).exists()
 
 
+def test_default_runtime_paths_use_governed_workspace_and_cache() -> None:
+    runtime = CampaignRuntimePaths.defaults()
+    governed_workspace = (
+        runtime.output_root / "data" / "local" / "workspace"
+    ).resolve()
+    governed_cache = (
+        runtime.output_root / "data" / "local" / "cache"
+    ).resolve()
+
+    assert runtime.campaigns_root.parent == governed_workspace
+    assert runtime.workspaces_root.parent == governed_cache
+
+
+def test_detached_branch_fallback_requires_campaign_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    branch = _git(repo, "branch", "--show-current")
+    _git(repo, "checkout", "--detach")
+
+    assert current_git_branch(cwd=repo) == ""
+    monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", branch)
+    assert current_git_branch(cwd=repo) == ""
+    monkeypatch.setenv("QWQ_CAMPAIGN_ROOT_EXECUTION_ID", ROOT_ID)
+    assert current_git_branch(cwd=repo) == branch
+    spec = {"executionPolicy": {}}
+    stamp_execution_branch(spec, cwd=repo)
+    assert spec["executionPolicy"] == {
+        "executionBranch": branch,
+        "gitCommitSha": _git(repo, "rev-parse", "HEAD"),
+    }
+
+
 def test_real_subprocess_lanes_overlap_and_publish_only_after_review_barrier(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -249,6 +289,7 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_review_barrier(
     assert report["status"] == "succeeded"
     assert report["phase"] == "completed"
     assert report["planDigest"].startswith("sha256:")
+    assert report["gitBranch"] == _git(repo, "branch", "--show-current")
     review_events = [
         row for row in _events(event_log) if row["phase"] == "review"
     ]
@@ -330,7 +371,7 @@ def test_submission_collision_and_cross_lane_mismatch_fail_closed(
             root=runtime.campaigns_root,
         )
     monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(tmp_path / "events.ndjson"))
-    with pytest.raises(ValueError, match="must share one commit"):
+    with pytest.raises(ValueError, match="must share one branch, commit"):
         campaign_controller.run_campaign(
             ROOT_ID,
             submission_timeout_seconds=1,

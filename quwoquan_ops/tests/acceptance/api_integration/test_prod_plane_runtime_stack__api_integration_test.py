@@ -21,6 +21,8 @@ from quwoquan_ops.cli.prod import render_prod_plane_stack as render
 
 
 ROOT = Path(__file__).resolve().parents[4]
+CANDIDATE_DIGEST = "sha256:" + ("b" * 64)
+ARTIFACT_DIGEST = "sha256:" + ("c" * 64)
 
 
 class ProdPlaneRuntimeStackTest(unittest.TestCase):
@@ -97,15 +99,16 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 (package / "provenance.json").write_text(
                     json.dumps(
                         {
-                            "schema": "qwq.service_package.v1",
+                            "schema": "qwq.service_package",
                             "service": service,
                             "environment": "prod",
                             "configVersion": config_version,
                             "digests": {"config": config_digest},
-                            "releaseArtifact": {
+                            "releaseEvidence": {
                                 "manifest": str(artifact_manifest),
-                                "manifestSha256": digest(artifact_manifest),
-                                "releaseId": "local-gamma-v1",
+                                "evidenceFileDigest": digest(artifact_manifest),
+                                "artifactDigest": ARTIFACT_DIGEST,
+                                "candidateId": CANDIDATE_DIGEST,
                                 "verifiedConfigDigest": config_digest,
                             }
                         }
@@ -137,9 +140,9 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "service",
                     "--instance",
                     "prod",
-                    "--config-version",
-                    "local-gamma-v1",
-                    "--image-version",
+                    "--candidate-digest",
+                    CANDIDATE_DIGEST,
+                    "--image-transport-tag",
                     "1.20260617.rootless-service-plane",
                     "--output-dir",
                     str(out_dir),
@@ -156,6 +159,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertEqual(
                 report["governedComposeServices"],
                 [
+                    "api-edge",
                     "recommendation-service",
                     "content-service",
                     "chat-service",
@@ -258,21 +262,34 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             caddy_text = (out_dir / "runtime/Caddyfile").read_text(encoding="utf-8")
             self.assertNotIn("/v1/", caddy_text)
             self.assertNotIn("\n:80 {", caddy_text)
-            self.assertIn("handle /config/app", caddy_text)
-            self.assertIn("@api_tag path /tag*", caddy_text)
-            self.assertIn("@api_search path /search*", caddy_text)
             self.assertIn(
-                "@api_user path /auth* /owner* /user* /me /me/*",
+                "(business_api_edge) {\n"
+                "\treverse_proxy api-edge:18079 {\n"
+                "\t\theader_up X-Edge-Client-IP {remote_host}",
                 caddy_text,
             )
-            self.assertIn("@api_entity path /homepages*", caddy_text)
-            self.assertNotIn("@pub_entity path /homepages*", caddy_text)
-            self.assertEqual(caddy_text.count("reverse_proxy entity-service:18084"), 1)
-            self.assertEqual(caddy_text.count("reverse_proxy search-service:18095"), 1)
-            self.assertEqual(caddy_text.count("handle /legal/manifest.json {"), 1)
+            self.assertIn(
+                "handle_path /api/* {\n\t\timport business_api_edge\n\t}",
+                caddy_text,
+            )
+            api_gateway = caddy_text.split("api.quwoquan.com {", 1)[1].split(
+                "\n}\n\nops.quwoquan.com {", 1
+            )[0]
+            self.assertIn(
+                "handle {\n\t\timport business_api_edge\n\t}",
+                api_gateway,
+            )
+            self.assertNotRegex(
+                caddy_text,
+                r"reverse_proxy\s+(?:tag|search|user|entity)-service(?::\d+)?\b",
+            )
+            self.assertNotRegex(caddy_text, r"@(api|pub)_[a-z_]+\s+path")
+            # API and public-Web authorities each expose the same immutable
+            # legal package; this is one package with two routed surfaces.
+            self.assertEqual(caddy_text.count("handle /legal/manifest.json {"), 2)
             self.assertEqual(
                 caddy_text.count('Content-Type "text/html; charset=utf-8"'),
-                1,
+                3,
             )
             # 服务启动与 Platform ConfigSnapshot 共同消费同一 package 有效配置；
             # 不得复制旧的 versioned/repository-shaped config tree。
@@ -304,9 +321,9 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "first-party",
                     "--data-mode",
                     "isolated",
-                    "--config-version",
-                    "local-gamma-v1",
-                    "--image-version",
+                    "--candidate-digest",
+                    CANDIDATE_DIGEST,
+                    "--image-transport-tag",
                     "1.20260726.42",
                     "--output-dir",
                     str(out_dir),
@@ -433,9 +450,9 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "service",
                     "--instance",
                     "gray",
-                    "--config-version",
-                    "local-gamma-v1",
-                    "--image-version",
+                    "--candidate-digest",
+                    CANDIDATE_DIGEST,
+                    "--image-transport-tag",
                     "1.20260617.rootless-service-plane",
                     "--output-dir",
                     str(out_dir),
@@ -472,9 +489,9 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "edge",
                     "--instance",
                     "prod",
-                    "--config-version",
-                    "local-gamma-v1",
-                    "--image-version",
+                    "--candidate-digest",
+                    CANDIDATE_DIGEST,
+                    "--image-transport-tag",
                     "d6ccc4c96adb",
                     "--output-dir",
                     str(out_dir),
@@ -550,8 +567,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                 [
                     "python3",
                     "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
-                    "--config-version",
-                    "local-gamma-v1",
+                    "--candidate-digest",
+                    CANDIDATE_DIGEST,
                     "--output-dir",
                     str(out_dir),
                 ],
@@ -576,8 +593,8 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     "service",
                     "--instance",
                     "prod",
-                    "--config-version",
-                    "local-gamma-v1",
+                    "--candidate-digest",
+                    CANDIDATE_DIGEST,
                     "--output-dir",
                     str(rejected_output),
                 ],
@@ -607,7 +624,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     str(key_dir),
                     "--services",
                     "content-service,tag-service",
-                    "--image-version",
+                    "--image-transport-tag",
                     "test-build-123",
                     "--dry-run",
                 ],

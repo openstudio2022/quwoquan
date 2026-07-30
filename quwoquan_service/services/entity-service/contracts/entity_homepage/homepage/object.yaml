@@ -22,7 +22,7 @@ relationships:
   on_delete: detach
   reference_fields:
   - ownerUserId
-  - ownerSubAccountId
+  - ownerPersonaId
   target_objects:
   - user.UserAccount
   - user.Persona
@@ -46,6 +46,7 @@ business_rules:
 - averageRating/ratingCount/reviewSummary 是 HomepageReview 事件投影字段，claimStatus/owner 由 HomepageClaimReviewed
   事件幂等推进；均不接受公开写入
 lifecycle:
+  state_field: status
   states:
   - candidate
   - published

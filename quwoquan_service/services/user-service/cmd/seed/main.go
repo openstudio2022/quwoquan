@@ -28,6 +28,7 @@ import (
 
 	"quwoquan_service/runtime/contractfixture"
 	model "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 	personaseed "quwoquan_service/services/user-service/internal/persona_management/persona/application/environmentseed"
 	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
 	personapersistence "quwoquan_service/services/user-service/internal/persona_management/persona/infrastructure/persona/persistence"
@@ -67,33 +68,13 @@ func profileFromFixture(fp userFixtureProfile) *model.UserProfile {
 	return &model.UserProfile{
 		UserID:                   fp.UserID,
 		AccountState:             "active",
-		IdentityOrigin:           "phone",
+		IdentityOrigin:           "migrated_seed",
 		LogicalShard:             0,
-		AnonymousRetentionPolicy: "retain",
-		// phone is UNIQUE + NOT-pointer in the model scan, so it must be a
-		// distinct non-null value. It is json:"-" (never serialized to clients),
-		// so a deterministic per-user sentinel is safe seed data.
-		Phone:            "seed:" + fp.UserID,
-		Nickname:         fp.DisplayName,
-		AvatarURL:        fp.AvatarURL,
-		AvatarAssetID:    avatarAssetID(fp),
-		AvatarVersion:    avatarVersion(fp),
-		Bio:              fp.Bio,
-		IdentityTags:     "",
-		Gender:           fp.Gender,
-		BirthDate:        nil,
-		Region:           fp.Region,
-		Status:           "active",
-		ProfileVersion:   1,
-		FollowerCount:    fp.Stats.FollowerCount,
-		FollowingCount:   fp.Stats.FollowingCount,
-		PostCount:        fp.Stats.PostCount,
-		CircleCount:      fp.Stats.CircleCount,
-		LikeCount:        fp.Stats.LikeCount,
-		OwnerDisplayName: fp.DisplayName,
-		SubAccountCount:  0,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		AnonymousRetentionPolicy: "preserve",
+		ProfileVersion:           0,
+		PersonaCount:             1,
+		CreatedAt:                now,
+		UpdatedAt:                now,
 	}
 }
 
@@ -116,34 +97,21 @@ func avatarVersion(fp userFixtureProfile) int {
 const userProfileUpsert = `
 INSERT INTO user_profiles (
 	user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
-	phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, identity_tags,
-	gender, birth_date, region, status, profile_version, follower_count, following_count,
-	post_count, circle_count, like_count, owner_display_name, sub_account_count,
-	created_at, updated_at
+	phone, nickname, nickname_customized, avatar_version, profile_version,
+	owner_display_name, persona_count, created_at, updated_at
 ) VALUES (
-	$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-	$19, $20, $21, $22, $23, $24, $25, $26
+	$1, $2, $3, $4, $5, NULL, '', false, 0, 0, '', $6, $7, $8
 )
 ON CONFLICT (user_id) DO UPDATE SET
 	account_state=EXCLUDED.account_state, identity_origin=EXCLUDED.identity_origin,
 	logical_shard=EXCLUDED.logical_shard, anonymous_retention_policy=EXCLUDED.anonymous_retention_policy,
-	phone=EXCLUDED.phone, nickname=EXCLUDED.nickname, avatar_url=EXCLUDED.avatar_url,
-	avatar_asset_id=EXCLUDED.avatar_asset_id, avatar_version=EXCLUDED.avatar_version,
-	bio=EXCLUDED.bio, identity_tags=EXCLUDED.identity_tags, gender=EXCLUDED.gender,
-	birth_date=EXCLUDED.birth_date, region=EXCLUDED.region, status=EXCLUDED.status,
-	profile_version=EXCLUDED.profile_version, follower_count=EXCLUDED.follower_count,
-	following_count=EXCLUDED.following_count, post_count=EXCLUDED.post_count,
-	circle_count=EXCLUDED.circle_count, like_count=EXCLUDED.like_count,
-	owner_display_name=EXCLUDED.owner_display_name, sub_account_count=EXCLUDED.sub_account_count,
+	persona_count=EXCLUDED.persona_count,
 	updated_at=EXCLUDED.updated_at`
 
 func upsertProfile(ctx context.Context, pool *pgxpool.Pool, p *model.UserProfile) error {
 	_, err := pool.Exec(ctx, userProfileUpsert,
 		p.UserID, p.AccountState, p.IdentityOrigin, p.LogicalShard, p.AnonymousRetentionPolicy,
-		p.Phone, p.Nickname, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion, p.Bio, p.IdentityTags,
-		p.Gender, p.BirthDate, p.Region, p.Status, p.ProfileVersion, p.FollowerCount, p.FollowingCount,
-		p.PostCount, p.CircleCount, p.LikeCount, p.OwnerDisplayName, p.SubAccountCount,
-		p.CreatedAt, p.UpdatedAt,
+		p.PersonaCount, p.CreatedAt, p.UpdatedAt,
 	)
 	return err
 }
@@ -152,17 +120,16 @@ func seedPrimaryPersona(
 	ctx context.Context,
 	store *personapersistence.PersonaCommandPostgresStore,
 	persona *model.Persona,
-) error {
+) (personaports.PersonaCommandResult, error) {
 	payload, err := json.Marshal(persona)
 	if err != nil {
-		return err
+		return personaports.PersonaCommandResult{}, err
 	}
 	sum := sha256.Sum256(payload)
-	_, err = store.CommitCreate(ctx, persona, personaports.PersonaCommandMeta{
-		IdempotencyKey: "environment-seed:primary-persona:" + persona.SubAccountID,
+	return store.CommitCreate(ctx, persona, personaports.PersonaCommandMeta{
+		IdempotencyKey: "environment-seed:primary-persona:" + persona.PersonaID,
 		CommandDigest:  hex.EncodeToString(sum[:]),
 	})
-	return err
 }
 
 func main() {
@@ -193,6 +160,10 @@ func main() {
 	personaStore, err := personapersistence.NewPersonaCommandPostgresStore(pool)
 	if err != nil {
 		log.Fatalf("open persona command store: %v", err)
+	}
+	personaProjector, err := useraccountpersistence.NewPersonaProfileProjector(pool)
+	if err != nil {
+		log.Fatalf("open persona profile projector: %v", err)
 	}
 
 	// Reset the complete fixture-owned command history before deleting profiles.
@@ -237,18 +208,29 @@ func main() {
 			if err := upsertProfile(ctx, pool, profileFromFixture(fp)); err != nil {
 				log.Fatalf("upsert profile %s: %v", fp.UserID, err)
 			}
-			if err := seedPrimaryPersona(
+			personaResult, err := seedPrimaryPersona(
 				ctx,
 				personaStore,
 				personaseed.BuildPrimaryPersona(personaseed.PrimaryPersonaInput{
-					UserID:        fp.UserID,
-					DisplayName:   fp.DisplayName,
-					AvatarURL:     fp.AvatarURL,
-					AvatarVersion: avatarVersion(fp),
-					Bio:           fp.Bio,
+					UserID:             fp.UserID,
+					DisplayName:        fp.DisplayName,
+					AvatarMediaAssetID: avatarAssetID(fp),
+					AvatarURL:          fp.AvatarURL,
+					AvatarVersion:      avatarVersion(fp),
+					Bio:                fp.Bio,
+					Gender:             fp.Gender,
+					Region:             fp.Region,
 				}),
-			); err != nil {
+			)
+			if err != nil {
 				log.Fatalf("seed primary persona %s: %v", fp.UserID, err)
+			}
+			if _, err := personaProjector.Project(
+				ctx,
+				personaResult.PersonaID,
+				personaResult.Version,
+			); err != nil {
+				log.Fatalf("project primary persona %s: %v", fp.UserID, err)
 			}
 			inserted++
 			personasInserted++

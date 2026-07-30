@@ -55,20 +55,11 @@
 - WHEN 参与者执行“集成服务基础”对应的公开行为。
 - THEN 对外只暴露标准化接口，禁止端侧直接调用供应商 API。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
+- AND 请求状态、provider attempt、dead letter 与指标快照必须读取同一 MongoDB 可靠任务事实；死信恢复以 `Idempotency-Key` 持久化唯一 command receipt，同键重放返回首次回执、同键换任务失败关闭。
+- AND 本 Story 的本地 Provider substitute 只替代仓外网络边界，不替代第一方 HTTP/application/store；实际 Provider 的 Prod 商用证据仍由 `capability-provider-commercial-readiness-gate` 独立准出。
 
 ## 6. 依赖
 
 - 前置要求：[`runtime-external-integration`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
-
-## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 集成服务基础 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“集成服务基础”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

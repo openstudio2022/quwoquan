@@ -14,11 +14,13 @@ type OpenPostModerationCaseCommand struct {
 }
 
 type ReviewPostModerationCaseCommand struct {
+	PostID     string
 	CaseID     string
 	ReviewerID string
 }
 
 type DecidePostModerationCaseCommand struct {
+	PostID         string
 	CaseID         string
 	ReviewerID     string
 	Decision       moderationmodel.Decision
@@ -26,6 +28,7 @@ type DecidePostModerationCaseCommand struct {
 }
 
 type SupersedePostModerationCaseCommand struct {
+	PostID string
 	CaseID string
 }
 

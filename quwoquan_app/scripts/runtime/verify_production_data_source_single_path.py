@@ -4,10 +4,19 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
+DEVICE_SCRIPTS = APP / "scripts" / "device"
+if str(DEVICE_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(DEVICE_SCRIPTS))
+
+from launch_manifest_metadata import (  # noqa: E402
+    LaunchManifestContractError,
+    load_launch_manifest_contract,
+)
 RETIRED_AGGREGATE_MOCK_PACKAGE = APP / "packages/quwoquan_cloud_mock"
 FORBIDDEN_SYMBOLS = (
     "AppDataSourceMode",
@@ -110,9 +119,21 @@ def main() -> int:
     handoff = (APP / "scripts/device/build_launcher_handoff.py").read_text(
         encoding="utf-8"
     )
-    if 'entrypoint = "lib/main_prod.dart"' not in handoff:
+    try:
+        launch_contract = load_launch_manifest_contract()
+        entrypoint = launch_contract["schemas"]["app_effective_launch_manifest"][
+            "fields"
+        ]["entrypoint"]["const"]
+    except (KeyError, TypeError, LaunchManifestContractError) as exc:
+        issues.append(f"launcher handoff metadata is invalid: {exc}")
+        entrypoint = ""
+    if entrypoint != "lib/main_prod.dart":
         issues.append(
-            "launcher handoff must use lib/main_prod.dart for every environment"
+            "launcher handoff metadata must require lib/main_prod.dart for every environment"
+        )
+    if 'entrypoint = effective_schema["fields"]["entrypoint"]["const"]' not in handoff:
+        issues.append(
+            "launcher handoff must derive its entrypoint from canonical metadata"
         )
 
     if issues:

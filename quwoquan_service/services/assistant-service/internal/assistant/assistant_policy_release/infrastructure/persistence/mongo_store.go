@@ -23,20 +23,18 @@ type MongoStore struct {
 }
 
 type stageReceipt struct {
-	ID             string        `bson:"_id"`
-	PolicyID       string        `bson:"policyId"`
-	ReleaseVersion string        `bson:"releaseVersion"`
-	CommandDigest  string        `bson:"commandDigest"`
-	Release        model.Release `bson:"release"`
-	CreatedAt      time.Time     `bson:"createdAt"`
+	ID            string        `bson:"_id"`
+	PolicyID      string        `bson:"policyId"`
+	ReleaseDigest string        `bson:"releaseDigest"`
+	Release       model.Release `bson:"release"`
+	CreatedAt     time.Time     `bson:"createdAt"`
 }
 
 type stageAuditRecord struct {
 	ID              string     `bson:"_id"`
 	EventType       string     `bson:"eventType"`
 	PolicyID        string     `bson:"policyId"`
-	ReleaseVersion  string     `bson:"releaseVersion"`
-	CanonicalDigest string     `bson:"canonicalDigest"`
+	ReleaseDigest   string     `bson:"releaseDigest"`
 	TemplateCount   int        `bson:"templateCount"`
 	RuleCount       int        `bson:"ruleCount"`
 	OccurredAt      time.Time  `bson:"occurredAt"`
@@ -52,8 +50,7 @@ type stageAuditPayload struct {
 	AggregateType    string    `json:"aggregateType"`
 	PolicyID         string    `json:"policyId"`
 	AggregateVersion int       `json:"aggregateVersion"`
-	ReleaseVersion   string    `json:"releaseVersion,omitempty"`
-	CanonicalDigest  string    `json:"canonicalDigest,omitempty"`
+	ReleaseDigest    string    `json:"releaseDigest,omitempty"`
 	TemplateCount    int       `json:"templateCount,omitempty"`
 	RuleCount        int       `json:"ruleCount,omitempty"`
 	OccurredAt       time.Time `json:"occurredAt"`
@@ -79,18 +76,14 @@ func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
 	}
 	if _, err := store.releases.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "policyId", Value: 1}, {Key: "releaseVersion", Value: 1}},
+			Keys:    bson.D{{Key: "policyId", Value: 1}, {Key: "releaseDigest", Value: 1}},
 			Options: options.Index().SetName("uq_assistant_policy_release_identity").SetUnique(true),
-		},
-		{
-			Keys:    bson.D{{Key: "policyId", Value: 1}, {Key: "canonicalDigest", Value: 1}},
-			Options: options.Index().SetName("uq_assistant_policy_release_digest").SetUnique(true),
 		},
 	}); err != nil {
 		return fmt.Errorf("%w: ensure release indexes: %v", model.ErrStorageUnavailable, err)
 	}
 	if _, err := store.receipts.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "policyId", Value: 1}, {Key: "releaseVersion", Value: 1}},
+		Keys:    bson.D{{Key: "policyId", Value: 1}, {Key: "releaseDigest", Value: 1}},
 		Options: options.Index().SetName("idx_assistant_policy_release_receipt_identity"),
 	}); err != nil {
 		return fmt.Errorf("%w: ensure receipt index: %v", model.ErrStorageUnavailable, err)
@@ -152,9 +145,8 @@ func (store *MongoStore) Stage(
 		var receipt stageReceipt
 		receiptErr := store.receipts.FindOne(txCtx, bson.M{"_id": commandID}).Decode(&receipt)
 		if receiptErr == nil {
-			if receipt.CommandDigest != release.CanonicalDigest ||
-				receipt.PolicyID != release.PolicyID ||
-				receipt.ReleaseVersion != release.ReleaseVersion {
+			if receipt.PolicyID != release.PolicyID ||
+				receipt.ReleaseDigest != release.ReleaseDigest {
 				return nil, model.ErrIdempotencyConflict
 			}
 			result = receipt.Release
@@ -167,12 +159,12 @@ func (store *MongoStore) Stage(
 
 		var existing model.Release
 		existingErr := store.releases.FindOne(txCtx, bson.M{
-			"policyId":       release.PolicyID,
-			"releaseVersion": release.ReleaseVersion,
+			"policyId":      release.PolicyID,
+			"releaseDigest": release.ReleaseDigest,
 		}).Decode(&existing)
 		switch {
 		case existingErr == nil:
-			if existing.CanonicalDigest != release.CanonicalDigest {
+			if existing.ReleaseDigest != release.ReleaseDigest {
 				return nil, model.ErrIdempotencyConflict
 			}
 			result = existing
@@ -188,25 +180,23 @@ func (store *MongoStore) Stage(
 		}
 		now := time.Now().UTC()
 		_, receiptErr = store.receipts.InsertOne(txCtx, stageReceipt{
-			ID:             commandID,
-			PolicyID:       result.PolicyID,
-			ReleaseVersion: result.ReleaseVersion,
-			CommandDigest:  result.CanonicalDigest,
-			Release:        result,
-			CreatedAt:      now,
+			ID:            commandID,
+			PolicyID:      result.PolicyID,
+			ReleaseDigest: result.ReleaseDigest,
+			Release:       result,
+			CreatedAt:     now,
 		})
 		if receiptErr != nil || !created {
 			return nil, receiptErr
 		}
 		_, outboxErr := store.outbox.InsertOne(txCtx, stageAuditRecord{
-			ID:              commandID,
-			EventType:       "AssistantPolicyReleaseStaged",
-			PolicyID:        result.PolicyID,
-			ReleaseVersion:  result.ReleaseVersion,
-			CanonicalDigest: result.CanonicalDigest,
-			TemplateCount:   len(result.Templates),
-			RuleCount:       len(result.RoutingRules),
-			OccurredAt:      now,
+			ID:            commandID,
+			EventType:     "AssistantPolicyReleaseStaged",
+			PolicyID:      result.PolicyID,
+			ReleaseDigest: result.ReleaseDigest,
+			TemplateCount: len(result.Templates),
+			RuleCount:     len(result.RoutingRules),
+			OccurredAt:    now,
 		})
 		return nil, outboxErr
 	})
@@ -222,15 +212,15 @@ func (store *MongoStore) Stage(
 func (store *MongoStore) Get(
 	ctx context.Context,
 	policyID string,
-	releaseVersion string,
+	releaseDigest string,
 ) (model.Release, bool, error) {
 	if store == nil || store.releases == nil {
 		return model.Release{}, false, model.ErrStorageUnavailable
 	}
 	var release model.Release
 	err := store.releases.FindOne(ctx, bson.M{
-		"policyId":       strings.TrimSpace(policyID),
-		"releaseVersion": strings.TrimSpace(releaseVersion),
+		"policyId":      strings.TrimSpace(policyID),
+		"releaseDigest": strings.TrimSpace(releaseDigest),
 	}).Decode(&release)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return model.Release{}, false, nil
@@ -290,8 +280,7 @@ func (store *MongoStore) ClaimPendingOutbox(
 			AggregateType:    "AssistantPolicyRelease",
 			PolicyID:         record.PolicyID,
 			AggregateVersion: 1,
-			ReleaseVersion:   record.ReleaseVersion,
-			CanonicalDigest:  record.CanonicalDigest,
+			ReleaseDigest:    record.ReleaseDigest,
 			TemplateCount:    record.TemplateCount,
 			RuleCount:        record.RuleCount,
 			OccurredAt:       record.OccurredAt,
@@ -303,7 +292,7 @@ func (store *MongoStore) ClaimPendingOutbox(
 			ID:               record.ID,
 			EventType:        record.EventType,
 			AggregateType:    "AssistantPolicyRelease",
-			AggregateID:      record.PolicyID,
+			AggregateID:      record.PolicyID + ":" + record.ReleaseDigest,
 			AggregateVersion: 1,
 			OccurredAt:       record.OccurredAt,
 			Payload:          string(payload),

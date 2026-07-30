@@ -15,6 +15,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../cloud_services/content_facet_overrides.dart';
+import '../cloud_services/content/mock_content_repository.dart';
 
 /// Web 宽屏壳测试通用脚手架：固定宽屏视口 + Web 能力 + 可控登录态，
 /// 复用同一 [MainAppShell] 入口，避免每个用例各自拼装第二套壳。
@@ -32,6 +34,7 @@ class WebShellTestHarness {
     final effectiveRouter = router ?? _defaultRouter();
     return ProviderScope(
       overrides: [
+        ...mockContentFacetOverrides(MockContentRepository()),
         platformCapabilitiesProvider.overrideWithValue(CapabilityProfile.web),
         oneTapLoginClientProvider.overrideWithValue(
           const _UnavailableOneTapLoginClient(),
@@ -159,7 +162,7 @@ class _AuthenticatedTestAuthSession extends AuthSessionController {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       ownerId: 'user_001',
-      activeSubAccountId: 'user_001',
+      activePersonaId: 'user_001',
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'install-id',
@@ -199,7 +202,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
       accessToken: authenticated ? 'access-token' : '',
       refreshToken: authenticated ? 'refresh-token' : '',
       ownerId: authenticated ? 'user_001' : '',
-      activeSubAccountId: authenticated ? 'user_001' : '',
+      activePersonaId: authenticated ? 'user_001' : '',
       accountState: authenticated ? 'active' : '',
       identityOrigin: authenticated ? 'phone' : '',
       installId: 'install-id',
@@ -228,7 +231,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}

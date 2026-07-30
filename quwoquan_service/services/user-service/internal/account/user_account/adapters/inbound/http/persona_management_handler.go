@@ -12,7 +12,7 @@ func (h *UserHandler) handleListPersonas(w http.ResponseWriter, r *http.Request)
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	personas, err := h.subAccount.ListSubAccounts(r.Context(), userID)
+	personas, err := h.persona.ListPersonas(r.Context(), userID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -30,7 +30,7 @@ func (h *UserHandler) handleGetPersonaManagementSummary(w http.ResponseWriter, r
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	summary, err := h.subAccount.GetPersonaManagementSummary(r.Context(), userID)
+	summary, err := h.persona.GetPersonaManagementSummary(r.Context(), userID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -44,7 +44,7 @@ func (h *UserHandler) handleGetActivePersonaContext(w http.ResponseWriter, r *ht
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	view, err := h.subAccount.GetActivePersonaContextView(r.Context(), userID)
+	view, err := h.persona.GetActivePersonaContextView(r.Context(), userID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -72,7 +72,7 @@ func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request
 		writeInvalidArg(w, r, err.Error())
 		return
 	}
-	p, err := h.subAccount.CreateSubAccount(r.Context(), userID, application.CreatePersonaCommand{
+	p, err := h.persona.CreatePersona(r.Context(), userID, application.CreatePersonaCommand{
 		DisplayName:    wire.DisplayName,
 		AvatarURL:      wire.AvatarURL,
 		IsolationLevel: wire.IsolationLevel,
@@ -86,7 +86,7 @@ func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request
 }
 
 func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request) {
-	personaID := r.PathValue("subAccountId")
+	personaID := r.PathValue("personaId")
 	userID := userIDFromHeader(r)
 	if userID == "" {
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
@@ -106,10 +106,8 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 		writeInvalidArg(w, r, err.Error())
 		return
 	}
-	p, err := h.subAccount.UpdatePersona(r.Context(), userID, personaID, application.UpdatePersonaCommand{
+	p, err := h.persona.UpdatePersona(r.Context(), userID, personaID, application.UpdatePersonaCommand{
 		DisplayName:    wire.DisplayName,
-		Phone:          wire.Phone,
-		Email:          wire.Email,
 		AvatarURL:      wire.AvatarURL,
 		BackgroundURL:  wire.BackgroundURL,
 		IsolationLevel: wire.IsolationLevel,
@@ -121,7 +119,7 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 		},
 	}, meta)
 	if err != nil {
-		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+		if hasUserErrorCode(err, "USER.PERSONA.not_found") {
 			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
@@ -137,7 +135,7 @@ func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *ht
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	personaID := r.PathValue("subAccountId")
+	personaID := r.PathValue("personaId")
 	var wire profileSyncWire
 	payload, err := decodePersonaCommandBody(r, &wire)
 	if err != nil {
@@ -149,14 +147,14 @@ func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *ht
 		writeInvalidArg(w, r, err.Error())
 		return
 	}
-	result, err := h.subAccount.ApplyPersonaProfileSync(r.Context(), userID, personaID,
+	result, err := h.persona.ApplyPersonaProfileSync(r.Context(), userID, personaID,
 		application.PersonaProfileSyncOptions{
 			ApplyScope:    wire.ApplyScope,
 			SyncTargetIDs: wire.SyncTargetIDs,
 			FieldsMask:    wire.FieldsMask,
 		}, meta)
 	if err != nil {
-		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+		if hasUserErrorCode(err, "USER.PERSONA.not_found") {
 			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
@@ -172,8 +170,8 @@ func (h *UserHandler) handleGetPersonaLifecycleGuard(w http.ResponseWriter, r *h
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	personaID := r.PathValue("subAccountId")
-	guard, err := h.subAccount.GetPersonaLifecycleGuard(r.Context(), userID, personaID)
+	personaID := r.PathValue("personaId")
+	guard, err := h.persona.GetPersonaLifecycleGuard(r.Context(), userID, personaID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -187,22 +185,22 @@ func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	personaID := r.PathValue("subAccountId")
+	personaID := r.PathValue("personaId")
 	meta, err := personaCommandMeta(r, nil)
 	if err != nil {
 		writeInvalidArg(w, r, err.Error())
 		return
 	}
-	view, err := h.subAccount.RetirePersona(r.Context(), userID, personaID, meta)
+	view, err := h.persona.RetirePersona(r.Context(), userID, personaID, meta)
 	if err != nil {
-		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+		if hasUserErrorCode(err, "USER.PERSONA.not_found") {
 			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.primary_guard") ||
-			hasUserErrorCode(err, "USER.SUB_ACCOUNT.last_sub_account") ||
-			hasUserErrorCode(err, "USER.SUB_ACCOUNT.active_guard") ||
-			hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+		if hasUserErrorCode(err, "USER.PERSONA.primary_guard") ||
+			hasUserErrorCode(err, "USER.PERSONA.last_persona") ||
+			hasUserErrorCode(err, "USER.PERSONA.active_guard") ||
+			hasUserErrorCode(err, "USER.PERSONA.retired_guard") {
 			writeHTTPError(w, r, err)
 			return
 		}
@@ -213,7 +211,7 @@ func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request
 }
 
 func (h *UserHandler) handleActivatePersona(w http.ResponseWriter, r *http.Request) {
-	personaID := r.PathValue("subAccountId")
+	personaID := r.PathValue("personaId")
 	userID := userIDFromHeader(r)
 	if userID == "" {
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
@@ -224,13 +222,13 @@ func (h *UserHandler) handleActivatePersona(w http.ResponseWriter, r *http.Reque
 		writeInvalidArg(w, r, err.Error())
 		return
 	}
-	err = h.subAccount.ActivateSubAccount(r.Context(), userID, personaID, meta)
+	err = h.persona.ActivatePersona(r.Context(), userID, personaID, meta)
 	if err != nil {
-		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.not_found") {
+		if hasUserErrorCode(err, "USER.PERSONA.not_found") {
 			writeNotFound(w, r, userErrorDebugMessage(err))
 			return
 		}
-		if hasUserErrorCode(err, "USER.SUB_ACCOUNT.retired_guard") {
+		if hasUserErrorCode(err, "USER.PERSONA.retired_guard") {
 			writeHTTPError(w, r, err)
 			return
 		}

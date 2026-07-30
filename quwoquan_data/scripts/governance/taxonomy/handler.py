@@ -45,6 +45,11 @@ def handle_taxonomy(args: argparse.Namespace) -> None:
 
         main(_forward(args, ("json", "group")))
         return
+    if command == "closure-scorecard":
+        from governance.taxonomy.closure_scorecard import main
+
+        main(_forward(args, ("json", "axis", "gate")))
+        return
     if command == "discover":
         from governance.taxonomy.discover import main
 
@@ -83,6 +88,11 @@ def register_taxonomy_parser(subparsers: argparse._SubParsersAction) -> None:
     stats = commands.add_parser("stats")
     stats.add_argument("--json", action="store_true")
     stats.add_argument("--group", choices=["Topic", "Audience", "Format", "Entity"])
+
+    scorecard = commands.add_parser("closure-scorecard")
+    scorecard.add_argument("--json", action="store_true")
+    scorecard.add_argument("--axis")
+    scorecard.add_argument("--gate", action="store_true")
 
     graph = commands.add_parser("graph")
     graph.add_argument("--min-cooccur", type=int, default=1)

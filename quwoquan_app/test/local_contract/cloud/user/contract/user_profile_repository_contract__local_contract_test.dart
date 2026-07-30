@@ -29,7 +29,7 @@ void main() {
       final stats = await query.getUserStats(_fixtureProfileUserId);
       final bundle = await query.getUserHomepageBundle(_fixtureProfileUserId);
 
-      expect(profile.subAccountId, _fixtureProfileUserId);
+      expect(profile.personaId, _fixtureProfileUserId);
       expect(profile.displayName, isNotEmpty);
       expect(profile.userHandle, isNotEmpty);
       expect(stats.followingCount, profile.followingCount);
@@ -37,7 +37,7 @@ void main() {
       expect(stats.circleCount, profile.circleCount);
       expect(stats.likeCount, profile.likeCount);
       expect(stats.postCount, profile.postCount);
-      expect(bundle.profile.subAccountId, profile.subAccountId);
+      expect(bundle.profile.personaId, profile.personaId);
       expect(bundle.profileWithStats.followerCount, bundle.stats.followerCount);
       expect(bundle.tabCounts.worksCount, bundle.stats.postCount);
       expect(bundle.tabCounts.likesCount, bundle.stats.likeCount);
@@ -54,7 +54,7 @@ void main() {
       expect(mine.relationshipCapability, isNull);
       expect(other.viewerContext.isOwner, isFalse);
       expect(
-        other.relationshipCapability?.targetSubAccountId,
+        other.relationshipCapability?.targetPersonaId,
         _fixtureProfileUserId,
       );
     });
@@ -63,7 +63,7 @@ void main() {
       final profile = await query.getUserProfile('nonexistent_user_xyz');
       final stats = await query.getUserStats('nonexistent_user_xyz');
 
-      expect(profile.subAccountId, 'nonexistent_user_xyz');
+      expect(profile.personaId, 'nonexistent_user_xyz');
       expect(profile.displayName, isNotEmpty);
       expect(stats.followingCount, isNonNegative);
       expect(stats.followerCount, isNonNegative);
@@ -80,7 +80,7 @@ void main() {
 
       expect(results.length, lessThanOrEqualTo(1));
       expect(results, isNotEmpty);
-      expect(results.single.subAccountId, _fixtureProfileUserId);
+      expect(results.single.personaId, _fixtureProfileUserId);
     });
   });
 
@@ -95,7 +95,7 @@ void main() {
       final snapshot = await query.getProfileEditSnapshot();
       final card = await query.getProfileQrCard();
 
-      expect(snapshot.subAccountId, isNotEmpty);
+      expect(snapshot.personaId, isNotEmpty);
       expect(snapshot.nickname, isNotEmpty);
       expect(card.qrPayload, isNotEmpty);
       expect(card.publicProfileUrl, isNotEmpty);
@@ -107,7 +107,7 @@ void main() {
         handle: _fixtureProfileUserId,
       );
 
-      expect(resolved.subAccountId, _fixtureProfileUserId);
+      expect(resolved.personaId, _fixtureProfileUserId);
       expect(resolved.scanStatus, 'accepted');
       await expectLater(
         query.resolveProfileQrToken(token: ''),
@@ -168,7 +168,7 @@ void main() {
 
       expect(personas.where((item) => item.isPrimary), hasLength(1));
       expect(personas.where((item) => item.isActive), hasLength(1));
-      expect((await query.getActivePersonaContext()).subAccountId, isNotEmpty);
+      expect((await query.getActivePersonaContext()).personaId, isNotEmpty);
     });
 
     test('创建、更新与激活后查询投影立即一致', () async {
@@ -180,20 +180,20 @@ void main() {
       );
       final updated = await commands.updatePersona(
         contracts.UpdatePersonaCommand(
-          subAccountId: created.subAccountId,
+          personaId: created.personaId,
           displayName: '更新名',
         ),
       );
       final active = await commands.activatePersona(
-        contracts.ActivatePersonaCommand(subAccountId: created.subAccountId),
+        contracts.ActivatePersonaCommand(personaId: created.personaId),
       );
 
       expect(created.displayName, '新分身');
       expect(updated.displayName, '更新名');
-      expect(active.subAccountId, created.subAccountId);
+      expect(active.personaId, created.personaId);
       expect(
         (await query.listPersonas())
-            .singleWhere((item) => item.subAccountId == created.subAccountId)
+            .singleWhere((item) => item.personaId == created.personaId)
             .isActive,
         isTrue,
       );
@@ -208,19 +208,19 @@ void main() {
 
       await expectLater(
         commands.retirePersona(
-          contracts.RetirePersonaCommand(subAccountId: 'persona_primary'),
+          contracts.RetirePersonaCommand(personaId: 'persona_primary'),
         ),
         throwsA(
           isA<CloudException>()
               .having(
                 (error) => error.code,
                 'code',
-                UserErrorCode.primarySubAccountGuard.code,
+                UserErrorCode.primaryPersonaGuard.code,
               )
               .having(
                 (error) => error.runtimeFailure.code,
                 'runtimeFailure.code',
-                UserErrorCode.primarySubAccountGuard.code,
+                UserErrorCode.primaryPersonaGuard.code,
               ),
         ),
       );
@@ -240,7 +240,7 @@ void main() {
 
     test('follow/unfollow 与 following 查询共享同一强类型状态', () async {
       expect(
-        (await query.listFollowing(subAccountId: _fixtureCurrentUserId)).items,
+        (await query.listFollowing(personaId: _fixtureCurrentUserId)).items,
         isEmpty,
       );
 
@@ -249,22 +249,22 @@ void main() {
         sourceSurfaceId: 'userProfile',
       );
       final following = await query.listFollowing(
-        subAccountId: _fixtureCurrentUserId,
+        personaId: _fixtureCurrentUserId,
         limit: 1,
       );
       expect(following.items, hasLength(1));
-      expect(following.items.single.subAccountId, _fixtureProfileUserId);
+      expect(following.items.single.personaId, _fixtureProfileUserId);
 
       await commands.unfollow(_fixtureProfileUserId);
       expect(
-        (await query.listFollowing(subAccountId: _fixtureCurrentUserId)).items,
+        (await query.listFollowing(personaId: _fixtureCurrentUserId)).items,
         isEmpty,
       );
     });
 
     test('followers 查询保留 typed cursor page 与 limit 边界', () async {
       final followers = await query.listFollowers(
-        subAccountId: _fixtureProfileUserId,
+        personaId: _fixtureProfileUserId,
         limit: 1,
       );
 
@@ -281,8 +281,7 @@ final class _TestPersonaRelationshipFacets
 
   ProfileSocialRelationRowViewData get _row =>
       const ProfileSocialRelationRowViewData(
-        subAccountId: _fixtureProfileUserId,
-        username: 'fixture_photo',
+        personaId: _fixtureProfileUserId,
         userHandle: 'fixture_photo',
         displayName: 'Fixture Photo',
         avatarUrl: 'media/avatar/s/mock/user/fixture_user_photo/v1/avatar.png',
@@ -292,26 +291,26 @@ final class _TestPersonaRelationshipFacets
 
   @override
   Future<void> follow(
-    String targetSubAccountId, {
+    String targetPersonaId, {
     required String sourceSurfaceId,
   }) async {
-    if (targetSubAccountId.trim().isEmpty) {
-      throw ArgumentError.value(targetSubAccountId, 'targetSubAccountId');
+    if (targetPersonaId.trim().isEmpty) {
+      throw ArgumentError.value(targetPersonaId, 'targetPersonaId');
     }
     _following = true;
   }
 
   @override
-  Future<void> unfollow(String targetSubAccountId) async {
-    if (targetSubAccountId.trim().isEmpty) {
-      throw ArgumentError.value(targetSubAccountId, 'targetSubAccountId');
+  Future<void> unfollow(String targetPersonaId) async {
+    if (targetPersonaId.trim().isEmpty) {
+      throw ArgumentError.value(targetPersonaId, 'targetPersonaId');
     }
     _following = false;
   }
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowing({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = 20,
@@ -324,7 +323,7 @@ final class _TestPersonaRelationshipFacets
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowers({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = 20,

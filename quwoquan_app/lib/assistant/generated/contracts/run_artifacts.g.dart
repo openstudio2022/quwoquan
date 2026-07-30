@@ -410,14 +410,14 @@ class EvidenceLedgerEntry {
   const EvidenceLedgerEntry({
     required this.evidenceId,
     this.domainId = "",
-    this.dimension = "",
+    this.dimension = SearchPlanDimension.unknown,
     this.dimensionLabel = "",
     this.searchPlanId = "",
     this.title = "",
     required this.destination,
     this.source = "",
     this.sourceHost = "",
-    this.sourceTier = "",
+    this.sourceTier = EvidenceSourceTier.unknown,
     this.freshnessHours = 0,
     this.authorityScore = 0,
     this.relevanceScore = 0,
@@ -428,14 +428,14 @@ class EvidenceLedgerEntry {
 
   final String evidenceId;
   final String domainId;
-  final String dimension;
+  final SearchPlanDimension dimension;
   final String dimensionLabel;
   final String searchPlanId;
   final String title;
   final CitationDestination destination;
   final String source;
   final String sourceHost;
-  final String sourceTier;
+  final EvidenceSourceTier sourceTier;
   final int freshnessHours;
   final double authorityScore;
   final double relevanceScore;
@@ -446,14 +446,14 @@ class EvidenceLedgerEntry {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'evidenceId': evidenceId,
         'domainId': domainId,
-        'dimension': dimension,
+        'dimension': dimension.wireName,
         'dimensionLabel': dimensionLabel,
         'searchPlanId': searchPlanId,
         'title': title,
         'destination': destination.toJson(),
         'source': source,
         'sourceHost': sourceHost,
-        'sourceTier': sourceTier,
+        'sourceTier': sourceTier.wireName,
         'freshnessHours': freshnessHours,
         'authorityScore': authorityScore,
         'relevanceScore': relevanceScore,
@@ -466,14 +466,14 @@ class EvidenceLedgerEntry {
     return EvidenceLedgerEntry(
       evidenceId: (json['evidenceId'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
-      dimension: (json['dimension'] as String?)?.trim() ?? "",
+      dimension: parseSearchPlanDimension((json['dimension'] as String?)?.trim() ?? ""),
       dimensionLabel: (json['dimensionLabel'] as String?)?.trim() ?? "",
       searchPlanId: (json['searchPlanId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
       destination: json['destination'] is Map ? CitationDestination.fromJson((json['destination'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field destination is missing')),
       source: (json['source'] as String?)?.trim() ?? "",
       sourceHost: (json['sourceHost'] as String?)?.trim() ?? "",
-      sourceTier: (json['sourceTier'] as String?)?.trim() ?? "",
+      sourceTier: parseEvidenceSourceTier((json['sourceTier'] as String?)?.trim() ?? ""),
       freshnessHours: (json['freshnessHours'] as num?)?.toInt() ?? 0,
       authorityScore: (json['authorityScore'] as num?)?.toDouble() ?? 0,
       relevanceScore: (json['relevanceScore'] as num?)?.toDouble() ?? 0,
@@ -1180,7 +1180,6 @@ class RunArtifactsDiagnosticsPartitioned {
 
 class RunArtifacts {
   const RunArtifacts({
-    this.machineEnvelope = "",
     this.displayMarkdown = "",
     this.displayPlainText = "",
     this.displayState = const AssistantDisplayState(),
@@ -1198,7 +1197,6 @@ class RunArtifacts {
     this.domainPolicyBundle,
   });
 
-  final String machineEnvelope;
   final String displayMarkdown;
   final String displayPlainText;
   final AssistantDisplayState displayState;
@@ -1216,7 +1214,6 @@ class RunArtifacts {
   final DomainPolicyBundle? domainPolicyBundle;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'machineEnvelope': machineEnvelope,
         'displayMarkdown': displayMarkdown,
         'displayPlainText': displayPlainText,
         'displayState': displayState.toJson(),
@@ -1236,7 +1233,6 @@ class RunArtifacts {
 
   factory RunArtifacts.fromJson(Map<String, dynamic> json) {
     return RunArtifacts(
-      machineEnvelope: (json['machineEnvelope'] as String?)?.trim() ?? "",
       displayMarkdown: (json['displayMarkdown'] as String?)?.trim() ?? "",
       displayPlainText: (json['displayPlainText'] as String?)?.trim() ?? "",
       displayState: json['displayState'] is Map ? AssistantDisplayState.fromJson((json['displayState'] as Map).cast<String, dynamic>()) : const AssistantDisplayState(),
@@ -1258,7 +1254,6 @@ class RunArtifacts {
 }
 
 class RunArtifactsFields {
-  static const String machineEnvelope = 'machineEnvelope';
   static const String displayMarkdown = 'displayMarkdown';
   static const String displayPlainText = 'displayPlainText';
   static const String displayState = 'displayState';

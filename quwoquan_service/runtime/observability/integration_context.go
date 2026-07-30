@@ -22,7 +22,7 @@ type CorrelationMeta struct {
 	RequestID      string
 	SessionID      string
 	UserID         string
-	SubAccountID   string
+	PersonaID      string
 	PageID         string
 	DevicePlatform string
 	AppVersion     string
@@ -84,7 +84,7 @@ func buildCorrelationMetaFromHeaders(h http.Header) CorrelationMeta {
 		RequestID:      requestID,
 		SessionID:      sessionID,
 		UserID:         userID,
-		SubAccountID:   h.Get("X-Client-Sub-Account-Id"),
+		PersonaID:      h.Get("X-Client-Persona-Id"),
 		PageID:         h.Get("X-Client-Page-Id"),
 		DevicePlatform: h.Get("X-Client-Device-Platform"),
 		AppVersion:     h.Get("X-Client-App-Version"),

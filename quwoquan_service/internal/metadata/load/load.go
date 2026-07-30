@@ -28,7 +28,7 @@ var objectTopLevelKeys = stringSet(
 )
 
 var operationsTopLevelKeys = stringSet(
-	"api_routes", "commercial_defaults", "consumers", "contract_test",
+	"api_routes", "runtime_entrypoints", "commercial_defaults", "consumers", "contract_test",
 	"delivery_slo", "description", "incoming_call_slo", "privacy_contract",
 	"response_list_key", "upstreams", "externalDependencies",
 )
@@ -66,11 +66,19 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 		objectDir := filepath.Dir(path)
 		operationsPath := filepath.Join(objectDir, "operations.yaml")
 		if _, statErr := os.Stat(operationsPath); statErr == nil {
-			operations, serviceErr := loadService(metadataDir, operationsPath, object)
+			operations, runtimeEntrypoints, serviceErr := loadService(
+				metadataDir,
+				operationsPath,
+				object,
+			)
 			if serviceErr != nil {
 				loadErrors = append(loadErrors, serviceErr)
 			} else {
 				catalog.Operations = append(catalog.Operations, operations...)
+				catalog.RuntimeEntrypoints = append(
+					catalog.RuntimeEntrypoints,
+					runtimeEntrypoints...,
+				)
 			}
 		}
 		projections, _, projectionErr := loadProjections(metadataDir, objectDir, object)
@@ -86,6 +94,9 @@ func Load(metadataDir string) (*ast.Catalog, error) {
 	}
 	collectSourceDigests(catalog, metadataDir, &loadErrors)
 	deriveBusinessObjectMaps(catalog, &loadErrors)
+	if governanceErr := loadMetadataGovernance(metadataDir, catalog); governanceErr != nil {
+		loadErrors = append(loadErrors, governanceErr)
+	}
 	if len(loadErrors) > 0 {
 		return nil, errors.Join(loadErrors...)
 	}
@@ -271,8 +282,9 @@ func decodeMembers(node *yaml.Node) ([]ast.Member, error) {
 }
 
 type serviceDocument struct {
-	CommercialDefaults commercialDocument `yaml:"commercial_defaults"`
-	APIRoutes          []routeDocument    `yaml:"api_routes"`
+	CommercialDefaults commercialDocument          `yaml:"commercial_defaults"`
+	APIRoutes          []routeDocument             `yaml:"api_routes"`
+	RuntimeEntrypoints []runtimeEntrypointDocument `yaml:"runtime_entrypoints"`
 }
 
 type commercialDocument struct {
@@ -282,17 +294,35 @@ type commercialDocument struct {
 	TargetStory string `yaml:"target_story"`
 }
 
+type runtimeEntrypointDocument struct {
+	Name        string `yaml:"name"`
+	RuntimeKind string `yaml:"kind"`
+	Phase       string `yaml:"phase"`
+	Application struct {
+		Kind         string `yaml:"kind"`
+		Facet        string `yaml:"facet"`
+		Method       string `yaml:"method"`
+		SessionOwner string `yaml:"session_owner"`
+	} `yaml:"application"`
+}
+
 type routeDocument struct {
-	Method           string            `yaml:"method"`
-	Path             string            `yaml:"path"`
-	Operation        string            `yaml:"operation"`
-	RequestEntity    string            `yaml:"request_entity"`
-	RequestBodyKind  string            `yaml:"request_body_kind"`
-	ResponseEntity   string            `yaml:"response_entity"`
-	ResponseBody     string            `yaml:"response_body"`
-	ResponseBodyKind string            `yaml:"response_body_kind"`
-	Actor            string            `yaml:"actor"`
-	Security         map[string]string `yaml:"security"`
+	Method           string                    `yaml:"method"`
+	Path             string                    `yaml:"path"`
+	Operation        string                    `yaml:"operation"`
+	RequestEntity    string                    `yaml:"request_entity"`
+	RequestBodyKind  string                    `yaml:"request_body_kind"`
+	RequestBindings  *requestBindingsDocument  `yaml:"request_bindings"`
+	RequestConstants *requestConstantsDocument `yaml:"request_constants"`
+	PathParams       any                       `yaml:"path_params"`
+	QueryParams      any                       `yaml:"query_params"`
+	RequestFields    any                       `yaml:"request_fields"`
+	Headers          any                       `yaml:"headers"`
+	ResponseEntity   string                    `yaml:"response_entity"`
+	ResponseBody     string                    `yaml:"response_body"`
+	ResponseBodyKind string                    `yaml:"response_body_kind"`
+	Actor            string                    `yaml:"actor"`
+	Security         map[string]string         `yaml:"security"`
 	Authorization    struct {
 		Principal       string   `yaml:"principal"`
 		Scopes          []string `yaml:"scopes"`
@@ -307,6 +337,13 @@ type routeDocument struct {
 		MaxAttempts         int    `yaml:"max_attempts"`
 		Idempotency         string `yaml:"idempotency"`
 	} `yaml:"reliability"`
+	Pagination *struct {
+		DefaultItems int `yaml:"default_items"`
+		MaximumItems int `yaml:"maximum_items"`
+	} `yaml:"pagination"`
+	ResponseAdmission *struct {
+		MaximumBodyBytes int `yaml:"maximum_body_bytes"`
+	} `yaml:"response_admission"`
 	Concurrency struct {
 		VersionPrecondition string `yaml:"version_precondition"`
 	} `yaml:"concurrency"`
@@ -326,13 +363,14 @@ type routeDocument struct {
 		AvailabilityPercent    float64 `yaml:"availability_percent"`
 	} `yaml:"slo"`
 	ClientContract *struct {
-		DartImport      string            `yaml:"dart_import"`
-		RequestType     string            `yaml:"request_type"`
-		ResponseType    string            `yaml:"response_type"`
-		RequestEncoder  string            `yaml:"request_encoder"`
-		ResponseDecoder string            `yaml:"response_decoder"`
-		PathBindings    map[string]string `yaml:"path_bindings"`
-		QueryBindings   map[string]string `yaml:"query_bindings"`
+		DartImport      string `yaml:"dart_import"`
+		ResponseType    string `yaml:"response_type"`
+		ResponseDecoder string `yaml:"response_decoder"`
+		RequestType     any    `yaml:"request_type"`
+		RequestEncoder  any    `yaml:"request_encoder"`
+		PathBindings    any    `yaml:"path_bindings"`
+		QueryBindings   any    `yaml:"query_bindings"`
+		HeaderBindings  any    `yaml:"header_bindings"`
 	} `yaml:"client_contract"`
 	Application struct {
 		Kind            string `yaml:"kind"`
@@ -348,31 +386,57 @@ type routeDocument struct {
 	} `yaml:"application"`
 }
 
-func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, error) {
+type requestBindingsDocument struct {
+	Path     []requestBindingDocument `yaml:"path"`
+	Query    []requestBindingDocument `yaml:"query"`
+	Header   []requestBindingDocument `yaml:"header"`
+	Injected []requestBindingDocument `yaml:"injected"`
+}
+
+type requestBindingDocument struct {
+	Name     string `yaml:"name"`
+	Field    string `yaml:"field"`
+	Required *bool  `yaml:"required"`
+}
+
+type requestConstantsDocument struct {
+	Body []requestConstantDocument `yaml:"body"`
+}
+
+type requestConstantDocument struct {
+	Name  string `yaml:"name"`
+	Value any    `yaml:"value"`
+}
+
+func loadService(
+	metadataDir,
+	path string,
+	object ast.Object,
+) ([]ast.Operation, []ast.RuntimeEntrypoint, error) {
 	top, err := loadTopLevelMapping(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := rejectUnknownTopLevel(path, top, operationsTopLevelKeys); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var document serviceDocument
 	if err := yaml.Unmarshal(data, &document); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
 	operations := make([]ast.Operation, 0, len(document.APIRoutes))
 	for index, route := range document.APIRoutes {
 		localID := strings.TrimSpace(route.Operation)
 		if localID == "" {
-			return nil, fmt.Errorf("%s: api_routes[%d].operation is required", path, index)
+			return nil, nil, fmt.Errorf("%s: api_routes[%d].operation is required", path, index)
 		}
 		kind, explicit, kindErr := resolveOperationKind(route.Method, route.Application.Kind)
 		if kindErr != nil {
-			return nil, fmt.Errorf("%s: operation %s: %w", path, localID, kindErr)
+			return nil, nil, fmt.Errorf("%s: operation %s: %w", path, localID, kindErr)
 		}
 		actor := strings.TrimSpace(route.Actor)
 		if actor == "" {
@@ -390,44 +454,105 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 			commercialBlockReason = "missing commercial operation binding"
 		}
 		var clientContract *ast.ClientContract
+		var clientBindingOverrides []string
 		if route.ClientContract != nil {
+			if route.ClientContract.PathBindings != nil {
+				clientBindingOverrides = append(clientBindingOverrides, "path_bindings")
+			}
+			if route.ClientContract.QueryBindings != nil {
+				clientBindingOverrides = append(clientBindingOverrides, "query_bindings")
+			}
+			if route.ClientContract.HeaderBindings != nil {
+				clientBindingOverrides = append(clientBindingOverrides, "header_bindings")
+			}
+			if route.ClientContract.RequestType != nil {
+				clientBindingOverrides = append(clientBindingOverrides, "request_type")
+			}
+			if route.ClientContract.RequestEncoder != nil {
+				clientBindingOverrides = append(clientBindingOverrides, "request_encoder")
+			}
 			clientContract = &ast.ClientContract{
 				DartImport:      strings.TrimSpace(route.ClientContract.DartImport),
-				RequestType:     strings.TrimSpace(route.ClientContract.RequestType),
 				ResponseType:    strings.TrimSpace(route.ClientContract.ResponseType),
-				RequestEncoder:  strings.TrimSpace(route.ClientContract.RequestEncoder),
 				ResponseDecoder: strings.TrimSpace(route.ClientContract.ResponseDecoder),
-				PathBindings:    route.ClientContract.PathBindings,
-				QueryBindings:   route.ClientContract.QueryBindings,
+			}
+		}
+		var requestBindings *ast.RequestBindings
+		if route.RequestBindings != nil {
+			requestBindings = &ast.RequestBindings{
+				Path:  normalizeRequestBindings(route.RequestBindings.Path),
+				Query: normalizeRequestBindings(route.RequestBindings.Query),
+				Header: normalizeRequestBindings(
+					route.RequestBindings.Header,
+				),
+				Injected: normalizeRequestBindings(
+					route.RequestBindings.Injected,
+				),
+			}
+		}
+		var requestConstants *ast.RequestConstants
+		if route.RequestConstants != nil {
+			requestConstants = &ast.RequestConstants{
+				Body: normalizeRequestConstants(route.RequestConstants.Body),
+			}
+		}
+		legacyRequestKeys := make([]string, 0, 4)
+		if route.PathParams != nil {
+			legacyRequestKeys = append(legacyRequestKeys, "path_params")
+		}
+		if route.QueryParams != nil {
+			legacyRequestKeys = append(legacyRequestKeys, "query_params")
+		}
+		if route.RequestFields != nil {
+			legacyRequestKeys = append(legacyRequestKeys, "request_fields")
+		}
+		if route.Headers != nil {
+			legacyRequestKeys = append(legacyRequestKeys, "headers")
+		}
+		var pagination *ast.PaginationPolicy
+		if route.Pagination != nil {
+			pagination = &ast.PaginationPolicy{
+				DefaultItems: route.Pagination.DefaultItems,
+				MaximumItems: route.Pagination.MaximumItems,
+			}
+		}
+		var responseAdmission *ast.ResponseAdmissionPolicy
+		if route.ResponseAdmission != nil {
+			responseAdmission = &ast.ResponseAdmissionPolicy{
+				MaximumBodyBytes: route.ResponseAdmission.MaximumBodyBytes,
 			}
 		}
 		operations = append(operations, ast.Operation{
-			ID:               object.ID + "." + localID,
-			LocalID:          localID,
-			Domain:           object.Domain,
-			ObjectID:         object.ID,
-			Method:           strings.ToUpper(strings.TrimSpace(route.Method)),
-			PathTemplate:     strings.TrimSpace(route.Path),
-			Kind:             kind,
-			KindExplicit:     explicit,
-			Facet:            strings.TrimSpace(route.Application.Facet),
-			FacadeMethod:     strings.TrimSpace(route.Application.Method),
-			AggregateOwner:   strings.TrimSpace(route.Application.AggregateOwner),
-			AppendSink:       strings.TrimSpace(route.Application.AppendSink),
-			MutationTarget:   strings.TrimSpace(route.Application.MutationTarget),
-			InvariantTarget:  strings.TrimSpace(route.Application.InvariantTarget),
-			SessionOwner:     strings.TrimSpace(route.Application.SessionOwner),
-			Reader:           strings.TrimSpace(route.Application.Reader),
-			Slice:            strings.TrimSpace(route.Application.Slice),
-			ActorRequirement: actor,
-			RequestEntity:    strings.TrimSpace(route.RequestEntity),
-			RequestBodyKind:  strings.TrimSpace(route.RequestBodyKind),
-			ResponseEntity:   strings.TrimSpace(route.ResponseEntity),
-			ResponseBody:     strings.TrimSpace(route.ResponseBody),
-			ResponseBodyKind: strings.TrimSpace(route.ResponseBodyKind),
-			SourcePath:       relativePath(metadataDir, path),
-			Security:         route.Security,
-			AuthMode:         resolveAuthMode(route.Security),
+			ID:                     object.ID + "." + localID,
+			LocalID:                localID,
+			Domain:                 object.Domain,
+			ObjectID:               object.ID,
+			Method:                 strings.ToUpper(strings.TrimSpace(route.Method)),
+			PathTemplate:           strings.TrimSpace(route.Path),
+			Kind:                   kind,
+			KindExplicit:           explicit,
+			Facet:                  strings.TrimSpace(route.Application.Facet),
+			FacadeMethod:           strings.TrimSpace(route.Application.Method),
+			AggregateOwner:         strings.TrimSpace(route.Application.AggregateOwner),
+			AppendSink:             strings.TrimSpace(route.Application.AppendSink),
+			MutationTarget:         strings.TrimSpace(route.Application.MutationTarget),
+			InvariantTarget:        strings.TrimSpace(route.Application.InvariantTarget),
+			SessionOwner:           strings.TrimSpace(route.Application.SessionOwner),
+			Reader:                 strings.TrimSpace(route.Application.Reader),
+			Slice:                  strings.TrimSpace(route.Application.Slice),
+			ActorRequirement:       actor,
+			RequestEntity:          strings.TrimSpace(route.RequestEntity),
+			RequestBodyKind:        strings.TrimSpace(route.RequestBodyKind),
+			RequestBindings:        requestBindings,
+			RequestConstants:       requestConstants,
+			LegacyRequestKeys:      legacyRequestKeys,
+			ClientBindingOverrides: clientBindingOverrides,
+			ResponseEntity:         strings.TrimSpace(route.ResponseEntity),
+			ResponseBody:           strings.TrimSpace(route.ResponseBody),
+			ResponseBodyKind:       strings.TrimSpace(route.ResponseBodyKind),
+			SourcePath:             relativePath(metadataDir, path),
+			Security:               route.Security,
+			AuthMode:               resolveAuthMode(route.Security),
 			Principal: strings.TrimSpace(
 				route.Authorization.Principal,
 			),
@@ -454,6 +579,8 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 					route.Reliability.Idempotency,
 				),
 			},
+			Pagination:        pagination,
+			ResponseAdmission: responseAdmission,
 			Concurrency: ast.ConcurrencyPolicy{
 				VersionPrecondition: ast.VersionPrecondition(strings.TrimSpace(
 					route.Concurrency.VersionPrecondition,
@@ -481,7 +608,70 @@ func loadService(metadataDir, path string, object ast.Object) ([]ast.Operation, 
 			ClientContract: clientContract,
 		})
 	}
-	return operations, nil
+	runtimeEntrypoints := make(
+		[]ast.RuntimeEntrypoint,
+		0,
+		len(document.RuntimeEntrypoints),
+	)
+	for index, entrypoint := range document.RuntimeEntrypoints {
+		localID := strings.TrimSpace(entrypoint.Name)
+		if localID == "" {
+			return nil, nil, fmt.Errorf(
+				"%s: runtime_entrypoints[%d].name is required",
+				path,
+				index,
+			)
+		}
+		applicationKind, _, kindErr := resolveOperationKind(
+			"",
+			strings.TrimSpace(entrypoint.Application.Kind),
+		)
+		if kindErr != nil {
+			return nil, nil, fmt.Errorf(
+				"%s: runtime entrypoint %s: %w",
+				path,
+				localID,
+				kindErr,
+			)
+		}
+		runtimeEntrypoints = append(runtimeEntrypoints, ast.RuntimeEntrypoint{
+			ID:              object.ID + "." + localID,
+			LocalID:         localID,
+			Domain:          object.Domain,
+			ObjectID:        object.ID,
+			RuntimeKind:     strings.TrimSpace(entrypoint.RuntimeKind),
+			Phase:           strings.TrimSpace(entrypoint.Phase),
+			ApplicationKind: applicationKind,
+			Facet:           strings.TrimSpace(entrypoint.Application.Facet),
+			FacadeMethod:    strings.TrimSpace(entrypoint.Application.Method),
+			SessionOwner:    strings.TrimSpace(entrypoint.Application.SessionOwner),
+			SourcePath:      relativePath(metadataDir, path),
+		})
+	}
+	return operations, runtimeEntrypoints, nil
+}
+
+func normalizeRequestBindings(values []requestBindingDocument) []ast.RequestBinding {
+	result := make([]ast.RequestBinding, 0, len(values))
+	for _, value := range values {
+		result = append(result, ast.RequestBinding{
+			Name:     strings.TrimSpace(value.Name),
+			Field:    strings.TrimSpace(value.Field),
+			Required: value.Required,
+		})
+	}
+	return result
+}
+
+func normalizeRequestConstants(values []requestConstantDocument) []ast.RequestConstant {
+	result := make([]ast.RequestConstant, 0, len(values))
+	for _, value := range values {
+		result = append(result, ast.RequestConstant{
+			Name:  strings.TrimSpace(value.Name),
+			Value: value.Value,
+		})
+	}
+	return result
 }
 
 func mergeCommercialBinding(
@@ -573,7 +763,28 @@ func loadProjections(metadataDir, objectDir string, object ast.Object) ([]ast.Pr
 			return loadErr
 		}
 		readModel := scalarString(top["read_model"])
+		readModelExplicit := strings.TrimSpace(readModel) != ""
 		dartClass := scalarString(top["dart_class"])
+		outputPath := scalarString(top["output_path"])
+		var clientProjection struct {
+			DartClass        string `yaml:"dart_class"`
+			OutputPath       string `yaml:"output_path"`
+			ExternalDartPath string `yaml:"external_dart_path"`
+			Fields           []struct {
+				Name string `yaml:"name"`
+			} `yaml:"fields"`
+		}
+		if node := top["client_projection"]; node != nil {
+			if decodeErr := node.Decode(&clientProjection); decodeErr != nil {
+				return fmt.Errorf("%s: client_projection: %w", path, decodeErr)
+			}
+			if dartClass == "" {
+				dartClass = strings.TrimSpace(clientProjection.DartClass)
+			}
+			if outputPath == "" {
+				outputPath = strings.TrimSpace(clientProjection.OutputPath)
+			}
+		}
 		projectionName := scalarString(top["projection"])
 		if readModel == "" {
 			readModel = dartClass
@@ -585,18 +796,68 @@ func loadProjections(metadataDir, objectDir string, object ast.Object) ([]ast.Pr
 			// projections/ 也承载紧邻对象的客户端配置文档；没有任何投影身份时不进入图。
 			return nil
 		}
+		fieldNames := projectionFieldNames(top["fields"])
+		if len(fieldNames) == 0 {
+			for _, field := range clientProjection.Fields {
+				if name := strings.TrimSpace(field.Name); name != "" {
+					fieldNames = append(fieldNames, name)
+				}
+			}
+		}
 		projections = append(projections, ast.Projection{
-			ID:         object.ID + "." + readModel,
-			Domain:     object.Domain,
-			ObjectID:   object.ID,
-			ReadModel:  readModel,
-			DartClass:  dartClass,
-			SourcePath: relativePath(metadataDir, path),
+			ID:                object.ID + "." + readModel,
+			Domain:            object.Domain,
+			ObjectID:          object.ID,
+			ReadModel:         readModel,
+			ReadModelExplicit: readModelExplicit,
+			DartClass:         dartClass,
+			OutputPath:        outputPath,
+			ExternalDartPath:  strings.TrimSpace(clientProjection.ExternalDartPath),
+			FieldNames:        fieldNames,
+			SourceEntities:    stringSequence(top["source_entities"]),
+			SourceEvents:      stringSequence(top["source_events"]),
+			SourcePath:        relativePath(metadataDir, path),
 		})
 		projectionPaths = append(projectionPaths, path)
 		return nil
 	})
 	return projections, projectionPaths, err
+}
+
+func projectionFieldNames(node *yaml.Node) []string {
+	if node == nil || node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	result := make([]string, 0, len(node.Content))
+	for _, item := range node.Content {
+		if item.Kind == yaml.ScalarNode {
+			if name := strings.TrimSpace(item.Value); name != "" {
+				result = append(result, name)
+			}
+			continue
+		}
+		mapping, err := mappingFromNode(item)
+		if err != nil {
+			continue
+		}
+		if name := strings.TrimSpace(scalarString(mapping["name"])); name != "" {
+			result = append(result, name)
+		}
+	}
+	return result
+}
+
+func stringSequence(node *yaml.Node) []string {
+	if node == nil || node.Kind != yaml.SequenceNode {
+		return nil
+	}
+	result := make([]string, 0, len(node.Content))
+	for _, item := range node.Content {
+		if value := strings.TrimSpace(item.Value); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func loadTopLevelMapping(path string) (map[string]*yaml.Node, error) {

@@ -3,5 +3,10 @@
   "labelEn": "河曲县",
   "description": "忻州市河曲县",
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ]
 }

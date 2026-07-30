@@ -77,7 +77,8 @@ extension _CircleShellBuilders on _CircleShellState {
               avatarUrl: circle?.iconUrl ?? coverUrl,
               name: circleName,
               identityTags: circle?.tags ?? const <String>[],
-              verified: _isVerified(state),
+              // CircleStatus 只表达生命周期，不能推断官方认证事实。
+              verified: false,
             ),
             if ((circle?.description ?? '').trim().isNotEmpty) ...[
               SizedBox(height: AppSpacing.containerSm),
@@ -100,9 +101,11 @@ extension _CircleShellBuilders on _CircleShellState {
               isDark: isDark,
               role: state.role,
               joinStatus: state.joinStatus,
-              joinPolicy: circle?.joinPolicy ?? 'open',
+              joinPolicy: circle?.joinPolicy ?? CircleJoinPolicy.open,
               onJoinCircle:
-                  _isMemberLike(state) || state.joinStatus == 'pending'
+                  _isMemberLike(state) ||
+                      state.joinStatus == 'pending' ||
+                      circle?.joinPolicy == CircleJoinPolicy.inviteOnly
                   ? null
                   : () => _gatedJoinCircle(context, notifier),
               onEnterDiscussion: () => _changeTab('discussion'),
@@ -118,9 +121,9 @@ extension _CircleShellBuilders on _CircleShellState {
         if (circle != null &&
             ((circle.rulesText ?? '').trim().isNotEmpty ||
                 (_isMemberLike(state) &&
-                    (circle.welcomeMessage ?? '').trim().isNotEmpty))) ...<
-          Widget
-        >[
+                    (circle.welcomeMessage ?? '')
+                        .trim()
+                        .isNotEmpty))) ...<Widget>[
           SizedBox(height: AppSpacing.containerSm),
           _buildGovernanceCard(state, isDark),
         ],
@@ -568,9 +571,7 @@ extension _CircleShellBuilders on _CircleShellState {
             ? _buildGateCard(
                 context,
                 title: CommunityText.visibilityMembers,
-                description: circle?.joinPolicy == 'approval'
-                    ? CommunityText.circleJoinApprovalDescription
-                    : CommunityText.circleJoinOpenDescription,
+                description: _joinGateDescription(circle?.joinPolicy),
                 keySuffix: _activeTabId,
               )
             : _buildDiscussionBody(context, isDark: isDark, state: state),
@@ -579,9 +580,7 @@ extension _CircleShellBuilders on _CircleShellState {
             ? _buildGateCard(
                 context,
                 title: CommunityText.visibilityMembers,
-                description: circle?.joinPolicy == 'approval'
-                    ? CommunityText.circleJoinApprovalDescription
-                    : CommunityText.circleJoinOpenDescription,
+                description: _joinGateDescription(circle?.joinPolicy),
                 keySuffix: _activeTabId,
               )
             : Padding(

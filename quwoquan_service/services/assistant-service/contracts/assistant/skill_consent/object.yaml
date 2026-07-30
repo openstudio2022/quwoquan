@@ -37,9 +37,4 @@ business_rules:
 - revoke 立即阻断后续 run，但不删除历史审计
 - AssistantRun 只能读取当前 consent Slice，不能直接修改 consent
 lifecycle:
-  states:
-  - granted
-  - revoked
-  - expired
-  optimistic_concurrency: version
-  idempotency: command_receipt
+  notes: 生效性只由 canonical revokedAt 是否为空判定；Grant 创建授权记录，Revoke 原子写入 revokedAt，不复制 status 第二真相源。

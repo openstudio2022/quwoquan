@@ -19,6 +19,7 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,9 +33,11 @@ import (
 	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 )
 
-// ProcessorProfile identifies this pipeline generation in descriptors and
-// preview manifests.
-const ProcessorProfile = "content_processing_progressive_mp4_v1"
+// ProcessorProfile is the only semantic identity for the progressive MP4
+// pipeline in descriptors and preview manifests. Pipeline bytes remain
+// content-addressed by each artifact SHA256; the profile itself is not a
+// version selector.
+const ProcessorProfile = "content_processing_progressive_mp4"
 
 const (
 	targetKeyframeIntervalMs = 2000
@@ -49,13 +52,14 @@ const (
 // production implementation is runtimemedia.S3PresignClient.
 type ObjectStore interface {
 	GetObject(ctx context.Context, bucket string, key string) (io.ReadCloser, error)
-	PutObject(ctx context.Context, bucket string, key string, contentType string, body io.Reader) error
+	PutObject(ctx context.Context, bucket string, key string, mimeType string, body io.Reader) error
 }
 
 type Config struct {
-	Bucket      string
-	FFmpegPath  string
-	FFprobePath string
+	Bucket        string
+	FFmpegPath    string
+	FFprobePath   string
+	EnableHLSCMAF bool
 	// WorkDir hosts per-job scratch directories; empty means os.TempDir().
 	WorkDir string
 	// JobTimeout bounds one asset end to end. Zero means 15 minutes.
@@ -122,7 +126,7 @@ func (p *FFmpegMediaProcessor) Process(
 	}
 	defer os.RemoveAll(workDir)
 
-	sourcePath := filepath.Join(workDir, "source"+sourceExtension(request.ContentType))
+	sourcePath := filepath.Join(workDir, "source"+sourceExtension(request.MimeType))
 	if err := p.downloadObject(ctx, request.SourceObjectKey, sourcePath); err != nil {
 		return mediaprocessing.ProcessOutcome{}, err
 	}
@@ -245,22 +249,56 @@ func (p *FFmpegMediaProcessor) Process(
 		return mediaprocessing.ProcessOutcome{}, fmt.Errorf("upload preview Manifest: %w", err)
 	}
 
+	// HLS/CMAF 是 P1 增强链，P0 progressive MP4 始终是同一 asset/version 的
+	// 可用性底座。开关开启后，只有完整打包、校验并上传成功才发布 descriptor；
+	// 任一增强步骤失败都不污染领域快照，播放器因此确定性回落 P0。
+	hlsArtifacts := HLSCMAFArtifacts{}
+	if p.Config.EnableHLSCMAF {
+		hlsArtifacts, err = p.PackageHLSCMAF(
+			ctx,
+			deliveryPath,
+			workDir,
+			request.AssetID,
+			request.AssetVersion,
+			deliveryProbe,
+			slices,
+			ProcessorProfile,
+		)
+		if err != nil {
+			observeHLSCMAFPackaging("fallback_progressive")
+			slog.WarnContext(
+				ctx,
+				"optional HLS/CMAF packaging degraded to progressive MP4",
+				"enhancement", "hls_cmaf",
+				"result", "fallback_progressive",
+				"reason", "packaging_failed",
+			)
+			hlsArtifacts = HLSCMAFArtifacts{}
+		} else {
+			observeHLSCMAFPackaging("ready")
+		}
+	}
+
 	return mediaprocessing.ProcessOutcome{
 		Descriptor: mediamodel.MediaProcessingDescriptor{
 			Video: mediamodel.VideoProcessingDescriptor{
-				ProcessorProfile:             ProcessorProfile,
-				VerifiedDurationMs:           deliveryProbe.DurationMs,
-				VideoWidth:                   deliveryProbe.Width,
-				VideoHeight:                  deliveryProbe.Height,
-				VideoCodec:                   "h264",
-				VideoContainer:               "mp4",
-				VideoAudioCodec:              "aac",
-				VideoKeyframeIntervalMs:      targetKeyframeIntervalMs,
-				VideoFastStart:               true,
-				VideoPublicSliceKey:          slices.Video,
-				CoverPublicSliceKey:          slices.Cover,
-				PreviewTrackVersion:          previewTrackVersion,
-				PreviewTrackManifestSliceKey: slices.Manifest,
+				ProcessorProfile:              ProcessorProfile,
+				VerifiedDurationMs:            deliveryProbe.DurationMs,
+				VideoWidth:                    deliveryProbe.Width,
+				VideoHeight:                   deliveryProbe.Height,
+				VideoCodec:                    "h264",
+				VideoContainer:                "mp4",
+				VideoAudioCodec:               "aac",
+				VideoKeyframeIntervalMs:       targetKeyframeIntervalMs,
+				VideoFastStart:                true,
+				VideoPublicSliceKey:           slices.Video,
+				CoverPublicSliceKey:           slices.Cover,
+				PreviewTrackVersion:           previewTrackVersion,
+				PreviewTrackManifestSliceKey:  slices.Manifest,
+				HLSCMAFDescriptorVersion:      hlsArtifacts.DescriptorVersion,
+				HLSCMAFDescriptorSliceKey:     hlsArtifacts.DescriptorSliceKey,
+				HLSCMAFMasterManifestSliceKey: hlsArtifacts.MasterManifestSliceKey,
+				HLSCMAFRenditionCount:         hlsArtifacts.RenditionCount,
 			},
 		},
 	}, nil
@@ -344,13 +382,17 @@ func (p *FFmpegMediaProcessor) Probe(ctx context.Context, path string) (VideoPro
 		path,
 	)
 	if err != nil {
-		if ctx.Err() != nil {
-			return VideoProbe{}, fmt.Errorf("media probe interrupted: %w", ctx.Err())
-		}
+		// ffprobe may emit a deterministic source diagnostic immediately while
+		// the parent process is CPU-starved and observes the child exit only after
+		// the deadline. Preserve the stronger content fact before classifying the
+		// surrounding deadline as an infrastructure interruption.
 		if isUndecodableMediaSource(err) {
 			return VideoProbe{}, &mediaprocessing.RejectionError{
 				Reason: "uploaded media cannot be decoded",
 			}
+		}
+		if ctx.Err() != nil {
+			return VideoProbe{}, fmt.Errorf("media probe interrupted: %w", ctx.Err())
 		}
 		// 外部二进制的退出、运行时库和宿主资源故障不能被固化成用户内容
 		// 拒绝；只有成功 probe 后的确定性内容约束才使用 RejectionError。
@@ -395,13 +437,15 @@ func (p *FFmpegMediaProcessor) transcode(
 		deliveryPath,
 	)
 	if _, err := runCommand(ctx, p.Config.FFmpegPath, args...); err != nil {
-		if ctx.Err() != nil {
-			return fmt.Errorf("video transcode timed out: %w", ctx.Err())
-		}
+		// A deterministic decoder diagnostic remains authoritative when command
+		// completion and the job deadline race under a saturated package test run.
 		if isUndecodableMediaSource(err) {
 			return &mediaprocessing.RejectionError{
 				Reason: "uploaded media cannot be decoded",
 			}
+		}
+		if ctx.Err() != nil {
+			return fmt.Errorf("video transcode timed out: %w", ctx.Err())
 		}
 		return fmt.Errorf(
 			"ffmpeg transcode execution failed: %v",
@@ -552,7 +596,7 @@ func (p *FFmpegMediaProcessor) UploadFile(
 	ctx context.Context,
 	path string,
 	objectKey string,
-	contentType string,
+	mimeType string,
 ) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -570,7 +614,7 @@ func (p *FFmpegMediaProcessor) UploadFile(
 		ctx,
 		p.Config.Bucket,
 		objectKey,
-		contentType,
+		mimeType,
 		file,
 	); err != nil {
 		return "", fmt.Errorf("upload delivery artifact %q: %w", objectKey, err)
@@ -608,8 +652,8 @@ func keyframeGOP(frameRate float64) int {
 	return gop
 }
 
-func sourceExtension(contentType string) string {
-	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+func sourceExtension(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0])) {
 	case "video/mp4":
 		return ".mp4"
 	case "video/quicktime":

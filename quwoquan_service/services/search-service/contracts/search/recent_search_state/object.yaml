@@ -30,8 +30,5 @@ business_rules:
 - entries 数量不得超过配置的固定上限
 - 清除与新增只经 Search Command Facade，并使用服务端内部 version CAS
 lifecycle:
-  states:
-  - active
-  - cleared
   optimistic_concurrency: version
   idempotency: command_receipt

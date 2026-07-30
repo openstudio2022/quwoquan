@@ -17,10 +17,15 @@ import (
 type errorEntry struct {
 	Code                 string            `yaml:"code"`
 	Reason               string            `yaml:"reason"`
-	HTTPStatus           int               `yaml:"http_status"`
+	HTTPStatus           *int              `yaml:"http_status"`
 	GoConst              string            `yaml:"go_const"`
 	RecoveryAction       string            `yaml:"recovery_action"`
 	RecoveryAfterSeconds int               `yaml:"recovery_after_seconds"`
+	Recovery             struct {
+		Action          string `yaml:"action"`
+		DisruptionLevel string `yaml:"disruptionLevel"`
+		AfterSeconds    int    `yaml:"afterSeconds"`
+	} `yaml:"recovery"`
 	UserMessage          map[string]string `yaml:"user_message"`
 }
 
@@ -175,6 +180,10 @@ func renderErrors(sourcePath string, entries []errorEntry) ([]byte, error) {
 	buffer.WriteString(")\n")
 	for _, entry := range entries {
 		functionName := "AppErrorFrom" + strings.TrimPrefix(entry.GoConst, "Err")
+		httpStatus := 0
+		if entry.HTTPStatus != nil {
+			httpStatus = *entry.HTTPStatus
+		}
 		fmt.Fprintf(
 			&buffer,
 			"\n// %s returns *AppError for %s (user_message from errors.yaml).\n",
@@ -187,15 +196,37 @@ func renderErrors(sourcePath string, entries []errorEntry) ([]byte, error) {
 			functionName,
 		)
 		fmt.Fprintf(&buffer, "\tcode, _ := rterr.ParseCode(%q)\n", entry.Code)
-		fmt.Fprintf(
-			&buffer,
-			"\treturn rterr.NewAppError(code, %q, debugMessage).WithMetadata(%q, %d).WithRecovery(%q, %d)\n",
-			strings.TrimSpace(entry.UserMessage["zh"]),
-			strings.TrimSpace(entry.Reason),
-			entry.HTTPStatus,
-			strings.TrimSpace(entry.RecoveryAction),
-			entry.RecoveryAfterSeconds,
-		)
+		action := strings.TrimSpace(entry.Recovery.Action)
+		if action == "" {
+			action = strings.TrimSpace(entry.RecoveryAction)
+		}
+		afterSeconds := entry.Recovery.AfterSeconds
+		if afterSeconds <= 0 {
+			afterSeconds = entry.RecoveryAfterSeconds
+		}
+		disruptionLevel := strings.TrimSpace(entry.Recovery.DisruptionLevel)
+		if disruptionLevel == "" {
+			fmt.Fprintf(
+				&buffer,
+				"\treturn rterr.NewAppError(code, %q, debugMessage).WithMetadata(%q, %d).WithRecovery(%q, %d)\n",
+				strings.TrimSpace(entry.UserMessage["zh"]),
+				strings.TrimSpace(entry.Reason),
+				httpStatus,
+				action,
+				afterSeconds,
+			)
+		} else {
+			fmt.Fprintf(
+				&buffer,
+				"\treturn rterr.NewAppError(code, %q, debugMessage).WithMetadata(%q, %d).WithRecoveryDirective(%q, %q, %d)\n",
+				strings.TrimSpace(entry.UserMessage["zh"]),
+				strings.TrimSpace(entry.Reason),
+				httpStatus,
+				action,
+				disruptionLevel,
+				afterSeconds,
+			)
+		}
 		buffer.WriteString("}\n")
 	}
 	formatted, err := format.Source(buffer.Bytes())
@@ -213,9 +244,10 @@ func validateEntry(entry errorEntry) error {
 		return fmt.Errorf("%s go_const is required", entry.Code)
 	case strings.TrimSpace(entry.Reason) == "":
 		return fmt.Errorf("%s reason is required", entry.Code)
-	case entry.HTTPStatus < 400:
-		return fmt.Errorf("%s http_status must be >= 400", entry.Code)
-	case strings.TrimSpace(entry.RecoveryAction) == "":
+	case entry.HTTPStatus != nil &&
+		(*entry.HTTPStatus < 400 || *entry.HTTPStatus > 599):
+		return fmt.Errorf("%s http_status must be in 400..599", entry.Code)
+	case strings.TrimSpace(entry.RecoveryAction) == "" && strings.TrimSpace(entry.Recovery.Action) == "":
 		return fmt.Errorf("%s recovery_action is required", entry.Code)
 	case strings.TrimSpace(entry.UserMessage["zh"]) == "":
 		return fmt.Errorf("%s user_message.zh is required", entry.Code)

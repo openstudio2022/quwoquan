@@ -179,7 +179,7 @@ ChatMessageDisplayItem _message({
     senderId: senderId,
     senderName: senderId,
     senderAvatar: '',
-    senderSubAccountId: senderId,
+    senderPersonaId: senderId,
     type: type,
     content: content,
     status: 'sent',

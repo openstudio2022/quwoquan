@@ -33,8 +33,8 @@ final class AlphaUserSettingsFacet
   bool _enableGroupCallRing = true;
   ThemeModeSetting _ownerThemeMode = ThemeModeSetting.system;
   FontSizePreset _ownerFontSizePreset = FontSizePreset.md;
-  ThemeModeSetting? _subAccountThemeMode;
-  FontSizePreset? _subAccountFontSizePreset;
+  ThemeModeSetting? _personaThemeMode;
+  FontSizePreset? _personaFontSizePreset;
   int _aggregateVersion = 1;
   int _appearanceVersion = 1;
   DateTime _aggregateUpdatedAt;
@@ -160,10 +160,8 @@ final class AlphaUserSettingsFacet
     var aggregateChanged = false;
     final changed = switch (command.applyScope) {
       AppearanceApplyScope.allAccounts => _applyOwnerAppearance(command),
-      AppearanceApplyScope.currentSubAccount => _applySubAccountAppearance(
-        command,
-      ),
-      AppearanceApplyScope.inheritOwnerDefault => _clearSubAccountAppearance(),
+      AppearanceApplyScope.currentPersona => _applyPersonaAppearance(command),
+      AppearanceApplyScope.inheritOwnerDefault => _clearPersonaAppearance(),
     };
     if (command.applyScope == AppearanceApplyScope.allAccounts) {
       aggregateChanged =
@@ -188,27 +186,26 @@ final class AlphaUserSettingsFacet
     final changed =
         _ownerThemeMode != command.themeMode ||
         _ownerFontSizePreset != command.fontSizePreset ||
-        _subAccountThemeMode != null ||
-        _subAccountFontSizePreset != null;
-    _subAccountThemeMode = null;
-    _subAccountFontSizePreset = null;
+        _personaThemeMode != null ||
+        _personaFontSizePreset != null;
+    _personaThemeMode = null;
+    _personaFontSizePreset = null;
     return changed;
   }
 
-  bool _applySubAccountAppearance(UpdateAppearanceSettingsCommand command) {
+  bool _applyPersonaAppearance(UpdateAppearanceSettingsCommand command) {
     final changed =
-        _subAccountThemeMode != command.themeMode ||
-        _subAccountFontSizePreset != command.fontSizePreset;
-    _subAccountThemeMode = command.themeMode;
-    _subAccountFontSizePreset = command.fontSizePreset;
+        _personaThemeMode != command.themeMode ||
+        _personaFontSizePreset != command.fontSizePreset;
+    _personaThemeMode = command.themeMode;
+    _personaFontSizePreset = command.fontSizePreset;
     return changed;
   }
 
-  bool _clearSubAccountAppearance() {
-    final changed =
-        _subAccountThemeMode != null || _subAccountFontSizePreset != null;
-    _subAccountThemeMode = null;
-    _subAccountFontSizePreset = null;
+  bool _clearPersonaAppearance() {
+    final changed = _personaThemeMode != null || _personaFontSizePreset != null;
+    _personaThemeMode = null;
+    _personaFontSizePreset = null;
     return changed;
   }
 
@@ -226,16 +223,16 @@ final class AlphaUserSettingsFacet
 
   AppearanceSettingsView _appearance() {
     final hasOverride =
-        _subAccountThemeMode != null && _subAccountFontSizePreset != null;
+        _personaThemeMode != null && _personaFontSizePreset != null;
     return AppearanceSettingsView(
-      themeMode: _subAccountThemeMode ?? _ownerThemeMode,
-      fontSizePreset: _subAccountFontSizePreset ?? _ownerFontSizePreset,
+      themeMode: _personaThemeMode ?? _ownerThemeMode,
+      fontSizePreset: _personaFontSizePreset ?? _ownerFontSizePreset,
       source: hasOverride
           ? AppearanceSource.subOverride
           : AppearanceSource.ownerDefault,
       ownerDefaultThemeMode: _ownerThemeMode,
       ownerDefaultFontSizePreset: _ownerFontSizePreset,
-      hasSubAccountOverride: hasOverride,
+      hasPersonaOverride: hasOverride,
       version: _appearanceVersion,
       updatedAt: _appearanceUpdatedAt,
     );
@@ -296,6 +293,34 @@ final class AlphaCredentialBindingWriter
     'phone',
     command.displayLabel ?? _maskPhoneCredential(command.phone),
   );
+
+  @override
+  Future<AuthSessionGrant> completeFederatedPhoneBinding(
+    CompleteFederatedPhoneBindingCommand command,
+  ) async {
+    return AuthSessionGrant(
+      accessToken: 'alpha-binding-access',
+      refreshToken: 'alpha-binding-refresh',
+      ownerId: 'alpha-owner',
+      accountState: 'active',
+      identityOrigin: 'federated_phone',
+      logicalShard: 0,
+      anonymousRetentionPolicy: 'retained',
+      personaCount: 1,
+      sessionRememberTtlSeconds: 2592000,
+      activePersona: const ActivePersonaEnvelope(
+        personaId: 'alpha-persona-primary',
+      ),
+      accountHint: AccountHintSnapshot(
+        displayName: 'Alpha Account',
+        nicknameCustomized: false,
+        avatarUrl: '',
+        avatarAssetId: '',
+        maskedPhone: _maskPhoneCredential(command.phone),
+        identityOrigin: 'federated_phone',
+      ),
+    );
+  }
 
   @override
   Future<CredentialBindingCommandResult> bindCarrierPhoneCredential(

@@ -11,6 +11,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	generated "quwoquan_service/services/notification-service/generated/notification_delivery/notification"
+	jobgenerated "quwoquan_service/services/notification-service/generated/notification_delivery/notification_delivery_job"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 	deliverydomain "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
@@ -72,7 +73,7 @@ func (h *Handler) handleAckIncomingCallPresentation(
 		writeHTTPError(
 			w,
 			r,
-			generated.AppErrorFromUnauthorized(
+			jobgenerated.AppErrorFromDeliveryJobUnauthorized(
 				"incoming call presentation ACK requires trusted persona and device",
 			),
 		)
@@ -92,7 +93,7 @@ func (h *Handler) handleAckIncomingCallPresentation(
 		writeHTTPError(
 			w,
 			r,
-			generated.AppErrorFromInvalidArgument(debugMessage),
+			jobgenerated.AppErrorFromDeliveryJobInvalidArgument(debugMessage),
 		)
 		return
 	}
@@ -107,14 +108,14 @@ func (h *Handler) handleAckIncomingCallPresentation(
 			writeHTTPError(
 				w,
 				r,
-				generated.AppErrorFromDeliveryNotFound(err.Error()),
+				jobgenerated.AppErrorFromDeliveryJobNotFound(err.Error()),
 			)
 			return
 		}
 		writeHTTPError(
 			w,
 			r,
-			generated.AppErrorFromStorageWriteFailed(err.Error()),
+			jobgenerated.AppErrorFromDeliveryJobStorageWriteFailed(err.Error()),
 		)
 		return
 	}

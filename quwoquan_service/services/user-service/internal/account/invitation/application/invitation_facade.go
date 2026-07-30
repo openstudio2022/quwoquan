@@ -41,20 +41,20 @@ func NewFacade(
 func (facade *Facade) Generate(
 	ctx context.Context,
 	actorAccountID string,
-	inviterSubAccountID string,
+	inviterPersonaID string,
 	channel string,
 	inviteePhone string,
 ) (*invitationmodel.Invitation, error) {
 	actorAccountID = strings.TrimSpace(actorAccountID)
-	inviterSubAccountID = strings.TrimSpace(inviterSubAccountID)
+	inviterPersonaID = strings.TrimSpace(inviterPersonaID)
 	channel = strings.TrimSpace(channel)
 	inviteePhone = strings.TrimSpace(inviteePhone)
-	if actorAccountID == "" || inviterSubAccountID == "" || !validChannel(channel) {
+	if actorAccountID == "" || inviterPersonaID == "" || !validChannel(channel) {
 		return nil, usergenerated.AppErrorFromInvalidArgument("invalid invitation command")
 	}
 	ownerAccountID, found, err := facade.personas.ResolveOwnerAccountID(
 		ctx,
-		inviterSubAccountID,
+		inviterPersonaID,
 	)
 	if err != nil {
 		return nil, usergenerated.AppErrorFromInternalError("resolve invitation persona owner")
@@ -69,7 +69,7 @@ func (facade *Facade) Generate(
 	}
 	candidate := &invitationmodel.Invitation{
 		ID:                    uuid.NewString(),
-		InviterSubAccountID:   inviterSubAccountID,
+		InviterPersonaID:      inviterPersonaID,
 		InviterOwnerAccountID: ownerAccountID,
 		Channel:               channel,
 		LinkCode:              linkCode,
@@ -122,17 +122,17 @@ func (facade *Facade) Accept(
 func (facade *Facade) List(
 	ctx context.Context,
 	actorAccountID string,
-	inviterSubAccountID string,
+	inviterPersonaID string,
 	status string,
 	limit int,
 	offset int,
 ) ([]invitationmodel.Invitation, error) {
 	actorAccountID = strings.TrimSpace(actorAccountID)
-	inviterSubAccountID = strings.TrimSpace(inviterSubAccountID)
-	if actorAccountID == "" || inviterSubAccountID == "" {
+	inviterPersonaID = strings.TrimSpace(inviterPersonaID)
+	if actorAccountID == "" || inviterPersonaID == "" {
 		return nil, usergenerated.AppErrorFromInvalidArgument("invitation persona is required")
 	}
-	ownerAccountID, found, err := facade.personas.ResolveOwnerAccountID(ctx, inviterSubAccountID)
+	ownerAccountID, found, err := facade.personas.ResolveOwnerAccountID(ctx, inviterPersonaID)
 	if err != nil {
 		return nil, usergenerated.AppErrorFromInternalError("resolve invitation persona owner")
 	}
@@ -147,7 +147,7 @@ func (facade *Facade) List(
 	}
 	records, err := facade.store.ListByInviter(
 		ctx,
-		inviterSubAccountID,
+		inviterPersonaID,
 		strings.TrimSpace(status),
 		limit,
 		offset,

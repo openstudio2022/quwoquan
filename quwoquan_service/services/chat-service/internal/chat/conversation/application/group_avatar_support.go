@@ -17,8 +17,6 @@ import (
 	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 )
 
-const groupAvatarLayoutVersion = "v1"
-
 var configuredGroupAvatarCDNBase atomic.Value
 var configuredDefaultGroupAvatarURL atomic.Value
 
@@ -47,14 +45,14 @@ func ResolveGroupAvatarURL(conv model.Conversation) string {
 	if strings.TrimSpace(conv.GroupAvatarAssetId) == "" || conv.GroupAvatarVersion <= 0 {
 		return ""
 	}
-	ref := runtimemedia.BuildAvatarGroupAssetRef(
+	ref := runtimemedia.BuildAvatarGroupDeliveryReference(
 		conv.ID,
 		conv.GroupAvatarAssetId,
 		conv.GroupAvatarVersion,
 		conv.GroupAvatarSourceHash,
 		groupAvatarCDNBase(),
 	)
-	return ref.DeliveryReference().DeliveryURI
+	return ref.DeliveryURI
 }
 
 func ResolveConversationAvatarURL(conv model.Conversation) string {
@@ -123,12 +121,14 @@ func RegisterGroupAvatarAsset(
 	sourceHash := BuildGroupAvatarSourceHash(top9)
 	memberAvatarURLs := make([]string, 0, len(top9))
 	for _, member := range top9 {
-		memberAvatarURLs = append(memberAvatarURLs, resolveGroupAvatarSourceURL(member.AvatarUrl))
+		memberAvatarURLs = append(
+			memberAvatarURLs,
+			resolveGroupAvatarSourceURL(member.AvatarUrl, member.AvatarVersion),
+		)
 	}
 	asset, err := media.Register(ctx, runtimemedia.RegisterGroupAvatarRequest{
 		ConversationID:   conversationID,
 		SourceHash:       sourceHash,
-		LayoutVersion:    groupAvatarLayoutVersion,
 		Contributors:     buildAvatarSources(top9),
 		MemberAvatarURLs: memberAvatarURLs,
 	})
@@ -158,7 +158,7 @@ func RecomputeGroupAvatar(
 	if !IsGroupConversation(*conv) {
 		return nil
 	}
-	if strings.TrimSpace(conv.Status) != "active" {
+	if strings.TrimSpace(string(conv.Status)) != "active" {
 		return nil
 	}
 
@@ -422,7 +422,7 @@ func BuildGroupAvatarSourceHash(members []model.ConversationMember) string {
 		hash.Write([]byte("|"))
 		hash.Write([]byte(strings.TrimSpace(member.AvatarUrl)))
 		hash.Write([]byte("|"))
-		hash.Write([]byte(groupAvatarLayoutVersion))
+		hash.Write([]byte(runtimemedia.GroupAvatarGridLayoutID))
 		hash.Write([]byte("|"))
 	}
 	return hex.EncodeToString(hash.Sum(nil))
@@ -454,29 +454,24 @@ func buildAvatarSources(members []model.ConversationMember) []runtimemedia.Avata
 	return sources
 }
 
-func resolveGroupAvatarSourceURL(raw string) string {
-	source := strings.TrimSpace(raw)
-	if source == "" {
-		return ""
-	}
-	if strings.Contains(source, "://") {
-		return source
-	}
-	return runtimemedia.BuildPublicMediaURL(groupAvatarCDNBase(), source, 0)
+func resolveGroupAvatarSourceURL(raw string, version int64) string {
+	return resolveConversationAvatarURLValue(raw, version)
 }
 
 func resolveConversationAvatarURLValue(raw string, version int64) string {
 	source := strings.TrimSpace(raw)
-	if source == "" {
+	if source == "" || strings.Contains(source, "://") {
 		return ""
 	}
-	if strings.Contains(source, "://") {
-		return source
+	pathVersion, ok := runtimemedia.PublicSliceVersion(source)
+	if !ok || (version > 0 && version != pathVersion) {
+		return ""
 	}
-	if publicURL := runtimemedia.BuildPublicMediaURL(groupAvatarCDNBase(), source, version); publicURL != "" {
-		return publicURL
-	}
-	return source
+	return runtimemedia.BuildPublicMediaURL(
+		groupAvatarCDNBase(),
+		source,
+		pathVersion,
+	)
 }
 
 func int64String(value int64) string {

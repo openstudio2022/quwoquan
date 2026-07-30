@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	generated "quwoquan_service/services/circle-service/generated/circle_management/circle_post_placement"
 	placementmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/model"
 	placementports "quwoquan_service/services/circle-service/internal/circle_management/circle_post_placement/domain/ports"
 )
@@ -61,7 +62,7 @@ func (f *CommandFacade) Place(ctx context.Context, command PlaceCommand) (Comman
 	command.GroupID = strings.TrimSpace(command.GroupID)
 	current, actorID, err := trustedCommandContext(ctx)
 	if err != nil || command.CircleID == "" || command.PostID == "" {
-		return CommandResult{}, generated.AppErrorFromInvalidArgument("PlacePostInCircle requires trusted persona, circleId and postId")
+		return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("PlacePostInCircle requires trusted persona, circleId and postId")
 	}
 	circle, err := f.requireActiveCircle(ctx, command.CircleID)
 	if err != nil {
@@ -73,7 +74,7 @@ func (f *CommandFacade) Place(ctx context.Context, command PlaceCommand) (Comman
 			return CommandResult{}, generated.AppErrorFromPlacementStorageWriteFailed(readErr.Error())
 		}
 		if !found || group.CircleID != command.CircleID || group.State != "active" {
-			return CommandResult{}, generated.AppErrorFromInvalidArgument("group does not belong to the active circle")
+			return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("group does not belong to the active circle")
 		}
 	}
 	post, found, readErr := f.readers.Posts.ReadPostOwner(ctx, command.PostID)
@@ -81,14 +82,14 @@ func (f *CommandFacade) Place(ctx context.Context, command PlaceCommand) (Comman
 		return CommandResult{}, generated.AppErrorFromPlacementStorageWriteFailed(readErr.Error())
 	}
 	if !found || post.State != "published" || strings.TrimSpace(post.OwnerPersonaID) == "" {
-		return CommandResult{}, generated.AppErrorFromInvalidArgument("post is not an eligible published Post projection")
+		return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("post is not an eligible published Post projection")
 	}
 	moderator, err := f.isModerator(ctx, circle, actorID)
 	if err != nil {
 		return CommandResult{}, err
 	}
 	if actorID != post.OwnerPersonaID && !moderator {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
 	}
 	placementID := stablePlacementID(command.CircleID, actorID, current.IdempotencyKey)
 	change := placementmodel.ChangeSet{
@@ -117,7 +118,7 @@ func (f *CommandFacade) Remove(ctx context.Context, command TargetCommand) (Comm
 		return CommandResult{}, err
 	}
 	if actorID != placement.OwnerPersonaID && !moderator {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("actor is neither post owner nor circle moderator")
 	}
 	change := placementmodel.ChangeSet{
 		Kind: placementmodel.ChangeRemove, PlacementID: placement.ID, CircleID: placement.CircleID,
@@ -155,7 +156,7 @@ func (f *CommandFacade) setPresentation(ctx context.Context, kind placementmodel
 		return CommandResult{}, err
 	}
 	if !moderator {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("presentation changes require circle moderator")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("presentation changes require circle moderator")
 	}
 	change := placementmodel.ChangeSet{
 		Kind: kind, PlacementID: placement.ID, CircleID: placement.CircleID,
@@ -192,7 +193,7 @@ func (f *CommandFacade) requirePlacement(ctx context.Context, circleID, placemen
 	circleID = strings.TrimSpace(circleID)
 	placementID = strings.TrimSpace(placementID)
 	if circleID == "" || placementID == "" {
-		return placementmodel.CirclePostPlacement{}, generated.AppErrorFromInvalidArgument("circleId and placementId are required")
+		return placementmodel.CirclePostPlacement{}, circleerrors.AppErrorFromInvalidArgument("circleId and placementId are required")
 	}
 	placement, found, err := f.store.Load(ctx, placementID)
 	if err != nil {
@@ -210,10 +211,10 @@ func (f *CommandFacade) requireActiveCircle(ctx context.Context, circleID string
 		return placementports.CirclePolicySlice{}, generated.AppErrorFromPlacementStorageWriteFailed(err.Error())
 	}
 	if !found {
-		return placementports.CirclePolicySlice{}, generated.AppErrorFromCircleNotFound("placement target circle not found")
+		return placementports.CirclePolicySlice{}, circleerrors.AppErrorFromCircleNotFound("placement target circle not found")
 	}
 	if circle.State != "active" {
-		return placementports.CirclePolicySlice{}, generated.AppErrorFromInvalidArgument("placement target circle is not active")
+		return placementports.CirclePolicySlice{}, circleerrors.AppErrorFromInvalidArgument("placement target circle is not active")
 	}
 	return circle, nil
 }
@@ -302,7 +303,7 @@ func trustedCommandContext(ctx context.Context) (operation.Context, string, erro
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil ||
 		strings.TrimSpace(current.IdempotencyKey) == "" {
-		return operation.Context{}, "", generated.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
+		return operation.Context{}, "", circleerrors.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
 	}
 	return current, strings.TrimSpace(current.Actor.PersonaID), nil
 }
@@ -352,7 +353,7 @@ func mapCommitError(err error) error {
 	case errors.Is(err, placementmodel.ErrIdempotencyConflict):
 		return generated.AppErrorFromPlacementIdempotencyConflict(err.Error())
 	case errors.Is(err, placementmodel.ErrInvalidChange):
-		return generated.AppErrorFromInvalidArgument(err.Error())
+		return circleerrors.AppErrorFromInvalidArgument(err.Error())
 	default:
 		return generated.AppErrorFromPlacementStorageWriteFailed(err.Error())
 	}

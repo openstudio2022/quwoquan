@@ -4,7 +4,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('Chat Message typed contract', () {
     test('media command 只编码稳定 MediaAsset identity', () {
-      final payload = encodeChatSendMessageCommand(
+      final payload = encodeChatMessageSendMessageGeneratedRequest(
         ChatSendMessageCommand(
           conversationId: 'conversation-1',
           type: 'audio',
@@ -60,7 +60,7 @@ void main() {
     });
 
     test('card command 只编码强类型 card，拒绝非 card 命令夹带', () {
-      final payload = encodeChatSendMessageCommand(
+      final payload = encodeChatMessageSendMessageGeneratedRequest(
         ChatSendMessageCommand(
           conversationId: 'conversation-card',
           type: 'card',
@@ -126,7 +126,7 @@ void main() {
     });
 
     test('decodes message keyset page and encodes sequence bounds', () {
-      final request = encodeChatListMessagesQuery(
+      final request = encodeChatMessageListMessagesGeneratedRequest(
         ChatListMessagesQuery(
           conversationId: 'conversation-1',
           beforeSeq: 42,

@@ -52,15 +52,15 @@ class LocalGammaAnonymousSession {
     if (decoded is! Map<String, Object?>) {
       throw StateError('anonymous login returned a non-object payload');
     }
-    final activeSub = decoded['activeSub'];
-    if (activeSub is! Map<String, Object?>) {
-      throw StateError('anonymous login omitted activeSub');
+    final activePersona = decoded['activePersona'];
+    if (activePersona is! Map<String, Object?>) {
+      throw StateError('anonymous login omitted activePersona');
     }
     return LocalGammaAnonymousSession(
       accessToken: _requiredString(decoded, 'accessToken'),
       refreshToken: _requiredString(decoded, 'refreshToken'),
       ownerId: _requiredString(decoded, 'ownerId'),
-      personaId: _requiredString(activeSub, 'subAccountId'),
+      personaId: _requiredString(activePersona, 'personaId'),
     );
   }
 

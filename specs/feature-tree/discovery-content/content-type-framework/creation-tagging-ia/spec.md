@@ -18,7 +18,7 @@
 - 自动打标建议 suggestedTagRefs 消费 + 可编辑/可删除芯片（确认/修正层）
 - 交互形态：tag-service 常用标签 + 自动建议多选 ≤5；搜索入口由 flag 控制
 - 端侧不维护标签 catalog 或首发子集
-- tagRefs 经 CreatePost/UpdatePost writable_fields 注入（已通）
+- tagRefs 仅由 CreatePost/UpdatePost request entity 中的 semanticMentions 派生（已通）
 
 ### Out of Scope
 

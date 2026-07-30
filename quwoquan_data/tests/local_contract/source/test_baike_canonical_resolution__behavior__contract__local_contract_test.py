@@ -267,7 +267,7 @@ def test_geo_context_terms_are_derived_from_canonical_tag_ref():
     assert geo_context_terms_from_ref("地域/未知") == ()
 
 
-def test_non_fetchable_authority_does_not_enter_homepage_source_plan(tmp_path: Path):
+def test_registry_fetchable_authority_enters_homepage_source_plan(tmp_path: Path):
     qualified_source = QualifiedHomepageSource(
         provider=HomepageAuthorityProvider.TOUTIAO_BAIKE,
         title="古堰画乡景区",
@@ -293,4 +293,6 @@ def test_non_fetchable_authority_does_not_enter_homepage_source_plan(tmp_path: P
         force=True,
     ))
 
-    assert sources == []
+    assert len(sources) == 1
+    assert sources[0]["sourceKind"] == "toutiao_baike"
+    assert sources[0]["url"] == qualified_source.url

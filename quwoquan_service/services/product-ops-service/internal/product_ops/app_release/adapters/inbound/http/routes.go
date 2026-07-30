@@ -22,7 +22,7 @@ func NewHandler(service *apprelease.Service) *Handler { return &Handler{service:
 
 func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/ops/app-recovery/version", h.version)
-	mux.HandleFunc("/downloads/android/latest.json", h.androidLatest)
+	mux.HandleFunc("/download/android/latest.json", h.androidLatest)
 	mux.HandleFunc("/download", h.downloadLanding)
 	mux.HandleFunc("/download/", h.download)
 }

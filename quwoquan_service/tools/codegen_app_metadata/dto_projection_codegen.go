@@ -200,9 +200,21 @@ func projectionWireKey(f projectionFieldDef) string {
 	return strings.TrimSpace(f.Name)
 }
 
+func projectionUsesTypedEnum(f projectionFieldDef) bool {
+	enumRef := strings.TrimSpace(f.EnumRef)
+	dartType := strings.TrimSuffix(normalizeDartType(f.DartType), "?")
+	return enumRef != "" && dartType == enumRef
+}
+
 func buildStrictProjectionResolver(f projectionFieldDef) string {
 	key := projectionWireKey(f)
 	dartType := normalizeDartType(f.DartType)
+	if enumRef := strings.TrimSpace(f.EnumRef); projectionUsesTypedEnum(f) {
+		if f.Nullable {
+			return fmt.Sprintf("m['%s'] == null ? null : %s.fromWire(m['%s'])", key, enumRef, key)
+		}
+		return fmt.Sprintf("%s.fromWire(m['%s'])", enumRef, key)
+	}
 	nullableSuffix := ""
 	if f.Nullable {
 		nullableSuffix = "?"
@@ -236,6 +248,12 @@ func buildStrictProjectionResolver(f projectionFieldDef) string {
 }
 
 func strictProjectionToWireValue(f projectionFieldDef) string {
+	if projectionUsesTypedEnum(f) {
+		if f.Nullable {
+			return fmt.Sprintf("%s?.wireValue", f.Name)
+		}
+		return fmt.Sprintf("%s.wireValue", f.Name)
+	}
 	if f.MapFromStringKeyClass != "" {
 		if f.Nullable {
 			return fmt.Sprintf("%s?.toMap()", f.Name)
@@ -290,7 +308,13 @@ func strictProjectionInvalidCondition(f projectionFieldDef, key string) string {
 	dartType := normalizeDartType(f.DartType)
 	presentValue := fmt.Sprintf("m['%s']", key)
 	typeCheck := ""
-	if f.MapFromStringKeyClass != "" {
+	if strings.TrimSpace(f.EnumRef) != "" {
+		typeCheck = fmt.Sprintf("%s is! String", presentValue)
+	}
+	if typeCheck != "" {
+		// Canonical enum parsing is performed by Enum.fromWire in fromMap;
+		// the validator owns only the JSON scalar shape.
+	} else if f.MapFromStringKeyClass != "" {
 		typeCheck = fmt.Sprintf("%s is! Map || (%s as Map).keys.any((key) => key is! String)", presentValue, presentValue)
 	} else if f.ListElementDartClass != "" {
 		typeCheck = fmt.Sprintf("%s is! List || (%s as List).any((value) => value is! Map || value.keys.any((key) => key is! String))", presentValue, presentValue)
@@ -772,6 +796,21 @@ func buildAliasResolver(f projectionFieldDef) string {
 			"%s.fromMap(_parseStringKeyMap(m['%s']) ?? <String, dynamic>{})",
 			cls, key,
 		)
+	}
+
+	if enumRef := strings.TrimSpace(f.EnumRef); projectionUsesTypedEnum(f) {
+		if len(deduped) == 0 {
+			return defaultVal
+		}
+		if f.Nullable {
+			return fmt.Sprintf(
+				"m['%s'] == null ? null : %s.fromWire(m['%s'])",
+				key,
+				enumRef,
+				key,
+			)
+		}
+		return fmt.Sprintf("%s.fromWire(m['%s'])", enumRef, key)
 	}
 
 	switch dartType {

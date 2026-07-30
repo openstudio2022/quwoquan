@@ -238,6 +238,24 @@ void main() {
         contains('StartupHealthStore.shouldRecoverConfirmedStartupFatal(this)'),
       );
       expect(
+        health,
+        contains('clearFatalMarker(preferences, "safe_shell_conflict")'),
+      );
+      expect(
+        health,
+        contains('clearFatalMarker(preferences, "artifact_mismatch")'),
+      );
+      expect(health, contains('static boolean markCurrentArtifactFatal'));
+      expect(health, contains('preferences.getBoolean(SAFE_SHELL_KEY, false)'));
+      expect(java, contains('currentDartAttemptIsHotRestart'));
+      expect(java, contains('recordCurrentDartAttemptFatal('));
+      expect(java, contains('startup_fatal_marker_ignored reason=hot_restart'));
+      expect(
+        java,
+        contains('startup_fatal_marker_ignored reason=safe_shell_reached'),
+      );
+      expect(java, contains('startup_fatal_marker_recorded'));
+      expect(
         gate.indexOf('shouldRecoverConfirmedStartupFatal(this)'),
         lessThan(gate.indexOf('startFlutterMainActivity();')),
       );
@@ -354,6 +372,9 @@ void main() {
       );
       expect(gradle, contains('qwq.nativeStartupInstrumentation'));
       expect(gradle, contains('androidx.test.runner.AndroidJUnitRunner'));
+      expect(gradle, contains('"QWQ_RUNTIME_CONFIG_DIGEST"'));
+      expect(gradle, contains('expectedRuntimeConfigDigest'));
+      expect(gradle, isNot(contains('nativeRuntimeConfigDigest')));
     });
 
     test('iOS fatal gate 在 FlutterAppDelegate 与 implicit engine 之前终止启动', () {
@@ -445,10 +466,22 @@ void main() {
       );
       expect(iosGateProbe, contains('ios_implicit_flutter_engine_initialized'));
       expect(iosGateProbe, contains('--qwq-test-confirmed-startup-fatal'));
-      expect(iosGateProbe, contains('"uninstall"'));
+      expect(iosGateProbe, contains('--qwq-test-clear-startup-fatal'));
+      expect(iosGateProbe, isNot(contains('"uninstall"')));
       expect(iosGateProbe, contains('"normalLaunchVerified"'));
       expect(iosGateProbe, contains('"status": "passed" if not issues'));
       expect(ios, contains('effectiveLaunchManifestDigest'));
+      expect(ios, contains('clearFatalMarker(reason: "safe_shell_conflict")'));
+      expect(ios, contains('clearFatalMarker(reason: "artifact_mismatch")'));
+      expect(ios, contains('static func markFatalStartup() -> Bool'));
+      expect(ios, contains('currentDartAttemptIsHotRestart'));
+      expect(ios, contains('recordCurrentDartAttemptFatal('));
+      expect(ios, contains('startup_fatal_marker_ignored reason=hot_restart'));
+      expect(
+        ios,
+        contains('startup_fatal_marker_ignored reason=safe_shell_reached'),
+      );
+      expect(ios, contains('startup_fatal_marker_recorded'));
       expect(
         ios,
         contains(
@@ -666,20 +699,53 @@ void main() {
       expect(ios, contains('cancelNativeRecoveryTerminalReconciliation'));
       expect(ios, contains('dismissNativeStartupRecoveryForSafeTerminalRace'));
       expect(ios, contains('ios_startup_safe_terminal_race_dismissed'));
-      final iosFirstFrameConfirmation = ios.substring(
-        ios.indexOf('private func confirmFlutterFirstFrame'),
-        ios.indexOf('private func confirmStartupSafeTerminal'),
+      final iosDidFinishLaunch = ios.substring(
+        ios.indexOf('    didFinishLaunchingWithOptions launchOptions:'),
+        ios.indexOf('    configurationForConnecting connectingSceneSession:'),
+      );
+      expect(iosDidFinishLaunch, isNot(contains('registrar(forPlugin:')));
+      expect(
+        iosDidFinishLaunch,
+        isNot(contains('configureIncomingCallInfrastructure')),
+      );
+      final iosImplicitEngineInitialization = ios.substring(
+        ios.indexOf('func didInitializeImplicitFlutterEngine'),
+        ios.indexOf('private func registerMethodChannels'),
       );
       expect(
-        iosFirstFrameConfirmation.indexOf(
-          'registerGeneratedPluginsAfterFirstFrame()',
+        iosImplicitEngineInitialization,
+        contains(
+          'configureIncomingCallInfrastructure('
+          'pluginRegistry: engineBridge.pluginRegistry)',
         ),
-        greaterThan(
-          iosFirstFrameConfirmation.indexOf(
-            'flutterFirstFrameConfirmed = true',
+      );
+      expect(
+        iosImplicitEngineInitialization,
+        contains(
+          'GeneratedPluginRegistrant.register('
+          'with: engineBridge.pluginRegistry)',
+        ),
+      );
+      expect(
+        iosImplicitEngineInitialization.indexOf(
+          'configureIncomingCallInfrastructure',
+        ),
+        lessThan(
+          iosImplicitEngineInitialization.indexOf(
+            'GeneratedPluginRegistrant.register',
           ),
         ),
       );
+      expect(
+        iosImplicitEngineInitialization.indexOf(
+          'GeneratedPluginRegistrant.register',
+        ),
+        lessThan(
+          iosImplicitEngineInitialization.indexOf('registerMethodChannels('),
+        ),
+      );
+      expect(ios, isNot(contains('deferredPluginRegistry')));
+      expect(ios, isNot(contains('registerGeneratedPluginsAfterFirstFrame')));
       expect(web, contains('__qwqStartupStartedAtMs'));
       expect(web, contains('__qwqStartupElapsedMs'));
       expect(web, isNot(contains('__qwqShowStartupRecovery')));
@@ -710,7 +776,6 @@ void main() {
       expect(ios, contains('clearStartupJournal'));
       expect(ios, isNot(contains('private var lastElapsedMs')));
       expect(web, isNot(contains('__qwqStartupNativeLastElapsedMs')));
-      expect(ios, contains('registerGeneratedPluginsAfterFirstFrame'));
       for (final source in <String>[android, ios, bridge]) {
         expect(source, isNot(contains('animationProgress')));
         expect(source, isNot(contains('replayCount')));
@@ -831,7 +896,7 @@ void main() {
       expect(motionProbe, contains('frame_displacement'));
     });
 
-    test('本地 HTTPS trust 先于认证网络且不阻断安全 Shell readiness', () {
+    test('公共 CA 单轨不在 Flutter bootstrap 注入本地 trust', () {
       final bootstrap = _readAppFile('lib/app_bootstrap.dart');
       final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
       final beforeRunApp = bootstrap.substring(0, bootstrap.indexOf('runApp('));
@@ -853,14 +918,7 @@ void main() {
       expect(bootstrap, contains('_hydratePostFirstFrameStartupState'));
       expect(bootstrap, contains('postFirstFrameTasks:'));
       expect(bootstrap, contains('authNetworkPrerequisites:'));
-      expect(
-        bootstrap,
-        contains('_installLocalDevHttpsTrustBeforeMediaClients()'),
-      );
-      expect(
-        bootstrap,
-        contains('LocalDevHttpsTrust.installForCurrentRuntime()'),
-      );
+      expect(bootstrap, isNot(contains('LocalDevHttpsTrust')));
       expect(
         beforeRunApp,
         isNot(contains('_hydratePostFirstFrameStartupState()')),
@@ -882,22 +940,25 @@ void main() {
       expect(scheduler, isNot(contains('await prerequisites')));
     });
 
-    test('iOS 直接构建从同一环境包注入完整 Dart defines', () {
+    test('iOS 仅允许 canonical launcher 传入完整 Dart defines', () {
       final script = _readAppFile('scripts/ios/prepare_dart_defines.sh');
+      final logHygiene = _readAppFile(
+        'scripts/ios/ios_shortcut_log_hygiene.py',
+      );
       final wrapper = _readAppFile('scripts/ios/xcode_backend_build.sh');
       final project = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');
       expect(script, contains('print_app_env_dart_defines.py'));
-      expect(script, contains('build_launcher_handoff.py'));
-      expect(script, contains('CONFIGURATION:-}" == "Debug"'));
-      expect(script, contains('--target alpha-local'));
-      expect(script, contains('--launch-mode canonical_launcher'));
-      expect(script, contains('export FLUTTER_TARGET='));
-      expect(script, contains('lib/main_prod.dart'));
+      expect(script, contains('use ./run.sh -d <device>'));
+      expect(script, isNot(contains('DIRECT_ALPHA_HANDOFF')));
+      expect(script, isNot(contains('xcode-direct-alpha')));
+      expect(script, isNot(contains('export FLUTTER_TARGET=')));
       expect(script, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(wrapper, contains('runtime package preparation failed'));
       expect(wrapper, contains('QWQ_IOS_DART_DEFINES_READY'));
       expect(project, contains('xcode_backend_build.sh'));
       expect(project, isNot(contains('eval \\"')));
+      expect(logHygiene, contains('APP_ROOT / "run.sh"'));
+      expect(logHygiene, isNot(contains('cmd = ["flutter", "run"')));
     });
 
     test('Android 插件由稳定应用注册器分层装配，生成注册器不在构建期修改', () {
@@ -1013,10 +1074,11 @@ void main() {
         'scripts/device/build_launcher_handoff.py',
       );
       expect(instanceLauncher, contains('build_launcher_handoff.py'));
-      expect(launcherHandoff, contains('entrypoint = "lib/main_prod.dart"'));
       expect(
         launcherHandoff,
-        contains('"schema": "app-effective-launch-manifest-v1"'),
+        contains(
+          'entrypoint = effective_schema["fields"]["entrypoint"]["const"]',
+        ),
       );
       expect(launcherHandoff, contains('effectiveLaunchManifestDigest'));
       expect(launcherHandoff, isNot(contains('runners/alpha')));

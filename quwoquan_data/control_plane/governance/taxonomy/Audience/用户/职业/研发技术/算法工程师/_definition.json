@@ -2,6 +2,7 @@
   "label": "算法工程师",
   "labelEn": "Algorithm Engineer",
   "description": "负责机器学习、推荐、搜索或模型算法",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

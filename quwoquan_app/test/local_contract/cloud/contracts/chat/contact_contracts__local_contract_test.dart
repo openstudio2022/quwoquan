@@ -3,8 +3,50 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('Chat contact typed contracts', () {
+    test('contact identity only accepts canonical userId and userHandle', () {
+      final page = decodeChatContactPageSlice(<String, Object?>{
+        'items': <Object?>[
+          <String, Object?>{
+            'userId': 'persona-42',
+            'userHandle': 'alice_public',
+            'displayName': 'Alice',
+            'avatarUrl': '',
+            'bio': '',
+            'metFrom': '',
+            'lastInteraction': '',
+            'relationState': 'mutual',
+            'source': 'follow',
+            'isStarred': false,
+          },
+        ],
+      });
+
+      expect(page.items.single.userId, 'persona-42');
+      expect(page.items.single.userHandle, 'alice_public');
+      expect(
+        () => decodeChatContactPageSlice(<String, Object?>{
+          'items': <Object?>[
+            <String, Object?>{
+              'contactId': 'persona-42',
+              'userId': 'persona-42',
+              'userHandle': 'alice_public',
+              'displayName': 'Alice',
+              'avatarUrl': '',
+              'bio': '',
+              'metFrom': '',
+              'lastInteraction': '',
+              'relationState': 'mutual',
+              'source': 'follow',
+              'isStarred': false,
+            },
+          ],
+        }),
+        throwsFormatException,
+      );
+    });
+
     test('inbox query preserves opaque keyset cursor', () {
-      final payload = encodeChatListInboxQuery(
+      final payload = encodeChatConversationListInboxGeneratedRequest(
         ChatListInboxQuery(cursor: 'opaque-keyset', limit: 30),
       );
 
@@ -47,11 +89,12 @@ void main() {
         () => ChatBatchGetConversationsQuery(conversationIds: const <String>[]),
         throwsArgumentError,
       );
-      final payload = encodeChatBatchGetConversationsQuery(
-        ChatBatchGetConversationsQuery(
-          conversationIds: const <String>['conversation-1'],
-        ),
-      );
+      final payload =
+          encodeChatConversationBatchGetConversationsGeneratedRequest(
+            ChatBatchGetConversationsQuery(
+              conversationIds: const <String>['conversation-1'],
+            ),
+          );
       expect(payload.body, <String, Object?>{
         'ids': <String>['conversation-1'],
       });

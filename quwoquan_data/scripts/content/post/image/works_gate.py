@@ -1,7 +1,7 @@
 """作品判定接入闸口（compose-brief 阶段）。
 
 在 Agent 创作之前对每个内容对象跑 WorksClassifier：
-- 落 works_verdict.json 到对象 compose 阶段目录（审计全覆盖，可回溯 thresholdsVersion）。
+- 落 works_verdict.json 到对象 compose 阶段目录（审计全覆盖，可回溯 policyDigest）。
 - article/image 作品载体下判为 moment/abandoned → 返回阻断 issue，不进入 agent_compose，
   从而在创作前拦截随记/低专业度来源，节省执行 Agent 的创作 token（主成本）。
 - homepage 实体主页是独立流程，已有主页专属证据门，这里只落审计 verdict，不二次阻断。

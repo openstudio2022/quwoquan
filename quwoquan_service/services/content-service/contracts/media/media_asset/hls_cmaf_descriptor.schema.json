@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.quwoquan.com/content/media-asset/hls-cmaf-descriptor.schema.json",
+  "title": "HlsCmafDescriptor",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assetId",
+    "assetVersion",
+    "descriptorVersion",
+    "processorProfile",
+    "protocol",
+    "segmentFormat",
+    "segmentDurationMs",
+    "masterManifestSliceKey",
+    "fallbackVideoSliceKey",
+    "videoCodec",
+    "audioCodec",
+    "renditions"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan.content.hls_cmaf_descriptor"
+    },
+    "assetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assetVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "descriptorVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "processorProfile": {
+      "type": "string",
+      "minLength": 1
+    },
+    "protocol": {
+      "const": "hls"
+    },
+    "segmentFormat": {
+      "const": "cmaf"
+    },
+    "segmentDurationMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 2000
+    },
+    "masterManifestSliceKey": {
+      "type": "string",
+      "pattern": "^media/video/s/asset/[^/]+/v[1-9][0-9]*/hls/master\\.m3u8$"
+    },
+    "fallbackVideoSliceKey": {
+      "type": "string",
+      "pattern": "^media/video/s/asset/[^/]+/v[1-9][0-9]*/source\\.mp4$"
+    },
+    "videoCodec": {
+      "const": "h264"
+    },
+    "audioCodec": {
+      "const": "aac"
+    },
+    "renditions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "width",
+          "height",
+          "videoBitrateBps",
+          "audioBitrateBps",
+          "playlistSliceKey"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]+$"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "videoBitrateBps": {
+            "type": "integer",
+            "minimum": 100000
+          },
+          "audioBitrateBps": {
+            "type": "integer",
+            "minimum": 32000
+          },
+          "playlistSliceKey": {
+            "type": "string",
+            "pattern": "^media/video/s/asset/[^/]+/v[1-9][0-9]*/hls/v[0-3]/index\\.m3u8$"
+          }
+        }
+      }
+    }
+  }
+}

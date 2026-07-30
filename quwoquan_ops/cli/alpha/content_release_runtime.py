@@ -9,14 +9,16 @@ external deploy workspace, while process records and logs are disposable
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
 import time
 import urllib.request
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -31,6 +33,9 @@ from quwoquan_ops.cli.lib.local_alpha_object_storage import (
 from quwoquan_ops.cli.lib.local_environment_auth import (
     prepare_local_environment_auth,
     write_local_report_account_backfill,
+)
+from quwoquan_ops.cli.lib.immutable_image_composition import (
+    bind_packaged_image_composition,
 )
 from quwoquan_ops.cli.lib.local_provider_credentials import (
     prepare_local_provider_credentials,
@@ -157,15 +162,6 @@ def _service_package_config(service: str) -> Path:
 
 def _prepare_config_root(paths: RuntimePaths) -> dict[str, str]:
     paths.config_root.mkdir(parents=True, exist_ok=True)
-    _run([
-        sys.executable,
-        "quwoquan_ops/cli/stackctl.py",
-        "package",
-        "--env",
-        ENVIRONMENT,
-        "--kind",
-        "legal-static",
-    ])
     if not (paths.legal_root / "legal" / "user-agreement").is_file():
         raise RuntimeError("Alpha legal-static package is incomplete")
     versions: dict[str, str] = {}
@@ -214,11 +210,16 @@ def _compose_build_environment() -> dict[str, str]:
             )
         return value.strip()
 
+    media_delivery = urlsplit(str(public_bases["mediaImage"]))
     return {
         "QWQ_COMPOSE_GO_BASE_IMAGE": required_image("goBaseImage"),
         "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_image("alpineBaseImage"),
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL": urlunsplit(
+            (media_delivery.scheme, media_delivery.netloc, "", "", "")
+        ),
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
     }
 
 
@@ -238,13 +239,13 @@ def _base_environment(paths: RuntimePaths, versions: Mapping[str, str]) -> dict[
             "QWQ_LOCAL_MONGO_PORT": str(ports["mongodb"]),
             "QWQ_LOCAL_REDIS_PORT": str(ports["redis"]),
             "QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
-            "QWQ_LOCAL_PUBLIC_UPLOAD_HOST": "upload.alpha.quwoquan.com",
-            "QWQ_LOCAL_UPLOAD_LOCAL_HOST": "alpha-upload.localhost",
+            "QWQ_LOCAL_PUBLIC_UPLOAD_HOST": env["ALPHA_OBJECT_STORAGE_ENDPOINT"].rsplit(
+                ":", 1
+            )[0],
             "QWQ_LOCAL_OBJECT_STORAGE_BUCKET": env["ALPHA_OBJECT_STORAGE_BUCKET"],
             "QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_ID"],
             "QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_SECRET"],
             "QWQ_LOCAL_OBJECT_STORAGE_TLS_DIR": env["ALPHA_OBJECT_STORAGE_TLS_DIR"],
-            "QWQ_LOCAL_OBJECT_STORAGE_CA_FILE": env["ALPHA_OBJECT_STORAGE_CA_FILE"],
             "QWQ_COMPOSE_ENV": ENVIRONMENT,
             "QWQ_COMPOSE_CONFIG_ROOT": str(paths.config_root),
             "QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION": versions["content-service"],
@@ -261,15 +262,22 @@ def _base_environment(paths: RuntimePaths, versions: Mapping[str, str]) -> dict[
             "QWQ_COMPOSE_OBJECT_STORAGE_REGION": env["ALPHA_OBJECT_STORAGE_REGION"],
             "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_ID"],
             "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET": env["ALPHA_OBJECT_STORAGE_ACCESS_KEY_SECRET"],
-            "QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN": env["ALPHA_OBJECT_STORAGE_CDN_DOMAIN"],
             "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY": env["ALPHA_OBJECT_STORAGE_CDN_SIGN_KEY"],
-            "QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE": env["ALPHA_OBJECT_STORAGE_CA_FILE"],
             "QWQ_COMPOSE_EMBEDDING_ENDPOINT": env["CONTENT_EMBEDDING_FIXTURE_ENDPOINT"],
             "QWQ_COMPOSE_EMBEDDING_API_KEY": env["CONTENT_EMBEDDING_FIXTURE_API_KEY"],
             "QWQ_COMPOSE_REC_POLICY_SOURCE": str(
-                ROOT / "quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy_object_cards_v1.yaml"
+                ROOT / "quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
             ),
         }
+    )
+    bind_packaged_image_composition(
+        ENVIRONMENT,
+        env,
+        services=(
+            "recommendation-service",
+            "content-service",
+            "user-service",
+        ),
     )
     return env
 
@@ -357,7 +365,14 @@ def _wait_http(url: str, *, timeout_seconds: int, compose_service: str = "") -> 
     raise RuntimeError(f"service readiness timed out: {url}")
 
 
-def _start_process(paths: RuntimePaths, name: str, arguments: list[str], *, cwd: Path, env: Mapping[str, str]) -> dict[str, int]:
+def _start_process(
+    paths: RuntimePaths,
+    name: str,
+    arguments: list[str],
+    *,
+    cwd: Path,
+    env: Mapping[str, str],
+) -> dict[str, int | str]:
     log = paths.logs_root / name / "local" / "runtime.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     process = subprocess.Popen(
@@ -369,7 +384,16 @@ def _start_process(paths: RuntimePaths, name: str, arguments: list[str], *, cwd:
         stderr=subprocess.DEVNULL,
         start_new_session=True,
     )
-    return {"pid": process.pid, "pgid": os.getpgid(process.pid)}
+    return {
+        "pid": process.pid,
+        "pgid": os.getpgid(process.pid),
+        "commandDigest": "sha256:"
+        + hashlib.sha256(
+            json.dumps(arguments, ensure_ascii=False, separators=(",", ":")).encode(
+                "utf-8"
+            )
+        ).hexdigest(),
+    }
 
 
 def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
@@ -394,6 +418,11 @@ def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
                 "",
                 f"https://{api_host}:{api_port}, https://{web_host}:{api_port} {{",
                 "  import public_tls",
+                "  @web_api {",
+                f"    host {web_host}",
+                "    path /api/*",
+                "  }",
+                "  uri @web_api strip_prefix /api",
                 "  handle /healthz {",
                 f"    reverse_proxy host.docker.internal:{ports['content-service']}",
                 "  }",
@@ -418,7 +447,21 @@ def _write_caddyfile(paths: RuntimePaths, ports: Mapping[str, int]) -> None:
                 "",
                 f"https://{cdn_host}:{media_port}, https://{upload_host}:{media_port} {{",
                 "  import public_tls",
-                "  header Access-Control-Allow-Origin \"*\"",
+                "  header {",
+                "    Access-Control-Allow-Origin \"*\"",
+                "    Access-Control-Allow-Methods \"GET, HEAD, OPTIONS\"",
+                "    Access-Control-Allow-Headers \"*\"",
+                "    Cross-Origin-Resource-Policy \"cross-origin\"",
+                "    Cache-Control \"no-store\"",
+                "  }",
+                "  @immutable_public_media {",
+                "    path_regexp immutable_public_media ^/media/(?:avatar|image|video|background|attachment)/s/(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$",
+                "    vars_regexp canonical_media_query {http.request.uri.query} ^$",
+                "  }",
+                "  header @immutable_public_media {",
+                "    Cache-Control \"public, max-age=31536000, immutable\"",
+                "    X-QWQ-Media-Cache-Key \"{http.request.uri.path}\"",
+                "  }",
                 f"  reverse_proxy host.docker.internal:{ports['media-processor']}",
                 "}",
                 "",
@@ -452,31 +495,197 @@ def _container_exists(name: str) -> bool:
     return subprocess.run(["docker", "container", "inspect", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode == 0
 
 
-def _stop_process(record: Mapping[str, object]) -> None:
+def _process_group_exists(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _wait_process_group_gone(pgid: int, *, timeout_seconds: float) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if not _process_group_exists(pgid):
+            return True
+        time.sleep(0.2)
+    return not _process_group_exists(pgid)
+
+
+def _stop_process(record: Mapping[str, object]) -> bool:
+    pid = record.get("pid")
     pgid = record.get("pgid")
-    if not isinstance(pgid, int) or pgid <= 0:
-        return
+    if (
+        not isinstance(pid, int)
+        or pid <= 0
+        or not isinstance(pgid, int)
+        or pgid <= 0
+    ):
+        return False
+    try:
+        current_pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        return True
+    if current_pgid != pgid:
+        raise RuntimeError(
+            f"managed process identity drift: pid={pid} expectedPgid={pgid} "
+            f"actualPgid={current_pgid}"
+        )
     try:
         os.killpg(pgid, signal.SIGTERM)
     except ProcessLookupError:
-        return
-    deadline = time.monotonic() + 15
-    while time.monotonic() < deadline:
-        try:
-            os.killpg(pgid, 0)
-        except ProcessLookupError:
-            return
-        time.sleep(0.2)
+        return True
+    if _wait_process_group_gone(pgid, timeout_seconds=15):
+        return True
     try:
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
-        return
+        return True
+    return _wait_process_group_gone(pgid, timeout_seconds=5)
+
+
+def _matches_orphaned_wrapper(
+    command: str,
+    *,
+    name: str,
+    ports: Mapping[str, int],
+    paths: RuntimePaths,
+) -> bool:
+    try:
+        arguments = shlex.split(command)
+    except ValueError:
+        return False
+    wrapper = str((ROOT / "quwoquan_ops/cli/lib/runtime_log_process.py").resolve())
+    if len(arguments) < 8 or str(Path(arguments[1]).resolve()) != wrapper:
+        return False
+    try:
+        log_index = arguments.index("--log-file")
+        event_index = arguments.index("--event")
+        separator_index = arguments.index("--")
+    except ValueError:
+        return False
+    if (
+        log_index + 1 >= len(arguments)
+        or event_index + 1 >= len(arguments)
+        or arguments[event_index + 1] != name
+        or separator_index <= event_index
+    ):
+        return False
+    log_path = Path(arguments[log_index + 1]).resolve()
+    observability_root = (ROOT / ".qwq_output/env/alpha/observability").resolve()
+    try:
+        relative_log = log_path.relative_to(observability_root)
+    except ValueError:
+        return False
+    if relative_log.parts[-5:] != (
+        "logs",
+        "service",
+        name,
+        "local",
+        "runtime.log",
+    ):
+        return False
+    child = arguments[separator_index + 1 :]
+    if name == "media-origin":
+        required = {
+            "quwoquan_ops/cli/lib/local_media_origin.py",
+            "--listen-port",
+            str(ports["media-origin"]),
+            "--root-dir",
+            str(paths.media_root.resolve()),
+        }
+        return required.issubset(set(child))
+    if name == "media-edge":
+        required = {
+            "quwoquan_ops/cli/lib/http_reverse_proxy.py",
+            "--listen-port",
+            str(ports["media-processor"]),
+            "--target-base-url",
+            f"http://127.0.0.1:{ports['media-origin']}",
+        }
+        return required.issubset(set(child))
+    if name == "entity-service":
+        return child == ["go", "run", "./cmd/api"]
+    return False
+
+
+def discover_orphaned_managed_processes() -> dict[str, dict[str, int]]:
+    """Find only target-scoped Alpha wrappers after their canonical ledger was lost."""
+    paths = _paths()
+    if paths.state_path.exists():
+        raise RuntimeError(
+            "Alpha managed process ledger still exists; use stackctl down instead"
+        )
+    result = subprocess.run(
+        ["ps", "-axo", "pid=,pgid=,command="],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode:
+        raise RuntimeError(
+            "cannot inspect Alpha managed processes: "
+            + (result.stderr.strip() or f"ps exit={result.returncode}")
+        )
+    ports = profile_ports(load_port_manifest(), TARGET)
+    matches: dict[str, dict[str, int]] = {}
+    for line in result.stdout.splitlines():
+        fields = line.strip().split(maxsplit=2)
+        if len(fields) != 3:
+            continue
+        try:
+            pid, pgid = int(fields[0]), int(fields[1])
+        except ValueError:
+            continue
+        for name in ("media-origin", "media-edge", "entity-service"):
+            if _matches_orphaned_wrapper(
+                fields[2], name=name, ports=ports, paths=paths
+            ):
+                if name in matches:
+                    raise RuntimeError(
+                        f"multiple orphaned Alpha wrappers match managed role {name}"
+                    )
+                matches[name] = {"pid": pid, "pgid": pgid}
+    return matches
+
+
+def reclaim_orphaned_managed_processes(
+    *, confirm: bool
+) -> dict[str, dict[str, int]]:
+    if not confirm:
+        raise RuntimeError(
+            "orphaned Alpha process reclaim requires explicit confirmation"
+        )
+    matches = discover_orphaned_managed_processes()
+    residual: list[str] = []
+    for name, record in matches.items():
+        if not _stop_process(record):
+            residual.append(name)
+    if residual:
+        raise RuntimeError(
+            "orphaned Alpha process groups remain after repair: "
+            + ", ".join(sorted(residual))
+        )
+    remaining = discover_orphaned_managed_processes()
+    if remaining:
+        raise RuntimeError(
+            "orphaned Alpha wrappers remain after repair: "
+            + ", ".join(sorted(remaining))
+        )
+    return matches
 
 
 def up() -> None:
     if subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode:
         raise RuntimeError("Docker daemon is unavailable for Alpha content-release")
     assert_local_runtime_available(load_environment_topology(), TARGET)
+    # Public TLS is a startup prerequisite.  Validate it before stopping the
+    # current runtime so a missing certificate cannot turn a degraded but
+    # inspectable Alpha stack into a full outage.
+    certificate_paths(TARGET)
     down()
     paths = _paths(new_run=True)
     _materialize_observability_run(paths)
@@ -537,7 +746,20 @@ def up() -> None:
     _start_caddy(paths, ports)
     paths.process_dir.mkdir(parents=True, exist_ok=True)
     paths.state_path.write_text(
-        json.dumps({"workload": "content-release", "processes": processes, "composeProject": COMPOSE_PROJECT, "caddy": CADDY_NAME}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            {
+                "target": TARGET,
+                "workload": "content-release",
+                "runRoot": str(paths.run_root.resolve()),
+                "observabilityRoot": str(paths.observability_root.resolve()),
+                "processes": processes,
+                "composeProject": COMPOSE_PROJECT,
+                "caddy": CADDY_NAME,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -549,11 +771,23 @@ def down() -> None:
         try:
             loaded = json.loads(paths.state_path.read_text(encoding="utf-8"))
             state = loaded if isinstance(loaded, dict) else {}
-        except json.JSONDecodeError:
-            state = {}
-    for record in (state.get("processes") or {}).values():
-        if isinstance(record, Mapping):
-            _stop_process(record)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"managed process ledger is invalid JSON: {paths.state_path}"
+            ) from exc
+        if not state:
+            raise RuntimeError(
+                f"managed process ledger is not an object: {paths.state_path}"
+            )
+    process_records = state.get("processes") or {}
+    if not isinstance(process_records, Mapping):
+        raise RuntimeError(
+            f"managed process ledger has invalid processes: {paths.state_path}"
+        )
+    residual_processes: list[str] = []
+    for name, record in process_records.items():
+        if not isinstance(record, Mapping) or not _stop_process(record):
+            residual_processes.append(str(name))
     if _container_exists(CADDY_NAME):
         _run(["docker", "rm", "-f", CADDY_NAME])
     if subprocess.run(["docker", "info"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode == 0:
@@ -567,6 +801,11 @@ def down() -> None:
         container_ids = [line for line in result.stdout.splitlines() if line.strip()]
         if container_ids:
             _run(["docker", "rm", "-f", *container_ids])
+    if residual_processes:
+        raise RuntimeError(
+            "managed process groups remain after Alpha teardown: "
+            + ", ".join(sorted(residual_processes))
+        )
     paths.state_path.unlink(missing_ok=True)
 
 

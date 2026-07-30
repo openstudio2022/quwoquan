@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/user_settings_contracts.requests.g.dart';
 
 /// UserSettings 聚合命令的 pure contracts。
 /// 真相源：quwoquan_service/services/user-service/contracts/account/user_settings/{service,fields}.yaml。
@@ -58,7 +59,7 @@ enum AppearanceSource {
 
 enum AppearanceApplyScope {
   allAccounts('all_accounts'),
-  currentSubAccount('current_sub_account'),
+  currentPersona('current_persona'),
   inheritOwnerDefault('inherit_owner_default');
 
   const AppearanceApplyScope(this.wireValue);
@@ -147,63 +148,6 @@ final class NullableSettingMutation<T extends Object> {
   final bool clearsValue;
 }
 
-final class UpdateNotificationSettingsCommand {
-  const UpdateNotificationSettingsCommand({
-    this.enablePush,
-    this.enableMarketing,
-    this.quietHoursStart,
-    this.quietHoursEnd,
-  });
-
-  final bool? enablePush;
-  final bool? enableMarketing;
-  final NullableSettingMutation<QuietHoursTime>? quietHoursStart;
-  final NullableSettingMutation<QuietHoursTime>? quietHoursEnd;
-}
-
-final class UpdatePrivacySettingsCommand {
-  UpdatePrivacySettingsCommand({
-    this.allowStrangerMsg,
-    this.profileVisibility,
-    List<String>? blockedKeywords,
-    this.assistantEnabled,
-  }) : blockedKeywords = blockedKeywords == null
-           ? null
-           : List<String>.unmodifiable(_normalizeKeywords(blockedKeywords));
-
-  final bool? allowStrangerMsg;
-  final ProfileVisibility? profileVisibility;
-  final List<String>? blockedKeywords;
-  final bool? assistantEnabled;
-}
-
-final class UpdateCallSettingsCommand {
-  const UpdateCallSettingsCommand({
-    this.defaultIncomingCallRingtoneId,
-    this.allowCallerRingtoneOverride,
-    this.enableCallVibration,
-    this.enableGroupCallRing,
-  });
-
-  final NullableSettingMutation<OfficialRingtoneId>?
-  defaultIncomingCallRingtoneId;
-  final bool? allowCallerRingtoneOverride;
-  final bool? enableCallVibration;
-  final bool? enableGroupCallRing;
-}
-
-final class UpdateAppearanceSettingsCommand {
-  const UpdateAppearanceSettingsCommand({
-    required this.themeMode,
-    required this.fontSizePreset,
-    required this.applyScope,
-  });
-
-  final ThemeModeSetting themeMode;
-  final FontSizePreset fontSizePreset;
-  final AppearanceApplyScope applyScope;
-}
-
 /// 通知/隐私/通话设置命令的稳定提交回执；页面读投影为单一真相源。
 final class UserSettingsCommandResult {
   const UserSettingsCommandResult({
@@ -225,7 +169,7 @@ final class AppearanceSettingsView {
     required this.source,
     required this.ownerDefaultThemeMode,
     required this.ownerDefaultFontSizePreset,
-    required this.hasSubAccountOverride,
+    required this.hasPersonaOverride,
     required this.version,
     required this.updatedAt,
   });
@@ -235,7 +179,7 @@ final class AppearanceSettingsView {
   final AppearanceSource source;
   final ThemeModeSetting ownerDefaultThemeMode;
   final FontSizePreset ownerDefaultFontSizePreset;
-  final bool hasSubAccountOverride;
+  final bool hasPersonaOverride;
   final int version;
   final DateTime updatedAt;
 }
@@ -382,11 +326,6 @@ final class CallSettingsView {
   );
 }
 
-/// UserSettings 的四个对象级 named Reader；同时作为无 body GET 的 ABI marker。
-final class UserSettingsQuery {
-  const UserSettingsQuery();
-}
-
 abstract interface class UserSettingsQueryReader {
   Future<NotificationSettingsView> getNotificationSettings();
 
@@ -396,9 +335,6 @@ abstract interface class UserSettingsQueryReader {
 
   Future<AppearanceSettingsView> getAppearanceSettings();
 }
-
-CloudOperationRequestPayload encodeUserSettingsQuery(UserSettingsQuery query) =>
-    const CloudOperationRequestPayload(body: null);
 
 NotificationSettingsView decodeNotificationSettingsView(Object? value) {
   final map = _object(value, 'NotificationSettingsView');
@@ -486,69 +422,6 @@ CallSettingsView decodeCallSettingsView(Object? value) {
   );
 }
 
-CloudOperationRequestPayload encodeUpdateNotificationSettingsCommand(
-  UpdateNotificationSettingsCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    if (command.enablePush != null) 'enablePush': command.enablePush,
-    if (command.enableMarketing != null)
-      'enableMarketing': command.enableMarketing,
-    if (command.quietHoursStart != null)
-      'quietHoursStart': _nullableMutationWire(
-        command.quietHoursStart!,
-        (value) => value.wireValue,
-      ),
-    if (command.quietHoursEnd != null)
-      'quietHoursEnd': _nullableMutationWire(
-        command.quietHoursEnd!,
-        (value) => value.wireValue,
-      ),
-  },
-);
-
-CloudOperationRequestPayload encodeUpdatePrivacySettingsCommand(
-  UpdatePrivacySettingsCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    if (command.allowStrangerMsg != null)
-      'allowStrangerMsg': command.allowStrangerMsg,
-    if (command.profileVisibility != null)
-      'profileVisibility': command.profileVisibility!.wireValue,
-    if (command.blockedKeywords != null)
-      'blockedKeywords': command.blockedKeywords,
-    if (command.assistantEnabled != null)
-      'assistantEnabled': command.assistantEnabled,
-  },
-);
-
-CloudOperationRequestPayload encodeUpdateCallSettingsCommand(
-  UpdateCallSettingsCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    if (command.defaultIncomingCallRingtoneId != null)
-      'defaultIncomingCallRingtoneId': _nullableMutationWire(
-        command.defaultIncomingCallRingtoneId!,
-        (value) => value.wireValue,
-      ),
-    if (command.allowCallerRingtoneOverride != null)
-      'allowCallerRingtoneOverride': command.allowCallerRingtoneOverride,
-    if (command.enableCallVibration != null)
-      'enableCallVibration': command.enableCallVibration,
-    if (command.enableGroupCallRing != null)
-      'enableGroupCallRing': command.enableGroupCallRing,
-  },
-);
-
-CloudOperationRequestPayload encodeUpdateAppearanceSettingsCommand(
-  UpdateAppearanceSettingsCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'themeMode': command.themeMode.wireValue,
-    'fontSizePreset': command.fontSizePreset.wireValue,
-    'applyScope': command.applyScope.wireValue,
-  },
-);
-
 UserSettingsCommandResult decodeUserSettingsCommandResult(Object? value) {
   final map = _object(value, 'UserSettingsCommandResult');
   _only(map, const <String>{'userId', 'version', 'idempotentReplay'});
@@ -567,7 +440,7 @@ AppearanceSettingsView decodeAppearanceSettingsView(Object? value) {
     'source',
     'ownerDefaultThemeMode',
     'ownerDefaultFontSizePreset',
-    'hasSubAccountOverride',
+    'hasPersonaOverride',
     'version',
     'updatedAt',
   });
@@ -602,7 +475,7 @@ AppearanceSettingsView decodeAppearanceSettingsView(Object? value) {
       FontSizePreset.values,
       (value) => value.wireValue,
     ),
-    hasSubAccountOverride: _bool(map, 'hasSubAccountOverride'),
+    hasPersonaOverride: _bool(map, 'hasPersonaOverride'),
     version: _nonNegativeInt(map, 'version'),
     updatedAt: _timestamp(map, 'updatedAt'),
   );
@@ -712,18 +585,6 @@ T _enumFromString<T>(
     if (wireValue(value) == raw) return value;
   }
   throw FormatException('$key contains an unknown enum value: $raw');
-}
-
-Object _nullableMutationWire<T extends Object>(
-  NullableSettingMutation<T> mutation,
-  Object Function(T value) encoder,
-) {
-  if (mutation.clearsValue) return '';
-  final value = mutation.value;
-  if (value == null) {
-    throw StateError('setting mutation must contain a value or clear marker');
-  }
-  return encoder(value);
 }
 
 T? _applyNullableMutation<T extends Object>(

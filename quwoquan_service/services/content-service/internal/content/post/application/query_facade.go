@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
-	tombstoneerrors "quwoquan_service/services/content-service/generated/content/deleted_post_tombstone"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
@@ -58,7 +57,7 @@ func (f *PostQueryFacade) GetPost(
 	}
 	if found && strings.EqualFold(strings.TrimSpace(string(detail.Status)), "deleted") {
 		// 软删文档仍在：保留期内按墓碑语义返回 410 content_deleted。
-		return postports.PostDetailSlice{}, tombstoneerrors.AppErrorFromContentDeleted(
+		return postports.PostDetailSlice{}, contentgenerated.AppErrorFromContentDeleted(
 			"GetPost target was deleted by its author",
 		)
 	}
@@ -68,7 +67,7 @@ func (f *PostQueryFacade) GetPost(
 				ctx,
 				string(query.PostID()),
 			); tombstoneErr == nil && deleted {
-				return postports.PostDetailSlice{}, tombstoneerrors.AppErrorFromContentDeleted(
+				return postports.PostDetailSlice{}, contentgenerated.AppErrorFromContentDeleted(
 					"GetPost target was deleted by its author",
 				)
 			}
@@ -102,6 +101,52 @@ func (f *PostQueryFacade) GetPost(
 		)
 	}
 	return detail, nil
+}
+
+// GetHelperRead 只从具名 Post detail projection 读取公开文章。公开端点必须
+// 与 GetPost 共享 published/public/approved 门禁，避免按可猜测 ID 读取私有、
+// 待审核或已删除内容。
+func (f *PostQueryFacade) GetHelperRead(
+	ctx context.Context,
+	postID string,
+) (postports.HelperReadSlice, error) {
+	canonicalPostID := postports.PostID(strings.TrimSpace(postID))
+	if canonicalPostID == "" {
+		return postports.HelperReadSlice{}, contentgenerated.AppErrorFromPostNotFound(
+			"GetHelperRead target is missing or not visible",
+		)
+	}
+	if f == nil || f.detail == nil {
+		return postports.HelperReadSlice{}, postQueryReaderUnavailable(
+			"GetHelperRead detail reader is not configured",
+		)
+	}
+
+	detail, found, err := f.detail.FindPostDetail(ctx, canonicalPostID)
+	if err != nil {
+		return postports.HelperReadSlice{}, postQueryReadFailure("GetHelperRead", err)
+	}
+	if !found ||
+		!canViewerReadPostDetail(detail, postports.ViewerContext{}) ||
+		!strings.EqualFold(strings.TrimSpace(string(detail.ContentType)), "article") {
+		return postports.HelperReadSlice{}, contentgenerated.AppErrorFromPostNotFound(
+			"GetHelperRead target is missing or not visible",
+		)
+	}
+
+	summary := strings.TrimSpace(detail.HelperReadSummary)
+	if summary == "" {
+		summary = strings.TrimSpace(detail.Summary)
+	}
+	if summary == "" {
+		summary = truncateTextRunes(strings.TrimSpace(detail.Body), 200)
+	}
+	return postports.HelperReadSlice{
+		PostID:      detail.PostID,
+		ContentType: detail.ContentType,
+		Title:       detail.Title,
+		Summary:     summary,
+	}, nil
 }
 
 func (f *PostQueryFacade) ListUserPosts(

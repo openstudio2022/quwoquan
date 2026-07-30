@@ -27,13 +27,13 @@ extension _GlobalSearchPageStateNavigation on _GlobalSearchPageState {
     );
   }
 
-  void _openUserProfile(String userId) {
-    final normalized = userId.trim();
+  void _openUserProfile(String userHandle) {
+    final normalized = userHandle.trim();
     if (normalized.isEmpty) {
       return;
     }
     unawaited(_coordinator.rememberCurrentQuery());
-    context.push(AppRoutePaths.userProfile(username: normalized));
+    context.push(AppRoutePaths.userProfile(userHandle: normalized));
   }
 
   void _openHomepage(String homepageId) {

@@ -21,7 +21,7 @@ func TestPostBindingReaderPublishesNormalizedImageBytes(t *testing.T) {
 			AssetID:                  assetID,
 			OwnerID:                  "persona-1",
 			MediaType:                "image",
-			ContentType:              "image/png",
+			MimeType:                 "image/png",
 			Version:                  2,
 			ObjectKey:                originalKey,
 			ProcessingStatus:         mediamodel.ProcessingStatusReady,
@@ -64,7 +64,7 @@ func TestPostBindingReaderRejectsReadyImageWithoutNormalizedSource(t *testing.T)
 			AssetID:             assetID,
 			OwnerID:             "persona-1",
 			MediaType:           "image",
-			ContentType:         "image/jpeg",
+			MimeType:            "image/jpeg",
 			Version:             1,
 			ObjectKey:           "media/private/original",
 			ProcessingStatus:    mediamodel.ProcessingStatusReady,
@@ -82,6 +82,49 @@ func TestPostBindingReaderRejectsReadyImageWithoutNormalizedSource(t *testing.T)
 	}
 	if publisher.calls != 0 {
 		t.Fatalf("publisher called %d times for an invalid ready image", publisher.calls)
+	}
+}
+
+func TestPostBindingReaderKeepsHLSCMAFPairedWithProgressiveVideo(t *testing.T) {
+	const (
+		assetID     = "mas_video_hls_001"
+		prefix      = "media/video/s/asset/mas_video_hls_001/v4"
+		progressive = prefix + "/source.mp4"
+		descriptor  = prefix + "/hls/descriptor.json"
+		master      = prefix + "/hls/master.m3u8"
+	)
+	assets := &postBindingAssetReader{assets: map[string]mediaapp.MediaAssetSlice{
+		assetID: {
+			AssetID:                       assetID,
+			OwnerID:                       "persona-1",
+			MediaType:                     "video",
+			MimeType:                      "video/mp4",
+			Version:                       4,
+			ProcessingStatus:              mediamodel.ProcessingStatusReady,
+			VideoPublicSliceKey:           progressive,
+			CoverPublicSliceKey:           prefix + "/cover.jpg",
+			HLSCMAFDescriptorVersion:      1,
+			HLSCMAFDescriptorSliceKey:     descriptor,
+			HLSCMAFMasterManifestSliceKey: master,
+			HLSCMAFRenditionCount:         3,
+		},
+	}}
+	reader := NewPostBindingReader(assets, &recordingPublicSlicePublisher{})
+
+	bindings, err := reader.FindMediaAssetsForBinding(
+		context.Background(),
+		[]string{assetID},
+	)
+	if err != nil {
+		t.Fatalf("find HLS/CMAF video binding: %v", err)
+	}
+	got := bindings[assetID]
+	if got.PublicSliceKey != progressive || got.VideoPublicSliceKey != progressive ||
+		got.HLSCMAFDescriptorVersion != 1 ||
+		got.HLSCMAFDescriptorSliceKey != descriptor ||
+		got.HLSCMAFMasterManifestSliceKey != master ||
+		got.HLSCMAFRenditionCount != 3 {
+		t.Fatalf("HLS/CMAF binding lost canonical P0/P1 pairing: %+v", got)
 	}
 }
 

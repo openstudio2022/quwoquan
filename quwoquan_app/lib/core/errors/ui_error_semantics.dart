@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
+import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/entity/generated/entity_errors.g.dart';
 import 'package:quwoquan_app/cloud/rtc/generated/rtc_errors.g.dart';
@@ -400,6 +401,22 @@ class UiErrorSemanticResolver {
           }
           return CircleErrorMessages.zh[circleError] ??
               circleError.defaultMessage;
+        }
+        final membershipError = CircleMembershipErrorCode.fromCode(code);
+        if (membershipError != CircleMembershipErrorCode.unknown) {
+          if (l10n != null) {
+            return _localizedDefaultMessage(
+              l10n,
+              zh:
+                  CircleMembershipErrorMessages.zh[membershipError] ??
+                  membershipError.defaultMessage,
+              en:
+                  CircleMembershipErrorMessages.en[membershipError] ??
+                  membershipError.defaultMessage,
+            );
+          }
+          return CircleMembershipErrorMessages.zh[membershipError] ??
+              membershipError.defaultMessage;
         }
       }
       if (code.startsWith('CHAT.')) {

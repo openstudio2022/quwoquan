@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	generated "quwoquan_service/services/circle-service/generated/circle_management/circle_group"
+	membershiperrors "quwoquan_service/services/circle-service/generated/circle_management/circle_membership"
 	groupmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/model"
 	groupports "quwoquan_service/services/circle-service/internal/circle_management/circle_group/domain/ports"
 )
@@ -80,7 +82,7 @@ func (facade *CommandFacade) Create(ctx context.Context, command CreateCommand) 
 		return CommandResult{}, err
 	}
 	if command.GroupType != groupmodel.CircleGroupTypeSelfBuilt && membership.Role != "owner" && membership.Role != "admin" {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("public groups and organization nodes require Circle owner or admin")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("public groups and organization nodes require Circle owner or admin")
 	}
 	groupID := stableGroupID(circleID, actorID, current.IdempotencyKey)
 	if err := facade.validateParent(ctx, circleID, groupID, command.ParentGroupID); err != nil {
@@ -108,7 +110,7 @@ func (facade *CommandFacade) Update(ctx context.Context, command UpdateCommand) 
 		return CommandResult{}, err
 	}
 	if command.ExpectedVersion <= 0 {
-		return CommandResult{}, generated.AppErrorFromInvalidArgument("If-Match version is required")
+		return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("If-Match version is required")
 	}
 	if err := facade.validateParent(ctx, group.CircleID, group.ID, command.ParentGroupID); err != nil {
 		return CommandResult{}, err
@@ -168,14 +170,14 @@ func (facade *CommandFacade) requireActiveCircleMember(ctx context.Context, circ
 		return groupports.CircleMembershipPolicySlice{}, generated.AppErrorFromGroupStorageWriteFailed(err.Error())
 	}
 	if !found || circle.State != "active" {
-		return groupports.CircleMembershipPolicySlice{}, generated.AppErrorFromCircleNotFound("CircleGroup target Circle is not active")
+		return groupports.CircleMembershipPolicySlice{}, circleerrors.AppErrorFromCircleNotFound("CircleGroup target Circle is not active")
 	}
 	membership, found, err := facade.policies.ReadCircleMembership(ctx, circleID, personaID)
 	if err != nil {
 		return groupports.CircleMembershipPolicySlice{}, generated.AppErrorFromGroupStorageWriteFailed(err.Error())
 	}
 	if !found || membership.State != "active" {
-		return groupports.CircleMembershipPolicySlice{}, generated.AppErrorFromNotMember("active CircleMembership is required")
+		return groupports.CircleMembershipPolicySlice{}, membershiperrors.AppErrorFromNotMember("active CircleMembership is required")
 	}
 	return membership, nil
 }
@@ -197,7 +199,7 @@ func (facade *CommandFacade) requireGroupModerator(ctx context.Context, circleID
 		allowed = allowed || (found && membership.State == "active" && membership.Role == "manager")
 	}
 	if !allowed {
-		return groupmodel.CircleGroup{}, generated.AppErrorFromPermissionDenied("CircleGroup owner or manager role is required")
+		return groupmodel.CircleGroup{}, circleerrors.AppErrorFromPermissionDenied("CircleGroup owner or manager role is required")
 	}
 	return group, nil
 }
@@ -259,7 +261,7 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 func trustedGroupCommandContext(ctx context.Context) (operation.Context, string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil || strings.TrimSpace(current.IdempotencyKey) == "" {
-		return operation.Context{}, "", generated.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
+		return operation.Context{}, "", circleerrors.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
 	}
 	return current, strings.TrimSpace(current.Actor.PersonaID), nil
 }
@@ -308,7 +310,7 @@ func mapGroupCommitError(err error) error {
 	case errors.Is(err, groupmodel.ErrIdempotencyConflict):
 		return generated.AppErrorFromGroupIdempotencyConflict(err.Error())
 	case errors.Is(err, groupmodel.ErrInvalidChange):
-		return generated.AppErrorFromInvalidArgument(err.Error())
+		return circleerrors.AppErrorFromInvalidArgument(err.Error())
 	default:
 		return generated.AppErrorFromGroupStorageWriteFailed(err.Error())
 	}
@@ -382,7 +384,7 @@ func (facade *QueryFacade) Search(ctx context.Context, query groupports.SearchQu
 		return PageResult{}, err
 	}
 	if strings.TrimSpace(query.Query) == "" {
-		return PageResult{}, generated.AppErrorFromInvalidArgument("CircleGroup search query is required")
+		return PageResult{}, circleerrors.AppErrorFromInvalidArgument("CircleGroup search query is required")
 	}
 	page, err := facade.readers.SearchGroups(ctx, query)
 	if err != nil {
@@ -394,7 +396,7 @@ func (facade *QueryFacade) Search(ctx context.Context, query groupports.SearchQu
 func (facade *QueryFacade) requireReaderActor(ctx context.Context, circleID string) (operation.Context, string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil {
-		return operation.Context{}, "", generated.AppErrorFromInvalidArgument("trusted persona is required")
+		return operation.Context{}, "", circleerrors.AppErrorFromInvalidArgument("trusted persona is required")
 	}
 	actorID := strings.TrimSpace(current.Actor.PersonaID)
 	membership, found, err := facade.policies.ReadCircleMembership(ctx, strings.TrimSpace(circleID), actorID)
@@ -402,7 +404,7 @@ func (facade *QueryFacade) requireReaderActor(ctx context.Context, circleID stri
 		return operation.Context{}, "", generated.AppErrorFromGroupStorageWriteFailed(err.Error())
 	}
 	if !found || membership.State != "active" {
-		return operation.Context{}, "", generated.AppErrorFromNotMember("active CircleMembership is required")
+		return operation.Context{}, "", membershiperrors.AppErrorFromNotMember("active CircleMembership is required")
 	}
 	return current, actorID, nil
 }

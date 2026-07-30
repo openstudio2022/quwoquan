@@ -135,7 +135,7 @@ def _definition(
         "creatorProfileId": str(metadata.get("creatorProfileId") or "").strip(),
         "authorId": str(metadata.get("authorId") or "").strip(),
         "creatorArchetype": str(metadata.get("creatorArchetype") or "").strip(),
-        "creatorProfileVersion": str(metadata.get("creatorProfileVersion") or "").strip(),
+        "creatorProfileDigest": str(metadata.get("creatorProfileDigest") or "").strip(),
     }
 
 
@@ -242,7 +242,7 @@ def enqueue_ref_job(
         creator_profile_id=str(definition["creatorProfileId"]),
         author_id=str(definition["authorId"]),
         creator_archetype=str(definition["creatorArchetype"]),
-        creator_profile_version=str(definition["creatorProfileVersion"]),
+        creator_profile_digest=str(definition["creatorProfileDigest"]),
         content_type=definition["contentType"],  # type: ignore[arg-type]
         carrier=definition["carrier"],  # type: ignore[arg-type]
         created_at=store.now_iso(),
@@ -367,7 +367,7 @@ def refresh_job_definition(
                 creator_profile_id=str(definition["creatorProfileId"]),
                 author_id=str(definition["authorId"]),
                 creator_archetype=str(definition["creatorArchetype"]),
-                creator_profile_version=str(definition["creatorProfileVersion"]),
+                creator_profile_digest=str(definition["creatorProfileDigest"]),
                 content_type=definition["contentType"],  # type: ignore[arg-type]
                 carrier=definition["carrier"],  # type: ignore[arg-type]
                 created_at=previous.created_at,
@@ -402,7 +402,7 @@ def refresh_job_definition(
             creator_profile_id=str(definition["creatorProfileId"]),
             author_id=str(definition["authorId"]),
             creator_archetype=str(definition["creatorArchetype"]),
-            creator_profile_version=str(definition["creatorProfileVersion"]),
+            creator_profile_digest=str(definition["creatorProfileDigest"]),
             content_type=definition["contentType"],  # type: ignore[arg-type]
             carrier=definition["carrier"],  # type: ignore[arg-type]
             created_at=previous.created_at,
@@ -419,7 +419,7 @@ def refresh_job_definition(
         creator_profile_id=str(definition["creatorProfileId"]),
         author_id=str(definition["authorId"]),
         creator_archetype=str(definition["creatorArchetype"]),
-        creator_profile_version=str(definition["creatorProfileVersion"]),
+        creator_profile_digest=str(definition["creatorProfileDigest"]),
         content_type=definition["contentType"],  # type: ignore[arg-type]
         carrier=definition["carrier"],  # type: ignore[arg-type]
         updated_at=store.now_iso(),

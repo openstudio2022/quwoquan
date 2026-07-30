@@ -39,7 +39,7 @@ func TestGeneratedUploadRouteUsesObjectOwnedSessionAdapter(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/content/media/uploads:init",
-		strings.NewReader(`{"mediaType":"image","contentType":"image/jpeg","fileSize":128,"expectedSha256":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`),
+		strings.NewReader(`{"mediaType":"image","mimeType":"image/jpeg","fileSize":128,"expectedSha256":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}`),
 	)
 	request.Header.Set("Idempotency-Key", "media-upload-api-1")
 	request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{

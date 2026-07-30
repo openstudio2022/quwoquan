@@ -27,18 +27,17 @@ if [[ ! -f "$RUNTIME_TOPOLOGY" ]]; then
   exit 2
 fi
 
-GATEWAY_BASE_URL="$(python3 - "$RUNTIME_TOPOLOGY" <<'PY'
-import json
-import sys
-from pathlib import Path
+GATEWAY_BASE_URL="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 
-try:
-    runtime = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    value = str(runtime["publicBases"]["api"]).strip()
-except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid gamma runtime topology: {exc}")
+value = str(
+    get_target(load_environment_topology(), "gamma-local")["publicBases"]["api"]
+).strip()
 if not value:
-    raise SystemExit("invalid gamma runtime topology: publicBases.api is empty")
+    raise SystemExit("resolved gamma-local publicBases.api is empty")
 print(value)
 PY
 )"
@@ -207,7 +206,7 @@ if published_count <= 0:
 relay_evidence_path.write_text(
     json.dumps(
         {
-            "schema": "profile-proposal-relay-evidence-v1",
+            "schema": "profile-proposal-relay-evidence",
             "status": "passed",
             "proposalId": proposal_id,
             "stream": "events.user.profile_update_proposal",
@@ -249,7 +248,7 @@ if path.is_file():
 Path(report_path).write_text(
     json.dumps(
         {
-            "schema": "profile-proposal-remote-api-uat-report-v1",
+            "schema": "profile-proposal-remote-api-uat-report",
             "status": status,
             "target": "gamma-local",
             "evidenceClass": "api_integration_remote",

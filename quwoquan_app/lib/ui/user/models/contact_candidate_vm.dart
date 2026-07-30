@@ -22,7 +22,7 @@ extension ContactAddStateX on ContactAddState {
 /// 供确认页与候选行复用（R31 改一处验三面：搜索/通讯录/扫码同源渲染）。
 class ContactCandidateVm {
   const ContactCandidateVm({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.userHandle,
     this.avatarUrl,
@@ -32,7 +32,7 @@ class ContactCandidateVm {
     this.addState = ContactAddState.canAdd,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String displayName;
   final String userHandle;
   final String? avatarUrl;
@@ -45,7 +45,7 @@ class ContactCandidateVm {
 
   ContactCandidateVm copyWith({ContactAddState? addState}) {
     return ContactCandidateVm(
-      subAccountId: subAccountId,
+      personaId: personaId,
       displayName: displayName,
       userHandle: userHandle,
       avatarUrl: avatarUrl,

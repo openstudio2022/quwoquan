@@ -306,7 +306,7 @@ CloudOperationInvocationContext _accountSessionInvocationContext(
   );
 }
 
-/// 设置页当前暴露的 CredentialBinding 商用写面。
+/// 登录首次绑定与设置页凭证管理共用的 CredentialBinding 商用写面。
 final appCredentialBindingCommandWriterProvider =
     Provider<AppCredentialBindingCommandWriter>((ref) {
       return AppProductionComposition.generatedAdapter<
@@ -316,7 +316,10 @@ final appCredentialBindingCommandWriterProvider =
         client: ref.watch(generatedCloudOperationClientProvider),
         invocationContext: (clientPageId) => _reportInvocationContext(
           ref,
-          surface: AppUiSurfaces.settingsAccountSecurity,
+          surface:
+              clientPageId == UserRequestPageIds.completeFederatedPhoneBinding
+              ? AppUiSurfaces.login
+              : AppUiSurfaces.settingsAccountSecurity,
           clientPageId: clientPageId,
         ),
       );
@@ -529,7 +532,7 @@ final blockedKeywordSnapshotCacheProvider =
       final cache = BlockedKeywordSnapshotCache();
       ref.listen(
         authSessionControllerProvider.select(
-          (state) => (state.status, state.ownerId, state.activeSubAccountId),
+          (state) => (state.status, state.ownerId, state.activePersonaId),
         ),
         (previous, next) {
           if (previous != null && previous != next) {
@@ -674,7 +677,7 @@ CloudOperationInvocationContext _profileUpdateProposalInvocationContext(
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
-  final personaId = persona?.subAccountId.trim() ?? '';
+  final personaId = persona?.personaId.trim() ?? '';
   return CloudOperationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,
@@ -756,7 +759,7 @@ CloudOperationInvocationContext _reportInvocationContext(
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
-  final personaId = persona?.subAccountId.trim() ?? '';
+  final personaId = persona?.personaId.trim() ?? '';
   return CloudOperationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,
@@ -777,7 +780,7 @@ CloudOperationInvocationContext _locationInvocationContext(
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
-  final personaId = persona?.subAccountId.trim() ?? '';
+  final personaId = persona?.personaId.trim() ?? '';
   return CloudOperationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,

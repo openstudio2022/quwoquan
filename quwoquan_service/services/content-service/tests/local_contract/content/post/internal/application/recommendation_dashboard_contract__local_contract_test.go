@@ -78,14 +78,18 @@ func TestRecommendationCommercialDashboardLocalContract(t *testing.T) {
 
 	expressions := strings.Join(appendDashboardExpressions(dashboard), "\n")
 	for _, required := range []string{
+		"recommendation_feed_terminal_total",
 		"recommendation_feed_served_by_attribution_total",
 		"recommendation_behavior_by_attribution_total",
+		"request_class",
+		"outcome",
+		"empty_reason",
+		"failure_stage",
 		"channel",
 		"vertical",
 		"supply_source",
 		"recall_path",
-		"ranking_version",
-		"reason_version",
+		"policy_digest",
 		"intersection_class",
 		"state=\"click\"",
 		"state=\"impressed\"",

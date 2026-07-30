@@ -16,7 +16,7 @@ void main() {
 
     final result = await client.userGreetingRequestSendGreetingRequest(
       SendGreetingCommand(
-        targetSubAccountId: 'persona-target',
+        targetPersonaId: 'persona-target',
         requestMessage: '你好',
       ),
       context: context,
@@ -27,7 +27,7 @@ void main() {
       AppCloudOperationIds.userGreetingRequestSendGreetingRequest,
     );
     expect(executor.body, <String, Object?>{
-      'targetSubAccountId': 'persona-target',
+      'targetPersonaId': 'persona-target',
       'requestMessage': '你好',
       'source': 'profile',
     });
@@ -39,7 +39,7 @@ void main() {
       response: <String, Object?>{
         'id': 'discovery-1',
         'status': 'completed',
-        'matchedSubAccountIds': <Object?>[],
+        'matchedPersonaIds': <Object?>[],
         'matchCount': 0,
         'matches': <Object?>[],
       },
@@ -71,8 +71,8 @@ void main() {
   test('RelationshipCapability generated client 保留 16 个能力位', () async {
     final executor = _RecordingExecutor(
       response: <String, Object?>{
-        'viewerSubAccountId': 'persona-current',
-        'targetSubAccountId': 'persona-target',
+        'viewerPersonaId': 'persona-current',
+        'targetPersonaId': 'persona-target',
         'relationState': 'mutual',
         'canFollow': false,
         'canUnfollow': true,
@@ -93,12 +93,12 @@ void main() {
 
     final result = await client
         .userPersonaRelationshipGetRelationshipCapability(
-          GetRelationshipCapabilityQuery(targetSubAccountId: 'persona-target'),
+          GetRelationshipCapabilityQuery(targetPersonaId: 'persona-target'),
           context: context,
         );
 
     expect(executor.pathParameters, <String, String>{
-      'subAccountId': 'persona-target',
+      'personaId': 'persona-target',
     });
     expect(result.relationState, 'mutual');
     expect(result.canStartVideoCall, isTrue);
@@ -108,8 +108,8 @@ void main() {
 Map<String, Object?> _greetingRecord({required String status}) {
   return <String, Object?>{
     'id': 'greeting-1',
-    'requesterSubAccountId': 'persona-current',
-    'targetSubAccountId': 'persona-target',
+    'requesterPersonaId': 'persona-current',
+    'targetPersonaId': 'persona-target',
     'requestMessage': '你好',
     'status': status,
     'source': 'profile',

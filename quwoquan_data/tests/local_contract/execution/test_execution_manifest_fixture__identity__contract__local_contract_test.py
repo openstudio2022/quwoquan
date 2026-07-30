@@ -28,10 +28,7 @@ def test_existing_manifest_is_revalidated_not_accepted_by_existence() -> None:
         "provider": "cursor_sdk",
         "authorModel": "grok-4.5",
         "authorModelFamily": "grok",
-        "authorModelParameters": [
-            {"id": "effort", "value": "high"},
-            {"id": "fast", "value": "false"},
-        ],
+        "authorModelParameters": [],
         "reviewerModel": "composer-2.5",
         "reviewerModelFamily": "composer",
         "reviewerModelParameters": [],

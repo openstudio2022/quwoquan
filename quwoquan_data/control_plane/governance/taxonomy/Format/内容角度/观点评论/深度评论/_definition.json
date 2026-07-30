@@ -2,6 +2,7 @@
   "label": "深度评论",
   "labelEn": "In-depth Commentary",
   "description": "深度分析评论",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

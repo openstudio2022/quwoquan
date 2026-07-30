@@ -1,6 +1,7 @@
 import 'public_profile_query_contracts.dart';
 import '../operation_request_payload.dart';
 import 'user_contract_codec.dart';
+part '../generated/requests/user/profile_edit_query_contracts.requests.g.dart';
 
 abstract interface class ProfileEditSnapshotQueryFacet {
   Future<ProfileEditSnapshotProjection> getProfileEditSnapshot(
@@ -8,17 +9,9 @@ abstract interface class ProfileEditSnapshotQueryFacet {
   );
 }
 
-final class GetProfileEditSnapshotQuery {
-  const GetProfileEditSnapshotQuery();
 
-  Map<String, Object?> toJson() => const <String, Object?>{};
-}
 
-CloudOperationRequestPayload encodeGetProfileEditSnapshotQuery(
-  GetProfileEditSnapshotQuery query,
-) {
-  return const CloudOperationRequestPayload();
-}
+
 
 final class ProfileCredentialSummaryProjection {
   const ProfileCredentialSummaryProjection({
@@ -48,7 +41,7 @@ final class ProfileCredentialSummaryProjection {
 final class ProfileEditSnapshotProjection {
   const ProfileEditSnapshotProjection({
     required this.ownerUserId,
-    required this.subAccountId,
+    required this.personaId,
     required this.avatarUrl,
     required this.avatarAssetId,
     required this.avatarVersion,
@@ -71,7 +64,7 @@ final class ProfileEditSnapshotProjection {
   });
 
   final String ownerUserId;
-  final String subAccountId;
+  final String personaId;
   final String avatarUrl;
   final String avatarAssetId;
   final int avatarVersion;
@@ -99,7 +92,7 @@ final class ProfileEditSnapshotProjection {
     );
     return ProfileEditSnapshotProjection(
       ownerUserId: UserContractCodec.requiredText(source, 'ownerUserId'),
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       avatarUrl: UserContractCodec.textOr(source, 'avatarUrl', ''),
       avatarAssetId: UserContractCodec.textOr(source, 'avatarAssetId', ''),
       avatarVersion: UserContractCodec.integerOr(source, 'avatarVersion', 0),

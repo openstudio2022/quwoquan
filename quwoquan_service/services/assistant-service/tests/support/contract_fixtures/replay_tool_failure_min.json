@@ -15,15 +15,15 @@
       "stage": "reasoning",
       "text": "Need market search evidence.",
       "structuredDelta": {
-        "nextAction": "call_tool",
-        "toolName": "mock_search"
+        "nextAction": "tool_call",
+        "toolName": "web_search"
       },
       "finishReason": "tool_use"
     }
   ],
   "fakeToolScript": [
     {
-      "toolName": "mock_search",
+      "toolName": "web_search",
       "input": {
         "query": "current market news"
       },
@@ -37,7 +37,7 @@
         "disruptionLevel": "turn_failed",
         "traceId": "trace_replay_failure",
         "context": {
-          "toolName": "mock_search"
+          "toolName": "web_search"
         }
       }
     }
@@ -53,6 +53,14 @@
       "eventType": "failed"
     }
   ],
+  "expectations": {
+    "selectedSkillId": "general_qa",
+    "selectedDomainId": "assistant",
+    "expectedToolNames": ["web_search"],
+    "expectedClarificationSlotIds": [],
+    "expectedReferenceUrls": [],
+    "finalAnswerMode": "blocked"
+  },
   "expectedRunResponse": {
     "conversationId": "acv_replay_failure",
     "turnId": "atn_replay_failure",
@@ -69,7 +77,7 @@
       "disruptionLevel": "turn_failed",
       "traceId": "trace_replay_failure",
       "context": {
-        "toolName": "mock_search"
+        "toolName": "web_search"
       }
     },
     "completedAt": "2026-04-29T00:02:02Z"

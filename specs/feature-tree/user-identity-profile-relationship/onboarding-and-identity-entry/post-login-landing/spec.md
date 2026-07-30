@@ -17,7 +17,7 @@
 ### In Scope
 
 - “内容登录落点”的输入、可观察主路径、失败语义以及与父能力的交接。
-- applyLoginResult 后 accessToken/refreshToken/ownerId/activeSubAccountId 落盘与恢复。
+- applyLoginResult 后 accessToken/refreshToken/ownerId/activePersonaId 落盘与恢复。
 - 登录成功返回 redirect 或执行 AuthContinuation。
 - 游客关闭登录返回安全态，不触发受限动作残留。
 - token 过期后的自动 refresh/retry 细节。
@@ -40,7 +40,7 @@
 - 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 
 <a id="req-003"></a>
-### REQ-003 登录成功后恢复 owner/subAccount 上下文并进入目标态
+### REQ-003 登录成功后恢复 owner/persona 上下文并进入目标态
 
 - 从欢迎页、评论、关注、消息、创作等登录入口完成登录后，不需要用户手动重复操作即可继续原目标态。
 - 只有 `AuthSessionGrant` 可以进入 `applyLoginResult` 与消费 `AuthContinuation`；社交 `phoneBindingRequired`、授权完成或 OTP 单项完成均不是登录成功终态。
@@ -62,11 +62,11 @@
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 <a id="gwt-002"></a>
-### GWT-002 登录成功后恢复 owner/subAccount 上下文并进入目标态
+### GWT-002 登录成功后恢复 owner/persona 上下文并进入目标态
 
 - GIVEN 用户从欢迎页、评论、关注、消息或创作入口被要求登录。
 - WHEN 登录成功并应用登录结果。
-- THEN owner 与 activeSubAccount 上下文恢复，且 AuthContinuation 将用户带回原目标态而无需重复操作。
+- THEN owner 与 activePersona 上下文恢复，且 AuthContinuation 将用户带回原目标态而无需重复操作。
 - AND 社交首登绑定手机号未完成时不写入 session、不进入目标态且 continuation 保持待续接。
 
 ## 6. 依赖
@@ -87,7 +87,7 @@
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-002"></a>
-### OPEN-002 登录成功后恢复 owner/subAccount 上下文并进入目标态
+### OPEN-002 登录成功后恢复 owner/persona 上下文并进入目标态
 
 - 类型：`capability_gap`
 - 优先级：`P1`

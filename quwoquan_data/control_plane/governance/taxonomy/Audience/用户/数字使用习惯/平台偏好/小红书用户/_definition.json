@@ -2,6 +2,7 @@
   "label": "小红书用户",
   "labelEn": "Xiaohongshu User",
   "description": "主要使用小红书",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

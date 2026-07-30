@@ -2,6 +2,10 @@
   "label": "编程",
   "labelEn": "Programming",
   "description": "喜欢编程、开发与技术实践",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/科技/编程开发"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

@@ -4,13 +4,13 @@ import (
 	"testing"
 
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
 
 // TestMigratedMain exercises the command's real application composition through public ports.
 func TestMigratedMainApplicationComposition(t *testing.T) {
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 	)

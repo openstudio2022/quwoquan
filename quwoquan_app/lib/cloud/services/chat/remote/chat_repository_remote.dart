@@ -68,6 +68,19 @@ class RemoteChatRepository implements ChatRepository {
   final ChatContractProjectionMapper _mapper;
   final String Function() _idempotencyKeyFactory;
 
+  String _resolveIdempotencyKey(String? supplied) {
+    final candidate = supplied ?? _idempotencyKeyFactory();
+    final normalized = candidate.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        candidate,
+        'idempotencyKey',
+        'must not be blank',
+      );
+    }
+    return normalized;
+  }
+
   // ── 会话 ──────────────────────────────────────────────────────────────────
 
   @override
@@ -112,22 +125,15 @@ class RemoteChatRepository implements ChatRepository {
     List<String>? initialMemberIds,
     String? idempotencyKey,
   }) async {
-    final suppliedIdempotencyKey = idempotencyKey?.trim();
-    if (suppliedIdempotencyKey != null && suppliedIdempotencyKey.isEmpty) {
-      throw ArgumentError.value(
-        idempotencyKey,
-        'idempotencyKey',
-        'must not be blank when supplied',
-      );
-    }
+    final commandIdempotencyKey = _resolveIdempotencyKey(idempotencyKey);
     final conversation = await _conversationCommandWriter.createConversation(
       ChatCreateConversationCommand(
         type: type,
-        idempotencyKey: suppliedIdempotencyKey ?? _idempotencyKeyFactory(),
         title: title,
         maxGroupSize: maxGroupSize,
         initialMemberIds: initialMemberIds ?? const <String>[],
       ),
+      idempotencyKey: commandIdempotencyKey,
     );
     return _mapper.toCreated(conversation);
   }
@@ -148,9 +154,9 @@ class RemoteChatRepository implements ChatRepository {
     await _conversationCommandWriter.updateConversationTitle(
       ChatUpdateConversationTitleCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         title: title,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -187,9 +193,9 @@ class RemoteChatRepository implements ChatRepository {
     await _messageMutationWriter.recallMessage(
       ChatRecallMessageCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         messageId: messageId,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -219,9 +225,9 @@ class RemoteChatRepository implements ChatRepository {
     await _userStateCommandWriter.markMessageRead(
       ChatMarkConversationMessageReadCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         messageId: messageId,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -286,19 +292,17 @@ class RemoteChatRepository implements ChatRepository {
     await _membershipCommandWriter.addMembers(
       ChatAddConversationMembersCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         userIds: userIds,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
   @override
   Future<void> leaveConversation(String conversationId) async {
     await _membershipCommandWriter.leaveConversation(
-      ChatLeaveConversationCommand(
-        conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
-      ),
+      ChatLeaveConversationCommand(conversationId: conversationId),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -310,9 +314,9 @@ class RemoteChatRepository implements ChatRepository {
     await _membershipCommandWriter.removeMember(
       ChatRemoveConversationMemberCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         userId: userId,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -326,19 +330,17 @@ class RemoteChatRepository implements ChatRepository {
     await _membershipCommandWriter.inviteAssistant(
       ChatInviteConversationAssistantCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         skillId: skillId,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
   @override
   Future<void> removeAssistant({required String conversationId}) async {
     await _membershipCommandWriter.removeAssistant(
-      ChatRemoveConversationAssistantCommand(
-        conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
-      ),
+      ChatRemoveConversationAssistantCommand(conversationId: conversationId),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -353,10 +355,10 @@ class RemoteChatRepository implements ChatRepository {
     await _userStateCommandWriter.updateConversationSettings(
       ChatUpdateConversationSettingsCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         muted: muted,
         pinned: pinned,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -471,7 +473,7 @@ class RemoteChatRepository implements ChatRepository {
   @override
   Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
     final page = await _conversationQuery.listConversationTimestamps(
-      const ChatListConversationTimestampsQuery(),
+      ChatListConversationTimestampsQuery(),
     );
     return page.items.map(_mapper.toTimestamp).toList(growable: false);
   }
@@ -510,9 +512,9 @@ class RemoteChatRepository implements ChatRepository {
     await _conversationCommandWriter.updateGroupGovernanceSettings(
       ChatUpdateGroupGovernanceSettingsCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         nameEditableByAdminOnly: settings.nameEditableByAdminOnly,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -524,9 +526,9 @@ class RemoteChatRepository implements ChatRepository {
     await _conversationCommandWriter.updateAnnouncement(
       ChatUpdateAnnouncementCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         announcement: announcement,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -538,9 +540,9 @@ class RemoteChatRepository implements ChatRepository {
     await _membershipCommandWriter.transferOwnership(
       ChatTransferConversationOwnershipCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         newOwnerId: newOwnerId,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
@@ -552,19 +554,17 @@ class RemoteChatRepository implements ChatRepository {
     await _membershipCommandWriter.updateAdmins(
       ChatUpdateConversationAdminsCommand(
         conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
         adminIds: adminIds,
       ),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 
   @override
   Future<void> dissolveConversation(String conversationId) async {
     await _conversationCommandWriter.dissolveConversation(
-      ChatDissolveConversationCommand(
-        conversationId: conversationId,
-        idempotencyKey: _idempotencyKeyFactory(),
-      ),
+      ChatDissolveConversationCommand(conversationId: conversationId),
+      idempotencyKey: _resolveIdempotencyKey(null),
     );
   }
 }

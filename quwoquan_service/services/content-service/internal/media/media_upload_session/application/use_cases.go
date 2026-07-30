@@ -65,7 +65,7 @@ func NewUseCases(store ports.Store, objects ObjectStore, options ...Option) *Use
 type InitCommand struct {
 	OwnerID        string
 	MediaType      string
-	ContentType    string
+	MimeType       string
 	FileSize       int64
 	ExpectedSHA256 string
 }
@@ -99,23 +99,23 @@ type CommandResult struct {
 }
 
 type Slice struct {
-	SessionID   string       `json:"sessionId"`
-	Version     int64        `json:"version"`
-	AssetID     string       `json:"assetId,omitempty"`
-	MediaType   string       `json:"mediaType"`
-	ContentType string       `json:"contentType"`
-	FileSize    int64        `json:"fileSize"`
-	Status      model.Status `json:"status"`
-	CreatedAt   time.Time    `json:"createdAt"`
-	UpdatedAt   time.Time    `json:"updatedAt"`
-	ExpiresAt   time.Time    `json:"expiresAt"`
+	SessionID string       `json:"sessionId"`
+	Version   int64        `json:"version"`
+	AssetID   string       `json:"assetId,omitempty"`
+	MediaType string       `json:"mediaType"`
+	MimeType  string       `json:"mimeType"`
+	FileSize  int64        `json:"fileSize"`
+	Status    model.Status `json:"status"`
+	CreatedAt time.Time    `json:"createdAt"`
+	UpdatedAt time.Time    `json:"updatedAt"`
+	ExpiresAt time.Time    `json:"expiresAt"`
 }
 
 type PrepareUploadParams struct {
 	SessionID      string
 	OwnerID        string
 	MediaType      string
-	ContentType    string
+	MimeType       string
 	FileSize       int64
 	ExpectedSHA256 string
 	ExpiresAt      time.Time
@@ -131,7 +131,7 @@ type CompleteUploadParams struct {
 	ObjectKey      string
 	ExpectedSHA256 string
 	MediaType      string
-	ContentType    string
+	MimeType       string
 	FileSize       int64
 }
 
@@ -167,7 +167,7 @@ func (s *UseCases) Init(ctx context.Context, command InitCommand) (CommandResult
 	}
 	grant, err := s.objects.PrepareUpload(ctx, PrepareUploadParams{
 		SessionID: sessionID, OwnerID: command.OwnerID, MediaType: command.MediaType,
-		ContentType: command.ContentType, FileSize: command.FileSize,
+		MimeType: command.MimeType, FileSize: command.FileSize,
 		ExpectedSHA256: command.ExpectedSHA256, ExpiresAt: now.Add(15 * time.Minute),
 	})
 	if err != nil {
@@ -175,7 +175,7 @@ func (s *UseCases) Init(ctx context.Context, command InitCommand) (CommandResult
 	}
 	session, err := model.Create(model.CreateParams{
 		ID: sessionID, OwnerID: command.OwnerID, ObjectKey: grant.ObjectKey,
-		MediaType: command.MediaType, ContentType: command.ContentType,
+		MediaType: model.MediaType(command.MediaType), MimeType: command.MimeType,
 		FileSize: command.FileSize, ExpectedSHA256: command.ExpectedSHA256,
 		ExpiresAt: grant.ExpiresAt, Now: now,
 	})
@@ -231,7 +231,7 @@ func (s *UseCases) Complete(ctx context.Context, command CompleteCommand) (Comma
 	}
 	completed, err := s.objects.CompleteUpload(ctx, CompleteUploadParams{
 		ObjectKey: session.ObjectKey(), ExpectedSHA256: session.ExpectedSHA256(),
-		MediaType: session.MediaType(), ContentType: session.ContentType(), FileSize: session.FileSize(),
+		MediaType: session.MediaType(), MimeType: session.MimeType(), FileSize: session.FileSize(),
 	})
 	if err != nil {
 		return CommandResult{}, unavailable(err)
@@ -244,7 +244,7 @@ func (s *UseCases) Complete(ctx context.Context, command CompleteCommand) (Comma
 			ObjectKey:       completed.ObjectKey,
 			SHA256:          completed.SHA256,
 			MediaType:       session.MediaType(),
-			ContentType:     session.ContentType(),
+			MimeType:        session.MimeType(),
 			FileSize:        session.FileSize(),
 			AccessPolicy:    command.AccessPolicy,
 			Now:             now,
@@ -271,7 +271,7 @@ func (s *UseCases) Complete(ctx context.Context, command CompleteCommand) (Comma
 	assetPayload, err := json.Marshal(map[string]any{
 		"assetId": asset.ID, "ownerId": asset.OwnerID, "sourceSessionId": asset.SourceSessionID,
 		"objectKey": asset.ObjectKey, "sha256": asset.SHA256,
-		"contentType": asset.ContentType, "fileSize": asset.FileSize,
+		"mimeType": asset.MimeType, "fileSize": asset.FileSize,
 		"processingStatus": asset.ProcessingStatus,
 	})
 	if err != nil {
@@ -358,7 +358,7 @@ func (s *UseCases) Get(ctx context.Context, query GetQuery) (Slice, error) {
 	}
 	return Slice{
 		SessionID: snapshot.ID, Version: snapshot.Version, AssetID: snapshot.AssetID,
-		MediaType: snapshot.MediaType, ContentType: snapshot.ContentType,
+		MediaType: string(snapshot.MediaType), MimeType: snapshot.MimeType,
 		FileSize: snapshot.FileSize, Status: snapshot.Status, CreatedAt: snapshot.CreatedAt,
 		UpdatedAt: snapshot.UpdatedAt, ExpiresAt: snapshot.ExpiresAt,
 	}, nil
@@ -381,7 +381,7 @@ func (s *UseCases) replay(ctx context.Context, commandName, digest string) (Comm
 		if !s.now().UTC().Before(result.ExpiresAt) {
 			return result, true, nil
 		}
-		uploadURL, err := s.objects.UploadURL(ctx, result.ObjectKey, receipt.Session.ContentType(), receipt.Session.ExpectedSHA256(), result.ExpiresAt)
+		uploadURL, err := s.objects.UploadURL(ctx, result.ObjectKey, receipt.Session.MimeType(), receipt.Session.ExpectedSHA256(), result.ExpiresAt)
 		if err != nil {
 			return CommandResult{}, false, unavailable(err)
 		}
@@ -428,8 +428,8 @@ func validateInit(command InitCommand) error {
 		return contenterrors.AppErrorFromInvalidArgument("media upload requires owner, positive fileSize and SHA-256")
 	}
 	policy, ok := uploaderrors.ContentMediaUploadPolicies[command.MediaType]
-	if !ok || !contentTypeAllowed(policy.AllowedContentTypes, command.ContentType) {
-		return uploaderrors.AppErrorFromMediaTypeUnsupported(fmt.Sprintf("mediaType=%q contentType=%q is not allowed", command.MediaType, command.ContentType))
+	if !ok || !mimeTypeAllowed(policy.AllowedContentTypes, command.MimeType) {
+		return uploaderrors.AppErrorFromMediaTypeUnsupported(fmt.Sprintf("mediaType=%q mimeType=%q is not allowed", command.MediaType, command.MimeType))
 	}
 	if command.FileSize > policy.MaxFileSizeBytes {
 		return uploaderrors.AppErrorFromMediaFileTooLarge(fmt.Sprintf("media file size %d exceeds maximum %d for %s", command.FileSize, policy.MaxFileSizeBytes, command.MediaType))
@@ -440,19 +440,19 @@ func validateInit(command InitCommand) error {
 func normalizeInit(command InitCommand) InitCommand {
 	command.OwnerID = strings.TrimSpace(command.OwnerID)
 	command.MediaType = strings.ToLower(strings.TrimSpace(command.MediaType))
-	command.ContentType = strings.ToLower(strings.TrimSpace(strings.Split(command.ContentType, ";")[0]))
+	command.MimeType = strings.ToLower(strings.TrimSpace(strings.Split(command.MimeType, ";")[0]))
 	command.ExpectedSHA256 = strings.ToLower(strings.TrimSpace(command.ExpectedSHA256))
 	return command
 }
 
-func contentTypeAllowed(allowed map[string]struct{}, contentType string) bool {
-	if contentType == "" {
+func mimeTypeAllowed(allowed map[string]struct{}, mimeType string) bool {
+	if mimeType == "" {
 		return false
 	}
 	if _, wildcard := allowed["*/*"]; wildcard {
-		return strings.Contains(contentType, "/")
+		return strings.Contains(mimeType, "/")
 	}
-	_, ok := allowed[contentType]
+	_, ok := allowed[mimeType]
 	return ok
 }
 

@@ -2,6 +2,7 @@
   "label": "景点探店",
   "labelEn": "Attraction Visit",
   "description": "实地到访景点",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

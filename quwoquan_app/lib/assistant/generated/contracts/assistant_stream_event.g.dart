@@ -50,7 +50,7 @@ class AssistantStreamEventWire {
       conversationId: (json['conversationId'] as String?)?.trim() ?? "",
       turnId: (json['turnId'] as String?)?.trim() ?? "",
       seq: (json['seq'] as num?)?.toInt() ?? 0,
-      eventType: parseAssistantStreamEventType((json['eventType'] as String?)?.trim() ?? ""),
+      eventType: parseAssistantStreamEventTypeStrict((json['eventType'] as String?)?.trim() ?? ''),
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       runtimeFailure: json['runtimeFailure'] is Map ? RuntimeFailureWire.fromJson((json['runtimeFailure'] as Map).cast<String, dynamic>()) : null,

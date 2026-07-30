@@ -2,6 +2,7 @@
   "label": "品质优先型",
   "labelEn": "Quality First",
   "description": "以品质为主要决策因素",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

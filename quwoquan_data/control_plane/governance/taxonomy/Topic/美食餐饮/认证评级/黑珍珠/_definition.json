@@ -2,6 +2,7 @@
   "label": "黑珍珠",
   "labelEn": "Black Pearl",
   "description": "黑珍珠餐厅指南评级体系",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

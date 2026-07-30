@@ -2,6 +2,7 @@
   "label": "雨林秘境",
   "labelEn": "Rainforest Expedition",
   "description": "热带雨林深度探索旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

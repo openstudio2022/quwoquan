@@ -7,8 +7,8 @@ import (
 
 type GreetingRequest struct {
 	ID                     string     `json:"id" db:"id"`
-	RequesterSubAccountID  string     `json:"requesterSubAccountId" db:"requester_sub_account_id"`
-	TargetSubAccountID     string     `json:"targetSubAccountId" db:"target_sub_account_id"`
+	RequesterPersonaID     string     `json:"requesterPersonaId" db:"requester_persona_id"`
+	TargetPersonaID        string     `json:"targetPersonaId" db:"target_persona_id"`
 	RequestMessage         string     `json:"requestMessage" db:"request_message"`
 	Status                 string     `json:"status" db:"status"`
 	Source                 string     `json:"source" db:"source"`

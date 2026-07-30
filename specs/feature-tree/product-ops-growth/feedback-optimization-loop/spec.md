@@ -16,7 +16,7 @@
 - UserInterestRecomputed 事件投影到 user 域 rm_user_profile_view（单一真相源）
 - policy.yaml 元数据化评分权重/二级系数/实验/segment 定向/护栏
 - runtime/recpolicy Store 热加载（atomic + validate-before-swap + last-good）+ codegen baseline fail-safe
-- 推荐引擎从 ResolvedPolicy 取权重/系数/分桶/定向；PipelineMetrics 归因 policyVersion/preset/segment
+- 推荐引擎从 ResolvedPolicy 取权重/系数/分桶/定向；PipelineMetrics 归因 policyDigest/preset/segment
 - rec_policy_advisor 只产建议 + 至多 :simulate（绝不 :activate）
 
 ### Out of Scope
@@ -47,7 +47,7 @@
 - 行为反馈→派生 interestProfile/segments→事件投影 user 域→segments 回写宽表 全链路可验证。
 - policy.yaml 改权重/系数/实验/定向即热生效（Store.Apply 校验通过即原子切换），坏 YAML 保留 last-good。
 - 引擎按 ResolvedPolicy 打分/重排，命中 segment 的用户按 segmentTargeting 取 preset 覆盖/权重增量。
-- PipelineMetrics 与 rec_requests_by_policy_total 按 policyVersion×preset×segment 归因。
+- PipelineMetrics 与 rec_requests_by_policy_total 按 policyDigest×preset×segment 归因。
 - rec_policy_advisor 评估护栏后只产 recommend_review/hold/reject 建议，至多调 :simulate，无 activate 路径。
 - 大循环实证脚本跨 content/user 两库断言行为→派生→双路 CQRS 投影→引擎可定向闭合，且宽表与画像两路 segments 一致（单一 MatchSegments 源）。
 - 飞轮评估 dashboard（l2_content_flywheel）按派生/投影/引擎归因/互动/主动个性化各环节可视化，配套告警覆盖派生失败率、投影失败与新鲜度滞后。
@@ -73,7 +73,7 @@
 - THEN 行为反馈→派生 interestProfile/segments→事件投影 user 域→segments 回写宽表 全链路可验证。
 - THEN policy.yaml 改权重/系数/实验/定向即热生效（Store.Apply 校验通过即原子切换），坏 YAML 保留 last-good。
 - THEN 引擎按 ResolvedPolicy 打分/重排，命中 segment 的用户按 segmentTargeting 取 preset 覆盖/权重增量。
-- THEN PipelineMetrics 与 rec_requests_by_policy_total 按 policyVersion×preset×segment 归因。
+- THEN PipelineMetrics 与 rec_requests_by_policy_total 按 policyDigest×preset×segment 归因。
 - THEN rec_policy_advisor 评估护栏后只产 recommend_review/hold/reject 建议，至多调 :simulate，无 activate 路径。
 - THEN 大循环实证脚本跨 content/user 两库断言行为→派生→双路 CQRS 投影→引擎可定向闭合，且宽表与画像两路 segments 一致（单一 MatchSegments 源）。
 - THEN 飞轮评估 dashboard（l2_content_flywheel）按派生/投影/引擎归因/互动/主动个性化各环节可视化，配套告警覆盖派生失败率、投影失败与新鲜度滞后。

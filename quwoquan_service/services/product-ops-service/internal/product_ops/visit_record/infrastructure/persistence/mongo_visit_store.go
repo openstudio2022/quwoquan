@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,62 +15,239 @@ import (
 	"quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 )
 
-// MongoVisitStore 仅保存 visit_record 业务事实；产品事件不再创建、索引或查询
-// event_records 集合。
-type MongoVisitStore struct{ collection *mongo.Collection }
+// MongoVisitStore owns VisitRecord state and actor-scoped command receipts.
+// Both collections are committed in one MongoDB transaction; EventRecord and
+// its batch ledger never participate in VisitRecord writes.
+type MongoVisitStore struct {
+	visits   *mongo.Collection
+	receipts *mongo.Collection
+}
 
 func NewMongoVisitStore(db *mongo.Database) *MongoVisitStore {
-	return &MongoVisitStore{collection: db.Collection("visit_records")}
+	return &MongoVisitStore{
+		visits:   db.Collection("visit_records"),
+		receipts: db.Collection("visit_record_command_receipts"),
+	}
 }
 
 func (s *MongoVisitStore) EnsureIndexes(ctx context.Context) error {
-	indexes := []mongo.IndexModel{
-		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}}, Options: options.Index().SetName("uq_visit_user_target").SetUnique(true)},
-		{Keys: bson.D{{Key: "targetType", Value: 1}, {Key: "targetKey", Value: 1}, {Key: "timestamp", Value: -1}}, Options: options.Index().SetName("idx_visit_target")},
-		{Keys: bson.D{{Key: "sessionId", Value: 1}, {Key: "timestamp", Value: -1}}, Options: options.Index().SetName("idx_visit_session").SetSparse(true)},
-		{Keys: bson.D{{Key: "timestamp", Value: 1}}, Options: options.Index().SetName("ttl_visit_timestamp").SetExpireAfterSeconds(180 * 24 * 60 * 60)},
+	if err := s.migrateCanonicalVisitTime(ctx); err != nil {
+		return err
 	}
-	_, err := s.collection.Indexes().CreateMany(ctx, indexes)
-	if err != nil {
+	for _, legacyIndex := range []string{
+		"idx_visit_target",
+		"idx_visit_session",
+		"ttl_visit_timestamp",
+	} {
+		if err := dropVisitIndexIfExists(ctx, s.visits, legacyIndex); err != nil {
+			return fmt.Errorf("drop legacy visit index %s: %w", legacyIndex, err)
+		}
+	}
+	if _, err := s.visits.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "userId", Value: 1},
+				{Key: "targetType", Value: 1},
+				{Key: "targetKey", Value: 1},
+			},
+			Options: options.Index().SetName("uq_visit_user_target").SetUnique(true),
+		},
+		{
+			Keys: bson.D{
+				{Key: "targetType", Value: 1},
+				{Key: "targetKey", Value: 1},
+				{Key: "occurredAt", Value: -1},
+			},
+			Options: options.Index().SetName("idx_visit_target_occurred_at"),
+		},
+		{
+			Keys:    bson.D{{Key: "occurredAt", Value: 1}},
+			Options: options.Index().SetName("ttl_visit_occurred_at").SetExpireAfterSeconds(180 * 24 * 60 * 60),
+		},
+	}); err != nil {
 		return fmt.Errorf("create visit indexes: %w", err)
+	}
+	if _, err := s.receipts.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+		Options: options.Index().SetName("idx_visit_receipts_expire").SetExpireAfterSeconds(0),
+	}); err != nil {
+		return fmt.Errorf("create visit receipt indexes: %w", err)
 	}
 	return nil
 }
 
-func (s *MongoVisitStore) RecordVisit(ctx context.Context, input application.VisitInput) (application.VisitRecord, error) {
-	now := time.Now().UTC()
-	filter := bson.D{{Key: "userId", Value: input.UserID}, {Key: "targetType", Value: input.TargetType}, {Key: "targetKey", Value: input.TargetKey}}
-	set := bson.D{{Key: "lastSeenAt", Value: now.Format(time.RFC3339Nano)}, {Key: "timestamp", Value: now}}
-	if value := strings.TrimSpace(input.SessionID); value != "" {
-		set = append(set, bson.E{Key: "sessionId", Value: value})
-	}
-	if value := strings.TrimSpace(input.Source); value != "" {
-		set = append(set, bson.E{Key: "source", Value: value})
-	}
-	update := bson.D{
-		{Key: "$inc", Value: bson.D{{Key: "visitCount", Value: 1}}},
-		{Key: "$set", Value: set},
-		{Key: "$setOnInsert", Value: bson.D{{Key: "userId", Value: input.UserID}, {Key: "targetType", Value: input.TargetType}, {Key: "targetKey", Value: input.TargetKey}}},
-	}
-	var record application.VisitRecord
-	err := s.collection.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)).Decode(&record)
+// migrateCanonicalVisitTime performs the one-time cutover before legacy TTL
+// indexes are removed. Runtime reads never fall back to retired fields.
+func (s *MongoVisitStore) migrateCanonicalVisitTime(ctx context.Context) error {
+	_, err := s.visits.UpdateMany(
+		ctx,
+		bson.D{{Key: "occurredAt", Value: bson.D{{Key: "$exists", Value: false}}}},
+		mongo.Pipeline{bson.D{{Key: "$set", Value: bson.D{{
+			Key: "occurredAt",
+			Value: bson.D{{
+				Key:   "$ifNull",
+				Value: bson.A{"$timestamp", "$$NOW"},
+			}},
+		}}}}},
+	)
 	if err != nil {
-		return application.VisitRecord{}, fmt.Errorf("record visit: %w", err)
+		return fmt.Errorf("migrate canonical visit time: %w", err)
 	}
-	return record, nil
+	_, err = s.visits.UpdateMany(ctx, bson.D{}, bson.D{{Key: "$unset", Value: bson.D{
+		{Key: "lastSeenAt", Value: ""},
+		{Key: "timestamp", Value: ""},
+		{Key: "sessionId", Value: ""},
+		{Key: "source", Value: ""},
+	}}})
+	if err != nil {
+		return fmt.Errorf("remove legacy visit fields: %w", err)
+	}
+	return nil
 }
 
+func dropVisitIndexIfExists(
+	ctx context.Context,
+	collection *mongo.Collection,
+	name string,
+) error {
+	if err := collection.Indexes().DropOne(ctx, name); err != nil {
+		var commandError mongo.CommandError
+		if errors.As(err, &commandError) &&
+			(commandError.Code == 26 || commandError.Code == 27) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+type commandReceiptDocument struct {
+	ID            string                  `bson:"_id"`
+	CommandDigest string                  `bson:"commandDigest"`
+	Result        application.VisitRecord `bson:"result"`
+	CreatedAt     time.Time               `bson:"createdAt"`
+	ExpiresAt     time.Time               `bson:"expiresAt"`
+}
+
+func (s *MongoVisitStore) CommitVisit(
+	ctx context.Context,
+	command application.CommitCommand,
+) (application.CommandResult, error) {
+	session, err := s.visits.Database().Client().StartSession()
+	if err != nil {
+		return application.CommandResult{}, fmt.Errorf("start visit transaction: %w", err)
+	}
+	defer session.EndSession(ctx)
+
+	var result application.CommandResult
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		receipt, found, loadErr := s.loadReceipt(txCtx, command.ReceiptID)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if found {
+			if receipt.CommandDigest != command.CommandDigest {
+				return nil, application.ErrIdempotencyConflict
+			}
+			result = application.CommandResult{
+				VisitRecord: receipt.Result,
+				Replayed:    true,
+			}
+			return nil, nil
+		}
+
+		now := time.Now().UTC()
+		filter := bson.D{
+			{Key: "userId", Value: command.Input.UserID},
+			{Key: "targetType", Value: command.Input.TargetType},
+			{Key: "targetKey", Value: command.Input.TargetKey},
+		}
+		update := bson.D{
+			{Key: "$inc", Value: bson.D{{Key: "visitCount", Value: 1}}},
+			{Key: "$set", Value: bson.D{{Key: "occurredAt", Value: now}}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "lastSeenAt", Value: ""},
+				{Key: "timestamp", Value: ""},
+				{Key: "sessionId", Value: ""},
+				{Key: "source", Value: ""},
+			}},
+			{Key: "$setOnInsert", Value: bson.D{
+				{Key: "userId", Value: command.Input.UserID},
+				{Key: "targetType", Value: command.Input.TargetType},
+				{Key: "targetKey", Value: command.Input.TargetKey},
+			}},
+		}
+		var record application.VisitRecord
+		if err := s.visits.FindOneAndUpdate(
+			txCtx,
+			filter,
+			update,
+			options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After),
+		).Decode(&record); err != nil {
+			return nil, fmt.Errorf("record visit: %w", err)
+		}
+		if _, err := s.receipts.InsertOne(txCtx, commandReceiptDocument{
+			ID:            command.ReceiptID,
+			CommandDigest: command.CommandDigest,
+			Result:        record,
+			CreatedAt:     now,
+			ExpiresAt:     command.ReceiptExpires.UTC(),
+		}); err != nil {
+			return nil, fmt.Errorf("store visit receipt: %w", err)
+		}
+		result = application.CommandResult{VisitRecord: record}
+		return nil, nil
+	})
+	if err == nil {
+		return result, nil
+	}
+	if errors.Is(err, application.ErrIdempotencyConflict) {
+		return application.CommandResult{}, err
+	}
+
+	// Resolve an ambiguous commit or a concurrent duplicate strictly from the
+	// durable receipt. This is confirmation, not a second write path.
+	receipt, found, loadErr := s.loadReceipt(ctx, command.ReceiptID)
+	if loadErr == nil && found {
+		if receipt.CommandDigest != command.CommandDigest {
+			return application.CommandResult{}, application.ErrIdempotencyConflict
+		}
+		return application.CommandResult{
+			VisitRecord: receipt.Result,
+			Replayed:    true,
+		}, nil
+	}
+	return application.CommandResult{}, fmt.Errorf("commit visit: %w", err)
+}
+
+func (s *MongoVisitStore) loadReceipt(
+	ctx context.Context,
+	receiptID string,
+) (commandReceiptDocument, bool, error) {
+	var receipt commandReceiptDocument
+	err := s.receipts.FindOne(ctx, bson.D{{Key: "_id", Value: receiptID}}).Decode(&receipt)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return commandReceiptDocument{}, false, nil
+	}
+	if err != nil {
+		return commandReceiptDocument{}, false, err
+	}
+	return receipt, true, nil
+}
+
+// GetVisit is an object-local evidence reader used by real-store integration
+// tests. Public queries use GetVisitStats and never expose actor identifiers.
 func (s *MongoVisitStore) GetVisit(
 	ctx context.Context,
 	userID, targetType, targetKey string,
 ) (application.VisitRecord, bool, error) {
 	var record application.VisitRecord
-	err := s.collection.FindOne(ctx, bson.D{
+	err := s.visits.FindOne(ctx, bson.D{
 		{Key: "userId", Value: strings.TrimSpace(userID)},
 		{Key: "targetType", Value: strings.TrimSpace(targetType)},
 		{Key: "targetKey", Value: strings.TrimSpace(targetKey)},
 	}).Decode(&record)
-	if err == mongo.ErrNoDocuments {
+	if errors.Is(err, mongo.ErrNoDocuments) {
 		return application.VisitRecord{}, false, nil
 	}
 	if err != nil {
@@ -78,7 +256,10 @@ func (s *MongoVisitStore) GetVisit(
 	return record, true, nil
 }
 
-func (s *MongoVisitStore) GetVisitStats(ctx context.Context, query application.VisitStatsQuery) (application.VisitStats, error) {
+func (s *MongoVisitStore) GetVisitStats(
+	ctx context.Context,
+	query application.VisitStatsQuery,
+) (application.VisitStats, error) {
 	filter := bson.D{}
 	if value := strings.TrimSpace(query.TargetType); value != "" {
 		filter = append(filter, bson.E{Key: "targetType", Value: value})
@@ -86,7 +267,7 @@ func (s *MongoVisitStore) GetVisitStats(ctx context.Context, query application.V
 	if value := strings.TrimSpace(query.TargetKey); value != "" {
 		filter = append(filter, bson.E{Key: "targetKey", Value: value})
 	}
-	cursor, err := s.collection.Find(ctx, filter)
+	cursor, err := s.visits.Find(ctx, filter)
 	if err != nil {
 		return application.VisitStats{}, fmt.Errorf("find visit stats: %w", err)
 	}
@@ -103,7 +284,12 @@ func (s *MongoVisitStore) GetVisitStats(ctx context.Context, query application.V
 	if err := cursor.Err(); err != nil {
 		return application.VisitStats{}, err
 	}
-	sort.Slice(out.Items, func(i, j int) bool { return out.Items[i].VisitCount > out.Items[j].VisitCount })
+	sort.Slice(out.Items, func(i, j int) bool {
+		if out.Items[i].VisitCount == out.Items[j].VisitCount {
+			return out.Items[i].OccurredAt.After(out.Items[j].OccurredAt)
+		}
+		return out.Items[i].VisitCount > out.Items[j].VisitCount
+	})
 	return out, nil
 }
 

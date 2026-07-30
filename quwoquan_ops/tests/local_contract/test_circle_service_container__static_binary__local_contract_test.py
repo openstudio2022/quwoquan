@@ -13,7 +13,8 @@ class CircleServiceContainerBuildContractTest(unittest.TestCase):
         self.assertIn("ARG GO_BUILD_FLAGS=-p=1", dockerfile)
         self.assertIn("ARG GO_BUILD_FLAGS", dockerfile)
         self.assertIn(
-            "CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o /circle-service ",
+            "CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} "
+            "go build ${GO_BUILD_FLAGS} -o /circle-service ",
             dockerfile,
         )
         self.assertIn("FROM ${ALPINE_BASE_IMAGE}", dockerfile)

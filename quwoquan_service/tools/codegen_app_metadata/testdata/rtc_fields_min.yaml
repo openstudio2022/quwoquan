@@ -19,6 +19,7 @@ entities:
 
       - name: status
         type: enum
+        enum_ref: CallStatus
         constraints: [NOT_NULL]
         client_default: initiated
 

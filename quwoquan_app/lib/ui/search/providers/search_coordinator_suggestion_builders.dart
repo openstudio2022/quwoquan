@@ -16,6 +16,7 @@ extension SearchCoordinatorSuggestionBuilders on SearchCoordinator {
       suggestions.add(
         ContactSearchSuggestion(
           contactId: userId,
+          userHandle: contact.userHandle.trim(),
           displayName: displayName,
           conversationId: directConversationId.isNotEmpty
               ? directConversationId

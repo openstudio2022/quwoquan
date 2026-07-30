@@ -2,6 +2,7 @@
   "label": "市中心",
   "labelEn": "City Center",
   "description": "城市中心区域",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

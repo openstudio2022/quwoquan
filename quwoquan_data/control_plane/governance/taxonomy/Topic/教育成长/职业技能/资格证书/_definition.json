@@ -2,6 +2,7 @@
   "label": "资格证书",
   "labelEn": "Professional Certificate",
   "description": "行业资格证书备考",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

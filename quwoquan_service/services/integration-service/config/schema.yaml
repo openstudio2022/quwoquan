@@ -12,20 +12,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.integration-service.config.max_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 9.9.9
-- key: sys.integration-service.config.min_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0.0.1
 - key: sys.integration-service.integration.external_interaction.push.apns.environment
   type: string
   scope: workload

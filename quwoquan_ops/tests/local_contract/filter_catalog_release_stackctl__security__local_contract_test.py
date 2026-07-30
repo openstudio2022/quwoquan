@@ -63,7 +63,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         )
         self.assertEqual(execution.return_code, 0)
         self.assertNotIn("gamma-local-service-bearer", execution.argv)
-        self.assertIn("--insecure-local-tls", execution.argv)
+        self.assertNotIn("--insecure-local-tls", execution.argv)
         self.assertNotIn("--prod-gray-activation", execution.argv)
         process_env = run.call_args.kwargs["env"]
         self.assertEqual(
@@ -164,7 +164,7 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
 
         open_session.assert_not_called()
         self.assertEqual(execution.return_code, 0)
-        self.assertIn("--insecure-local-tls", execution.argv)
+        self.assertNotIn("--insecure-local-tls", execution.argv)
 
     def test_stackctl_records_only_sanitized_passed_publish_receipt(self) -> None:
         execution = filter_catalog_release.FilterCatalogCommandExecution(
@@ -227,12 +227,11 @@ class FilterCatalogReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
         )
 
     def test_environment_profiles_bind_public_active_catalog_verification(self) -> None:
-        with mock.patch.object(stackctl, "_local_target_runtime_ready", return_value=True):
-            commands = stackctl._selected_profile_commands(
-                "gamma",
-                "gamma-local",
-                stackctl.VerificationProfile.INTEGRATION,
-            )
+        commands = stackctl._selected_profile_commands(
+            "gamma",
+            "gamma-local",
+            stackctl.VerificationProfile.INTEGRATION,
+        )
 
         catalog_command = next(
             command

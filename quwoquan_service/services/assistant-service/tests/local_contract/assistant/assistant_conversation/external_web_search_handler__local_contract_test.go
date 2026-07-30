@@ -5,39 +5,40 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"strings"
 	"testing"
 
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 type migratedExternalWebSearchHandlerRecordingExternalSearchProvider struct {
-	result  ExternalSearchResult
-	request ExternalSearchRequest
+	result  ports.ExternalSearchResult
+	request ports.ExternalSearchRequest
 }
 
 func (p *migratedExternalWebSearchHandlerRecordingExternalSearchProvider) Search(
 	_ context.Context,
-	request ExternalSearchRequest,
-) (ExternalSearchResult, error) {
+	request ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
 	p.request = request
 	return p.result, nil
 }
 
 func (p *migratedExternalWebSearchHandlerRecordingExternalSearchProvider) Lookup(
 	_ context.Context,
-	request ExternalSearchRequest,
-) (ExternalSearchResult, error) {
+	request ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
 	p.request = request
 	return p.result, nil
 }
 
 func TestExternalWebSearchHandlerUsesTypedWeatherPort(t *testing.T) {
-	weather := &migratedExternalWebSearchHandlerRecordingExternalSearchProvider{result: ExternalSearchResult{
+	weather := &migratedExternalWebSearchHandlerRecordingExternalSearchProvider{result: ports.ExternalSearchResult{
 		Summary: "杭州晴",
-		References: []ExternalReference{{
+		References: []ports.ExternalReference{{
 			Title: "中国天气网", URL: "https://www.weather.com.cn/", Source: "weather_com_cn",
 		}, {
 			Title: "不安全来源", URL: "http://example.com/weather", Source: "unsafe",
@@ -128,7 +129,7 @@ func TestExternalWebSearchHandlerDoesNotFallbackAcrossCapabilities(t *testing.T)
 			"skillId": "weather",
 		},
 	})
-	var failure ProviderFailure
+	var failure ports.ProviderFailure
 	if !errors.As(err, &failure) {
 		t.Fatalf("error = %v, want ProviderFailure", err)
 	}
@@ -144,11 +145,11 @@ type migratedExternalWebSearchHandlerProviderFailureSearchProvider struct{}
 
 func (migratedExternalWebSearchHandlerProviderFailureSearchProvider) Search(
 	context.Context,
-	ExternalSearchRequest,
-) (ExternalSearchResult, error) {
-	return ExternalSearchResult{}, ProviderFailure{
+	ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
+	return ports.ExternalSearchResult{}, ports.ProviderFailure{
 		Capability: "public_search",
-		Reason:     ProviderFailureUnavailable,
+		Reason:     ports.ProviderFailureUnavailable,
 	}
 }
 
@@ -156,11 +157,11 @@ type migratedExternalWebSearchHandlerProviderFailureWeatherProvider struct{}
 
 func (migratedExternalWebSearchHandlerProviderFailureWeatherProvider) Lookup(
 	context.Context,
-	ExternalSearchRequest,
-) (ExternalSearchResult, error) {
-	return ExternalSearchResult{}, ProviderFailure{
+	ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
+	return ports.ExternalSearchResult{}, ports.ProviderFailure{
 		Capability: "weather",
-		Reason:     ProviderFailureUnavailable,
+		Reason:     ports.ProviderFailureUnavailable,
 	}
 }
 

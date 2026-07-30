@@ -13,7 +13,7 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	platformredis "quwoquan_service/internal/platform/redis"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	conversationports "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
 	preferenceports "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/ports"
@@ -107,9 +107,9 @@ func BuildRedisRouter(cfg runtimeconfig.Config) (*rtredis.Router, error) {
 }
 
 type PersistentDependencies struct {
-	SubscriptionStore    application.SkillSubscriptionStore
-	ConsentStore         application.ConsentStore
-	ConversationRunStore application.ConversationRunStore
+	SubscriptionStore    conversationports.SkillSubscriptionStore
+	ConsentStore         conversationports.ConsentStore
+	ConversationRunStore conversationports.ConversationRunStore
 	PreferenceStore      preferenceports.Store
 	PreferenceReader     preferenceports.Reader
 	MongoClient          *mongo.Client

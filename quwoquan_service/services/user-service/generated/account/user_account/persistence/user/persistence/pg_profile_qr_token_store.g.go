@@ -27,11 +27,11 @@ func NewPGProfileQrTokenStoreBase(pool *pgxpool.Pool) *PGProfileQrTokenStoreBase
 	return &PGProfileQrTokenStoreBase{pool: pool}
 }
 
-const ProfileQrTokenCols = `token_id, token_hash, owner_user_id, sub_account_id, user_handle, style_version, status, expires_at, revoked_at, created_at, updated_at`
+const ProfileQrTokenCols = `token_id, token_hash, owner_user_id, persona_id, user_handle, status, expires_at, revoked_at, created_at, updated_at`
 
 func ScanProfileQrToken(row pgx.Row) (*model.ProfileQrToken, error) {
 	e := &model.ProfileQrToken{}
-	err := row.Scan(&e.TokenID, &e.TokenHash, &e.OwnerUserID, &e.SubAccountID, &e.UserHandle, &e.StyleVersion, &e.Status, &e.ExpiresAt, &e.RevokedAt, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.TokenID, &e.TokenHash, &e.OwnerUserID, &e.PersonaID, &e.UserHandle, &e.Status, &e.ExpiresAt, &e.RevokedAt, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -53,8 +53,8 @@ func (s *PGProfileQrTokenStoreBase) Create(ctx context.Context, e *model.Profile
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO profile_qr_tokens (token_id, token_hash, owner_user_id, sub_account_id, user_handle, style_version, status, expires_at, revoked_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		e.TokenID, e.TokenHash, e.OwnerUserID, e.SubAccountID, e.UserHandle, e.StyleVersion, e.Status, e.ExpiresAt, e.RevokedAt, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO profile_qr_tokens (token_id, token_hash, owner_user_id, persona_id, user_handle, status, expires_at, revoked_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		e.TokenID, e.TokenHash, e.OwnerUserID, e.PersonaID, e.UserHandle, e.Status, e.ExpiresAt, e.RevokedAt, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -62,8 +62,8 @@ func (s *PGProfileQrTokenStoreBase) Create(ctx context.Context, e *model.Profile
 func (s *PGProfileQrTokenStoreBase) Update(ctx context.Context, e *model.ProfileQrToken) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE profile_qr_tokens SET token_hash=$2, owner_user_id=$3, sub_account_id=$4, user_handle=$5, style_version=$6, status=$7, expires_at=$8, revoked_at=$9, created_at=$10, updated_at=$11 WHERE token_id = $1`,
-		e.TokenID, e.TokenHash, e.OwnerUserID, e.SubAccountID, e.UserHandle, e.StyleVersion, e.Status, e.ExpiresAt, e.RevokedAt, e.CreatedAt, e.UpdatedAt)
+		`UPDATE profile_qr_tokens SET token_hash=$2, owner_user_id=$3, persona_id=$4, user_handle=$5, status=$6, expires_at=$7, revoked_at=$8, created_at=$9, updated_at=$10 WHERE token_id = $1`,
+		e.TokenID, e.TokenHash, e.OwnerUserID, e.PersonaID, e.UserHandle, e.Status, e.ExpiresAt, e.RevokedAt, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (s *PGProfileQrTokenStoreBase) ListByOwnerUserID(ctx context.Context, fkID 
 	var result []model.ProfileQrToken
 	for rows.Next() {
 		var e model.ProfileQrToken
-		if err := rows.Scan(&e.TokenID, &e.TokenHash, &e.OwnerUserID, &e.SubAccountID, &e.UserHandle, &e.StyleVersion, &e.Status, &e.ExpiresAt, &e.RevokedAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.TokenID, &e.TokenHash, &e.OwnerUserID, &e.PersonaID, &e.UserHandle, &e.Status, &e.ExpiresAt, &e.RevokedAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

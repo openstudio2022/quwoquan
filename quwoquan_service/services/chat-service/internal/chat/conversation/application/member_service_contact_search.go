@@ -56,6 +56,7 @@ func (s *MemberService) contactHitForConversation(
 		return ContactSearchHit{}, false
 	}
 	contactID := ""
+	userHandle := ""
 	displayName := strings.TrimSpace(conversation.Title)
 	avatarURL := strings.TrimSpace(conversation.AvatarUrl)
 	for _, member := range members {
@@ -63,6 +64,7 @@ func (s *MemberService) contactHitForConversation(
 			continue
 		}
 		contactID = strings.TrimSpace(member.UserId)
+		userHandle = strings.TrimSpace(member.UserHandle)
 		if name := strings.TrimSpace(member.DisplayName); name != "" {
 			displayName = name
 		}
@@ -79,6 +81,7 @@ func (s *MemberService) contactHitForConversation(
 	}
 	return ContactSearchHit{
 		ContactID:       contactID,
+		UserHandle:      userHandle,
 		DisplayName:     displayName,
 		AvatarURL:       avatarURL,
 		Bio:             strings.TrimSpace(conversation.LastMessagePreview),

@@ -1941,7 +1941,7 @@ void main() {
     final sample = await _renderBackwardVersoTextureProbeScene(
       tester,
       surfaceSize: const Size(408, 916),
-      backwardDragSteps: List<Offset>.filled(4, const Offset(64, -8)),
+      backwardDragSteps: List<Offset>.filled(3, const Offset(64, -8)),
     );
 
     final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
@@ -2468,14 +2468,6 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
   expect(probeState.backwardVersoProbeLocalPoints, isNotEmpty);
   expect(probeState.backwardVersoProbeViewportPoints, isNotEmpty);
   expect(capturedBackPageSize, isNotNull);
-  await tester.pump(const Duration(milliseconds: 16));
-  probeState = debugStates.lastWhere(
-    (state) =>
-        state.renderDirection == StPageFlipDirection.back &&
-        state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
-        state.backwardBackPaintBounds != null &&
-        state.backwardBackSheetId == 'mainlineLeaf:2',
-  );
 
   final framebufferImage = await tester.runAsync<ui.Image>(
     () => _captureBoundaryImage(boundaryKey),

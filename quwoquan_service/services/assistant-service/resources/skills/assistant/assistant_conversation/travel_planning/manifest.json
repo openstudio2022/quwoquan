@@ -3,11 +3,19 @@
   "displayName": "出行管家",
   "description": "旅行攻略、景点推荐、酒店机票、行程规划。",
   "domainId": "travel_planning",
+  "problemClass": "complex_reasoning",
   "executionTarget": "hybrid",
   "routingHints": ["旅游", "旅行", "行程", "景点", "酒店", "攻略", "拥堵"],
   "iconHint": "airplane",
+  "promptAssets": ["travel_planning.reactive", "assistant.evidence_discipline"],
+  "slotSchema": {
+    "requiredSlots": ["destination", "travel_date"],
+    "optionalSlots": ["origin", "party_size", "budget"],
+    "carryOver": true,
+    "stateId": "travel_plan_context"
+  },
   "toolPolicy": {
-    "allowedTools": ["web_search", "app_search", "web_fetch"],
+    "allowedTools": ["web_search", "app_search"],
     "preferredTools": ["web_search", "app_search"],
     "maxToolCalls": 3
   }

@@ -151,11 +151,11 @@ class MultiObjectiveScorer:
             self._fusion_weights,
             self._model_release_id,
         ) = _load_multiobjective_models()
-        self._model_version = "multi_obj" if self._models else "rule"
+        self._scorer_kind = "multi_obj" if self._models else "rule"
 
     @property
-    def model_version(self) -> str:
-        return self._model_version
+    def scorer_kind(self) -> str:
+        return self._scorer_kind
 
     @property
     def model_release_id(self) -> str | None:
@@ -172,7 +172,7 @@ class MultiObjectiveScorer:
             self._fusion_weights,
             self._model_release_id,
         ) = _load_multiobjective_models()
-        self._model_version = "multi_obj" if self._models else "rule"
+        self._scorer_kind = "multi_obj" if self._models else "rule"
 
     def score(self, req: ModelScoreRequest) -> ModelScoreResponse:
         rows = build_candidate_features(req)
@@ -206,7 +206,7 @@ class MultiObjectiveScorer:
                 boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost * 0.1
                 detail["sessionTagBoost"] = boost
-                observe_score_value(self._model_version, sc)
+                observe_score_value(self._scorer_kind, sc)
                 if content_id in exposed_ids or content_id in negative_ids:
                     sc -= 1000.0
                     detail["filtered"] = 1.0
@@ -219,7 +219,7 @@ class MultiObjectiveScorer:
                 boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost
                 detail["sessionTagBoost"] = boost
-                observe_score_value(self._model_version, sc)
+                observe_score_value(self._scorer_kind, sc)
                 if content_id in exposed_ids or content_id in negative_ids:
                     sc -= 1000.0
                     detail["filtered"] = 1.0

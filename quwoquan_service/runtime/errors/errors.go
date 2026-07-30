@@ -607,7 +607,7 @@ func HTTPStatusFromError(err *AppError) int {
 			"otp_expired",
 			"otp_mismatch",
 			"last_credential",
-			"last_sub_account",
+			"last_persona",
 			"quota_reached",
 			"primary_guard",
 			"active_guard",

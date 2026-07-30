@@ -4,6 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/recovery/recovery_state_machine.dart';
 
 void main() {
+  const trustedBaseUrls = <String>[
+    'https://quwoquan.com',
+    'https://cdn.quwoquan.com/download',
+  ];
+
   test('startup version state can only be confirmed by a valid response', () {
     final machine = RecoveryStateMachine();
     expect(machine.snapshot.phase, RecoveryPhase.startupChecking);
@@ -14,8 +19,9 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18201,
-        updateUrl: 'https://cdn.quwoquan.com/downloads/android/latest.json',
+        updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
       ),
       isTrue,
     );
@@ -25,8 +31,9 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18300,
-        updateUrl: 'https://cdn.quwoquan.com/downloads/android/latest.json',
+        updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
       ),
       isFalse,
     );
@@ -51,8 +58,9 @@ void main() {
         machine.confirmVersion(
           currentBuild: 18100,
           latestBuild: 18201,
-          updateUrl: 'https://cdn.quwoquan.com/downloads/android/latest.json',
+          updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
           recoveryUrl: 'https://quwoquan.com/',
+          trustedBaseUrls: trustedBaseUrls,
         ),
         isTrue,
       );
@@ -69,6 +77,7 @@ void main() {
         latestBuild: 18201,
         updateUrl: 'javascript:alert(1)',
         recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
       ),
       isFalse,
     );
@@ -79,6 +88,7 @@ void main() {
         latestBuild: 18201,
         updateUrl: 'https://attacker.example/quwoquan.apk',
         recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
       ),
       isFalse,
     );
@@ -92,6 +102,7 @@ void main() {
         latestBuild: 18201,
         updateUrl: '',
         recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
       ),
       isTrue,
     );

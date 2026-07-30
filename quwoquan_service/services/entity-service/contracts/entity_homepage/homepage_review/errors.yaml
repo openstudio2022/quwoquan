@@ -10,6 +10,9 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [UpdateHomepageReview, DeleteHomepageReview, GetMyHomepageReview]
   recovery_action: surface
   dart_const: reviewNotFound
   go_const: ErrReviewNotFound

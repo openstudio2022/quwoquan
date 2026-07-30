@@ -9,14 +9,9 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('CallSummary.formatDuration', () {
     test('分秒补零', () {
+      expect(CallSummary.formatDuration(const Duration(seconds: 5)), '00:05');
       expect(
-        CallSummary.formatDuration(const Duration(seconds: 5)),
-        '00:05',
-      );
-      expect(
-        CallSummary.formatDuration(
-          const Duration(minutes: 3, seconds: 9),
-        ),
+        CallSummary.formatDuration(const Duration(minutes: 3, seconds: 9)),
         '03:09',
       );
     });
@@ -36,53 +31,47 @@ void main() {
       expect(
         CallSummary.describe(
           duration: const Duration(minutes: 2, seconds: 30),
-          endReason: EndReason.completed,
+          endReason: EndReason.normal,
           connected: true,
         ),
         '${CallText.callSummaryDurationPrefix}02:30',
       );
     });
 
-    test('未接通 + cancelled/initiatorHangup → 已取消', () {
-      for (final reason in [
-        EndReason.cancelled,
-        EndReason.initiatorHangup,
-      ]) {
-        expect(
-          CallSummary.describe(
-            duration: Duration.zero,
-            endReason: reason,
-            connected: false,
-          ),
-          CallText.callSummaryCancelled,
-          reason: reason.name,
-        );
-      }
-    });
-
-    test('未接通 + rejected/busy → 对方已拒绝', () {
-      for (final reason in [EndReason.rejected, EndReason.busy]) {
-        expect(
-          CallSummary.describe(
-            duration: Duration.zero,
-            endReason: reason,
-            connected: false,
-          ),
-          CallText.callSummaryRejected,
-          reason: reason.name,
-        );
-      }
-    });
-
-    test('未接通 + timeout → 无人接听', () {
+    test('未接通 + cancelled → 已取消', () {
       expect(
         CallSummary.describe(
           duration: Duration.zero,
-          endReason: EndReason.timeout,
+          endReason: EndReason.cancelled,
           connected: false,
         ),
-        CallText.callSummaryNoAnswer,
+        CallText.callSummaryCancelled,
       );
+    });
+
+    test('未接通 + rejected → 对方已拒绝', () {
+      expect(
+        CallSummary.describe(
+          duration: Duration.zero,
+          endReason: EndReason.rejected,
+          connected: false,
+        ),
+        CallText.callSummaryRejected,
+      );
+    });
+
+    test('未接通 + noAnswer/timeout → 无人接听', () {
+      for (final reason in [EndReason.noAnswer, EndReason.timeout]) {
+        expect(
+          CallSummary.describe(
+            duration: Duration.zero,
+            endReason: reason,
+            connected: false,
+          ),
+          CallText.callSummaryNoAnswer,
+          reason: reason.name,
+        );
+      }
     });
 
     test('connected 但时长为 0 仍按未接通原因', () {

@@ -51,8 +51,8 @@
         "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
         "/content/comments/fixture_comment_parent_001/reaction",
         "/content/comments/fixture_comment_parent_001/media:bind",
-        "/content/sub-accounts/fixture_user_current/interactions/received?type=share",
-        "/content/sub-accounts/fixture_user_current/interactions/sent?type=share"
+        "/content/personas/fixture_user_current/interactions/received?type=share",
+        "/content/personas/fixture_user_current/interactions/sent?type=share"
       ],
       "deliveryChannels": [
         "app-fixture-json",

@@ -10,10 +10,10 @@ import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 final class RtcCallLogPresentation {
   const RtcCallLogPresentation({required this.callType, required this.summary});
 
-  final String callType;
+  final CallType callType;
   final String summary;
 
-  bool get isVideo => callType == 'video';
+  bool get isVideo => callType == CallType.video;
 
   factory RtcCallLogPresentation.fromCard(ChatMessageCardDto? card) {
     final attributes = <String, String>{
@@ -21,11 +21,18 @@ final class RtcCallLogPresentation {
         attribute.name: attribute.value,
     };
     final durationMs = int.tryParse(attributes['durationMs'] ?? '') ?? 0;
+    final callType = attributes['callType'];
+    final endReason = attributes['endReason'];
+    if (callType == null || endReason == null) {
+      throw const FormatException(
+        'rtc_call_log attributes require callType and endReason',
+      );
+    }
     return RtcCallLogPresentation(
-      callType: attributes['callType'] == 'video' ? 'video' : 'audio',
+      callType: CallType.fromString(callType),
       summary: CallSummary.describe(
         duration: Duration(milliseconds: durationMs),
-        endReason: EndReason.fromString(attributes['endReason']),
+        endReason: EndReason.fromString(endReason),
         connected: durationMs > 0,
       ),
     );
@@ -56,9 +63,7 @@ class RtcCallLogBubble extends StatelessWidget {
     );
     return Semantics(
       button: onRedial != null,
-      label: presentation.isVideo
-          ? CallText.callVideo
-          : CallText.callVoice,
+      label: presentation.isVideo ? CallText.callVideo : CallText.callVoice,
       child: CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: onRedial,

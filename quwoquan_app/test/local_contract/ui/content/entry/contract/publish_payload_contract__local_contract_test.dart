@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -9,33 +9,33 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 验证 Post 发布字段与 CirclePostPlacement 跨上下文输入严格分离。
 /// 不依赖 lib/features/create/，仅引用 cloud 元数据。
 void main() {
-  const writable = GeneratedPostRuntimeMetadata.publicationWritableFields;
+  final requestBodyFields = _submitPostPublicationRequestBodyFields();
 
   group('PublishPayload — 常规契约', () {
-    test('publicationWritableFields 包含 Post 字段且排除 CirclePostPlacement 输入', () {
-      expect(writable, contains('visibility'));
-      expect(writable, contains('location'));
-      expect(writable, contains('locationName'));
-      expect(writable, isNot(contains('circleIds')));
-      expect(writable, contains('primaryHomepageId'));
-      expect(writable, contains('primaryHomepageType'));
-      expect(writable, contains('primaryHomepageSnapshot'));
-      expect(writable, contains('summary'));
-      expect(writable, contains('semanticMentions'));
-      expect(writable, isNot(contains('tagRefs')));
-      expect(writable, isNot(contains('entityRefs')));
-      expect(writable, contains('assistantUsePolicy'));
+    test('generated request body 包含 Post 字段且排除 CirclePostPlacement 输入', () {
+      expect(requestBodyFields, contains('visibility'));
+      expect(requestBodyFields, contains('location'));
+      expect(requestBodyFields, contains('locationName'));
+      expect(requestBodyFields, isNot(contains('circleIds')));
+      expect(requestBodyFields, contains('primaryHomepageId'));
+      expect(requestBodyFields, contains('primaryHomepageType'));
+      expect(requestBodyFields, contains('primaryHomepageSnapshot'));
+      expect(requestBodyFields, contains('summary'));
+      expect(requestBodyFields, contains('semanticMentions'));
+      expect(requestBodyFields, isNot(contains('tagRefs')));
+      expect(requestBodyFields, isNot(contains('entityRefs')));
+      expect(requestBodyFields, contains('assistantUsePolicy'));
     });
 
-    test('文章发布 payload 可写字段包含封面与展示真相源', () {
-      expect(writable, contains('articleMarkdown'));
-      expect(writable, contains('markdownDialect'));
-      expect(writable, contains('articleAssetManifest'));
-      expect(writable, contains('articleRenderProfile'));
-      expect(writable, isNot(contains('articleDocument')));
-      expect(writable, isNot(contains('articleTemplate')));
-      expect(writable, isNot(contains('articleFontPreset')));
-      expect(writable, isNot(contains('articlePresentationVersion')));
+    test('文章发布 request body 包含封面与展示真相源', () {
+      expect(requestBodyFields, contains('articleMarkdown'));
+      expect(requestBodyFields, contains('markdownDialect'));
+      expect(requestBodyFields, contains('articleAssetManifest'));
+      expect(requestBodyFields, contains('articleRenderProfile'));
+      expect(requestBodyFields, isNot(contains('articleDocument')));
+      expect(requestBodyFields, isNot(contains('articleTemplate')));
+      expect(requestBodyFields, isNot(contains('articleFontPreset')));
+      expect(requestBodyFields, isNot(contains('articlePresentationVersion')));
     });
 
     test('Post payload 公开+位置组合结构正确', () {
@@ -50,9 +50,9 @@ void main() {
       };
       for (final k in payload.keys) {
         expect(
-          writable,
+          requestBodyFields,
           contains(k),
-          reason: 'payload 字段 $k 应在 publicationWritableFields 中',
+          reason: 'payload 字段 $k 应由 generated request body 接纳',
         );
       }
       expect(payload['visibility'], 'public');
@@ -102,7 +102,7 @@ void main() {
     });
 
     test('SubmitPostPublication semanticMentions 为结构化数组且不被 stringify', () {
-      // R-CS06：semanticMentions 是 []object 可写字段，wire 必须以结构化数组承载，
+      // R-CS06：semanticMentions 是 []object request body 字段，wire 必须以结构化数组承载，
       // 不得 .toString() 破坏；顶层只读投影 tagRefs/entityRefs 仍被 wire 剥离。
       final command = SubmitContentPostPublicationCommand(
         publishIntentId: 'intent-contract',
@@ -126,7 +126,8 @@ void main() {
         assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
       );
       final body = Map<String, Object?>.from(
-        encodeSubmitContentPostPublicationCommand(command).body! as Map,
+        encodeContentPostSubmitPostPublicationGeneratedRequest(command).body!
+            as Map,
       );
       expect(body['contentType'], 'article');
       expect(body, isNot(contains('type')));
@@ -200,6 +201,92 @@ void main() {
     });
   });
 
+  group('PublishPayload — 出行时间（到访事实）', () {
+    const anchored = PublishSettings(
+      locationName: '老君山观景台',
+      geoTagRef: 'Topic/地理/行政区/河南省/洛阳市',
+    );
+
+    test('visitedAt 是发布 request body 字段', () {
+      expect(requestBodyFields, contains('visitedAt'));
+    });
+
+    test('声明的到访时间以 UTC RFC3339 进入 payload', () {
+      final settings = anchored.copyWith(
+        visitedAt: DateTime.utc(2026, 4, 5, 6, 30),
+      );
+
+      expect(
+        settings.toPayloadFields()['visitedAt'],
+        '2026-04-05T06:30:00.000Z',
+      );
+    });
+
+    test('没有地点锚点时到访时间不进入 payload', () {
+      final settings = const PublishSettings().copyWith(
+        visitedAt: DateTime.utc(2026, 4, 5),
+      );
+
+      expect(settings.hasPlaceAnchor, isFalse);
+      expect(settings.toPayloadFields().containsKey('visitedAt'), isFalse);
+    });
+
+    test('未声明到访时间时不用发布时间冒充', () {
+      expect(anchored.visitedAt, isNull);
+      expect(anchored.toPayloadFields().containsKey('visitedAt'), isFalse);
+    });
+
+    test('草稿存取往返保留到访时间', () {
+      final settings = anchored.copyWith(
+        visitedAt: DateTime.utc(2026, 4, 5, 6, 30),
+      );
+
+      final restored = PublishSettings.fromMap(
+        Map<String, dynamic>.from(settings.toMap()),
+      );
+
+      expect(restored.visitedAt?.toUtc(), settings.visitedAt);
+    });
+
+    test('payload 到发布命令的 wire 往返保留到访时间', () {
+      final settings = anchored.copyWith(
+        visitedAt: DateTime.utc(2026, 4, 5, 6, 30),
+      );
+      final payload = <String, Object?>{
+        'contentType': 'image',
+        ...settings.toPayloadFields(),
+      };
+
+      final command = submitContentPostPublicationCommandFromPreparedPayload(
+        payload,
+        localDraftId: 'draft-visited',
+        mediaAssetIds: const <String>['asset-image'],
+      );
+      final body = Map<String, Object?>.from(
+        encodeContentPostSubmitPostPublicationGeneratedRequest(command).body!
+            as Map,
+      );
+
+      expect(command.visitedAt, DateTime.utc(2026, 4, 5, 6, 30));
+      expect(body['visitedAt'], '2026-04-05T06:30:00.000Z');
+      expect(
+        decodeSubmitContentPostPublicationCommand(body).visitedAt,
+        command.visitedAt,
+      );
+    });
+
+    test('非 RFC3339 的到访时间在端侧即被拒绝', () {
+      expect(
+        () => submitContentPostPublicationCommandFromPreparedPayload(
+          <String, Object?>{'contentType': 'micro', 'visitedAt': '去年春天'},
+          localDraftId: 'draft-visited-invalid',
+          mediaAssetIds: const <String>[],
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
   group('PublishPayload — 严格字段契约', () {
     test('visibility 仅允许 public 或 private', () {
       const allowed = ['public', 'private'];
@@ -244,10 +331,57 @@ void main() {
           'contentType': t,
           'visibility': 'public',
         };
-        expect(writable, contains('contentType'));
+        expect(requestBodyFields, contains('contentType'));
         expect(payload['contentType'], t);
         expect(payload, isNot(contains('circleIds')));
       }
     });
   });
+}
+
+Set<String> _submitPostPublicationRequestBodyFields() {
+  final structured = ContentPostStructuredObject(
+    <String, ContentPostStructuredValue>{
+      'value': const ContentPostStructuredText('contract'),
+    },
+  );
+  final command = SubmitContentPostPublicationCommand(
+    publishIntentId: 'intent-contract-fields',
+    localDraftId: 'draft-contract-fields',
+    contentType: ContentPostType.article,
+    contentIdentity: ContentPostIdentity.work,
+    title: '标题',
+    body: '正文',
+    summary: '摘要',
+    semanticMentions: <ContentPostStructuredObject>[structured],
+    mediaAssetIds: const <String>['asset-contract'],
+    mediaItems: <ContentPostStructuredObject>[structured],
+    articleMarkdown: '# 标题',
+    markdownDialect: 'qwq-rich-md',
+    articleAssetManifest: structured,
+    articleRenderProfile: structured,
+    coverStrategy: 'manual',
+    coverFrameTimeMs: 1,
+    illustrationAssetId: 'asset-contract',
+    location: structured,
+    locationName: '成都',
+    geoTagRef: 'Topic/地理/行政区/四川省/成都市',
+    visitedAt: DateTime.utc(2026, 4, 5),
+    primaryHomepageId: 'homepage-contract',
+    primaryHomepageType: 'sight',
+    primaryHomepageSnapshot: structured,
+    visibility: ContentPostVisibility.public,
+    assistantUsePolicy: ContentPostAssistantUsePolicy.inherit,
+    sourcePostId: 'source-contract',
+    sourceType: ContentPostSourceType.original,
+    deviceInfo: structured,
+    publishLocation: structured,
+    authorDisplayNameSnapshot: '作者',
+    authorAvatarUrlSnapshot: 'https://example.com/avatar.jpg',
+    personaContextVersion: 1,
+  );
+  final body = encodeContentPostSubmitPostPublicationGeneratedRequest(
+    command,
+  ).body;
+  return Map<String, Object?>.from(body! as Map).keys.toSet();
 }

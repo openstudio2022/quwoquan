@@ -251,7 +251,7 @@ class _AuthenticatedAuthSessionController extends AuthSessionController {
     accessToken: 'test-access-token',
     refreshToken: 'test-refresh-token',
     ownerId: 'viewer_001',
-    activeSubAccountId: 'viewer_001',
+    activePersonaId: 'viewer_001',
     accountState: 'active',
     identityOrigin: 'widget-test',
     installId: 'widget-test-install',
@@ -285,14 +285,14 @@ class _TestUserProfileRepository extends MockUserProfileRepository
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
     return bundle;
   }
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowers({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = 20,
@@ -305,7 +305,7 @@ class _TestUserProfileRepository extends MockUserProfileRepository
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowing({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = 20,
@@ -324,7 +324,6 @@ class _TestUserProfileRepository extends MockUserProfileRepository
     return rows
         .where((row) {
           return row.displayName.toLowerCase().contains(normalized) ||
-              row.username.toLowerCase().contains(normalized) ||
               row.userHandle.toLowerCase().contains(normalized);
         })
         .toList(growable: false);
@@ -405,7 +404,7 @@ final class _TestCircleMembershipQuery implements CircleMembershipQuery {
               memberCount: circle.memberCount,
               postCount: circle.postCount,
               weeklyActiveCount: circle.weeklyActiveCount,
-              state: circle.status,
+              status: circle.status,
               visibility: circle.visibility,
               joinPolicy: circle.joinPolicy,
               kind: circle.kind,
@@ -413,7 +412,7 @@ final class _TestCircleMembershipQuery implements CircleMembershipQuery {
               followEnabled: circle.followEnabled,
               defaultPublicGroupId: circle.defaultPublicGroupId ?? '',
               linkedHomepageId: '',
-              linkedHomepageType: '',
+              linkedHomepageType: null,
               linkedHomepageTitle: '',
               createdAt: circle.createdAt,
               updatedAt: circle.updatedAt,
@@ -437,12 +436,11 @@ UserHomepageBundleViewData _bundle({
   String displayName = '测试主页',
   RelationshipCapabilityDto? relationshipCapability,
 }) {
-  final profile = SubAccountProfileViewData(
-    subAccountId: subjectUserId,
+  final profile = PersonaProfileViewData(
+    personaId: subjectUserId,
     ownerUserId: isOwner ? subjectUserId : 'owner_$subjectUserId',
     subjectType: 'user',
     userHandle: '${subjectUserId}_handle',
-    username: '${subjectUserId}_username',
     displayName: displayName,
     avatarUrl: 'https://example.com/$subjectUserId-avatar.png',
     backgroundUrl: 'https://example.com/$subjectUserId-bg.png',
@@ -465,7 +463,7 @@ UserHomepageBundleViewData _bundle({
     relationshipCapability: relationshipCapability,
     tabCounts: UserHomepageTabCountsViewData.fromStats(stats),
     viewerContext: UserHomepageViewerContextViewData(
-      viewerSubAccountId: isGuest ? '' : 'viewer_001',
+      viewerPersonaId: isGuest ? '' : 'viewer_001',
       isOwner: isOwner,
       isGuest: isGuest,
       relationToTarget: relationToTarget,
@@ -482,54 +480,29 @@ RelationshipCapabilityDto _capability({
   bool isBlockedBy = false,
   bool hasFormalConversation = false,
 }) {
-  return switch (relationState) {
-    'self' => RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: targetId,
-      targetId: targetId,
-      isFollowing: false,
-      isFollowedBy: false,
-      isSelf: true,
-      isBlocked: isBlocked,
-      isBlockedBy: isBlockedBy,
-      hasFormalConversation: hasFormalConversation,
-    ),
-    'mutual' => RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: 'viewer_001',
-      targetId: targetId,
-      isFollowing: true,
-      isFollowedBy: true,
-      isBlocked: isBlocked,
-      isBlockedBy: isBlockedBy,
-      hasFormalConversation: hasFormalConversation,
-    ),
-    'following' => RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: 'viewer_001',
-      targetId: targetId,
-      isFollowing: true,
-      isFollowedBy: false,
-      isBlocked: isBlocked,
-      isBlockedBy: isBlockedBy,
-      hasFormalConversation: hasFormalConversation,
-    ),
-    'followed_by' => RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: 'viewer_001',
-      targetId: targetId,
-      isFollowing: false,
-      isFollowedBy: true,
-      isBlocked: isBlocked,
-      isBlockedBy: isBlockedBy,
-      hasFormalConversation: hasFormalConversation,
-    ),
-    _ => RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: 'viewer_001',
-      targetId: targetId,
-      isFollowing: false,
-      isFollowedBy: false,
-      isBlocked: isBlocked,
-      isBlockedBy: isBlockedBy,
-      hasFormalConversation: hasFormalConversation,
-    ),
-  };
+  final blocked = isBlocked || isBlockedBy;
+  final isSelf = relationState == 'self';
+  final isMutual = relationState == 'mutual';
+  final isFollowing = relationState == 'following' || isMutual;
+  final isFollowedBy = relationState == 'followed_by' || isMutual;
+  return RelationshipCapabilityDto(
+    viewerPersonaId: isSelf ? targetId : 'viewer_001',
+    targetPersonaId: targetId,
+    relationState: relationState,
+    canFollow: !blocked && !isSelf && !isFollowing,
+    canUnfollow: !blocked && isFollowing,
+    canFollowBack: !blocked && isFollowedBy && !isFollowing,
+    canGreet: !blocked && !isSelf && !isMutual && !hasFormalConversation,
+    canOpenConversation: !blocked && (isMutual || hasFormalConversation),
+    canCreateDirectConversation: !blocked && isMutual,
+    canSendMessage: !blocked && (isMutual || hasFormalConversation),
+    hasPendingGreeting: false,
+    hasFormalConversation: hasFormalConversation,
+    canStartVoiceCall: !blocked && isMutual,
+    canStartVideoCall: !blocked && isMutual,
+    isBlocked: isBlocked,
+    isBlockedBy: isBlockedBy,
+  );
 }
 
 ProfileSocialRelationRowViewData _row({
@@ -540,8 +513,7 @@ ProfileSocialRelationRowViewData _row({
   String profileVisibility = 'public',
 }) {
   return ProfileSocialRelationRowViewData(
-    subAccountId: id,
-    username: userHandle,
+    personaId: id,
     userHandle: userHandle,
     displayName: displayName,
     avatarUrl: 'https://example.com/$id.png',
@@ -559,7 +531,7 @@ CircleDto _circle({
   required String name,
   int memberCount = 0,
   int postCount = 0,
-  String visibility = 'public',
+  CircleVisibility visibility = CircleVisibility.public,
 }) {
   final timestamp = DateTime(2026, 6, 25);
   return CircleDto(
@@ -628,11 +600,11 @@ Widget _buildTestApp({
           ),
           GoRoute(
             path: AppRoutePaths.userProfilePathTemplate.replaceAll(
-              '{username}',
+              '{userHandle}',
               ':username',
             ),
             builder: (_, state) =>
-                Text('User ${state.pathParameters['username']}'),
+                Text('User ${state.pathParameters['userHandle']}'),
           ),
         ],
       ),

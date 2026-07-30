@@ -34,6 +34,7 @@ Widget _scopedApp({CircleQueryReader? circleQuery}) {
     overrides: [
       circlesListQueryProvider.overrideWithValue(query),
       circleDetailQueryProvider.overrideWithValue(query),
+      circleDetailFeedQueryProvider.overrideWithValue(query),
       circlesListDiscoveryFeedQueryProvider.overrideWithValue(discoveryQuery),
       // 游客态：对象行为信号守卫短路；页面遥测走 Mock 上报，
       // 不触发 Remote-only 装配链（APP_RUNTIME_ENV 由真机 runner 提供）。

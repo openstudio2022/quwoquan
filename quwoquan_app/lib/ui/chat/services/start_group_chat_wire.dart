@@ -21,6 +21,7 @@ List<StartGroupPickableMember> selectableFromChatMembers(
     normalized.add(
       StartGroupPickableMember(
         userId: userId,
+        userHandle: m.userHandle,
         displayName: displayName,
         avatarUrl: m.avatarUrl,
       ),

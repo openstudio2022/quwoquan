@@ -10,7 +10,7 @@ final class SecureInterestOnboardingDraftStore
     this.storage = const FlutterSecureStorage(),
   });
 
-  static const String _storageKey = 'qwq.interest_onboarding.v1';
+  static const String _storageKey = 'qwq.interest_onboarding';
   final FlutterSecureStorage storage;
 
   @override

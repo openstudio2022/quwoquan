@@ -9,6 +9,10 @@
     "status",
     "environment",
     "releaseId",
+    "sourceOwner",
+    "manifestDigest",
+    "mode",
+    "deletePolicy",
     "counts",
     "postBindings",
     "auditEvents"
@@ -31,13 +35,18 @@
       "minLength": 1
     },
     "sourceOwner": {
-      "type": "string"
+      "const": "qwq_data"
+    },
+    "manifestDigest": {
+      "description": "完整 immutable release payload 摘要；必须等于 release attestation.payloadSha256。",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "mode": {
-      "type": "string"
+      "enum": ["upsert", "sync"]
     },
     "deletePolicy": {
-      "type": "string"
+      "enum": ["none", "tombstone"]
     },
     "counts": {
       "type": "object",
@@ -93,9 +102,9 @@
         ],
         "additionalProperties": false,
         "properties": {
-          "postRef": {"type": "string", "minLength": 1},
+          "postRef": {"type": "string", "pattern": "^(article|image|video)/[^/].*$"},
           "postId": {"type": "string", "minLength": 1},
-          "contentType": {"type": "string", "minLength": 1},
+          "contentType": {"enum": ["article", "image", "video"]},
           "authorId": {"type": "string", "minLength": 1}
         }
       }

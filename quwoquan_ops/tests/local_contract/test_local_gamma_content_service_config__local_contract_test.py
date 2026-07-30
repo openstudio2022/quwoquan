@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -56,390 +57,85 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             {
                 "QWQ_COMPOSE_GO_BASE_IMAGE": build_images["goBaseImage"],
                 "QWQ_COMPOSE_ALPINE_BASE_IMAGE": build_images["alpineBaseImage"],
+                "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": (
+                    "https://alpha.quwoquan.com:17000"
+                ),
+                "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": (
+                    "https://cdn.alpha.quwoquan.com:17100/media/avatar"
+                ),
+                "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL": (
+                    "https://cdn.alpha.quwoquan.com:17100"
+                ),
+                "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL": (
+                    "https://upload.alpha.quwoquan.com:17100"
+                ),
             },
         )
 
-    def test_t3_runtime_setup_applies_manifest_moment_channel_supplement(self) -> None:
-        spec = importlib.util.spec_from_file_location("local_gamma_t3_seed_test", T3_SCRIPT)
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        with (
-            mock.patch.object(
-                module,
-                "setup_comment_thread",
-                return_value={
-                    "status": "passed",
-                    "parentCommentId": "parent",
-                    "replyCommentId": "reply",
-                },
-            ),
-            mock.patch.object(
-                module,
-                "seed_content_moment_channel",
-                return_value={"status": "passed"},
-            ),
-            mock.patch.object(
-                module,
-                "seed_content_social_graph",
-                return_value={"status": "passed"},
-            ),
-            mock.patch.object(
-                module,
-                "seed_content_object_cards",
-                return_value={"status": "passed"},
-            ),
-        ):
-            result = module.setup_runtime_fixtures(
-                "https://gamma.invalid",
-                "viewer",
-            )
-
-        self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["momentChannelSeed"], {"status": "passed"})
-
-        with (
-            mock.patch.object(
-                module,
-                "setup_comment_thread",
-                return_value={"status": "passed"},
-            ),
-            mock.patch.object(
-                module,
-                "seed_content_moment_channel",
-                return_value={"status": "failed"},
-            ),
-            mock.patch.object(
-                module,
-                "seed_content_social_graph",
-                return_value={"status": "passed"},
-            ),
-            mock.patch.object(
-                module,
-                "seed_content_object_cards",
-                return_value={"status": "passed"},
-            ),
-        ):
-            failed = module.setup_runtime_fixtures(
-                "https://gamma.invalid",
-                "viewer",
-            )
-        self.assertEqual(failed["status"], "failed")
-
-    def test_content_t3_uses_metadata_owned_isolated_verification_principal(
-        self,
-    ) -> None:
-        spec = importlib.util.spec_from_file_location(
-            "local_gamma_t3_principal_test",
-            T3_SCRIPT,
-        )
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        manifest = module.load_manifest()
-        core_scope = manifest["verificationScopes"]["app-core-readback"]
-        self.assertEqual(
-            set(core_scope["domains"]),
-            {"content", "chat", "user"},
-        )
-        self.assertTrue(
-            module.resolve_scope_verification_subject(
-                "app-core-readback",
-                core_scope,
-            ).startswith("app-core-readback-")
-        )
-        self.assertEqual(
-            {
-                endpoint["assertion"]
-                for endpoint in core_scope["strictEndpoints"]
-            },
-            {
-                "home_feed_page",
-                "video_feed_page",
-                "chat_inbox_page",
-                "my_profile",
-            },
-        )
-        home_probe = next(
-            endpoint
-            for endpoint in core_scope["strictEndpoints"]
-            if endpoint["assertion"] == "home_feed_page"
-        )
-        self.assertTrue(home_probe.get("requireObjectCards", False))
-        self.assertEqual(core_scope["probeMode"], "strictEndpointsOnly")
-        chat_probe = next(
-            endpoint
-            for endpoint in core_scope["strictEndpoints"]
-            if endpoint["assertion"] == "chat_inbox_page"
-        )
-        self.assertEqual(
-            chat_probe["expectedConversationId"],
-            "{coreConversationId}",
-        )
-        self.assertEqual(chat_probe["expectedMessageText"], "{coreMessageText}")
-
-        self.assertEqual(
-            module.resolve_domain_verification_subject(
-                manifest,
-                {"content"},
-                True,
-            ),
-            "fixture_user_outdoor_01",
-        )
-        self.assertIsNone(
-            module.resolve_domain_verification_subject(
-                manifest,
-                {"content", "user"},
-                True,
-            )
-        )
-        self.assertIsNone(
-            module.resolve_domain_verification_subject(
-                manifest,
-                {"content"},
-                False,
-            )
-        )
-        endpoints = [
-            {"domain": "content", "status": "passed"},
-            {"domain": "chat", "status": "not_ready"},
-        ]
-        self.assertFalse(
-            module.has_strict_not_ready_endpoint(
-                endpoints,
-                {"content"},
-                True,
-            )
-        )
-        self.assertTrue(
-            module.has_strict_not_ready_endpoint(
-                endpoints,
-                {"content"},
-                False,
-            )
-        )
+    def test_t3_runtime_is_a_read_only_release_consumer(self) -> None:
         source = T3_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('report["postHealth"] = wait_url(', source)
-        self.assertIn("post_health_failed", source)
-        with self.assertRaisesRegex(AssertionError, "presentation"):
-            module.assert_home_feed_page(
-                {
-                    "items": [
-                        {
-                            "postId": "post-1",
-                            "contentType": "image",
-                            "contentIdentity": "moment",
-                        }
-                    ]
-                },
-                {},
-            )
-        with self.assertRaisesRegex(AssertionError, "objectCards"):
-            module.assert_home_feed_page(
-                {
-                    "items": [
-                        {
-                            "postId": "post-1",
-                            "contentType": "image",
-                            "contentIdentity": "moment",
-                            "summary": "可渲染摘要",
-                        }
-                    ]
-                    * 8
-                },
-                {"requireObjectCards": True},
-            )
-        module.assert_home_feed_page(
-            {
-                "items": [
-                    {
-                        "postId": "post-1",
-                        "contentType": "image",
-                        "contentIdentity": "moment",
-                        "summary": "可渲染摘要",
-                    }
-                ],
-                "objectCards": [
-                    {
-                        "objectKind": "entity_homepage",
-                        "objectId": "homepage-1",
-                        "title": "西湖",
-                        "anchorIndex": 8,
-                    }
-                ],
-            },
-            {"requireObjectCards": True},
-        )
-        module.assert_video_feed_page(
-            {
-                "items": [
-                    {
-                        "contentType": "video",
-                        "contentIdentity": "work",
-                        "videoUrl": "https://media.example/video.mp4",
-                    }
-                ]
-            },
-            {},
-        )
-        module.assert_my_profile(
-            {
-                "ownerUserId": "fixture_user_current",
-                "subAccountId": "fixture_user_current",
-                "displayName": "Gamma 用户",
-                "postCount": 1,
-            },
-            {
-                "expectedOwnerUserId": "fixture_user_current",
-                "expectedSubAccountId": "fixture_user_current",
-            },
-        )
-        self.assertEqual(
-            module.resolve_probe_spec(
-                {
-                    "expectedOwnerUserId": "{activeOwnerId}",
-                    "expectedSubAccountId": "{activePersonaId}",
-                },
-                {
-                    "{activeOwnerId}": "owner-runtime",
-                    "{activePersonaId}": "persona-runtime",
-                },
-            ),
-            {
-                "expectedOwnerUserId": "owner-runtime",
-                "expectedSubAccountId": "persona-runtime",
-            },
-        )
 
-    def test_user_t3_provisions_contact_discovery_through_public_command(
+        for retired in (
+            "setup_runtime_fixtures",
+            "setup_comment_thread",
+            "seed_content_moment_channel",
+            "seed_content_social_graph",
+            "seed_content_object_cards",
+            "mongosh",
+        ):
+            self.assertNotIn(retired, source)
+        self.assertIn("quwoquan_data/scripts/cli.py", source)
+        self.assertIn('"ship"', source)
+        self.assertIn('"verify"', source)
+        self.assertIn('"mutationPolicy": "read_only"', source)
+
+    def test_content_t3_identity_is_owned_by_canonical_readiness_receipt(
         self,
     ) -> None:
-        spec = importlib.util.spec_from_file_location(
-            "local_gamma_t3_contact_discovery_test",
-            T3_SCRIPT,
-        )
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        module._ACTIVE_SESSION = mock.Mock(owner_id="fixture_user_current")
-        response = json.dumps(
-            {
-                "id": "contact-discovery-runtime-id",
-                "status": "completed",
-                "matchCount": 1,
-            }
-        ).encode("utf-8")
+        source = T3_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("load_release_content_identity", source)
+        self.assertIn("resolve_readiness_path", source)
+        self.assertIn('expected_environment="gamma"', source)
+        for field in (
+            "releaseId",
+            "sourceOwner",
+            "manifestDigest",
+            "mediaManifestDigest",
+            "importRunId",
+            "verifyRunId",
+            "readinessReceiptRef",
+        ):
+            self.assertIn(f'identity["{field}"]', source)
+        self.assertNotIn('parser.add_argument("--release-id"', source)
+        self.assertNotIn('parser.add_argument("--import-run-id"', source)
+        self.assertNotIn('parser.add_argument("--verification-run-id"', source)
 
-        with mock.patch.object(
-            module,
-            "http_request",
-            return_value=(202, response),
-        ) as request:
-            result = module.provision_contact_discovery(
-                "https://api.gamma.quwoquan.com:19000"
-            )
-
-        self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["matchCount"], 1)
-        request.assert_called_once()
-        _, kwargs = request.call_args
-        self.assertEqual(kwargs["method"], "POST")
-        self.assertEqual(
-            kwargs["body"]["hashedPhones"],
-            [
-                "7e6ee9eaabde53f4a704fd4f7fb8f66df56fe3e5d596bbfe3bc8af3cbf50fa02"
-            ],
-        )
-
-    def test_core_readback_ephemeral_identity_uses_public_anonymous_login(
+    def test_user_t3_does_not_provision_contact_discovery(
         self,
     ) -> None:
-        spec = importlib.util.spec_from_file_location(
-            "local_gamma_t3_public_login_test",
-            T3_SCRIPT,
-        )
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        response = json.dumps(
-            {
-                "ownerId": "runtime-owner",
-                "activeSub": {"subAccountId": "runtime-persona"},
-                "accessToken": "runtime-access-token",
-            }
-        ).encode("utf-8")
+        source = T3_SCRIPT.read_text(encoding="utf-8")
 
-        with mock.patch.object(
-            module,
-            "http_request",
-            return_value=(200, response),
-        ) as request:
-            session = module.open_public_anonymous_session(
-                "https://api.gamma.quwoquan.com:19000",
-                "app-core-readback-run",
-            )
+        self.assertNotIn("provision_contact_discovery", source)
+        self.assertNotIn("hashedPhones", source)
+        self.assertNotIn("_ACTIVE_SESSION", source)
 
-        self.assertEqual(session.owner_id, "runtime-owner")
-        self.assertEqual(session.persona_id, "runtime-persona")
-        _, kwargs = request.call_args
-        self.assertEqual(kwargs["method"], "POST")
-        self.assertEqual(
-            kwargs["body"]["installId"],
-            "gamma-t3-app-core-readback-run",
-        )
+    def test_core_readback_does_not_mint_anonymous_identity_in_t3(
+        self,
+    ) -> None:
+        source = T3_SCRIPT.read_text(encoding="utf-8")
 
-    def test_core_readback_provisions_non_empty_chat_inbox(self) -> None:
-        spec = importlib.util.spec_from_file_location(
-            "local_gamma_t3_chat_readback_test",
-            T3_SCRIPT,
-        )
-        self.assertIsNotNone(spec)
-        self.assertIsNotNone(spec.loader)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        module._ACTIVE_SESSION = module.LocalGammaAcceptanceSession(
-            owner_id="runtime-owner",
-            persona_id="runtime-persona",
-            access_token="runtime-access-token",
-        )
-        create_response = json.dumps(
-            {
-                "id": "runtime-conversation",
-                "status": "active",
-                "type": "group",
-            }
-        ).encode("utf-8")
-        send_response = json.dumps(
-            {"messageId": "runtime-message", "seq": 1}
-        ).encode("utf-8")
+        self.assertNotIn("open_public_anonymous_session", source)
+        self.assertNotIn("LocalGammaAcceptanceSession", source)
+        self.assertNotIn("/auth/login", source)
+        self.assertNotIn("accessToken", source)
 
-        with mock.patch.object(
-            module,
-            "http_request",
-            side_effect=[(201, create_response), (201, send_response)],
-        ) as request:
-            result = module.provision_chat_core_readback(
-                "https://api.gamma.quwoquan.com:19000"
-            )
+    def test_core_readback_does_not_provision_chat_inbox_in_t3(self) -> None:
+        source = T3_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["conversationId"], "runtime-conversation")
-        self.assertIn("双端核心可用性验证", result["messageText"])
-        self.assertEqual(request.call_count, 2)
-        send_call = request.call_args_list[1]
-        self.assertIn(
-            "/chat/conversations/runtime-conversation/messages",
-            send_call.args[0],
-        )
-        self.assertEqual(
-            send_call.kwargs["body"]["content"],
-            result["messageText"],
-        )
+        self.assertNotIn("provision_chat_core_readback", source)
+        self.assertNotIn("/chat/conversations", source)
+        self.assertNotIn("runtime-message", source)
+        self.assertNotIn("http_request", source)
 
     def test_content_service_declares_all_required_runtime_bindings(self) -> None:
         service_block = service_compose("content-service")
@@ -455,7 +151,8 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             "CONTENT_OSS_REGION:",
             "CONTENT_OSS_ACCESS_KEY_ID:",
             "CONTENT_OSS_ACCESS_KEY_SECRET:",
-            "CONTENT_CDN_DOMAIN:",
+            "CONTENT_MEDIA_DELIVERY_BASE_URL:",
+            "CONTENT_MEDIA_UPLOAD_BASE_URL:",
             "CONTENT_CDN_SIGN_KEY:",
             "SEARCH_ES_ENABLED:",
             "SEARCH_ES_ENDPOINTS:",
@@ -464,8 +161,8 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         ):
             self.assertIn(binding, service_block)
 
-        self.assertIn("SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt", service_block)
-        self.assertIn("/etc/ssl/local-ca/object-storage-ca.crt:ro", service_block)
+        self.assertNotIn("SSL_CERT_FILE:", service_block)
+        self.assertNotIn("object-storage-ca.crt", service_block)
 
     def test_gamma_owns_content_elasticsearch_startup_dependency(self) -> None:
         content = service_compose("content-service")
@@ -538,7 +235,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         )
         start_script = START_SCRIPT.read_text(encoding="utf-8")
         self.assertIn(
-            "-path '*/environments/gamma/deploy/compose.yaml' -type f | sort",
+            '-path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort',
             start_script,
         )
 
@@ -575,7 +272,11 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         assistant_compose = service_compose("assistant-service")
 
-        self.assertIn('case "alpha", "beta", "gamma":', product_runtime_config)
+        self.assertIn('case "integration", "alpha":', product_runtime_config)
+        self.assertIn(
+            'case "beta-integration", "beta_integration", "beta":',
+            product_runtime_config,
+        )
         self.assertIn("POSTGRES_DSN:", assistant_compose)
         self.assertIn(
             "postgres:\n        condition: service_healthy",
@@ -661,9 +362,14 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         caddy = CADDYFILE.read_text(encoding="utf-8")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
         compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        api_edge_schema = (
+            ROOT / "quwoquan_service/services/api-edge/config/schema.yaml"
+        ).read_text(encoding="utf-8")
 
-        self.assertEqual(caddy.count("reverse_proxy user-service:18081"), 2)
-        self.assertNotIn("reverse_proxy user-service:18082", caddy)
+        self.assertEqual(caddy.count("reverse_proxy api-edge:18079"), 1)
+        self.assertNotIn("reverse_proxy user-service:", caddy)
+        self.assertEqual(api_edge_schema.count("http://user-service:18081"), 2)
+        self.assertNotIn("http://user-service:18082", api_edge_schema)
         for expected in (
             "USER_SERVICE_ADDR=:18081",
             'LOCAL_GAMMA_USER_PORT:-19210}:18081',
@@ -819,28 +525,23 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                 start_script,
             )
 
-    def test_gamma_fixture_bootstrap_waits_for_tag_projection_before_completion(self) -> None:
+    def test_gamma_waits_for_tag_service_without_copying_owner_routes_into_caddy(self) -> None:
         gamma_compose = COMPOSE_FILE.read_text(encoding="utf-8")
         start_script = START_SCRIPT.read_text(encoding="utf-8")
         gamma_proxy = gamma_compose[
             gamma_compose.index("  gamma-proxy:") :
             gamma_compose.index("\n    environment:", gamma_compose.index("  gamma-proxy:"))
         ]
-        tag_dependency = gamma_proxy[
-            gamma_proxy.index("      tag-service:") :
-            gamma_proxy.index("      search-service:")
-        ]
-        fixture_seed = start_script[
-            start_script.index('if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then', start_script.index("seed_tag_service_data()")) :
-            start_script.index(
-                'else\n  echo "[local-gamma] skip tag seed',
-                start_script.index("seed_tag_service_data()"),
-            )
-        ]
 
-        self.assertIn("condition: service_started", tag_dependency)
-        self.assertIn("wait_tag_service_taxonomy_ready()", start_script)
-        self.assertIn("seed_tag_service_data\n  wait_tag_service_taxonomy_ready", fixture_seed)
+        self.assertIn("      api-edge:", gamma_proxy)
+        self.assertIn("condition: service_healthy", gamma_proxy)
+        self.assertNotIn("tag-service:", gamma_proxy)
+        self.assertIn(
+            'curl -fsS "http://127.0.0.1:${tag_port}/healthz"',
+            start_script,
+        )
+        self.assertNotIn("seed_tag_service_data", start_script)
+        self.assertNotIn("ENABLE_FIXTURE_SEEDS", start_script)
 
     def test_product_ops_receives_local_elasticsearch_endpoint(self) -> None:
         service_block = service_compose("product-ops-service")
@@ -862,29 +563,20 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             source,
         )
 
-    def test_premium_pool_proof_uses_authoritative_fixture_actor(self) -> None:
+    def test_gamma_startup_has_no_business_seed_proof_path(self) -> None:
         source = START_SCRIPT.read_text(encoding="utf-8")
 
-        premium_pool_seed = source[
-            source.index("seed_gamma_premium_pool_data()"):
-            source.index("seed_search_index()", source.index("seed_gamma_premium_pool_data()"))
-        ]
-
         self.assertIn(
-            'environment="gamma",\n'
-            '    target_name="gamma-local",\n'
-            ")",
-            premium_pool_seed,
+            "immutable release activation owns business data and search projections",
+            source,
         )
-        self.assertNotIn("subject=", premium_pool_seed)
+        self.assertNotIn("seed_gamma_premium_pool_data", source)
+        self.assertNotIn("seed_gamma_intersection_data", source)
+        self.assertNotIn("seed_search_index", source)
+        self.assertNotIn("fixture_user_current", source)
         self.assertNotIn("redis-cli --scan", source)
-        self.assertIn('acceptance_actor = "fixture_user_current"', premium_pool_seed)
-        self.assertIn('"SREM"', premium_pool_seed)
-        self.assertIn("from datetime import datetime, timedelta, timezone", premium_pool_seed)
-        self.assertIn("rec:served:", premium_pool_seed)
-        self.assertIn("rec:impressed:", premium_pool_seed)
-        self.assertIn("rec:negative:", premium_pool_seed)
-        self.assertNotIn('"DEL"', premium_pool_seed)
+        self.assertNotIn("deleteMany", source)
+        self.assertNotIn("insertMany", source)
 
     def test_gamma_startup_removes_only_non_running_named_residue(self) -> None:
         source = START_SCRIPT.read_text(encoding="utf-8")
@@ -895,7 +587,15 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
             source,
         )
         self.assertIn("removing stale non-running container", source)
-        self.assertIn("cleanup_stale_named_gamma_containers\n  #", source)
+        release_branches = source.split(
+            'if [[ "$formal_release" != "1" ]]; then', 1
+        )[1]
+        development_branch = release_branches.split("\n  else", 1)[0]
+        formal_branch = release_branches.split("\n  else", 1)[1].split(
+            "\n  ensure_docker_gamma_proxy_started", 1
+        )[0]
+        self.assertIn("cleanup_stale_named_gamma_containers", development_branch)
+        self.assertNotIn("cleanup_stale_named_gamma_containers", formal_branch)
 
     def test_gamma_compose_failure_is_never_downgraded_to_readiness_warning(self) -> None:
         source = START_SCRIPT.read_text(encoding="utf-8")
@@ -918,6 +618,36 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertIn('provenance.get("configVersion")', source)
         self.assertNotIn("releases/config", source)
 
+    def test_gamma_configuration_identity_is_digest_only_and_fail_closed(self) -> None:
+        source = START_SCRIPT.read_text(encoding="utf-8")
+        verifier = (
+            ROOT
+            / "quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-}"',
+            source,
+        )
+        self.assertIn(
+            "LOCAL_GAMMA_CONFIG_VERSION must be the canonical sha256 runtime configuration digest",
+            source,
+        )
+        self.assertIn(
+            '[[ ! "$CONFIG_VERSION" =~ ^sha256:[0-9a-f]{64}$ ]]',
+            source,
+        )
+        self.assertIn(
+            '[[ "$packaged_configuration_digest" != "$CONFIG_VERSION" ]]',
+            source,
+        )
+        self.assertNotIn("local-gamma-v1", source)
+        self.assertNotIn("local-gamma-down", source)
+        self.assertIn('"--configuration-digest"', verifier)
+        self.assertIn('"configurationDigest": args.configuration_digest', verifier)
+        self.assertNotIn("local-gamma-v1", verifier)
+        self.assertNotIn('"--config-version"', verifier)
+
     def test_t3_rejects_reports_in_mutable_local_runtime_state(self) -> None:
         spec = importlib.util.spec_from_file_location("local_gamma_t3_report_path_test", T3_SCRIPT)
         self.assertIsNotNone(spec)
@@ -925,10 +655,38 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
 
-        with self.assertRaises(ValueError):
-            module.resolve_t3_report_path(
-                ".qwq_output/env/gamma/local/gamma-local/t3_forbidden.json"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output_root = Path(tmp_dir) / "output"
+            allowed = (
+                output_root
+                / "env"
+                / "gamma"
+                / "runs"
+                / "release-consumer"
+                / "t3.json"
             )
+            forbidden = (
+                output_root
+                / "env"
+                / "gamma"
+                / "local"
+                / "gamma-local"
+                / "t3_forbidden.json"
+            )
+            with mock.patch.dict(
+                module.os.environ,
+                {"QWQ_OUTPUT_ROOT": str(output_root)},
+            ):
+                self.assertEqual(module.default_t3_report_path(), allowed)
+                self.assertEqual(
+                    module.resolve_t3_report_path(str(allowed)),
+                    allowed.resolve(),
+                )
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "QWQ_OUTPUT_ROOT/env/gamma/runs",
+                ):
+                    module.resolve_t3_report_path(str(forbidden))
 
 
 if __name__ == "__main__":

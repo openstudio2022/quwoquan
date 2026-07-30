@@ -1,0 +1,12 @@
+{
+  "label": "第一区",
+  "labelEn": "District 1",
+  "description": "市中心商业与历史建筑区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

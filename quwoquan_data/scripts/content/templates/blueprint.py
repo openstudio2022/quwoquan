@@ -25,7 +25,7 @@ REQUIRED_BLUEPRINT_FIELDS = [
 
 REQUIRED_CREATOR_FIELDS = [
     "creatorProfileId",
-    "subAccountId",
+    "personaId",
     "authorId",
     "isSystemBuiltin",
     "displayName",
@@ -42,7 +42,6 @@ REQUIRED_CREATOR_FIELDS = [
     "qualityScore",
     "fatigueScore",
     "riskTier",
-    "profileVersion",
     "publicProfileTagRefs",
     "recommendationTagRefs",
     "preferredBlueprintIds",

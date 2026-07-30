@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan content API
-    version: v1
+    version: canonical
 paths:
     /config/app:
         get:
@@ -48,14 +48,18 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/GenerateArticleSummaryRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentArticleSummaryGenerateResponse'
                 default:
                     description: Runtime failure
                     content:
@@ -67,14 +71,14 @@ paths:
     /content/behaviors:
         post:
             operationId: ReportBehaviors
-            x-contract-operation-id: content.post.ReportBehaviors
-            x-object-id: content.post
+            x-contract-operation-id: content.content_behavior_fact.ReportBehaviors
+            x-object-id: content.content_behavior_fact
             x-actor: persona_or_device
             x-application:
                 kind: command
                 facet: ContentBehaviorCommandFacet
                 method: reportBehaviors
-                aggregateOwner: Post
+                appendSink: ContentBehaviorFact
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -83,11 +87,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReportBehaviorsRequest'
+                            $ref: '#/components/schemas/ReportContentBehaviorsCommand'
             responses:
                 "204":
                     description: No Content
@@ -123,11 +127,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/BindMediaAssetsToCommentRequest'
+                            $ref: '#/components/schemas/BindContentCommentAttachmentsCommand'
             responses:
                 "204":
                     description: No Content
@@ -163,11 +167,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReactToCommentRequest'
+                            $ref: '#/components/schemas/ReactToContentCommentCommand'
             responses:
                 "204":
                     description: No Content
@@ -191,6 +195,17 @@ paths:
                 method: getEntityWishlistState
                 reader: EntityWishlistStateReader
                 slice: EntityWishlistStateSlice
+            parameters:
+                - name: objectId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: objectKind
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -218,13 +233,64 @@ paths:
                 method: getFeed
                 reader: DiscoveryFeedReader
                 slice: DiscoveryFeedSlice
+            parameters:
+                - name: identity
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sort
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: subCategory
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: channelId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sessionId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: feedRequestId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: X-Blocked-Keywords
+                  in: header
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Post'
+                                $ref: '#/components/schemas/ContentDiscoveryFeedPageSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -271,6 +337,22 @@ paths:
                 method: getMyFootprint
                 reader: ContentFootprintReader
                 slice: ContentFootprintPageSlice
+            parameters:
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -310,7 +392,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetHelperReadResponse'
+                                $ref: '#/components/schemas/HelperReadSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -329,6 +411,37 @@ paths:
                 method: listMyIntersections
                 reader: IntersectionListReader
                 slice: IntersectionPageSlice
+            parameters:
+                - name: dimension
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: filter
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sourceRef
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: timeBucket
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -356,6 +469,22 @@ paths:
                 method: getObjectIntersections
                 reader: ObjectIntersectionReader
                 slice: ObjectIntersectionPageSlice
+            parameters:
+                - name: objectId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: objectType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -523,12 +652,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/SelectAutoVideoCoverRequest'
             responses:
                 "204":
                     description: No Content
@@ -564,11 +687,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/SelectManualVideoCoverRequest'
+                            $ref: '#/components/schemas/SelectManualContentMediaCoverCommand'
             responses:
                 "204":
                     description: No Content
@@ -604,11 +727,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/RequestOriginalImageAccessRequest'
+                            $ref: '#/components/schemas/RequestContentMediaOriginalAccessCommand'
             responses:
                 "204":
                     description: No Content
@@ -676,12 +799,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/AbortMediaUploadRequest'
             responses:
                 "204":
                     description: No Content
@@ -717,11 +834,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CompleteMediaUploadRequest'
+                            $ref: '#/components/schemas/CompleteContentMediaUploadCommand'
             responses:
                 "204":
                     description: No Content
@@ -752,11 +869,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/InitMediaUploadRequest'
+                            $ref: '#/components/schemas/InitContentMediaUploadCommand'
             responses:
                 "204":
                     description: No Content
@@ -768,6 +885,301 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/personas/{personaId}/author-impact:
+        get:
+            operationId: GetAuthorImpact
+            x-contract-operation-id: content.post.GetAuthorImpact
+            x-object-id: content.post
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: AuthorImpactQueryFacet
+                method: getAuthorImpact
+                reader: AuthorImpactReader
+                slice: AuthorImpactSlice
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthorImpactSummary'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/personas/{personaId}/author-impact/evidence:
+        get:
+            operationId: ListAuthorImpactEvidence
+            x-contract-operation-id: content.post.ListAuthorImpactEvidence
+            x-object-id: content.post
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: AuthorImpactQueryFacet
+                method: listAuthorImpactEvidence
+                reader: AuthorImpactEvidenceReader
+                slice: AuthorImpactEvidencePageSlice
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: impactId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: evidenceSnapshotId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthorImpactEvidencePage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/personas/{personaId}/interactions/{interactionId}/read-facts:
+        post:
+            operationId: UpdateProfileInteractionState
+            x-contract-operation-id: content.profile_interaction_read_fact.UpdateProfileInteractionState
+            x-object-id: content.profile_interaction_read_fact
+            x-actor: persona
+            x-application:
+                kind: command
+                facet: ProfileInteractionReadFactAppendFacet
+                method: appendReadFact
+                appendSink: ProfileInteractionReadFact
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: interactionId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AppendContentProfileInteractionReadFactCommand'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProfileInteractionReadFactAck'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/personas/{personaId}/interactions/received:
+        get:
+            operationId: ListProfileInteractionActivitiesReceived
+            x-contract-operation-id: content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
+            x-object-id: content.profile_interaction_activity_view
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: ProfileInteractionActivityQueryFacet
+                method: listReceived
+                reader: ReceivedProfileInteractionActivityReader
+                slice: ProfileInteractionActivityPageSlice
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListProfileInteractionActivitiesReceivedPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/personas/{personaId}/interactions/sent:
+        get:
+            operationId: ListProfileInteractionActivitiesSent
+            x-contract-operation-id: content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
+            x-object-id: content.profile_interaction_activity_view
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: ProfileInteractionActivityQueryFacet
+                method: listSent
+                reader: SentProfileInteractionActivityReader
+                slice: ProfileInteractionActivityPageSlice
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListProfileInteractionActivitiesSentPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/personas/{personaId}/posts:
+        get:
+            operationId: ListUserPosts
+            x-contract-operation-id: content.post.ListUserPosts
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PostQueryFacet
+                method: listUserPosts
+                reader: AuthorPostReader
+                slice: AuthorPostPageSlice
+            parameters:
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: identity
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: visibility
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ListUserPostsPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /content/posts/{postId}:
         get:
             operationId: GetPost
@@ -853,6 +1265,21 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sort
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -896,7 +1323,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Comment'
+                            $ref: '#/components/schemas/CreateContentCommentCommand'
             responses:
                 "204":
                     description: No Content
@@ -975,12 +1402,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/PinCommentRequest'
             responses:
                 "204":
                     description: No Content
@@ -1053,6 +1474,16 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1123,12 +1554,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/LikePostRequest'
             responses:
                 "204":
                     description: No Content
@@ -1199,11 +1624,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CreateOutboundShareRequest'
+                            $ref: '#/components/schemas/CreateContentOutboundShareCommand'
             responses:
                 "204":
                     description: No Content
@@ -1274,14 +1699,18 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdatePostSettingsRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentPostProjection'
                 default:
                     description: Runtime failure
                     content:
@@ -1314,14 +1743,18 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/PromotePostToWorkRequest'
             responses:
-                "204":
-                    description: No Content
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ContentPostProjection'
                 default:
                     description: Runtime failure
                     content:
@@ -1353,7 +1786,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Post'
+                            $ref: '#/components/schemas/SubmitContentPostPublicationCommand'
             responses:
                 "204":
                     description: No Content
@@ -1377,6 +1810,12 @@ paths:
                 method: listReports
                 reader: ReportQueueReader
                 slice: ReportQueueSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1410,11 +1849,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CreateReportRequest'
+                            $ref: '#/components/schemas/CreateContentReportCommand'
             responses:
                 "204":
                     description: No Content
@@ -1526,7 +1965,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: true
+                required: false
                 content:
                     application/json:
                         schema:
@@ -1590,221 +2029,6 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/author-impact:
-        get:
-            operationId: GetAuthorImpact
-            x-contract-operation-id: content.post.GetAuthorImpact
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: AuthorImpactQueryFacet
-                method: getAuthorImpact
-                reader: AuthorImpactReader
-                slice: AuthorImpactSlice
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AuthorImpactSummary'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/author-impact/evidence:
-        get:
-            operationId: ListAuthorImpactEvidence
-            x-contract-operation-id: content.post.ListAuthorImpactEvidence
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: AuthorImpactQueryFacet
-                method: listAuthorImpactEvidence
-                reader: AuthorImpactEvidenceReader
-                slice: AuthorImpactEvidencePageSlice
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/AuthorImpactEvidencePage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts:
-        post:
-            operationId: UpdateProfileInteractionState
-            x-contract-operation-id: content.profile_interaction_read_fact.UpdateProfileInteractionState
-            x-object-id: content.profile_interaction_read_fact
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: ProfileInteractionReadFactAppendFacet
-                method: appendReadFact
-                appendSink: ProfileInteractionReadFact
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-                - name: interactionId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-                - name: Idempotency-Key
-                  in: header
-                  required: true
-                  description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ProfileInteractionReadFact'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ProfileInteractionReadFactAck'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/interactions/received:
-        get:
-            operationId: ListProfileInteractionActivitiesReceived
-            x-contract-operation-id: content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
-            x-object-id: content.profile_interaction_activity_view
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: ProfileInteractionActivityQueryFacet
-                method: listReceived
-                reader: ReceivedProfileInteractionActivityReader
-                slice: ProfileInteractionActivityPageSlice
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ListProfileInteractionActivitiesReceivedPage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/interactions/sent:
-        get:
-            operationId: ListProfileInteractionActivitiesSent
-            x-contract-operation-id: content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
-            x-object-id: content.profile_interaction_activity_view
-            x-actor: persona
-            x-application:
-                kind: query
-                facet: ProfileInteractionActivityQueryFacet
-                method: listSent
-                reader: SentProfileInteractionActivityReader
-                slice: ProfileInteractionActivityPageSlice
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ListProfileInteractionActivitiesSentPage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /content/sub-accounts/{subAccountId}/posts:
-        get:
-            operationId: ListUserPosts
-            x-contract-operation-id: content.post.ListUserPosts
-            x-object-id: content.post
-            x-actor: none
-            x-application:
-                kind: query
-                facet: PostQueryFacet
-                method: listUserPosts
-                reader: AuthorPostReader
-                slice: AuthorPostPageSlice
-            parameters:
-                - name: subAccountId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ListUserPostsPage'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-                - {}
     /content/users/me/comments:
         get:
             operationId: ListCommentsByAuthor
@@ -1817,6 +2041,17 @@ paths:
                 method: listByAuthor
                 reader: AuthorCommentPageReader
                 slice: AuthorCommentPageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1844,6 +2079,17 @@ paths:
                 method: listReceivedByPostAuthor
                 reader: ReceivedCommentPageReader
                 slice: ReceivedCommentPageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1871,6 +2117,17 @@ paths:
                 method: listMyReports
                 reader: MyReportReader
                 slice: MyReportPageSlice
+            parameters:
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1889,14 +2146,14 @@ paths:
     /internal/content/account-closure/dead-letters:recover:
         post:
             operationId: RecoverContentAccountClosureDeadLetter
-            x-contract-operation-id: content.post.RecoverContentAccountClosureDeadLetter
-            x-object-id: content.post
+            x-contract-operation-id: content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter
+            x-object-id: content.content_account_closure_workflow
             x-actor: none
             x-application:
                 kind: command
-                facet: PostAccountClosureRecoveryCommandFacet
+                facet: ContentAccountClosureRecoveryCommandFacet
                 method: recoverAccountClosureDeadLetter
-                aggregateOwner: Post
+                aggregateOwner: ContentAccountClosureWorkflow
             parameters:
                 - name: Idempotency-Key
                   in: header
@@ -1949,11 +2206,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/HideCommentRequest'
+                            $ref: '#/components/schemas/ModerateContentCommentCommand'
             responses:
                 "204":
                     description: No Content
@@ -1989,11 +2246,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/RestoreCommentRequest'
+                            $ref: '#/components/schemas/ModerateContentCommentCommand'
             responses:
                 "204":
                     description: No Content
@@ -2028,7 +2285,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/FilterCatalogRelease'
+                            $ref: '#/components/schemas/StageFilterCatalogReleaseRequest'
             responses:
                 "200":
                     description: OK
@@ -2155,7 +2412,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/MediaImageReprocessRun'
+                            $ref: '#/components/schemas/StartMediaImageReprocessRunRequest'
             responses:
                 "200":
                     description: OK
@@ -2393,7 +2650,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -2424,6 +2681,11 @@ paths:
             parameters:
                 - name: mediaId
                   in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: ownerPersonaId
+                  in: query
                   required: true
                   schema:
                     type: string
@@ -2466,7 +2728,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -2497,6 +2759,11 @@ paths:
             parameters:
                 - name: mediaId
                   in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: ownerPersonaId
+                  in: query
                   required: true
                   schema:
                     type: string
@@ -2566,6 +2833,16 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: postVersion
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: contentDigest
+                  in: query
+                  required: true
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -2605,11 +2882,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/DecidePostModerationRequest'
+                            $ref: '#/components/schemas/DecidePostModerationCaseRequest'
             responses:
                 "204":
                     description: No Content
@@ -2645,7 +2922,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -2685,7 +2962,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -2725,7 +3002,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -2746,15 +3023,15 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        AbortMediaUploadRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AbortMediaUploadRequest
-            x-contract-placeholder: true
         ActivateFilterCatalogReleaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ActivateFilterCatalogReleaseRequest
+            x-contract-placeholder: true
+        AppendContentProfileInteractionReadFactCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AppendContentProfileInteractionReadFactCommand
             x-contract-placeholder: true
         AuthorCommentPageSlice:
             type: object
@@ -2776,25 +3053,20 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: BeginReportReviewRequest
             x-contract-placeholder: true
-        BindMediaAssetsToCommentRequest:
+        BindContentCommentAttachmentsCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: BindMediaAssetsToCommentRequest
-            x-contract-placeholder: true
-        Comment:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: Comment
+            x-contract-entity: BindContentCommentAttachmentsCommand
             x-contract-placeholder: true
         CommentPageSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CommentPageSlice
             x-contract-placeholder: true
-        CompleteMediaUploadRequest:
+        CompleteContentMediaUploadCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CompleteMediaUploadRequest
+            x-contract-entity: CompleteContentMediaUploadCommand
             x-contract-placeholder: true
         ContentAccountClosureDeadLetterRecoveryAccepted:
             type: object
@@ -2805,6 +3077,16 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentAccountClosureDeadLetterRecoveryRequest
+            x-contract-placeholder: true
+        ContentArticleSummaryGenerateResponse:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentArticleSummaryGenerateResponse
+            x-contract-placeholder: true
+        ContentDiscoveryFeedPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ContentDiscoveryFeedPageSlice
             x-contract-placeholder: true
         ContentFootprintEntry:
             type: object
@@ -2826,20 +3108,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContentReaction
             x-contract-placeholder: true
-        CreateOutboundShareRequest:
+        CreateContentCommentCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CreateOutboundShareRequest
+            x-contract-entity: CreateContentCommentCommand
             x-contract-placeholder: true
-        CreateReportRequest:
+        CreateContentOutboundShareCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CreateReportRequest
+            x-contract-entity: CreateContentOutboundShareCommand
             x-contract-placeholder: true
-        DecidePostModerationRequest:
+        CreateContentReportCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: DecidePostModerationRequest
+            x-contract-entity: CreateContentReportCommand
+            x-contract-placeholder: true
+        DecidePostModerationCaseRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: DecidePostModerationCaseRequest
             x-contract-placeholder: true
         DismissReportRequest:
             type: object
@@ -2875,11 +3162,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetCountersResponse
-            x-contract-placeholder: true
-        GetHelperReadResponse:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: GetHelperReadResponse
             x-contract-placeholder: true
         GetMediaAssetDeliveryReferenceResponse:
             type: object
@@ -2937,15 +3219,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetPostPublicationEligibilityResponse
             x-contract-placeholder: true
-        HideCommentRequest:
+        HelperReadSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: HideCommentRequest
+            x-contract-entity: HelperReadSlice
             x-contract-placeholder: true
-        InitMediaUploadRequest:
+        InitContentMediaUploadCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: InitMediaUploadRequest
+            x-contract-entity: InitContentMediaUploadCommand
             x-contract-placeholder: true
         IntersectionInboxSummary:
             type: object
@@ -2956,11 +3238,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: IntersectionReason
-            x-contract-placeholder: true
-        LikePostRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: LikePostRequest
             x-contract-placeholder: true
         ListCommentRepliesPage:
             type: object
@@ -3107,6 +3384,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: MediaImageReprocessRunDetail
             x-contract-placeholder: true
+        ModerateContentCommentCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ModerateContentCommentCommand
+            x-contract-placeholder: true
         MyReportItemSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3122,16 +3404,6 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PauseMediaImageReprocessRunRequest
             x-contract-placeholder: true
-        PinCommentRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PinCommentRequest
-            x-contract-placeholder: true
-        Post:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: Post
-            x-contract-placeholder: true
         PostModerationCaseOpsSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3141,11 +3413,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ProfileInteractionActivityView
-            x-contract-placeholder: true
-        ProfileInteractionReadFact:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ProfileInteractionReadFact
             x-contract-placeholder: true
         ProfileInteractionReadFactAck:
             type: object
@@ -3157,10 +3424,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PromotePostToWorkRequest
             x-contract-placeholder: true
-        ReactToCommentRequest:
+        ReactToContentCommentCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReactToCommentRequest
+            x-contract-entity: ReactToContentCommentCommand
             x-contract-placeholder: true
         ReceivedCommentPageSlice:
             type: object
@@ -3177,15 +3444,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReplyPageSlice
             x-contract-placeholder: true
-        ReportBehaviorsRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReportBehaviorsRequest
-            x-contract-placeholder: true
         ReportCommandResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportCommandResult
+            x-contract-placeholder: true
+        ReportContentBehaviorsCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReportContentBehaviorsCommand
             x-contract-placeholder: true
         ReportDetailSlice:
             type: object
@@ -3197,20 +3464,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportQueueItemSlice
             x-contract-placeholder: true
-        RequestOriginalImageAccessRequest:
+        RequestContentMediaOriginalAccessCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RequestOriginalImageAccessRequest
+            x-contract-entity: RequestContentMediaOriginalAccessCommand
             x-contract-placeholder: true
         ResolveReportRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ResolveReportRequest
-            x-contract-placeholder: true
-        RestoreCommentRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RestoreCommentRequest
             x-contract-placeholder: true
         ResumeMediaImageReprocessRunRequest:
             type: object
@@ -3232,15 +3494,25 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RollbackMediaImageReprocessRunRequest
             x-contract-placeholder: true
-        SelectAutoVideoCoverRequest:
+        SelectManualContentMediaCoverCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SelectAutoVideoCoverRequest
+            x-contract-entity: SelectManualContentMediaCoverCommand
             x-contract-placeholder: true
-        SelectManualVideoCoverRequest:
+        StageFilterCatalogReleaseRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SelectManualVideoCoverRequest
+            x-contract-entity: StageFilterCatalogReleaseRequest
+            x-contract-placeholder: true
+        StartMediaImageReprocessRunRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: StartMediaImageReprocessRunRequest
+            x-contract-placeholder: true
+        SubmitContentPostPublicationCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SubmitContentPostPublicationCommand
             x-contract-placeholder: true
         SupersedePostModerationCaseRequest:
             type: object

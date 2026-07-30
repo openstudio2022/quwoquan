@@ -19,9 +19,14 @@ func retireAndScrubPersonas(
 	_, err := tx.Exec(ctx, `
 UPDATE personas
 SET display_name='已注销用户',
+	 nickname_customized=false,
     user_handle=NULL,
-    phone=NULL,
-    email=NULL,
+	 identity_tags=ARRAY[]::text[],
+	 taxonomy_release_id='',
+	 gender='',
+	 birth_date=NULL,
+	 region='',
+	 region_tag_ref='',
     avatar_url=NULL,
     avatar_version=0,
     background_url=NULL,
@@ -49,9 +54,14 @@ SET display_name='已注销用户',
 WHERE user_id=$1
   AND (
     display_name IS DISTINCT FROM '已注销用户'
+	OR nickname_customized
     OR user_handle IS NOT NULL
-    OR phone IS NOT NULL
-    OR email IS NOT NULL
+	OR identity_tags IS DISTINCT FROM ARRAY[]::text[]
+	OR taxonomy_release_id<>''
+	OR gender<>''
+	OR birth_date IS NOT NULL
+	OR region<>''
+	OR region_tag_ref<>''
     OR avatar_url IS NOT NULL
     OR avatar_version<>0
     OR background_url IS NOT NULL

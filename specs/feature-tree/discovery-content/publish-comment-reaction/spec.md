@@ -45,6 +45,7 @@
 
 
 
+- [`capture-metadata-disclosure`](./capture-metadata-disclosure/spec.md)：作者自己决定公开哪几类拍摄信息，关掉的那类彻底不再出现。
 - [`comment-thread`](./comment-thread/spec.md)：Gamma 真机完成打开、评论、返回和二次进入。
 - [`filter-catalog-release`](./filter-catalog-release/spec.md)：Mongo 真实引擎 contract 覆盖 digest 幂等、状态机和单 active CAS。
 - [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
@@ -70,6 +71,9 @@
 - published receipt 只创建一个 Post，并立即回流详情或作品浏览器以及 feed/Persona 作品投影。
 - tag/entity/location/circle 关联只来自可证实事实，circle placement 失败不重复发布。
 - App 产品遥测、服务 RED、dashboard 和 alert 能对账三项黄金指标。
+- `DeletedPostTombstone` 是独立且不可变的删除事实，删除保留期、作者与原因只由该对象定义；Post 不复制同名 type 或隐私口径。
+- `GetPost` 在墓碑保留期内返回 canonical `CONTENT.USER.content_deleted`（HTTP 410），错误定义与真实 HTTP producer 双向绑定；保留期结束后才回落 404。
+- 审核 pending、旧 revision 或 digest 不匹配通过 typed `PublicationEligibilitySlice` 返回 `eligible=false`，发布命令只使用真实可发射的 `publication_rejected`，不得保留未被任何 operation 发射的审核错误码。
 
 <a id="req-003"></a>
 ### REQ-003 照片选择、像素编辑、MediaAsset 上传与发布回流组合 SIT
@@ -119,6 +123,8 @@
 - THEN published receipt 只创建一个 Post，并立即回流详情或作品浏览器以及 feed/Persona 作品投影。
 - THEN tag/entity/location/circle 关联只来自可证实事实，circle placement 失败不重复发布。
 - THEN App 产品遥测、服务 RED、dashboard 和 alert 能对账三项黄金指标。
+- THEN 删除后读取在墓碑保留期内稳定返回 410 `content_deleted`，服务重启后语义不变；Post contract 不再声明第二份 `DeletedPostTombstone`。
+- THEN 当前 revision 的审核资格由 typed Slice 表达，pending 或 stale 只得到 `eligible=false`，不会伪造成成功发布，也不会产生无 producer 的错误码。
 
 <a id="sit-003"></a>
 ### SIT-003 照片选择、像素编辑、MediaAsset 上传与发布回流组合 SIT
@@ -162,3 +168,12 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：图片编辑器全部可见工具为真实像素实现；裁剪、旋转/翻转、颜色矩阵、局部径向调整、曲线、马赛克和文字共用 ImageEditorExportEngine。
 - 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-006"></a>
+### OPEN-006 Post 聚合寄生账号注销 saga 与行为采集契约
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：存在聚合归属错位。`content/post/fields.yaml` 1496 行中约 420 行是一整套跨服务账号注销 saga 的 inbox/死信/补偿工作项/审计类型（8 个），它们有自己的 pending→running→failed→dead_letter→recovered 生命周期与重试语义，与 Post 的不变量零交集，`PostCommandFacade` 也不可能是它们的命令入口。另有 `behaviors.yaml` 790 行——它本身是合理的契约收敛（把散在三处的枚举、路由、ML schema 合并为单一真相源），但主语不是 Post：`intersection_expand` 事件的 payload 里没有 postId，`wire_schema.common_fields` 全是推荐系统概念，且 `post/object.yaml` 的 `counter_strategy.sources.view` 引用的 `content.BehaviorFact` 并不存在为独立对象，是一个悬空引用。
+- 完成判定：saga 类型迁出为独立对象，`behaviors.yaml` 连同 `POST /content/behaviors` 路由迁入新的 `content_behavior_fact` 对象使悬空引用可解析；新增门禁——`counter_strategy.sources.*` 与 `relationships[].target_object` 必须解析到存在的 `object.yaml`。

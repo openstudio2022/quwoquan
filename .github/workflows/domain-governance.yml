@@ -1,0 +1,80 @@
+name: Domain governance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: domain-governance
+  cancel-in-progress: false
+
+jobs:
+  dns:
+    runs-on: ubuntu-latest
+    environment: domain-governance
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - name: Apply canonical DNS records
+        env:
+          QWQ_DNS_PROVISIONING_API_TOKEN: ${{ secrets.QWQ_DNS_PROVISIONING_API_TOKEN }}
+          QWQ_DNS_ZONE_ID: ${{ secrets.QWQ_DNS_ZONE_ID }}
+        run: |
+          python3 quwoquan_ops/cli/domain_governance.py apply \
+            --report .qwq_output/domain/dns-apply-receipt.json
+          python3 quwoquan_ops/cli/domain_governance.py verify \
+            --skip-tls \
+            --report .qwq_output/domain/dns-live-evidence.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-dns-evidence
+          path: .qwq_output/domain/*.json
+          retention-days: 30
+
+  certificate:
+    needs: dns
+    runs-on: ubuntu-latest
+    environment: domain-governance
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [alpha-local, beta-local, gamma-local, prod-sim]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.24.x"
+      - name: Install pinned DNS-01 and encryption clients
+        run: |
+          go install github.com/go-acme/lego/v4/cmd/lego@v4.25.2
+          go install filippo.io/age/cmd/age@v1.2.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Issue and encrypt wildcard certificate
+        env:
+          QWQ_ACME_DNS_API_TOKEN: ${{ secrets.QWQ_ACME_DNS_API_TOKEN }}
+          QWQ_ACME_ACCOUNT_EMAIL: ${{ secrets.QWQ_ACME_ACCOUNT_EMAIL }}
+          QWQ_TLS_AGE_RECIPIENT: ${{ secrets.QWQ_TLS_AGE_RECIPIENT }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          test -n "$QWQ_TLS_AGE_RECIPIENT"
+          mkdir -p .qwq_output
+          python3 quwoquan_ops/cli/lib/public_domain_tls.py issue \
+            --target "$TARGET" \
+            > ".qwq_output/${TARGET}-tls-evidence.json"
+          tls_exports="$(python3 quwoquan_ops/cli/lib/public_domain_tls.py paths \
+            --target "$TARGET" --format shell)"
+          eval "$tls_exports"
+          tar -C "$(dirname "$QWQ_PUBLIC_TLS_CERT_FILE")" \
+            -cf - fullchain.pem privkey.pem \
+            | age -r "$QWQ_TLS_AGE_RECIPIENT" \
+              -o ".qwq_output/${TARGET}-tls-bundle.tar.age"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: domain-tls-${{ matrix.target }}
+          path: |
+            .qwq_output/${{ matrix.target }}-tls-evidence.json
+            .qwq_output/${{ matrix.target }}-tls-bundle.tar.age
+          retention-days: 7

@@ -2,6 +2,7 @@
   "label": "图集",
   "labelEn": "Photo Album",
   "description": "多图组合图集",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

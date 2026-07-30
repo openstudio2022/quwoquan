@@ -11,208 +11,97 @@ from quwoquan_app.scripts.gamma import run_local_gamma_t3 as local_gamma_t3
 from quwoquan_ops.cli import stackctl
 
 
+def gamma_release_identity() -> dict[str, object]:
+    return {
+        "releaseId": "release-gamma-a",
+        "sourceOwner": "quwoquan_data",
+        "manifestDigest": "sha256:" + ("1" * 64),
+        "mediaManifestDigest": "sha256:" + ("2" * 64),
+        "importRunId": "import-gamma-a",
+        "verifyRunId": "verify-gamma-a",
+        "readinessReceiptRef": (
+            "env/gamma/runs/data-release/release-gamma-a/verify-gamma-a/"
+            "release-readiness.json"
+        ),
+    }
+
+
 class LocalGammaCommentSeedContractTest(unittest.TestCase):
-    def test_fixture_post_has_a_valid_revision_for_report_moderation(self) -> None:
-        document = local_gamma_t3.fixture_post_to_doc(
-            {
-                "postId": "fixture_photo_001",
-                "contentType": "image",
-                "title": "可审核的 Gamma 种子内容",
-                "createdAt": "2026-06-05T11:00:00Z",
-            }
-        )
+    def test_t3_has_no_fixture_post_projection_or_comment_mutation(self) -> None:
+        source = Path(local_gamma_t3.__file__).read_text(encoding="utf-8")
 
-        self.assertEqual(document["version"], 1)
-        self.assertRegex(
-            document["contentDigest"],
-            r"^sha256:[0-9a-f]{64}$",
-        )
-
-    def test_fixture_post_preserves_canonical_tag_refs_for_search_backfill(self) -> None:
-        document = local_gamma_t3.fixture_post_to_doc(
-            {
-                "postId": "fixture_photo_search_tags",
-                "contentType": "image",
-                "title": "带标签的 Gamma 搜索内容",
-                "tagRefs": ["fixture", "photography", "fixture"],
-                "tags": ["must-not-override-canonical-tag-refs"],
-            }
-        )
-
-        self.assertEqual(
-            document["tagRefs"],
-            ["fixture", "photography", "fixture"],
-        )
-
-    def test_content_seed_does_not_write_comment_aggregate_documents(
-        self,
-    ) -> None:
-        fixture_payload = {
-            "seedSets": {
-                "content_core": {
-                    "posts": [
-                        {
-                            "postId": "fixture_photo_001",
-                            "contentType": "image",
-                            "createdAt": "2026-06-05T11:00:00Z",
-                            "tagRefs": ["fixture", "photography"],
-                        }
-                    ],
-                    "comments": [
-                        {
-                            "commentId": "fixture_comment_parent_001",
-                            "postId": "fixture_photo_001",
-                            "authorId": "fixture_user_current",
-                            "content": "主评论示例",
-                            "createdAt": "2026-06-05T12:00:00Z",
-                            "authorIpLocation": "浙江",
-                            "hotScore": 128,
-                        }
-                    ],
-                }
-            }
-        }
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            fixture_path = Path(tmp_dir) / "fixture.json"
-            fixture_path.write_text(
-                json.dumps(fixture_payload, ensure_ascii=False),
-                encoding="utf-8",
-            )
-            artifact_root = Path(tmp_dir) / "artifacts"
-            with (
-                mock.patch.object(
-                    local_gamma_t3,
-                    "gamma_content_fixture_spec",
-                    return_value=(fixture_path, ["content_core"]),
-                ),
-                mock.patch.object(local_gamma_t3, "GAMMA_RUN_ROOT", artifact_root),
-                mock.patch.object(
-                    local_gamma_t3,
-                    "compose_command",
-                    return_value=["mongosh"],
-                ),
-                mock.patch.object(
-                    local_gamma_t3.subprocess,
-                    "run",
-                    return_value=subprocess.CompletedProcess(
-                        ["mongosh"],
-                        0,
-                        "seed ok",
-                    ),
-                ),
-            ):
-                result = local_gamma_t3.seed_content()
-
-            seed_script = (artifact_root / "seed-content.js").read_text(
-                encoding="utf-8"
-            )
-
-        self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["insertedCount"], 1)
-        self.assertIn(
-            "dbh.posts.deleteMany({_id: {$in: ids}})",
-            seed_script,
-        )
-        self.assertIn(
-            'tagRefs: Array.isArray(doc.tagRefs) ? doc.tagRefs : [],',
-            seed_script,
-        )
-        self.assertNotIn("dbh.comments", seed_script)
-
-    def test_comment_thread_setup_uses_public_commands_without_expected_version(
-        self,
-    ) -> None:
-        calls: list[tuple[str, dict[str, object]]] = []
-        responses = iter(
-            [
-                (200, {"id": "comment-parent", "version": 1}),
-                (200, {"id": "comment-reply", "version": 1}),
-                (200, {"reaction": "like"}),
-                (200, {"version": 2}),
-            ]
-        )
-
-        def request(url: str, **kwargs: object) -> tuple[int, bytes]:
-            calls.append((url, kwargs))
-            status, body = next(responses)
-            return status, json.dumps(body).encode("utf-8")
-
-        with (
-            mock.patch.object(local_gamma_t3, "http_request", side_effect=request),
-            mock.patch.object(
-                local_gamma_t3,
-                "gamma_probe_idempotency_key",
-                side_effect=lambda purpose: f"key-{purpose}",
-            ),
+        for retired in (
+            "fixture_post_to_doc",
+            "seed_content",
+            "setup_comment_thread",
+            "setup_runtime_fixtures",
+            "mongosh",
+            "/content/comments",
         ):
-            result = local_gamma_t3.setup_comment_thread("https://gamma.example")
+            self.assertNotIn(retired, source)
+        self.assertIn("load_release_content_identity", source)
+        self.assertIn('"mutationPolicy": "read_only"', source)
 
-        self.assertEqual(result["status"], "passed")
-        self.assertEqual(result["parentCommentId"], "comment-parent")
-        self.assertEqual(result["replyCommentId"], "comment-reply")
-        self.assertEqual(len(calls), 4)
-        self.assertEqual(
-            [call[0] for call in calls],
-            [
-                "https://gamma.example/content/posts/fixture_photo_001/comments",
-                "https://gamma.example/content/posts/fixture_photo_001/comments",
-                "https://gamma.example/content/comments/comment-parent/reaction",
-                "https://gamma.example/content/comments/comment-parent/media:bind",
-            ],
+    def test_release_consumer_command_is_bound_to_receipt_identity(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["quwoquan_data/scripts/cli.py"],
+            0,
+            stdout="release verification passed",
         )
-        self.assertEqual(calls[0][1]["body"], {"content": "主评论示例"})
-        self.assertEqual(
-            calls[1][1]["body"],
-            {"content": "回复示例", "replyToCommentId": "comment-parent"},
-        )
-        self.assertEqual(calls[2][1]["body"], {"reaction": "like"})
-        self.assertEqual(calls[3][1]["body"], {"attachmentMediaIds": []})
-        self.assertNotIn("version", calls[3][1]["body"])
-
-    def test_content_scoped_probe_does_not_require_product_ops_health(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            report_path = Path(tmp_dir) / "t3-report.json"
-            session = local_gamma_t3.LocalGammaAcceptanceSession(
-                owner_id="fixture_owner",
-                persona_id="fixture_persona",
-                access_token="test-token",
+        with mock.patch.object(
+            local_gamma_t3.subprocess,
+            "run",
+            return_value=completed,
+        ) as run:
+            result = local_gamma_t3.run_release_consumer(
+                identity=gamma_release_identity(),
             )
+
+        command = run.call_args.args[0]
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(
+            command[command.index("--release-id") + 1],
+            "release-gamma-a",
+        )
+        self.assertEqual(
+            command[command.index("--import-run-id") + 1],
+            "import-gamma-a",
+        )
+        self.assertEqual(command[command.index("--run-id") + 1], "verify-gamma-a")
+        self.assertNotIn("fixture", " ".join(command))
+
+    def test_t3_success_report_is_read_only_and_release_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_path = Path(tmp_dir) / "t3.json"
             with (
                 mock.patch.object(
                     local_gamma_t3,
-                    "wait_url",
-                    return_value={"status": "passed"},
-                ) as wait_url,
-                mock.patch.object(
-                    local_gamma_t3,
-                    "open_local_acceptance_session",
-                    return_value=session,
+                    "resolve_t3_report_path",
+                    return_value=report_path,
                 ),
                 mock.patch.object(
                     local_gamma_t3,
-                    "setup_runtime_fixtures",
-                    return_value={
-                        "status": "passed",
-                        "parentCommentId": "parent",
-                        "replyCommentId": "reply",
-                    },
+                    "resolve_readiness_path",
+                    return_value=Path("/tmp/release-readiness.json"),
                 ),
-                mock.patch.object(local_gamma_t3, "endpoint_checks", return_value=[]),
                 mock.patch.object(
                     local_gamma_t3,
-                    "strict_endpoint_checks",
-                    return_value=[],
+                    "load_release_content_identity",
+                    return_value=gamma_release_identity(),
+                ) as load_identity,
+                mock.patch.object(
+                    local_gamma_t3,
+                    "run_release_consumer",
+                    return_value={"status": "passed", "exitCode": 0},
                 ),
-                mock.patch.object(local_gamma_t3, "_ACTIVE_SESSION", None),
                 mock.patch.object(
                     local_gamma_t3.sys,
                     "argv",
                     [
                         "run_local_gamma_t3.py",
-                        "--enabled-domain",
-                        "content",
-                        "--skip-seed",
-                        "--skip-flutter-contracts",
+                        "--release-readiness",
+                        "env/gamma/runs/data-release/release-gamma-a/"
+                        "verify-gamma-a/release-readiness.json",
                         "--report",
                         str(report_path),
                     ],
@@ -220,57 +109,116 @@ class LocalGammaCommentSeedContractTest(unittest.TestCase):
             ):
                 self.assertEqual(local_gamma_t3.main(), 0)
 
-            wait_url.assert_called_once_with(
-                "https://api.gamma.quwoquan.com:19000/healthz",
-                45,
-            )
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            self.assertEqual(report["enabledDomains"], ["content"])
-            self.assertEqual(
-                report["productOpsHealth"],
-                {"status": "skipped", "reason": "domain_scoped_verification"},
+
+        load_identity.assert_called_once_with(
+            Path("/tmp/release-readiness.json"),
+            expected_environment="gamma",
+        )
+        self.assertEqual(report["schema"], "gamma-t3-release-consumer")
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["release"], gamma_release_identity())
+        self.assertEqual(report["mutationPolicy"], "read_only")
+        self.assertNotIn("domainSeeds", report)
+
+    def test_t3_missing_readiness_fails_closed_without_consumer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_path = Path(tmp_dir) / "t3.json"
+            with (
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_t3_report_path",
+                    return_value=report_path,
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_readiness_path",
+                    side_effect=local_gamma_t3.ReleaseVideoDeliveryError(
+                        "DATA_RELEASE_READINESS_RECEIPT is required"
+                    ),
+                ),
+                mock.patch.object(local_gamma_t3, "run_release_consumer") as consumer,
+                mock.patch.object(
+                    local_gamma_t3.sys,
+                    "argv",
+                    ["run_local_gamma_t3.py", "--report", str(report_path)],
+                ),
+            ):
+                self.assertEqual(local_gamma_t3.main(), 2)
+
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+
+        consumer.assert_not_called()
+        self.assertEqual(report["status"], "gate_block")
+        self.assertIn("DATA_RELEASE_READINESS_RECEIPT is required", report["reason"])
+
+    def test_t3_rejects_environment_identity_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            report_path = Path(tmp_dir) / "t3.json"
+            with (
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_t3_report_path",
+                    return_value=report_path,
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "resolve_readiness_path",
+                    return_value=Path("/tmp/release-readiness.json"),
+                ),
+                mock.patch.object(
+                    local_gamma_t3,
+                    "load_release_content_identity",
+                    side_effect=local_gamma_t3.ReleaseVideoDeliveryError(
+                        "Data readiness environment='beta', expected 'gamma'"
+                    ),
+                ),
+                mock.patch.object(local_gamma_t3, "run_release_consumer") as consumer,
+                mock.patch.object(
+                    local_gamma_t3.sys,
+                    "argv",
+                    ["run_local_gamma_t3.py", "--report", str(report_path)],
+                ),
+            ):
+                self.assertEqual(local_gamma_t3.main(), 2)
+
+        consumer.assert_not_called()
+
+    def test_release_consumer_failure_is_not_downgraded(self) -> None:
+        failed = subprocess.CompletedProcess(
+            ["quwoquan_data/scripts/cli.py"],
+            1,
+            stdout="GATE_BLOCK: import receipt mismatch",
+        )
+        with mock.patch.object(
+            local_gamma_t3.subprocess,
+            "run",
+            return_value=failed,
+        ):
+            result = local_gamma_t3.run_release_consumer(
+                identity=gamma_release_identity(),
             )
 
-    def test_content_scoped_probe_runs_only_content_flutter_contract(self) -> None:
-        calls: list[list[str]] = []
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["exitCode"], 1)
+        self.assertIn("GATE_BLOCK", result["outputTail"])
 
-        def run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-            calls.append(command)
-            return subprocess.CompletedProcess(command, 0, "content contract passed")
-
-        with mock.patch.object(local_gamma_t3.subprocess, "run", side_effect=run):
-            checks = local_gamma_t3.run_flutter_contracts(
-                "https://gamma.example",
-                "https://gamma-product-ops.example",
-                {"content"},
-                include_product_ops=False,
-            )
-
-        self.assertEqual([check["name"] for check in checks], ["content_api_contract"])
-        self.assertEqual(len(calls), 1)
-        self.assertIn(
-            "test/api_integration/cloud/content/api_contract_runner.dart",
-            calls[0],
+    def test_gamma_integration_profile_does_not_restore_t3_fixture_probe(self) -> None:
+        commands = stackctl._selected_profile_commands(
+            "gamma",
+            "gamma-local",
+            stackctl.VerificationProfile.INTEGRATION,
         )
 
-    def test_gamma_integration_profile_uses_content_scoped_t3_probe(self) -> None:
-        with mock.patch.object(stackctl, "_local_target_runtime_ready", return_value=True):
-            commands = stackctl._selected_profile_commands(
-                "gamma",
-                "gamma-local",
-                stackctl.VerificationProfile.INTEGRATION,
-            )
-
-        probe = next(command for command in commands if command["name"] == "gamma-local-t3")
-        self.assertEqual(
-            probe["argv"],
-            [
-                "python3",
-                "quwoquan_app/scripts/gamma/run_local_gamma_t3.py",
-                "--enabled-domain",
-                "content",
-            ],
+        names = {str(command["name"]) for command in commands}
+        argv = " ".join(
+            str(part)
+            for command in commands
+            for part in command.get("argv", [])
         )
+        self.assertIn("filter-catalog-active-release", names)
+        self.assertNotIn("gamma-local-t3", names)
+        self.assertNotIn("run_local_gamma_t3.py", argv)
 
 
 if __name__ == "__main__":

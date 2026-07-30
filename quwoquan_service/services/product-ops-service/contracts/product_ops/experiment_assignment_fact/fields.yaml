@@ -40,11 +40,12 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
-- name: policyVersion
-  source: policyVersion
-  type: string
+- name: experimentRevision
+  source: experimentRevision
+  type: int
   constraints:
   - NOT_NULL
+  - POSITIVE
   classification: PUBLIC
   log_policy: allow
   api_exposure: read
@@ -61,16 +62,28 @@ fields:
   ops_exposure: read
   role: append_only_fact
 types:
+  AssignExperimentVariantRequest:
+    description: 分配实验变体的唯一请求实体；experimentId 只从 path 绑定，受试主体只从已验签 Persona 或 Device 派生。
+    fields:
+    - name: experimentId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
   ExperimentStatsSlice:
     fields:
     - name: experimentId
       type: string
       constraints:
       - NOT_NULL
-    - name: policyVersion
-      type: string
+    - name: experimentRevision
+      type: int
       constraints:
       - NOT_NULL
+      - POSITIVE
     - name: status
       type: string
       constraints:
@@ -86,6 +99,6 @@ types:
 unique_constraints:
 - columns:
   - experimentId
-  - policyVersion
+  - experimentRevision
   - subjectKey
-  description: 同一实验策略版本内的分配确定性
+  description: 同一 Experiment 聚合修订号内的分配确定性；该修订号不是 runtime 策略身份

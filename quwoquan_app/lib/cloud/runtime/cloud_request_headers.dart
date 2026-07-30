@@ -61,19 +61,19 @@ class CloudRequestHeaders {
     };
   }
 
-  static Map<String, String> withOwnerSubAccountContext(
+  static Map<String, String> withOwnerPersonaContext(
     Map<String, String> headers, {
     String? ownerUserId,
-    String? subAccountId,
+    String? personaId,
   }) {
     final next = Map<String, String>.from(headers);
     final resolvedOwnerUserId = (ownerUserId ?? '').trim();
-    final resolvedSubAccountId = (subAccountId ?? '').trim();
+    final resolvedPersonaId = (personaId ?? '').trim();
     if (resolvedOwnerUserId.isNotEmpty) {
       next['X-Client-User-Id'] = resolvedOwnerUserId;
     }
-    if (resolvedSubAccountId.isNotEmpty) {
-      next['X-Client-Sub-Account-Id'] = resolvedSubAccountId;
+    if (resolvedPersonaId.isNotEmpty) {
+      next['X-Client-Persona-Id'] = resolvedPersonaId;
     }
     return next;
   }

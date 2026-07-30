@@ -34,8 +34,9 @@ func NewStoreFromBaseline() *Store {
 }
 
 func (s *Store) swap(p *RecPolicy) {
-	s.ptr.Store(p)
 	h := policyHash(p)
+	p.effectiveHash = h
+	s.ptr.Store(p)
 	s.hash.Store(&h)
 }
 
@@ -83,5 +84,5 @@ func policyHash(p *RecPolicy) string {
 		return ""
 	}
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+	return "sha256:" + hex.EncodeToString(sum[:])
 }

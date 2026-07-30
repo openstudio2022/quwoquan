@@ -53,6 +53,7 @@ BANNED_PATHS = {
     "quwoquan_ops/environments/content_release_readiness.yaml",
     "quwoquan_ops/environments/content_sampling_manifest.yaml",
     "quwoquan_ops/environments/gamma_curated_media_bundle.json",
+    "quwoquan_service/services/content-service/environments/gamma/resources/artifacts/media/gamma_curated_media_bundle.json",
     "quwoquan_ops/environments/media_delivery_manifest.json",
     "quwoquan_ops/environments/media_slice_registry.json",
     "quwoquan_ops/environments/gamma_validation_suites.json",
@@ -77,6 +78,7 @@ ALLOWED_OPS_ENVIRONMENT_ROOT_FILES = {
     "output_layout_manifest.yaml",
     "pr_gate_timing_budgets.json",
     "provider_conformance_evidence.schema.json",
+    "release_video_delivery_evidence.schema.json",
 }
 ALLOWED_OPS_ENVIRONMENT_ROOT_DIRS = {
     "alpha",
@@ -690,9 +692,9 @@ class Verification:
                     delivery_manifest = (
                         environment_resources / "artifacts" / "media" / "delivery_manifest.yaml"
                     )
-                    if not delivery_manifest.is_file():
+                    if delivery_manifest.exists():
                         self.error(
-                            f"{relative(delivery_manifest)}: content media artifact ref is required"
+                            f"{relative(delivery_manifest)}: environment media manifests are forbidden; immutable release activation owns public media"
                         )
                 if not environment_resources.is_dir():
                     continue

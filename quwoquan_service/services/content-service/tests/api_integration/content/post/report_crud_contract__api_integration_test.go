@@ -269,7 +269,7 @@ func TestCreateReportRejectsForgedIdentityHeadersWithoutPersistence(t *testing.T
 	request.Header.Set("Idempotency-Key", "forged-report-identity")
 	request.Header.Set("X-Client-User-Id", "forged-account")
 	request.Header.Set("X-Client-Account-Id", "forged-account")
-	request.Header.Set("X-Client-Sub-Account-Id", "forged-persona")
+	request.Header.Set("X-Client-Persona-Id", "forged-persona")
 	request.Header.Set("X-Client-Persona-Id", "forged-persona")
 
 	response := httptest.NewRecorder()

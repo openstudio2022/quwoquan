@@ -3,11 +3,13 @@ package local_contract
 
 import (
 	"context"
+	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/prompting"
 	"strings"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 	preferencemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/domain/model"
 )
@@ -39,11 +41,11 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 			},
 		},
 	}
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		nil,
-		application.WithConversationRunStore(store),
-		application.WithPreferenceSnapshotReader(preferences),
+		orchestration.WithConversationRunStore(store),
+		orchestration.WithPreferenceSnapshotReader(preferences),
 		testFrozenPolicyOption(),
 	)
 	conversationA, err := service.CreateConversation(
@@ -125,7 +127,7 @@ func TestCreateTurnSnapshotsPreferencesWithoutMutatingQuestion(t *testing.T) {
 }
 
 func TestFormatModelPreferencesSessionOverridesLongTerm(t *testing.T) {
-	prompt := application.FormatModelPreferencesForPrompt(
+	prompt := prompting.FormatModelPreferencesForPrompt(
 		[]preferencemodel.Snapshot{
 			{
 				Scope: preferencemodel.ScopeSession,
@@ -158,41 +160,43 @@ func TestFormatModelPreferencesSessionOverridesLongTerm(t *testing.T) {
 }
 
 type migratedPreferenceInjectionCapturingModelProvider struct {
-	request application.ModelCompletionRequest
+	request ports.ModelCompletionRequest
 }
 
 func (p *migratedPreferenceInjectionCapturingModelProvider) Complete(
 	_ context.Context,
-	request application.ModelCompletionRequest,
-) (application.ModelCompletionResult, error) {
+	request ports.ModelCompletionRequest,
+) (ports.ModelCompletionResult, error) {
 	p.request = request
-	return application.ModelCompletionResult{Content: "已完成"}, nil
+	return ports.ModelCompletionResult{Content: "已完成"}, nil
 }
 
 func (p *migratedPreferenceInjectionCapturingModelProvider) Stream(
 	ctx context.Context,
-	request application.ModelCompletionRequest,
-	emit func(application.ModelTextDelta) error,
-) (application.ModelCompletionResult, error) {
+	request ports.ModelCompletionRequest,
+	emit func(ports.ModelTextDelta) error,
+) (ports.ModelCompletionResult, error) {
 	result, err := p.Complete(ctx, request)
 	if err != nil {
-		return application.ModelCompletionResult{}, err
+		return ports.ModelCompletionResult{}, err
 	}
-	if err := emit(application.ModelTextDelta{Text: result.Content}); err != nil {
-		return application.ModelCompletionResult{}, err
+	if err := emit(ports.ModelTextDelta{Text: result.Content}); err != nil {
+		return ports.ModelCompletionResult{}, err
 	}
 	return result, nil
 }
 
 func TestProviderBackedModelRequestSeparatesPreferencesFromOriginalQuestion(t *testing.T) {
 	backend := &migratedPreferenceInjectionCapturingModelProvider{}
-	_, err := (application.ProviderBackedModelProvider{Backend: backend}).Complete(
+	_, err := (orchestration.ProviderBackedModelProvider{Backend: backend}).Complete(
 		t.Context(),
-		application.ModelRequest{
-			Stage:        string(application.ModelStageFinal),
-			Prompt:       "请输出最终回答。",
-			UserQuestion: "请按我的问题回答，不要改写。",
-			Observation:  map[string]any{},
+		orchestration.ModelRequest{
+			Stage:           string(ports.ModelStageFinal),
+			Prompt:          "请输出最终回答。",
+			UserQuestion:    "请按我的问题回答，不要改写。",
+			ProblemClass:    "general",
+			SearchIntensity: "medium",
+			Observation:     map[string]any{},
 			SessionPreferenceFacts: []preferencemodel.Snapshot{
 				{
 					Scope: preferencemodel.ScopeSession,

@@ -1,0 +1,67 @@
+commercial_defaults:
+  status: blocked
+  block_reason: 未显式携带 SkillCatalog 商业证据的新增操作默认阻断
+  gap_id: ASSISTANT_SKILL_CATALOG_UNDECLARED_OPERATION
+  target_story: skill-progressive-disclosure-routing
+description: SkillCatalog 私有账号目录 Reader；HTTP path 保持稳定，operation 只归属本对象。
+api_routes:
+- method: GET
+  path: /assistant/skills
+  operation: ListSkills
+  actor: account
+  commercial:
+    status: ready
+  application:
+    kind: query
+    facet: SkillCatalogQueryFacade
+    method: listSkills
+    reader: SkillCatalogReader
+    slice: AssistantSkillCatalogListView
+  description: 可用技能与账号授权状态的私有目录。
+  request_entity: ListSkillsQuery
+  request_body_kind: none
+  request_bindings:
+    query:
+    - {name: limit, field: limit, required: false}
+    injected:
+    - {name: accountId, field: accountId}
+  response_entity: AssistantSkillCatalogListView
+  client_contract:
+    dart_import: ../assistant/assistant_contracts.dart
+    response_type: AssistantSkillCatalogListProjection
+    response_decoder: decodeAssistantSkillCatalogList
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - ASSISTANT.USER.skill_catalog_unauthorized
+  - ASSISTANT.USER.skill_catalog_invalid_argument
+  - ASSISTANT.SYSTEM.skill_catalog_consent_unavailable
+  - ASSISTANT.SYSTEM.skill_catalog_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: assistant_skill_catalog_query
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+    - item_count
+  slo:
+    latency_p95_ms: 300
+    availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: requester_self
+  security:
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private

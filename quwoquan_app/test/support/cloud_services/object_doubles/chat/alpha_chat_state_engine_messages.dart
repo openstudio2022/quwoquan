@@ -11,7 +11,7 @@ extension AlphaChatMessageCommandState on AlphaChatStateEngine {
       conversation: conversation,
       mentions: command.mentions,
     );
-    final payload = encodeChatSendMessageCommand(command);
+    final payload = encodeChatMessageSendMessageGeneratedRequest(command);
     final Map<String, Object?> body = payload.body is Map
         ? Map<String, Object?>.from(
             (payload.body as Map).cast<String, Object?>(),

@@ -1,0 +1,12 @@
+{
+  "label": "九龙",
+  "labelEn": "Kowloon",
+  "description": "尖沙咀与旺角所在半岛",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

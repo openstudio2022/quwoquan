@@ -23,7 +23,7 @@ var _ greetingrepo.GreetingOutbox = (*PgGreetingStore)(nil)
 
 func (s *PgGreetingStore) LoadCommandReceipt(
 	ctx context.Context,
-	actorSubAccountID, idempotencyKey, operation string,
+	actorPersonaID, idempotencyKey, operation string,
 ) (*usermodel.GreetingRequest, bool, error) {
 	var (
 		storedOperation string
@@ -32,8 +32,8 @@ func (s *PgGreetingStore) LoadCommandReceipt(
 	err := s.pool.QueryRow(ctx, `
 		SELECT operation, response_json
 		FROM greeting_request_command_receipts
-		WHERE actor_sub_account_id = $1 AND idempotency_key = $2`,
-		actorSubAccountID, idempotencyKey,
+		WHERE actor_persona_id = $1 AND idempotency_key = $2`,
+		actorPersonaID, idempotencyKey,
 	).Scan(&storedOperation, &payload)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, false, nil
@@ -72,11 +72,11 @@ func (s *PgGreetingStore) CommitCommand(
 	if commit.Insert {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO greeting_requests (
-				id, requester_sub_account_id, target_sub_account_id, request_message,
+				id, requester_persona_id, target_persona_id, request_message,
 				status, source, promoted_conversation_id, expire_at, decision_at,
 				created_at, updated_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
-			greeting.ID, greeting.RequesterSubAccountID, greeting.TargetSubAccountID,
+			greeting.ID, greeting.RequesterPersonaID, greeting.TargetPersonaID,
 			greeting.RequestMessage, greeting.Status, greeting.Source,
 			greeting.PromotedConversationID, greeting.ExpireAt, greeting.DecisionAt,
 		); err != nil {
@@ -105,9 +105,9 @@ func (s *PgGreetingStore) CommitCommand(
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO greeting_request_command_receipts (
-				receipt_id, actor_sub_account_id, idempotency_key, operation, request_id, response_json, created_at
+				receipt_id, actor_persona_id, idempotency_key, operation, request_id, response_json, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-			"grr_"+uuid.NewString(), commit.ActorSubAccountID, commit.IdempotencyKey,
+			"grr_"+uuid.NewString(), commit.ActorPersonaID, commit.IdempotencyKey,
 			commit.Operation, greeting.ID, payload,
 		); err != nil {
 			return fmt.Errorf("save greeting receipt: %w", err)
@@ -209,14 +209,14 @@ func (s *PgGreetingStore) ReleaseOutboxClaim(ctx context.Context, eventID, owner
 // CountRecentByRequester 统计 24h 窗口内该发起者创建的打招呼数（限流）。
 func (s *PgGreetingStore) CountRecentByRequester(
 	ctx context.Context,
-	requesterSubAccountID string,
+	requesterPersonaID string,
 	window time.Duration,
 ) (int64, error) {
 	var count int64
 	err := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM greeting_requests
-		WHERE requester_sub_account_id = $1 AND created_at > NOW() - $2::interval`,
-		requesterSubAccountID, window.String(),
+		WHERE requester_persona_id = $1 AND created_at > NOW() - $2::interval`,
+		requesterPersonaID, window.String(),
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count recent greetings: %w", err)

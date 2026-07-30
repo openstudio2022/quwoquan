@@ -59,6 +59,7 @@ COPY services/recommendation-service/internal/recommendation/recommendation_mode
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/features/ ./features/
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/models/ ./models/
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/security/ ./security/
+COPY services/recommendation-service/contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml ./contracts/recommendation/recommendation_model_release/intersection_kind_registry.yaml
 COPY services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/runtime_contract.py ./
 COPY services/recommendation-service/cmd/api/main.py ./
 

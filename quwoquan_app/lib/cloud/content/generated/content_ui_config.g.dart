@@ -102,15 +102,11 @@ class OnboardingInterestDimensionConfig {
 }
 
 class OnboardingInterestCatalogConfig {
-  final String version;
-  final String taxonomyReleaseId;
   final int minSelectionCount;
   final int maxSelectionCount;
   final List<OnboardingInterestDimensionConfig> dimensions;
 
   const OnboardingInterestCatalogConfig({
-    required this.version,
-    required this.taxonomyReleaseId,
     required this.minSelectionCount,
     required this.maxSelectionCount,
     required this.dimensions,
@@ -223,6 +219,25 @@ class ArticleDarkPaperThemeConfig {
   });
 }
 
+abstract final class ContentFeatureFlags {
+  static const String enableArticleBookReader = "enable_article_book_reader";
+  static const String enableArticleDistributionProfiles = "enable_article_distribution_profiles";
+  static const String enableArticlePageCurl = "enable_article_page_curl";
+  static const String enableAssistantContentIdentityIndex = "enable_assistant_content_identity_index";
+  static const String enableBehaviorTracking = "enable_behavior_tracking";
+  static const String enableCreateActionEntry = "enable_create_action_entry";
+  static const String enableHelperRead = "enable_helper_read";
+  static const String enableHlsCmafAbr = "enable_hls_cmaf_abr";
+  static const String enableIdentityBasedSurfaces = "enable_identity_based_surfaces";
+  static const String enableIdentityShareTemplate = "enable_identity_share_template";
+  static const String enablePhotoWaterfall = "enable_photo_waterfall";
+  static const String enableShareToCircle = "enable_share_to_circle";
+  static const String enableSharedVideoTimeline = "enable_shared_video_timeline";
+  static const String enableUnifiedCreateEditor = "enable_unified_create_editor";
+  static const String enableVideoTimelinePreview = "enable_video_timeline_preview";
+  static const String showViewCount = "show_view_count";
+}
+
 // ignore: avoid_classes_with_only_static_members
 class ContentUIConfig {
   const ContentUIConfig._();
@@ -231,7 +246,7 @@ class ContentUIConfig {
     HomeChannelConfig(id: "following", labelKey: "home_tab_following", template: "single_column_relations", layoutTemplate: "singleColumnRelations", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "none", contentCardPolicy: "richRelation", feedQuery: <String, String>{"channel": "following"}, moodCopyKey: "home_mood_following", order: 0),
     HomeChannelConfig(id: "recommend", labelKey: "home_tab_recommend", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "recommend"}, moodCopyKey: "home_mood_recommend", order: 1),
     HomeChannelConfig(id: "campus", labelKey: "home_tab_campus", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "campus"}, moodCopyKey: "home_mood_campus", order: 2),
-    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
+    HomeChannelConfig(id: "travel", labelKey: "home_tab_travel", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "spotlightSegment", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "travel"}, moodCopyKey: "home_mood_travel", order: 3),
     HomeChannelConfig(id: "photography", labelKey: "home_tab_photography", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "photography"}, moodCopyKey: "home_mood_photography", order: 4),
     HomeChannelConfig(id: "tech", labelKey: "home_tab_tech", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "tech"}, moodCopyKey: "home_mood_tech", order: 5),
     HomeChannelConfig(id: "car", labelKey: "home_tab_car", template: "single_column_multiform", layoutTemplate: "singleColumnMultiForm", phoneColumns: 1, supportsFullSpanModules: false, intersectionModulePolicy: "inlineOnly", contentCardPolicy: "richMultiForm", feedQuery: <String, String>{"channel": "car"}, moodCopyKey: "home_mood_car", order: 6),
@@ -263,8 +278,6 @@ class ContentUIConfig {
   ];
 
   static const OnboardingInterestCatalogConfig onboardingInterestCatalog = OnboardingInterestCatalogConfig(
-    version: "v1",
-    taxonomyReleaseId: "tag-taxonomy-20260723-001",
     minSelectionCount: 1,
     maxSelectionCount: 12,
     dimensions: <OnboardingInterestDimensionConfig>[
@@ -342,6 +355,7 @@ class ContentUIConfig {
     'enable_behavior_tracking': true,
     'enable_create_action_entry': false,
     'enable_helper_read': false,
+    'enable_hls_cmaf_abr': false,
     'enable_identity_based_surfaces': false,
     'enable_identity_share_template': false,
     'enable_photo_waterfall': true,
@@ -361,10 +375,6 @@ class ContentUIConfig {
     'feed_error': <String, String>{
       'titleKey': 'feed_load_error_title',
       'subtitleKey': 'feed_load_error_subtitle',
-    },
-    'feed_rate_limited': <String, String>{
-      'titleKey': 'feed_rate_limited_title',
-      'subtitleKey': 'feed_rate_limited_subtitle',
     },
     'post_not_found': <String, String>{
       'titleKey': 'post_not_found_title',

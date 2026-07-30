@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/circle/behavior_fact_contracts.requests.g.dart';
 
 enum CircleBehaviorEventType {
   impression('impression'),
@@ -34,28 +35,9 @@ enum CircleBehaviorEventType {
   final String wireValue;
 }
 
-final class AppendCircleBehaviorFactCommand {
-  AppendCircleBehaviorFactCommand({
-    required String circleId,
-    required this.eventType,
-  }) : circleId = _required(circleId, 'circleId');
-
-  final String circleId;
-  final CircleBehaviorEventType eventType;
-}
-
 abstract interface class CircleBehaviorFactWriter {
   Future<void> append(AppendCircleBehaviorFactCommand command);
 }
-
-CloudOperationRequestPayload encodeAppendCircleBehaviorFactCommand(
-  AppendCircleBehaviorFactCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'circleId': command.circleId,
-    'eventType': command.eventType.wireValue,
-  },
-);
 
 void decodeEmptyCircleBehaviorFactResponse(Object? value) {
   if (value != null) {
@@ -63,10 +45,4 @@ void decodeEmptyCircleBehaviorFactResponse(Object? value) {
       'CircleBehaviorFact append response must be empty',
     );
   }
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }

@@ -45,7 +45,11 @@ python3 quwoquan_ops/gate/verify_github_supply_chain.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
+python3 quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py
 python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
+python3 quwoquan_ops/gate/verify_object_relation_edge_type_contract.py
+python3 quwoquan_ops/gate/verify_homepage_type_contract.py
+python3 quwoquan_ops/gate/verify_tag_collection_wiring.py
 python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
 python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
 python3 quwoquan_app/scripts/runtime/verify_app_recoverable_error_surface.py
@@ -91,8 +95,10 @@ python3 quwoquan_ops/gate/verify_domain_governance.py
   python3 quwoquan_ops/gate/verify_prod_access_guard.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
+  # Gamma curated 场景只由 manifest 投影器生成；默认 check 阻断手改、漏域与选择漂移。
+  python3 quwoquan_ops/tests/support/environment_seeds/sync_gamma_curated_scenarios.py --check
   # 内容域评论计数自洽（缺口A 防回归）：真相源 + 派生产物（*.lite.json / *.gamma-curated.json）
-  # 的 commentCount/replyCount 不得与裁剪后评论集漂移（派生由 bundle 生成器在裁剪后重算保证）
+  # 的 commentCount/replyCount 不得与裁剪后评论集漂移。
   python3 quwoquan_service/scripts/contract/verify_content_fixture_comment_counts.py --include-derived
   bash quwoquan_ops/environments/verify/verify_service_domain_layout.sh
   bash quwoquan_service/scripts/runtime/verify_runtime_packaging.sh
@@ -106,10 +112,8 @@ python3 quwoquan_ops/gate/verify_domain_governance.py
   bash quwoquan_ops/environments/verify/verify_deploy_kustomization.sh
   bash quwoquan_service/scripts/recommendation/verify_recommendation_service_contract.sh
   python3 quwoquan_service/scripts/recommendation/verify_daily_metrics_dimension_consistency.py
-  # N2-2 gamma-local 推荐 policy overlay 与 metadata baseline 的受控差异守卫
-  # （允许差异仅 objectCards.enabled / policyVersion，防第二真相源漂移）
-  python3 quwoquan_ops/gate/verify_gamma_policy_overlay.py
-  bash quwoquan_ops/environments/verify/verify_config_gray_parallel_binding.sh
+  # 推荐 policy 单轨守卫：禁止环境变体，gamma release 只绑定 canonical 内容摘要。
+  python3 quwoquan_ops/gate/verify_canonical_recommendation_policy.py
   bash quwoquan_ops/environments/verify/verify_gray_rollout_stages.sh
   # 灰度路由策略（版本/userId/省份/运营商四维）schema 与枚举
   python3 quwoquan_ops/environments/verify/verify_gray_routing_policy.py
@@ -126,7 +130,7 @@ python3 quwoquan_ops/gate/verify_domain_governance.py
   python3 quwoquan_service/scripts/verify/verify_entity_homepage_object_mainline.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_ops/environments/verify/verify_service_config_digest_mapping.sh
-  bash quwoquan_ops/environments/verify/verify_config_image_compat.sh
+  bash quwoquan_ops/environments/verify/verify_image_identity_single_track.sh
   bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
   make verify-env-packaging
   # 环境包生成后再次断言，防止 package/renderer 旁路把配置或 payload 写回 output。
@@ -250,7 +254,6 @@ run_app() {
     python3 quwoquan_service/scripts/contract/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_ops/gate/verify_media_delivery_contract.py || exit 1
-    python3 quwoquan_ops/gate/verify_alpha_media_fixture_surface.py --files-only || exit 1
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_app_no_integration_test_dir.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py || exit 1

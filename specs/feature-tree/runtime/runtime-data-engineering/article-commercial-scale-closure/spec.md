@@ -37,7 +37,7 @@
 - `payload/release.json`、`payload/desired_state.json`、environment `run/result`、`applied_ref`、`rollback_ref` 与各 importer/API readback report 分别由对应 JSON Schema 唯一约束；`release_manifest` 不承担 canonical release 或环境激活真相源。
 - empty baseline 是 release-bound、零 execution、零对象/creator/tag 的 immutable snapshot；Tag taxonomy 允许激活该零节点 snapshot，并允许 retired snapshot rollback/replay，历史 snapshot 不物理删除。
 - Alpha/Beta/Gamma 必须分别以真实 importer receipt、`applied_ref` 和 post/homepage（或 baseline）API report 证明激活；Prod `prepared` / `dry-run` 只能证明准备或演练，不得生成或冒充激活证据。
-- entity 的 `creatorProfileId` 必须进入 creator object closure；avatar 仅在 creator profile 绑定可校验 CAS bytes、摘要与 rights snapshot 时投影，禁止合成 URL。
+- entity 的 `creatorProfileId` 必须进入 creator object closure；avatar 仅在 creator profile 绑定可校验 CAS bytes、摘要与 schema-bound commercial rights snapshot 时投影，禁止合成 URL。rights 必须明确 `depictsIdentifiablePerson`：可识别人物只能使用 `modelReleaseStatus=obtained`，非人物资产才可在权利审计通过时使用 `not_required`。
 
 <a id="req-003"></a>
 ### REQ-003 capacity conclusions use only measured execution receipts

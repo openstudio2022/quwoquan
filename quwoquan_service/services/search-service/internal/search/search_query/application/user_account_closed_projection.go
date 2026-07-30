@@ -9,12 +9,18 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"quwoquan_service/runtime/accountrestriction"
 )
 
 const UserAccountClosedEventName = "UserAccountClosed"
 
 var ErrUserAccountClosedEventIDConflict = errors.New(
 	"UserAccountClosed eventId was reused with different data",
+)
+
+var ErrUserAccountRestrictionProjectionConflict = errors.New(
+	"search user account restriction projection conflict",
 )
 
 // UserAccountClosedEvent 是 Search 清理私有查询状态所需的 canonical 公共事实。
@@ -79,10 +85,26 @@ type UserAccountClosedProjectionResult struct {
 	Replayed bool
 }
 
+type UserAccountRestrictionProjectionResult struct {
+	Replayed bool
+	Stale    bool
+	Terminal bool
+	Affected int64
+}
+
 // UserAccountClosedProjection 必须把 inbox 与 Search 私有数据清理放在同一事务中。
 type UserAccountClosedProjection interface {
 	ApplyUserAccountClosed(
 		ctx context.Context,
 		event UserAccountClosedEvent,
 	) (UserAccountClosedProjectionResult, error)
+}
+
+// UserAccountRestrictionProjection owns only the reversible suspended/active
+// read model. It must never invoke the irreversible UserAccountClosed cleanup.
+type UserAccountRestrictionProjection interface {
+	Apply(
+		ctx context.Context,
+		event accountrestriction.Event,
+	) (UserAccountRestrictionProjectionResult, error)
 }

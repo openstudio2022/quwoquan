@@ -15,7 +15,7 @@ CircleDto circleDtoFromPersonaCircleSummary(PersonaCircleSummary summary) =>
       memberCount: summary.memberCount,
       postCount: summary.postCount,
       weeklyActiveCount: summary.weeklyActiveCount,
-      status: summary.state,
+      status: summary.status,
       visibility: summary.visibility,
       joinPolicy: summary.joinPolicy,
       kind: summary.kind,

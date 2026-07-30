@@ -18,11 +18,10 @@ final class RemoteFilterCatalogQuery implements ContentFilterCatalogQuery {
   @override
   Future<FilterCatalogSnapshot> getActiveFilterCatalog() {
     return client.contentFilterCatalogReleaseGetActiveFilterCatalog(
-      const FilterCatalogQuery(),
+      FilterCatalogQuery(),
       context: invocationContext(
         ContentRequestPageIds.getActiveFilterCatalog,
       ),
     );
   }
 }
-

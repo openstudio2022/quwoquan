@@ -1,0 +1,13 @@
+{
+  "label": "高端定制",
+  "labelEn": "Luxury Bespoke",
+  "description": "私导、包车、高端住宿与定制行程",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

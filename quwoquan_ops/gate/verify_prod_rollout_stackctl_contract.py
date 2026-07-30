@@ -9,7 +9,6 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = [
-    ROOT / ".github" / "workflows" / "deploy-prod-gray.yml",
     ROOT / ".github" / "workflows" / "deploy-prod-auto.yml",
 ]
 SERVICE_PIPELINE = ROOT / ".github" / "workflows" / "service_pipeline.yml"
@@ -17,54 +16,144 @@ ACCESS_MANIFEST = ROOT / "quwoquan_ops" / "environments" / "prod" / "access-isol
 RELEASE_GENERATOR = (
     ROOT / "quwoquan_ops" / "cli" / "prod" / "generate_mainline_release_artifact.py"
 )
+RELEASE_PLANNER = ROOT / "quwoquan_ops" / "ci" / "plan_service_release_images.py"
 DEPLOY_SCRIPT = ROOT / "quwoquan_ops" / "cli" / "prod" / "deploy_to_prod.sh"
 PROD_RENDERER = ROOT / "quwoquan_ops" / "cli" / "prod" / "render_prod_plane_stack.py"
+STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
+OCI_SUPPLY_CHAIN = (
+    ROOT / "quwoquan_ops" / "cli" / "prod" / "oci_supply_chain.py"
+)
+HOSTED_LEDGER = (
+    ROOT / "quwoquan_ops" / "cli" / "prod" / "hosted_release_ledger.py"
+)
+REQUIRED_ROLLOUT_TOKENS = (
+    "quwoquan_ops/cli/stackctl.py deploy",
+    "--target prod-hosted",
+    "--release-manifest",
+    "fetch_mainline_release_artifact.py",
+    "release_evidence_ref",
+    "release-evidence-manifest",
+    "verify_workflow_release_candidate.py",
+    "--require-deployable",
+    "--expected-candidate",
+    "--expected-artifact-digest",
+    "--from-candidate-digest",
+    "--to-candidate-digest",
+    "--release-evidence-ref",
+    "RESOLVED_FROM_CANDIDATE_DIGEST",
+    "RESOLVED_RESUME_STAGE",
+    "PROD_PROMETHEUS_URL",
+    "PROD_RELEASE_STATE_DIR",
+    "PROD_BACKUP_RECOVERY_RECEIPT",
+    "--backup-recovery-receipt",
+    "group: prod-hosted-release",
+)
+CALLER_SUPPLIED_SLO_TOKENS = (
+    "--error-rate",
+    "--p95-ms",
+    "--redis-error-rate",
+    "inputs.error_rate",
+    "inputs.p95_ms",
+    "inputs.redis_error_rate",
+)
+FORBIDDEN_ROLLOUT_TOKENS = (
+    "mainline-release-artifact",
+    "manifestDigest",
+    "versions",
+    "release_artifact_ref",
+    "releaseFiles",
+    "MANIFEST_DIGEST",
+    "--manifest-digest",
+    "make config-gray-rollout",
+    "make config-slo-gate",
+    "make config-rollback",
+    "bash quwoquan_ops/cli/prod/deploy_to_prod.sh",
+    "--from-image",
+    "--to-image",
+    "--from-config",
+    "--to-config",
+)
+
+
+def workflow_rollout_issues(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    rel = path.relative_to(ROOT)
+    issues: list[str] = []
+    for token in REQUIRED_ROLLOUT_TOKENS:
+        if token not in text:
+            issues.append(f"{rel} missing governed rollout token: {token}")
+    for token in CALLER_SUPPLIED_SLO_TOKENS:
+        if token in text:
+            issues.append(
+                f"{rel} permits caller-supplied SLO evidence instead of Prometheus readback: {token}"
+            )
+    for token in FORBIDDEN_ROLLOUT_TOKENS:
+        if token in text:
+            issues.append(f"{rel} still contains legacy rollout entry: {token}")
+    return issues
+
+
+def candidate_identity_issues() -> list[str]:
+    issues: list[str] = []
+    ledger_text = HOSTED_LEDGER.read_text(encoding="utf-8")
+    stackctl_text = STACKCTL.read_text(encoding="utf-8")
+    for token in (
+        '"fromCandidateDigest"',
+        '"toCandidateDigest"',
+        '"from_candidate_digest"',
+        '"to_candidate_digest"',
+        '"last_good_candidate_digest"',
+    ):
+        if token not in ledger_text:
+            issues.append(
+                f"{HOSTED_LEDGER.relative_to(ROOT)} missing candidate ledger identity: {token}"
+            )
+    for token in (
+        '"fromImage"',
+        '"toImage"',
+        '"fromConfig"',
+        '"toConfig"',
+        '"from_image"',
+        '"to_image"',
+        '"from_config"',
+        '"to_config"',
+    ):
+        if token in ledger_text:
+            issues.append(
+                f"{HOSTED_LEDGER.relative_to(ROOT)} uses transport coordinates as ledger identity: {token}"
+            )
+    for token in (
+        "state.get(\"from_candidate_digest\")",
+        "state.get(\"to_candidate_digest\")",
+        "state.get(\"to_candidate_digest\") != from_candidate_digest",
+        "candidate_digest=args.to_candidate_digest",
+        '"IMAGE_TRANSPORT_TAG": to_image_transport_tag',
+        '"CANDIDATE_DIGEST": args.to_candidate_digest',
+        '"PREVIOUS_IMAGE_TRANSPORT_TAG": from_image_transport_tag',
+        "hosted ledger lacks canonical source transport metadata",
+    ):
+        if token not in stackctl_text:
+            issues.append(
+                f"{STACKCTL.relative_to(ROOT)} missing canonical candidate transition guard: {token}"
+            )
+    for forbidden in (
+        "args.from_image =",
+        "args.to_image =",
+        "args.from_config =",
+        "args.to_config =",
+    ):
+        if forbidden in stackctl_text:
+            issues.append(
+                f"{STACKCTL.relative_to(ROOT)} retains a legacy rollout identity shim: {forbidden}"
+            )
+    return issues
 
 
 def main() -> int:
     issues: list[str] = []
     for path in WORKFLOWS:
-        text = path.read_text(encoding="utf-8")
-        rel = path.relative_to(ROOT)
-        if "quwoquan_ops/cli/stackctl.py deploy" not in text:
-            issues.append(f"{rel} must call stackctl.py deploy")
-        if "--target prod-hosted" not in text:
-            issues.append(f"{rel} must deploy prod-hosted through stackctl")
-        for token in (
-            "--release-manifest",
-            "fetch_mainline_release_artifact.py",
-            "release_artifact_ref",
-            "PROD_PROMETHEUS_URL",
-            "PROD_RELEASE_STATE_DIR",
-            "PROD_BACKUP_RECOVERY_RECEIPT",
-            "--backup-recovery-receipt",
-            "group: prod-hosted-release",
-        ):
-            if token not in text:
-                issues.append(f"{rel} missing governed rollout token: {token}")
-        for token in (
-            "--error-rate",
-            "--p95-ms",
-            "--redis-error-rate",
-            "inputs.error_rate",
-            "inputs.p95_ms",
-            "inputs.redis_error_rate",
-        ):
-            if token in text:
-                issues.append(
-                    f"{rel} permits caller-supplied SLO evidence instead of Prometheus readback: {token}"
-                )
-        for forbidden in (
-            "name: mainline-release-artifact",
-            "name: resolved-mainline-release-artifact",
-            "name: governed-mainline-release-artifact",
-            "make config-gray-rollout",
-            "make config-slo-gate",
-            "make config-rollback",
-            "bash quwoquan_ops/cli/prod/deploy_to_prod.sh",
-        ):
-            if forbidden in text:
-                issues.append(f"{rel} still contains legacy rollout entry: {forbidden}")
+        issues.extend(workflow_rollout_issues(path))
+    issues.extend(candidate_identity_issues())
 
     controlled_rollout = (
         ROOT / ".github" / "workflows" / "deploy-prod-auto.yml"
@@ -75,7 +164,8 @@ def main() -> int:
         )
     for token in (
         "name: 07. Deploy To Prod (Controlled)",
-        "release_run_id must reference a successful main Service Pipeline",
+        "Service Pipeline (same mainline DAG)",
+        "App package evidence (same mainline DAG)",
         "default: true",
     ):
         if token not in controlled_rollout:
@@ -91,6 +181,10 @@ def main() -> int:
         for service in plane.get("rootlessGovernedComposeServices") or []
     }
     generator_globals = runpy.run_path(str(RELEASE_GENERATOR))
+    if generator_globals.get("SCHEMA") != "release-evidence-manifest":
+        issues.append(
+            "release evidence producer must emit the canonical release-evidence-manifest schema"
+        )
     declared_images = set(generator_globals.get("DEPLOYED_SERVICES") or ())
     if declared_images != expected_images:
         issues.append(
@@ -99,17 +193,45 @@ def main() -> int:
             f"extra={sorted(declared_images - expected_images)}"
         )
 
+    planner_globals = runpy.run_path(str(RELEASE_PLANNER))
+    planned_images = set(planner_globals.get("ALL_SERVICES") or ())
+    if planned_images != expected_images:
+        issues.append(
+            "service release planner image set must equal prod governed compose services: "
+            f"missing={sorted(expected_images - planned_images)} "
+            f"extra={sorted(planned_images - expected_images)}"
+        )
+    build_definitions = planner_globals.get("SERVICE_BUILD_DEFINITIONS") or ()
+    recommendation = next(
+        (
+            item
+            for item in build_definitions
+            if isinstance(item, dict)
+            and item.get("service") == "recommendation-service"
+        ),
+        None,
+    )
+    if not isinstance(recommendation, dict) or recommendation.get("context") != (
+        "quwoquan_service"
+    ):
+        issues.append(
+            f"{RELEASE_PLANNER.relative_to(ROOT)} must build recommendation-service "
+            "from quwoquan_service context"
+        )
+
     pipeline_text = SERVICE_PIPELINE.read_text(encoding="utf-8")
-    for service in sorted(expected_images):
-        if f"service: {service}" not in pipeline_text:
-            issues.append(f"{SERVICE_PIPELINE.relative_to(ROOT)} does not build {service}")
     for token in (
         "sbom: true",
         "provenance: mode=max",
         "finalize_mainline_release_artifact.py",
         "collect_mainline_image_descriptors.py",
-        "/release-artifact:sha-${{ github.sha }}",
+        "/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}",
         'DOCKER_BUILD_RECORD_UPLOAD: "false"',
+        "plan_service_release_images.py",
+        "matrix: ${{ fromJSON(needs.prepare-release.outputs.image_matrix) }}",
+        "${{ matrix.service }}",
+        "${{ matrix.image_name }}",
+        '--require-count "build_release_images=15"',
         "id: base_images",
         "runs-on: [self-hosted, macOS, ARM64]",
         "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130",
@@ -119,13 +241,32 @@ def main() -> int:
         "version: v0.35.0",
         "cache-binary: false",
         "clean: false",
-        'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}"',
+        'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/go-${RUNNER_ARCH}"',
         'echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"',
         'echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"',
+        "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
+        "id-token: write",
+        "attestations: write",
+        "oci_supply_chain.py extract-sbom",
+        "Sign image provenance with GitHub OIDC",
+        "Sign image SPDX SBOM with GitHub OIDC",
     ):
         if token not in pipeline_text:
             issues.append(
                 f"{SERVICE_PIPELINE.relative_to(ROOT)} missing release provenance token: {token}"
+            )
+    verifier_text = OCI_SUPPLY_CHAIN.read_text(encoding="utf-8")
+    for token in (
+        "--bundle-from-oci",
+        "--signer-workflow",
+        "--cert-oidc-issuer",
+        "https://token.actions.githubusercontent.com",
+        "{{json .SBOM}}",
+        "{{json .Provenance}}",
+    ):
+        if token not in verifier_text:
+            issues.append(
+                f"{OCI_SUPPLY_CHAIN.relative_to(ROOT)} missing signed OCI verification token: {token}"
             )
     for image_variable, output in (
         ("GO_BASE_IMAGE", "go_base_image"),
@@ -148,18 +289,12 @@ def main() -> int:
         "cache-from: type=gha",
         "cache-to: type=gha",
         "runs-on: ubuntu-latest",
-        "actions/cache@",
         "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go",
     ):
         if forbidden in pipeline_text:
             issues.append(
                 f"{SERVICE_PIPELINE.relative_to(ROOT)} still permits ungoverned Actions storage: {forbidden}"
             )
-    if "recommendation-service\n            image_name: recommendation-service\n            context: quwoquan_service" not in pipeline_text:
-        issues.append(
-            f"{SERVICE_PIPELINE.relative_to(ROOT)} must build recommendation-service from quwoquan_service context"
-        )
-
     deploy_script_text = DEPLOY_SCRIPT.read_text(encoding="utf-8")
     for token in (
         "readyz/config-convergence",

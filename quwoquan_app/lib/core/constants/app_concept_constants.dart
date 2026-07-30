@@ -1,6 +1,6 @@
 /// 产品概念与命名规范
 ///
-/// 遵循 app-global spec、InformationArchitecture v3.1、CONTENT_SPECIFICATION v3.0。
+/// 遵循 AppRoot spec/design 与特性树中的 canonical 信息架构、内容契约。
 /// 严禁使用已弃用概念。
 class AppConceptConstants {
   AppConceptConstants._();

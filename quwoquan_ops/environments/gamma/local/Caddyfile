@@ -12,79 +12,36 @@
 		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
 		Access-Control-Allow-Headers "*"
 		Cross-Origin-Resource-Policy "cross-origin"
+		Cache-Control "no-store"
+	}
+	@immutable_public_media {
+		path_regexp immutable_public_media ^/media/(?:avatar|image|video|background|attachment)/s/(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$
+		vars_regexp canonical_media_query {http.request.uri.query} ^$
+	}
+	header @immutable_public_media {
+		Cache-Control "public, max-age=31536000, immutable"
+		X-QWQ-Media-Cache-Key "{http.request.uri.path}"
 	}
 }
 
-# Ops owns the single immutable local-gamma route table. Compose mounts this
-# file directly; runtime output contains evidence and process state only.
+(business_api_edge) {
+	reverse_proxy api-edge:18079 {
+		# Caddy owns the network boundary and overwrites, rather than appends to,
+		# the only anonymous admission subject header.
+		header_up X-Edge-Client-IP {remote_host}
+	}
+}
+
+# Caddy owns TLS and static delivery only. Every business HTTP path enters the
+# generated-operation api-edge; service path ownership is not copied here.
 https://{$QWQ_PUBLIC_API_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000},
 https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	import public_gamma_tls
-	handle /healthz {
-		reverse_proxy content-service:18080
+	@web_api {
+		host {$QWQ_PUBLIC_WEB_HOST}
+		path /api/*
 	}
-	handle /config/app {
-		reverse_proxy content-service:18080
-	}
-	handle /livez {
-		reverse_proxy content-service:18080
-	}
-	handle /startupz {
-		reverse_proxy content-service:18080
-	}
-	@api_content path /content*
-	handle @api_content {
-		reverse_proxy content-service:18080
-	}
-	# FilterCatalogRelease 写入由 content-service 的 service principal 保护。
-	# local-gamma 只暴露此窄发布路由，启动时据此建立不可变的 active catalog。
-	@api_content_filter_catalog_release path /internal/content/filter-catalog-releases /internal/content/filter-catalog-releases/*
-	handle @api_content_filter_catalog_release {
-		reverse_proxy content-service:18080
-	}
-	@api_chat path /chat*
-	handle @api_chat {
-		reverse_proxy chat-service:18081
-	}
-	@api_user path /auth* /owner* /user* /me /me/*
-	handle @api_user {
-		reverse_proxy user-service:18081
-	}
-	@api_assistant path /assistant*
-	handle @api_assistant {
-		reverse_proxy assistant-service:18087
-	}
-	@api_notification path /app-messages /app-messages/*
-	handle @api_notification {
-		reverse_proxy notification-service:18087
-	}
-	@api_tag path /tag*
-	handle @api_tag {
-		reverse_proxy tag-service:18092
-	}
-	@api_search path /search*
-	handle @api_search {
-		reverse_proxy search-service:18095
-	}
-	@api_entity path /homepages*
-	handle @api_entity {
-		reverse_proxy entity-service:18084
-	}
-	@api_circle path /circles*
-	handle @api_circle {
-		reverse_proxy circle-service:18082
-	}
-	@api_rtc path /rtc*
-	handle @api_rtc {
-		reverse_proxy rtc-service:18083
-	}
-	@api_realtime path /realtime* /config/realtime
-	handle @api_realtime {
-		reverse_proxy realtime-gateway:18090
-	}
-	handle /ops/* {
-		reverse_proxy product-ops-service:18086
-	}
+	uri @web_api strip_prefix /api
 	handle /legal/manifest.json {
 		header {
 			Cache-Control "public, max-age=300"
@@ -108,7 +65,7 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 		file_server
 	}
 	handle {
-		respond "local-gamma mirror route is not ready for this path" 404
+		import business_api_edge
 	}
 }
 
@@ -120,16 +77,16 @@ https://{$QWQ_PUBLIC_RTC_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 https://{$QWQ_PUBLIC_OPS_HOST}:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 	import public_gamma_tls
 	handle /healthz {
-		reverse_proxy product-ops-service:18086
+		import business_api_edge
 	}
 	handle /ops/* {
-		reverse_proxy product-ops-service:18086
+		import business_api_edge
 	}
 	handle /control-plane/product/* {
-		reverse_proxy product-ops-service:18086
+		import business_api_edge
 	}
 	handle /control-plane/platform/* {
-		reverse_proxy platform-ops-service:18088
+		import business_api_edge
 	}
 	# 运维运营 Portal SPA（与 prod 渲染面同构：静态站点 + 同源控制面 API）。
 	handle {
@@ -155,51 +112,6 @@ https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
 }
 
 :80 {
-	handle /healthz {
-		reverse_proxy content-service:18080
-	}
-	handle /config/app {
-		reverse_proxy content-service:18080
-	}
-	@pub_content path /content*
-	handle @pub_content {
-		reverse_proxy content-service:18080
-	}
-	@pub_chat path /chat*
-	handle @pub_chat {
-		reverse_proxy chat-service:18081
-	}
-	@pub_user path /auth* /owner* /user* /me /me/*
-	handle @pub_user {
-		reverse_proxy user-service:18081
-	}
-	@pub_assistant path /assistant*
-	handle @pub_assistant {
-		reverse_proxy assistant-service:18087
-	}
-	@pub_notification path /app-messages /app-messages/*
-	handle @pub_notification {
-		reverse_proxy notification-service:18087
-	}
-	@pub_tag path /tag*
-	handle @pub_tag {
-		reverse_proxy tag-service:18092
-	}
-	@pub_search path /search*
-	handle @pub_search {
-		reverse_proxy search-service:18095
-	}
-	@pub_entity path /homepages*
-	handle @pub_entity {
-		reverse_proxy entity-service:18084
-	}
-	@pub_circle path /circles*
-	handle @pub_circle {
-		reverse_proxy circle-service:18082
-	}
-	handle /ops/* {
-		reverse_proxy product-ops-service:18086
-	}
 	handle /legal/* {
 		header {
 			Cache-Control "public, max-age=300"
@@ -214,6 +126,6 @@ https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
 		file_server
 	}
 	handle {
-		respond "local-gamma mirror route is not ready for this path" 404
+		import business_api_edge
 	}
 }

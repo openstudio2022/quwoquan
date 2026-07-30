@@ -78,7 +78,7 @@ ChatMessageDisplayItem _message({
     senderId: isSelf ? 'user_self' : 'user_other',
     senderName: isSelf ? '我' : '对方',
     senderAvatar: '',
-    senderSubAccountId: isSelf ? 'user_self' : 'user_other',
+    senderPersonaId: isSelf ? 'user_self' : 'user_other',
     type: type,
     content: type == 'text' ? 'hello' : '',
     status: 'sent',

@@ -1,29 +1,5 @@
 import '../operation_request_payload.dart';
-
-/// Author-impact summary query for one sub-account.
-final class GetAuthorImpactQuery {
-  const GetAuthorImpactQuery({required this.subAccountId, this.limit = 12});
-
-  final String subAccountId;
-  final int limit;
-}
-
-/// Paginated evidence query for one author-impact fact.
-final class ListAuthorImpactEvidenceQuery {
-  const ListAuthorImpactEvidenceQuery({
-    required this.subAccountId,
-    required this.impactId,
-    this.evidenceSnapshotId,
-    this.cursor,
-    this.limit = 20,
-  });
-
-  final String subAccountId;
-  final String impactId;
-  final String? evidenceSnapshotId;
-  final String? cursor;
-  final int limit;
-}
+part '../generated/requests/content/author_impact_contracts.requests.g.dart';
 
 /// A typed navigation target embedded in author-impact evidence.
 final class AuthorImpactTargetProjection {
@@ -249,36 +225,6 @@ final class AuthorImpactEvidencePageProjection {
   final List<AuthorImpactEvidenceItemProjection> items;
   final String nextCursor;
   final bool hasMore;
-}
-
-CloudOperationRequestPayload encodeGetAuthorImpactQuery(
-  GetAuthorImpactQuery query,
-) {
-  _validatePageLimit(query.limit);
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'subAccountId': _requiredText(query.subAccountId, 'subAccountId'),
-    },
-    queryParameters: <String, String>{'limit': '${query.limit}'},
-  );
-}
-
-CloudOperationRequestPayload encodeListAuthorImpactEvidenceQuery(
-  ListAuthorImpactEvidenceQuery query,
-) {
-  _validatePageLimit(query.limit);
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'subAccountId': _requiredText(query.subAccountId, 'subAccountId'),
-    },
-    queryParameters: <String, String>{
-      'impactId': _requiredText(query.impactId, 'impactId'),
-      if (_optionalText(query.evidenceSnapshotId) case final snapshotId?)
-        'evidenceSnapshotId': snapshotId,
-      if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
-      'limit': '${query.limit}',
-    },
-  );
 }
 
 AuthorImpactSummaryProjection decodeAuthorImpactSummaryProjection(
@@ -526,19 +472,6 @@ T? _optionalObject<T>(
   return decode(_expectObject(value, context));
 }
 
-String _requiredText(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return normalized;
-}
-
-String? _optionalText(String? value) {
-  final normalized = value?.trim() ?? '';
-  return normalized.isEmpty ? null : normalized;
-}
-
 String _textOrEmpty(Object? value, {String fallback = ''}) {
   if (value == null) {
     return fallback;
@@ -596,10 +529,4 @@ List<String> _textList(Object? value, String context) {
       })
       .where((entry) => entry.isNotEmpty)
       .toList(growable: false);
-}
-
-void _validatePageLimit(int limit) {
-  if (limit <= 0 || limit > 100) {
-    throw ArgumentError.value(limit, 'limit', 'must be between 1 and 100');
-  }
 }

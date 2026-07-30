@@ -2,6 +2,10 @@
   "label": "自驾",
   "labelEn": "Self-driving",
   "description": "喜欢自驾出行",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/旅行/出行方式/自驾"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

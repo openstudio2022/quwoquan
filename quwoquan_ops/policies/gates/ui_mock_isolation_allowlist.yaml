@@ -5,7 +5,6 @@
 # path 可写 `lib/ui/...` 或 `ui/...`（脚本会规范化为相对于 quwoquan_app/lib 的路径）。
 # 治理：每修复一处，删除对应条目；禁止为新增文件追加豁免（应直接按规范实现）。
 #
-version: 1
 governance:
   owner: runtime-client-foundation
   reason: production UI/App/Core/Cloud 与 Mock 物理隔离迁移期间冻结存量

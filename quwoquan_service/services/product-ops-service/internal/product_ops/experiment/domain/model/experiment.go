@@ -40,12 +40,12 @@ type Experiment struct {
 }
 
 type AssignmentFact struct {
-	ID            string `json:"id"`
-	ExperimentID  string `json:"experimentId"`
-	SubjectKey    string `json:"subjectKey"`
-	Variant       string `json:"variant"`
-	PolicyVersion string `json:"policyVersion"`
-	AssignedAt    string `json:"assignedAt"`
+	ID                 string `json:"id"`
+	ExperimentID       string `json:"experimentId"`
+	SubjectKey         string `json:"subjectKey"`
+	Variant            string `json:"variant"`
+	ExperimentRevision int64  `json:"experimentRevision"`
+	AssignedAt         string `json:"assignedAt"`
 }
 
 type Event struct {
@@ -150,14 +150,14 @@ func (e Experiment) Assign(subjectKey string, now time.Time) (AssignmentFact, er
 		(!endsAt.IsZero() && !now.Before(endsAt)) {
 		return AssignmentFact{}, ErrDisabled
 	}
-	policyVersion := fmt.Sprintf("%d", e.Version)
+	experimentRevision := e.Version
 	return AssignmentFact{
-		ID:            assignmentID(e.ID, policyVersion, subjectKey),
-		ExperimentID:  e.ID,
-		SubjectKey:    subjectKey,
-		Variant:       e.selectVariant(subjectKey),
-		PolicyVersion: policyVersion,
-		AssignedAt:    now.UTC().Format(time.RFC3339),
+		ID:                 assignmentID(e.ID, experimentRevision, subjectKey),
+		ExperimentID:       e.ID,
+		SubjectKey:         subjectKey,
+		Variant:            e.selectVariant(subjectKey),
+		ExperimentRevision: experimentRevision,
+		AssignedAt:         now.UTC().Format(time.RFC3339),
 	}, nil
 }
 
@@ -250,11 +250,11 @@ func (e Experiment) selectVariant(subjectKey string) string {
 	return e.Variants[len(e.Variants)-1].Key
 }
 
-func assignmentID(experimentID, policyVersion, subjectKey string) string {
+func assignmentID(experimentID string, experimentRevision int64, subjectKey string) string {
 	hasher := fnv.New64a()
 	_, _ = hasher.Write([]byte(experimentID))
 	_, _ = hasher.Write([]byte{0})
-	_, _ = hasher.Write([]byte(policyVersion))
+	_, _ = hasher.Write([]byte(fmt.Sprintf("%d", experimentRevision)))
 	_, _ = hasher.Write([]byte{0})
 	_, _ = hasher.Write([]byte(subjectKey))
 	return "assignment-" + fmt.Sprintf("%016x", hasher.Sum64())

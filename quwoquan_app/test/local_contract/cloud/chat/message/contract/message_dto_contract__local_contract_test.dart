@@ -101,7 +101,7 @@ void main() {
         'mediaUrl',
         'media',
         'cardPayload',
-        'senderSubAccountId',
+        'senderPersonaId',
         'messageStatus',
         'createdAt',
         'sentAt',

@@ -25,6 +25,10 @@ const (
 // ErrVersionConflict 由 store 在 CAS 失败时返回，orchestrator 据此重放意图。
 var ErrVersionConflict = errors.New("rtc: call session version conflict")
 
+// ErrIdempotencyConflict 表示同一 actor-scoped Idempotency-Key 被不同命令
+// 或不同语义载荷复用。它与内部 CAS 竞态严格分离并映射到公开结构化错误。
+var ErrIdempotencyConflict = errors.New("rtc: call command idempotency conflict")
+
 type CallOrchestrator struct {
 	repo            CallStore
 	cache           CallStateCache
@@ -94,11 +98,12 @@ func NewCallOrchestrator(
 }
 
 type InitiateCallRequest struct {
-	InitiatorID    string   `json:"initiatorId"`
-	CallType       string   `json:"callType"`
-	ConversationID string   `json:"conversationId"`
-	CircleID       string   `json:"circleId"`
-	InviteeIDs     []string `json:"inviteeIds"`
+	InitiatorID     string   `json:"initiatorId"`
+	CallType        string   `json:"callType"`
+	ConversationID  string   `json:"conversationId"`
+	CircleID        string   `json:"circleId"`
+	InviteeIDs      []string `json:"inviteeIds"`
+	MaxParticipants int      `json:"maxParticipants"`
 }
 
 type InitiateCallResponse struct {
@@ -111,6 +116,31 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	if actorID == "" {
 		return nil, generated.AppErrorFromUnauthorized("initiate requires an authenticated persona")
 	}
+	inviteeIDs, err := canonicalInviteeIDs(actorID, req.InviteeIDs)
+	if err != nil {
+		return nil, generated.AppErrorFromInvalidArgument("initiate: " + err.Error())
+	}
+	req.InitiatorID = actorID
+	req.InviteeIDs = inviteeIDs
+	req.ConversationID = strings.TrimSpace(req.ConversationID)
+	req.CircleID = strings.TrimSpace(req.CircleID)
+	if req.MaxParticipants < model.MaxParticipants1v1 ||
+		req.MaxParticipants > model.MaxParticipantsGroup {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"initiate: maxParticipants must be between 2 and 32",
+		)
+	}
+	if len(inviteeIDs)+1 > req.MaxParticipants {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"initiate: invitees exceed maxParticipants",
+		)
+	}
+	if len(inviteeIDs) == 1 && req.ConversationID == "" &&
+		req.CircleID == "" && req.MaxParticipants != model.MaxParticipants1v1 {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"initiate: direct call maxParticipants must be 2",
+		)
+	}
 	if err := o.authorizeCallActor(ctx, actorID); err != nil {
 		return nil, err
 	}
@@ -121,16 +151,29 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 		}
 		return nil, err
 	}
-	if existing, _ := o.repo.FindActiveCallForUser(ctx, actorID); existing != nil {
+	existing, err := o.repo.FindActiveCallForUser(ctx, actorID)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(
+			"find active call: " + err.Error(),
+		)
+	}
+	if existing != nil {
 		return nil, generated.AppErrorFromAlreadyInCall("user already in active call")
 	}
 	if err := o.ensureOneToOneRelationshipGate(ctx, req); err != nil {
 		return nil, err
 	}
 
-	session, err := o.domainService.InitiateCall(actorID, req.CallType, req.ConversationID, req.CircleID, req.InviteeIDs)
+	session, err := o.domainService.InitiateCall(
+		actorID,
+		req.CallType,
+		req.ConversationID,
+		req.CircleID,
+		req.InviteeIDs,
+		req.MaxParticipants,
+	)
 	if err != nil {
-		return nil, generated.AppErrorFromInvalidCallAction("initiate: " + err.Error())
+		return nil, generated.AppErrorFromInvalidArgument("initiate: " + err.Error())
 	}
 	now := o.now().UTC()
 	session.ID = generateID()
@@ -301,7 +344,12 @@ func (o *CallOrchestrator) issueMediaAccess(
 		return MediaSessionAccess{}, err
 	}
 	session, err := o.repo.FindCallByID(ctx, callID)
-	if err != nil || session == nil {
+	if err != nil {
+		return MediaSessionAccess{}, generated.AppErrorFromInternalError(
+			"load call before media access: " + err.Error(),
+		)
+	}
+	if session == nil {
 		return MediaSessionAccess{}, generated.AppErrorFromCallNotFound(
 			"call not found",
 		)
@@ -373,14 +421,22 @@ func (o *CallOrchestrator) ReportMediaConnected(ctx context.Context, callID, use
 }
 
 func (o *CallOrchestrator) InviteToCall(ctx context.Context, callID, userID string, inviteeIDs []string) (*model.CallSession, error) {
-	return o.mutate(ctx, callID, userID, "InviteToCall", func(session *model.CallSession) (string, CallEventPayload, error) {
-		if err := o.domainService.InviteToCall(session, inviteeIDs); err != nil {
+	canonicalIDs, err := canonicalInviteeIDs(userID, inviteeIDs)
+	if err != nil {
+		return nil, generated.AppErrorFromInvalidArgument("invite: " + err.Error())
+	}
+	digestPayload := struct {
+		CallID     string   `json:"callId"`
+		InviteeIDs []string `json:"inviteeIds"`
+	}{CallID: strings.TrimSpace(callID), InviteeIDs: canonicalIDs}
+	return o.mutateWithPayload(ctx, callID, userID, "InviteToCall", digestPayload, func(session *model.CallSession) (string, CallEventPayload, error) {
+		if err := o.domainService.InviteToCall(session, canonicalIDs); err != nil {
 			if err.Error() == "exceeds max participants" {
 				return "", CallEventPayload{}, generated.AppErrorFromCallFull("invite: exceeds max participants")
 			}
 			return "", CallEventPayload{}, generated.AppErrorFromInvalidCallAction("invite: " + err.Error())
 		}
-		return event.CallRinging, CallEventPayload{InviteeIDs: inviteeIDs}, nil
+		return event.CallRinging, CallEventPayload{InviteeIDs: canonicalIDs}, nil
 	})
 }
 
@@ -428,12 +484,12 @@ func (o *CallOrchestrator) ListCalls(
 	})
 }
 
-type ToggleMuteRequest struct {
-	Muted bool `json:"muted"`
-}
-
 func (o *CallOrchestrator) ToggleMute(ctx context.Context, callID, userID string, muted bool) (*model.CallSession, error) {
-	return o.mutate(ctx, callID, userID, "ToggleMute", func(session *model.CallSession) (string, CallEventPayload, error) {
+	digestPayload := struct {
+		CallID string `json:"callId"`
+		Muted  bool   `json:"muted"`
+	}{CallID: strings.TrimSpace(callID), Muted: muted}
+	return o.mutateWithPayload(ctx, callID, userID, "ToggleMute", digestPayload, func(session *model.CallSession) (string, CallEventPayload, error) {
 		if p := participantOf(session, userID); p != nil && p.IsMuted == muted {
 			return "", CallEventPayload{}, errNoop
 		}
@@ -444,12 +500,12 @@ func (o *CallOrchestrator) ToggleMute(ctx context.Context, callID, userID string
 	})
 }
 
-type ToggleCameraRequest struct {
-	CameraOn bool `json:"cameraOn"`
-}
-
 func (o *CallOrchestrator) ToggleCamera(ctx context.Context, callID, userID string, cameraOn bool) (*model.CallSession, error) {
-	return o.mutate(ctx, callID, userID, "ToggleCamera", func(session *model.CallSession) (string, CallEventPayload, error) {
+	digestPayload := struct {
+		CallID   string `json:"callId"`
+		CameraOn bool   `json:"cameraOn"`
+	}{CallID: strings.TrimSpace(callID), CameraOn: cameraOn}
+	return o.mutateWithPayload(ctx, callID, userID, "ToggleCamera", digestPayload, func(session *model.CallSession) (string, CallEventPayload, error) {
 		if p := participantOf(session, userID); p != nil && p.IsCameraOn == cameraOn {
 			return "", CallEventPayload{}, errNoop
 		}
@@ -465,8 +521,20 @@ func (o *CallOrchestrator) StartScreenShare(ctx context.Context, callID, userID 
 		if session.IsScreenSharing && session.ScreenShareUserID == userID {
 			return "", CallEventPayload{}, errNoop
 		}
+		if session.Status != model.StatusInCall {
+			return "", CallEventPayload{}, generated.AppErrorFromInvalidCallAction(
+				"start screen share: call is not active",
+			)
+		}
 		if err := o.domainService.StartScreenShare(session, userID); err != nil {
-			return "", CallEventPayload{}, generated.AppErrorFromScreenShareConflict("start screen share: " + err.Error())
+			if session.IsScreenSharing {
+				return "", CallEventPayload{}, generated.AppErrorFromScreenShareConflict(
+					"start screen share: " + err.Error(),
+				)
+			}
+			return "", CallEventPayload{}, generated.AppErrorFromInvalidCallAction(
+				"start screen share: " + err.Error(),
+			)
 		}
 		return event.ScreenShareStarted, CallEventPayload{}, nil
 	})
@@ -512,6 +580,24 @@ func (o *CallOrchestrator) mutate(
 	commandName string,
 	apply applyFunc,
 ) (*model.CallSession, error) {
+	return o.mutateWithPayload(
+		ctx,
+		callID,
+		userID,
+		commandName,
+		strings.TrimSpace(callID),
+		apply,
+	)
+}
+
+func (o *CallOrchestrator) mutateWithPayload(
+	ctx context.Context,
+	callID string,
+	userID string,
+	commandName string,
+	digestPayload any,
+	apply applyFunc,
+) (*model.CallSession, error) {
 	actorID := strings.TrimSpace(userID)
 	if actorID == "" {
 		return nil, generated.AppErrorFromUnauthorized(commandName + " requires an authenticated persona")
@@ -519,7 +605,7 @@ func (o *CallOrchestrator) mutate(
 	if err := o.authorizeCallActor(ctx, actorID); err != nil {
 		return nil, err
 	}
-	digest := commandDigest(commandName, callID)
+	digest := commandDigest(commandName, digestPayload)
 	key, err := scopedIdempotencyKey(ctx, actorID)
 	if err != nil {
 		return nil, err
@@ -558,7 +644,12 @@ func (o *CallOrchestrator) mutateCommand(
 	}
 	for attempt := 0; attempt < maxCommitRetries; attempt++ {
 		session, err := o.repo.FindCallByID(ctx, callID)
-		if err != nil || session == nil {
+		if err != nil {
+			return mutationOutcome{}, generated.AppErrorFromInternalError(
+				"load call for mutation: " + err.Error(),
+			)
+		}
+		if session == nil {
 			return mutationOutcome{}, generated.AppErrorFromCallNotFound("call not found: " + callID)
 		}
 		if command.requireParticipant &&
@@ -706,6 +797,11 @@ func (o *CallOrchestrator) commitWithKey(
 		Events:           events,
 	})
 	if err != nil {
+		if errors.Is(err, ErrIdempotencyConflict) {
+			return CallCommitResult{}, generated.AppErrorFromIdempotencyConflict(
+				"idempotency key was reused for a different call command",
+			)
+		}
 		return CallCommitResult{}, err
 	}
 	if result.Session == nil || o.cache == nil {
@@ -738,6 +834,11 @@ func (o *CallOrchestrator) recordNoopWithKey(
 		ReceiptExpiresAt: o.now().UTC().Add(callReceiptTTL),
 	})
 	if err != nil {
+		if errors.Is(err, ErrIdempotencyConflict) {
+			return nil, generated.AppErrorFromIdempotencyConflict(
+				"idempotency key was reused for a different no-op command",
+			)
+		}
 		return nil, err
 	}
 	return result.Session, nil
@@ -762,7 +863,18 @@ func (o *CallOrchestrator) replayWithKey(
 	commandName string,
 	digest string,
 ) (CallCommitResult, bool, error) {
-	return o.repo.FindReceipt(ctx, idempotencyKey, commandName, digest)
+	result, found, err := o.repo.FindReceipt(
+		ctx,
+		idempotencyKey,
+		commandName,
+		digest,
+	)
+	if errors.Is(err, ErrIdempotencyConflict) {
+		return CallCommitResult{}, false, generated.AppErrorFromIdempotencyConflict(
+			"idempotency key was reused for a different call command",
+		)
+	}
+	return result, found, err
 }
 
 func (o *CallOrchestrator) ensureOneToOneRelationshipGate(ctx context.Context, req InitiateCallRequest) error {
@@ -792,7 +904,12 @@ func (o *CallOrchestrator) loadSession(ctx context.Context, callID string) (*mod
 		return cached, nil
 	}
 	session, err := o.repo.FindCallByID(ctx, callID)
-	if err != nil || session == nil {
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(
+			"load call: " + err.Error(),
+		)
+	}
+	if session == nil {
 		return nil, generated.AppErrorFromCallNotFound("call not found: " + callID)
 	}
 	_ = o.cache.SetCallState(ctx, session)
@@ -834,6 +951,30 @@ func commandDigest(commandName string, payload any) string {
 	body, _ := json.Marshal(payload)
 	sum := sha256.Sum256(append([]byte(commandName+"\x00"), body...))
 	return hex.EncodeToString(sum[:])
+}
+
+func canonicalInviteeIDs(actorID string, values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, errors.New("at least one inviteeId is required")
+	}
+	actorID = strings.TrimSpace(actorID)
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			return nil, errors.New("inviteeId must not be empty")
+		}
+		if value == actorID {
+			return nil, errors.New("actor cannot invite itself")
+		}
+		if _, exists := seen[value]; exists {
+			return nil, errors.New("inviteeIds must not contain duplicates")
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result, nil
 }
 
 func scopedIdempotencyKey(ctx context.Context, actorID string) (string, error) {

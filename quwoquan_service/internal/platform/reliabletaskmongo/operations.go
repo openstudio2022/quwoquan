@@ -95,6 +95,113 @@ func (s *Store) RecoverDeadTask(ctx context.Context, taskID string, now time.Tim
 	return nil
 }
 
+func (s *Store) RecoverDeadTaskIdempotently(
+	ctx context.Context,
+	taskID string,
+	idempotencyKey string,
+	now time.Time,
+) (reliabletask.TaskRecoveryReceipt, bool, error) {
+	taskID = strings.TrimSpace(taskID)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return reliabletask.TaskRecoveryReceipt{}, false,
+			reliabletask.ErrRecoveryIdempotencyKey
+	}
+	if taskID == "" {
+		return reliabletask.TaskRecoveryReceipt{}, false,
+			reliabletask.ErrTaskNotFound
+	}
+	if existing, found, err := s.findTaskRecoveryReceipt(
+		ctx,
+		idempotencyKey,
+	); err != nil {
+		return reliabletask.TaskRecoveryReceipt{}, false, err
+	} else if found {
+		if existing.TaskID != taskID {
+			return reliabletask.TaskRecoveryReceipt{}, false,
+				reliabletask.ErrRecoveryIdempotencyConflict
+		}
+		return existing, true, nil
+	}
+
+	now = now.UTC()
+	receipt := reliabletask.TaskRecoveryReceipt{
+		IdempotencyKey: idempotencyKey,
+		TaskID:         taskID,
+		RecoveredAt:    now,
+		ExpiresAt:      now.Add(30 * 24 * time.Hour),
+	}
+	session, err := s.db.Client().StartSession()
+	if err != nil {
+		return reliabletask.TaskRecoveryReceipt{}, false, err
+	}
+	defer session.EndSession(ctx)
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		result, updateErr := s.tasks.UpdateOne(
+			txCtx,
+			bson.M{
+				"_id":    taskID,
+				"status": reliabletask.TaskStatusDead,
+			},
+			bson.M{"$set": bson.M{
+				"status":        reliabletask.TaskStatusReady,
+				"nextAttemptAt": now,
+				"leaseOwner":    "",
+				"leaseToken":    "",
+				"leaseUntil":    time.Time{},
+				"updatedAt":     now,
+			}},
+		)
+		if updateErr != nil {
+			return nil, updateErr
+		}
+		if result.MatchedCount == 0 {
+			return nil, reliabletask.ErrTaskNotFound
+		}
+		if _, insertErr := s.recoveryReceipts.InsertOne(txCtx, receipt); insertErr != nil {
+			return nil, insertErr
+		}
+		return nil, nil
+	})
+	if err == nil {
+		return receipt, false, nil
+	}
+	// A concurrent request can commit the same receipt after the optimistic
+	// pre-read. Reconcile every failed transaction from the durable receipt:
+	// depending on snapshot timing the loser can observe duplicate-key or a
+	// task that has already left dead state.
+	existing, found, findErr := s.findTaskRecoveryReceipt(ctx, idempotencyKey)
+	if findErr != nil {
+		return reliabletask.TaskRecoveryReceipt{}, false, findErr
+	}
+	if found && existing.TaskID == taskID {
+		return existing, true, nil
+	}
+	if found {
+		return reliabletask.TaskRecoveryReceipt{}, false,
+			reliabletask.ErrRecoveryIdempotencyConflict
+	}
+	return reliabletask.TaskRecoveryReceipt{}, false, err
+}
+
+func (s *Store) findTaskRecoveryReceipt(
+	ctx context.Context,
+	idempotencyKey string,
+) (reliabletask.TaskRecoveryReceipt, bool, error) {
+	var receipt reliabletask.TaskRecoveryReceipt
+	err := s.recoveryReceipts.FindOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(idempotencyKey)},
+	).Decode(&receipt)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return reliabletask.TaskRecoveryReceipt{}, false, nil
+	}
+	if err != nil {
+		return reliabletask.TaskRecoveryReceipt{}, false, err
+	}
+	return receipt, true, nil
+}
+
 func (s *Store) ListDeadNotifications(
 	ctx context.Context,
 	eventTypes []string,

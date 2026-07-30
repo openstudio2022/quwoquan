@@ -98,6 +98,7 @@ def _write_image_plan(execution_id: str, entity: str, count: int) -> None:
                 "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
                 "authorizationProof": f"https://commons.wikimedia.org/wiki/File:{entity}_{index}.jpg",
                 "usageScope": "app_publish",
+                "modelReleaseStatus": "not_required",
                 "images": [
                     {
                         "url": f"https://upload.wikimedia.org/{entity}_{index}.jpg",
@@ -108,6 +109,7 @@ def _write_image_plan(execution_id: str, entity: str, count: int) -> None:
                         "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
                         "authorizationProof": f"https://commons.wikimedia.org/wiki/File:{entity}_{index}.jpg",
                         "usageScope": "app_publish",
+                        "modelReleaseStatus": "not_required",
                         "width": 1200,
                         "height": 800,
                         "sourceCollectionId": collection_id,
@@ -168,6 +170,7 @@ def _write_homepage_plan(execution_id: str, entity: str, count: int) -> None:
             "licenseSnapshot": "CC BY-SA 4.0 recorded on Wikimedia Commons file page",
             "authorizationProof": f"https://commons.wikimedia.org/wiki/File:{entity}_{index}.jpg",
             "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
             "width": 1200,
             "height": 800,
         }
@@ -234,8 +237,8 @@ def test_open_license_scale_proof_scores_below_desired_without_failing_soft_poli
     assert report["averageImageCountScore"] == 0.75
 
 
-def test_media_scale_proof_audits_incomplete_travel_rights_without_filtering():
-    execution_id = _make_task("旅行图片授权仅审计", ["景区甲"])
+def test_media_scale_proof_filters_incomplete_travel_rights():
+    execution_id = _make_task("旅行图片授权强制门", ["景区甲"])
     _write_image_plan(execution_id, "景区甲", 2)
     plan_path = (
         resolve_entity_object_dir(execution_id, "景区甲", etype_hint="地点/景区")
@@ -253,8 +256,10 @@ def test_media_scale_proof_audits_incomplete_travel_rights_without_filtering():
 
     report = build_open_license_scale_proof(execution_id)
 
+    # score_bonus allows the task to continue, but rights-invalid assets never
+    # count as publishable evidence.
     assert report["passed"] is True
-    assert report["proof"]["publishableImageAssets"] == 2
+    assert report["proof"]["publishableImageAssets"] == 0
     assert report["rightsAuditIssueCount"] > 0
     assert report["rightsAuditIssueSample"]
 
@@ -338,6 +343,13 @@ def test_scale_proof_reads_each_target_from_its_declared_entity_type():
                         "images": [
                             {
                                 "url": "https://upload.wikimedia.org/测试博物馆乙_1.jpg",
+                                "license": "CC BY-SA 4.0",
+                                "credit": "Test creator",
+                                "sourceUrl": "https://commons.wikimedia.org/wiki/File:测试博物馆乙_1.jpg",
+                                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                                "authorizationProof": "https://commons.wikimedia.org/wiki/File:测试博物馆乙_1.jpg",
+                                "usageScope": "app_publish",
+                                "modelReleaseStatus": "not_required",
                                 "sourceCollectionId": "commons:测试博物馆乙:1",
                                 "researchLane": "image",
                                 "width": 1200,

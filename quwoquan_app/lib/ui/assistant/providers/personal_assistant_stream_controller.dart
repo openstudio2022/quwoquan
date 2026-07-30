@@ -89,10 +89,10 @@ class PersonalAssistantStreamController
     }
     state = state.copyWith(historyLoading: true);
     try {
-      final subAccountId = await _historySubAccountId();
+      final personaId = await _historyPersonaId();
       final snapshot = await ref
           .read(assistantHistoryLoaderProvider)
-          .load(subAccountId: subAccountId);
+          .load(personaId: personaId);
       if (snapshot == null) {
         state = state.copyWith(
           historyInitialized: true,
@@ -166,10 +166,10 @@ class PersonalAssistantStreamController
       historyLoading: true,
     );
     try {
-      final subAccountId = await _historySubAccountId();
+      final personaId = await _historyPersonaId();
       final snapshot = await ref
           .read(assistantHistoryLoaderProvider)
-          .load(subAccountId: subAccountId, conversationId: target);
+          .load(personaId: personaId, conversationId: target);
       state = state.copyWith(
         transcript:
             snapshot?.transcript ?? const <AssistantTranscriptTimelineRow>[],
@@ -315,29 +315,30 @@ class PersonalAssistantStreamController
     if (runId.isEmpty) {
       return;
     }
-    final fact = AppendAssistantLearningFactRequest(
+    final fact = AssistantLearningFactAppendCommand(
       eventId: 'regen:$runId:${option?.name ?? 'regenerate'}',
-      eventVersion: 1,
-      factType: AssistantLearningFactType.interactionOutcome,
+      factType: AssistantLearningFactType.interactionOutcome.wireName,
       assistantTurnId: runId,
-      referralSource: assistantReferralSourceForOpenContext(_openContext),
+      referralSource: assistantReferralSourceForOpenContext(
+        _openContext,
+      ).wireName,
       domainId: 'assistant',
-      eventType: InteractionEventType.actionClick,
-      feedbackType: FeedbackType.regenerated,
+      eventType: InteractionEventType.actionClick.wireName,
+      feedbackType: FeedbackType.regenerated.wireName,
       actionType: option?.name ?? 'regenerate',
       trainingEligible: false,
-      occurredAt: DateTime.now().toUtc().toIso8601String(),
+      occurredAt: DateTime.now().toUtc(),
     );
     await _persistAndFlushLearningFact(fact);
   }
 
-  Future<String> _historySubAccountId() async {
+  Future<String> _historyPersonaId() async {
     // 历史恢复不能等待远端 Persona 查询；仅消费已就绪的上下文，否则立即
     // 回退当前用户归属键，避免会话首发被非关键画像请求阻塞。
     final activeContext = ref.read(activePersonaContextProvider).asData?.value;
-    final subAccountId = activeContext?.subAccountId.trim() ?? '';
-    if (subAccountId.isNotEmpty) {
-      return subAccountId;
+    final personaId = activeContext?.personaId.trim() ?? '';
+    if (personaId.isNotEmpty) {
+      return personaId;
     }
     return ref.read(currentUserIdProvider).trim();
   }
@@ -353,7 +354,7 @@ class PersonalAssistantStreamController
     try {
       final unread = await ref
           .read(appMessageQueryProvider)
-          .getUnreadCount(const GetAppMessageUnreadCountQuery());
+          .getUnreadCount(GetAppMessageUnreadCountQuery());
       if (!ref.mounted) {
         return;
       }
@@ -894,17 +895,18 @@ class PersonalAssistantStreamController
     final referenceKind = external ? 'external' : 'internal';
     unawaited(
       _persistAndFlushLearningFact(
-        AppendAssistantLearningFactRequest(
+        AssistantLearningFactAppendCommand(
           eventId: 'reference-open:$assistantTurnId:$referenceKind',
-          eventVersion: 1,
-          factType: AssistantLearningFactType.interactionOutcome,
+          factType: AssistantLearningFactType.interactionOutcome.wireName,
           assistantTurnId: assistantTurnId,
-          referralSource: assistantReferralSourceForOpenContext(_openContext),
+          referralSource: assistantReferralSourceForOpenContext(
+            _openContext,
+          ).wireName,
           domainId: 'assistant',
-          eventType: InteractionEventType.actionClick,
+          eventType: InteractionEventType.actionClick.wireName,
           actionType: 'open_${referenceKind}_reference',
           trainingEligible: false,
-          occurredAt: DateTime.now().toUtc().toIso8601String(),
+          occurredAt: DateTime.now().toUtc(),
         ),
       ),
     );
@@ -918,18 +920,19 @@ class PersonalAssistantStreamController
     _pendingSuggestedActionId = '';
     unawaited(
       _persistAndFlushLearningFact(
-        AppendAssistantLearningFactRequest(
+        AssistantLearningFactAppendCommand(
           eventId: 'suggested-action:$assistantTurnId:$suggestedActionId',
-          eventVersion: 1,
-          factType: AssistantLearningFactType.interactionOutcome,
+          factType: AssistantLearningFactType.interactionOutcome.wireName,
           assistantTurnId: assistantTurnId,
-          referralSource: assistantReferralSourceForOpenContext(_openContext),
+          referralSource: assistantReferralSourceForOpenContext(
+            _openContext,
+          ).wireName,
           domainId: 'assistant',
-          eventType: InteractionEventType.actionClick,
+          eventType: InteractionEventType.actionClick.wireName,
           actionType: 'suggested_action',
           suggestedActionId: suggestedActionId,
           trainingEligible: false,
-          occurredAt: DateTime.now().toUtc().toIso8601String(),
+          occurredAt: DateTime.now().toUtc(),
         ),
       ),
     );
@@ -940,24 +943,25 @@ class PersonalAssistantStreamController
     if (feedbackType.isEmpty || runId.isEmpty) {
       return;
     }
-    final fact = AppendAssistantLearningFactRequest(
+    final fact = AssistantLearningFactAppendCommand(
       // 稳定派生 id：同一 run 上同一反馈动作重试不产生新事件。
       eventId: 'fb:$runId:$feedbackType',
-      eventVersion: 1,
-      factType: AssistantLearningFactType.userFeedback,
+      factType: AssistantLearningFactType.userFeedback.wireName,
       assistantTurnId: runId,
-      referralSource: assistantReferralSourceForOpenContext(_openContext),
+      referralSource: assistantReferralSourceForOpenContext(
+        _openContext,
+      ).wireName,
       domainId: 'assistant',
-      feedbackType: parseFeedbackTypeStrict(feedbackType),
+      feedbackType: parseFeedbackTypeStrict(feedbackType).wireName,
       actionType: feedbackType,
       trainingEligible: false,
-      occurredAt: DateTime.now().toUtc().toIso8601String(),
+      occurredAt: DateTime.now().toUtc(),
     );
     await _persistAndFlushLearningFact(fact);
   }
 
   Future<void> _persistAndFlushLearningFact(
-    AppendAssistantLearningFactRequest fact,
+    AssistantLearningFactAppendCommand fact,
   ) async {
     try {
       final persisted = await ref

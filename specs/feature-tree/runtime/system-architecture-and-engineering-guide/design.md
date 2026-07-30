@@ -75,6 +75,16 @@
 - 被否决方案：为目录外观给 13 个 Go 服务复制 `go.mod`，或引入 `go.work` 和根模块/服务模块循环 replace。
 - 关联要求：`REQ-002`、`REQ-005`
 
+<a id="dec-006"></a>
+### DEC-006 外部交互事实账本由 Integration 唯一拥有
+
+- 决策：Provider request、attempt、result 与 dead-letter 事实只由 `integration.ExternalInteraction` 及其事实对象维护；Notification 等消费方只保存 `externalInteractionId`、业务状态与幂等 inbox receipt。
+- 理由：同一次 Provider 调用若在消费方和 Integration 各维护一套状态账本，异步回执窗口必然产生矛盾事实，恢复与审计也无法确定唯一依据。
+- 被否决方案：在消费方聚合冗余 provider 请求摘要、结果和取消结果，或在 `external_interaction` 内联 attempt/dead-letter 的同时再保留独立事实对象。
+- 约束与影响：跨对象组合读通过引用与 projection 完成；`external_reference` 的 identity、事件 payload 与 projection 字段必须有 typed contract，禁止原始 `object` 和未声明 payload。
+- 关联要求：`REQ-004`
+- 关联验收：`SIT-004`
+
 ## 5. 失败与恢复
 
 - 目录或契约移动用 Git diff 与内容摘要证明一一映射；文件无唯一 owner 时阻断变更。

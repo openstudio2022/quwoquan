@@ -499,6 +499,7 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
   });
 
   static const int maxPageCurlPages = 80;
+  static const int maxResidentPageTextures = 3;
 
   final List<ArticlePageData> pages;
   final ArticleTemplatePreset template;

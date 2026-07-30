@@ -313,22 +313,23 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	}
 
 	profMap, _ := s.profiles.ResolveMany(ctx, newUserIDs)
-	lookup := func(uid string) (string, string, string, int) {
+	lookup := func(uid string) (string, string, string, string, int) {
 		if p, ok := profMap[uid]; ok {
-			return p.DisplayName, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion
+			return p.UserHandle, p.DisplayName, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion
 		}
-		return "", "", "", 0
+		return "", "", "", "", 0
 	}
 
 	now := time.Now()
 	membersToCreate := make([]*model.ConversationMember, 0, len(newUserIDs))
 	statesToCreate := make([]*model.ConversationUserState, 0, len(newUserIDs))
 	for _, userId := range newUserIDs {
-		dn, av, assetID, avatarVersion := lookup(userId)
+		userHandle, dn, av, assetID, avatarVersion := lookup(userId)
 		membersToCreate = append(membersToCreate, &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: req.ConversationId,
 			UserId:         userId,
+			UserHandle:     userHandle,
 			DisplayName:    dn,
 			AvatarUrl:      av,
 			AvatarAssetId:  assetID,

@@ -12,13 +12,12 @@ import (
 )
 
 type DerivedAvatarAsset struct {
-	Ref              DeliveryReference `json:"ref"`
-	StorageObjectKey string            `json:"-"`
-	SourceHash       string            `json:"sourceHash"`
-	LayoutVersion    string            `json:"layoutVersion"`
-	Contributors     []AvatarSource    `json:"contributors"`
-	CreatedAt        time.Time         `json:"createdAt"`
-	UpdatedAt        time.Time         `json:"updatedAt"`
+	Ref          DeliveryReference `json:"ref"`
+	SourceHash   string            `json:"sourceHash"`
+	LayoutID     string            `json:"layoutId"`
+	Contributors []AvatarSource    `json:"contributors"`
+	CreatedAt    time.Time         `json:"createdAt"`
+	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
 type AvatarSource struct {
@@ -30,10 +29,13 @@ type AvatarSource struct {
 type RegisterGroupAvatarRequest struct {
 	ConversationID   string
 	SourceHash       string
-	LayoutVersion    string
 	Contributors     []AvatarSource
 	MemberAvatarURLs []string
 }
+
+// GroupAvatarGridLayoutID is the sole semantic layout identity. Derived media
+// bytes and immutable delivery slices carry their own version/digest identity.
+const GroupAvatarGridLayoutID = "group_avatar_grid"
 
 type GroupAvatarService struct {
 	client         rtredis.Client
@@ -134,14 +136,13 @@ func (s *GroupAvatarService) Register(
 		nextVersion = 1
 	}
 	assetID := fmt.Sprintf("ga_%s_v%d", conversationID, nextVersion)
-	internalRef := BuildAvatarGroupAssetRef(
+	deliveryRef := BuildAvatarGroupDeliveryReference(
 		conversationID,
 		assetID,
 		nextVersion,
 		sourceHash,
 		s.cdnBaseURL,
 	)
-	deliveryRef := internalRef.DeliveryReference()
 	if strings.TrimSpace(deliveryRef.DeliveryURI) == "" {
 		return DerivedAvatarAsset{}, fmt.Errorf("derived group avatar public URL is empty")
 	}
@@ -151,19 +152,18 @@ func (s *GroupAvatarService) Register(
 	if err != nil {
 		return DerivedAvatarAsset{}, fmt.Errorf("render group avatar: %w", err)
 	}
-	if err := WriteDerivedMediaFile(s.localMediaRoot, internalRef.ObjectKey, pngBytes); err != nil {
+	if err := WriteDerivedMediaFile(s.localMediaRoot, deliveryRef.PublicSliceKey, pngBytes); err != nil {
 		return DerivedAvatarAsset{}, fmt.Errorf("persist group avatar png: %w", err)
 	}
 
 	now := time.Now().UTC()
 	asset := DerivedAvatarAsset{
-		Ref:              deliveryRef,
-		StorageObjectKey: internalRef.ObjectKey,
-		SourceHash:       sourceHash,
-		LayoutVersion:    defaultLayoutVersion(req.LayoutVersion),
-		Contributors:     append([]AvatarSource(nil), req.Contributors...),
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		Ref:          deliveryRef,
+		SourceHash:   sourceHash,
+		LayoutID:     GroupAvatarGridLayoutID,
+		Contributors: append([]AvatarSource(nil), req.Contributors...),
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	body, err := json.Marshal(asset)
 	if err != nil {
@@ -180,9 +180,6 @@ func (s *GroupAvatarService) Register(
 		return DerivedAvatarAsset{}, err
 	}
 	if err := s.client.HSet(ctx, stateKey, "sourceHash", sourceHash); err != nil {
-		return DerivedAvatarAsset{}, err
-	}
-	if err := s.client.HSet(ctx, stateKey, "objectKey", internalRef.ObjectKey); err != nil {
 		return DerivedAvatarAsset{}, err
 	}
 	if err := s.client.HSet(ctx, stateKey, "updatedAt", now.Format(time.RFC3339Nano)); err != nil {
@@ -216,6 +213,9 @@ func (s *GroupAvatarService) readAsset(
 	if err := json.Unmarshal(raw, &asset); err != nil {
 		return DerivedAvatarAsset{}, fmt.Errorf("decode media asset %s: %w", assetID, err)
 	}
+	if asset.LayoutID != GroupAvatarGridLayoutID {
+		return DerivedAvatarAsset{}, fmt.Errorf("media asset %s has non-canonical layout identity", assetID)
+	}
 	return asset, nil
 }
 
@@ -223,11 +223,4 @@ func parseInt64(raw string) int64 {
 	var value int64
 	_, _ = fmt.Sscanf(strings.TrimSpace(raw), "%d", &value)
 	return value
-}
-
-func defaultLayoutVersion(raw string) string {
-	if strings.TrimSpace(raw) == "" {
-		return "v1"
-	}
-	return strings.TrimSpace(raw)
 }

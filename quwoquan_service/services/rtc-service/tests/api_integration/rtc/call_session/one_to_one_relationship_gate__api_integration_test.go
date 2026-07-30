@@ -69,9 +69,10 @@ func TestInitiateCall_OneToOne_RequiresMutual(t *testing.T) {
 		"gate-reject-not-mutual",
 	)
 	_, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
-		InitiatorID: "caller_a",
-		CallType:    "audio",
-		InviteeIDs:  []string{"caller_b"},
+		InitiatorID:     "caller_a",
+		CallType:        "audio",
+		InviteeIDs:      []string{"caller_b"},
+		MaxParticipants: 2,
 	})
 	if err == nil {
 		t.Fatal("expected not mutual gate error")
@@ -96,9 +97,10 @@ func TestInitiateCall_OneToOne_Blocked(t *testing.T) {
 		"gate-reject-blocked",
 	)
 	_, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
-		InitiatorID: "caller_c",
-		CallType:    "audio",
-		InviteeIDs:  []string{"caller_d"},
+		InitiatorID:     "caller_c",
+		CallType:        "audio",
+		InviteeIDs:      []string{"caller_d"},
+		MaxParticipants: 2,
 	})
 	if err == nil {
 		t.Fatal("expected blocked gate error")
@@ -120,9 +122,10 @@ func TestInitiateCall_OneToOne_AllowsMutual(t *testing.T) {
 
 	ctx := commandmeta.WithIdempotencyKey(context.Background(), "gate-allow-mutual")
 	resp, err := orchestrator.InitiateCall(ctx, application.InitiateCallRequest{
-		InitiatorID: "caller_ok",
-		CallType:    "audio",
-		InviteeIDs:  []string{"peer_ok"},
+		InitiatorID:     "caller_ok",
+		CallType:        "audio",
+		InviteeIDs:      []string{"peer_ok"},
+		MaxParticipants: 2,
 	})
 	if err != nil {
 		t.Fatalf("initiate call: %v", err)

@@ -122,7 +122,7 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 ) (int64, error) {
 	if a == nil || a.client == nil {
 		return 0, &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause:          errors.New("notification integration delivery adapter is not initialized"),
 		}
@@ -130,7 +130,7 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 	if strings.TrimSpace(notification.NotificationID) == "" ||
 		strings.TrimSpace(recipientID) == "" {
 		return 0, &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause:          errors.New("delivery job id and recipientId are required"),
 		}
@@ -194,7 +194,7 @@ func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 ) (string, error) {
 	if a == nil || a.client == nil {
 		return "", &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause:          errors.New("notification integration delivery adapter is not initialized"),
 		}
@@ -206,7 +206,7 @@ func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 		strings.TrimSpace(job.TargetPersonaID) == "" ||
 		job.ExpiresAt.IsZero() {
 		return "", &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			Cause:          errors.New("incoming call delivery job is incomplete"),
 		}
@@ -216,7 +216,7 @@ func (a *ExternalInteractionDeliveryAdapter) submitIncomingCallPush(
 		if job.CancellationOccurredAt == nil ||
 			strings.TrimSpace(job.CancellationEventID) == "" {
 			return "", &DeliveryError{
-				Code:           serviceclients.IntegrationInternalErrorCode,
+				Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 				RecoveryAction: failures.RecoveryActionSurface,
 				Cause:          errors.New("incoming call cancellation job is incomplete"),
 			}
@@ -268,7 +268,7 @@ func (a *ExternalInteractionDeliveryAdapter) submit(
 	body, err := json.Marshal(bodyPayload)
 	if err != nil {
 		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			RequestID:      requestID,
 			Cause:          err,
@@ -279,7 +279,7 @@ func (a *ExternalInteractionDeliveryAdapter) submit(
 	authorization, err := a.credentials.AuthorizationHeader(requestCtx)
 	if err != nil {
 		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionRetry,
 			RequestID:      requestID,
 			Cause:          fmt.Errorf("issue integration service credential: %w", err),
@@ -293,7 +293,7 @@ func (a *ExternalInteractionDeliveryAdapter) submit(
 	)
 	if err != nil {
 		return reliabletask.ExternalInteractionAccepted{}, &DeliveryError{
-			Code:           serviceclients.IntegrationInternalErrorCode,
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
 			RecoveryAction: failures.RecoveryActionSurface,
 			RequestID:      requestID,
 			Cause:          err,

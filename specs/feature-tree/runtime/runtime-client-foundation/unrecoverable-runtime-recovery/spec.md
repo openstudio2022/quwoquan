@@ -83,14 +83,15 @@
 - 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
 - 协作 Story：[`cold-start-performance`](../cold-start-performance/spec.md)、[`public-content-web-entry`](../public-content-web-entry/spec.md)。
 - 父级设计：[L2 DEC-002](../design.md#dec-002)
+- 真机验收入口：`stackctl verify --env <beta|gamma> --kind all --profile release` 调度 `runtime_recovery_journey__user_acceptance_test.dart`；执行设备必须保留正式 Remote 持久化登录态，且同一 CaseResult 同时包含 Android 与 iPhone，禁止注入 AuthSession 测试装配。
 
 ## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 真机主容器重建与登录态恢复证据
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Android/iPhone 真机的一次性根容器重建、首页首帧、登录态恢复和失败转版本链的真实环境录像与日志证据。
+- 影响或价值：仓内已有 fail-closed 双真机验收入口，但尚缺 Android/iPhone 对同一 Beta/Gamma 候选执行的一次性根容器重建、首页首帧、正式持久化登录态恢复和失败转版本链 CaseResult、录像与日志证据。
 - 完成判定：`GWT-001`、`GWT-002` 在 Beta 和 Gamma 的 production Remote composition 中通过，并完成 Prod 发布前真机验证。

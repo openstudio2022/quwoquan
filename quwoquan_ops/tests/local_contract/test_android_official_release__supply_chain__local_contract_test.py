@@ -55,7 +55,7 @@ echo 'Signer #1 certificate SHA-256 digest: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             manifest = json.loads(Path(str(release["manifestPath"])).read_text())
             self.assertEqual(
                 manifest["apkUrl"],
-                "https://cdn.quwoquan.com/downloads/android/1.8.2/18201/"
+                "https://cdn.quwoquan.com/download/android/1.8.2/18201/"
                 "quwoquan-18201.apk",
             )
             self.assertFalse(manifest["remoteVerified"])

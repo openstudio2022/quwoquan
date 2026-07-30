@@ -2,6 +2,7 @@
   "label": "年级圈",
   "labelEn": "Class Year Circle",
   "description": "同一届的同学社群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

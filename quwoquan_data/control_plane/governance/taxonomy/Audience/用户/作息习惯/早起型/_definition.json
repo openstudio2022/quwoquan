@@ -2,6 +2,7 @@
   "label": "早起型",
   "labelEn": "Early Bird",
   "description": "习惯早起的用户",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

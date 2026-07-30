@@ -15,9 +15,7 @@ enum RtcErrorCode {
   cannotAnswer('RTC.USER.cannot_answer', '无法接听，通话状态异常', 409),
   invalidCallAction('RTC.USER.invalid_call_action', '当前通话状态无法执行该操作', 409),
   screenShareConflict('RTC.USER.screen_share_conflict', '已有参与者正在共享屏幕', 409),
-  versionConflict('RTC.USER.version_conflict', '通话状态已变更，请刷新后重试', 409),
   idempotencyConflict('RTC.USER.idempotency_conflict', '请求重复且内容不一致，请重新发起', 409),
-  rateLimited('RTC.USER.rate_limited', '操作太频繁，请稍后重试', 429),
   mediaTransportUnavailable('RTC.SYSTEM.media_transport_unavailable', '通话服务暂时不可用，请稍后重试', 503),
   accountSecurityUnavailable('RTC.SYSTEM.account_security_unavailable', '账号安全校验暂不可用，请稍后重试', 503),
   internalError('RTC.SYSTEM.internal_error', '通话服务异常，请稍后重试', 500);

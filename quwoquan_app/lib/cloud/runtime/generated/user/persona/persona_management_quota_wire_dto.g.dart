@@ -2,35 +2,35 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class PersonaManagementQuotaWireDto {
-  final int maxSubAccounts;
-  final int usedSubAccounts;
+  final int maxPersonas;
+  final int usedPersonas;
 
   PersonaManagementQuotaWireDto({
-    this.maxSubAccounts = 5,
-    this.usedSubAccounts = 0,
+    this.maxPersonas = 5,
+    this.usedPersonas = 0,
   });
 
   factory PersonaManagementQuotaWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaManagementQuotaWireDto(
-      maxSubAccounts: (m['maxSubAccounts'] as num?)?.toInt() ?? 5,
-      usedSubAccounts: (m['usedSubAccounts'] as num?)?.toInt() ?? 0,
+      maxPersonas: (m['maxPersonas'] as num?)?.toInt() ?? 5,
+      usedPersonas: (m['usedPersonas'] as num?)?.toInt() ?? 0,
     );
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'maxSubAccounts': maxSubAccounts,
-      'usedSubAccounts': usedSubAccounts,
+      'maxPersonas': maxPersonas,
+      'usedPersonas': usedPersonas,
     };
   }
 
   PersonaManagementQuotaWireDto copyWith({
-    int? maxSubAccounts,
-    int? usedSubAccounts,
+    int? maxPersonas,
+    int? usedPersonas,
   }) {
     return PersonaManagementQuotaWireDto(
-      maxSubAccounts: maxSubAccounts ?? this.maxSubAccounts,
-      usedSubAccounts: usedSubAccounts ?? this.usedSubAccounts,
+      maxPersonas: maxPersonas ?? this.maxPersonas,
+      usedPersonas: usedPersonas ?? this.usedPersonas,
     );
   }
 }

@@ -1,9 +1,53 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestReadProjectionDoesNotInferAppDtoForBackendOnlyProjection(t *testing.T) {
+	metadataDir := initializeTestContractGraph(t)
+	path := filepath.Join(
+		metadataDir,
+		"chat",
+		"chat",
+		"message",
+		"projections",
+		"chat_message_sync_slice.yaml",
+	)
+
+	projection, err := readProjection(path)
+	if err != nil {
+		t.Fatalf("backend-only projection rejected by App codegen: %v", err)
+	}
+	if len(projection.ClientProjection.Fields) != 0 {
+		t.Fatalf("backend fields were inferred as App fields: %#v", projection.ClientProjection.Fields)
+	}
+}
+
+func TestReadProjectionAcceptsFieldNamesForExternalAppDto(t *testing.T) {
+	metadataDir := initializeTestContractGraph(t)
+	path := filepath.Join(
+		metadataDir,
+		"content",
+		"content",
+		"comment",
+		"projections",
+		"author_comment_page_slice.yaml",
+	)
+
+	projection, err := readProjection(path)
+	if err != nil {
+		t.Fatalf("external projection field references rejected: %v", err)
+	}
+	if projection.ClientProjection.ExternalDartPath == "" {
+		t.Fatal("external projection lost its canonical Dart owner")
+	}
+	if len(projection.ClientProjection.Fields) != 0 {
+		t.Fatalf("external fields were reinterpreted as generated fields: %#v", projection.ClientProjection.Fields)
+	}
+}
 
 func TestRenderStandaloneDtoHasExactlyOneTrailingNewline(t *testing.T) {
 	projection := clientProjection{
@@ -136,6 +180,142 @@ func TestRenderStandaloneDtoStrictProjectionRejectsUnknownAndInvalidWireValues(t
 		if strings.Contains(generated, retired) {
 			t.Fatalf("strict DTO must not emit unused helper %q:\n%s", retired, generated)
 		}
+	}
+}
+
+func TestRenderStandaloneDtoUsesCanonicalGeneratedEnum(t *testing.T) {
+	projection := clientProjection{
+		DartClass:   "FollowingSubjectItemViewDto",
+		Strict:      true,
+		DartImports: []string{"package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart"},
+		Fields: []projectionFieldDef{
+			{
+				Name:     "subjectType",
+				Source:   "subjectType",
+				WireType: "enum",
+				DartType: "FollowSubjectKind",
+				EnumRef:  "FollowSubjectKind",
+			},
+		},
+	}
+
+	generated := renderStandaloneDtoDart(projection, "following_subject.yaml")
+	for _, expected := range []string{
+		"import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';",
+		"final FollowSubjectKind subjectType;",
+		"subjectType: FollowSubjectKind.fromWire(m['subjectType'])",
+		"'subjectType': subjectType.wireValue",
+		"m['subjectType'] is! String",
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("canonical enum DTO missing %q:\n%s", expected, generated)
+		}
+	}
+	if strings.Contains(generated, "final String subjectType") {
+		t.Fatalf("canonical enum was downgraded to String:\n%s", generated)
+	}
+}
+
+func TestValidateClientProjectionEnumsFailsClosed(t *testing.T) {
+	catalog := map[string][]string{
+		"FollowSubjectKind": {"persona", "homepage", "circle", "location"},
+		"OtherKind":         {"other"},
+	}
+	valid := projectionFieldDef{
+		Name:     "subjectType",
+		Source:   "subjectType",
+		WireType: "enum",
+		DartType: "FollowSubjectKind",
+		EnumRef:  "FollowSubjectKind",
+	}
+	cases := []struct {
+		name string
+		edit func(*projectionFieldDef)
+		want string
+	}{
+		{
+			name: "missing wire enum declaration",
+			edit: func(field *projectionFieldDef) { field.WireType = "" },
+			want: "requires type=enum",
+		},
+		{
+			name: "unknown enum ref",
+			edit: func(field *projectionFieldDef) { field.EnumRef = "UnknownKind" },
+			want: "absent from _shared/types.yaml",
+		},
+		{
+			name: "second dart enum class",
+			edit: func(field *projectionFieldDef) { field.DartType = "OtherKind" },
+			want: "must use the same enum_ref",
+		},
+		{
+			name: "client default",
+			edit: func(field *projectionFieldDef) { field.Default = "FollowSubjectKind.persona" },
+			want: "must not declare a default",
+		},
+	}
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			field := valid
+			testCase.edit(&field)
+			projection := &projectionFile{
+				ClientProjection:               clientProjection{Fields: []projectionFieldDef{field}},
+				clientProjectionFieldsDeclared: true,
+			}
+			err := validateClientProjectionEnums("projection.yaml", projection, catalog)
+			if err == nil || !strings.Contains(err.Error(), testCase.want) {
+				t.Fatalf("error = %v, want %q", err, testCase.want)
+			}
+		})
+	}
+}
+
+func TestValidateClientProjectionEnumsAllowsCanonicalValidationOnlyString(t *testing.T) {
+	projection := &projectionFile{
+		ClientProjection: clientProjection{Fields: []projectionFieldDef{{
+			Name:     "edgeType",
+			DartType: "String",
+			EnumRef:  "ObjectRelationEdgeType",
+			Default:  "''",
+		}}},
+		clientProjectionFieldsDeclared: true,
+	}
+	err := validateClientProjectionEnums(
+		"projection.yaml",
+		projection,
+		map[string][]string{"ObjectRelationEdgeType": {"parent", "child"}},
+	)
+	if err != nil {
+		t.Fatalf("validation-only String enum_ref rejected: %v", err)
+	}
+}
+
+func TestRenderStandaloneDtoKeepsStringWireWhenEnumRefIsValidationOnly(t *testing.T) {
+	projection := clientProjection{
+		DartClass: "ObjectRelationEdge",
+		Fields: []projectionFieldDef{
+			{
+				Name:     "edgeType",
+				Source:   "edgeType",
+				DartType: "String",
+				EnumRef:  "ObjectRelationEdgeType",
+				Default:  "''",
+			},
+		},
+	}
+
+	generated := renderStandaloneDtoDart(projection, "object_relation_edge.yaml")
+	for _, expected := range []string{
+		"final String edgeType;",
+		"edgeType: m['edgeType']?.toString() ?? ''",
+		"'edgeType': edgeType",
+	} {
+		if !strings.Contains(generated, expected) {
+			t.Fatalf("String enum-ref projection missing %q:\n%s", expected, generated)
+		}
+	}
+	if strings.Contains(generated, "ObjectRelationEdgeType.fromWire") {
+		t.Fatalf("validation-only enum_ref changed String wire type:\n%s", generated)
 	}
 }
 

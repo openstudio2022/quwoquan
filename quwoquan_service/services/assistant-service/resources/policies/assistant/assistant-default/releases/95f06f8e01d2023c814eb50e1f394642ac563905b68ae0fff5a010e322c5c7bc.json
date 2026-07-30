@@ -1,0 +1,111 @@
+{
+  "schema": "assistant.policy_release",
+  "commandId": "policy-release:assistant-default:95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc",
+  "release": {
+    "policyId": "assistant-default",
+    "releaseDigest": "95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc",
+    "defaultTemplateId": "default-general",
+    "templates": [
+      {
+        "templateId": "default-general",
+        "skillId": "fallback_general_search",
+        "domainId": "assistant",
+        "promptPolicy": "先判断问题需要的事实边界，再给出结论与依据。引用可核验来源，明确说明不确定的部分。",
+        "allowedTools": ["web_search", "app_search"],
+        "searchIntensity": "medium"
+      },
+      {
+        "templateId": "travel-planning",
+        "skillId": "travel_planning",
+        "domainId": "travel",
+        "promptPolicy": "按时间、地点、预算、同行人四个维度组织行程。缺少关键槽位时先问清，再给可执行安排；站内地点与内容优先引用趣我圈对象。",
+        "allowedTools": ["web_search", "app_search"],
+        "searchIntensity": "high"
+      },
+      {
+        "templateId": "travel-transport",
+        "skillId": "travel_transport",
+        "domainId": "travel",
+        "promptPolicy": "先确认出发地、目的地与时间，再比较交通方式的耗时与成本。班次与票价必须标注查询时间与来源。",
+        "allowedTools": ["web_search", "app_search"],
+        "searchIntensity": "high"
+      },
+      {
+        "templateId": "weather-realtime",
+        "skillId": "weather",
+        "domainId": "life",
+        "promptPolicy": "天气必须给出地点、时间范围与数据来源。先回答用户真正要做的决策，再补细节。",
+        "allowedTools": ["web_search"],
+        "searchIntensity": "high"
+      },
+      {
+        "templateId": "local-life",
+        "skillId": "local_life",
+        "domainId": "life",
+        "promptPolicy": "本地生活先明确所在城市与商圈，再给出候选与取舍理由。站内地点主页与内容优先于站外泛结果。",
+        "allowedTools": ["web_search", "app_search"],
+        "searchIntensity": "medium"
+      },
+      {
+        "templateId": "knowledge-general",
+        "skillId": "knowledge_general",
+        "domainId": "knowledge",
+        "promptPolicy": "先给结论再给依据。涉及争议或时效的结论必须标注来源与时间，不确定时说明边界。",
+        "allowedTools": ["web_search"],
+        "searchIntensity": "medium"
+      }
+    ],
+    "routingRules": [
+      {
+        "ruleId": "travel-planning",
+        "priority": 10,
+        "skillId": "travel_planning",
+        "templateId": "travel-planning"
+      },
+      {
+        "ruleId": "travel-transport",
+        "priority": 11,
+        "skillId": "travel_transport",
+        "templateId": "travel-transport"
+      },
+      {
+        "ruleId": "weather-realtime",
+        "priority": 20,
+        "skillId": "weather",
+        "templateId": "weather-realtime"
+      },
+      {
+        "ruleId": "local-life",
+        "priority": 30,
+        "skillId": "local_life",
+        "templateId": "local-life"
+      },
+      {
+        "ruleId": "knowledge-general",
+        "priority": 40,
+        "skillId": "knowledge_general",
+        "templateId": "knowledge-general"
+      },
+      {
+        "ruleId": "fallback-general-search",
+        "priority": 100,
+        "domainId": "assistant",
+        "skillId": "fallback_general_search",
+        "templateId": "default-general"
+      }
+    ],
+    "learningContextPolicy": {
+      "enabled": true,
+      "allowedSignals": [
+        "feedback_counts",
+        "metric_summaries",
+        "top_reason_codes"
+      ],
+      "allowedMetricIds": ["turn_completion"],
+      "allowedReasonCodes": ["clear", "privacy", "unsafe"],
+      "minimumFeedbackSamples": 3,
+      "windowDays": 30,
+      "snapshotTrainingEligible": false
+    }
+  }
+}

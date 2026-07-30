@@ -267,6 +267,7 @@ final class CommercialAuthPlugin: NSObject, WXApiDelegate, TencentSessionDelegat
     }
     result(ticketPayload(
       provider: "qq",
+      // Frozen provider ticket prefix; `_v1` is the sole accepted byte shape.
       ticket: "qq_mobile_v1." + data.base64URLEncodedString()
     ))
   }

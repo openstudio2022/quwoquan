@@ -2,6 +2,7 @@
   "label": "西班牙语",
   "labelEn": "Spanish",
   "description": "使用西班牙语的用户群体",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

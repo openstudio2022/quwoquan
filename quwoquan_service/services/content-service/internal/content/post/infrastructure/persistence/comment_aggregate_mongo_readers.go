@@ -95,6 +95,7 @@ func (s *MongoCommentDataAdapter) ListByPost(
 		"parentCommentId": "",
 		"status":          string(commentmodel.StatusActive),
 	}
+	applyCommentAccountRestrictionVisibility(filter)
 	applyCommentAuthorExclusions(filter, request.ExcludedAuthorIDs)
 	cursor, hasCursor := commentmodel.DecodeCursor(request.Cursor)
 	if hasCursor {
@@ -143,6 +144,7 @@ func (s *MongoCommentDataAdapter) ListReplies(
 		"parentCommentId": strings.TrimSpace(parentCommentID),
 		"status":          string(commentmodel.StatusActive),
 	}
+	applyCommentAccountRestrictionVisibility(filter)
 	applyCommentAuthorExclusions(filter, request.ExcludedAuthorIDs)
 	if cursor, ok := commentmodel.DecodeCursor(request.Cursor); ok {
 		filter["$or"] = flatAfter(cursor)
@@ -181,6 +183,7 @@ func (s *MongoCommentDataAdapter) ReadReplySummaries(
 		"parentCommentId": bson.M{"$in": parentCommentIDs},
 		"status":          string(commentmodel.StatusActive),
 	}
+	applyCommentAccountRestrictionVisibility(match)
 	applyCommentAuthorExclusions(match, excludedAuthorIDs)
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: match}},
@@ -247,6 +250,7 @@ func (s *MongoCommentDataAdapter) ListByAuthor(
 			},
 		},
 	}
+	applyCommentAccountRestrictionVisibility(filter)
 	if cursor, ok := commentmodel.DecodeCursor(request.Cursor); ok {
 		filter["$or"] = flatAfter(cursor)
 	}
@@ -280,6 +284,7 @@ func (s *MongoCommentDataAdapter) ListReceivedByPostAuthor(
 		))},
 		"status": string(commentmodel.StatusActive),
 	}
+	applyCommentAccountRestrictionVisibility(filter)
 	if cursor, ok := commentmodel.DecodeCursor(request.Cursor); ok {
 		filter["$or"] = flatAfter(cursor)
 	}
@@ -298,8 +303,9 @@ func (s *MongoCommentDataAdapter) ListReceivedByPostAuthor(
 
 func (s *MongoCommentDataAdapter) CountByPost(ctx context.Context, postID string) (int64, error) {
 	return s.comments.CountDocuments(ctx, bson.M{
-		"postId": strings.TrimSpace(postID),
-		"status": string(commentmodel.StatusActive),
+		"postId":            strings.TrimSpace(postID),
+		"status":            string(commentmodel.StatusActive),
+		"accountRestricted": bson.M{"$ne": true},
 	})
 }
 
@@ -310,7 +316,10 @@ func (s *MongoCommentDataAdapter) FindReplyTarget(
 	var document commentRelationDocument
 	err := s.comments.FindOne(
 		ctx,
-		bson.M{"_id": strings.TrimSpace(commentID)},
+		bson.M{
+			"_id":               strings.TrimSpace(commentID),
+			"accountRestricted": bson.M{"$ne": true},
+		},
 		options.FindOne().SetProjection(CommentRelationProjection()),
 	).Decode(&document)
 	if err == mongo.ErrNoDocuments {

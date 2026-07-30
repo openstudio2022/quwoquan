@@ -31,6 +31,18 @@ collections:
         deliveryStatus: 1
         leaseExpiresAt: 1
         createdAt: 1
+  reliable_task_recovery_receipts:
+    entity: ExternalInteractionRecoveryReceipt
+    role: authoritative
+    description: RecoverExternalInteractionDeadLetter 与任务状态同一 Mongo transaction 提交的 command receipt。
+    indexes:
+    - name: idx_reliable_task_recovery_receipt_task
+      keys:
+        taskId: 1
+    - name: idx_reliable_task_recovery_receipt_expiry
+      keys:
+        expiresAt: 1
+      ttl_seconds: 0
 redis_cache:
 - key: ready:integration:external_interaction:{taskType}
   ttl_seconds: 60

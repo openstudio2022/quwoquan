@@ -102,11 +102,43 @@ extension _ArticleReadOnlyBookDeckControllerSession
   }
 
   void _queueStaticTextureSnapshots() {
+    _trimPageCachesAround(_currentPage);
     _queuePageTextureCaptureIndices(<int>[
       _currentPage,
       _currentPage - 1,
       _currentPage + 1,
     ]);
+  }
+
+  void _trimPageCachesAround(int centerPage) {
+    final keep = <int>{
+      for (var index = centerPage - 1; index <= centerPage + 1; index += 1)
+        if (index >= 0 && index < _deck.pages.length) index,
+      ...?_activeBackTexturePageIndices,
+    };
+
+    final retiredIndices = _pageTextureSnapshots.keys
+        .where((index) => !keep.contains(index))
+        .toList(growable: false);
+    for (final index in retiredIndices) {
+      final retired = _pageTextureSnapshots.remove(index);
+      if (retired != null) {
+        _retiredTextureSnapshots.add(retired);
+      }
+    }
+    _pendingTextureCaptureIndices.removeWhere((index) => !keep.contains(index));
+    _textureCaptureBoundaryKeys.removeWhere(
+      (index, _) => !keep.contains(index),
+    );
+    _pageSurfaceCache.removeWhere((key, _) {
+      final parts = key.split(':');
+      final pageIndex = parts.length > 1 ? int.tryParse(parts[1]) : null;
+      return pageIndex == null || !keep.contains(pageIndex);
+    });
+
+    if (!_hasActivePageCurlAnimation && _pageFlipScene?.direction == null) {
+      _disposeRetiredTextureSnapshots();
+    }
   }
 
   int? _backTexturePageIndexForDirection(StPageFlipDirection direction) {

@@ -2,7 +2,7 @@
 
 > 所属能力：[`runtime-client-foundation`](../spec.md)
 >
-> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
+> Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)、[`JNY-002 / SCN-005`](../../../spec.md#scn-005)
 >
 > 设计归属：[L2 DEC-001](../design.md#dec-001)
 
@@ -77,6 +77,8 @@
 
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md`
 - canonical：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml`
+- canonical：`quwoquan_service/services/product-ops-service/contracts/product_ops/app_release/operations.yaml`
+- canonical：`quwoquan_service/services/product-ops-service/contracts/product_ops/app_release/fields.yaml`
 - canonical：`specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md`
 - canonical：`specs/feature-tree/runtime/runtime-client-foundation/external-inbound-deeplink-routing/spec.md`
 

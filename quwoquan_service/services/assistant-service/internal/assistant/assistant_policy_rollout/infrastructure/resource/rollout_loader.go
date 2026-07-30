@@ -13,7 +13,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
 )
 
-const RolloutArtifactSchema = "assistant.policy_rollout.v1"
+const RolloutArtifactSchema = "assistant.policy_rollout"
 
 var ErrInvalidArtifact = errors.New("assistant policy rollout artifact is invalid")
 

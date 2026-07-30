@@ -29,10 +29,10 @@ class ShareInteractionItem {
   const ShareInteractionItem({
     required this.interactionId,
     required this.direction,
-    required this.displaySubAccountId,
+    required this.displayPersonaId,
     required this.displayName,
     required this.displayAvatarUrl,
-    required this.targetSubAccountId,
+    required this.targetPersonaId,
     required this.targetContentId,
     required this.targetContentType,
     required this.targetSummary,
@@ -53,10 +53,10 @@ class ShareInteractionItem {
 
   final String interactionId;
   final ShareInteractionDirection direction;
-  final String displaySubAccountId;
+  final String displayPersonaId;
   final String displayName;
   final String displayAvatarUrl;
-  final String targetSubAccountId;
+  final String targetPersonaId;
   final String targetContentId;
   final String targetContentType;
   final String targetSummary;
@@ -101,11 +101,11 @@ class ShareInteractionItem {
     ProfileInteractionActivityViewData activity,
     ShareInteractionDirection direction,
   ) {
-    final displaySubAccountId = direction == ShareInteractionDirection.received
-        ? activity.actorSubAccountId
-        : (activity.counterpartSubAccountId.isNotEmpty
-              ? activity.counterpartSubAccountId
-              : activity.targetSubAccountId);
+    final displayPersonaId = direction == ShareInteractionDirection.received
+        ? activity.actorPersonaId
+        : (activity.counterpartPersonaId.isNotEmpty
+              ? activity.counterpartPersonaId
+              : activity.targetPersonaId);
     final displayName = direction == ShareInteractionDirection.received
         ? activity.actorDisplayName
         : (activity.counterpartDisplayName.isNotEmpty
@@ -123,10 +123,10 @@ class ShareInteractionItem {
     return ShareInteractionItem(
       interactionId: activity.activityId,
       direction: direction,
-      displaySubAccountId: displaySubAccountId,
+      displayPersonaId: displayPersonaId,
       displayName: displayName,
       displayAvatarUrl: displayAvatarUrl,
-      targetSubAccountId: activity.targetSubAccountId,
+      targetPersonaId: activity.targetPersonaId,
       targetContentId: activity.targetContentId,
       targetContentType: activity.targetContentType,
       targetSummary: activity.targetContentSummary,
@@ -167,10 +167,10 @@ class ShareInteractionItem {
     return ShareInteractionItem(
       interactionId: interactionId,
       direction: direction,
-      displaySubAccountId: displaySubAccountId,
+      displayPersonaId: displayPersonaId,
       displayName: displayName,
       displayAvatarUrl: displayAvatarUrl,
-      targetSubAccountId: targetSubAccountId,
+      targetPersonaId: targetPersonaId,
       targetContentId: targetContentId,
       targetContentType: targetContentType,
       targetSummary: targetSummary,

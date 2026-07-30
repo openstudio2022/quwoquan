@@ -1,1237 +1,1307 @@
 description: 用户档案、认证、设备、设置与分身管理
 externalDependencies:
-- capability: identity.carrier.one_tap
-  port: CarrierOneTapPort
-  operations: [resolvePhone]
-  conformance: carrier_one_tap
-- capability: identity.social.login
-  port: FederatedIdentityPort
-  operations: [authorize, resolveIdentity]
-  conformance: social_identity
-- role: use
-  capability: runtime.message.transport
-  port: MessageTransportPort
-  operations: [appendDurable]
-  scenes: [general, realtime]
+  - capability: identity.carrier.one_tap
+    port: CarrierOneTapPort
+    operations: [resolvePhone]
+    conformance: carrier_one_tap
+  - capability: identity.social.login
+    port: FederatedIdentityPort
+    operations: [authorize, resolveIdentity]
+    conformance: social_identity
+  - role: use
+    capability: runtime.message.transport
+    port: MessageTransportPort
+    operations: [appendDurable]
+    scenes: [general, realtime]
 api_routes:
-- actor: account
-  application:
-    facet: PersonaManagementQueryFacade
-    kind: query
-    method: listPersonas
-    reader: ListPersonasReader
-    slice: ListPersonasSlice
-  description: 查看自己所有分身列表
-  method: GET
-  operation: ListPersonas
-  commercial:
-    status: ready
-  path: /user/personas
-  response_entity: PersonaManagementItemView
-  response_fields:
-  - subAccountId
-  - displayName
-  - userHandle
-  - phone
-  - email
-  - avatarUrl
-  - backgroundUrl
-  - bio
-  - isolationLevel
-  - isActive
-  - isPrimary
-  - status
-  - retiredAt
-  - inheritsProfileFromOwner
-  - overriddenProfileFields
-  - lastProfileSyncAt
-  - lastProfileSyncSource
-  - profileVisibility
-  - purposeHint
-  - updatedAt
-  - lastActivatedAt
-  - version
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_personas_list
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/persona_management_query_contracts.dart
-    request_type: ListPersonasQuery
-    response_type: ListPersonasResult
-    request_encoder: encodeListPersonasQuery
-    response_decoder: decodeListPersonasResult
-- actor: account
-  application:
-    facet: PersonaManagementQueryFacade
-    kind: query
-    method: getPersonaManagementSummary
-    reader: GetPersonaManagementSummaryReader
-    slice: GetPersonaManagementSummarySlice
-  description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
-  method: GET
-  operation: GetPersonaManagementSummary
-  commercial:
-    status: ready
-  path: /user/personas/summary
-  response_entity: PersonaManagementQuotaView
-  response_fields:
-  - ownerUserId
-  - totalCount
-  - quotaLimit
-  - remainingCount
-  - activeSubAccountId
-  - primarySubAccountId
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_persona_summary_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/persona_management_query_contracts.dart
-    request_type: GetPersonaManagementSummaryQuery
-    response_type: PersonaManagementSummaryProjection
-    request_encoder: encodeGetPersonaManagementSummaryQuery
-    response_decoder: decodePersonaManagementSummaryProjection
-- actor: account
-  application:
-    facet: PersonaManagementQueryFacade
-    kind: query
-    method: getActivePersonaContext
-    reader: GetActivePersonaContextReader
-    slice: GetActivePersonaContextSlice
-  description: 获取当前激活分身上下文快照（供跨域动作主体透传）
-  method: GET
-  operation: GetActivePersonaContext
-  commercial:
-    status: ready
-  path: /user/personas/active
-  response_entity: ActivePersonaContextView
-  response_fields:
-  - ownerUserId
-  - subAccountId
-  - subjectType
-  - displayName
-  - avatarUrl
-  - avatarVersion
-  - isPrimary
-  - isolationLevel
-  - profileVisibility
-  - contextVersion
-  - personaSnapshotVersion
-  - sourceSurfaceId
-  - explicitOverride
-  - switchedAt
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_persona_active_context_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/persona_management_query_contracts.dart
-    request_type: GetActivePersonaContextQuery
-    response_type: ActivePersonaContextProjection
-    request_encoder: encodeGetActivePersonaContextQuery
-    response_decoder: decodeActivePersonaContextProjection
-- actor: account
-  application:
-    facet: PersonaManagementQueryFacade
-    kind: query
-    method: getPersonaLifecycleGuard
-    reader: GetPersonaLifecycleGuardReader
-    slice: GetPersonaLifecycleGuardSlice
-  description: 获取该分身当前可否退役的保护状态
-  method: GET
-  operation: GetPersonaLifecycleGuard
-  commercial:
-    status: ready
-  path: /user/personas/{subAccountId}/lifecycle-guard
-  response_entity: PersonaLifecycleGuardView
-  response_fields:
-  - subAccountId
-  - requestedAction
-  - allowed
-  - reason
-  - requiresSuccessor
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SUB_ACCOUNT.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_persona_lifecycle_guard_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/persona_management_query_contracts.dart
-    request_type: GetPersonaLifecycleGuardQuery
-    response_type: PersonaLifecycleGuardProjection
-    request_encoder: encodeGetPersonaLifecycleGuardQuery
-    response_decoder: decodePersonaLifecycleGuardProjection
-- actor: none
-  application:
-    facet: PublicProfileQueryFacade
-    kind: query
-    method: getSubAccountProfile
-    reader: GetSubAccountProfileReader
-    slice: GetSubAccountProfileSlice
-  description: 公开用户主页按 canonical public identity 读取；普通 Persona 接受 userHandle/subAccountId，release CreatorRuntimeProfile 接受 subAccountId 或内容 creatorProfileId 对应的 creatorId，不接受 creator handle 别名
-  method: GET
-  note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
-  operation: GetSubAccountProfile
-  commercial:
-    status: ready
-  path: /user/{subAccountId}
-  response_entity: SubAccountProfileView
-  response_fields:
-  - subAccountId
-  - subjectType
-  - userHandle
-  - username
-  - displayName
-  - nicknameCustomized
-  - avatarUrl
-  - backgroundUrl
-  - bio
-  - identityTags
-  - followerCount
-  - followingCount
-  - postCount
-  - circleCount
-  - likeCount
-  - isolationLevel
-  - profileVisibility
-  - inheritsFromOwner
-  - overriddenFields
-  - updatedAt
-  authorization:
-    principal: public
-    ownership_policy: public_profile_visibility
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.SUB_ACCOUNT.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: user_sub_account_profile_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  security:
-    auth_mode: optional
-    anonymous_policy: allow
-    principal: public
-    token_transport: bearer
-    visibility: public
-  client_contract:
-    dart_import: ../user/public_profile_query_contracts.dart
-    request_type: GetSubAccountProfileQuery
-    response_type: SubAccountProfileProjection
-    request_encoder: encodeGetSubAccountProfileQuery
-    response_decoder: decodeSubAccountProfileProjection
-- actor: none
-  application:
-    facet: PublicProfileQueryFacade
-    kind: query
-    method: getUserHomepageBundle
-    reader: GetUserHomepageBundleReader
-    slice: GetUserHomepageBundleSlice
-  security:
-    auth_mode: optional
-  description: '主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
+  - actor: account
+    application:
+      facet: PersonaManagementQueryFacade
+      kind: query
+      method: listPersonas
+      reader: ListPersonasReader
+      slice: ListPersonasSlice
+    description: 查看自己所有分身列表
+    method: GET
+    operation: ListPersonas
+    commercial:
+      status: ready
+    path: /user/personas
+    response_entity: PersonaManagementItemView
+    response_fields:
+      - personaId
+      - displayName
+      - userHandle
+      - phone
+      - email
+      - avatarUrl
+      - backgroundUrl
+      - bio
+      - isolationLevel
+      - isActive
+      - isPrimary
+      - status
+      - retiredAt
+      - inheritsProfileFromOwner
+      - overriddenProfileFields
+      - lastProfileSyncAt
+      - lastProfileSyncSource
+      - profileVisibility
+      - purposeHint
+      - updatedAt
+      - lastActivatedAt
+      - version
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_personas_list
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/persona_management_query_contracts.dart
+      response_type: ListPersonasResult
+      response_decoder: decodeListPersonasResult
+    request_entity: ListPersonasQuery
+    request_body_kind: none
+  - actor: account
+    application:
+      facet: PersonaManagementQueryFacade
+      kind: query
+      method: getPersonaManagementSummary
+      reader: GetPersonaManagementSummaryReader
+      slice: GetPersonaManagementSummarySlice
+    description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
+    method: GET
+    operation: GetPersonaManagementSummary
+    commercial:
+      status: ready
+    path: /user/personas/summary
+    response_entity: PersonaManagementQuotaView
+    response_fields:
+      - ownerUserId
+      - totalCount
+      - quotaLimit
+      - remainingCount
+      - activePersonaId
+      - primaryPersonaId
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_persona_summary_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/persona_management_query_contracts.dart
+      response_type: PersonaManagementSummaryProjection
+      response_decoder: decodePersonaManagementSummaryProjection
+    request_entity: GetPersonaManagementSummaryQuery
+    request_body_kind: none
+  - actor: account
+    application:
+      facet: PersonaManagementQueryFacade
+      kind: query
+      method: getActivePersonaContext
+      reader: GetActivePersonaContextReader
+      slice: GetActivePersonaContextSlice
+    description: 获取当前激活分身上下文快照（供跨域动作主体透传）
+    method: GET
+    operation: GetActivePersonaContext
+    commercial:
+      status: ready
+    path: /user/personas/active
+    response_entity: ActivePersonaContextView
+    response_fields:
+      - ownerUserId
+      - personaId
+      - subjectType
+      - displayName
+      - avatarUrl
+      - avatarVersion
+      - isPrimary
+      - isolationLevel
+      - profileVisibility
+      - contextVersion
+      - personaSnapshotVersion
+      - sourceSurfaceId
+      - explicitOverride
+      - switchedAt
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_persona_active_context_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/persona_management_query_contracts.dart
+      response_type: ActivePersonaContextProjection
+      response_decoder: decodeActivePersonaContextProjection
+    request_entity: GetActivePersonaContextQuery
+    request_body_kind: none
+  - actor: account
+    application:
+      facet: PersonaManagementQueryFacade
+      kind: query
+      method: getPersonaLifecycleGuard
+      reader: GetPersonaLifecycleGuardReader
+      slice: GetPersonaLifecycleGuardSlice
+    description: 获取该分身当前可否退役的保护状态
+    method: GET
+    operation: GetPersonaLifecycleGuard
+    commercial:
+      status: ready
+    path: /user/personas/{personaId}/lifecycle-guard
+    request_bindings:
+      path:
+        - name: personaId
+          field: personaId
+    response_entity: PersonaLifecycleGuardView
+    response_fields:
+      - personaId
+      - requestedAction
+      - allowed
+      - reason
+      - requiresSuccessor
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.PERSONA.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_persona_lifecycle_guard_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/persona_management_query_contracts.dart
+      response_type: PersonaLifecycleGuardProjection
+      response_decoder: decodePersonaLifecycleGuardProjection
+    request_entity: GetPersonaLifecycleGuardQuery
+    request_body_kind: none
+  - actor: none
+    application:
+      facet: PublicProfileQueryFacade
+      kind: query
+      method: getPersonaProfile
+      reader: GetPersonaProfileReader
+      slice: GetPersonaProfileSlice
+    description: 公开用户主页按 canonical public identity 读取；普通 Persona 接受 userHandle/personaId，release CreatorRuntimeProfile 接受 personaId 或内容 creatorProfileId 对应的 creatorId，不接受 creator handle 别名
+    method: GET
+    note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
+    operation: GetPersonaProfile
+    commercial:
+      status: ready
+    path: /user/{personaId}
+    request_bindings:
+      path:
+        - name: personaId
+          field: personaId
+    response_entity: PersonaProfileView
+    response_fields:
+      - personaId
+      - subjectType
+      - userHandle
+      - displayName
+      - nicknameCustomized
+      - avatarUrl
+      - backgroundUrl
+      - bio
+      - identityTags
+      - followerCount
+      - followingCount
+      - postCount
+      - circleCount
+      - likeCount
+      - isolationLevel
+      - profileVisibility
+      - inheritsFromOwner
+      - overriddenFields
+      - updatedAt
+    authorization:
+      principal: public
+      ownership_policy: public_profile_visibility
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.PERSONA.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: user_persona_profile_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      anonymous_policy: allow
+      principal: public
+      token_transport: bearer
+      visibility: public
+    client_contract:
+      dart_import: ../user/public_profile_query_contracts.dart
+      response_type: PersonaProfileProjection
+      response_decoder: decodePersonaProfileProjection
+    request_entity: GetPersonaProfileQuery
+    request_body_kind: none
+  - actor: none
+    application:
+      facet: PublicProfileQueryFacade
+      kind: query
+      method: getUserHomepageBundle
+      reader: GetUserHomepageBundleReader
+      slice: GetUserHomepageBundleSlice
+    security:
+      auth_mode: optional
+    description: '主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
 
-    tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
+      tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
 
-    域接口端侧并发拉取，user 域不聚合 content/intersection 事实。陌生人 strict 隔离返回 404。
+      域接口端侧并发拉取，user 域不聚合 content/intersection 事实。陌生人 strict 隔离返回 404。
 
-    '
-  method: GET
-  note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
-  operation: GetUserHomepageBundle
-  commercial:
-    status: ready
-  path: /user/sub-accounts/{subAccountId}/homepage-bundle
-  response_body: UserHomepageBundleWire
-  response_body_kind: object
-  response_entity: UserHomepageBundleWire
-  response_fields:
-  - profile
-  - stats
-  - relationshipCapability
-  - tabCounts
-  - viewerContext
-  - cacheVersion
-  authorization:
-    principal: public
-    ownership_policy: public_profile_visibility
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.SUB_ACCOUNT.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: user_homepage_bundle_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/user_homepage_query_contracts.dart
-    request_type: GetUserHomepageBundleQuery
-    response_type: UserHomepageBundleProjection
-    request_encoder: encodeGetUserHomepageBundleQuery
-    response_decoder: decodeUserHomepageBundleProjection
-- actor: persona
-  application:
-    facet: ProfileQueryFacade
-    kind: query
-    method: getMeProfile
-    reader: GetMeProfileReader
-    slice: GetMeProfileSlice
-  description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
-  method: GET
-  operation: GetMeProfile
-  path: /me
-  commercial:
-    status: ready
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_profile
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_me_profile_get
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  response_entity: SubAccountProfileView
-  response_fields:
-  - subAccountId
-  - ownerUserId
-  - subjectType
-  - userHandle
-  - username
-  - displayName
-  - nicknameCustomized
-  - avatarUrl
-  - backgroundUrl
-  - bio
-  - identityTags
-  - followerCount
-  - followingCount
-  - postCount
-  - circleCount
-  - likeCount
-  - isolationLevel
-  - profileVisibility
-  - inheritsFromOwner
-  - overriddenFields
-  - updatedAt
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  client_contract:
-    dart_import: ../user/public_profile_query_contracts.dart
-    request_type: GetMeProfileQuery
-    response_type: SubAccountProfileProjection
-    request_encoder: encodeGetMeProfileQuery
-    response_decoder: decodeSubAccountProfileProjection
-- actor: persona
-  application:
-    facet: SocialRelationSearchQueryFacade
-    kind: query
-    method: searchSocialRelations
-    reader: SearchSocialRelationsReader
-    slice: SearchSocialRelationsSlice
-  security:
-    auth_mode: required
-  description: '全局搜索社交关系结果，统一承接“人”的搜索对象。匹配规则：先按趣我圈号(userHandle)精确命中并置顶 （strict/private 分身不暴露；semi/friends
-    只允许完整趣我圈号这一已知路径），再按昵称/资料模糊匹配 open/public 分身并去重。 不支持按手机号查人（隐私默认），手机号匹配仅走 contact_discovery 批量哈希。
+'
+    method: GET
+    note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
+    operation: GetUserHomepageBundle
+    commercial:
+      status: ready
+    path: /user/personas/{personaId}/homepage-bundle
+    request_bindings:
+      path:
+        - name: personaId
+          field: personaId
+    response_body: UserHomepageBundleWire
+    response_body_kind: object
+    response_entity: UserHomepageBundleWire
+    response_fields:
+      - profile
+      - stats
+      - relationshipCapability
+      - tabCounts
+      - viewerContext
+      - cacheVersion
+    authorization:
+      principal: public
+      ownership_policy: public_profile_visibility
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.PERSONA.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: user_homepage_bundle_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/user_homepage_query_contracts.dart
+      response_type: UserHomepageBundleProjection
+      response_decoder: decodeUserHomepageBundleProjection
+    request_entity: GetUserHomepageBundleQuery
+    request_body_kind: none
+  - actor: persona
+    application:
+      facet: ProfileQueryFacade
+      kind: query
+      method: getMeProfile
+      reader: GetMeProfileReader
+      slice: GetMeProfileSlice
+    description: 当前激活Persona快捷视图（等同于 GetPersonaProfile(activePersona)）
+    method: GET
+    operation: GetMeProfile
+    path: /me
+    commercial:
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_profile
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_me_profile_get
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    response_entity: PersonaProfileView
+    response_fields:
+      - personaId
+      - ownerUserId
+      - subjectType
+      - userHandle
+      - displayName
+      - nicknameCustomized
+      - avatarUrl
+      - backgroundUrl
+      - bio
+      - identityTags
+      - followerCount
+      - followingCount
+      - postCount
+      - circleCount
+      - likeCount
+      - isolationLevel
+      - profileVisibility
+      - inheritsFromOwner
+      - overriddenFields
+      - updatedAt
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    client_contract:
+      dart_import: ../user/public_profile_query_contracts.dart
+      response_type: PersonaProfileProjection
+      response_decoder: decodePersonaProfileProjection
+    request_entity: GetMeProfileQuery
+    request_body_kind: none
+  - actor: persona
+    application:
+      facet: SocialRelationSearchQueryFacade
+      kind: query
+      method: searchSocialRelations
+      reader: SearchSocialRelationsReader
+      slice: SearchSocialRelationsSlice
+    security:
+      auth_mode: required
+    description: '全局搜索社交关系结果，统一承接“人”的搜索对象。匹配规则：先按趣我圈号(userHandle)精确命中并置顶 （strict/private 分身不暴露；semi/friends 只允许完整趣我圈号这一已知路径），再按昵称/资料模糊匹配 open/public 分身并去重。 不支持按手机号查人（隐私默认），手机号匹配仅走 contact_discovery 批量哈希。
 
-    '
-  method: GET
-  operation: SearchSocialRelations
-  commercial:
-    status: ready
-  path: /user/search/social-relations
-  query_params:
-  - query
-  - cursor
-  - limit
-  response_entity: SocialRelationSearchItemView
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_search
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_social_relation_search
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/public_profile_query_contracts.dart
-    request_type: SearchSocialRelationsQuery
-    response_type: SearchSocialRelationsResult
-    request_encoder: encodeSearchSocialRelationsQuery
-    response_decoder: decodeSearchSocialRelationsResult
-- actor: account
-  application:
-    facet: UserSyncQueryFacade
-    kind: query
-    method: pullUserSync
-    reader: PullUserSyncReader
-    slice: PullUserSyncSlice
-  authorization:
-    ownership_policy: current_account_sync_stream
-    principal: account
-  commercial:
-    status: ready
-  description: 拉取当前用户资料与头像相关的增量同步补丁
-  error_codes:
-  - USER.USER.invalid_argument
-  - USER.SYSTEM.internal_error
-  method: POST
-  operation: PullUserSync
-  path: /user/sync
-  privacy:
-    log_policy: metadata_only
-    request_classification: PII
-    response_classification: INTERNAL
-  reliability:
-    cancellation: supported
-    idempotency: none
-    max_attempts: 1
-    retry_mode: none
-    timeout_ms: 1500
-  request_fields:
-  - afterSeq
-  - limit
-  response_fields:
-  - patches
-  - latestSyncSeq
-  - hasMore
-  - requiresResync
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: account
-    token_transport: bearer
-    visibility: private
-  slo:
-    availability_percent: 99.9
-    latency_p95_ms: 500
-  telemetry:
-    attributes:
-    - afterSeq
-    - limit
-    - outcome
-    metric: user_sync_pull
-    trace: true
-- actor: account
-  application:
-    facet: ProfileQueryFacade
-    kind: query
-    method: getUserProfile
-    reader: GetUserProfileReader
-    slice: GetUserProfileSlice
-  deprecated: false
-  description: 当前 owner 私有账号档案读取；公开用户主页只走 GetSubAccountProfile
-  join_path: owner_full_snapshot
-  method: GET
-  operation: GetUserProfile
-  commercial:
-    status: ready
-  path: /user/profile/{userId}
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.not_found
-  - USER.USER.forbidden
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: user_profile_get
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  response_entity: UserAccount
-- actor: persona
-  application:
-    facet: ProfileQueryFacade
-    kind: query
-    method: getProfileEditSnapshot
-    reader: GetProfileEditSnapshotReader
-    slice: GetProfileEditSnapshotSlice
-  description: 当前登录 owner/active persona 的私有资料编辑快照；包含手机号凭证摘要与系统分配 userHandle，只供本人编辑页使用
-  method: GET
-  operation: GetProfileEditSnapshot
-  commercial:
-    status: ready
-  path: /user/profile/edit-snapshot
-  response_entity: ProfileEditSnapshotWire
-  response_fields:
-  - ownerUserId
-  - subAccountId
-  - avatarUrl
-  - avatarAssetId
-  - avatarVersion
-  - backgroundUrl
-  - backgroundAssetId
-  - nickname
-  - displayName
-  - gender
-  - birthDate
-  - region
-  - regionTagRef
-  - userHandle
-  - bio
-  - identityTags
-  - occupationTagRef
-  - interestTagRefs
-  - phoneCredential
-  - qrCard
-  - updatedAt
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_profile_edit_snapshot_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/profile_edit_query_contracts.dart
-    request_type: GetProfileEditSnapshotQuery
-    response_type: ProfileEditSnapshotProjection
-    request_encoder: encodeGetProfileEditSnapshotQuery
-    response_decoder: decodeProfileEditSnapshotProjection
-- actor: persona
-  application:
-    facet: ProfileQueryFacade
-    kind: query
-    method: getProfileQrCard
-    reader: GetProfileQrCardReader
-    slice: GetProfileQrCardSlice
-  description: 返回我的二维码卡片渲染所需快照与可撤销 QR token 摘要；二维码 payload 为公开主页 HTTPS link，不编码手机号或 bearer token
-  method: GET
-  operation: GetProfileQrCard
-  commercial:
-    status: ready
-  path: /user/profile/qr-card
-  response_entity: ProfileQrCardWire
-  response_fields:
-  - publicProfileUrl
-  - qrPayload
-  - qrTokenId
-  - styleVersion
-  - avatarUrl
-  - displayName
-  - region
-  - shareText
-  - expiresAt
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_profile_qr_card_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/public_profile_query_contracts.dart
-    request_type: GetProfileQrCardQuery
-    response_type: ProfileQrCardProjection
-    request_encoder: encodeGetProfileQrCardQuery
-    response_decoder: decodeProfileQrCardProjection
-- actor: none
-  application:
-    facet: PublicProfileQueryFacade
-    kind: query
-    method: resolveProfileQrToken
-    reader: ResolveProfileQrTokenReader
-    slice: ResolveProfileQrTokenSlice
-  description: 公开扫码落地解析入口；校验 HTTPS payload 中的 opaque QR token，记录扫码观测后返回规范主页目标
-  method: GET
-  operation: ResolveProfileQrToken
-  commercial:
-    status: ready
-  path: /public/profile/qr/resolve
-  response_entity: ProfileQrResolveWire
-  response_fields:
-  - subAccountId
-  - userHandle
-  - publicProfileUrl
-  - scanStatus
-  security:
-    anonymous_policy: allow
-    auth_mode: optional
-    principal: user
-    token_transport: bearer
-    visibility: public
-  authorization:
-    principal: public
-    ownership_policy: public_qr_resolve
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.PROFILE.qr_token_invalid
-  - USER.PROFILE.qr_token_expired
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: user_profile_qr_resolve
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/public_profile_query_contracts.dart
-    request_type: ResolveProfileQrTokenQuery
-    response_type: ProfileQrResolveProjection
-    request_encoder: encodeResolveProfileQrTokenQuery
-    response_decoder: decodeProfileQrResolveProjection
-- actor: persona
-  application:
-    facet: ProfileQueryFacade
-    kind: query
-    method: getUserInterestProfile
-    reader: GetUserInterestProfileReader
-    slice: GetUserInterestProfileSlice
-  description: 读取用户派生兴趣画像（topN 兴趣 + 维度 tops + 生命周期分层 + 新鲜度 + 规则人群 segment）；由 content 基于 rm_recommend_feature
-    四维 affinities 派生并匹配 segments.yaml 规则人群，经 UserInterestRecomputed 事件投影到 rm_user_profile_view.interestProfile/segments（user
-    域单一真相源）。供 assistant 主动服务与 recommendation 策略自调消费
-  method: GET
-  operation: GetUserInterestProfile
-  commercial:
-    status: ready
-  path: /users/{userId}/interest-profile
-  response_fields:
-  - userId
-  - topInterests
-  - dimensionTops
-  - lifecycleStage
-  - freshnessDays
-  - decayHalfLifeDays
-  - recomputedAt
-  - segments
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_interest_profile_get
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-- actor: account
-  application:
-    kind: command
-    facet: AccountLifecycleCommandFacade
-    method: closeAccount
-    aggregate_owner: UserAccount
-    mutation_target: UserAccount
-    invariant_target: UserAccount
-  description: 账号注销（Apple App Review 5.1.1(v)：App 内自助发起）。closed 为终态： 同事务落 accountState=closed，吊销全部 AccountSession、失效全部
-    CredentialBinding、退役全部 Persona，并发布 UserAccountClosed 事件驱动 下游（content/chat/circle/search/notification）删除或匿名化关联数据。
-    已 closed 账号重放返回幂等成功；匿名（guest）账号同样可注销。
-  method: POST
-  operation: CloseAccount
-  commercial:
-    status: ready
-  path: /owner/account/close
-  request_entity: CloseAccountRequestWire
-  request_fields:
-  - clientRequestId
-  response_entity: CloseAccountResultWire
-  response_fields:
-  - accountState
-  - closedAt
-  - idempotentReplay
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 3000
-    cancellation: none
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_account_close
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/user_account_contracts.dart
-    request_type: CloseAccountCommand
-    response_type: CloseAccountResult
-    request_encoder: encodeCloseAccountCommand
-    response_decoder: decodeCloseAccountResult
-- actor: none
-  application:
-    kind: command
-    facet: AccountEnforcementCommandFacade
-    method: suspendAccount
-    aggregate_owner: UserAccount
-    mutation_target: UserAccount
-    invariant_target: UserAccount
-  description: 仅供受信 Product Ops enforcement 调用的内部封禁命令。服务必须验证调用方服务身份、 OIDC scope 与已审批 decision 绑定，在同一事务内将
-    active 变为 suspended、递增 authEpoch、撤销 refresh session、记录审计回执并发布 UserSuspended。closed 是不可逆 注销终态，绝不允许封禁命令把
-    closed 改回任何可用状态。
-  method: POST
-  operation: SuspendAccount
-  commercial:
-    status: blocked
-    block_reason: 受信 enforcement facade、auth epoch 校验、可逆下游投影与三层证据尚未实现
-    gap_id: USER_ACCOUNT_ENFORCEMENT_IMPLEMENTATION
-    target_story: account-suspension-and-appeal-lifecycle
-  path: /internal/user/accounts/{userId}/suspend
-  path_params:
-  - userId
-  request_entity: AccountEnforcementDecisionWire
-  request_fields:
-  - decisionId
-  - caseRef
-  - decisionDigest
-  - approvedAt
-  response_entity: AccountEnforcementResultWire
-  response_fields:
-  - accountState
-  - authEpoch
-  - decisionId
-  - idempotentReplay
-  - occurredAt
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
-  authorization:
-    principal: service
-    scopes:
-    - user.account.enforcement.write
-    ownership_policy: trusted_product_ops_enforcement_only
-  reliability:
-    timeout_ms: 3000
-    cancellation: none
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.forbidden
-  - USER.USER.not_found
-  - USER.ACCOUNT.enforcement_decision_invalid
-  - USER.ACCOUNT.state_conflict
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_account_suspend
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1500
-    availability_percent: 99.95
-- actor: none
-  application:
-    kind: command
-    facet: AccountEnforcementCommandFacade
-    method: restoreAccount
-    aggregate_owner: UserAccount
-    mutation_target: UserAccount
-    invariant_target: UserAccount
-  description: 仅消费受信 appeal approval 或运营恢复 decision。服务必须验证 Restore decision 与 case 审计链，将 suspended 原子迁回
-    active、递增 authEpoch 并发布 UserRestored； 不恢复旧 session/token、已删除数据或 closed 账号。
-  method: POST
-  operation: RestoreAccount
-  commercial:
-    status: blocked
-    block_reason: 受信 enforcement facade、auth epoch 校验、可逆下游投影与三层证据尚未实现
-    gap_id: USER_ACCOUNT_ENFORCEMENT_IMPLEMENTATION
-    target_story: account-suspension-and-appeal-lifecycle
-  path: /internal/user/accounts/{userId}/restore
-  path_params:
-  - userId
-  request_entity: AccountEnforcementDecisionWire
-  request_fields:
-  - decisionId
-  - caseRef
-  - decisionDigest
-  - approvedAt
-  response_entity: AccountEnforcementResultWire
-  response_fields:
-  - accountState
-  - authEpoch
-  - decisionId
-  - idempotentReplay
-  - occurredAt
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
-  authorization:
-    principal: service
-    scopes:
-    - user.account.enforcement.write
-    ownership_policy: trusted_product_ops_enforcement_only
-  reliability:
-    timeout_ms: 3000
-    cancellation: none
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.forbidden
-  - USER.USER.not_found
-  - USER.ACCOUNT.enforcement_decision_invalid
-  - USER.ACCOUNT.state_conflict
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_account_restore
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1500
-    availability_percent: 99.95
-- actor: none
-  application:
-    kind: query
-    facet: AccountSecurityAuthorityQueryFacade
-    method: readAccountSecurity
-    reader: AccountSecurityReader
-    slice: AccountSecuritySnapshot
-  description: 仅供已登记的 assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag
-    资源服务在验签后同步读取终端用户的权威账号状态和安全代次；其他 service principal 即使持有同 scope 也必须拒绝。
-    响应绝不含 Persona、资料、设备、凭证、审核 case 或其他可识别信息；调用失败或响应无效时调用方必须 fail-closed，
-    禁止缓存、降级或沿用旧快照。
-  method: GET
-  operation: ReadAccountSecurity
-  commercial:
-    status: ready
-  path: /internal/user/accounts/{userId}/security
-  path_params:
-  - userId
-  response_entity: AccountSecuritySnapshotWire
-  response_fields:
-  - accountState
-  - authEpoch
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
-  authorization:
-    principal: service
-    scopes:
-    - user.account.security.read
-    ownership_policy: trusted_resource_security_authority_only
-  reliability:
-    timeout_ms: 300
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.forbidden
-  - USER.USER.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: none
-  telemetry:
-    metric: user_account_security_read
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 80
-    availability_percent: 99.99
-- actor: none
-  application:
-    kind: query
-    facet: AccountSecurityAuthorityQueryFacade
-    method: checkAccountSecurityAuthority
-    reader: AccountSecurityReader
-    slice: AccountSecurityAuthorityHealth
-  description: 仅供已登记的 assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search
-    资源服务 readiness 验证账号安全权威的服务身份、scope、路由与 PostgreSQL 读取链路；其他 service principal
-    即使持有同 scope 也必须拒绝。使用保留的不可解析 probe subject，不返回或持久化任意账号资料。
-  method: GET
-  operation: CheckAccountSecurityAuthority
-  commercial:
-    status: ready
-  path: /internal/user/account-security/health
-  response_entity: AccountSecurityAuthorityHealthWire
-  response_fields:
-  - status
-  security:
-    anonymous_policy: deny
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    visibility: internal
-  authorization:
-    principal: service
-    scopes:
-    - user.account.security.read
-    ownership_policy: trusted_resource_security_authority_only
-  reliability:
-    timeout_ms: 300
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.forbidden
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: none
-  telemetry:
-    metric: user_account_security_authority_health
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 80
-    availability_percent: 99.99
+'
+    method: GET
+    operation: SearchSocialRelations
+    commercial:
+      status: ready
+    path: /user/search/social-relations
+    request_bindings:
+      query:
+        - name: query
+          field: query
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+    response_entity: SocialRelationSearchItemView
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_search
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_social_relation_search
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/public_profile_query_contracts.dart
+      response_type: SearchSocialRelationsResult
+      response_decoder: decodeSearchSocialRelationsResult
+    request_entity: SearchSocialRelationsQuery
+    request_body_kind: none
+  - actor: account
+    application:
+      facet: UserSyncQueryFacade
+      kind: query
+      method: pullUserSync
+      reader: PullUserSyncReader
+      slice: PullUserSyncSlice
+    authorization:
+      ownership_policy: current_account_sync_stream
+      principal: account
+    commercial:
+      status: ready
+    description: 拉取当前用户资料与头像相关的增量同步补丁
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    method: POST
+    operation: PullUserSync
+    path: /user/sync
+    request_entity: UserSyncPullRequestWire
+    request_body_kind: object
+    privacy:
+      log_policy: metadata_only
+      request_classification: PII
+      response_classification: INTERNAL
+    reliability:
+      cancellation: supported
+      idempotency: none
+      max_attempts: 1
+      retry_mode: none
+      timeout_ms: 1500
+    response_fields:
+      - patches
+      - latestSyncSeq
+      - hasMore
+      - requiresResync
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: account
+      token_transport: bearer
+      visibility: private
+    slo:
+      availability_percent: 99.9
+      latency_p95_ms: 500
+    telemetry:
+      attributes:
+        - afterSeq
+        - limit
+        - outcome
+      metric: user_sync_pull
+      trace: true
+  - actor: account
+    application:
+      facet: ProfileQueryFacade
+      kind: query
+      method: getUserProfile
+      reader: GetUserProfileReader
+      slice: GetUserProfileSlice
+    deprecated: false
+    description: 当前 owner 私有账号档案读取；公开用户主页只走 GetPersonaProfile
+    join_path: owner_full_snapshot
+    method: GET
+    operation: GetUserProfile
+    commercial:
+      status: ready
+    path: /user/profile/{userId}
+    request_bindings:
+      path:
+        - name: userId
+          field: userId
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.not_found
+      - USER.USER.forbidden
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: user_profile_get
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    response_entity: UserAccount
+  - actor: persona
+    application:
+      facet: ProfileQueryFacade
+      kind: query
+      method: getProfileEditSnapshot
+      reader: GetProfileEditSnapshotReader
+      slice: GetProfileEditSnapshotSlice
+    description: 当前登录 owner/active persona 的私有资料编辑快照；包含手机号凭证摘要与系统分配 userHandle，只供本人编辑页使用
+    method: GET
+    operation: GetProfileEditSnapshot
+    commercial:
+      status: ready
+    path: /user/profile/edit-snapshot
+    response_entity: ProfileEditSnapshotWire
+    response_fields:
+      - ownerUserId
+      - personaId
+      - avatarUrl
+      - avatarAssetId
+      - avatarVersion
+      - backgroundUrl
+      - backgroundAssetId
+      - nickname
+      - displayName
+      - gender
+      - birthDate
+      - region
+      - regionTagRef
+      - userHandle
+      - bio
+      - identityTags
+      - occupationTagRef
+      - interestTagRefs
+      - phoneCredential
+      - qrCard
+      - updatedAt
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_profile_edit_snapshot_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/profile_edit_query_contracts.dart
+      response_type: ProfileEditSnapshotProjection
+      response_decoder: decodeProfileEditSnapshotProjection
+    request_entity: GetProfileEditSnapshotQuery
+    request_body_kind: none
+  - actor: persona
+    application:
+      facet: ProfileQueryFacade
+      kind: query
+      method: getProfileQrCard
+      reader: GetProfileQrCardReader
+      slice: GetProfileQrCardSlice
+    description: 返回我的二维码卡片渲染所需快照与可撤销 QR token 摘要；二维码 payload 为公开主页 HTTPS link，不编码手机号或 bearer token
+    method: GET
+    operation: GetProfileQrCard
+    commercial:
+      status: ready
+    path: /user/profile/qr-card
+    response_entity: ProfileQrCardWire
+    response_fields:
+      - publicProfileUrl
+      - qrPayload
+      - qrTokenId
+      - avatarUrl
+      - displayName
+      - region
+      - shareText
+      - expiresAt
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_profile_qr_card_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/public_profile_query_contracts.dart
+      response_type: ProfileQrCardProjection
+      response_decoder: decodeProfileQrCardProjection
+    request_entity: GetProfileQrCardQuery
+    request_body_kind: none
+  - actor: none
+    application:
+      facet: PublicProfileQueryFacade
+      kind: query
+      method: resolveProfileQrToken
+      reader: ResolveProfileQrTokenReader
+      slice: ResolveProfileQrTokenSlice
+    description: 公开扫码落地解析入口；校验 HTTPS payload 中的 opaque QR token，记录扫码观测后返回规范主页目标
+    method: GET
+    operation: ResolveProfileQrToken
+    commercial:
+      status: ready
+    path: /public/profile/qr/resolve
+    response_entity: ProfileQrResolveWire
+    response_fields:
+      - personaId
+      - userHandle
+      - publicProfileUrl
+      - scanStatus
+    security:
+      anonymous_policy: allow
+      auth_mode: optional
+      principal: user
+      token_transport: bearer
+      visibility: public
+    authorization:
+      principal: public
+      ownership_policy: public_qr_resolve
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.PROFILE.qr_token_invalid
+      - USER.PROFILE.qr_token_expired
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: user_profile_qr_resolve
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/public_profile_query_contracts.dart
+      response_type: ProfileQrResolveProjection
+      response_decoder: decodeProfileQrResolveProjection
+    request_entity: ResolveProfileQrTokenQuery
+    request_body_kind: none
+    request_bindings:
+      query:
+        - name: qr
+          field: qr
+        - name: handle
+          field: handle
+          required: false
+  - actor: persona
+    application:
+      facet: ProfileQueryFacade
+      kind: query
+      method: getUserInterestProfile
+      reader: GetUserInterestProfileReader
+      slice: GetUserInterestProfileSlice
+    description: 读取用户派生兴趣画像（topN 兴趣 + 维度 tops + 生命周期分层 + 新鲜度 + 规则人群 segment）；由 content 基于 rm_recommend_feature 四维 affinities 派生并匹配 segments.yaml 规则人群，经 UserInterestRecomputed 事件投影到 rm_user_profile_view.interestProfile/segments（user 域单一真相源）。供 assistant 主动服务与 recommendation 策略自调消费
+    method: GET
+    operation: GetUserInterestProfile
+    commercial:
+      status: ready
+    path: /users/{userId}/interest-profile
+    request_bindings:
+      path:
+        - name: userId
+          field: userId
+    response_fields:
+      - userId
+      - topInterests
+      - dimensionTops
+      - lifecycleStage
+      - freshnessDays
+      - decayHalfLifeDays
+      - recomputedAt
+      - segments
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_interest_profile_get
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+  - actor: account
+    application:
+      kind: command
+      facet: AccountLifecycleCommandFacade
+      method: closeAccount
+      aggregate_owner: UserAccount
+      mutation_target: UserAccount
+      invariant_target: UserAccount
+    description: 账号注销（Apple App Review 5.1.1(v)：App 内自助发起）。closed 为终态： 同事务落 accountState=closed，吊销全部 AccountSession、失效全部 CredentialBinding、退役全部 Persona，并发布 UserAccountClosed 事件驱动 下游（content/chat/circle/search/notification）删除或匿名化关联数据。 已 closed 账号重放返回幂等成功；匿名（guest）账号同样可注销。
+    method: POST
+    operation: CloseAccount
+    commercial:
+      status: ready
+    path: /owner/account/close
+    request_entity: CloseAccountCommand
+    request_body_kind: object
+    response_entity: CloseAccountResultWire
+    response_fields:
+      - accountState
+      - closedAt
+      - idempotentReplay
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: none
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_account_close
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/user_account_contracts.dart
+      response_type: CloseAccountResult
+      response_decoder: decodeCloseAccountResult
+  - actor: none
+    application:
+      kind: command
+      facet: AccountEnforcementCommandFacade
+      method: suspendAccount
+      aggregate_owner: UserAccount
+      mutation_target: UserAccount
+      invariant_target: UserAccount
+    description: 仅供受信 Product Ops enforcement 调用的内部封禁命令。服务必须验证调用方服务身份、 OIDC scope 与已审批 decision 绑定，在同一事务内将 active 变为 suspended、递增 authEpoch、撤销 refresh session、记录审计回执并发布 UserSuspended。closed 是不可逆 注销终态，绝不允许封禁命令把 closed 改回任何可用状态。
+    method: POST
+    operation: SuspendAccount
+    commercial:
+      status: blocked
+      block_reason: Product Ops 尚未实现 approved workflow 到 enforcement decision 的受信 producer 与 application receipt；R_AUTH_001 Gamma 真实 Provider、设备和 UAT 尚未证明；受影响服务 codegen 与 gate 尚未收敛
+      gap_id: USER_ACCOUNT_ENFORCEMENT_IMPLEMENTATION
+      target_story: account-suspension-and-appeal-lifecycle
+    path: /internal/user/accounts/{userId}/suspend
+    request_bindings:
+      path:
+        - name: userId
+          field: userId
+    request_entity: AccountEnforcementDecisionWire
+    request_body_kind: object
+    response_entity: AccountEnforcementResultWire
+    response_fields:
+      - accountState
+      - authEpoch
+      - decisionId
+      - idempotentReplay
+      - occurredAt
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      visibility: internal
+    authorization:
+      principal: service
+      scopes:
+        - user.account.enforcement.write
+      ownership_policy: trusted_product_ops_enforcement_only
+    reliability:
+      timeout_ms: 3000
+      cancellation: none
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.forbidden
+      - USER.USER.not_found
+      - USER.ACCOUNT.enforcement_decision_invalid
+      - USER.ACCOUNT.state_conflict
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_account_suspend
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.95
+  - actor: none
+    application:
+      kind: command
+      facet: AccountEnforcementCommandFacade
+      method: restoreAccount
+      aggregate_owner: UserAccount
+      mutation_target: UserAccount
+      invariant_target: UserAccount
+    description: 仅消费受信 appeal approval 或运营恢复 decision。服务必须验证 Restore decision 与 case 审计链，将 suspended 原子迁回 active、递增 authEpoch 并发布 UserRestored； 不恢复旧 session/token、已删除数据或 closed 账号。
+    method: POST
+    operation: RestoreAccount
+    commercial:
+      status: blocked
+      block_reason: Product Ops 尚未实现 approved workflow 到 enforcement decision 的受信 producer 与 application receipt；R_AUTH_001 Gamma 真实 Provider、设备和 UAT 尚未证明；受影响服务 codegen 与 gate 尚未收敛
+      gap_id: USER_ACCOUNT_ENFORCEMENT_IMPLEMENTATION
+      target_story: account-suspension-and-appeal-lifecycle
+    path: /internal/user/accounts/{userId}/restore
+    request_bindings:
+      path:
+        - name: userId
+          field: userId
+    request_entity: AccountEnforcementDecisionWire
+    request_body_kind: object
+    response_entity: AccountEnforcementResultWire
+    response_fields:
+      - accountState
+      - authEpoch
+      - decisionId
+      - idempotentReplay
+      - occurredAt
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      visibility: internal
+    authorization:
+      principal: service
+      scopes:
+        - user.account.enforcement.write
+      ownership_policy: trusted_product_ops_enforcement_only
+    reliability:
+      timeout_ms: 3000
+      cancellation: none
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.forbidden
+      - USER.USER.not_found
+      - USER.ACCOUNT.enforcement_decision_invalid
+      - USER.ACCOUNT.state_conflict
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_account_restore
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.95
+  - actor: none
+    application:
+      kind: query
+      facet: AccountSecurityAuthorityQueryFacade
+      method: readAccountSecurity
+      reader: AccountSecurityReader
+      slice: AccountSecuritySnapshot
+    description: 仅供已登记的 assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search/tag 资源服务在验签后同步读取终端用户的权威账号状态和安全代次；其他 service principal 即使持有同 scope 也必须拒绝。 响应绝不含 Persona、资料、设备、凭证、审核 case 或其他可识别信息；调用失败或响应无效时调用方必须 fail-closed， 禁止缓存、降级或沿用旧快照。
+    method: GET
+    operation: ReadAccountSecurity
+    commercial:
+      status: ready
+    path: /internal/user/accounts/{userId}/security
+    request_bindings:
+      path:
+        - name: userId
+          field: userId
+    response_entity: AccountSecuritySnapshotWire
+    response_fields:
+      - accountState
+      - authEpoch
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      visibility: internal
+    authorization:
+      principal: service
+      scopes:
+        - user.account.security.read
+      ownership_policy: trusted_resource_security_authority_only
+    reliability:
+      timeout_ms: 300
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.forbidden
+      - USER.USER.not_found
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: none
+    telemetry:
+      metric: user_account_security_read
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 80
+      availability_percent: 99.99
+  - actor: none
+    application:
+      kind: query
+      facet: AccountSecurityAuthorityQueryFacade
+      method: checkAccountSecurityAuthority
+      reader: AccountSecurityReader
+      slice: AccountSecurityAuthorityHealth
+    description: 仅供已登记的 assistant/chat/circle/content/entity/integration/notification/product-ops/realtime/rtc/search 资源服务 readiness 验证账号安全权威的服务身份、scope、路由与 PostgreSQL 读取链路；其他 service principal 即使持有同 scope 也必须拒绝。使用保留的不可解析 probe subject，不返回或持久化任意账号资料。
+    method: GET
+    operation: CheckAccountSecurityAuthority
+    commercial:
+      status: ready
+    path: /internal/user/account-security/health
+    response_entity: AccountSecurityAuthorityHealthWire
+    response_fields:
+      - status
+    security:
+      anonymous_policy: deny
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      visibility: internal
+    authorization:
+      principal: service
+      scopes:
+        - user.account.security.read
+      ownership_policy: trusted_resource_security_authority_only
+    reliability:
+      timeout_ms: 300
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.forbidden
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: none
+    telemetry:
+      metric: user_account_security_authority_health
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 80
+      availability_percent: 99.99
 consumers:
-- capabilities:
-  - read_profile
-  - write_profile
-  - manage_persona
-  - manage_settings
-  - manage_device
-  name: app
-- capabilities:
-  - read_profile
-  - write_status
-  - review_proposals
-  name: platform-ops
-- capabilities:
-  - read_profile
-  - read_tags
-  - read_interest_profile
-  name: recommendation-engine
-- capabilities:
-  - read_profile
-  - read_settings
-  - create_proposals
-  - read_interest_profile
-  name: assistant-service
-- capabilities:
-  - read_device
-  - read_settings
-  name: notification-service
+  - capabilities:
+      - read_profile
+      - write_profile
+      - manage_persona
+      - manage_settings
+      - manage_device
+    name: app
+  - capabilities:
+      - read_profile
+      - write_status
+      - review_proposals
+    name: platform-ops
+  - capabilities:
+      - read_profile
+      - read_tags
+      - read_interest_profile
+    name: recommendation-engine
+  - capabilities:
+      - read_profile
+      - read_settings
+      - create_proposals
+      - read_interest_profile
+    name: assistant-service
+  - capabilities:
+      - read_device
+      - read_settings
+    name: notification-service
 contract_test:
   coverage_requirements:
-  - all api_routes have at least one scenario
-  - all state_machine transitions covered
-  - all unique_constraints have violation test
-  - all SECRET fields verified not exposed in API responses
-  - all events verified published with correct payload_fields
+    - all api_routes have at least one scenario
+    - all state_machine transitions covered
+    - all unique_constraints have violation test
+    - all SECRET fields verified not exposed in API responses
+    - all events verified published with correct payload_fields
   description: '基于接口契约的隔离测试：端侧 mock 云端、服务侧 mock 外部依赖。
 
     元数据驱动：从 fields.yaml + service.yaml 自动生成 mock 数据和断言。
 
-    '
+'
   mock_strategy:
     app_side:
       data_source: fields.yaml
@@ -1239,113 +1309,111 @@ contract_test:
       generation: 从 fields.yaml 生成符合 constraints/classification 的 mock JSON
       mock_target: user-service API
       scenarios:
-      - assertions:
-        - status_200
-        - response_matches_schema
-        - pii_fields_filtered
-        mock_response: auto_from_fields
-        name: get_profile_success
-        route: GET /user/profile/{userId}
-      - assertions:
-        - status_200
-        - updated_fields_reflected
-        mock_request: auto_from_writable_fields
-        name: update_profile_success
-        route: PATCH /user/profile
-      - assertions:
-        - status_200
-        - only_one_active
-        name: persona_activate
-        route: POST /user/personas/{subAccountId}/activate
-      - assertions:
-        - status_200
-        - tokens_returned
-        name: login_flow
-        route: POST /user/auth/login
-      - assertions:
-        - status_200
-        - response_matches_schema
-        mock_response: auto_from_fields
-        name: get_appearance_settings
-        route: GET /user/settings/appearance
-      - assertions:
-        - status_200
-        - updated_fields_reflected
-        mock_request: auto_from_writable_fields
-        name: update_appearance_settings
-        route: PATCH /user/settings/appearance
+        - assertions:
+            - status_200
+            - response_matches_schema
+            - pii_fields_filtered
+          mock_response: auto_from_fields
+          name: get_profile_success
+          route: GET /user/profile/{userId}
+        - assertions:
+            - status_200
+            - updated_fields_reflected
+          mock_request: auto_from_request_entity
+          name: update_profile_success
+          route: PATCH /user/profile
+        - assertions:
+            - status_200
+            - only_one_active
+          name: persona_activate
+          route: POST /user/personas/{personaId}/activate
+        - assertions:
+            - status_200
+            - tokens_returned
+          name: login_flow
+          route: POST /user/auth/login
+        - assertions:
+            - status_200
+            - response_matches_schema
+          mock_response: auto_from_fields
+          name: get_appearance_settings
+          route: GET /user/settings/appearance
+        - assertions:
+            - status_200
+            - updated_fields_reflected
+          mock_request: auto_from_request_entity
+          name: update_appearance_settings
+          route: PATCH /user/settings/appearance
     service_side:
       data_management:
-        cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals
-          CASCADE
+        cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals CASCADE
         redis_cleanup: miniredis.FlushAll()
         seed: 从 fields.yaml 生成 fixture 工厂预制到真实 PG
       description: 服务只依赖自身，使用真实测试数据库，不 mock 存储层
       mock_targets:
-      - cross_service_clients
+        - cross_service_clients
       real_engines:
         postgres: embedded-postgres
         redis: miniredis/v2
       scenarios:
-      - assertions:
-        - SELECT * FROM user_profiles WHERE user_id = ? → row exists
-        - SELECT * FROM user_auth WHERE user_id = ? → row exists
-        - SELECT * FROM user_settings WHERE user_id = ? → defaults correct
-        - eventSpy.AssertPublished('UserRegistered', {userId, nickname})
-        command: RegisterUser
-        name: create_user_aggregate
-        seed:
-        - fixture.NewUserAuth()
-      - assertions:
-        - SELECT profile_version FROM user_profiles → incremented by 1
-        - miniredis.Get('cache:user_profile:{id}') → key deleted (invalidated)
-        - eventSpy.AssertPublished('UserProfileUpdated', {userId, profileVersion})
-        command: UpdateUserProfile
-        name: update_profile_version
-        seed:
-        - fixture.NewUserProfile()
-      - assertions:
-        - SELECT COUNT(*) FROM personas WHERE user_id=? AND is_active=true → exactly 1
-        - SELECT id FROM personas WHERE is_active=true → matches new persona ID
-        - eventSpy.AssertPublished('PersonaActivated', {userId, id})
-        command: ActivatePersona
-        name: persona_activation_exclusivity
-        seed:
-        - fixture.NewUserProfile()
-        - fixture.NewPersona(active=true)
-        - fixture.NewPersona(active=false)
-      - assertions:
-        - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → updated
-          to requested values
-        - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? → all NULL
-        - SELECT appearance_version FROM user_settings WHERE user_id=? → incremented by 1
-        - eventSpy.AssertPublished('UserAppearanceSettingsChanged', {userId, version})
-        command: UpdateAppearanceSettings(applyScope='all_accounts')
-        name: update_appearance_all_accounts
-        seed:
-        - fixture.NewUserProfile()
-        - fixture.NewUserSetting()
-        - fixture.NewPersona(active=true)
-        - fixture.NewPersona(active=false)
-      - assertions:
-        - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? AND is_active=true
-          → updated to requested values
-        - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → unchanged
-        - GET /user/settings/appearance → source='sub_override'
-        command: UpdateAppearanceSettings(applyScope='current_sub_account')
-        name: update_appearance_current_sub_account
-        seed:
-        - fixture.NewUserProfile()
-        - fixture.NewUserSetting()
-        - fixture.NewPersona(active=true)
-      - assertions:
-        - SELECT login_fail_count FROM user_auth → 5
-        - SELECT locked_until FROM user_auth → NOT NULL, future timestamp
-        - miniredis.Get('login_fail:{userId}') → count exists
-        command: Login (5x wrong password)
-        name: login_fail_lockout
-        seed:
-        - fixture.NewUserProfile()
-        - fixture.NewUserAuth()
+        - assertions:
+            - SELECT * FROM user_profiles WHERE user_id = ? → row exists
+            - SELECT * FROM user_auth WHERE user_id = ? → row exists
+            - SELECT * FROM user_settings WHERE user_id = ? → defaults correct
+            - eventSpy.AssertPublished('UserRegistered', {userId, nickname})
+          command: RegisterUser
+          name: create_user_aggregate
+          seed:
+            - fixture.NewUserAuth()
+        - assertions:
+            - SELECT display_name, version FROM personas WHERE is_active=true → canonical fields committed once
+            - SELECT profile_version FROM user_profiles → advanced only by Persona outbox projector
+            - miniredis.Get('cache:user_profile:{id}') → key deleted (invalidated)
+            - eventSpy.AssertPublished('UserProfileUpdated', {userId, profileVersion})
+          command: UpdateUserProfile
+          name: update_profile_version
+          seed:
+            - fixture.NewUserProfile()
+        - assertions:
+            - SELECT COUNT(*) FROM personas WHERE user_id=? AND is_active=true → exactly 1
+            - SELECT id FROM personas WHERE is_active=true → matches new persona ID
+            - eventSpy.AssertPublished('PersonaActivated', {userId, id})
+          command: ActivatePersona
+          name: persona_activation_exclusivity
+          seed:
+            - fixture.NewUserProfile()
+            - fixture.NewPersona(active=true)
+            - fixture.NewPersona(active=false)
+        - assertions:
+            - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → updated to requested values
+            - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? → all NULL
+            - SELECT appearance_version FROM user_settings WHERE user_id=? → incremented by 1
+            - eventSpy.AssertPublished('UserAppearanceSettingsChanged', {userId, version})
+          command: UpdateAppearanceSettings(applyScope='all_accounts')
+          name: update_appearance_all_accounts
+          seed:
+            - fixture.NewUserProfile()
+            - fixture.NewUserSetting()
+            - fixture.NewPersona(active=true)
+            - fixture.NewPersona(active=false)
+        - assertions:
+            - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? AND is_active=true → updated to requested values
+            - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → unchanged
+            - GET /user/settings/appearance → source='sub_override'
+          command: UpdateAppearanceSettings(applyScope='current_persona')
+          name: update_appearance_current_persona
+          seed:
+            - fixture.NewUserProfile()
+            - fixture.NewUserSetting()
+            - fixture.NewPersona(active=true)
+        - assertions:
+            - SELECT login_fail_count FROM user_auth → 5
+            - SELECT locked_until FROM user_auth → NOT NULL, future timestamp
+            - miniredis.Get('login_fail:{userId}') → count exists
+          command: Login (5x wrong password)
+          name: login_fail_lockout
+          seed:
+            - fixture.NewUserProfile()
+            - fixture.NewUserAuth()
       spy_targets:
-      - event_publisher
+        - event_publisher

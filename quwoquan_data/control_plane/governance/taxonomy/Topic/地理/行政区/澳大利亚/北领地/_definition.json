@@ -1,0 +1,12 @@
+{
+  "label": "北领地",
+  "labelEn": "Northern Territory",
+  "description": "红色中心与原住民文化地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

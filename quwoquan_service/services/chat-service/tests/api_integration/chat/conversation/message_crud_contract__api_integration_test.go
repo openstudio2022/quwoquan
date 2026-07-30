@@ -107,6 +107,22 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 	if removed["code"] != "CHAT.USER.message_invalid" {
 		t.Fatalf("removed cardPayload must be rejected: %#v", removed)
 	}
+	for _, legacyKind := range []string{"profileQr", "post", "userProfile", "entityProfile"} {
+		legacy := doPost(
+			t,
+			"/chat/conversations/"+convID+"/messages",
+			fmt.Sprintf(
+				`{"type":"card","clientMsgId":"legacy-%s","card":{"kind":%q,"title":"legacy"}}`,
+				legacyKind,
+				legacyKind,
+			),
+			"user_test_001",
+			http.StatusBadRequest,
+		)
+		if legacy["code"] != "CHAT.USER.message_invalid" {
+			t.Fatalf("legacy card kind %q must be rejected: %#v", legacyKind, legacy)
+		}
+	}
 
 	created := sendMessage(t, convID, `{
 		"type":"card",
@@ -140,7 +156,7 @@ func TestSendMessageTypedCardRejectsRemovedMapAndRoundTrips(t *testing.T) {
 	invalid := doPost(
 		t,
 		"/chat/conversations/"+convID+"/messages",
-		`{"type":"text","content":"invalid","clientMsgId":"text-with-card","card":{"kind":"post","title":"x","attributes":[]}}`,
+		`{"type":"text","content":"invalid","clientMsgId":"text-with-card","card":{"kind":"content_post","title":"x","attributes":[]}}`,
 		"user_test_001",
 		http.StatusBadRequest,
 	)

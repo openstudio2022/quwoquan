@@ -1,4 +1,11 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_section_config_dto.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        CircleDisplaySubjectType,
+        CircleJoinPolicy,
+        CircleKind,
+        CircleStatus,
+        CircleVisibility;
 
 /// 圈子聚合根 DTO。
 ///
@@ -20,11 +27,11 @@ class CircleDto {
   final int memberCount;
   final int postCount;
   final int weeklyActiveCount;
-  final String status;
-  final String visibility;
-  final String joinPolicy;
-  final String kind;
-  final String displaySubjectType;
+  final CircleStatus status;
+  final CircleVisibility visibility;
+  final CircleJoinPolicy joinPolicy;
+  final CircleKind kind;
+  final CircleDisplaySubjectType displaySubjectType;
   final bool followEnabled;
   final String? defaultPublicGroupId;
   final String? conversationId;
@@ -51,11 +58,11 @@ class CircleDto {
     this.memberCount = 0,
     this.postCount = 0,
     this.weeklyActiveCount = 0,
-    this.status = 'active',
-    this.visibility = 'public',
-    this.joinPolicy = 'open',
-    this.kind = 'interest',
-    this.displaySubjectType = 'circle',
+    this.status = CircleStatus.active,
+    this.visibility = CircleVisibility.public,
+    this.joinPolicy = CircleJoinPolicy.open,
+    this.kind = CircleKind.interest,
+    this.displaySubjectType = CircleDisplaySubjectType.circle,
     this.followEnabled = true,
     this.defaultPublicGroupId,
     this.conversationId,
@@ -86,11 +93,13 @@ class CircleDto {
       memberCount: (m['memberCount'] as num?)?.toInt() ?? 0,
       postCount: (m['postCount'] as num?)?.toInt() ?? 0,
       weeklyActiveCount: (m['weeklyActiveCount'] as num?)?.toInt() ?? 0,
-      status: (m['status'] ?? 'active').toString(),
-      visibility: (m['visibility'] ?? 'public').toString(),
-      joinPolicy: (m['joinPolicy'] ?? 'open').toString(),
-      kind: (m['kind'] ?? 'interest').toString(),
-      displaySubjectType: (m['displaySubjectType'] ?? 'circle').toString(),
+      status: CircleStatus.fromWire(m['status'] ?? 'active'),
+      visibility: CircleVisibility.fromWire(m['visibility'] ?? 'public'),
+      joinPolicy: CircleJoinPolicy.fromWire(m['joinPolicy'] ?? 'open'),
+      kind: CircleKind.fromWire(m['kind'] ?? 'interest'),
+      displaySubjectType: CircleDisplaySubjectType.fromWire(
+        m['displaySubjectType'] ?? 'circle',
+      ),
       followEnabled: m['followEnabled'] as bool? ?? true,
       defaultPublicGroupId: m['defaultPublicGroupId']?.toString(),
       conversationId: m['conversationId'] as String?,
@@ -125,11 +134,11 @@ class CircleDto {
     'memberCount': memberCount,
     'postCount': postCount,
     'weeklyActiveCount': weeklyActiveCount,
-    'status': status,
-    'visibility': visibility,
-    'joinPolicy': joinPolicy,
-    'kind': kind,
-    'displaySubjectType': displaySubjectType,
+    'status': status.wireValue,
+    'visibility': visibility.wireValue,
+    'joinPolicy': joinPolicy.wireValue,
+    'kind': kind.wireValue,
+    'displaySubjectType': displaySubjectType.wireValue,
     'followEnabled': followEnabled,
     if (defaultPublicGroupId != null)
       'defaultPublicGroupId': defaultPublicGroupId,
@@ -164,11 +173,11 @@ class CircleDto {
     int? memberCount,
     int? postCount,
     int? weeklyActiveCount,
-    String? status,
-    String? visibility,
-    String? joinPolicy,
-    String? kind,
-    String? displaySubjectType,
+    CircleStatus? status,
+    CircleVisibility? visibility,
+    CircleJoinPolicy? joinPolicy,
+    CircleKind? kind,
+    CircleDisplaySubjectType? displaySubjectType,
     bool? followEnabled,
     String? defaultPublicGroupId,
     String? conversationId,

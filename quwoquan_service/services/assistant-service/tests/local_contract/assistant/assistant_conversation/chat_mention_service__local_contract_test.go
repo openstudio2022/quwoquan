@@ -3,10 +3,11 @@ package local_contract
 
 import (
 	"context"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"strings"
 	"testing"
 
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
 
@@ -14,7 +15,7 @@ type migratedChatMentionServiceFakeChatGroundingClient struct {
 	listMessagesCalled bool
 	membershipChecked  bool
 	membershipDenied   bool
-	sent               []ChatGroundingSendMessageRequest
+	sent               []ports.ChatGroundingSendMessageRequest
 }
 
 func (f *migratedChatMentionServiceFakeChatGroundingClient) ListMessages(
@@ -24,13 +25,13 @@ func (f *migratedChatMentionServiceFakeChatGroundingClient) ListMessages(
 	assistantSkillID string,
 	beforeSeq int64,
 	limit int,
-) ([]ChatGroundingMessage, error) {
+) ([]ports.ChatGroundingMessage, error) {
 	f.listMessagesCalled = conversationID == "conv-1" &&
 		creatorPersonaID == "user-a" &&
 		assistantSkillID == "general" &&
 		beforeSeq == 12 &&
 		limit == 20
-	return []ChatGroundingMessage{
+	return []ports.ChatGroundingMessage{
 		{MessageID: "msg-10", Seq: 10, SenderID: "user-a", SenderName: "小明", Content: "周末去川西怎么样？"},
 		{MessageID: "msg-11", Seq: 11, SenderID: "user-b", SenderName: "小红", Content: "我想知道自驾路线和住宿。"},
 	}, nil
@@ -50,7 +51,10 @@ func (f *migratedChatMentionServiceFakeChatGroundingClient) ResolveAssistantDeli
 	return !f.membershipDenied, nil
 }
 
-func (f *migratedChatMentionServiceFakeChatGroundingClient) SendMessage(_ context.Context, req ChatGroundingSendMessageRequest) error {
+func (f *migratedChatMentionServiceFakeChatGroundingClient) SendMessage(
+	_ context.Context,
+	req ports.ChatGroundingSendMessageRequest,
+) error {
 	f.sent = append(f.sent, req)
 	return nil
 }

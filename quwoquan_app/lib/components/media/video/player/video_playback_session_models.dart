@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/core/platform/video_native_playback_signals.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -39,7 +40,73 @@ enum VideoPlaybackPauseReason {
   failure,
 }
 
-enum VideoSeekLifecyclePhase { requested, commandCompleted, failed, superseded }
+enum VideoSeekLifecyclePhase {
+  requested,
+  commandCompleted,
+  commandTimedOut,
+  commandCapacityExceeded,
+  failed,
+  settleTimedOut,
+  settleUnsupported,
+  superseded,
+}
+
+enum VideoSourceSwitchSeekOutcome {
+  nativeSettled,
+  positionReadbackSettled,
+  nativeSettleTimedOut,
+  settleUnsupported,
+  commandTimedOut,
+  commandCapacityExceeded,
+  commandFailed,
+  superseded,
+}
+
+@immutable
+class VideoSourceSwitchSeekResult {
+  const VideoSourceSwitchSeekResult({
+    required this.outcome,
+    required this.target,
+    required this.elapsedMs,
+    required this.evidenceCapability,
+    this.observedPosition,
+  });
+
+  final VideoSourceSwitchSeekOutcome outcome;
+  final Duration target;
+  final Duration? observedPosition;
+  final int elapsedMs;
+  final VideoSeekSettleEvidenceCapability evidenceCapability;
+
+  bool get isSettled =>
+      outcome == VideoSourceSwitchSeekOutcome.nativeSettled ||
+      outcome == VideoSourceSwitchSeekOutcome.positionReadbackSettled;
+
+  bool get countsAsFailure =>
+      outcome == VideoSourceSwitchSeekOutcome.nativeSettleTimedOut ||
+      outcome == VideoSourceSwitchSeekOutcome.settleUnsupported ||
+      outcome == VideoSourceSwitchSeekOutcome.commandTimedOut ||
+      outcome == VideoSourceSwitchSeekOutcome.commandCapacityExceeded ||
+      outcome == VideoSourceSwitchSeekOutcome.commandFailed;
+
+  String get evidenceSource => switch (outcome) {
+    VideoSourceSwitchSeekOutcome.nativeSettled =>
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchNativeSettled,
+    VideoSourceSwitchSeekOutcome.positionReadbackSettled =>
+      AppTelemetryValueSeekEvidenceSource
+          .sourceSwitchPositionReadbackNativeUnsupported,
+    VideoSourceSwitchSeekOutcome.nativeSettleTimedOut =>
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchNativeSettleTimeout,
+    VideoSourceSwitchSeekOutcome.settleUnsupported =>
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchSettleUnsupported,
+    VideoSourceSwitchSeekOutcome.commandTimedOut ||
+    VideoSourceSwitchSeekOutcome.commandCapacityExceeded ||
+    VideoSourceSwitchSeekOutcome.commandFailed =>
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchCommandFailed,
+    VideoSourceSwitchSeekOutcome.superseded =>
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchSuperseded,
+  };
+}
 
 typedef VideoNativeSignalObserver =
     FutureOr<void> Function(VideoNativePlaybackSignal signal);
@@ -157,6 +224,7 @@ class VideoPlaybackSnapshot {
     this.verifiedDuration,
     this.runtimeFailure,
     this.lastSeekLifecycleEvent,
+    this.lastSourceSwitchSeekResult,
   });
 
   final VideoPlaybackTransport transport;
@@ -174,6 +242,7 @@ class VideoPlaybackSnapshot {
   final Duration? verifiedDuration;
   final RuntimeFailure? runtimeFailure;
   final VideoSeekLifecycleEvent? lastSeekLifecycleEvent;
+  final VideoSourceSwitchSeekResult? lastSourceSwitchSeekResult;
 
   bool get isScrubbing => transport == VideoPlaybackTransport.scrubbing;
 

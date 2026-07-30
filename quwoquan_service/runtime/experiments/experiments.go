@@ -2,15 +2,26 @@ package runtimeexperiments
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
+	"strings"
 	"sync"
+)
+
+var (
+	ErrInvalidExperiment  = errors.New("runtimeexperiments: invalid experiment")
+	ErrExperimentMissing  = errors.New("runtimeexperiments: experiment missing")
+	ErrExperimentDisabled = errors.New("runtimeexperiments: experiment disabled")
 )
 
 type Assignment struct {
 	ExperimentID    string
 	Bucket          string
-	PolicyVersion   string
+	PolicyDigest    string
 	AssignmentTrace string
 }
 
@@ -18,114 +29,214 @@ type Resolver interface {
 	Resolve(ctx context.Context, experimentID string, subjectKey string) (Assignment, error)
 }
 
-// StaticResolver offers a deterministic default for tests and explicitly
-// disabled experiments. Production recommendation/search traffic uses
-// HashResolver (or AssignBucket through recpolicy); Product Ops assignment facts
-// are intentionally not a second runtime resolver.
-type StaticResolver struct {
-	DefaultBucket string
-}
-
-func (r StaticResolver) Resolve(_ context.Context, experimentID string, _ string) (Assignment, error) {
-	bucket := r.DefaultBucket
-	if bucket == "" {
-		bucket = "control"
-	}
-	return Assignment{
-		ExperimentID:    experimentID,
-		Bucket:          bucket,
-		PolicyVersion:   "runtime-static-v1",
-		AssignmentTrace: "static",
-	}, nil
-}
-
-// Experiment defines the configuration for a single experiment.
+// Experiment defines the complete runtime bucketing policy. Runtime identity is
+// derived from this content; it is intentionally separate from Product Ops'
+// immutable assignment-fact experimentRevision, which is not bound to this hot path.
 type Experiment struct {
-	ID            string
-	Buckets       []BucketDef
-	PolicyVersion string
-	Enabled       bool
+	ID      string      `json:"id"`
+	Buckets []BucketDef `json:"buckets"`
+	Enabled bool        `json:"enabled"`
 }
 
 type BucketDef struct {
-	Name              string
-	WeightPct         int
-	WeightBasisPoints int
+	Name              string `json:"name"`
+	WeightPct         int    `json:"weightPct"`
+	WeightBasisPoints int    `json:"weightBasisPoints"`
+}
+
+type registeredExperiment struct {
+	policy Experiment
+	digest string
 }
 
 // HashResolver is the canonical runtime bucketing implementation shared by
-// recommendation and search.
+// recommendation and search. Registered policies are validated, copied and
+// content-addressed before publication so later caller mutation cannot drift the
+// effective identity.
 type HashResolver struct {
 	mu          sync.RWMutex
-	experiments map[string]*Experiment
+	experiments map[string]registeredExperiment
 }
 
 func NewHashResolver() *HashResolver {
 	return &HashResolver{
-		experiments: make(map[string]*Experiment),
+		experiments: make(map[string]registeredExperiment),
 	}
 }
 
-// Register adds or updates an experiment configuration.
-func (r *HashResolver) Register(exp *Experiment) {
+// Register validates and atomically publishes one experiment policy.
+func (r *HashResolver) Register(exp *Experiment) error {
+	if r == nil {
+		return fmt.Errorf("%w: nil resolver", ErrInvalidExperiment)
+	}
+	policy, digest, err := canonicalExperiment(exp)
+	if err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.experiments[exp.ID] = exp
+	r.experiments[policy.ID] = registeredExperiment{policy: policy, digest: digest}
+	return nil
 }
 
-func (r *HashResolver) Resolve(_ context.Context, experimentID string, subjectKey string) (Assignment, error) {
+func (r *HashResolver) Resolve(
+	ctx context.Context,
+	experimentID string,
+	subjectKey string,
+) (Assignment, error) {
+	if err := ctx.Err(); err != nil {
+		return Assignment{}, err
+	}
+	experimentID = strings.TrimSpace(experimentID)
+	subjectKey = strings.TrimSpace(subjectKey)
+	if experimentID == "" || subjectKey == "" {
+		return Assignment{}, fmt.Errorf(
+			"%w: experimentID and subjectKey are required",
+			ErrInvalidExperiment,
+		)
+	}
 	r.mu.RLock()
-	exp, ok := r.experiments[experimentID]
+	registered, ok := r.experiments[experimentID]
 	r.mu.RUnlock()
-
-	if !ok || !exp.Enabled {
-		return Assignment{
-			ExperimentID:    experimentID,
-			Bucket:          "control",
-			PolicyVersion:   "not-found",
-			AssignmentTrace: "experiment not found or disabled",
-		}, nil
+	if !ok {
+		return Assignment{}, fmt.Errorf("%w: %s", ErrExperimentMissing, experimentID)
+	}
+	if !registered.policy.Enabled {
+		return Assignment{}, fmt.Errorf("%w: %s", ErrExperimentDisabled, experimentID)
 	}
 
-	bucket := AssignBucket(experimentID, subjectKey, exp.Buckets)
+	bucket, err := AssignBucket(experimentID, subjectKey, registered.policy.Buckets)
+	if err != nil {
+		return Assignment{}, err
+	}
 	return Assignment{
 		ExperimentID:    experimentID,
 		Bucket:          bucket,
-		PolicyVersion:   exp.PolicyVersion,
-		AssignmentTrace: fmt.Sprintf("hash(%s+%s)", experimentID, subjectKey),
+		PolicyDigest:    registered.digest,
+		AssignmentTrace: "fnv1a32",
 	}, nil
 }
 
-// AssignBucket deterministically maps (expID, subjectKey) to one of buckets via
-// consistent FNV hashing on weightPct ranges. Exported so policy resolvers reuse
-// the single canonical hashing impl instead of duplicating it.
-func AssignBucket(expID, subjectKey string, buckets []BucketDef) string {
-	h := fnv.New32a()
-	h.Write([]byte(expID + ":" + subjectKey))
-	hash := h.Sum32()
-	scale := 100
-	for _, bucket := range buckets {
-		if bucket.WeightBasisPoints > 0 {
-			scale = 10000
-			break
-		}
+// PolicyDigest derives the canonical runtime identity of one valid assignment
+// policy without registering it.
+func PolicyDigest(exp *Experiment) (string, error) {
+	_, digest, err := canonicalExperiment(exp)
+	return digest, err
+}
+
+// ValidateExperiment applies the same canonical policy constraints used by
+// Register and AssignBucket. Domain-specific policy owners must delegate here
+// instead of maintaining a second bucket validator.
+func ValidateExperiment(exp *Experiment) error {
+	_, _, err := canonicalExperiment(exp)
+	return err
+}
+
+func canonicalExperiment(exp *Experiment) (Experiment, string, error) {
+	if exp == nil {
+		return Experiment{}, "", fmt.Errorf("%w: nil policy", ErrInvalidExperiment)
 	}
-	position := int(hash % uint32(scale))
+	policy := Experiment{
+		ID:      strings.TrimSpace(exp.ID),
+		Buckets: append([]BucketDef(nil), exp.Buckets...),
+		Enabled: exp.Enabled,
+	}
+	if policy.ID == "" || policy.ID != exp.ID {
+		return Experiment{}, "", fmt.Errorf(
+			"%w: canonical experiment id is required",
+			ErrInvalidExperiment,
+		)
+	}
+	if _, err := validateBuckets(policy.Buckets); err != nil {
+		return Experiment{}, "", err
+	}
+	encoded, err := json.Marshal(policy)
+	if err != nil {
+		return Experiment{}, "", fmt.Errorf("%w: encode policy: %v", ErrInvalidExperiment, err)
+	}
+	sum := sha256.Sum256(encoded)
+	return policy, "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+// AssignBucket deterministically maps (experimentID, subjectKey) to one bucket.
+// Invalid or incomplete input returns an error; no implicit control bucket exists.
+func AssignBucket(experimentID, subjectKey string, buckets []BucketDef) (string, error) {
+	experimentID = strings.TrimSpace(experimentID)
+	subjectKey = strings.TrimSpace(subjectKey)
+	if experimentID == "" || subjectKey == "" {
+		return "", fmt.Errorf(
+			"%w: experimentID and subjectKey are required",
+			ErrInvalidExperiment,
+		)
+	}
+	scale, err := validateBuckets(buckets)
+	if err != nil {
+		return "", err
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(experimentID + ":" + subjectKey))
+	position := int(h.Sum32() % uint32(scale))
 
 	cumulative := 0
-	for _, b := range buckets {
-		weight := b.WeightPct
+	for _, bucket := range buckets {
+		weight := bucket.WeightPct
 		if scale == 10000 {
-			weight = b.WeightBasisPoints
+			weight = bucket.WeightBasisPoints
 		}
 		cumulative += weight
 		if position < cumulative {
-			return b.Name
+			return bucket.Name, nil
 		}
 	}
+	return "", fmt.Errorf("%w: bucket weights do not cover hash space", ErrInvalidExperiment)
+}
 
-	if len(buckets) > 0 {
-		return buckets[len(buckets)-1].Name
+func validateBuckets(buckets []BucketDef) (int, error) {
+	if len(buckets) == 0 {
+		return 0, fmt.Errorf("%w: buckets are required", ErrInvalidExperiment)
 	}
-	return "control"
+	hasPercent := false
+	hasBasisPoints := false
+	total := 0
+	names := make(map[string]struct{}, len(buckets))
+	for _, bucket := range buckets {
+		name := strings.TrimSpace(bucket.Name)
+		if name == "" || name != bucket.Name {
+			return 0, fmt.Errorf("%w: canonical bucket name is required", ErrInvalidExperiment)
+		}
+		if _, exists := names[name]; exists {
+			return 0, fmt.Errorf("%w: duplicate bucket %q", ErrInvalidExperiment, name)
+		}
+		names[name] = struct{}{}
+		if bucket.WeightPct > 0 {
+			hasPercent = true
+			total += bucket.WeightPct
+		}
+		if bucket.WeightBasisPoints > 0 {
+			hasBasisPoints = true
+			total += bucket.WeightBasisPoints
+		}
+		if bucket.WeightPct < 0 || bucket.WeightBasisPoints < 0 {
+			return 0, fmt.Errorf("%w: bucket %q weight must be non-negative", ErrInvalidExperiment, name)
+		}
+	}
+	if hasPercent == hasBasisPoints {
+		return 0, fmt.Errorf(
+			"%w: use exactly one weight unit for all buckets",
+			ErrInvalidExperiment,
+		)
+	}
+	scale := 100
+	if hasBasisPoints {
+		scale = 10000
+	}
+	if total != scale {
+		return 0, fmt.Errorf(
+			"%w: bucket weights total %d, expected %d",
+			ErrInvalidExperiment,
+			total,
+			scale,
+		)
+	}
+	return scale, nil
 }

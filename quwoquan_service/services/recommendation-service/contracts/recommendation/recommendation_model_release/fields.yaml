@@ -28,7 +28,7 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
-- name: featureContractVersion
+- name: featureContractDigest
   type: string
   constraints:
   - NOT_NULL
@@ -37,6 +37,7 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
+  description: canonical feature contract payload 的小写十六进制 SHA-256 内容身份
 - name: status
   type: string
   constraints:
@@ -89,6 +90,11 @@ types:
       type: string
       constraints:
       - NOT_NULL
+    - name: modelChannel
+      type: string
+      constraints:
+      - NULLABLE
+      description: champion/challenger 发布路由通道；不是模型内容身份
     - name: userFeatures
       type: object
       constraints:
@@ -126,6 +132,15 @@ types:
       type: '[]string'
     - name: entityRefs
       type: '[]string'
+    - name: intersectionEdgeWeight
+      type: float64
+      description: 当前 viewer 与本候选作者或实体引用命中的最强物化交集边权；由 Go StrongestIntersectionEdgeFor 单点投影。
+    - name: intersectionEdgeFreshness
+      type: float64
+      description: 与 intersectionEdgeWeight 同一条物化交集边的新鲜度；未命中为 0。
+    - name: intersectionEdgeKind
+      type: string
+      description: 与 intersectionEdgeWeight 同一条物化交集边的 canonical kind；未命中为空。
     - name: ageHours
       type: float64
     - name: publishHour

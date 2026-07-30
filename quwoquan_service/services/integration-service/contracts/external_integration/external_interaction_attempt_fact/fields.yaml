@@ -21,6 +21,27 @@ fields:
   ops_exposure: read
   role: append_only_fact
   reference: true
+- name: taskId
+  source: taskId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: operation
+  source: operation
+  type: enum
+  enum_ref: ExternalInteractionOperation
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
 - name: provider
   source: provider
   type: enum
@@ -37,8 +58,8 @@ fields:
   type: string
   constraints:
   - NULLABLE
-  classification: PRIVATE
-  log_policy: hash
+  classification: SENSITIVE
+  log_policy: mask
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
@@ -58,7 +79,7 @@ fields:
   type: string
   constraints:
   - NULLABLE
-  classification: PRIVATE
+  classification: PII
   log_policy: mask
   api_exposure: read
   ops_exposure: read
@@ -68,7 +89,7 @@ fields:
   type: int
   constraints:
   - NOT_NULL
-  classification: PUBLIC
+  classification: INTERNAL
   log_policy: allow
   api_exposure: read
   ops_exposure: read
@@ -76,7 +97,7 @@ fields:
 - name: status
   source: status
   type: enum
-  enum_ref: ExternalInteractionStatus
+  enum_ref: ExternalInteractionAttemptStatus
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -89,6 +110,16 @@ fields:
   type: string
   constraints:
   - NULLABLE
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: retryable
+  source: retryable
+  type: bool
+  constraints:
+  - NOT_NULL
   classification: PUBLIC
   log_policy: allow
   api_exposure: read
@@ -104,6 +135,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+- name: attributes
+  source: attributes
+  type: object
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: redacted
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
 - name: createdAt
   source: createdAt
   type: timestamp
@@ -114,33 +155,3 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
-enums:
-  ExternalInteractionOperation:
-    values:
-    - sms_otp.send
-    - push_delivery.send
-    - one_tap_phone.resolve
-    - webhook.deliver
-  ExternalInteractionStatus:
-    values:
-    - accepted
-    - pending_dispatch
-    - processing
-    - sent_unconfirmed
-    - delivered
-    - failed
-    - dead_letter
-  ExternalInteractionSensitivity:
-    values:
-    - public
-    - private
-    - secret
-  ExternalInteractionProvider:
-    values:
-    - mock_sms
-    - aliyun_sms
-    - tencent_sms
-    - apns_voip
-    - fcm
-    - alpha_fake
-    - webhook

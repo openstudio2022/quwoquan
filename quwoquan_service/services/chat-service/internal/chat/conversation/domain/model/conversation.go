@@ -18,43 +18,48 @@ var (
 
 // Conversation is the aggregate root for the chat domain.
 type Conversation struct {
-	ID                      string     `json:"id" bson:"_id"`
-	Type                    string     `json:"type" bson:"type"`
-	Title                   string     `json:"title" bson:"title"`
-	AvatarUrl               string     `json:"avatarUrl" bson:"avatarUrl"`
-	GroupAvatarAssetId      string     `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
-	GroupAvatarVersion      int64      `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
-	GroupAvatarSourceHash   string     `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
-	CreatorId               string     `json:"creatorId" bson:"creatorId"`
-	CircleId                string     `json:"circleId" bson:"circleId"`
-	CircleGroupId           string     `json:"circleGroupId" bson:"circleGroupId,omitempty"`
-	EntityId                string     `json:"entityId" bson:"entityId"`
-	OriginType              string     `json:"originType" bson:"originType"`
-	BindingType             string     `json:"bindingType" bson:"bindingType"`
-	LifecyclePolicy         string     `json:"lifecyclePolicy" bson:"lifecyclePolicy"`
-	MaxSeq                  int64      `json:"maxSeq" bson:"maxSeq"`
-	MemberCount             int        `json:"memberCount" bson:"memberCount"`
-	MembersRosterRevision   int64      `json:"membersRosterRevision" bson:"membersRosterRevision"`
-	MaxGroupSize            int        `json:"maxGroupSize" bson:"maxGroupSize"`
-	ReceiptEnabled          bool       `json:"receiptEnabled" bson:"receiptEnabled"`
-	Announcement            string     `json:"announcement" bson:"announcement"`
-	AnnouncementUpdatedBy   string     `json:"announcementUpdatedBy" bson:"announcementUpdatedBy"`
-	AnnouncementUpdatedAt   *time.Time `json:"announcementUpdatedAt,omitempty" bson:"announcementUpdatedAt,omitempty"`
-	NameEditableByAdminOnly bool       `json:"nameEditableByAdminOnly" bson:"nameEditableByAdminOnly"`
-	LastMessageId           string     `json:"lastMessageId" bson:"lastMessageId"`
-	LastMessagePreview      string     `json:"lastMessagePreview" bson:"lastMessagePreview"`
-	LastMessageType         string     `json:"lastMessageType" bson:"lastMessageType"`
-	LastMessageTime         time.Time  `json:"lastMessageTime" bson:"lastMessageTime"`
-	MessageCount            int        `json:"messageCount" bson:"messageCount"`
-	Status                  string     `json:"status" bson:"status"`
-	CreatedAt               time.Time  `json:"createdAt" bson:"createdAt"`
-	UpdatedAt               time.Time  `json:"updatedAt" bson:"updatedAt"`
+	ID                    string `json:"id" bson:"_id"`
+	Type                  string `json:"type" bson:"type"`
+	Title                 string `json:"title" bson:"title"`
+	AvatarUrl             string `json:"avatarUrl" bson:"avatarUrl"`
+	GroupAvatarAssetId    string `json:"groupAvatarAssetId" bson:"groupAvatarAssetId"`
+	GroupAvatarVersion    int64  `json:"groupAvatarVersion" bson:"groupAvatarVersion"`
+	GroupAvatarSourceHash string `json:"groupAvatarSourceHash" bson:"groupAvatarSourceHash"`
+	CreatorId             string `json:"creatorId" bson:"creatorId"`
+	CircleId              string `json:"circleId" bson:"circleId"`
+	CircleGroupId         string `json:"circleGroupId" bson:"circleGroupId,omitempty"`
+	EntityId              string `json:"entityId" bson:"entityId"`
+	OriginType            string `json:"originType" bson:"originType"`
+	// OriginGreetingRequestID 是升级来源的 GreetingRequest.id，只在
+	// originType=greeting_reply 时有值（contracts/chat/conversation/fields.yaml）。
+	// 它让「打招呼被回复而成的会话」与冷启动私信可区分，是漏斗归因的唯一依据。
+	OriginGreetingRequestID string             `json:"originGreetingRequestId" bson:"originGreetingRequestId,omitempty"`
+	MaxSeq                  int64              `json:"maxSeq" bson:"maxSeq"`
+	MemberCount             int                `json:"memberCount" bson:"memberCount"`
+	MembersRosterRevision   int64              `json:"membersRosterRevision" bson:"membersRosterRevision"`
+	MaxGroupSize            int                `json:"maxGroupSize" bson:"maxGroupSize"`
+	ReceiptEnabled          bool               `json:"receiptEnabled" bson:"receiptEnabled"`
+	Announcement            string             `json:"announcement" bson:"announcement"`
+	AnnouncementUpdatedBy   string             `json:"announcementUpdatedBy" bson:"announcementUpdatedBy"`
+	AnnouncementUpdatedAt   *time.Time         `json:"announcementUpdatedAt,omitempty" bson:"announcementUpdatedAt,omitempty"`
+	NameEditableByAdminOnly bool               `json:"nameEditableByAdminOnly" bson:"nameEditableByAdminOnly"`
+	LastMessageId           string             `json:"lastMessageId" bson:"lastMessageId"`
+	LastMessagePreview      string             `json:"lastMessagePreview" bson:"lastMessagePreview"`
+	LastMessageType         string             `json:"lastMessageType" bson:"lastMessageType"`
+	LastMessageTime         time.Time          `json:"lastMessageTime" bson:"lastMessageTime"`
+	MessageCount            int                `json:"messageCount" bson:"messageCount"`
+	Status                  ConversationStatus `json:"status" bson:"status"`
+	CreatedAt               time.Time          `json:"createdAt" bson:"createdAt"`
+	UpdatedAt               time.Time          `json:"updatedAt" bson:"updatedAt"`
 }
+
+// ConversationStatus is the closed lifecycle set owned by Conversation.
+type ConversationStatus string
 
 // Conversation lifecycle states（与 metadata aggregate lifecycle 单轨一致）。
 const (
-	ConversationStatusActive    = "active"
-	ConversationStatusDissolved = "dissolved"
+	ConversationStatusActive    ConversationStatus = "active"
+	ConversationStatusDissolved ConversationStatus = "dissolved"
 )
 
 // ConversationMember tracks membership in a conversation (independent collection for scale).
@@ -62,6 +67,7 @@ type ConversationMember struct {
 	ID               string    `json:"id" bson:"_id"`
 	ConversationId   string    `json:"conversationId" bson:"conversationId"`
 	UserId           string    `json:"userId" bson:"userId"`
+	UserHandle       string    `json:"userHandle" bson:"userHandle"`
 	DisplayName      string    `json:"displayName" bson:"displayName"`
 	AvatarUrl        string    `json:"avatarUrl" bson:"avatarUrl"`
 	AvatarAssetId    string    `json:"avatarAssetId" bson:"avatarAssetId"`

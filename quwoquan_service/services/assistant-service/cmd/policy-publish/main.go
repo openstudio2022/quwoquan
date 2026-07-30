@@ -37,8 +37,7 @@ type options struct {
 
 type report struct {
 	PolicyID           string   `json:"policyId"`
-	ReleaseVersion     string   `json:"releaseVersion"`
-	CanonicalDigest    string   `json:"canonicalDigest"`
+	ReleaseDigest      string   `json:"releaseDigest"`
 	RolloutRevision    int      `json:"rolloutRevision"`
 	Cohorts            []string `json:"cohorts"`
 	StageReplayed      bool     `json:"stageReplayed"`
@@ -134,11 +133,11 @@ func run(parent context.Context, opts options, output io.Writer) error {
 		return fmt.Errorf("rollout policy identity does not match release artifact")
 	}
 	for _, assignment := range rolloutArtifact.Assignments {
-		if assignment.ReleaseVersion != releaseArtifact.Release.ReleaseVersion {
+		if assignment.ReleaseDigest != releaseArtifact.Release.ReleaseDigest {
 			return fmt.Errorf(
 				"rollout assignment %q references undeclared release %q",
 				assignment.Cohort,
-				assignment.ReleaseVersion,
+				assignment.ReleaseDigest,
 			)
 		}
 	}
@@ -196,8 +195,7 @@ func run(parent context.Context, opts options, output io.Writer) error {
 	}
 	result := report{
 		PolicyID:           staged.Release.PolicyID,
-		ReleaseVersion:     staged.Release.ReleaseVersion,
-		CanonicalDigest:    staged.Release.CanonicalDigest,
+		ReleaseDigest:      staged.Release.ReleaseDigest,
 		RolloutRevision:    activated.Rollout.Revision,
 		Cohorts:            cohorts,
 		StageReplayed:      staged.Replayed,

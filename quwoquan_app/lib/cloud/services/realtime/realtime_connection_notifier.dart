@@ -31,9 +31,12 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
 
   static String _defaultCurrentUserIdResolver(Ref ref) {
     final authSession = ref.read(authSessionControllerProvider);
-    final activeSubAccountId = authSession.activeSubAccountId.trim();
-    if (activeSubAccountId.isNotEmpty) {
-      return activeSubAccountId;
+    if (!authSession.isAuthenticated) {
+      return '';
+    }
+    final activePersonaId = authSession.activePersonaId.trim();
+    if (activePersonaId.isNotEmpty) {
+      return activePersonaId;
     }
     return authSession.ownerId.trim();
   }
@@ -41,6 +44,7 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   final RealtimeCurrentUserIdResolver _currentUserIdResolver;
   final RealtimeConnectionDelegateFactory _delegateFactory;
   RealtimeConnectionDelegate? _delegate;
+  bool _isAppForeground = false;
 
   static RealtimeConnectionDelegate _createRemoteDelegate({
     required Ref ref,
@@ -95,6 +99,20 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
       onStateChanged: _syncDelegateState,
       currentUserIdResolver: _currentUserIdResolver,
     );
+    ref.listen<AuthSessionState>(authSessionControllerProvider, (
+      previous,
+      next,
+    ) {
+      if (!next.isAuthenticated) {
+        _delegate?.onAppBackground();
+        _syncDelegateState();
+        return;
+      }
+      if (_isAppForeground && !(previous?.isAuthenticated ?? false)) {
+        _delegate?.onAppForeground();
+        _syncDelegateState();
+      }
+    });
     ref.onDispose(() {
       _silentlyDisposeDelegate(_delegate);
       _delegate = null;
@@ -103,6 +121,9 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   }
 
   void _syncDelegateState() {
+    if (!ref.mounted) {
+      return;
+    }
     final delegate = _delegate;
     if (delegate == null) {
       return;
@@ -144,21 +165,47 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   }
 
   void onAppForeground() {
-    _delegate?.onAppForeground();
+    if (!ref.mounted) {
+      return;
+    }
+    _isAppForeground = true;
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      _delegate?.onAppForeground();
+    } else {
+      // Realtime endpoints require a bearer issued for an explicitly
+      // authenticated account. Trusted anonymous/guest sessions must not
+      // start LongPoll or WebSocket transports.
+      _delegate?.onAppBackground();
+    }
     _syncDelegateState();
   }
 
   void onAppBackground() {
+    _isAppForeground = false;
     _delegate?.onAppBackground();
     _syncDelegateState();
   }
 
   void onEnterConversation(String conversationId) {
+    if (!ref.mounted) {
+      return;
+    }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      return;
+    }
     _delegate?.onEnterConversation(conversationId);
     _syncDelegateState();
   }
 
   void onLeaveConversation() {
+    if (!ref.mounted) {
+      return;
+    }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      _delegate?.onAppBackground();
+      _syncDelegateState();
+      return;
+    }
     _delegate?.onLeaveConversation();
     _syncDelegateState();
   }

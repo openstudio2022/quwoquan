@@ -2,6 +2,7 @@
   "label": "行程单",
   "labelEn": "Itinerary",
   "description": "旅行行程规划单",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

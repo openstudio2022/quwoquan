@@ -22,6 +22,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
@@ -149,7 +150,7 @@ void main() {
 
   testWidgets('直达入口：环境 smoke 使用可读视频 seed 时渲染视频 stage', (tester) async {
     final repo = MockContentRepository();
-    const videoWorkId = 'v1';
+    const videoWorkId = 'video_tokyo_midnight';
 
     await tester.pumpWidget(
       ProviderScope(
@@ -370,7 +371,11 @@ final class _FlakyContentPostDetailReader implements ContentPostDetailReader {
   int calls = 0;
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     calls += 1;
     if (calls == 1) {
       throw CloudErrorMapper.fromStatusCode(
@@ -380,6 +385,10 @@ final class _FlakyContentPostDetailReader implements ContentPostDetailReader {
         requestPath: ContentApiMetadata.getPostPath(postId: postId),
       );
     }
-    return delegate.getPost(postId: postId);
+    return delegate.getPost(
+      postId: postId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
   }
 }

@@ -117,20 +117,20 @@ void main() {
 
       await container.read(
         authorImpactProvider((
-          subAccountId: 'u_demo',
+          personaId: 'u_demo',
           surface: AppUiSurfaces.profileHome,
         )).future,
       );
       // 无监听者：若非 keepAlive，autoDispose 会销毁并在二次读取时重新取数。
       await container.read(
         authorImpactProvider((
-          subAccountId: 'u_demo',
+          personaId: 'u_demo',
           surface: AppUiSurfaces.profileHome,
         )).future,
       );
       await container.read(
         authorImpactProvider((
-          subAccountId: 'u_demo',
+          personaId: 'u_demo',
           surface: AppUiSurfaces.profileHome,
         )).future,
       );
@@ -149,13 +149,13 @@ void main() {
 
       await container.read(
         authorImpactProvider((
-          subAccountId: 'u_a',
+          personaId: 'u_a',
           surface: AppUiSurfaces.profileHome,
         )).future,
       );
       await container.read(
         authorImpactProvider((
-          subAccountId: 'u_b',
+          personaId: 'u_b',
           surface: AppUiSurfaces.profileHome,
         )).future,
       );
@@ -232,7 +232,7 @@ final class _CountingAuthorImpactQuery implements AuthorImpactQuery {
 
   @override
   Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
-    required String subAccountId,
+    required String personaId,
     required String impactId,
     String evidenceSnapshotId = '',
     String cursor = '',

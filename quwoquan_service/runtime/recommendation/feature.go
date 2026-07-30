@@ -1,6 +1,9 @@
 package recommendation
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // UserFeatureVector holds precomputed user-level features for model scoring.
 // Populated from the feature store (rm_recommend_feature projection) and
@@ -58,6 +61,15 @@ type UserFeatureVector struct {
 	AffinityIntersectionScore float64 `json:"affinityIntersectionScore"`
 	IntersectionSourceRefTop  string  `json:"intersectionSourceRefTop,omitempty"`
 
+	// IntersectionEdges 是「viewer ↔ 具体对象」的物化交集边，键为对象 ID
+	// （人 / 地点 / 圈子 / 内容），值为交集图物化器真算的边权与新鲜度。
+	//
+	// 这是排序里唯一的「真实交集强度」来源。候选投影上的
+	// intersectionFactStrength 是内容侧的交集承载力（该 post 自身挂了多少
+	// entity/tag 提示），与 viewer 无关，不能当作 viewer 与该内容的交集强度使用；
+	// 它继续作为离线训练特征回流，不参与在线事实通道融合。
+	IntersectionEdges map[string]IntersectionEdgeFeature `json:"intersectionEdges,omitempty"`
+
 	// Population segments (rule-based, from segments.yaml), computed by the
 	// content-service InterestProfileAggregator and $set into rm_recommend_feature.
 	// Priority-sorted; drive policy segment targeting (preset override / weight deltas)
@@ -66,6 +78,59 @@ type UserFeatureVector struct {
 
 	// Embedding (Phase 5+, populated by dual-tower inference)
 	UserEmbedding []float64 `json:"userEmbedding,omitempty"`
+}
+
+// IntersectionEdgeFeature 是 viewer 与单个对象之间的一条物化交集边。
+// 真相源是 content-service 的 rm_viewer_object_intersection 快照：Weight 取
+// 交集图物化器的 edgeWeight（关系强度 × 证据频率 × 新鲜度衰减），Freshness 取
+// 同一条边的新鲜度衰减，Kind 取注册表 kind。三者都在异步物化时算好，
+// 在线读路径只做点查与匹配，不重算图谱（R-IX01 读路径零同步打分）。
+type IntersectionEdgeFeature struct {
+	Weight    float64 `json:"weight"`
+	Freshness float64 `json:"freshness"`
+	Kind      string  `json:"kind,omitempty"`
+}
+
+// StrongestIntersectionEdge 返回 viewer 与该候选之间最强的物化交集边。
+//
+// 命中口径只有两处，因为对象级交集只能通过这两处与一条内容相连：
+// 候选作者（人对象交集，如共同关注 / 同行）与候选 entityRefs
+// （地点/实体对象交集，如都去过某地）。命不中即返回 false，调用方
+// 必须按「无交集」处理，禁止回退到内容侧的交集承载力冒充 viewer 强度。
+func (v *UserFeatureVector) StrongestIntersectionEdge(c ContentCandidate) (IntersectionEdgeFeature, bool) {
+	return v.StrongestIntersectionEdgeFor(c.AuthorID, c.EntityRefs)
+}
+
+// StrongestIntersectionEdgeFor 是同一匹配口径的对象级入口，供在线评分与训练
+// 特征快照共用，避免两侧各写一遍命中规则形成训练/在线偏斜。
+func (v *UserFeatureVector) StrongestIntersectionEdgeFor(
+	authorID string,
+	entityRefs []string,
+) (IntersectionEdgeFeature, bool) {
+	if v == nil || len(v.IntersectionEdges) == 0 {
+		return IntersectionEdgeFeature{}, false
+	}
+	best := IntersectionEdgeFeature{}
+	found := false
+	consider := func(objectID string) {
+		objectID = strings.TrimSpace(objectID)
+		if objectID == "" {
+			return
+		}
+		edge, ok := v.IntersectionEdges[objectID]
+		if !ok || edge.Weight <= 0 {
+			return
+		}
+		if !found || edge.Weight > best.Weight {
+			best = edge
+			found = true
+		}
+	}
+	consider(authorID)
+	for _, ref := range entityRefs {
+		consider(ref)
+	}
+	return best, found
 }
 
 // MapCountToLevel maps a raw count to a 0-5 level using fixed thresholds.

@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 )
 
@@ -25,14 +27,22 @@ type sharedFieldDef struct {
 // ── post/fields.yaml ─────────────────────────────────────────────────────────
 
 type fieldDef struct {
-	Name           string   `yaml:"name"`
-	Source         string   `yaml:"source"`
-	Type           string   `yaml:"type"`
-	Constraints    []string `yaml:"constraints"`
-	EnumRef        string   `yaml:"enum_ref"`
-	ClientDartName string   `yaml:"client_dart_name"`
-	ClientDefault  string   `yaml:"client_default"`
-	ItemEntity     string   `yaml:"item_entity"`
+	Name                string            `yaml:"name"`
+	Source              string            `yaml:"source"`
+	Type                string            `yaml:"type"`
+	Constraints         []string          `yaml:"constraints"`
+	EnumRef             string            `yaml:"enum_ref"`
+	ClientDartName      string            `yaml:"client_dart_name"`
+	ClientDartType      string            `yaml:"client_dart_type"`
+	ClientParameterType string            `yaml:"client_parameter_type"`
+	ClientDefault       string            `yaml:"client_default"`
+	ClientNormalization string            `yaml:"client_normalization"`
+	ClientWire          string            `yaml:"client_wire"`
+	ClientEnumMembers   map[string]string `yaml:"client_enum_members"`
+	ClientWireName      string            `yaml:"client_wire_name"`
+	ClientOmitEmpty     bool              `yaml:"client_omit_empty"`
+	ClientSpreadBody    bool              `yaml:"client_spread_body"`
+	ItemEntity          string            `yaml:"item_entity"`
 }
 
 type entityDef struct {
@@ -40,9 +50,15 @@ type entityDef struct {
 }
 
 type fieldsFile struct {
-	Entities map[string]entityDef `yaml:"entities"`
-	Fields   []fieldDef           `yaml:"fields"`
-	Types    map[string]entityDef `yaml:"types"`
+	Entity       string               `yaml:"entity"`
+	Entities     map[string]entityDef `yaml:"entities"`
+	Fields       []fieldDef           `yaml:"fields"`
+	Types        map[string]entityDef `yaml:"types"`
+	ValueObjects map[string]entityDef `yaml:"value_objects"`
+	// Members 承载 `members:` 下的 owned_entity 声明。它与 `types:` 是同一种「聚合内
+	// 嵌套结构」的两种写法，DTO 生成按名字查找，不关心声明落在哪个键下；漏读会让
+	// 契约里明明存在的成员在生成期表现为"实体缺失"。
+	Members map[string]entityDef `yaml:"members"`
 }
 
 // ── post/operations.yaml ─────────────────────────────────────────────────────────
@@ -56,23 +72,44 @@ type routeSecurity struct {
 	Visibility      string   `yaml:"visibility"`
 }
 
+type requestBindingDef struct {
+	Name     string `yaml:"name"`
+	Field    string `yaml:"field"`
+	Required *bool  `yaml:"required"`
+}
+
+type requestBindingsDef struct {
+	Path     []requestBindingDef `yaml:"path"`
+	Query    []requestBindingDef `yaml:"query"`
+	Header   []requestBindingDef `yaml:"header"`
+	Injected []requestBindingDef `yaml:"injected"`
+}
+
 type routeDef struct {
-	Method          string   `yaml:"method"`
-	Path            string   `yaml:"path"`
-	Operation       string   `yaml:"operation"`
-	Description     string   `yaml:"description"`
-	QueryParams     []string `yaml:"query_params"`
-	WritableFields  []string `yaml:"writable_fields"`
-	RequestFields   []string `yaml:"request_fields"`
-	ResponseFields  []string `yaml:"response_fields"`
-	RequestEntity   string   `yaml:"request_entity"`
-	RequestBodyKind string   `yaml:"request_body_kind"`
-	ResponseEntity  string   `yaml:"response_entity"`
+	Method          string             `yaml:"method"`
+	Path            string             `yaml:"path"`
+	Operation       string             `yaml:"operation"`
+	Description     string             `yaml:"description"`
+	RequestBindings requestBindingsDef `yaml:"request_bindings"`
+	ResponseFields  []string           `yaml:"response_fields"`
+	RequestEntity   string             `yaml:"request_entity"`
+	RequestBodyKind string             `yaml:"request_body_kind"`
+	ResponseEntity  string             `yaml:"response_entity"`
 	// 框架级响应契约（R-ID02）：response_body 指向 projection read_model，
 	// response_body_kind ∈ object|page|ack（ack 无读模型，仅状态确认）。
 	ResponseBody     string        `yaml:"response_body"`
 	ResponseBodyKind string        `yaml:"response_body_kind"`
 	Security         routeSecurity `yaml:"security"`
+}
+
+func (r routeDef) queryBindingNames() []string {
+	names := make([]string, 0, len(r.RequestBindings.Query))
+	for _, binding := range r.RequestBindings.Query {
+		if name := strings.TrimSpace(binding.Name); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // resolveAuthMode 返回 public | optional | required 三态。
@@ -109,6 +146,7 @@ type projectionFieldDef struct {
 	Name        string `yaml:"name"`
 	DartType    string `yaml:"dart_type"`
 	WireType    string `yaml:"type"`
+	EnumRef     string `yaml:"enum_ref"`
 	Nullable    bool   `yaml:"nullable"`
 	Source      string `yaml:"source"`
 	Default     string `yaml:"default"`
@@ -117,6 +155,15 @@ type projectionFieldDef struct {
 	ListElementDartClass string `yaml:"list_element_dart_class"`
 	// When dart_type is a class with SomeDto.fromMap(Map<String,dynamic>) and wire is a JSON object.
 	MapFromStringKeyClass string `yaml:"map_from_string_key_class"`
+}
+
+func (field *projectionFieldDef) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		field.Name = strings.TrimSpace(node.Value)
+		return nil
+	}
+	type rawProjectionFieldDef projectionFieldDef
+	return node.Decode((*rawProjectionFieldDef)(field))
 }
 
 type computedGetterDef struct {
@@ -139,9 +186,10 @@ type clientProjection struct {
 }
 
 type projectionFile struct {
-	ReadModel        string               `yaml:"read_model"`
-	ClientProjection clientProjection     `yaml:"client_projection"`
-	Fields           []projectionFieldDef `yaml:"fields"`
+	ReadModel                      string               `yaml:"read_model"`
+	ClientProjection               clientProjection     `yaml:"client_projection"`
+	Fields                         []projectionFieldDef `yaml:"fields"`
+	clientProjectionFieldsDeclared bool
 }
 
 // projectionBinding 只承载 operation response_body 解析所需的投影身份和端侧类型绑定。
@@ -392,8 +440,6 @@ type careerInterestCategoryDef struct {
 }
 
 type onboardingInterestCatalogDef struct {
-	Version           string                           `yaml:"version"`
-	TaxonomyReleaseID string                           `yaml:"taxonomy_release_id"`
 	MinSelectionCount int                              `yaml:"min_selection_count"`
 	MaxSelectionCount int                              `yaml:"max_selection_count"`
 	Dimensions        []onboardingInterestDimensionDef `yaml:"dimensions"`
@@ -421,6 +467,12 @@ type appRouteDef struct {
 	ID          string   `yaml:"id"`
 	Path        string   `yaml:"path"`
 	QueryParams []string `yaml:"query_params"`
+}
+
+// app_routes.yaml 只描述端内导航，不承载 HTTP request_bindings，
+// 因此 query 绑定名就是 query_params 本身。
+func (r appRouteDef) queryBindingNames() []string {
+	return r.QueryParams
 }
 
 type appRoutesFile struct {
@@ -457,13 +509,14 @@ type appPagesFile struct {
 }
 
 type telemetryExtensionDef struct {
-	Type          string `yaml:"type"`
-	Minimum       *int   `yaml:"minimum"`
-	Maximum       *int   `yaml:"maximum"`
-	MaxLength     int    `yaml:"max_length"`
-	MaxItems      int    `yaml:"max_items"`
-	ItemMaxLength int    `yaml:"item_max_length"`
-	Sensitive     bool   `yaml:"sensitive"`
+	Type          string   `yaml:"type"`
+	Enum          []string `yaml:"enum"`
+	Minimum       *int     `yaml:"minimum"`
+	Maximum       *int     `yaml:"maximum"`
+	MaxLength     int      `yaml:"max_length"`
+	MaxItems      int      `yaml:"max_items"`
+	ItemMaxLength int      `yaml:"item_max_length"`
+	Sensitive     bool     `yaml:"sensitive"`
 }
 
 type telemetryEventDef struct {

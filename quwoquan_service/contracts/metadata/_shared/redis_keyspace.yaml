@@ -171,6 +171,146 @@ key_patterns:
     hash_tag: userId
     description: Session 实时兴趣向量（最近一次行为信号的 JSON 快照）
 
+  - pattern: "rec:ranked_feed_window:{rfw-<quotaShard>}:<subjectHash>:<windowId>"
+    redis_scene: rec
+    ttl_seconds: 600
+    type: string
+    hash_tag: quotaShard
+    max_value_bytes: 2097152
+    max_items: 300
+    default_page_depth: 8
+    max_active_per_subject: 8
+    quota_shard_count: 256
+    max_live_records_per_quota_shard: 128
+    max_live_bytes_per_quota_shard: 134217728
+    global_max_live_records: 32768
+    global_max_live_bytes: 34359738368
+    quota_index_pattern: "rec:ranked_feed_window_index:{rfw-<quotaShard>}"
+    quota_metadata_pattern: "rec:ranked_feed_window_metadata:{rfw-<quotaShard>}"
+    quota_config:
+      shard_count: sys.content-service.feed.ranked_window_quota_shard_count
+      records_per_shard: sys.content-service.feed.ranked_window_maximum_live_records_per_shard
+      bytes_per_shard: sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard
+    create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
+    description: |
+      subjectHash 为 canonical 窗口配额主体的 SHA-256 前 128 bit 十六进制：具名/
+      已验证设备请求使用命名空间化 actorId，无身份公开请求使用命名空间化
+      sessionId，禁止使用全局匿名 fallback actor 作为存储或配额键。键中只保留
+      主体摘要，不暴露 actorId/sessionId。推荐域不可变、未压缩
+      RankedFeedWindow JSON，默认冻结 8 个完整请求页、最多 300 项且硬限
+      2,097,152 bytes，以 (ordinal, contentId) 形成总序。canonical local_contract 的
+      典型 300 项样本约 1.5 MiB，可进入窗口；高密度 300 项样本约 3.0 MiB，必须拒绝并
+      停止签发 continuation，不得静默截断。生产编码器必须按 item 逐块累计完整 wire
+      bytes，越过剩余预算时立即停止并拒绝；禁止先物化无界整窗 JSON 后才检查大小。
+      subjectHash 由固定 256 个 quotaShard 确定性承载；默认全族硬上限为
+      256 * 128 = 32,768 个 live value、256 * 128 MiB = 32 GiB live payload。
+      这是业务准入上限而非 Redis maxmemory 或环境容量证明。Lua 在同一 quotaShard
+      slot 内原子执行 SET NX、过期/缺失成员清理、每主体最多 8 个窗口淘汰以及分片
+      live key/live byte 拒绝；分片已满只拒绝 contender，禁止淘汰其他主体。
+      Cluster adapter 只预读 max_live_records_per_quota_shard + 1 个索引成员并把当前
+      value key 全部显式列入 EVAL KEYS；Lua 自身也只读取同一硬界内成员。并发导致
+      索引出现未声明成员时脚本不写入并做有界重试，严禁动态构造 Redis key、全量
+      SCAN/KEYS/ZRANGE 或可漂移 mutable counter。winner replay 不重复计入 bytes，
+      过期/缺失 value 清理必须同步删除 index/metadata 并精确扣除 bytes。
+      创建后 value TTL 不滑动，读取禁止 EXPIRE 续期。窗口同时绑定
+      actor/session/route、active release/manifest digest、candidate watermark 以及
+      policy/model/feature/ranking/reason 版本；任一失配或键缺失必须 fail-closed，
+      不得实时重算、offset 续接或回退 Mongo _id。
+      key 与 payload 都是唯一 canonical schema，不含协议版本前缀或 schema-version
+      信封；任何非 canonical key/payload 均不读写，禁止 dual-read、shim 或依赖
+      maxmemory 作为业务配额。
+
+  - pattern: "rec:ranked_feed_window_index:{rfw-<quotaShard>}"
+    redis_scene: rec
+    ttl_seconds: 600
+    type: sorted_set
+    hash_tag: quotaShard
+    max_members: 128
+    member: "rec:ranked_feed_window:{rfw-<quotaShard>}:<subjectHash>:<windowId>"
+    score: redis_server_expires_at_microseconds
+    description: |
+      RankedFeedWindow 固定配额分片索引，与 value/metadata 使用相同 quotaShard
+      slot。每个分片最多 128 个 live 成员；Lua 创建时先清理过期或缺失 value，
+      再按 metadata 的 subjectHash 只淘汰该主体最老窗口。第 9 个主体窗口必须原子
+      删除最老 value/index/metadata；分片 key/byte 上限命中则无写入拒绝。
+      index TTL 可随新窗口创建延长，value TTL 严禁滑动。
+
+  - pattern: "rec:ranked_feed_window_metadata:{rfw-<quotaShard>}"
+    redis_scene: rec
+    ttl_seconds: 600
+    type: hash
+    hash_tag: quotaShard
+    max_fields: 128
+    field: "rec:ranked_feed_window:{rfw-<quotaShard>}:<subjectHash>:<windowId>"
+    value: "<subjectHash>:<payloadBytes>"
+    description: |
+      与 index 一一对应的 owner digest + 精确 payload bytes 元数据。Lua 每次只在
+      有界 index 上重算 live key/live bytes，不维护可漂移计数器；任一缺失、非法
+      或 value 实际 bytes 不一致必须 repair_bound fail-closed。
+
+  - pattern: "rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>"
+    redis_scene: rec
+    ttl_seconds: 600
+    type: string
+    hash_tag: quotaShard
+    max_value_bytes: 65536
+    max_items: 20
+    max_object_cards: 20
+    max_active_per_scope: 400
+    quota_shard_count: 256
+    max_live_records_per_quota_shard: 512
+    max_live_bytes_per_quota_shard: 33554432
+    global_max_live_records: 131072
+    global_max_live_bytes: 8589934592
+    quota_index_pattern: "rec:feed_delivery_page_index:{fdp-<quotaShard>}"
+    quota_metadata_pattern: "rec:feed_delivery_page_metadata:{fdp-<quotaShard>}"
+    quota_config:
+      shard_count: sys.content-service.feed.delivery_page_quota_shard_count
+      records_per_shard: sys.content-service.feed.delivery_page_maximum_live_records_per_shard
+      bytes_per_shard: sys.content-service.feed.delivery_page_maximum_live_bytes_per_shard
+    create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
+    description: |
+      content.Post.GetFeed 已交付页的未压缩只追加 JSON。scopeHash 为 actor/session/
+      route/pageSize 规范元组的 SHA-256，不暴露原始主体。每页只保存已交付 Post
+      identity 顺序、对象卡公开快照与 anchor、previous page identity、原始 outbound
+      cursor、feedRequestId、release/version 与固定 expiry；previous cursor 只能读取该
+      记录（含原推荐归因）并按原顺序执行当前可见性 hydration，不得重新 recall、重排、反向 live query
+      或补入替代内容。value TTL 不滑动；同 scope 最多 400 页，覆盖最多 8 个活跃
+      RankedFeedWindow 各 50 页的 cursor 深度。scopeHash 由固定 256 个 quotaShard
+      确定性承载；默认全族硬上限为 256 * 512 = 131,072 个 live value、
+      256 * 32 MiB = 8 GiB live payload。Lua 与 RankedFeedWindow 复用同一有界
+      原子准入契约：显式 EVAL KEYS、无动态 key/无全量 scan/无 mutable counter；
+      每 scope 淘汰仅作用于自身，分片 key/byte 已满拒绝 contender 且不得淘汰其他
+      scope。任何原子能力缺失、repair bound、payload 冲突或 quota 拒绝均
+      fail-closed。key 与 payload 都是唯一 canonical schema，不含协议版本前缀或
+      schema-version 信封；禁止 dual-read/shim。
+
+  - pattern: "rec:feed_delivery_page_index:{fdp-<quotaShard>}"
+    redis_scene: rec
+    ttl_seconds: 600
+    type: sorted_set
+    hash_tag: quotaShard
+    max_members: 512
+    member: "rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>"
+    score: redis_server_expires_at_microseconds
+    description: |
+      FeedDeliveryPage 固定配额分片索引，与 value/metadata 使用相同 quotaShard
+      slot；新页原子追加时清理过期记录并按 scope 淘汰最老页，分片最多 512 个
+      live member，读取不得延长 value TTL。
+
+  - pattern: "rec:feed_delivery_page_metadata:{fdp-<quotaShard>}"
+    redis_scene: rec
+    ttl_seconds: 600
+    type: hash
+    hash_tag: quotaShard
+    max_fields: 512
+    field: "rec:feed_delivery_page:{fdp-<quotaShard>}:<scopeHash>:<deliveryPageId>"
+    value: "<scopeHash>:<payloadBytes>"
+    description: |
+      与 FeedDeliveryPage index 一一对应的 scope digest + payload bytes 元数据；
+      Lua 从有界 index 精确重算分片 live key/live bytes，异常 metadata 必须
+      repair_bound fail-closed。
+
   - pattern: "rec:icool:{<userId>}"
     redis_scene: rec
     ttl_seconds: 2592000

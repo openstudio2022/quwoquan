@@ -49,6 +49,7 @@ business_rules:
 - reviewer 必须具备 status report review 权限
 - confirmed_offline 或 dismissed 后不可再次裁决
 lifecycle:
+  state_field: status
   states:
   - pending_review
   - confirmed_offline

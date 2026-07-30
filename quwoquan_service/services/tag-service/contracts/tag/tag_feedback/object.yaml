@@ -1,4 +1,6 @@
 kind: append_only_fact
+lifecycle:
+  immutable: true
 description: 'Persona 或设备对标签推荐的反馈事实。反馈只追加且不修改 TagTaxonomyRelease 或 TagNode。
 
   '

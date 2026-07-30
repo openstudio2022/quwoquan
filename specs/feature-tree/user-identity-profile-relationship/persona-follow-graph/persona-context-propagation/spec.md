@@ -36,7 +36,7 @@
 - 内容对象需保留不可变作者快照，避免停用后记录显示异常。
 - 圈子相关写入必须明确落到具体分身，而不是 owner。
 - 下游写入对象必须保存足够的作者快照，避免 persona 停用后记录渲染丢失。
-- 下游域可以持久化 `personaId / subAccountId / profileSubjectId`，但不得反查或暴露 owner 映射。
+- 下游域可以持久化 `personaId / personaId / profileSubjectId`，但不得反查或暴露 owner 映射。
 - 助手会话与通知回放至少要带上 active persona 上下文，不得默认落回 owner。
 - 通知与助手回放的 persona drift 事件必须可观测、可回滚。
 

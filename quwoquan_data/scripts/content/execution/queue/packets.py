@@ -82,7 +82,7 @@ def build_lease_packet(job: QueueJob) -> dict[str, Any]:
         "creatorProfileId": job.creator_profile_id or None,
         "authorId": job.author_id or None,
         "creatorArchetype": job.creator_archetype or None,
-        "creatorProfileVersion": job.creator_profile_version or None,
+        "creatorProfileDigest": job.creator_profile_digest or None,
         "contentType": content_type or None,
         "resultEnvelopeRequired": job.result_envelope_required,
         "resultEnvelopeContract": {

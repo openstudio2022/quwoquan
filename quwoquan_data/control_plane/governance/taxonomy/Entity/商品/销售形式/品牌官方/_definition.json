@@ -2,6 +2,7 @@
   "label": "品牌官方",
   "labelEn": "Brand Official",
   "description": "品牌官方渠道",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

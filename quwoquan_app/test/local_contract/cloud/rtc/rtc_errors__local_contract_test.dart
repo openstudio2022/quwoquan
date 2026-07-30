@@ -60,22 +60,15 @@ void main() {
       expect(code!.httpStatus, 409);
     });
 
-    test('parse version_conflict → versionConflict', () {
-      final code = RtcErrorCode.fromCode('RTC.USER.version_conflict');
-      expect(code, RtcErrorCode.versionConflict);
-      expect(code!.httpStatus, 409);
-    });
-
     test('parse idempotency_conflict → idempotencyConflict', () {
       final code = RtcErrorCode.fromCode('RTC.USER.idempotency_conflict');
       expect(code, RtcErrorCode.idempotencyConflict);
       expect(code!.httpStatus, 409);
     });
 
-    test('parse rate_limited → rateLimited', () {
-      final code = RtcErrorCode.fromCode('RTC.USER.rate_limited');
-      expect(code, RtcErrorCode.rateLimited);
-      expect(code!.httpStatus, 429);
+    test('retired service-local rate limit code is not an RTC error', () {
+      expect(RtcErrorCode.fromCode('RTC.USER.rate_limited'), isNull);
+      expect(RtcErrorCode.fromCode('GATEWAY.USER.rate_limited'), isNull);
     });
 
     test('parse media_transport_unavailable → mediaTransportUnavailable', () {
@@ -107,12 +100,9 @@ void main() {
       expect(code, isNull);
     });
 
-    test(
-      'enum 总数 = 19（含 invalid_argument、media_transport 与 account_security）',
-      () {
-        expect(RtcErrorCode.values.length, 19);
-      },
-    );
+    test('enum 总数 = 17（限流统一归 gateway，RTC 不保留第二错误源）', () {
+      expect(RtcErrorCode.values.length, 17);
+    });
 
     test('关系门禁错误码已贯通端侧', () {
       expect(
@@ -149,7 +139,6 @@ void main() {
       expect(RtcErrorCode.unauthorized.isUserError, isTrue);
       expect(RtcErrorCode.accountSecurityDenied.isUserError, isTrue);
       expect(RtcErrorCode.alreadyInCall.isUserError, isTrue);
-      expect(RtcErrorCode.rateLimited.isUserError, isTrue);
       expect(RtcErrorCode.internalError.isUserError, isFalse);
       expect(RtcErrorCode.mediaTransportUnavailable.isUserError, isFalse);
       expect(RtcErrorCode.accountSecurityUnavailable.isUserError, isFalse);
@@ -160,7 +149,6 @@ void main() {
       expect(RtcErrorCode.accountSecurityUnavailable.isSystemError, isTrue);
       expect(RtcErrorCode.internalError.isSystemError, isTrue);
       expect(RtcErrorCode.callNotFound.isSystemError, isFalse);
-      expect(RtcErrorCode.rateLimited.isSystemError, isFalse);
     });
   });
 

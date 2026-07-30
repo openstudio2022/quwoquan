@@ -7,13 +7,17 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     if (objectId.isEmpty) {
       return const SizedBox.shrink();
     }
+    // 交集要按真实垂类说话：大学说「同校」、博物馆说「同游」、车型说「同好」。
+    // 这里必须下发主页自身的 homepageType，云侧再经注册表 objectTypeBindings 收口；
+    // 统一发 'homepage' 会让所有垂类退化成同一种读法。
+    final homepageType = (_reference?.homepageType ?? '').trim();
     return Consumer(
       builder: (context, ref, _) {
         final query = ObjectIntersectionQuery(
           objectAId: ref.watch(currentUserIdProvider),
           objectAType: 'user',
           objectBId: objectId,
-          objectBType: 'homepage',
+          objectBType: homepageType.isEmpty ? 'homepage' : homepageType,
         );
         if (!query.isResolvable) {
           return const SizedBox.shrink();

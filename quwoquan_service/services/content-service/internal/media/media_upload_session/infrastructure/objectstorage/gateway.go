@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,7 +17,8 @@ import (
 )
 
 type Config struct {
-	Bucket string
+	Bucket        string
+	UploadBaseURL string
 }
 
 // Gateway is the MediaUploadSession object-storage adapter. It owns temporary
@@ -30,9 +32,10 @@ type Gateway struct {
 
 func NewGateway(config Config, client runtimemedia.PresignClient) (*Gateway, error) {
 	config.Bucket = strings.TrimSpace(config.Bucket)
-	if config.Bucket == "" || client == nil {
+	config.UploadBaseURL = strings.TrimRight(strings.TrimSpace(config.UploadBaseURL), "/")
+	if config.Bucket == "" || !isTrustedUploadURL(config.UploadBaseURL, config.UploadBaseURL) || client == nil {
 		return nil, errors.New(
-			"media upload session object gateway requires bucket and presign client",
+			"media upload session object gateway requires bucket, HTTPS upload base URL and presign client",
 		)
 	}
 	return &Gateway{config: config, client: client, now: time.Now}, nil
@@ -50,29 +53,54 @@ func (g *Gateway) PrepareUpload(ctx context.Context, params sessionapp.PrepareUp
 	if err := validatePrepare(params, g.now().UTC()); err != nil {
 		return sessionapp.UploadGrant{}, err
 	}
-	key := temporaryObjectKey(params.OwnerID, params.SessionID, params.ContentType)
-	url, err := g.UploadURL(ctx, key, params.ContentType, params.ExpectedSHA256, params.ExpiresAt)
+	key := temporaryObjectKey(params.OwnerID, params.SessionID, params.MimeType)
+	url, err := g.UploadURL(ctx, key, params.MimeType, params.ExpectedSHA256, params.ExpiresAt)
 	if err != nil {
 		return sessionapp.UploadGrant{}, err
 	}
 	return sessionapp.UploadGrant{ObjectKey: key, UploadURL: url, ExpiresAt: params.ExpiresAt.UTC()}, nil
 }
 
-func (g *Gateway) UploadURL(ctx context.Context, objectKey, contentType, expectedSHA256 string, expiresAt time.Time) (string, error) {
+func (g *Gateway) UploadURL(ctx context.Context, objectKey, mimeType, expectedSHA256 string, expiresAt time.Time) (string, error) {
 	ttl := expiresAt.UTC().Sub(g.now().UTC())
-	if strings.TrimSpace(objectKey) == "" || strings.TrimSpace(contentType) == "" || ttl <= 0 {
+	if strings.TrimSpace(objectKey) == "" || strings.TrimSpace(mimeType) == "" || ttl <= 0 {
 		return "", errors.New("media upload grant is expired or incomplete")
 	}
-	return g.client.PresignPutObject(ctx, g.config.Bucket, objectKey, runtimemedia.PutObjectConstraints{
-		ContentType: contentType, SHA256: expectedSHA256,
+	uploadURL, err := g.client.PresignPutObject(ctx, g.config.Bucket, objectKey, runtimemedia.PutObjectConstraints{
+		ContentType: mimeType, SHA256: expectedSHA256,
 	}, ttl)
+	if err != nil {
+		return "", err
+	}
+	if !isTrustedUploadURL(uploadURL, g.config.UploadBaseURL) {
+		return "", errors.New("presigned media upload URL is outside the configured upload authority")
+	}
+	return uploadURL, nil
+}
+
+func isTrustedUploadURL(rawCandidate, rawBase string) bool {
+	candidate, candidateErr := url.Parse(strings.TrimSpace(rawCandidate))
+	base, baseErr := url.Parse(strings.TrimSpace(rawBase))
+	if candidateErr != nil || baseErr != nil ||
+		base.Scheme != "https" || base.Host == "" || base.User != nil ||
+		base.RawQuery != "" || base.Fragment != "" ||
+		candidate.Scheme != base.Scheme ||
+		!strings.EqualFold(candidate.Hostname(), base.Hostname()) ||
+		candidate.Port() != base.Port() ||
+		candidate.User != nil || candidate.Fragment != "" {
+		return false
+	}
+	basePath := strings.TrimRight(base.Path, "/")
+	return basePath == "" ||
+		candidate.Path == basePath ||
+		strings.HasPrefix(candidate.Path, basePath+"/")
 }
 
 func (g *Gateway) CompleteUpload(ctx context.Context, params sessionapp.CompleteUploadParams) (sessionapp.CompletedObject, error) {
 	if err := validateComplete(params); err != nil {
 		return sessionapp.CompletedObject{}, err
 	}
-	finalKey := contentAddressedObjectKey(params.ExpectedSHA256, params.ContentType)
+	finalKey := contentAddressedObjectKey(params.ExpectedSHA256, params.MimeType)
 	info, err := g.client.StatObject(ctx, g.config.Bucket, params.ObjectKey)
 	if err != nil {
 		return sessionapp.CompletedObject{}, fmt.Errorf("stat uploaded media object: %w", err)
@@ -105,7 +133,7 @@ func (g *Gateway) CompleteUpload(ctx context.Context, params sessionapp.Complete
 			finalKey,
 			map[string]string{
 				"sha256":       actualDigest,
-				"content-type": strings.TrimSpace(params.ContentType),
+				"content-type": strings.TrimSpace(params.MimeType),
 			},
 		); err != nil {
 			return sessionapp.CompletedObject{}, fmt.Errorf("promote uploaded media object: %w", err)
@@ -123,7 +151,7 @@ func validateCompletedObject(
 		return "", errors.New("uploaded media object checksum does not match the upload session")
 	}
 	if info.Size != params.FileSize ||
-		strings.TrimSpace(info.ContentType) != strings.TrimSpace(params.ContentType) {
+		strings.TrimSpace(info.ContentType) != strings.TrimSpace(params.MimeType) {
 		return "", errors.New("uploaded media object metadata does not match the upload session")
 	}
 	return actualDigest, nil
@@ -155,23 +183,23 @@ func validatePrepare(params sessionapp.PrepareUploadParams, now time.Time) error
 		params.FileSize <= 0 || !params.ExpiresAt.After(now) || !validDigest(params.ExpectedSHA256) {
 		return errors.New("media upload session identity, owner, file size, checksum and future expiration are required")
 	}
-	return validateType(params.MediaType, params.ContentType)
+	return validateType(params.MediaType, params.MimeType)
 }
 
 func validateComplete(params sessionapp.CompleteUploadParams) error {
 	if strings.TrimSpace(params.ObjectKey) == "" || params.FileSize <= 0 || !validDigest(params.ExpectedSHA256) {
 		return errors.New("media completion requires object key, file size and checksum")
 	}
-	return validateType(params.MediaType, params.ContentType)
+	return validateType(params.MediaType, params.MimeType)
 }
 
-func validateType(mediaType, contentType string) error {
+func validateType(mediaType, mimeType string) error {
 	mediaType = strings.ToLower(strings.TrimSpace(mediaType))
-	contentType = strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
-	if mediaType == "file" && strings.Contains(contentType, "/") {
+	mimeType = strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
+	if mediaType == "file" && strings.Contains(mimeType, "/") {
 		return nil
 	}
-	if (mediaType == "image" || mediaType == "video" || mediaType == "audio") && strings.HasPrefix(contentType, mediaType+"/") {
+	if (mediaType == "image" || mediaType == "video" || mediaType == "audio") && strings.HasPrefix(mimeType, mediaType+"/") {
 		return nil
 	}
 	return errors.New("media type and content type are inconsistent")
@@ -194,22 +222,22 @@ func normalizeDigest(value string) string {
 	return "sha256:" + raw
 }
 
-func temporaryObjectKey(ownerID, sessionID, contentType string) string {
+func temporaryObjectKey(ownerID, sessionID, mimeType string) string {
 	ownerDigest := sha256.Sum256([]byte(strings.TrimSpace(ownerID)))
-	return fmt.Sprintf("uploads/%s/%s%s", hex.EncodeToString(ownerDigest[:8]), strings.TrimSpace(sessionID), extension(contentType))
+	return fmt.Sprintf("uploads/%s/%s%s", hex.EncodeToString(ownerDigest[:8]), strings.TrimSpace(sessionID), extension(mimeType))
 }
 
-func contentAddressedObjectKey(digest, contentType string) string {
+func contentAddressedObjectKey(digest, mimeType string) string {
 	raw := strings.TrimPrefix(normalizeDigest(digest), "sha256:")
-	return fmt.Sprintf("media/objects/sha256/%s/%s/%s%s", raw[:2], raw[2:4], raw, extension(contentType))
+	return fmt.Sprintf("media/objects/sha256/%s/%s/%s%s", raw[:2], raw[2:4], raw, extension(mimeType))
 }
 
-func extension(contentType string) string {
-	extensions, _ := mime.ExtensionsByType(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+func extension(mimeType string) string {
+	extensions, _ := mime.ExtensionsByType(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
 	if len(extensions) > 0 {
 		return strings.ToLower(extensions[0])
 	}
-	return filepath.Ext(contentType)
+	return filepath.Ext(mimeType)
 }
 
 var _ sessionapp.ObjectStore = (*Gateway)(nil)

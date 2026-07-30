@@ -14,6 +14,9 @@ from pathlib import Path
 _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
+_MODEL_RUNTIME_ROOT = _SCRIPT_DIR.parent
+if str(_MODEL_RUNTIME_ROOT) not in sys.path:
+    sys.path.insert(0, str(_MODEL_RUNTIME_ROOT))
 
 try:
     from pymongo import MongoClient
@@ -34,6 +37,10 @@ except ImportError:
     roc_auc_score = None
 
 from diversity_metrics import compute_diversity_metrics
+from features.intersection_feature_encoder import (
+    append_intersection_features,
+    matched_edge_categorical_features,
+)
 from privacy_guard import reject_closed_documents
 from time_utils import utc_now
 from training_sample_policy import (
@@ -55,30 +62,6 @@ CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",
 ]
 CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
-# W7 交集特征（registry v5）：与 models/content_feed.py 在线抽取保持同构。
-INTERSECTION_USER_NUMERIC = [
-    "sharedFolloweesCount", "sharedCircleCount", "coCommentedCount",
-    "coVisitedEntityCount", "followeeInObjectActive", "followeeViewingActive",
-    "affinityIntersectionScore",
-]
-INTERSECTION_CLASS_MAP = {"fact": 2, "affinity": 1}
-
-
-def _append_intersection_features(features: list, item: dict, user: dict) -> None:
-    """Append intersection features (user 7 + item 4 = 11 dims)."""
-    for f in INTERSECTION_USER_NUMERIC:
-        features.append(float(user.get(f, 0) or 0))
-    features.append(float(item.get("intersectionFactStrength", 0) or 0))
-    features.append(float(item.get("intersectionFreshness", 0) or 0))
-    candidate_affinity = float(item.get("affinityIntersectionScore", 0) or 0)
-    if not str(item.get("intersectionConfidenceLabel", "") or "").strip():
-        candidate_affinity = 0.0
-    features.append(candidate_affinity)
-    features.append(
-        float(INTERSECTION_CLASS_MAP.get(str(item.get("intersectionClass", "") or ""), 0))
-    )
-
-
 # Multi-objective targets and their fusion weights
 OBJECTIVES = {
     "click":    {"type": "binary",     "weight": 0.30},
@@ -146,7 +129,7 @@ def _extract_features(sample: dict) -> list[float]:
     content_type = item.get("contentType", "")
     features.append(float(type_ener.get(content_type, 0)))
 
-    _append_intersection_features(features, item, user)
+    append_intersection_features(features, item, user, user)
 
     return features
 
@@ -253,8 +236,18 @@ def main():
                 "bagging_freq": 5,
             }
 
-        dtrain = lgb.Dataset(X_train, label=y_train)
-        dval = lgb.Dataset(X_val, label=y_val, reference=dtrain)
+        categorical_features = matched_edge_categorical_features(X_train.shape[1])
+        dtrain = lgb.Dataset(
+            X_train,
+            label=y_train,
+            categorical_feature=categorical_features,
+        )
+        dval = lgb.Dataset(
+            X_val,
+            label=y_val,
+            reference=dtrain,
+            categorical_feature=categorical_features,
+        )
         callbacks = [lgb.early_stopping(stopping_rounds=10, verbose=False)]
         model = lgb.train(
             params, dtrain,

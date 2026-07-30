@@ -23,23 +23,6 @@ def _load_yaml_dict(path: Path) -> dict[str, Any]:
     return data
 
 
-def _compare_semver(a: str, b: str) -> int:
-    def parse(value: str) -> tuple[int, int, int]:
-        parts = value.strip().lstrip("v").split(".")
-        ints = [int(p) if p.isdigit() else 0 for p in parts[:3]]
-        while len(ints) < 3:
-            ints.append(0)
-        return ints[0], ints[1], ints[2]
-
-    av = parse(a)
-    bv = parse(b)
-    if av > bv:
-        return 1
-    if av < bv:
-        return -1
-    return 0
-
-
 def _runtime_paths(
     app_env: str, service_name: str, config_root: str, config_version: str
 ) -> list[Path]:
@@ -87,8 +70,8 @@ def load_layered_runtime_config_or_die(
     return merged
 
 
-def _validate_runtime_compatibility_or_die(
-    merged_cfg: dict[str, Any], config_version: str, image_version: str
+def _validate_runtime_configuration_identity_or_die(
+    merged_cfg: dict[str, Any], config_version: str
 ) -> None:
     cfg = merged_cfg.get("config", {})
     if not isinstance(cfg, dict):
@@ -100,25 +83,12 @@ def _validate_runtime_compatibility_or_die(
             f"CONFIG_VERSION mismatch: env={config_version!r} file={file_version!r}"
         )
 
-    if image_version:
-        min_image = str(cfg.get("min_image_version", "")).strip()
-        max_image = str(cfg.get("max_image_version", "")).strip()
-        if min_image and _compare_semver(image_version, min_image) < 0:
-            raise RuntimeError(
-                f"IMAGE_VERSION={image_version!r} below min_image_version={min_image!r}"
-            )
-        if max_image and _compare_semver(image_version, max_image) > 0:
-            raise RuntimeError(
-                f"IMAGE_VERSION={image_version!r} above max_image_version={max_image!r}"
-            )
-
-
 def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
     """
     Fail-fast runtime contract:
     - APP_ENV must be one of alpha/beta/gamma/prod.
     - SERVICE_NAME, when provided, must be recommendation-service.
-    - For gamma/prod, CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT are required.
+    - CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT are required in every environment.
     """
     app_env = _env("APP_ENV") or "alpha"
     if app_env not in VALID_APP_ENVS:
@@ -134,15 +104,13 @@ def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
 
     config_root = _env("CONFIG_ROOT")
     config_version = _env("CONFIG_VERSION")
-    image_version = _env("IMAGE_VERSION")
 
-    if app_env in {"gamma", "prod"}:
-        required = ["CONFIG_VERSION", "IMAGE_VERSION", "CONFIG_ROOT"]
-        missing = [k for k in required if not _env(k)]
-        if missing:
-            raise RuntimeError(
-                f"missing required runtime env for APP_ENV={app_env}: {', '.join(missing)}"
-            )
+    required = ["CONFIG_VERSION", "IMAGE_VERSION", "CONFIG_ROOT"]
+    missing = [key for key in required if not _env(key)]
+    if missing:
+        raise RuntimeError(
+            f"missing required runtime env for APP_ENV={app_env}: {', '.join(missing)}"
+        )
 
     merged_cfg = load_layered_runtime_config_or_die(
         app_env=app_env,
@@ -150,9 +118,8 @@ def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
         config_root=config_root,
         config_version=config_version,
     )
-    _validate_runtime_compatibility_or_die(
+    _validate_runtime_configuration_identity_or_die(
         merged_cfg=merged_cfg,
         config_version=config_version,
-        image_version=image_version,
     )
     return merged_cfg

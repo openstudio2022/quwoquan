@@ -25,8 +25,6 @@ var DefaultResultTargets = []rtsearch.Target{
 const (
 	SuggestLimit = 12
 	ResultLimit  = 20
-	// RankingVersion lets observability/AB attribute hits to a ranking revision.
-	RankingVersion = "search-v1"
 )
 
 var ErrSearchInvalid = errors.New("invalid search request")
@@ -43,7 +41,6 @@ type QueryLog struct {
 	ViewerID         string
 	ObjectTypes      []string
 	ResultCount      int
-	RankingVersion   string
 	ExperimentBucket string
 	RelatedTerms     []string
 	CreatedAt        time.Time
@@ -177,7 +174,6 @@ func (s *SearchService) LogQuery(ctx context.Context, q QueryLog) {
 		UserID:           q.ViewerID,
 		NormalizedQuery:  q.Query,
 		RelatedTerms:     q.RelatedTerms,
-		RankingVersion:   q.RankingVersion,
 		ExperimentBucket: q.ExperimentBucket,
 		ResultCount:      q.ResultCount,
 		CreatedAt:        q.CreatedAt,

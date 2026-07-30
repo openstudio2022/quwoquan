@@ -1,3 +1,8 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-004
+
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -56,7 +61,55 @@ void main() {
   });
 
   group('CachedContentRepository', () {
-    test('feed 查询优先请求远端，失败时才回退快照', () async {
+    test('快照 hydration 永久阻塞时取消立即终止且不请求远端', () async {
+      final delegate = _CountingContentRepository();
+      final hydration = Completer<void>();
+      final store = _BlockingContentQuerySnapshotStore(hydration.future);
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: store,
+      );
+      final cancellation = CloudOperationCancellationSignal();
+
+      final pending = repo.listDiscoveryFeedPage(
+        category: 'moment',
+        cancellation: cancellation,
+      );
+      cancellation.cancel();
+
+      await expectLater(
+        pending.timeout(const Duration(seconds: 1)),
+        throwsA(isA<CloudOperationCancelledException>()),
+      );
+      expect(delegate.feedRequestCount, 0);
+      expect(store.count, 0);
+    });
+
+    test('快照 hydration 永久阻塞时由请求期限终止且不请求远端', () async {
+      final delegate = _CountingContentRepository();
+      final hydration = Completer<void>();
+      final store = _BlockingContentQuerySnapshotStore(hydration.future);
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: store,
+      );
+
+      final pending = repo.listDiscoveryFeedPage(
+        category: 'moment',
+        deadlineAt: DateTime.now().add(const Duration(milliseconds: 20)),
+      );
+
+      await expectLater(
+        pending.timeout(const Duration(seconds: 1)),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(delegate.feedRequestCount, 0);
+      expect(store.count, 0);
+    });
+
+    test('feed 首屏先返回持久快照并用同一结果句柄完成远端再验证', () async {
       final delegate = _CountingContentRepository();
       final repo = _cachedContentRepository(
         delegate: delegate,
@@ -65,16 +118,44 @@ void main() {
       );
 
       final first = await repo.listDiscoveryFeedPage(category: 'moment');
-      final second = await repo.listDiscoveryFeedPage(category: 'moment');
-      delegate.failFeedRequests = true;
-      final fallback = await repo.listDiscoveryFeedPage(category: 'moment');
+      final refresh = Completer<DiscoveryFeedPage>();
+      delegate.pendingFeedPage = refresh;
+      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
 
       expect(first.items.single.id, 'post_1');
-      expect(second.items.single.id, 'post_1');
-      expect(delegate.feedRequestCount, 3);
+      expect(stale.items.single.id, 'post_1');
+      expect(stale.isStaleWhileRevalidate, isTrue);
+      expect(stale.isCacheFallback, isFalse);
+      expect(delegate.feedRequestCount, 2);
+
+      refresh.complete(
+        DiscoveryFeedPage(items: <PostBaseDto>[_postDto('post_2')]),
+      );
+      final revalidated = await stale.revalidation!;
+      expect(revalidated.items.single.id, 'post_2');
+      expect(revalidated.isCacheFallback, isFalse);
+      expect(delegate.feedRequestCount, 2);
+    });
+
+    test('feed 首屏远端再验证失败时保留快照并暴露真实失败', () async {
+      final delegate = _CountingContentRepository();
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: ContentQuerySnapshotStore(),
+      );
+
+      await repo.listDiscoveryFeedPage(category: 'moment');
+      delegate.failFeedRequests = true;
+      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
+      final fallback = await stale.revalidation!;
+
+      expect(stale.items.single.id, 'post_1');
+      expect(stale.isStaleWhileRevalidate, isTrue);
       expect(fallback.items.single.id, 'post_1');
       expect(fallback.isCacheFallback, isTrue);
       expect(fallback.cacheFallbackError, isA<StateError>());
+      expect(delegate.feedRequestCount, 2);
     });
 
     test('feed 缓存回退仍过滤账号屏蔽关键词', () async {
@@ -88,10 +169,79 @@ void main() {
 
       await repo.listDiscoveryFeedPage(category: 'moment');
       delegate.failFeedRequests = true;
-      final fallback = await repo.listDiscoveryFeedPage(category: 'moment');
+      final stale = await repo.listDiscoveryFeedPage(category: 'moment');
+      final fallback = await stale.revalidation!;
 
+      expect(stale.items, isEmpty);
       expect(fallback.items, isEmpty);
       expect(fallback.isCacheFallback, isTrue);
+    });
+
+    test('缓存回退关键词读取阻塞时取消终止且晚完成不产生新请求或写缓存', () async {
+      final delegate = _CountingContentRepository();
+      final store = ContentQuerySnapshotStore();
+      final keywords = Completer<List<String>>();
+      final loaderStarted = Completer<void>();
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: store,
+        blockedKeywordsLoader: () {
+          if (!loaderStarted.isCompleted) {
+            loaderStarted.complete();
+          }
+          return keywords.future;
+        },
+      );
+      await repo.listDiscoveryFeedPage(category: 'moment');
+      delegate.failFeedRequests = true;
+      final cancellation = CloudOperationCancellationSignal();
+
+      final pending = repo.listDiscoveryFeedPage(
+        category: 'moment',
+        cancellation: cancellation,
+      );
+      await loaderStarted.future;
+      cancellation.cancel();
+      await expectLater(
+        pending.timeout(const Duration(seconds: 1)),
+        throwsA(isA<CloudOperationCancelledException>()),
+      );
+      final requestCountAfterCancel = delegate.feedRequestCount;
+      final cacheCountAfterCancel = store.count;
+
+      keywords.complete(const <String>[]);
+      await Future<void>.delayed(Duration.zero);
+      expect(delegate.feedRequestCount, requestCountAfterCancel);
+      expect(store.count, cacheCountAfterCancel);
+      expect(requestCountAfterCancel, 1);
+      expect(cacheCountAfterCancel, 1);
+    });
+
+    test('缓存回退关键词读取阻塞时由请求期限终止', () async {
+      final delegate = _CountingContentRepository();
+      final store = ContentQuerySnapshotStore();
+      final keywords = Completer<List<String>>();
+      final repo = _cachedContentRepository(
+        delegate: delegate,
+        postCache: PostObjectCacheService(),
+        querySnapshotStore: store,
+        blockedKeywordsLoader: () => keywords.future,
+      );
+      await repo.listDiscoveryFeedPage(category: 'moment');
+      delegate.failFeedRequests = true;
+
+      final pending = repo.listDiscoveryFeedPage(
+        category: 'moment',
+        deadlineAt: DateTime.now().add(const Duration(milliseconds: 20)),
+      );
+
+      await expectLater(
+        pending.timeout(const Duration(seconds: 1)),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(delegate.feedRequestCount, 1);
+      expect(store.count, 1);
     });
 
     test('个人作品优先请求远端，失败时才回退快照', () async {
@@ -133,7 +283,7 @@ void main() {
 
     test('视频详情缓存保留播放 canary 的规范媒体字段', () async {
       const videoUrl =
-          'media/video/s/video-primary-0001/post/video-content-0001/source.mp4';
+          'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4';
       const thumbnailUrl =
           'media/image/s/archived-image/post/fixture_video_001/v1/cover.png';
       final delegate = _CountingContentRepository(
@@ -206,9 +356,20 @@ void main() {
         key: queryKey,
         items: <PostBaseDto>[_postDto('post_1')],
         nextCursor: 'cursor_2',
+        previousCursor: 'cursor_previous',
+        paginationExpiresAt: DateTime.utc(2026, 7, 29, 12),
+        paginationSessionId: 'session-persisted',
         feedRequestId: 'feed_request_1',
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       );
       await store.flushPersistence();
+      final persistedPayload =
+          jsonDecode(
+                (await SharedPreferences.getInstance()).getString(storageKey)!,
+              )
+              as Map<String, dynamic>;
+      expect(persistedPayload.keys, <String>['snapshots']);
       final memoryCached = store.get(queryKey);
       expect(memoryCached?.source, CacheReadSource.memory);
 
@@ -224,11 +385,225 @@ void main() {
       expect(cached!.source, CacheReadSource.disk);
       expect(cached.value.items.single.id, 'post_1');
       expect(cached.value.nextCursor, 'cursor_2');
+      expect(cached.value.previousCursor, 'cursor_previous');
+      expect(cached.value.paginationExpiresAt, DateTime.utc(2026, 7, 29, 12));
+      expect(cached.value.paginationSessionId, 'session-persisted');
       expect(cached.value.feedRequestId, 'feed_request_1');
+      expect(
+        cached.value.policyDigest,
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
       expect(cached.diagnostics.hitLayer, 'querySnapshot.disk');
     });
 
-    test('query snapshot 持久化只保留第一页和最近页并截断 projection', () async {
+    test('query snapshot 反序列化严格拒绝非 canonical policyDigest', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const storageKey = 'qwq.content_query_snapshots.policy_digest.test';
+      const queryKey = 'surface=discoveryFeed&category=moment&cursor=';
+      const canonical =
+          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+      final valid = ContentQuerySnapshot.fromMap(<String, dynamic>{
+        'key': queryKey,
+        'items': const <Object?>[],
+        'outcome': 'empty',
+        'emptyReason': 'no_eligible_content',
+        'fetchedAt': DateTime.utc(2026, 7, 29).toIso8601String(),
+        'policyDigest': canonical,
+      });
+      expect(valid?.policyDigest, canonical);
+
+      expect(
+        ContentQuerySnapshot.fromMap(<String, dynamic>{
+          'key': queryKey,
+          'items': const <Object?>[],
+          'fetchedAt': DateTime.utc(2026, 7, 29).toIso8601String(),
+        }),
+        isNull,
+        reason: 'legacy feed snapshots without canonical outcome must expire',
+      );
+
+      for (final invalid in <Object?>[
+        '',
+        'rank-v3',
+        ' $canonical',
+        '$canonical ',
+        'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        42,
+      ]) {
+        expect(
+          ContentQuerySnapshot.fromMap(<String, dynamic>{
+            'key': queryKey,
+            'items': const <Object?>[],
+            'fetchedAt': DateTime.utc(2026, 7, 29).toIso8601String(),
+            'policyDigest': invalid,
+          }),
+          isNull,
+          reason: 'must drop <$invalid> without coercion or normalization',
+        );
+      }
+
+      final persisted = jsonEncode(<String, Object?>{
+        'snapshots': <Object?>[
+          <String, Object?>{
+            'key': queryKey,
+            'items': const <Object?>[],
+            'fetchedAt': DateTime.now().toUtc().toIso8601String(),
+            'policyDigest': ' $canonical',
+          },
+        ],
+      });
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        storageKey: persisted,
+      });
+      final restored = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await restored.ensureHydrated();
+
+      expect(restored.count, 0);
+      expect(restored.get(queryKey), isNull);
+      expect(
+        () => restored.put(
+          key: queryKey,
+          items: const <PostBaseDto>[],
+          policyDigest: '',
+        ),
+        throwsFormatException,
+      );
+    });
+
+    test('query snapshot 在 5 分钟后至 24 小时内只以 stale 回显', () {
+      var now = DateTime.utc(2026, 7, 29, 0);
+      const queryKey = 'surface=discoveryFeed&category=moment&cursor=';
+      final store = ContentQuerySnapshotStore(
+        telemetrySink: const NoopCacheTelemetrySink(),
+        now: () => now,
+      );
+
+      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      now = now.add(const Duration(minutes: 6));
+
+      final cached = store.get(queryKey);
+      expect(cached, isNotNull);
+      expect(cached!.freshness, CacheFreshness.stale);
+      expect(cached.syncState, CacheSyncState.refreshing);
+      expect(store.count, 1);
+    });
+
+    test(
+      'cached feed cursors require the same live session and unexpired boundary',
+      () {
+        final expiresAt = DateTime.utc(2026, 7, 29, 12);
+        final snapshot = ContentQuerySnapshot(
+          key: 'surface=discoveryFeed&cursor=',
+          items: <PostBaseDto>[_postDto('post_1')],
+          fetchedAt: DateTime.utc(2026, 7, 29, 11),
+          nextCursor: 'fc.next',
+          previousCursor: 'fc.previous',
+          paginationExpiresAt: expiresAt,
+          paginationSessionId: 'session-a',
+        );
+
+        final live = snapshot.toDiscoveryFeedPage(
+          currentSessionId: 'session-a',
+          now: DateTime.utc(2026, 7, 29, 11, 30),
+        );
+        expect(live.nextCursor, 'fc.next');
+        expect(live.previousCursor, 'fc.previous');
+
+        final crossSession = snapshot.toDiscoveryFeedPage(
+          currentSessionId: 'session-b',
+          now: DateTime.utc(2026, 7, 29, 11, 30),
+        );
+        expect(crossSession.nextCursor, isNull);
+        expect(crossSession.previousCursor, isNull);
+
+        final expired = snapshot.toDiscoveryFeedPage(
+          currentSessionId: 'session-a',
+          now: expiresAt,
+        );
+        expect(expired.nextCursor, isNull);
+        expect(expired.previousCursor, isNull);
+      },
+    );
+
+    test('query snapshot 超过 24 小时后从内存和持久层主动清退', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const storageKey = 'qwq.content_query_snapshots.expiry.test';
+      const queryKey = 'surface=discoveryFeed&category=moment&cursor=';
+      var now = DateTime.utc(2026, 7, 29, 0);
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+        now: () => now,
+      );
+      await store.ensureHydrated();
+      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      await store.flushPersistence();
+
+      now = now.add(const Duration(hours: 24, microseconds: 1));
+      final restored = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+        now: () => now,
+      );
+      await restored.ensureHydrated();
+      await restored.flushPersistence();
+
+      expect(restored.get(queryKey), isNull);
+      expect(restored.count, 0);
+      expect(
+        (await SharedPreferences.getInstance()).containsKey(storageKey),
+        isFalse,
+      );
+    });
+
+    test('query snapshot 分块 JSON 编码保真转义字符和嵌套投影', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const storageKey = 'qwq.content_query_snapshots.json_round_trip.test';
+      const queryKey = 'surface=discoveryFeed&category=moment&cursor=';
+      final body =
+          '${List<String>.filled(1023, 'a').join()}🙂\n"quoted"\\slash\t\u0001';
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await store.ensureHydrated();
+
+      store.put(
+        key: queryKey,
+        items: <PostBaseDto>[
+          _postDto(
+            'post_escaped',
+            body: body,
+            intersectionReasons: <Map<String, dynamic>>[
+              <String, dynamic>{'primaryText': '共同喜欢雪山🙂'},
+            ],
+          ),
+        ],
+      );
+      await store.flushPersistence();
+
+      final restored = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await restored.ensureHydrated();
+      final post = restored.get(queryKey)!.value.items.single;
+
+      expect(post.body, body);
+      expect(post.intersectionReasons!.single.primaryText, '共同喜欢雪山🙂');
+    });
+
+    test('query snapshot 持久化保留有界连续 feed 完整页窗口', () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       const storageKey = 'qwq.content_query_snapshots.policy.test';
       final store = ContentQuerySnapshotStore(
@@ -237,6 +612,7 @@ void main() {
         persistencePolicy: const ContentQuerySnapshotPersistencePolicy(
           maxItemsPerSnapshot: 30,
           maxUserPostSubjects: 1,
+          maxFeedPagesPerQuery: 3,
         ),
         telemetrySink: const NoopCacheTelemetrySink(),
       );
@@ -260,20 +636,33 @@ void main() {
         sort: kFeedSortRecommend,
         limit: 20,
       );
+      final overflowFeedKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: 'cursor_3',
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
       final manyPosts = List<PostBaseDto>.generate(
-        35,
+        30,
         (index) => _postDto('feed_$index'),
       );
-      store.put(key: firstFeedKey, items: manyPosts);
+      store.put(key: firstFeedKey, items: manyPosts, nextCursor: 'cursor_1');
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: middleFeedKey,
         items: <PostBaseDto>[_postDto('middle_feed')],
+        nextCursor: 'cursor_2',
       );
       await Future<void>.delayed(const Duration(milliseconds: 1));
       store.put(
         key: latestFeedKey,
         items: <PostBaseDto>[_postDto('latest_feed')],
+        nextCursor: 'cursor_3',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      store.put(
+        key: overflowFeedKey,
+        items: <PostBaseDto>[_postDto('overflow_feed')],
       );
 
       final oldUserKey = contentUserPostsQueryKey(
@@ -300,16 +689,253 @@ void main() {
         persistencePolicy: const ContentQuerySnapshotPersistencePolicy(
           maxItemsPerSnapshot: 30,
           maxUserPostSubjects: 1,
+          maxFeedPagesPerQuery: 3,
         ),
         telemetrySink: const NoopCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
 
       expect(restored.get(firstFeedKey)?.value.items, hasLength(30));
-      expect(restored.get(middleFeedKey), isNull);
+      expect(restored.get(middleFeedKey)?.value.items.single.id, 'middle_feed');
       expect(restored.get(latestFeedKey)?.value.items.single.id, 'latest_feed');
+      expect(restored.get(overflowFeedKey), isNull);
       expect(restored.get(oldUserKey), isNull);
       expect(restored.get(latestUserKey)?.value.items.single.id, 'latest_user');
+    });
+
+    test('query snapshot 优先按多字节 UTF-8 预算保留完整 feed 页链', () async {
+      const probeStorageKey = 'qwq.content_query_snapshots.bytes.probe.test';
+      final firstFeedKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: null,
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final secondFeedKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: 'cursor_1',
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final firstPage = <PostBaseDto>[
+        _postDto('feed_1', body: List<String>.filled(24, '川西雪山🙂').join()),
+      ];
+      final secondPage = <PostBaseDto>[
+        _postDto('feed_2', body: List<String>.filled(48, '高原湖泊🏔️').join()),
+      ];
+
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final probe = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: probeStorageKey,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await probe.ensureHydrated();
+      probe.put(key: firstFeedKey, items: firstPage, nextCursor: 'cursor_1');
+      await probe.flushPersistence();
+      final firstPagePayload = (await SharedPreferences.getInstance())
+          .getString(probeStorageKey)!;
+      probe.put(key: secondFeedKey, items: secondPage);
+      await probe.flushPersistence();
+      final fullPayload = (await SharedPreferences.getInstance()).getString(
+        probeStorageKey,
+      )!;
+      final firstPageBytes = utf8.encode(firstPagePayload).length;
+      final fullPayloadBytes = utf8.encode(fullPayload).length;
+      final byteCap =
+          firstPageBytes + ((fullPayloadBytes - firstPageBytes) ~/ 2);
+
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const boundedStorageKey =
+          'qwq.content_query_snapshots.bytes.bounded.test';
+      final userPostsKey = contentUserPostsQueryKey(
+        userId: 'large_profile',
+        cursor: null,
+        limit: 20,
+      );
+      final boundedPolicy = ContentQuerySnapshotPersistencePolicy(
+        maxPersistedBytes: byteCap,
+      );
+      final bounded = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: boundedStorageKey,
+        persistencePolicy: boundedPolicy,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await bounded.ensureHydrated();
+      bounded.put(
+        key: userPostsKey,
+        items: <PostBaseDto>[
+          _postDto(
+            'large_user_post',
+            body: List<String>.filled(1000, '独立个人作品页🙂').join(),
+          ),
+        ],
+      );
+      await bounded.flushPersistence();
+      bounded.put(key: firstFeedKey, items: firstPage, nextCursor: 'cursor_1');
+      await bounded.flushPersistence();
+      bounded.put(key: secondFeedKey, items: secondPage);
+      await bounded.flushPersistence();
+
+      final persisted = (await SharedPreferences.getInstance()).getString(
+        boundedStorageKey,
+      )!;
+      expect(persisted, contains('川西雪山🙂'));
+      expect(utf8.encode(persisted).length, greaterThan(persisted.length));
+      expect(utf8.encode(persisted).length, lessThanOrEqualTo(byteCap));
+
+      final restored = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: boundedStorageKey,
+        persistencePolicy: boundedPolicy,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await restored.ensureHydrated();
+      expect(restored.get(firstFeedKey)?.value.items.single.id, 'feed_1');
+      expect(restored.get(firstFeedKey)?.value.nextCursor, 'cursor_1');
+      expect(restored.get(secondFeedKey), isNull);
+      expect(restored.get(userPostsKey), isNull);
+    });
+
+    test('query snapshot 超预算时逐字段预检并停止后续 item 编码', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const storageKey =
+          'qwq.content_query_snapshots.streaming_encode_budget.test';
+      var oversizedItemEncodeCount = 0;
+      var unreachableItemEncodeCount = 0;
+      final queryKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: null,
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        persistencePolicy: const ContentQuerySnapshotPersistencePolicy(
+          maxPersistedBytes: 512,
+        ),
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await store.ensureHydrated();
+
+      store.put(
+        key: queryKey,
+        items: <PostBaseDto>[
+          _SnapshotEncodingProbePost(
+            id: 'oversized',
+            body: List<String>.filled(4096, 'x').join(),
+            onEncode: () => oversizedItemEncodeCount += 1,
+          ),
+          _SnapshotEncodingProbePost(
+            id: 'must_not_encode',
+            body: 'tail',
+            onEncode: () => unreachableItemEncodeCount += 1,
+          ),
+        ],
+      );
+      await store.flushPersistence();
+
+      final persisted = (await SharedPreferences.getInstance()).getString(
+        storageKey,
+      )!;
+      final payload = jsonDecode(persisted) as Map<String, dynamic>;
+      expect(payload['snapshots'], isEmpty);
+      expect(utf8.encode(persisted).length, lessThanOrEqualTo(512));
+      expect(oversizedItemEncodeCount, 1);
+      expect(unreachableItemEncodeCount, 0);
+    });
+
+    test('query snapshot 不截断超 item 预算首屏且不持久化后续 cursor 页', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      const storageKey = 'qwq.content_query_snapshots.atomic_page.test';
+      const policy = ContentQuerySnapshotPersistencePolicy(
+        maxItemsPerSnapshot: 1,
+      );
+      final firstFeedKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: null,
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final secondFeedKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: 'cursor_1',
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        persistencePolicy: policy,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await store.ensureHydrated();
+      store.put(
+        key: firstFeedKey,
+        items: <PostBaseDto>[_postDto('feed_1'), _postDto('feed_2')],
+        nextCursor: 'cursor_1',
+      );
+      await store.flushPersistence();
+      store.put(key: secondFeedKey, items: <PostBaseDto>[_postDto('feed_3')]);
+      await store.flushPersistence();
+
+      final raw = (await SharedPreferences.getInstance()).getString(
+        storageKey,
+      )!;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      expect(decoded['snapshots'], isEmpty);
+
+      final restored = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        persistencePolicy: policy,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await restored.ensureHydrated();
+      expect(restored.get(firstFeedKey), isNull);
+      expect(restored.get(secondFeedKey), isNull);
+    });
+
+    test('query snapshot 持久化单活跃合并写且 flush 等到最新状态', () async {
+      const storageKey = 'qwq.content_query_snapshots.coalesced.test';
+      final backend = _ControlledQuerySnapshotPersistenceBackend();
+      final queryKey = contentFeedQueryKey(
+        category: 'moment',
+        cursor: null,
+        sort: kFeedSortRecommend,
+        limit: 20,
+      );
+      final store = ContentQuerySnapshotStore(
+        persistToPreferences: true,
+        storageKey: storageKey,
+        persistenceBackend: backend,
+        telemetrySink: const NoopCacheTelemetrySink(),
+      );
+      await store.ensureHydrated();
+
+      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_1')]);
+      await backend.firstWriteStarted.future;
+      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_2')]);
+      store.put(key: queryKey, items: <PostBaseDto>[_postDto('post_3')]);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(backend.writeCallCount, 1);
+      expect(backend.maxConcurrentWrites, 1);
+
+      backend.releaseFirstWrite.complete();
+      await store.flushPersistence();
+
+      expect(backend.writeCallCount, 2);
+      expect(backend.maxConcurrentWrites, 1);
+      final payload =
+          jsonDecode(backend.values[storageKey]!) as Map<String, dynamic>;
+      final snapshots = payload['snapshots'] as List<dynamic>;
+      final snapshot = snapshots.single as Map<String, dynamic>;
+      final items = snapshot['items'] as List<dynamic>;
+      final item = items.single as Map<String, dynamic>;
+      expect(item['postId'], 'post_3');
     });
 
     test('clear 和 invalidate 会 flush 持久化快照', () async {
@@ -425,12 +1051,88 @@ void main() {
       expect(userCache.diskCount, 0);
       expect(
         (await SharedPreferences.getInstance()).containsKey(
-          'qwq.user_profile_cache.v1',
+          'qwq.user_profile_cache',
         ),
         isFalse,
       );
     });
   });
+}
+
+class _BlockingContentQuerySnapshotStore extends ContentQuerySnapshotStore {
+  _BlockingContentQuerySnapshotStore(this.hydration);
+
+  final Future<void> hydration;
+
+  @override
+  Future<void> ensureHydrated() => hydration;
+}
+
+class _SnapshotEncodingProbePost extends MicroPostDto {
+  _SnapshotEncodingProbePost({
+    required super.id,
+    required super.body,
+    required this.onEncode,
+  }) : super(
+         type: 'micro',
+         identity: 'moment',
+         assistantUsePolicy: 'inherit',
+         authorId: 'author',
+         displayName: 'author',
+         avatarUrl: '',
+         authorRoleLabel: '',
+         authorIdentityTags: const <String>[],
+         authorVerified: false,
+         imageUrls: const <String>[],
+         likeCount: 0,
+         commentCount: 0,
+         shareCount: 0,
+         createdAt: DateTime.utc(2026),
+       );
+
+  final void Function() onEncode;
+
+  @override
+  Map<String, dynamic> toMap() {
+    onEncode();
+    return super.toMap();
+  }
+}
+
+class _ControlledQuerySnapshotPersistenceBackend
+    implements ContentQuerySnapshotPersistenceBackend {
+  final Map<String, String> values = <String, String>{};
+  final Completer<void> firstWriteStarted = Completer<void>();
+  final Completer<void> releaseFirstWrite = Completer<void>();
+  int writeCallCount = 0;
+  int maxConcurrentWrites = 0;
+  int _concurrentWrites = 0;
+
+  @override
+  Future<String?> read(String storageKey) async => values[storageKey];
+
+  @override
+  Future<void> remove(String storageKey) async {
+    values.remove(storageKey);
+  }
+
+  @override
+  Future<void> write(String storageKey, String payload) async {
+    writeCallCount += 1;
+    _concurrentWrites += 1;
+    if (_concurrentWrites > maxConcurrentWrites) {
+      maxConcurrentWrites = _concurrentWrites;
+    }
+    try {
+      if (writeCallCount == 1) {
+        firstWriteStarted.complete();
+        await releaseFirstWrite.future;
+      }
+      values[storageKey] = payload;
+    } finally {
+      _concurrentWrites -= 1;
+    }
+  }
 }
 
 class _CountingContentRepository extends Fake implements ContentReadRepository {
@@ -443,6 +1145,7 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
   int userPostsRequestCount = 0;
   bool failFeedRequests = false;
   bool failUserPostsRequests = false;
+  Completer<DiscoveryFeedPage>? pendingFeedPage;
 
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
@@ -463,6 +1166,10 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
     if (failFeedRequests) {
       throw StateError('feed offline');
     }
+    final pending = pendingFeedPage;
+    if (pending != null) {
+      return pending.future;
+    }
     return DiscoveryFeedPage(
       items: <PostBaseDto>[post],
       nextCursor: null,
@@ -473,7 +1180,11 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
   }
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     detailRequestCount += 1;
     return _detailPayload(postId, post: post);
   }
@@ -498,7 +1209,12 @@ class _CountingContentRepository extends Fake implements ContentReadRepository {
   }
 }
 
-PostBaseDto _postDto(String id, {String avatarUrl = ''}) {
+PostBaseDto _postDto(
+  String id, {
+  String avatarUrl = '',
+  String body = '缓存内容',
+  List<Map<String, dynamic>>? intersectionReasons,
+}) {
   return postBaseDtoFromMap(<String, dynamic>{
     'id': id,
     'type': 'micro',
@@ -506,13 +1222,14 @@ PostBaseDto _postDto(String id, {String avatarUrl = ''}) {
     'authorId': 'user_1',
     'displayName': '用户一',
     'avatarUrl': avatarUrl,
-    'body': '缓存内容',
+    'body': body,
     'imageUrls': <String>[],
     'likeCount': 0,
     'commentCount': 0,
     'shareCount': 0,
     'createdAt': '2026-05-19T00:00:00.000Z',
     'updatedAt': '2026-05-19T00:00:00.000Z',
+    'intersectionReasons': intersectionReasons,
   });
 }
 

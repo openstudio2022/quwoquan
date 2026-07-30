@@ -1,0 +1,14 @@
+{
+  "label": "移轴镜头",
+  "labelEn": "Tilt-shift Lens",
+  "description": "lensModel 含 TS-E/PC-E/移轴 标识",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

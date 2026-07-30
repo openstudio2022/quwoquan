@@ -18,6 +18,9 @@ relationships:
   reference_fields:
   - requestId
   target_object: integration.ExternalInteraction
+lifecycle:
+  immutable: true
 local_identity_reasons:
+  taskId: reliable-task worker correlation key scoped to this immutable attempt; it is not a business-object reference
   providerRequestId: immutable correlation or idempotency key scoped to this fact or command; it is not
     a business-object reference

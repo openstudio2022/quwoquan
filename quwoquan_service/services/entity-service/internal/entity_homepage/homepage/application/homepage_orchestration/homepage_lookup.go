@@ -35,18 +35,7 @@ func canonicalEntityIDFromTypeAndTitle(homepageType string, title string) string
 }
 
 func objectPageTemplate(homepageType string, explicit string) string {
-	if value := strings.TrimSpace(explicit); value != "" {
-		return value
-	}
-	switch strings.TrimSpace(homepageType) {
-	case "university":
-		return "campus"
-	case "travel_photo", "sight", "museum", "heritage_site", "ancient_town",
-		"religious_site", "check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
-		return "travel_photo"
-	default:
-		return "standard"
-	}
+	return homepagemodel.ObjectPageTemplate(homepageType, explicit)
 }
 
 func nonEmpty(value, fallback string) string {

@@ -15,6 +15,7 @@ from governance.coverage.admin_entity_catalog import (
     ADMIN_REGION_REFERENCE_PATH,
     admin_entity_partitions,
 )
+from governance.coverage.master_list import leaf_coordinates
 
 # 主清单 leaf → coverageTarget 契约字段透传集（task_spec.schema.json coverageTargets 同口径）。
 _MASTER_LIST_LIST_FIELDS = ("geoTagRefs", "typeTagRefs", "aliases")
@@ -71,6 +72,11 @@ def apply_master_list_fields(row: dict[str, Any], leaf: Mapping[str, Any]) -> di
     geo_tag_ref = str(leaf.get("geoTagRef") or "").strip()
     if geo_tag_ref:
         row["geoTagRef"] = geo_tag_ref
+    # coordinates 是 Homepage.location（2dsphere / filters.near）的唯一上游；
+    # 解析口径由 master_list.leaf_coordinates 独占，这里只做透传。
+    coordinates = leaf_coordinates(dict(leaf))
+    if coordinates is not None:
+        row["coordinates"] = coordinates
     for list_field in _MASTER_LIST_LIST_FIELDS:
         values = [str(v).strip() for v in (leaf.get(list_field) or []) if str(v).strip()]
         if list_field == "aliases":

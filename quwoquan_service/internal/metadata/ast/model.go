@@ -28,11 +28,13 @@ const (
 type Catalog struct {
 	Objects            []Object                  `json:"objects"`
 	Operations         []Operation               `json:"operations"`
+	RuntimeEntrypoints []RuntimeEntrypoint       `json:"runtimeEntrypoints"`
 	Projections        []Projection              `json:"projections"`
 	BusinessObjectMaps []BusinessObjectMap       `json:"businessObjectMaps"`
 	ReadinessEvidence  []ObjectReadinessEvidence `json:"readinessEvidence"`
 	Sources            []SourceDigest            `json:"sources"`
 	Documents          []SourceDocument          `json:"documents"`
+	Governance         MetadataGovernance        `json:"-"`
 }
 
 // EvidenceArtifact binds a readiness claim to the exact bytes consumed by the
@@ -104,45 +106,98 @@ type Member struct {
 	AggregateOwner string     `json:"aggregateOwner,omitempty"`
 }
 
+// RuntimeEntrypoint models an object-owned invocation seam that is part of a
+// service's request pipeline but is not an HTTP API operation. It keeps
+// middleware/session ownership in ContractGraph without inventing a second
+// transport route or exposing the entrypoint to App/OpenAPI generators.
+type RuntimeEntrypoint struct {
+	ID              string        `json:"id"`
+	LocalID         string        `json:"localId"`
+	Domain          string        `json:"domain"`
+	ObjectID        string        `json:"objectId"`
+	RuntimeKind     string        `json:"runtimeKind"`
+	Phase           string        `json:"phase"`
+	ApplicationKind OperationKind `json:"applicationKind"`
+	Facet           string        `json:"facet"`
+	FacadeMethod    string        `json:"facadeMethod"`
+	SessionOwner    string        `json:"sessionOwner"`
+	SourcePath      string        `json:"sourcePath"`
+}
+
 type Operation struct {
-	ID               string            `json:"id"`
-	LocalID          string            `json:"localId"`
-	Domain           string            `json:"domain"`
-	ObjectID         string            `json:"objectId"`
-	Method           string            `json:"method"`
-	PathTemplate     string            `json:"pathTemplate"`
-	Kind             OperationKind     `json:"kind"`
-	KindExplicit     bool              `json:"kindExplicit"`
-	Facet            string            `json:"facet,omitempty"`
-	FacadeMethod     string            `json:"facadeMethod,omitempty"`
-	AggregateOwner   string            `json:"aggregateOwner,omitempty"`
-	AppendSink       string            `json:"appendSink,omitempty"`
-	MutationTarget   string            `json:"mutationTarget,omitempty"`
-	InvariantTarget  string            `json:"invariantTarget,omitempty"`
-	SessionOwner     string            `json:"sessionOwner,omitempty"`
-	Reader           string            `json:"reader,omitempty"`
-	Slice            string            `json:"slice,omitempty"`
-	ActorRequirement string            `json:"actorRequirement,omitempty"`
-	RequestEntity    string            `json:"requestEntity,omitempty"`
-	RequestBodyKind  string            `json:"requestBodyKind,omitempty"`
-	ResponseEntity   string            `json:"responseEntity,omitempty"`
-	ResponseBody     string            `json:"responseBody,omitempty"`
-	ResponseBodyKind string            `json:"responseBodyKind,omitempty"`
-	SourcePath       string            `json:"sourcePath"`
-	Security         map[string]string `json:"security,omitempty"`
-	AuthMode         string            `json:"authMode"`
-	Principal        string            `json:"principal,omitempty"`
-	Scopes           []string          `json:"scopes,omitempty"`
-	Permissions      []string          `json:"permissions,omitempty"`
-	OwnershipPolicy  string            `json:"ownershipPolicy,omitempty"`
-	Commercial       CommercialBinding `json:"commercial"`
-	Reliability      ReliabilityPolicy `json:"reliability"`
-	Concurrency      ConcurrencyPolicy `json:"concurrency,omitempty"`
-	ErrorCodes       []string          `json:"errorCodes,omitempty"`
-	Privacy          PrivacyPolicy     `json:"privacy"`
-	Telemetry        TelemetryPolicy   `json:"telemetry"`
-	SLO              SLOPolicy         `json:"slo"`
-	ClientContract   *ClientContract   `json:"clientContract,omitempty"`
+	ID                     string                   `json:"id"`
+	LocalID                string                   `json:"localId"`
+	Domain                 string                   `json:"domain"`
+	ObjectID               string                   `json:"objectId"`
+	Method                 string                   `json:"method"`
+	PathTemplate           string                   `json:"pathTemplate"`
+	Kind                   OperationKind            `json:"kind"`
+	KindExplicit           bool                     `json:"kindExplicit"`
+	Facet                  string                   `json:"facet,omitempty"`
+	FacadeMethod           string                   `json:"facadeMethod,omitempty"`
+	AggregateOwner         string                   `json:"aggregateOwner,omitempty"`
+	AppendSink             string                   `json:"appendSink,omitempty"`
+	MutationTarget         string                   `json:"mutationTarget,omitempty"`
+	InvariantTarget        string                   `json:"invariantTarget,omitempty"`
+	SessionOwner           string                   `json:"sessionOwner,omitempty"`
+	Reader                 string                   `json:"reader,omitempty"`
+	Slice                  string                   `json:"slice,omitempty"`
+	ActorRequirement       string                   `json:"actorRequirement,omitempty"`
+	RequestEntity          string                   `json:"requestEntity,omitempty"`
+	RequestBodyKind        string                   `json:"requestBodyKind,omitempty"`
+	RequestBindings        *RequestBindings         `json:"requestBindings,omitempty"`
+	RequestConstants       *RequestConstants        `json:"requestConstants,omitempty"`
+	LegacyRequestKeys      []string                 `json:"-"`
+	ClientBindingOverrides []string                 `json:"-"`
+	ResponseEntity         string                   `json:"responseEntity,omitempty"`
+	ResponseBody           string                   `json:"responseBody,omitempty"`
+	ResponseBodyKind       string                   `json:"responseBodyKind,omitempty"`
+	SourcePath             string                   `json:"sourcePath"`
+	Security               map[string]string        `json:"security,omitempty"`
+	AuthMode               string                   `json:"authMode"`
+	Principal              string                   `json:"principal,omitempty"`
+	Scopes                 []string                 `json:"scopes,omitempty"`
+	Permissions            []string                 `json:"permissions,omitempty"`
+	OwnershipPolicy        string                   `json:"ownershipPolicy,omitempty"`
+	Commercial             CommercialBinding        `json:"commercial"`
+	Reliability            ReliabilityPolicy        `json:"reliability"`
+	Pagination             *PaginationPolicy        `json:"pagination,omitempty"`
+	ResponseAdmission      *ResponseAdmissionPolicy `json:"responseAdmission,omitempty"`
+	Concurrency            ConcurrencyPolicy        `json:"concurrency,omitempty"`
+	ErrorCodes             []string                 `json:"errorCodes,omitempty"`
+	Privacy                PrivacyPolicy            `json:"privacy"`
+	Telemetry              TelemetryPolicy          `json:"telemetry"`
+	SLO                    SLOPolicy                `json:"slo"`
+	ClientContract         *ClientContract          `json:"clientContract,omitempty"`
+}
+
+// RequestBindings records the non-body wire positions of a request. The body
+// remains owned solely by RequestEntity + RequestBodyKind. Name is the wire
+// parameter (or authenticated context source for injected bindings); Field is
+// the corresponding generated client command field.
+type RequestBindings struct {
+	Path     []RequestBinding `json:"path,omitempty"`
+	Query    []RequestBinding `json:"query,omitempty"`
+	Header   []RequestBinding `json:"header,omitempty"`
+	Injected []RequestBinding `json:"injected,omitempty"`
+}
+
+type RequestBinding struct {
+	Name     string `json:"name"`
+	Field    string `json:"field"`
+	Required *bool  `json:"required,omitempty"`
+}
+
+// RequestConstants contains operation-owned wire literals. Constants are not
+// writable request fields: they are compiled into generated encoders and keep
+// protocol discriminators out of the public App request model.
+type RequestConstants struct {
+	Body []RequestConstant `json:"body,omitempty"`
+}
+
+type RequestConstant struct {
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
 type CommercialBinding struct {
@@ -159,6 +214,15 @@ type ReliabilityPolicy struct {
 	RetryMode           string `json:"retryMode,omitempty"`
 	MaxAttempts         int    `json:"maxAttempts,omitempty"`
 	Idempotency         string `json:"idempotency,omitempty"`
+}
+
+type PaginationPolicy struct {
+	DefaultItems int `json:"defaultItems"`
+	MaximumItems int `json:"maximumItems"`
+}
+
+type ResponseAdmissionPolicy struct {
+	MaximumBodyBytes int `json:"maximumBodyBytes"`
 }
 
 // ConcurrencyPolicy only describes a caller-supplied resource precondition.
@@ -192,22 +256,135 @@ type SLOPolicy struct {
 }
 
 type ClientContract struct {
-	DartImport      string            `json:"dartImport"`
-	RequestType     string            `json:"requestType"`
-	ResponseType    string            `json:"responseType"`
-	RequestEncoder  string            `json:"requestEncoder"`
-	ResponseDecoder string            `json:"responseDecoder"`
-	PathBindings    map[string]string `json:"pathBindings,omitempty"`
-	QueryBindings   map[string]string `json:"queryBindings,omitempty"`
+	DartImport      string `json:"dartImport"`
+	ResponseType    string `json:"responseType"`
+	ResponseDecoder string `json:"responseDecoder"`
 }
 
 type Projection struct {
-	ID         string `json:"id"`
-	Domain     string `json:"domain"`
-	ObjectID   string `json:"objectId"`
-	ReadModel  string `json:"readModel"`
-	DartClass  string `json:"dartClass,omitempty"`
-	SourcePath string `json:"sourcePath"`
+	ID                string   `json:"id"`
+	Domain            string   `json:"domain"`
+	ObjectID          string   `json:"objectId"`
+	ReadModel         string   `json:"readModel"`
+	ReadModelExplicit bool     `json:"readModelExplicit"`
+	DartClass         string   `json:"dartClass,omitempty"`
+	OutputPath        string   `json:"outputPath,omitempty"`
+	ExternalDartPath  string   `json:"-"`
+	FieldNames        []string `json:"fieldNames,omitempty"`
+	SourceEntities    []string `json:"sourceEntities,omitempty"`
+	SourceEvents      []string `json:"sourceEvents,omitempty"`
+	SourcePath        string   `json:"sourcePath"`
+}
+
+// MetadataGovernance is a compiler-only typed view used by cross-document
+// validators. It is deliberately not serialized into ContractGraph: business
+// fields, lifecycle, errors and events remain owned by their object packets.
+type MetadataGovernance struct {
+	Objects        []ObjectGovernance
+	Enums          []EnumDefinition
+	EnumReferences []EnumReference
+	Types          []TypeDefinition
+	Fields         []FieldDefinition
+}
+
+type TypeDefinition struct {
+	Name       string
+	OwnerLevel EnumOwnerLevel
+	Domain     string
+	ObjectID   string
+	SourcePath string
+}
+
+type EnumReference struct {
+	Name       string
+	Domain     string
+	ObjectID   string
+	SourcePath string
+}
+
+type ObjectGovernance struct {
+	ObjectID      string
+	Domain        string
+	SourcePath    string
+	Lifecycle     *LifecycleDefinition
+	DeclaredTypes []string
+	Fields        []FieldDefinition
+	Errors        []ErrorDefinition
+	Events        []EventDefinition
+	Privacy       *PrivacyDefinition
+}
+
+type LifecycleDefinition struct {
+	States     []string
+	StateField string
+	Immutable  bool
+	SourcePath string
+}
+
+type EnumOwnerLevel string
+
+const (
+	EnumOwnerGlobal  EnumOwnerLevel = "global"
+	EnumOwnerService EnumOwnerLevel = "service"
+	EnumOwnerObject  EnumOwnerLevel = "object"
+)
+
+type EnumDefinition struct {
+	Name       string
+	Values     []string
+	OwnerLevel EnumOwnerLevel
+	Domain     string
+	ObjectID   string
+	SourcePath string
+}
+
+type FieldDefinition struct {
+	ObjectID     string
+	Domain       string
+	Entity       string
+	Name         string
+	Type         string
+	EnumRef      string
+	InlineValues []string
+	SemanticType string
+	SourcePath   string
+}
+
+type ErrorEmission struct {
+	Surface    string
+	Operations []string
+}
+
+type ErrorDefinition struct {
+	ObjectID   string
+	Code       string
+	HTTPStatus *int
+	EmittedBy  []ErrorEmission
+	SourcePath string
+}
+
+type EventDefinition struct {
+	ObjectID         string
+	Name             string
+	Channel          string
+	PayloadEntity    string
+	PayloadShape     string
+	PayloadFields    []string
+	Consumers        []string
+	NoConsumerReason string
+	SourcePath       string
+}
+
+// PrivacyDefinition 是对象 privacy.yaml 的 typed compiler view。字段与级联
+// 引用在 loader 中归一，validator 不重新解释 YAML/JSON 文档。
+type PrivacyDefinition struct {
+	ObjectID            string
+	Aggregate           string
+	AppLogFields        []string
+	VisibilityFields    []string
+	AnonymizationFields []string
+	DeletionTargets     []string
+	SourcePath          string
 }
 
 // BusinessObjectMap 是字段角色与对象边界的 typed canonical 输入。

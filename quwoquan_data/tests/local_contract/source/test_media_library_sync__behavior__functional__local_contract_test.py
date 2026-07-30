@@ -126,6 +126,66 @@ class TestSyncMediaLibrary:
         assert any("unsafe" in issue for issue in report["issues"])
         assert any("missing" in issue for issue in report["issues"])
 
+    def test_full_sync_public_slices_prunes_fixture_and_prior_release_media(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        source = tmp_path / "release-payload"
+        dest = tmp_path / "media-root"
+        selected = source / "media/image/s/release-a/post-a/v1/cover.jpg"
+        selected.parent.mkdir(parents=True, exist_ok=True)
+        selected.write_bytes(b"release-a-cover")
+        selected_digest = hashlib.sha256(selected.read_bytes()).hexdigest()
+        stale_fixture = dest / "media/image/s/archived-image/post/fixture_post/cover.jpg"
+        stale_fixture.parent.mkdir(parents=True, exist_ok=True)
+        stale_fixture.write_bytes(b"fixture-cover")
+        stale_prior = dest / "media/video/s/release-old/post-old/v1/video.mp4"
+        stale_prior.parent.mkdir(parents=True, exist_ok=True)
+        stale_prior.write_bytes(b"prior-release-video")
+        infrastructure_probe = dest / "probes/media-edge/health.txt"
+        infrastructure_probe.parent.mkdir(parents=True, exist_ok=True)
+        infrastructure_probe.write_text("ready", encoding="utf-8")
+
+        report = sync_media_library(
+            source,
+            dest,
+            object_digests={
+                selected.relative_to(source).as_posix(): f"sha256:{selected_digest}",
+            },
+            prune_unselected=True,
+        )
+
+        assert report["failed"] == 0
+        assert report["issues"] == []
+        assert report["pruned"] == 2
+        assert (dest / selected.relative_to(source)).read_bytes() == b"release-a-cover"
+        assert not stale_fixture.exists()
+        assert not stale_prior.exists()
+        assert infrastructure_probe.read_text(encoding="utf-8") == "ready"
+
+    def test_full_sync_does_not_prune_when_selected_release_is_invalid(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        source = tmp_path / "release-payload"
+        dest = tmp_path / "media-root"
+        stale = dest / "media/image/s/release-old/post-old/v1/cover.jpg"
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_bytes(b"recoverable-old-release")
+
+        report = sync_media_library(
+            source,
+            dest,
+            object_digests={
+                "media/image/s/release-new/post-new/v1/cover.jpg": "sha256:" + "0" * 64,
+            },
+            prune_unselected=True,
+        )
+
+        assert report["issues"]
+        assert report["pruned"] == 0
+        assert stale.read_bytes() == b"recoverable-old-release"
+
 
 class TestResolveMediaCdnBases:
     def _manifest(self, tmp_path: Path, body: str) -> Path:
@@ -138,13 +198,13 @@ class TestResolveMediaCdnBases:
             tmp_path,
             (
                 '{"environments": {"gamma": {"publicBases": {'
-                '"mediaImage": "https://gamma-image.quwoquan-content.execution.preflight.test:19100",'
-                '"mediaVideo": "https://gamma-video.quwoquan-content.execution.preflight.test:19100"}}}}'
+                '"mediaImage": "https://cdn.gamma.example.invalid:19100/media/image",'
+                '"mediaVideo": "https://cdn.gamma.example.invalid:19100/media/video"}}}}'
             ),
         )
         image, video = resolve_media_cdn_bases("gamma", topology_manifest=manifest)
-        assert image == "https://gamma-image.quwoquan-content.execution.preflight.test:19100"
-        assert video == "https://gamma-video.quwoquan-content.execution.preflight.test:19100"
+        assert image == "https://cdn.gamma.example.invalid:19100/media/image"
+        assert video == "https://cdn.gamma.example.invalid:19100/media/video"
 
     def test_non_prod_missing_base_returns_empty(self, tmp_path: Path) -> None:
         manifest = self._manifest(tmp_path, '{"environments": {}}')

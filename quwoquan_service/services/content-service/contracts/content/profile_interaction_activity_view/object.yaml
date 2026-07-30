@@ -33,7 +33,7 @@ relationships:
   name: actorPersona
   on_delete: retain
   reference_fields:
-  - actorSubAccountId
+  - actorPersonaId
   target_object: user.Persona
 - access: event
   cardinality: N:1
@@ -42,7 +42,7 @@ relationships:
   name: counterpartPersona
   on_delete: retain
   reference_fields:
-  - counterpartSubAccountId
+  - counterpartPersonaId
   target_object: user.Persona
 - access: event
   cardinality: N:1
@@ -51,7 +51,7 @@ relationships:
   name: displayPersona
   on_delete: retain
   reference_fields:
-  - displaySubAccountId
+  - displayPersonaId
   target_object: user.Persona
 - access: event
   cardinality: N:1
@@ -60,7 +60,7 @@ relationships:
   name: targetPersona
   on_delete: retain
   reference_fields:
-  - targetSubAccountId
+  - targetPersonaId
   target_object: user.Persona
 - access: event
   cardinality: N:1

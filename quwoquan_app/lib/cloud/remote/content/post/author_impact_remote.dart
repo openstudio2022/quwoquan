@@ -30,9 +30,9 @@ final class RemoteAuthorImpactQuery implements AuthorImpactQuery {
   final AuthorImpactInvocationContextFactory invocationContext;
 
   @override
-  Future<AuthorImpactSummary> getAuthorImpact(String subAccountId) async {
+  Future<AuthorImpactSummary> getAuthorImpact(String personaId) async {
     final projection = await client.contentPostGetAuthorImpact(
-      GetAuthorImpactQuery(subAccountId: subAccountId),
+      GetAuthorImpactQuery(personaId: personaId),
       context: invocationContext(ContentRequestPageIds.getAuthorImpact),
     );
     return _toSummary(projection);
@@ -40,7 +40,7 @@ final class RemoteAuthorImpactQuery implements AuthorImpactQuery {
 
   @override
   Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
-    required String subAccountId,
+    required String personaId,
     required String impactId,
     String evidenceSnapshotId = '',
     String cursor = '',
@@ -48,7 +48,7 @@ final class RemoteAuthorImpactQuery implements AuthorImpactQuery {
   }) async {
     final projection = await client.contentPostListAuthorImpactEvidence(
       ListAuthorImpactEvidenceQuery(
-        subAccountId: subAccountId,
+        personaId: personaId,
         impactId: impactId,
         evidenceSnapshotId: evidenceSnapshotId,
         cursor: cursor,

@@ -16,11 +16,11 @@ var ErrOutboxClaimLost = errors.New("persona relationship outbox claim lost")
 // BlockedListItem 是当前 persona 的私有拉黑列表切片。展示字段来自同域
 // Persona named reader 的公开快照；聚合内部 pair/version/direction 不向外暴露。
 type BlockedListItem struct {
-	TargetSubAccountID string
-	DisplayName        string
-	UserHandle         string
-	AvatarURL          string
-	BlockedAt          time.Time
+	TargetPersonaID string
+	DisplayName     string
+	UserHandle      string
+	AvatarURL       string
+	BlockedAt       time.Time
 }
 
 // PersonaRelationshipStore owns every durable fact for a persona pair. Follow

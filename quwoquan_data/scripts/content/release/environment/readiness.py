@@ -42,9 +42,7 @@ def phase_for_environment(
     *,
     consumer: bool,
 ) -> ShipReadinessPhase | None:
-    if environment is DeploymentEnvironment.PROD:
-        return ShipReadinessPhase.COMMERCIAL
-    if consumer and environment is DeploymentEnvironment.GAMMA:
+    if consumer:
         return ShipReadinessPhase.CONSUMER
     return ShipReadinessPhase.IMPORT
 
@@ -69,10 +67,23 @@ def require_environment_readiness(
     environment: DeploymentEnvironment,
     consumer: bool,
     run: Path,
+    release_id: str = "",
+    verify_run_id: str = "",
+    manifest_digest: str = "",
 ) -> ShipReadinessReceipt | None:
     phase = phase_for_environment(environment, consumer=consumer)
     if phase is None:
         return None
+    release_id = str(release_id or "").strip()
+    verify_run_id = str(verify_run_id or "").strip()
+    manifest_digest = str(manifest_digest or "").strip()
+    if phase is ShipReadinessPhase.CONSUMER and (
+        not release_id or not verify_run_id or not manifest_digest
+    ):
+        raise SystemExit(
+            f"[ship] GATE_BLOCK {environment.value}/{phase.value}: "
+            "releaseId, verifyRunId and manifestDigest are required"
+        )
     command = [
         sys.executable,
         str(_STACKCTL),
@@ -86,6 +97,17 @@ def require_environment_readiness(
         "--report-dir",
         str(run / "ops-readiness"),
     ]
+    if phase is ShipReadinessPhase.CONSUMER:
+        command.extend(
+            [
+                "--release-id",
+                release_id,
+                "--verify-run-id",
+                verify_run_id,
+                "--manifest-digest",
+                manifest_digest,
+            ]
+        )
     completed = subprocess.run(
         command,
         cwd=REPO_ROOT,

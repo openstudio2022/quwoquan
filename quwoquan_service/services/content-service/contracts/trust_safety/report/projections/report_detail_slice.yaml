@@ -2,3 +2,17 @@ read_model: ReportDetailSlice
 description: 举报详情的具名只读 Slice。
 consumers:
 - platform-ops
+fields:
+- id
+- version
+- reporterId
+- targetType
+- targetId
+- reason
+- description
+- status
+- reviewerId
+- resolution
+- createdAt
+- updatedAt
+- resolvedAt

@@ -40,7 +40,7 @@ void main() {
         ContentMockData.discoveryVideoData.first.toDiscoveryWireMap(),
       );
 
-      expect(dto.id, equals('v1'));
+      expect(dto.id, equals('video_tokyo_midnight'));
       expect(dto.type, equals('video'));
       expect(dto.authorId, equals('a1'));
       expect(dto.displayName, equals('楹语小筑'));
@@ -106,12 +106,12 @@ void main() {
       }
     });
 
-    test('subAccount alias 不再覆盖 authorId 真相源', () {
+    test('persona alias 不再覆盖 authorId 真相源', () {
       const serverRaw = <String, dynamic>{
         'id': 'v_subject',
         'type': 'video',
         'authorId': 'current_author',
-        'subAccountId': 'persona_author',
+        'personaId': 'persona_author',
         'displayName': 'Server Author',
         'avatarUrl': 'https://example.com/avatar.jpg',
         'thumbnailUrl': 'https://example.com/thumb.jpg',
@@ -119,7 +119,7 @@ void main() {
       };
       final dto = FeedItemDto.fromMap(serverRaw);
       expect(dto.authorId, equals('current_author'));
-      expect(dto.authorId, isNot(equals(serverRaw['subAccountId'])));
+      expect(dto.authorId, isNot(equals(serverRaw['personaId'])));
     });
   });
 

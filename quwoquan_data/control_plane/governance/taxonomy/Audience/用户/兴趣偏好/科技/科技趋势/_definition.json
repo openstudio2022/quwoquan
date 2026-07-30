@@ -1,0 +1,11 @@
+{
+  "label": "科技趋势",
+  "labelEn": "Tech Trends",
+  "description": "关注科技产业与技术趋势",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/科技"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
+}

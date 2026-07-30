@@ -11,7 +11,7 @@ final class _ThrowingProfileQuery implements ProfileQuery {
   const _ThrowingProfileQuery();
 
   @override
-  Future<Never> getUserHomepageBundle(String subAccountId) async {
+  Future<Never> getUserHomepageBundle(String personaId) async {
     throw StateError('profile transport unavailable');
   }
 

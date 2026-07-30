@@ -2,6 +2,7 @@
   "label": "短剧",
   "labelEn": "Short Drama",
   "description": "剧情化短视频",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -30,7 +30,7 @@ class CircleHeader extends StatelessWidget {
   /// 单行兴趣/类型标签（云侧直出，端以 ` · ` 拼接为副标题；最多 3 个由调用方收口）。
   final List<String> identityTags;
 
-  /// 官方认证标识（蓝勾）。云侧 status=official/verified 直出，端只读展示。
+  /// 官方认证标识（蓝勾）。必须来自独立 canonical 认证事实，禁止从生命周期 status 推断。
   final bool verified;
 
   /// 头像外径（含边框）与上探像素，供 [ObjectPageShell.identityPinExtent] 计算吸顶高度。

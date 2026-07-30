@@ -3,8 +3,8 @@ package runtimemedia
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -113,6 +113,13 @@ func LoadReleaseMediaAssets(
 			!nonEmptyReleaseRefs(asset.RightsSnapshotRefs) {
 			return nil, fmt.Errorf("release MediaAsset %q is invalid", asset.AssetID)
 		}
+		if err := validateReleaseMediaAssetClosure(releaseRoot, asset); err != nil {
+			return nil, fmt.Errorf(
+				"release MediaAsset %q provenance closure is invalid: %w",
+				asset.AssetID,
+				err,
+			)
+		}
 		if _, exists := result[asset.AssetID]; exists {
 			return nil, fmt.Errorf("release MediaAsset identity is duplicated: %s", asset.AssetID)
 		}
@@ -185,7 +192,7 @@ func ResolveReleaseMediaAsset(
 	}
 	return ResolvedReleaseMediaAsset{
 		ReleaseMediaAsset: asset,
-		PublicURL:         BuildPublicMediaURL(base, asset.PublicSliceKey, 0),
+		PublicURL:         BuildPublicMediaURL(base, asset.PublicSliceKey, asset.Version),
 	}, nil
 }
 
@@ -201,17 +208,9 @@ func (bases MediaDeliveryBases) forKind(kind string) string {
 	default:
 		return ""
 	}
-	value := strings.TrimRight(strings.TrimSpace(raw), "/")
-	parsed, err := url.Parse(value)
-	if err != nil ||
-		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
-		parsed.Host == "" ||
-		parsed.User != nil ||
-		parsed.RawQuery != "" ||
-		parsed.Fragment != "" {
-		return ""
-	}
-	return value
+	// Base validation must be identical to BuildPublicMediaURL. A weaker
+	// pre-check can otherwise report a successful resolution with an empty URL.
+	return NormalizeMediaCDNBase(raw)
 }
 
 func releaseKindMatchesContentType(kind string, contentType string) bool {
@@ -235,6 +234,158 @@ func nonEmptyReleaseRefs(refs []string) bool {
 		}
 	}
 	return true
+}
+
+func validateReleaseMediaAssetClosure(
+	releaseRoot string,
+	asset ReleaseMediaAsset,
+) error {
+	owners := make(map[string]struct{}, len(asset.OwnerRefs))
+	for _, raw := range asset.OwnerRefs {
+		owner := strings.TrimSpace(raw)
+		if !canonicalReleaseMediaOwnerRef(owner) {
+			return fmt.Errorf("ownerRefs contains non-canonical ref %q", raw)
+		}
+		if _, exists := owners[owner]; exists {
+			return fmt.Errorf("ownerRefs contains duplicate ref %q", owner)
+		}
+		owners[owner] = struct{}{}
+	}
+
+	rightsByOwner := make(map[string]int, len(owners))
+	seenRights := make(map[string]struct{}, len(asset.RightsSnapshotRefs))
+	for _, raw := range asset.RightsSnapshotRefs {
+		ref := strings.TrimSpace(raw)
+		if !canonicalReleaseRightsRef(ref) {
+			return fmt.Errorf("rightsSnapshotRefs contains non-canonical ref %q", raw)
+		}
+		if _, exists := seenRights[ref]; exists {
+			return fmt.Errorf("rightsSnapshotRefs contains duplicate ref %q", ref)
+		}
+		seenRights[ref] = struct{}{}
+
+		owner := releaseRightsOwner(ref)
+		if _, exists := owners[owner]; !exists {
+			return fmt.Errorf(
+				"rightsSnapshotRefs entry %q has no matching ownerRefs entry",
+				ref,
+			)
+		}
+		if err := validateReleaseRightsBinding(
+			releaseRoot,
+			ref,
+			asset.AssetID,
+			asset.SHA256,
+		); err != nil {
+			return err
+		}
+		rightsByOwner[owner]++
+	}
+	for owner := range owners {
+		if rightsByOwner[owner] == 0 {
+			return fmt.Errorf(
+				"ownerRefs entry %q has no bound rightsSnapshotRefs entry",
+				owner,
+			)
+		}
+	}
+	return nil
+}
+
+func canonicalReleaseMediaOwnerRef(ref string) bool {
+	if ref == "" ||
+		strings.Contains(ref, `\`) ||
+		path.IsAbs(ref) ||
+		path.Clean(ref) != ref {
+		return false
+	}
+	parts := strings.Split(ref, "/")
+	if len(parts) < 2 {
+		return false
+	}
+	switch parts[0] {
+	case "creators", "entities", "posts":
+	default:
+		return false
+	}
+	for _, part := range parts[1:] {
+		if strings.TrimSpace(part) == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func canonicalReleaseRightsRef(ref string) bool {
+	if ref == "" ||
+		strings.Contains(ref, `\`) ||
+		path.IsAbs(ref) ||
+		path.Clean(ref) != ref ||
+		!strings.HasPrefix(ref, "objects/") {
+		return false
+	}
+	owner := releaseRightsOwner(ref)
+	if !canonicalReleaseMediaOwnerRef(owner) {
+		return false
+	}
+	suffix := strings.TrimPrefix(
+		ref,
+		"objects/"+owner+"/rights_snapshots/",
+	)
+	return suffix != "" &&
+		!strings.Contains(suffix, "/") &&
+		suffix != "." &&
+		suffix != ".." &&
+		strings.HasSuffix(suffix, ".json")
+}
+
+func releaseRightsOwner(ref string) string {
+	const marker = "/rights_snapshots/"
+	if !strings.HasPrefix(ref, "objects/") {
+		return ""
+	}
+	value := strings.TrimPrefix(ref, "objects/")
+	index := strings.Index(value, marker)
+	if index <= 0 {
+		return ""
+	}
+	return value[:index]
+}
+
+func validateReleaseRightsBinding(
+	releaseRoot string,
+	ref string,
+	expectedAssetID string,
+	expectedSHA256 string,
+) error {
+	filePath := filepath.Join(
+		releaseRoot,
+		"payload",
+		filepath.FromSlash(ref),
+	)
+	raw, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("read rights snapshot %q: %w", ref, err)
+	}
+	var document struct {
+		AssetID       string `json:"assetId"`
+		ManifestAsset struct {
+			AssetID string `json:"assetId"`
+			SHA256  string `json:"sha256"`
+		} `json:"manifestAsset"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return fmt.Errorf("decode rights snapshot %q: %w", ref, err)
+	}
+	if strings.TrimSpace(document.AssetID) != expectedAssetID ||
+		strings.TrimSpace(document.ManifestAsset.AssetID) != expectedAssetID ||
+		strings.TrimSpace(document.ManifestAsset.SHA256) != expectedSHA256 {
+		return fmt.Errorf(
+			"rights snapshot %q does not bind MediaAsset identity",
+			ref,
+		)
+	}
+	return nil
 }
 
 func containsReleaseRef(refs []string, expected string) bool {

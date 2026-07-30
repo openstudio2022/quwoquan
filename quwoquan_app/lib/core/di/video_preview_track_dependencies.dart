@@ -7,9 +7,13 @@ import 'package:quwoquan_app/core/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 
 final videoPreviewTrackQueryProvider = Provider<VideoPreviewTrackQuery>((ref) {
+  final endpointConfig = ref.watch(mediaEndpointConfigProvider);
+  if (endpointConfig == null) {
+    throw StateError('视频预览轨缺少 package-bound media endpoint config');
+  }
   return RemoteVideoPreviewTrackQuery(
     httpClient: ref.watch(unauthenticatedCloudHttpClientProvider),
-    mediaDeliveryResolver: MediaDeliveryResolver.fromRuntimeConfig(),
+    mediaDeliveryResolver: MediaDeliveryResolver(endpointConfig),
     telemetry: ref.watch(appTelemetryReporterProvider),
   );
 });

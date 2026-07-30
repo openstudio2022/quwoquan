@@ -43,7 +43,7 @@
   "authorId": "builtin_travel_geo_editor",
   "creatorProfileId": "qwq_creator_geo_editor_001",
   "creatorArchetype": "geo_editor",
-  "creatorProfileVersion": "1.0.0",
+  "creatorProfileDigest": "sha256:6a4ab98ba999350059967e23751c544af0dd81b143d042eb38a8187e6d38c043",
   "creatorDisclosure": {
     "type": "platform_virtual_creator",
     "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",

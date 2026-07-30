@@ -15,7 +15,7 @@ Map<String, dynamic> _omitNullMapValues(Map<String, dynamic> source) {
 ///
 /// `MockUserProfileRepository`、alpha Persona Facet 等测试链路都必须复用它，
 /// 避免再次出现「主页资料已更新，但 active persona 仍读旧静态 JSON」的双真相源。
-SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
+PersonaProfileWireDto resolveMockUserProfileWire(String userId) {
   for (final key in _mockProfileLookupKeys(userId)) {
     final overrideWire = MockUserProfileRepository._profileOverrides[key];
     if (overrideWire != null) {
@@ -30,9 +30,9 @@ SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
   }
   final sharedProfileWire = AlphaFixtureUserResolver.profileWireFor(userId);
   if (sharedProfileWire != null) {
-    return SubAccountProfileWireDto.fromMap(sharedProfileWire);
+    return PersonaProfileWireDto.fromMap(sharedProfileWire);
   }
-  return SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+  return PersonaProfileWireDto.fromMap(_defaultProfile(userId));
 }
 
 ProfileEditSnapshotWireDto? _resolveMockProfileEditSnapshotWire(String userId) {
@@ -58,12 +58,12 @@ List<String> _mockProfileLookupKeys(String userId) {
   final trimmed = userId.trim();
   add(trimmed);
   if (trimmed.isNotEmpty) {
-    add(AlphaFixtureUserResolver.resolveSubAccountId(trimmed));
+    add(AlphaFixtureUserResolver.resolvePersonaId(trimmed));
     add(AlphaFixtureUserResolver.resolveUserId(trimmed));
   }
   if (trimmed.isEmpty ||
-      AlphaFixtureUserResolver.isOwnerLikeSubAccountId(trimmed)) {
-    add(AlphaFixtureUserResolver.currentUserVariantSubAccountId);
+      AlphaFixtureUserResolver.isOwnerLikePersonaId(trimmed)) {
+    add(AlphaFixtureUserResolver.currentUserVariantPersonaId);
     add(AlphaFixtureUserResolver.currentUserVariantUserId);
   }
   return keys;
@@ -75,7 +75,7 @@ extension _ProfileEditSnapshotDataMockMerge on ProfileEditSnapshotData {
   ) {
     return ProfileEditSnapshotData(
       ownerUserId: ownerUserId,
-      subAccountId: subAccountId,
+      personaId: personaId,
       avatarUrl: avatarUrl,
       avatarAssetId: wire.avatarAssetId,
       avatarVersion: avatarVersion,
@@ -134,10 +134,8 @@ List<Map<String, dynamic>> _filterRelationWiresByQuery(
   return wires
       .where((row) {
         final displayName = (row['displayName'] ?? '').toString().toLowerCase();
-        final username = (row['username'] ?? '').toString().toLowerCase();
         final userHandle = (row['userHandle'] ?? '').toString().toLowerCase();
         return displayName.contains(normalizedQuery) ||
-            username.contains(normalizedQuery) ||
             userHandle.contains(normalizedQuery);
       })
       .toList(growable: false);

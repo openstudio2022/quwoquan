@@ -2,7 +2,84 @@
 // Source: testdata/rtc_fields_min.yaml
 // ignore_for_file: prefer_const_constructors
 
-/// 通话参与者（与 metadata `CallParticipant` 对齐，JSON 枚举值为 string）。
+enum CallStatus {
+  initiated('initiated'),
+  ringing('ringing'),
+  connecting('connecting'),
+  inCall('in_call'),
+  ended('ended');
+
+  const CallStatus(this.wireValue);
+
+  final String wireValue;
+
+  static CallStatus fromString(String raw) {
+    return switch (raw.trim()) {
+      'initiated' => CallStatus.initiated,
+      'ringing' => CallStatus.ringing,
+      'connecting' => CallStatus.connecting,
+      'in_call' => CallStatus.inCall,
+      'ended' => CallStatus.ended,
+      _ => throw FormatException('Unknown CallStatus wire value: $raw'),
+    };
+  }
+
+  String toApiString() => wireValue;
+}
+
+String _rtcRequiredString(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('RTC field "$key" must be a non-empty string');
+  }
+  return value;
+}
+
+String? _rtcOptionalString(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('RTC field "$key" must be a string');
+  }
+  return value;
+}
+
+int _rtcRequiredInt(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value is! num) {
+    throw FormatException('RTC field "$key" must be a number');
+  }
+  return value.toInt();
+}
+
+int? _rtcOptionalInt(Map<Object?, Object?> map, String key) {
+  if (map[key] == null) return null;
+  return _rtcRequiredInt(map, key);
+}
+
+bool _rtcRequiredBool(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value is! bool) {
+    throw FormatException('RTC field "$key" must be a bool');
+  }
+  return value;
+}
+
+DateTime _rtcRequiredDateTime(Map<Object?, Object?> map, String key) {
+  final raw = _rtcRequiredString(map, key);
+  final value = DateTime.tryParse(raw);
+  if (value == null) {
+    throw FormatException('RTC field "$key" must be an ISO-8601 timestamp');
+  }
+  return value.toUtc();
+}
+
+DateTime? _rtcOptionalDateTime(Map<Object?, Object?> map, String key) {
+  if (map[key] == null) return null;
+  return _rtcRequiredDateTime(map, key);
+}
+
+/// 通话参与者（与 metadata `CallParticipant` 和 shared enum 对齐）。
 class CallParticipantDto {
   const CallParticipantDto({
     required this.userId,
@@ -10,9 +87,9 @@ class CallParticipantDto {
 
   final String userId;
 
-  factory CallParticipantDto.fromMap(Map<String, dynamic> map) {
+  factory CallParticipantDto.fromMap(Map<Object?, Object?> map) {
     return CallParticipantDto(
-      userId: map['userId'] as String? ?? '',
+      userId: _rtcRequiredString(map, 'userId'),
     );
   }
 
@@ -47,7 +124,7 @@ class CallParticipantDto {
 class CallSessionDto {
   const CallSessionDto({
     required this.callId,
-    this.status = 'initiated',
+    this.status = CallStatus.initiated,
     this.participantCount = 0,
     this.isRecording = false,
     this.isScreenSharing = false,
@@ -56,31 +133,29 @@ class CallSessionDto {
   });
 
   final String callId;
-  final String status;
+  final CallStatus status;
   final int participantCount;
   final bool isRecording;
   final bool isScreenSharing;
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  factory CallSessionDto.fromMap(Map<String, dynamic> map) {
+  factory CallSessionDto.fromMap(Map<Object?, Object?> map) {
     return CallSessionDto(
-      callId: map['callId'] as String? ?? '',
-      status: map['status'] as String? ?? 'initiated',
-      participantCount: (map['participantCount'] as num?)?.toInt() ?? 0,
-      isRecording: map['isRecording'] as bool? ?? false,
-      isScreenSharing: map['isScreenSharing'] as bool? ?? false,
-      createdAt: DateTime.tryParse((map['createdAt'] as String?) ?? '') ??
-          DateTime.now(),
-      updatedAt: DateTime.tryParse((map['updatedAt'] as String?) ?? '') ??
-          DateTime.now(),
+      callId: _rtcRequiredString(map, 'callId'),
+      status: map['status'] == null ? CallStatus.initiated : CallStatus.fromString(_rtcRequiredString(map, 'status')),
+      participantCount: map['participantCount'] == null ? 0 : _rtcRequiredInt(map, 'participantCount'),
+      isRecording: map['isRecording'] == null ? false : _rtcRequiredBool(map, 'isRecording'),
+      isScreenSharing: map['isScreenSharing'] == null ? false : _rtcRequiredBool(map, 'isScreenSharing'),
+      createdAt: _rtcRequiredDateTime(map, 'createdAt'),
+      updatedAt: _rtcRequiredDateTime(map, 'updatedAt'),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       'callId': callId,
-      'status': status,
+      'status': status.toApiString(),
       'participantCount': participantCount,
       'isRecording': isRecording,
       'isScreenSharing': isScreenSharing,
@@ -91,7 +166,7 @@ class CallSessionDto {
 
   CallSessionDto copyWith({
     String? callId,
-    String? status,
+    CallStatus? status,
     int? participantCount,
     bool? isRecording,
     bool? isScreenSharing,

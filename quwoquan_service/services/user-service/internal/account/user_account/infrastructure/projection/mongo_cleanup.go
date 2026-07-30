@@ -68,9 +68,9 @@ func (projector *MongoCleanupProjector) PublishUserEvent(
 	subjectIDs := append([]string{accountID}, personaIDs...)
 	if _, err := projector.followingSubjects.DeleteMany(ctx, bson.M{
 		"$or": bson.A{
-			bson.M{"viewerSubAccountId": bson.M{"$in": personaIDs}},
+			bson.M{"viewerPersonaId": bson.M{"$in": personaIDs}},
 			bson.M{
-				"subjectType": "user",
+				"subjectType": "persona",
 				"subjectId":   bson.M{"$in": subjectIDs},
 			},
 		},
@@ -81,7 +81,7 @@ func (projector *MongoCleanupProjector) PublishUserEvent(
 		"$or": bson.A{
 			bson.M{"personaId": bson.M{"$in": personaIDs}},
 			bson.M{
-				"subjectType": "user",
+				"subjectType": "persona",
 				"subjectId":   bson.M{"$in": subjectIDs},
 			},
 		},
@@ -91,7 +91,7 @@ func (projector *MongoCleanupProjector) PublishUserEvent(
 	if _, err := projector.creatorProfiles.UpdateMany(
 		ctx,
 		bson.M{"$or": bson.A{
-			bson.M{"subAccountId": bson.M{"$in": personaIDs}},
+			bson.M{"personaId": bson.M{"$in": personaIDs}},
 			bson.M{"creatorId": bson.M{"$in": personaIDs}},
 		}},
 		bson.M{

@@ -534,7 +534,7 @@ func processingEvent(eventID string, assetID string, checkpoint string) mediapor
 func processingAsset(
 	t *testing.T,
 	assetID string,
-	mediaType string,
+	mediaType mediamodel.MediaType,
 	processingRequired bool,
 ) *mediamodel.MediaAsset {
 	t.Helper()
@@ -549,7 +549,7 @@ func processingAsset(
 		ObjectKey:          "media/cas/" + assetID,
 		SHA256:             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		MediaType:          mediaType,
-		ContentType:        contentType,
+		MimeType:           contentType,
 		FileSize:           1024,
 		AccessPolicy:       mediamodel.AccessPolicyOwnerOnly,
 		ProcessingRequired: processingRequired,
@@ -565,7 +565,7 @@ func processingDescriptor(assetID string, version int64) mediamodel.MediaProcess
 	prefix := fmt.Sprintf("media/video/s/asset/%s/v%d", assetID, version)
 	return mediamodel.MediaProcessingDescriptor{
 		Video: mediamodel.VideoProcessingDescriptor{
-			ProcessorProfile:             "content_processing_progressive_mp4_v1",
+			ProcessorProfile:             "content_processing_progressive_mp4",
 			VerifiedDurationMs:           20_000,
 			VideoWidth:                   720,
 			VideoHeight:                  1280,
@@ -589,10 +589,10 @@ func imageProcessingDescriptor(
 	publicPrefix := fmt.Sprintf("media/image/s/asset/%s/v%d", assetID, version)
 	return mediamodel.MediaProcessingDescriptor{
 		Image: mediamodel.ImageProcessingDescriptor{
-			ProcessorProfile:         "content_processing_image_baseline_v1",
-			ImageWidth:               1080,
-			ImageHeight:              1440,
-			ImageDeliveryContentType: "image/jpeg",
+			ProcessorProfile:      "content_processing_image_baseline",
+			ImageWidth:            1080,
+			ImageHeight:           1440,
+			ImageDeliveryMimeType: "image/jpeg",
 			ImageNormalizedObjectKey: fmt.Sprintf(
 				"media/processed/image/%s/v%d/source.jpg",
 				assetID,

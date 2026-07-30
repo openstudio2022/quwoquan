@@ -15,6 +15,9 @@ class CandidateInput(BaseModel):
     authorId: str | None = None
     tagRefs: list[str] | None = None
     entityRefs: list[str] | None = None
+    intersectionEdgeWeight: float | None = None
+    intersectionEdgeFreshness: float | None = None
+    intersectionEdgeKind: str | None = None
     ageHours: float | None = None
     publishHour: int | None = None
     viewCount: int | None = None
@@ -45,6 +48,7 @@ class ModelScoreRequest(BaseModel):
     scenario: str
     userId: str
     sessionId: str
+    modelChannel: str | None = None
     userFeatures: dict[str, Any] | None = None
     sessionSignals: dict[str, Any] | None = None
     candidates: list[CandidateInput]

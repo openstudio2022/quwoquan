@@ -2,6 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/rtc/models/call_session_dto.dart';
 import 'package:quwoquan_app/cloud/rtc/models/call_participant_dto.dart';
 import 'package:quwoquan_app/cloud/rtc/models/rtc_repository_result_dtos.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        CallInviteStatus,
+        CallStatus,
+        CallType,
+        EndReason,
+        ParticipantRole,
+        ParticipantStatus;
 
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -49,8 +57,8 @@ void main() {
       final dto = CallSessionDto.fromMap(raw);
 
       expect(dto.callId, equals('call_001'));
-      expect(dto.callType, equals('video'));
-      expect(dto.status, equals('in_call'));
+      expect(dto.callType, CallType.video);
+      expect(dto.status, CallStatus.inCall);
       expect(dto.initiatorId, equals('user_001'));
       expect(dto.conversationId, equals('conv_001'));
       expect(dto.circleId, equals('circle_001'));
@@ -170,7 +178,7 @@ void main() {
       final dto = CallSessionDto.fromMap(raw);
       expect(dto.participants.length, equals(2));
       expect(dto.participants[0].userId, equals('u1'));
-      expect(dto.participants[0].role, equals('initiator'));
+      expect(dto.participants[0].role, ParticipantRole.initiator);
       expect(dto.participants[0].isMuted, isFalse);
       expect(dto.participants[1].userId, equals('u2'));
       expect(dto.participants[1].isCameraOn, isFalse);
@@ -191,7 +199,7 @@ void main() {
         'updatedAt': '2026-03-07T08:15:30Z',
       };
       final dto = CallSessionDto.fromMap(raw);
-      expect(dto.endReason, equals('normal'));
+      expect(dto.endReason, EndReason.normal);
       expect(dto.durationMs, equals(930000));
       expect(dto.endedAt, isNotNull);
       expect(dto.endedAt!.minute, equals(15));
@@ -245,7 +253,7 @@ void main() {
         'updatedAt': '2026-01-01T00:00:00Z',
       };
       final dto = CallSessionDto.fromMap(raw);
-      expect(dto.callType, equals('audio'));
+      expect(dto.callType, CallType.audio);
     });
 
     test('缺少 maxParticipants 默认 32', () {
@@ -296,10 +304,10 @@ void main() {
         'updatedAt': '2026-01-01T00:00:00Z',
       };
       final dto = CallSessionDto.fromMap(raw);
-      final updated = dto.copyWith(status: 'ended');
-      expect(updated.status, equals('ended'));
+      final updated = dto.copyWith(status: CallStatus.ended);
+      expect(updated.status, CallStatus.ended);
       expect(updated.callId, equals('call_copy'));
-      expect(updated.callType, equals('audio'));
+      expect(updated.callType, CallType.audio);
     });
   });
 
@@ -412,8 +420,8 @@ void main() {
       };
       final dto = CallParticipantDto.fromMap(raw);
       expect(dto.userId, equals('user_001'));
-      expect(dto.role, equals('initiator'));
-      expect(dto.status, equals('connected'));
+      expect(dto.role, ParticipantRole.initiator);
+      expect(dto.status, ParticipantStatus.connected);
       expect(dto.isMuted, isTrue);
       expect(dto.isCameraOn, isFalse);
       expect(dto.joinedAt, isNotNull);
@@ -447,7 +455,7 @@ void main() {
     test('缺少 role 默认 invitee', () {
       final raw = <String, dynamic>{'userId': 'u1', 'status': 'connected'};
       final dto = CallParticipantDto.fromMap(raw);
-      expect(dto.role, equals('invitee'));
+      expect(dto.role, ParticipantRole.invitee);
     });
 
     test('缺少 isCameraOn 默认 true', () {
@@ -493,6 +501,78 @@ void main() {
         'leftAt': null,
       };
       expect(() => CallParticipantDto.fromMap(raw), throwsFormatException);
+    });
+  });
+
+  group('RTC enum — 严格单轨 wire 契约', () {
+    test('canonical wire 值与 typed enum 一一对应', () {
+      expect(CallType.fromString('audio'), CallType.audio);
+      expect(CallStatus.fromString('in_call'), CallStatus.inCall);
+      expect(
+        ParticipantRole.fromString('initiator'),
+        ParticipantRole.initiator,
+      );
+      expect(
+        ParticipantStatus.fromString('connected'),
+        ParticipantStatus.connected,
+      );
+      expect(
+        CallInviteStatus.fromString('cancelled'),
+        CallInviteStatus.cancelled,
+      );
+      expect(EndReason.fromString('no_answer'), EndReason.noAnswer);
+      expect(EndReason.fromString('last_leave'), EndReason.lastLeave);
+      expect(EndReason.fromString('account_closed'), EndReason.accountClosed);
+      expect(
+        EndReason.fromString('account_suspended'),
+        EndReason.accountSuspended,
+      );
+    });
+
+    test('未知值和旧 EndReason 别名全部 fail-closed', () {
+      expect(() => CallType.fromString('unknown'), throwsFormatException);
+      expect(() => CallStatus.fromString('completed'), throwsFormatException);
+      expect(() => ParticipantRole.fromString('caller'), throwsFormatException);
+      expect(
+        () => ParticipantStatus.fromString('unknown'),
+        throwsFormatException,
+      );
+      expect(
+        () => CallInviteStatus.fromString('unknown'),
+        throwsFormatException,
+      );
+      for (final legacy in <String>[
+        'completed',
+        'busy',
+        'initiator_hangup',
+        'network_error',
+        'unknown',
+      ]) {
+        expect(() => EndReason.fromString(legacy), throwsFormatException);
+      }
+    });
+
+    test('DTO decoder 遇到未知 enum wire 值直接拒绝', () {
+      expect(
+        () => CallSessionDto.fromMap(<String, Object?>{
+          'callId': 'call_bad_enum',
+          'callType': 'voice',
+          'status': 'ringing',
+          'initiatorId': 'u1',
+          'roomId': 'r1',
+          'createdAt': '2026-01-01T00:00:00Z',
+          'updatedAt': '2026-01-01T00:00:00Z',
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => CallParticipantDto.fromMap(<String, Object?>{
+          'userId': 'u1',
+          'role': 'caller',
+          'status': 'connected',
+        }),
+        throwsFormatException,
+      );
     });
   });
 

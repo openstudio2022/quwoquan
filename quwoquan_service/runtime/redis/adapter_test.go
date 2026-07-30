@@ -33,11 +33,6 @@ func TestRecAdapter_SetOps(t *testing.T) {
 	ctx := context.Background()
 
 	_ = rec.SAdd(ctx, "s1", "a", "b")
-	members, _ := rec.SMembers(ctx, "s1")
-	if len(members) != 2 {
-		t.Errorf("SMembers: expected 2, got %d", len(members))
-	}
-
 	ok, _ := rec.SIsMember(ctx, "s1", "a")
 	if !ok {
 		t.Error("SIsMember should return true for 'a'")
@@ -52,8 +47,13 @@ func TestRecAdapter_HashOps(t *testing.T) {
 	_ = rec.HIncrByFloat(ctx, "h1", "score", 1.5)
 	_ = rec.HIncrByFloat(ctx, "h1", "score", 2.0)
 
-	all, _ := rec.HGetAll(ctx, "h1")
-	if all["score"] == "" {
+	operations := []recommendation.PipelineOp{
+		{Type: recommendation.PipelineHGetAll, Key: "h1"},
+	}
+	if err := rec.PipelineRead(ctx, operations); err != nil {
+		t.Fatalf("PipelineRead: %v", err)
+	}
+	if operations[0].Hash["score"] == "" {
 		t.Fatal("score should exist")
 	}
 
@@ -78,6 +78,11 @@ func TestRecAdapter_PipelineRead(t *testing.T) {
 		{Type: recommendation.PipelineHGetAll, Key: "rec:session_signals:{u1}:s1"},
 		{Type: recommendation.PipelineSMembers, Key: "rec:exposed:{u1}:s1"},
 		{Type: recommendation.PipelineSMembers, Key: "rec:negative:{u1}:s1"},
+		{
+			Type:   recommendation.PipelineSIsMember,
+			Key:    "rec:exposed:{u1}:s1",
+			Member: "p2",
+		},
 	}
 
 	if err := pipeliner.PipelineRead(ctx, ops); err != nil {
@@ -92,6 +97,19 @@ func TestRecAdapter_PipelineRead(t *testing.T) {
 	}
 	if len(ops[2].Set) != 1 {
 		t.Errorf("negative SMembers: expected 1, got %d", len(ops[2].Set))
+	}
+	if !ops[3].Bool {
+		t.Error("exposed SIsMember should return true for p2")
+	}
+}
+
+func TestRecAdapter_PipelineReadRejectsUnknownOperation(t *testing.T) {
+	rec := NewRecAdapter(NewMemoryClient())
+	err := rec.PipelineRead(context.Background(), []recommendation.PipelineOp{
+		{Type: recommendation.PipelineOpType(99), Key: "rec:invalid"},
+	})
+	if err == nil {
+		t.Fatal("unknown recommendation pipeline operation must fail closed")
 	}
 }
 

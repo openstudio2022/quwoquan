@@ -35,10 +35,10 @@ type CatalogReader interface {
 }
 
 type AssignmentSink interface {
-	Append(context.Context, model.AssignmentFact, model.Event) (model.AssignmentFact, bool, error)
+	Append(context.Context, model.AssignmentFact) (model.AssignmentFact, bool, error)
 }
 
 type AssignmentReader interface {
-	Get(context.Context, string, string, string) (model.AssignmentFact, error)
-	Stats(context.Context, string, string) (AssignmentStats, error)
+	Get(context.Context, string, int64, string) (model.AssignmentFact, error)
+	Stats(context.Context, string, int64) (AssignmentStats, error)
 }

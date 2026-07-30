@@ -2,6 +2,7 @@
   "label": "留学申请",
   "labelEn": "Study Abroad Application",
   "description": "海外院校申请与文书",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

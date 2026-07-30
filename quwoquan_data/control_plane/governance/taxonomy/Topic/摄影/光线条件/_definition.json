@@ -1,0 +1,14 @@
+{
+  "label": "光线条件",
+  "labelEn": "Lighting Condition",
+  "description": "由 capturedAt 与 GPS 推算太阳高度角判定的光线窗口",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

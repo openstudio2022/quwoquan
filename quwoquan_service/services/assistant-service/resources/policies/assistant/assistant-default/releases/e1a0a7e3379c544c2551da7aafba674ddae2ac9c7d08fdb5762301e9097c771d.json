@@ -1,0 +1,41 @@
+{
+  "schema": "assistant.policy_release",
+  "commandId": "policy-release:assistant-default:e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d",
+  "release": {
+    "policyId": "assistant-default",
+    "releaseDigest": "e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d",
+    "defaultTemplateId": "default-general",
+    "templates": [
+      {
+        "templateId": "default-general",
+        "skillId": "fallback_general_search",
+        "domainId": "assistant",
+        "promptPolicy": "Provide a grounded, concise answer. Cite verified sources and state uncertainty.",
+        "allowedTools": ["search", "web_fetch", "web_search"],
+        "searchIntensity": "medium"
+      }
+    ],
+    "routingRules": [
+      {
+        "ruleId": "fallback-general-search",
+        "priority": 100,
+        "domainId": "assistant",
+        "skillId": "fallback_general_search",
+        "templateId": "default-general"
+      }
+    ],
+    "learningContextPolicy": {
+      "enabled": true,
+      "allowedSignals": [
+        "feedback_counts",
+        "metric_summaries",
+        "top_reason_codes"
+      ],
+      "allowedMetricIds": ["turn_completion"],
+      "allowedReasonCodes": ["clear", "privacy", "unsafe"],
+      "minimumFeedbackSamples": 3,
+      "windowDays": 30,
+      "snapshotTrainingEligible": false
+    }
+  }
+}

@@ -1,8 +1,7 @@
-"""local_contract：四环境门禁矩阵预算、编排与加速短路。"""
+"""local_contract：三环境固定候选门禁矩阵。"""
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,8 +42,8 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 phases=[phase],
                 wall_clock_seconds=120.5,
                 budgets=budgets,
-                claim="LOCAL_ENV_GATE_GREEN",
-                cache_mode="warm",
+                claim="ALPHA_BETA_GAMMA_LOCAL_GREEN",
+                cache_mode="package-bound",
             )
             payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertEqual(payload["schema"], "local-env-gate-timing")
@@ -53,7 +52,7 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
         self.assertFalse(payload["overHardBudget"])
         self.assertEqual(payload["phases"][0]["name"], "alpha_up")
 
-    def test_matrix_orchestrator_serial_and_reuse_package(self) -> None:
+    def test_matrix_orchestrator_is_serial_package_bound_and_full(self) -> None:
         from quwoquan_ops.cli.lib.local_env_gate_matrix import run_local_env_gate_matrix
 
         calls: list[str] = []
@@ -62,7 +61,10 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             def _fn(args):
                 calls.append(f"{name}:{getattr(args, 'env', '')}:{getattr(args, 'target', '')}:{getattr(args, 'command', '')}")
                 if name == "verify":
-                    self.assertTrue(getattr(args, "reuse_package", False))
+                    self.assertFalse(hasattr(args, "reuse_package"))
+                if name == "up":
+                    self.assertEqual(args.workload, "full")
+                    self.assertTrue(args.skip_build)
                 return {
                     "exitCode": 0,
                     "summary": f"{name} ok",
@@ -82,15 +84,6 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 "stderr": "",
                 "reportDir": "runs/commit-gate",
             },
-        ), mock.patch(
-            "quwoquan_ops.cli.lib.local_env_gate_matrix.gamma_images_warm",
-            return_value=True,
-        ), mock.patch(
-            "quwoquan_ops.cli.lib.local_env_gate_matrix.beta_images_warm",
-            return_value=True,
-        ), mock.patch(
-            "quwoquan_ops.cli.lib.local_env_gate_matrix.force_cleanup_target",
-            return_value={"exitCode": 0, "summary": "down", "reportDir": ""},
         ), mock.patch(
             "quwoquan_ops.cli.lib.local_env_gate_matrix.probe_migration_drift",
         ) as drift_probe, mock.patch(
@@ -114,27 +107,34 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 health_fn=_ok("health"),
                 verify_fn=_ok("verify"),
                 down_fn=_ok("down"),
+                targets=("alpha-local", "beta-local", "gamma-local"),
                 include_l0=True,
-                cache_mode="warm",
-                auto_wipe_drift=True,
             )
         self.assertEqual(payload["exitCode"], 0)
-        self.assertEqual(payload["claim"], "LOCAL_ENV_GATE_GREEN")
+        self.assertEqual(payload["claim"], "ALPHA_BETA_GAMMA_LOCAL_GREEN")
+        self.assertGreater(payload["executed"], 0)
+        self.assertEqual(payload["skipped"], 0)
         self.assertLessEqual(payload["wallClockSeconds"], 600)
-        # Serial order: package/up/health/verify for local envs, then prod package/verify.
+        # Serial order: the same package/up/health/verify/down state machine for A/B/G.
         package_envs = [
             c.split(":")[1] for c in calls if c.startswith("package:")
         ]
-        self.assertEqual(package_envs, ["alpha", "beta", "gamma", "prod"])
+        self.assertEqual(package_envs, ["alpha", "beta", "gamma"])
         timing_path = ROOT / payload["reportDir"] / "timing.json"
         self.assertTrue(timing_path.is_file(), timing_path)
         timing = json.loads(timing_path.read_text(encoding="utf-8"))
-        self.assertEqual(timing["cacheMode"], "warm")
+        self.assertEqual(timing["cacheMode"], "package-bound")
         self.assertFalse(timing["overHardBudget"])
+        matrix = json.loads(
+            (ROOT / payload["reportDir"] / "matrix.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(matrix["schema"], "quwoquan.test.case-result")
         phase_names = [p["name"] for p in timing["phases"]]
         self.assertIn("L0_commit_gate", phase_names)
-        self.assertIn("gamma_up", phase_names)
-        self.assertIn("prod_verify_release", phase_names)
+        self.assertIn("gamma-local_up", phase_names)
+        self.assertNotIn("prod_verify_release", phase_names)
 
     def test_package_reuse_fingerprint(self) -> None:
         from quwoquan_ops.cli.lib.package_reuse import (
@@ -144,100 +144,134 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
-            app_dir = tmp_path / "app"
-            app_dir.mkdir()
+            candidate_dir = tmp_path / "candidate"
+            app_dir = candidate_dir / "packages/app"
+            app_dir.mkdir(parents=True)
             (app_dir / "marker").write_text("ok", encoding="utf-8")
             svc_dir = tmp_path / "svc"
             svc_dir.mkdir()
+            (svc_dir / "marker").write_text("ok", encoding="utf-8")
+            shared_dir = tmp_path / "runtime-shared"
+            shared_dir.mkdir()
+            (shared_dir / "marker").write_text("ok", encoding="utf-8")
+            legal_dir = tmp_path / "legal-static"
+            legal_dir.mkdir()
+            (legal_dir / "marker").write_text("ok", encoding="utf-8")
             with mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.app_deployment_package_dir",
                 return_value=app_dir,
             ), mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.service_deployment_package_dir",
                 return_value=svc_dir,
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.runtime_shared_deployment_package_dir",
+                return_value=shared_dir,
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.legal_static_deployment_package_dir",
+                return_value=legal_dir,
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse._expected_service_packages",
+                return_value=["content-service"],
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.deployment_input_digest",
+                return_value=(f"sha256:{'a' * 64}", 1),
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.workspace_snapshot",
+                return_value={
+                    "baselineId": f"sha256:{'b' * 64}",
+                    "sourceRevision": "a" * 40,
+                    "workspaceStatusDigest": f"sha256:{'c' * 64}",
+                    "deploymentInputDigest": f"sha256:{'a' * 64}",
+                    "deploymentInputFileCount": 1,
+                },
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.active_deployment_candidate",
+                return_value={
+                    "target": "alpha-local",
+                    "baselineId": f"sha256:{'b' * 64}",
+                },
+            ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.validate_candidate_manifest",
+                side_effect=lambda payload, **_kwargs: payload,
             ):
-                write_package_fingerprint(
+                fingerprint_path = write_package_fingerprint(
                     "alpha",
                     "alpha-local",
                     report_dir="runs/pkg",
                     include_services=True,
                     details=["ready"],
                 )
+                fingerprint = json.loads(
+                    fingerprint_path.read_text(encoding="utf-8")
+                )
+                (candidate_dir / "manifest.json").write_text(
+                    json.dumps(
+                        {
+                            "baselineId": fingerprint["baselineId"],
+                            "sourceRevision": fingerprint["sourceRevision"],
+                            "workspaceStatusDigest": fingerprint[
+                                "workspaceStatusDigest"
+                            ],
+                            "workspaceDigest": fingerprint["deploymentInputs"][
+                                "digest"
+                            ],
+                            "packageDigest": fingerprint["packageContent"][
+                                "digest"
+                            ],
+                        }
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
                 ok, detail = can_reuse_package(
                     "alpha", "alpha-local", include_services=True
                 )
                 self.assertTrue(ok, detail)
 
-    def test_force_release_skips_docker_proxy_listeners(self) -> None:
+    def test_down_target_uses_only_stackctl_down(self) -> None:
         from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
 
-        fake_lsof = (
-            "COMMAND     PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\n"
-            "docker-proxy 111 user   4u  IPv4 1      0t0  TCP *:17220 (LISTEN)\n"
-            "Python       222 user   4u  IPv4 2      0t0  TCP 127.0.0.1:17220 (LISTEN)\n"
+        down = mock.Mock(
+            return_value={"exitCode": 0, "summary": "down", "details": []}
         )
-        with mock.patch.object(
-            matrix_mod.subprocess,
-            "run",
-            side_effect=[
-                mock.Mock(returncode=0, stdout=fake_lsof, stderr=""),
-                mock.Mock(returncode=0, stdout="", stderr=""),
-                mock.Mock(returncode=0, stdout="COMMAND PID\n", stderr=""),
-            ],
-        ) as run:
-            pids = matrix_mod._host_listener_pids(17220)
-            self.assertEqual(pids, ["222"])
-            # ensure kill path would only target host Python, never docker-proxy
-            matrix_mod.subprocess.run(["kill", "-TERM", *pids], check=False)
-            kill_calls = [
-                call.args[0]
-                for call in run.call_args_list
-                if call.args and call.args[0][:1] == ["kill"]
-            ]
-            self.assertTrue(any(call == ["kill", "-TERM", "222"] for call in kill_calls))
-
-    def test_force_cleanup_cannot_bypass_active_consumer_lease(self) -> None:
-        from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
-
-        down_payload = {
-            "exitCode": 2,
-            "reason": "active_consumer_lease",
-            "summary": "stackctl down is GATE_BLOCK for alpha-local",
-            "details": ["active consumer lease: device=ELS-AN00"],
-        }
-        down = mock.Mock(return_value=down_payload)
-        with mock.patch.object(
-            matrix_mod,
-            "_clear_stale_operation_lock",
-            return_value=[],
-        ), mock.patch.object(
-            matrix_mod,
-            "_force_release_target_ports",
-        ) as release_ports:
-            payload = matrix_mod.force_cleanup_target(
-                "alpha-local",
-                down_fn=down,
-            )
-
-        self.assertEqual(payload["reason"], "active_consumer_lease")
+        payload = matrix_mod._down_target("alpha-local", down_fn=down)
+        self.assertEqual(payload["exitCode"], 0)
         down.assert_called_once()
-        release_ports.assert_not_called()
+        args = down.call_args.args[0]
+        self.assertEqual(args.target, "alpha-local")
+        self.assertFalse(args.formal_release_teardown)
 
-    def test_stackctl_skip_nested_up_short_circuits_profile_up(self) -> None:
+    def test_matrix_rejects_target_subset_without_execution(self) -> None:
+        from quwoquan_ops.cli.lib.local_env_gate_matrix import run_local_env_gate_matrix
+
+        runner = mock.Mock()
+        payload = run_local_env_gate_matrix(
+            package_fn=runner,
+            up_fn=runner,
+            health_fn=runner,
+            verify_fn=runner,
+            down_fn=runner,
+            targets=("alpha-local", "beta-local"),
+        )
+        self.assertEqual(payload["exitCode"], 2)
+        self.assertEqual(payload["claim"], "GATE_BLOCK")
+        self.assertEqual(payload["skipped"], 0)
+        runner.assert_not_called()
+
+    def test_verify_profile_never_performs_nested_up(self) -> None:
         from quwoquan_ops.cli.lib.content_release_readiness import VerificationProfile
         from quwoquan_ops.cli import stackctl as stackctl_mod
 
-        with mock.patch.dict(os.environ, {"STACKCTL_SKIP_NESTED_UP": "1"}, clear=False):
-            commands = stackctl_mod._selected_profile_commands(
-                "beta",
-                "beta-local",
-                VerificationProfile.INTEGRATION,
-            )
+        commands = stackctl_mod._selected_profile_commands(
+            "beta",
+            "beta-local",
+            VerificationProfile.INTEGRATION,
+        )
         names = [item["name"] for item in commands]
         self.assertIn("beta-local-health-preflight", names)
         self.assertNotIn("beta-local-up", names)
 
-    def test_start_script_has_reuse_data_plane_watermark(self) -> None:
+    def test_start_script_delegates_data_plane_to_immutable_release(self) -> None:
         script = (
             ROOT
             / "quwoquan_app"
@@ -245,10 +279,13 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             / "gamma"
             / "start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
-        self.assertIn("LOCAL_GAMMA_REUSE_DATA_PLANE", script)
-        self.assertIn("data-plane-watermark.json", script)
-        self.assertIn("maybe_reuse_local_gamma_data_plane", script)
-        self.assertIn("write_local_gamma_data_plane_watermark", script)
+        self.assertIn(
+            "immutable release activation owns business data and search projections",
+            script,
+        )
+        self.assertNotIn("LOCAL_GAMMA_REUSE_DATA_PLANE", script)
+        self.assertNotIn("data-plane-watermark.json", script)
+        self.assertNotIn("ENABLE_FIXTURE_SEEDS", script)
 
     def test_alpha_wait_http_early_exits_on_checksum_drift(self) -> None:
         from quwoquan_ops.cli.alpha import content_release_runtime as runtime
@@ -269,6 +306,117 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                         timeout_seconds=300,
                         compose_service="user-service",
                     )
+
+    def test_alpha_up_checks_public_tls_before_stopping_current_runtime(self) -> None:
+        from quwoquan_ops.cli.alpha import content_release_runtime as runtime
+        from quwoquan_ops.cli.lib.public_domain_tls import PublicDomainTlsError
+
+        docker_ready = mock.Mock(returncode=0)
+        with (
+            mock.patch.object(
+                runtime.subprocess,
+                "run",
+                return_value=docker_ready,
+            ),
+            mock.patch.object(runtime, "assert_local_runtime_available"),
+            mock.patch.object(
+                runtime,
+                "certificate_paths",
+                side_effect=PublicDomainTlsError("missing public TLS"),
+            ),
+            mock.patch.object(runtime, "down") as down,
+        ):
+            with self.assertRaisesRegex(PublicDomainTlsError, "missing public TLS"):
+                runtime.up()
+
+        down.assert_not_called()
+
+    def test_alpha_down_retains_ledger_when_managed_process_survives(self) -> None:
+        from quwoquan_ops.cli.alpha import content_release_runtime as runtime
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            paths = runtime.RuntimePaths(
+                process_dir=root / "process",
+                media_root=root / "media",
+                run_root=root / "run",
+                observability_root=root / "observability",
+                logs_root=root / "logs",
+                config_root=root / "config",
+                legal_root=root / "legal",
+                caddyfile=root / "Caddyfile",
+            )
+            paths.process_dir.mkdir(parents=True)
+            paths.state_path.write_text(
+                json.dumps(
+                    {
+                        "processes": {
+                            "media-origin": {"pid": 101, "pgid": 101}
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            docker_unavailable = mock.Mock(returncode=1, stdout="", stderr="")
+            with (
+                mock.patch.object(runtime, "_paths", return_value=paths),
+                mock.patch.object(runtime, "_stop_process", return_value=False),
+                mock.patch.object(runtime, "_container_exists", return_value=False),
+                mock.patch.object(
+                    runtime.subprocess, "run", return_value=docker_unavailable
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError, "managed process groups remain"
+                ):
+                    runtime.down()
+
+            self.assertTrue(paths.state_path.is_file())
+
+    def test_alpha_orphan_match_requires_target_scoped_wrapper_and_ports(
+        self,
+    ) -> None:
+        from quwoquan_ops.cli.alpha import content_release_runtime as runtime
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            paths = runtime.RuntimePaths(
+                process_dir=root / "process",
+                media_root=runtime.ROOT
+                / ".qwq_output/env/alpha/local/alpha-local/cache/media",
+                run_root=root / "run",
+                observability_root=root / "observability",
+                logs_root=root / "logs",
+                config_root=root / "config",
+                legal_root=root / "legal",
+                caddyfile=root / "Caddyfile",
+            )
+            wrapper = runtime.ROOT / "quwoquan_ops/cli/lib/runtime_log_process.py"
+            log = (
+                runtime.ROOT
+                / ".qwq_output/env/alpha/observability/run-1/logs/service/media-edge/local/runtime.log"
+            )
+            command = (
+                f"python3 {wrapper} --log-file {log} --event media-edge -- "
+                "python3 quwoquan_ops/cli/lib/http_reverse_proxy.py "
+                "--listen-host 0.0.0.0 --listen-port 17120 "
+                "--target-base-url http://127.0.0.1:17110"
+            )
+            ports = {"media-processor": 17120, "media-origin": 17110}
+
+            self.assertTrue(
+                runtime._matches_orphaned_wrapper(
+                    command, name="media-edge", ports=ports, paths=paths
+                )
+            )
+            self.assertFalse(
+                runtime._matches_orphaned_wrapper(
+                    command.replace("17120", "18120"),
+                    name="media-edge",
+                    ports=ports,
+                    paths=paths,
+                )
+            )
 
 
 if __name__ == "__main__":

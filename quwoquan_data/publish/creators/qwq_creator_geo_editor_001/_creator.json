@@ -1,0 +1,13 @@
+{
+  "schema": "quwoquan_data.creator_object",
+  "creatorId": "qwq_creator_geo_editor_001",
+  "profileRef": "profile.json",
+  "assetsRef": "assets.refs.json",
+  "worksRefsRef": "works.refs.ndjson",
+  "tagRefs": [
+    "Format/内容角度/科普/知识科普",
+    "Format/内容角度/资讯/深度报道",
+    "Format/内容载体/文章/专栏文"
+  ],
+  "entityRefs": []
+}

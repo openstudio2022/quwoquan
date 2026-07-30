@@ -8,8 +8,8 @@ void main() {
     test('decoder 严格解析 canonical record', () {
       final record = decodeGreetingRequestRecord(<String, Object?>{
         'id': 'gr_001',
-        'requesterSubAccountId': 'user_a',
-        'targetSubAccountId': 'user_b',
+        'requesterPersonaId': 'user_a',
+        'targetPersonaId': 'user_b',
         'requestMessage': '你好，很高兴认识你！',
         'status': 'pending',
         'source': 'profile',
@@ -21,8 +21,8 @@ void main() {
       });
 
       expect(record.id, 'gr_001');
-      expect(record.requesterSubAccountId, 'user_a');
-      expect(record.targetSubAccountId, 'user_b');
+      expect(record.requesterPersonaId, 'user_a');
+      expect(record.targetPersonaId, 'user_b');
       expect(record.requestMessage, '你好，很高兴认识你！');
       expect(record.status, 'pending');
       expect(record.expireAt, DateTime.utc(2026, 7, 23, 8));
@@ -36,16 +36,17 @@ void main() {
     });
 
     test('send command 只输出 canonical typed body', () {
-      final payload = encodeSendGreetingCommand(
-        SendGreetingCommand(
-          targetSubAccountId: 'user_b',
-          requestMessage: ' 认识一下 ',
-          source: ' profile ',
-        ),
-      );
+      final payload =
+          encodeUserGreetingRequestSendGreetingRequestGeneratedRequest(
+            SendGreetingCommand(
+              targetPersonaId: 'user_b',
+              requestMessage: ' 认识一下 ',
+              source: ' profile ',
+            ),
+          );
 
       expect(payload.body, <String, Object?>{
-        'targetSubAccountId': 'user_b',
+        'targetPersonaId': 'user_b',
         'requestMessage': '认识一下',
         'source': 'profile',
       });
@@ -68,13 +69,10 @@ void main() {
 
     test('send 后可从 typed outbox query 回读且 id 唯一', () async {
       final first = await facet.sendGreeting(
-        SendGreetingCommand(
-          targetSubAccountId: 'user_x',
-          requestMessage: '认识一下',
-        ),
+        SendGreetingCommand(targetPersonaId: 'user_x', requestMessage: '认识一下'),
       );
       final second = await facet.sendGreeting(
-        SendGreetingCommand(targetSubAccountId: 'user_y'),
+        SendGreetingCommand(targetPersonaId: 'user_y'),
       );
       final outbox = await facet.listGreetingOutbox(
         const ListGreetingRequestsQuery(status: 'pending', limit: 20),
@@ -84,7 +82,7 @@ void main() {
       expect(first.requestMessage, '认识一下');
       expect(first.id, isNot(second.id));
       expect(
-        outbox.items.map((item) => item.targetSubAccountId),
+        outbox.items.map((item) => item.targetPersonaId),
         containsAll(<String>['user_x', 'user_y']),
       );
     });
@@ -134,8 +132,8 @@ GreetingRequestRecord _greetingRecord({
   final createdAt = DateTime.utc(2026, 7, 20, 8);
   return GreetingRequestRecord(
     id: id,
-    requesterSubAccountId: requester,
-    targetSubAccountId: target,
+    requesterPersonaId: requester,
+    targetPersonaId: target,
     requestMessage: 'fixture greeting',
     status: 'pending',
     source: 'profile',

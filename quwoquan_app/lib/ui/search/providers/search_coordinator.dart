@@ -88,6 +88,9 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     'park',
     'hot_spring',
     'theme_park',
+    'transport_hub',
+    'city',
+    'photo_spot',
   };
 
   late SearchRecentHistoryStore _localStore;

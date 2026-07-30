@@ -38,11 +38,12 @@ void main() {
       final input = remote.inputs.first;
       expect(input.targetType, equals('page'));
       expect(input.targetKey, equals('page_discovery_recommend'));
-      expect(input.source, equals('page_access'));
       expect(input.idempotencyKey, isNotEmpty);
       // 出站 wire 形状与 ops/product_ops/visit_record 契约对齐：actor 由服务端派生。
-      expect(input.toWireJson().containsKey('userId'), isFalse);
-      expect(input.toWireJson().containsKey('idempotencyKey'), isFalse);
+      expect(
+        input.toWireJson().keys,
+        unorderedEquals(<String>['targetType', 'targetKey']),
+      );
     });
 
     test('五分钟去重窗口内的重复访问不产生第二次上报', () async {

@@ -27,8 +27,8 @@ type SelectableGroupConversationRow struct {
 }
 
 type SelectableGroupContactMemberRow struct {
-	ContactID     string `json:"contactId"`
 	UserID        string `json:"userId"`
+	UserHandle    string `json:"userHandle"`
 	DisplayName   string `json:"displayName"`
 	AvatarURL     string `json:"avatarUrl"`
 	RelationState string `json:"relationState"`
@@ -334,8 +334,8 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 			}
 			seen[id] = struct{}{}
 			items = append(items, SelectableGroupContactMemberRow{
-				ContactID:     id,
 				UserID:        id,
+				UserHandle:    strings.TrimSpace(member.UserHandle),
 				DisplayName:   member.DisplayName,
 				AvatarURL:     member.AvatarUrl,
 				RelationState: "mutual",

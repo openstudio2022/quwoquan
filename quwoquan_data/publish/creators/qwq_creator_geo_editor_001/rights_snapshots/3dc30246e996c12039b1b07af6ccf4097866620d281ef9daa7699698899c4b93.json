@@ -1,0 +1,46 @@
+{
+  "assetId": "creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120",
+  "commercialRights": {
+    "asset": {
+      "bytes": 430336,
+      "height": 1280,
+      "mimeType": "image/webp",
+      "ref": "cas/3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93.webp",
+      "sha256": "sha256:3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93",
+      "width": 1280
+    },
+    "assetId": "creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120",
+    "attribution": "潛說友 / Public domain",
+    "author": "潛說友",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:Westlake.JPG",
+    "canonicalFilePage": "https://commons.wikimedia.org/wiki/File:Westlake.JPG",
+    "caption": "西湖图，出自《咸淳临安志》，清同治六年补刊",
+    "captionSource": "entities/地点/景区/杭州西湖/rights_snapshots/aecaf741adb2bbf7f38f.json",
+    "fetchedAt": "2026-07-28T01:41:54Z",
+    "licenseName": "Public domain",
+    "licenseShortName": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/File:Westlake.JPG",
+    "modelReleaseStatus": "not_required",
+    "modifications": "deterministic center-square crop [306, 0, 1613, 1307] from 1920x1307; RGB; LANCZOS 1280x1280; WebP quality=85 method=4; derivative_policy_version=1",
+    "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/f/f3/Westlake.JPG",
+    "pageRevision": "93458353",
+    "rightsAuditIssues": [],
+    "rightsAuditStatus": "verified",
+    "snapshot": {
+      "bytes": 3224,
+      "ref": "entities/地点/景区/杭州西湖/rights_snapshots/aecaf741adb2bbf7f38f.json",
+      "sha256": "sha256:66402dbc5c8f05139f02cfc84a6e8a173cef254073f3367fc91992115d2c8896"
+    },
+    "snapshotUrl": "https://commons.wikimedia.org/wiki/File:Westlake.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Westlake.JPG",
+    "sourceKind": "creator_avatar_derivative",
+    "sourceUseMode": "licensed_adaptation",
+    "usageScope": "app_publish"
+  },
+  "depictsIdentifiablePerson": false,
+  "manifestAsset": {
+    "assetId": "creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120",
+    "sha256": "sha256:3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93"
+  },
+  "schema": "quwoquan_data.creator_avatar_rights_snapshot"
+}

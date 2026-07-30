@@ -1,10 +1,10 @@
 package intersection
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 
-	"quwoquan_service/services/content-service/generated/content/post"
+	generated "quwoquan_service/services/content-service/generated/content/post"
 )
 
 func RepresentativeActorForReason(r IntersectionReasonView, anchor IntersectionPointView) *IntersectionRepresentativeActorView {
@@ -30,7 +30,7 @@ func RepresentativeActorForReason(r IntersectionReasonView, anchor IntersectionP
 		actorID = target.ObjectID
 	}
 	privacyState := "visible"
-	if strings.HasPrefix(name, "一位") {
+	if isAnonymousActorName(name) {
 		privacyState = "anonymous"
 	}
 	return &IntersectionRepresentativeActorView{
@@ -104,33 +104,31 @@ func representativeActorName(r IntersectionReasonView, anchor IntersectionPointV
 	if name := strings.TrimSpace(r.DisplayName); name != "" && r.ObjectKind == "person" {
 		return name
 	}
-	switch anchor.SourceRef {
-	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni", "alumniHere":
-		return "一位校友"
-	case "sameCompany", "sameTeam", "sameIndustry", "colleagueHere":
-		return "一位同事"
-	case "commonContact":
-		return "一位联系人"
-	default:
-		return "一位用户"
-	}
+	return anonymousActorText(anchor.SourceRef)
 }
 
-func representativeRelationLabel(sourceRef string) string {
-	switch sourceRef {
-	case "sharedFollowees", "commonFollower", "followeeInObject", "followeeVisited", "followeeViewing", "followeeDiscussedThis":
-		return "你关注的人"
-	case "commonContact":
-		return "联系人"
-	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni", "alumniHere":
-		return "校友"
-	case "sameCompany", "sameTeam", "sameIndustry", "colleagueHere":
-		return "同事"
-	case "sharedCircle", "coMemberCircle":
-		return "同圈成员"
-	default:
-		return ""
+// isAnonymousActorName 判断代表人名是否是注册表下发的匿名称谓（而非真实人名）。
+// 匿名代表人的隐私态是 anonymous，也不得再被冠以关系限定前缀。
+func isAnonymousActorName(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
 	}
+	if name == resolve(generated.IntersectionAnonymousActorLabelDefault) {
+		return true
+	}
+	for kind := range generated.IntersectionAnonymousActorLabelByKind {
+		if anonymousActorText(kind) == name {
+			return true
+		}
+	}
+	return false
+}
+
+// representativeRelationLabel 查 kind → 代表人关系限定词
+// （generated.IntersectionRelationLabelByKind，源 registry.presentationText.relationLabels）。
+func representativeRelationLabel(sourceRef string) string {
+	return relationLabelText(sourceRef)
 }
 
 func representativeSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
@@ -139,37 +137,45 @@ func representativeSubject(r IntersectionReasonView, anchor IntersectionPointVie
 	if name == "" {
 		if n <= 1 {
 			if relation != "" {
-				return "一位" + relation
+				return subjectPatternText("anonymousWithRelation", map[string]string{"relation": relation})
 			}
-			return "一位用户"
+			return anonymousActorText("")
 		}
 		if relation != "" {
-			return fmt.Sprintf("%d位%s", n, relation)
+			return subjectPatternText("countedWithRelation", map[string]string{
+				"count": strconv.Itoa(n), "relation": relation,
+			})
 		}
-		return fmt.Sprintf("%d人", n)
+		return subjectPatternText("countedPlain", map[string]string{"count": strconv.Itoa(n)})
 	}
 	base := name
-	if relation != "" && !strings.HasPrefix(name, "一位") {
-		base = relation + name
+	if relation != "" && !isAnonymousActorName(name) {
+		base = subjectPatternText("relationPrefixedName", map[string]string{
+			"relation": relation, "name": name,
+		})
 	}
 	if n <= 1 {
 		return base
 	}
-	return fmt.Sprintf("%s等%d人", base, n)
+	return subjectPatternText("namedWithMore", map[string]string{
+		"subject": base, "count": strconv.Itoa(n),
+	})
 }
 
 func countedRepresentativeSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
 	relation := normalizedRepresentativeRelationLabel(r, anchor)
 	if n <= 1 {
 		if relation != "" {
-			return "1位" + relation
+			return subjectPatternText("singleWithRelation", map[string]string{"relation": relation})
 		}
-		return "1位用户"
+		return subjectPatternText("singleUnknownRelation", nil)
 	}
 	if relation != "" {
-		return fmt.Sprintf("%d位%s", n, relation)
+		return subjectPatternText("countedWithRelation", map[string]string{
+			"count": strconv.Itoa(n), "relation": relation,
+		})
 	}
-	return fmt.Sprintf("%d位用户", n)
+	return subjectPatternText("countedUnknownRelation", map[string]string{"count": strconv.Itoa(n)})
 }
 
 func representativeSubjectWithUnit(r IntersectionReasonView, anchor IntersectionPointView, n int, unit string) string {
@@ -177,7 +183,9 @@ func representativeSubjectWithUnit(r IntersectionReasonView, anchor Intersection
 	if n <= 1 {
 		return base
 	}
-	return fmt.Sprintf("%s等%d%s", base, n, unit)
+	return subjectPatternText("namedWithMoreUnit", map[string]string{
+		"subject": base, "count": strconv.Itoa(n), "unit": unit,
+	})
 }
 
 func normalizedRepresentativeRelationLabel(r IntersectionReasonView, anchor IntersectionPointView) string {
@@ -190,50 +198,46 @@ func normalizedRepresentativeRelationLabel(r IntersectionReasonView, anchor Inte
 	return representativeRelationLabel(anchor.SourceRef)
 }
 
+// isMeaningfulRepresentativeRelationLabel 排除历史上被当成关系称谓下发的通用占位词
+// （registry.presentationText.placeholderRelationLabels）：它们描述的是交集类型而非
+// 「这个人是谁」，冠在人名前会变成「共同点赞张三」这种病句。
 func isMeaningfulRepresentativeRelationLabel(label string) bool {
-	switch strings.TrimSpace(label) {
-	case "", "共同点赞", "共同讨论", "共同传播", "共同关注", "都关注此标签", "同行足迹", "同好":
+	if strings.TrimSpace(label) == "" {
 		return false
-	default:
-		return true
 	}
+	return !isPlaceholderRelationLabel(label)
 }
 
+// interactionActionPhraseForReason 由逐人证据的实测计数推出互动动词短语。
+//
+// 只看结构化计数：证据文本本身已由注册表按 kind 渲染，再去里面做子串匹配就是
+// 拿自己产出的文案反推事实，且一旦文案改词（或换语言）判定即失效。
 func interactionActionPhraseForReason(r IntersectionReasonView) string {
 	hasLike := false
 	hasComment := false
 	hasShare := false
 	for _, actor := range r.ActorEvidence {
-		if actor.LikeCount > 0 || strings.Contains(actor.ActionSummaryText, "赞") {
+		if actor.LikeCount > 0 {
 			hasLike = true
 		}
-		if actor.CommentCount > 0 || strings.Contains(actor.ActionSummaryText, "评") || strings.Contains(actor.ActionSummaryText, "讨论") {
+		if actor.CommentCount > 0 {
 			hasComment = true
 		}
-		if actor.ShareCount > 0 || strings.Contains(actor.ActionSummaryText, "转发") || strings.Contains(actor.ActionSummaryText, "分享") {
+		if actor.ShareCount > 0 {
 			hasShare = true
 		}
 	}
 	parts := make([]string, 0, 3)
 	if hasLike {
-		parts = append(parts, "赞过")
+		parts = append(parts, interactionVerbText("like"))
 	}
 	if hasComment {
-		parts = append(parts, "评论过")
+		parts = append(parts, interactionVerbText("comment"))
 	}
 	if hasShare {
-		parts = append(parts, "转发过")
+		parts = append(parts, interactionVerbText("share"))
 	}
-	switch len(parts) {
-	case 0:
-		return ""
-	case 1:
-		return parts[0]
-	case 2:
-		return parts[0] + "和" + parts[1]
-	default:
-		return parts[0] + "、" + parts[1] + "并" + parts[2]
-	}
+	return joinInteractionVerbs(parts)
 }
 
 func actionHintsForReason(r IntersectionReasonView, target *IntersectionTargetView) []IntersectionActionHintView {
@@ -274,9 +278,9 @@ func actionKeysForKind(kind string) []string {
 // 未登记 key 兜底 ask_assistant 标签（解释这条交集）。
 func actionLabelForKey(key string) string {
 	if v, ok := generated.IntersectionActionLabelByKey[key]; ok {
-		return v
+		return resolve(v)
 	}
-	return generated.IntersectionActionLabelByKey["ask_assistant"]
+	return resolve(generated.IntersectionActionLabelByKey["ask_assistant"])
 }
 
 // actionTierForKey 查 actionKey → 行动阶梯层级
@@ -362,124 +366,38 @@ func anchorAggregateCount(r IntersectionReasonView, anchor IntersectionPointView
 }
 
 // ExplainPrimaryText 按 §17.1「主语[代表人+数量+关系限定] + 谓语 + 宾语」实例化事实结论句；
-// affinity 走概率通道分支。kind 取 §5.4 注册表标准名；未登记 kind 返回空（不造假）。
+// affinity 走概率通道分支。
+//
+// 句式模板的真相源是 registry.statementTemplates（codegen generated.IntersectionStatementFormByKind），
+// 不再在本函数里逐 kind 硬编码 fmt.Sprintf：文本与 primarySpans 共用同一次渲染，
+// 改文案只改注册表并 codegen，且每条模板都带 l10nKey 供端接入译文。
+// 未登记 kind 返回空（不造句）。
 func ExplainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
 	if r.IntersectionClass == "affinity" {
 		return affinityPrimaryText(r, anchor)
 	}
-	n := anchorAggregateCount(r, anchor)
-	switch anchor.SourceRef {
-	case "sharedFollowees", "commonFollower":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		return fmt.Sprintf("%s也关注了%s", representativeSubject(r, anchor, n), objectName)
-	case "commonContact":
-		objectName := concreteObjectNameForReason(r)
-		if objectName == "" {
-			return fmt.Sprintf("%s都是你们的共同联系人", representativeSubject(r, anchor, n))
-		}
-		return fmt.Sprintf("%s都是你和%s的共同联系人", representativeSubject(r, anchor, n), objectName)
-	case "sharedCircle", "coMemberCircle":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			// §20.4 降级链第二级：无可证圈子名时用锚点真实计数作宾语，不造名不隐瞒。
-			return countedFallbackPrimaryText(r, anchor, n)
-		}
-		return fmt.Sprintf("%s都加入了%s", representativeSubject(r, anchor, n), objectName)
-	case "coCommented", "sharedDiscussion":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return countedFallbackPrimaryText(r, anchor, n)
-		}
-		if action := interactionActionPhraseForReason(r); action != "" {
-			return fmt.Sprintf("%s%s%s", representativeSubject(r, anchor, n), action, objectName)
-		}
-		return fmt.Sprintf("%s都讨论过%s", representativeSubject(r, anchor, n), objectName)
-	case "coSharedContent":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		if action := interactionActionPhraseForReason(r); action != "" {
-			return fmt.Sprintf("%s%s%s", representativeSubject(r, anchor, n), action, objectName)
-		}
-		return fmt.Sprintf("%s都转发过%s", representativeSubject(r, anchor, n), objectName)
-	case "coCreatedContent":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		return fmt.Sprintf("%s都共创过%s", representativeSubject(r, anchor, n), objectName)
-	case "coVisitedEntity":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return countedFallbackPrimaryText(r, anchor, n)
-		}
-		return fmt.Sprintf("%s都去过%s", representativeSubject(r, anchor, n), objectName)
-	case "coWishlistedEntity":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return countedFallbackPrimaryText(r, anchor, n)
-		}
-		return fmt.Sprintf("%s都想去%s", representativeSubject(r, anchor, n), objectName)
-	case "sharedEntityAttention":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return countedFallbackPrimaryText(r, anchor, n)
-		}
-		return fmt.Sprintf("%s也关注了%s", representativeSubject(r, anchor, n), objectName)
-	case "followeeVisited":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		return fmt.Sprintf("%s来过%s", countedRepresentativeSubject(r, anchor, n), objectName)
-	case "followeeInObject":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		return fmt.Sprintf("%s在%s", representativeSubject(r, anchor, n), objectName)
-	case "followeeViewing":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		return fmt.Sprintf("%s正在看%s", representativeSubject(r, anchor, n), objectName)
-	case "followeeDiscussedThis":
-		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-		if objectName == "" {
-			return ""
-		}
-		return fmt.Sprintf("%s正在讨论%s", representativeSubject(r, anchor, n), objectName)
-	case "sharedTagSample":
-		objectName := sharedTagSampleObjectName(r, anchor)
-		if objectName == "" {
-			return ""
-		}
-		subject := sharedTagSampleSubject(r, anchor, n)
-		if subject == "" {
-			return ""
-		}
-		if r.Source == "circleTag" {
-			return fmt.Sprintf("%s在圈子里常看%s", subject, objectName)
-		}
-		return fmt.Sprintf("%s都关注%s", subject, objectName)
-	default:
-		return ""
-	}
+	// 纯文本路径不需要可导航 target：对象位仍按模板出文字，可点击性由 spans 路径判定。
+	return statementRenderForReason(r, anchor, nil).text
 }
 
+// ExplainPrimaryTextL10nKey 返回命中模板的本地化资源键（registry.statementTemplates[].l10nKey）。
+// 端接入译文后按同名槽位回填；未命中模板返回空串。
+func ExplainPrimaryTextL10nKey(r IntersectionReasonView, anchor IntersectionPointView) string {
+	if r.IntersectionClass == "affinity" {
+		return ""
+	}
+	return statementRenderForReason(r, anchor, nil).l10nKey
+}
+
+// concreteObjectNameForReason 取可入句的具名对象。通用占位词
+// （registry.presentationText.placeholderObjectNames）不算具名：它们描述的是交集
+// 类型而非某个对象，入句会产出「都去过『同游』」这种空话。
 func concreteObjectNameForReason(r IntersectionReasonView) string {
 	name := strings.TrimSpace(r.DisplayName)
-	switch name {
-	case "", "同游", "同好", "同校", "这里", "这个对象", "这些内容", "这些主题", "相同内容", "相同的人":
+	if name == "" || isPlaceholderObjectName(name) {
 		return ""
-	default:
-		return name
 	}
+	return name
 }
 
 // containerObjectNameForReason 解析「容器/第三方对象位」（圈子/地点/内容/实体）的名字。
@@ -493,81 +411,36 @@ func containerObjectNameForReason(r IntersectionReasonView) string {
 	return concreteObjectNameForReason(r)
 }
 
+// placeSampleName 取点级样本中的首个地名（多地点时只命名最近一处，其余靠计数下钻）。
+func placeSampleName(anchor IntersectionPointView) string {
+	name := strings.TrimSpace(anchor.SampleText)
+	if idx := strings.IndexAny(name, "、,"); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	return name
+}
+
+// sharedOccupationName 取共享职业标签的展示名（identity 事实的谓语补足语）。
+// 只读锚点自带的标签样本，不回退人名：人名不是职业。
+func sharedOccupationName(anchor IntersectionPointView) string {
+	name := strings.TrimSpace(anchor.SampleText)
+	if idx := strings.IndexAny(name, "、,"); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	return name
+}
+
 func renderedObjectNameForReason(r IntersectionReasonView, kind string) string {
 	var name string
 	switch kind {
-	case "sharedFollowees", "commonFollower":
-		// 宾语=被共同关注的人本身，人名合法。
+	case "sharedFollowees", "commonFollower", "sameIndustry":
+		// 宾语=人本身（被共同关注的人 / 同行的对方），人名合法。
 		name = concreteObjectNameForReason(r)
 	default:
 		// 宾语=圈子/地点/内容/实体等第三方对象，人名不得占位（V3）。
 		name = containerObjectNameForReason(r)
 	}
-	if name == "" {
-		return ""
-	}
-	switch kind {
-	case "coCommented", "sharedDiscussion", "coSharedContent", "coCreatedContent", "followeeViewing", "followeeDiscussedThis":
-		return "《" + name + "》"
-	default:
-		return "「" + name + "」"
-	}
-}
-
-// countedFallbackObjectPhrase 是容器对象名缺失时的纯计数宾语（§20.4 降级链第二级：
-// 具名样本 → 纯计数 → 隐藏）。count 来自锚点真实计数，可证；不足 1 视为不可降级。
-func countedFallbackObjectPhrase(kind string, count int) string {
-	if count <= 0 {
-		return ""
-	}
-	switch kind {
-	case "sharedCircle", "coMemberCircle":
-		return fmt.Sprintf("%d个共同圈子", count)
-	case "coCommented", "sharedDiscussion":
-		return fmt.Sprintf("%d条相同内容", count)
-	case "coVisitedEntity":
-		return fmt.Sprintf("%d个相同的地方", count)
-	case "coWishlistedEntity":
-		return fmt.Sprintf("%d个相同的地方", count)
-	case "sharedEntityAttention":
-		return fmt.Sprintf("%d个相同对象", count)
-	default:
-		return ""
-	}
-}
-
-// countedFallbackPredicate 是计数降级句的谓语（与 spans 模板共享，保证
-// join(primarySpans.text)==primaryText 不变量在降级形态下同样成立）。
-func countedFallbackPredicate(kind string) string {
-	switch kind {
-	case "sharedCircle", "coMemberCircle":
-		return "和你都加入了"
-	case "coCommented", "sharedDiscussion":
-		return "和你都讨论过"
-	case "coVisitedEntity":
-		return "和你都去过"
-	case "coWishlistedEntity":
-		return "和你都想去"
-	case "sharedEntityAttention":
-		return "和你都关注了"
-	default:
-		return ""
-	}
-}
-
-// countedFallbackPrimaryText 组装计数降级结论句：主语（代表人）+ 谓语 + 纯计数宾语。
-// 与 primaryStatementSpansForReason 的降级分支同源（同一 predicate/phrase 函数）。
-func countedFallbackPrimaryText(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
-	predicate := countedFallbackPredicate(anchor.SourceRef)
-	phrase := countedFallbackObjectPhrase(anchor.SourceRef, anchor.Count)
-	if predicate == "" || phrase == "" {
-		return ""
-	}
-	subject := representativeSubject(r, anchor, n)
-	if strings.TrimSpace(subject) == "" {
-		return ""
-	}
-	return subject + predicate + phrase
+	return decorateObjectName(kind, name)
 }
 
 func sharedTagSampleObjectName(r IntersectionReasonView, anchor IntersectionPointView) string {
@@ -589,15 +462,17 @@ func sharedTagSampleObjectName(r IntersectionReasonView, anchor IntersectionPoin
 
 func sharedTagSampleSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
 	if strings.TrimSpace(r.Source) == "circleTag" {
-		return "你"
+		return viewerSelfSubjectText()
 	}
 	if strings.TrimSpace(r.ActionTargetID) != "" &&
 		strings.TrimSpace(r.ActionTargetID) == strings.TrimSpace(r.RelationObjectID) {
-		switch objectTypeForTarget(strings.TrimSpace(r.ObjectKind), strings.TrimSpace(r.ActionTargetID), RouteIDForObjectKind(strings.TrimSpace(r.ObjectKind))) {
-		case "homepage":
-			return "你和这里"
-		case "circle":
-			return "你和这个圈子"
+		objectType := objectTypeForTarget(
+			strings.TrimSpace(r.ObjectKind),
+			strings.TrimSpace(r.ActionTargetID),
+			RouteIDForObjectKind(strings.TrimSpace(r.ObjectKind)),
+		)
+		if subject := viewerSubjectText(objectType); subject != "" {
+			return subject
 		}
 	}
 	return representativeSubject(r, anchor, n)
@@ -605,35 +480,28 @@ func sharedTagSampleSubject(r IntersectionReasonView, anchor IntersectionPointVi
 
 // affinityPrimaryText 概率通道结论句（必须配 confidenceLabel 标注「推荐」，§17.5/§3.4）。
 func affinityPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
+	return affinityStatementText(
+		affinityChannelForReason(r, anchor),
+		renderedObjectNameForReason(r, anchor.SourceRef),
+	)
+}
+
+// affinityChannelForReason 判定概率通道的投放渠道（圈子 / 关注的人 / 通用）。
+func affinityChannelForReason(r IntersectionReasonView, anchor IntersectionPointView) string {
 	src := strings.ToLower(r.Source)
-	objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 	switch {
 	case anchor.SourceRef == "sharedCircle" || strings.Contains(src, "circle"):
-		if objectName != "" {
-			return "你的圈子里最近在看" + objectName
-		}
-		return "你的圈子里最近在看这些"
+		return "circle"
 	case anchor.SourceRef == "followeeViewing" || strings.Contains(src, "friend") || strings.Contains(src, "follow"):
-		if objectName != "" {
-			return "你关注的人最近在看" + objectName
-		}
-		return "你关注的人最近在看这些"
+		return "followee"
 	default:
-		if objectName != "" {
-			return "为你推荐" + objectName
-		}
-		return "为你推荐的相关内容"
+		return "general"
 	}
 }
 
 // affinityConfidenceLabel 概率通道置信标注（端只对 affinity 展示「推荐」语义）。
 func affinityConfidenceLabel(r IntersectionReasonView) string {
-	switch r.Dimension {
-	case "relationship", "identity":
-		return "推荐认识"
-	default:
-		return "可能感兴趣"
-	}
+	return affinityConfidenceText(r.Dimension)
 }
 
 // affinityModelReasonBucket 概率通道模型理由桶（埋点/灰度用，端不展示原文）。
@@ -663,16 +531,14 @@ func explainSecondaryText(r IntersectionReasonView, anchor IntersectionPointView
 		if label == "" {
 			continue
 		}
-		if p.Count > 1 {
-			parts = append(parts, fmt.Sprintf("%s %d", label, p.Count))
-		} else {
-			parts = append(parts, label)
+		if item := secondaryTextItem(label, p.Count); item != "" {
+			parts = append(parts, item)
 		}
 		if len(parts) >= 2 {
 			break
 		}
 	}
-	return strings.Join(parts, " · ")
+	return strings.Join(parts, secondaryTextSeparatorText())
 }
 
 // explainConnectionSummary 对象页「连接说明」（仅 viewer↔对象关系类 reason、且共同点≥2 时产出）。
@@ -685,7 +551,7 @@ func explainConnectionSummary(r IntersectionReasonView) string {
 	if r.TotalPointCount < 2 {
 		return ""
 	}
-	return fmt.Sprintf("你们已有%d个共同点", r.TotalPointCount)
+	return connectionSummaryText(r.TotalPointCount)
 }
 
 // Summary 我的主页聚合摘要：各维度计数 + 自上次查看未读数。

@@ -6,6 +6,48 @@ description: 'ListUserPosts 分页结果的单项内容读模型。它是 Post �
   '
 consumers:
 - app
+source_entities:
+- Post
+- MediaAsset
 client_projection:
   dart_class: ContentPostProjection
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
+  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/content_post_projection.dart
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/content_post_projection.dart
+fields:
+- {name: postId}
+- {name: contentType}
+- {name: contentIdentity}
+- {name: assistantUsePolicy}
+- {name: authorId}
+- {name: authorDisplayName}
+- {name: authorAvatarUrl}
+- {name: authorBackgroundUrl}
+- {name: authorRoleLabel}
+- {name: authorIdentityTags}
+- {name: authorVerified}
+- {name: title}
+- {name: body}
+- {name: summary}
+- {name: coverUrl}
+- {name: articleTemplate}
+- {name: articleFontPreset}
+- {name: mediaUrls}
+- {name: videoUrl}
+- {name: mediaAssetId}
+- {name: mediaAssetVersion}
+- {name: hlsCmafMasterManifestUrl}
+- {name: hlsCmafDescriptorVersion}
+- {name: thumbnailUrl}
+- {name: width}
+- {name: height}
+- {name: durationMs}
+- {name: likeCount}
+- {name: commentCount}
+- {name: shareCount}
+- {name: createdAt}
+- {name: updatedAt}
+- {name: publishedAt}
+- {name: contentVertical}
+- {name: recallPath}
+- {name: supplySource}
+- {name: intersectionReasons}

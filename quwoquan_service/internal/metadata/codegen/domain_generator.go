@@ -119,10 +119,11 @@ func (generator *DomainGenerator) GenerateDomainEvents(
 }
 
 type fieldsDocument struct {
-	Entity   string                          `yaml:"entity"`
-	Fields   []domainField                   `yaml:"fields"`
-	Entities map[string]domainEntityDocument `yaml:"entities"`
-	Members  map[string]domainEntityDocument `yaml:"members"`
+	Entity       string                          `yaml:"entity"`
+	Fields       []domainField                   `yaml:"fields"`
+	Entities     map[string]domainEntityDocument `yaml:"entities"`
+	Members      map[string]domainEntityDocument `yaml:"members"`
+	ValueObjects map[string]domainEntityDocument `yaml:"value_objects"`
 }
 
 type domainEntityDocument struct {
@@ -218,6 +219,7 @@ func (generator *DomainGenerator) buildTemplateData(
 	for name, member := range fields.Members {
 		fields.Entities[name] = member
 	}
+	referencedValueObjects := includeReferencedValueObjects(&fields)
 
 	data := domainTemplateData{
 		PackageName:     strings.ToLower(aggregateName),
@@ -233,7 +235,9 @@ func (generator *DomainGenerator) buildTemplateData(
 	for name := range fields.Entities {
 		if generator.config.businessObjectsOnly {
 			if _, registered := registeredEntities[name]; !registered {
-				continue
+				if _, valueObject := referencedValueObjects[name]; !valueObject {
+					continue
+				}
 			}
 		}
 		if generator.config.skipViewEntities &&
@@ -265,11 +269,21 @@ func (generator *DomainGenerator) buildTemplateData(
 			if field.Name == "_id" {
 				jsonTag = "id"
 			}
+			goType, err := generator.fieldGoType(field, entitySet)
+			if err != nil {
+				return domainTemplateData{}, fmt.Errorf(
+					"%s.%s from %s: %w",
+					entityName,
+					field.Name,
+					path.Join(objectDir, "fields.yaml"),
+					err,
+				)
+			}
 			entityData.Fields = append(
 				entityData.Fields,
 				domainFieldData{
 					GoName:  generator.fieldGoName(field.Name),
-					GoType:  generator.fieldGoType(field, entitySet),
+					GoType:  goType,
 					JSONTag: jsonTag,
 					BSONTag: field.Name,
 				},
@@ -292,6 +306,37 @@ func (generator *DomainGenerator) buildTemplateData(
 		}
 	}
 	return data, nil
+}
+
+// includeReferencedValueObjects promotes only value objects that are reachable
+// from the generated aggregate/member graph. This keeps transport projections
+// out of domain packages while ensuring named owned values never decay to any.
+func includeReferencedValueObjects(fields *fieldsDocument) map[string]struct{} {
+	result := make(map[string]struct{})
+	for {
+		changed := false
+		for _, entity := range fields.Entities {
+			for _, field := range entity.Fields {
+				candidate := strings.TrimSpace(field.Type)
+				if strings.HasPrefix(candidate, "[]") {
+					candidate = strings.TrimSpace(strings.TrimPrefix(candidate, "[]"))
+				}
+				valueObject, exists := fields.ValueObjects[candidate]
+				if !exists {
+					continue
+				}
+				if _, included := result[candidate]; included {
+					continue
+				}
+				fields.Entities[candidate] = valueObject
+				result[candidate] = struct{}{}
+				changed = true
+			}
+		}
+		if !changed {
+			return result
+		}
+	}
 }
 
 func (generator *DomainGenerator) registeredBusinessEntities(object ast.Object, fieldsPath string) (map[string]struct{}, error) {
@@ -397,47 +442,68 @@ func (generator *DomainGenerator) fieldGoName(name string) string {
 func (generator *DomainGenerator) fieldGoType(
 	field domainField,
 	entityNames map[string]struct{},
-) string {
+) (string, error) {
 	fieldType := strings.TrimSpace(field.Type)
 	if strings.HasPrefix(fieldType, "[]") {
 		inner := strings.TrimSpace(strings.TrimPrefix(fieldType, "[]"))
-		if inner == "string" {
-			return "[]string"
+		if inner == "" {
+			return "", fmt.Errorf("array type %q has no element type", fieldType)
 		}
-		if generator.config.resolveSliceEntity {
-			if _, exists := entityNames[inner]; exists {
-				return "[]" + inner
+		if _, exists := entityNames[inner]; exists {
+			if !generator.config.resolveSliceEntity {
+				return "", fmt.Errorf(
+					"array element %q is a named entity; enable slice entity references",
+					inner,
+				)
 			}
+			return "[]" + inner, nil
 		}
+		innerType, err := metadataTypeToGo(inner)
+		if err != nil {
+			return "", fmt.Errorf("array element: %w", err)
+		}
+		return "[]" + innerType, nil
 	}
 	if fieldType == "enum" && generator.config.typedEnums && field.EnumRef != "" {
-		return field.EnumRef
+		return field.EnumRef, nil
+	}
+	if fieldType == "enum" && generator.config.typedEnums {
+		return "", fmt.Errorf("typed enum field requires enum_ref")
+	}
+	if _, exists := entityNames[fieldType]; exists {
+		return fieldType, nil
 	}
 	return metadataTypeToGo(fieldType)
 }
 
-func metadataTypeToGo(value string) string {
+func metadataTypeToGo(value string) (string, error) {
 	switch value {
-	case "string", "ObjectId":
-		return "string"
-	case "int64", "int", "integer":
-		return "int64"
+	case "string", "ObjectId", "uuid", "url":
+		return "string", nil
+	case "int64", "int", "integer", "long":
+		return "int64", nil
+	case "int32":
+		return "int32", nil
 	case "float", "float64", "double":
-		return "float64"
+		return "float64", nil
+	case "float32":
+		return "float32", nil
 	case "bool", "boolean":
-		return "bool"
-	case "datetime", "timestamp":
-		return "time.Time"
+		return "bool", nil
+	case "date", "datetime", "timestamp":
+		return "time.Time", nil
 	case "enum":
-		return "string"
-	case "json", "map", "object":
-		return "map[string]any"
-	case "array", "list":
-		return "[]any"
+		return "string", nil
+	case "json", "jsonb", "map", "object":
+		return "map[string]any", nil
+	case "bytes", "binary":
+		return "[]byte", nil
+	case "array", "list", "embedded_list":
+		return "", fmt.Errorf("collection type %q must declare an explicit []T element type", value)
 	case "GeoPoint":
-		return "GeoPoint"
+		return "GeoPoint", nil
 	default:
-		return "any"
+		return "", fmt.Errorf("unsupported metadata type %q", value)
 	}
 }
 

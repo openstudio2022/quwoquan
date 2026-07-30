@@ -1,5 +1,5 @@
 """
-Feature transformer aligned with feature_registry (current version, see
+Feature transformer aligned with the canonical feature_registry (see
 scripts/feature_registry.yaml). Maps request payload to a feature matrix for
 scoring. Intersection features (W7): candidate-level fact strength/freshness
 and the advisory affinity channel flow through to models/content_feed.py
@@ -26,6 +26,12 @@ def build_candidate_features(req: ModelScoreRequest) -> list[dict[str, Any]]:
             "authorId": c.authorId or "",
             "tagRefs": tags,
             "entityRefs": getattr(c, "entityRefs", None) or [],
+            # viewer-candidate pair features are projected once by Go through
+            # StrongestIntersectionEdgeFor; Python must not receive or rematch
+            # the original intersectionEdges map.
+            "intersectionEdgeWeight": getattr(c, "intersectionEdgeWeight", 0.0) or 0.0,
+            "intersectionEdgeFreshness": getattr(c, "intersectionEdgeFreshness", 0.0) or 0.0,
+            "intersectionEdgeKind": getattr(c, "intersectionEdgeKind", "") or "",
             "ageHours": c.ageHours or 0.0,
             "viewCount": c.viewCount or 0,
             "likeCount": c.likeCount or 0,
@@ -38,7 +44,7 @@ def build_candidate_features(req: ModelScoreRequest) -> list[dict[str, Any]]:
             # publishHour 由 Go 侧从 publishedAt 派生随请求下发（-1 表缺失）。
             "publishHour": getattr(c, "publishHour", 0) or 0,
             "recallPath": c.recallPath or "",
-            # Intersection features (W7, registry v5): candidate-level fact
+            # Intersection features (W7, canonical registry): candidate-level fact
             # channel + advisory affinity（confidenceLabel 缺失时抽取器归零）。
             "intersectionFactStrength": getattr(c, "intersectionFactStrength", 0.0) or 0.0,
             "intersectionFreshness": getattr(c, "intersectionFreshness", 0.0) or 0.0,
@@ -61,7 +67,7 @@ def transform_user_features(raw: dict[str, Any] | None) -> dict[str, Any]:
         "totalLikes": int(raw.get("totalLikes", 0)),
         "totalShares": int(raw.get("totalShares", 0)),
         "totalEvents": int(raw.get("totalEvents", 0)),
-        # Intersection features (W7, registry v5): viewer-level fact counts
+        # Intersection features (W7, canonical registry): viewer-level fact counts
         # derived by Go FeatureStore（kindCounts 直方图派生），wire 单点注入。
         "sharedFolloweesCount": int(raw.get("sharedFolloweesCount", 0) or 0),
         "sharedCircleCount": int(raw.get("sharedCircleCount", 0) or 0),

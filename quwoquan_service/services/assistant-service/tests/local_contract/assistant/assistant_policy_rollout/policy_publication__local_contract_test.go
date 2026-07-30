@@ -73,26 +73,60 @@ func TestPolicyArtifactPathFailsClosedOutsideResourceRoot(t *testing.T) {
 	}
 }
 
+func TestPolicyArtifactLoadersRejectVersionedSchemaAliases(t *testing.T) {
+	t.Parallel()
+	resourceRoot := t.TempDir()
+	releasePath := filepath.Join(resourceRoot, "release.json")
+	if err := os.WriteFile(
+		releasePath,
+		[]byte(`{"schema":"assistant.policy_release.v1","commandId":"","release":{}}`),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := releaseresource.LoadReleaseArtifact(
+		resourceRoot,
+		"release.json",
+	); !errors.Is(err, releaseresource.ErrInvalidArtifact) {
+		t.Fatalf("versioned release schema alias must be rejected, got %v", err)
+	}
+
+	rollout := strings.NewReader(`{
+		"schema":"assistant.policy_rollout.v1",
+		"commandId":"policy-rollout:assistant-default:test",
+		"policyId":"assistant-default",
+		"expectedRevision":0,
+		"activatedBy":"test",
+		"bucketDefinitions":[{"cohort":"stable","weightBasisPoints":10000}],
+		"assignments":[{"cohort":"stable","releaseDigest":"0000000000000000000000000000000000000000000000000000000000000000"}]
+	}`)
+	if _, err := rolloutresource.DecodeRolloutArtifact(
+		rollout,
+	); !errors.Is(err, rolloutresource.ErrInvalidArtifact) {
+		t.Fatalf("versioned rollout schema alias must be rejected, got %v", err)
+	}
+}
+
 func TestDefaultPolicyArtifactsAreImmutableAndPairConsistently(t *testing.T) {
 	t.Parallel()
 	resourceRoot := filepath.Join(policyPublicationServiceRoot(), "resources", "policies")
 	release, err := releaseresource.LoadReleaseArtifact(
 		resourceRoot,
-		"assistant/assistant-default/releases/2026-07-26.1.json",
+		"assistant/assistant-default/releases/e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d.json",
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rollout, err := loadRolloutArtifact(
 		resourceRoot,
-		"assistant/assistant-default/rollouts/2026-07-26.1.json",
+		"assistant/assistant-default/rollouts/revision-1.json",
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if release.Release.PolicyID != rollout.PolicyID ||
 		len(rollout.Assignments) != 1 ||
-		rollout.Assignments[0].ReleaseVersion != release.Release.ReleaseVersion {
+		rollout.Assignments[0].ReleaseDigest != release.Release.ReleaseDigest {
 		t.Fatalf("release=%+v rollout=%+v", release, rollout)
 	}
 }

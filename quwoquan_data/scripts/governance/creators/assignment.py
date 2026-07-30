@@ -1,6 +1,8 @@
 """Creator assignment contract shared by content planning, authoring and scale gates."""
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Mapping
 
 import yaml
@@ -10,7 +12,7 @@ CREATOR_ASSIGNMENT_FIELDS: tuple[str, ...] = (
     "authorId",
     "creatorProfileId",
     "creatorArchetype",
-    "creatorProfileVersion",
+    "creatorProfileDigest",
     "creatorDisclosure",
     "experienceClaimMode",
     "authorQualitySignals",
@@ -23,7 +25,6 @@ VALID_EXPERIENCE_CLAIM_MODES = {
     "visual_discovery",
 }
 
-COMPACT_CREATOR_PROFILE_VERSION = "compact_profile"
 DEFAULT_CREATOR_DISCLOSURE = {
     "type": "platform_virtual_creator",
     "visible": True,
@@ -224,13 +225,13 @@ def creator_assignment_issues(
         return issues
     if str(registered.get("status") or "") != "active":
         issues.append(f"{prefix}.creatorProfileId is not active")
-    registered_author_id = str(registered.get("authorId") or registered.get("subAccountId") or "")
+    registered_author_id = str(registered.get("authorId") or registered.get("personaId") or "")
     if registered_author_id != str(creator.get("authorId") or ""):
         issues.append(f"{prefix}.authorId does not match creator registry")
     if str(registered.get("creatorArchetype") or "") != str(creator.get("creatorArchetype") or ""):
         issues.append(f"{prefix}.creatorArchetype does not match creator registry")
-    if str(_creator_profile_version(registered)) != str(creator.get("creatorProfileVersion") or ""):
-        issues.append(f"{prefix}.creatorProfileVersion does not match creator registry")
+    if creator_profile_digest(registered) != str(creator.get("creatorProfileDigest") or ""):
+        issues.append(f"{prefix}.creatorProfileDigest does not match creator registry")
     if carrier:
         try:
             from content.templates.creator import carrier_affinity
@@ -265,10 +266,10 @@ def creator_assignment_issues(
 def creator_assignment_from_profile(profile: Mapping[str, Any]) -> dict[str, Any]:
     """Project a registry profile into content-object creator assignment fields."""
     return {
-        "authorId": profile.get("authorId") or profile.get("subAccountId"),
+        "authorId": profile.get("authorId") or profile.get("personaId"),
         "creatorProfileId": profile.get("creatorProfileId"),
         "creatorArchetype": profile.get("creatorArchetype"),
-        "creatorProfileVersion": _creator_profile_version(profile),
+        "creatorProfileDigest": creator_profile_digest(profile),
         "creatorDisclosure": profile.get("disclosure") if isinstance(profile.get("disclosure"), Mapping) else DEFAULT_CREATOR_DISCLOSURE,
         "experienceClaimMode": _experience_claim_mode(profile),
         "authorQualitySignals": {
@@ -279,8 +280,20 @@ def creator_assignment_from_profile(profile: Mapping[str, Any]) -> dict[str, Any
     }
 
 
-def _creator_profile_version(profile: Mapping[str, Any]) -> str:
-    return str(profile.get("profileVersion") or COMPACT_CREATOR_PROFILE_VERSION)
+def creator_profile_digest(profile: Mapping[str, Any]) -> str:
+    """Return the canonical digest of the complete registry profile.
+
+    The profile document itself carries no mutable version label. Any semantic
+    profile change therefore yields a new immutable digest, and frozen content
+    assignments can prove the exact profile facts they consumed.
+    """
+    payload = json.dumps(
+        dict(profile),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
 def _experience_claim_mode(profile: Mapping[str, Any]) -> str:

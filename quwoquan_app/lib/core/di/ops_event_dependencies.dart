@@ -124,7 +124,7 @@ ActorQueuePartition _partitionFor(AuthSessionState session) {
   return ActorQueuePartition(
     environment: CloudRuntimeConfig.appRuntimeEnv,
     accountId: session.isAuthenticated ? session.ownerId : '',
-    personaId: session.isAuthenticated ? session.activeSubAccountId : '',
+    personaId: session.isAuthenticated ? session.activePersonaId : '',
     deviceId: deviceId,
   );
 }

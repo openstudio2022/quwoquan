@@ -269,7 +269,7 @@ func newProcessingVideoAsset(t *testing.T, assetID string) *mediamodel.MediaAsse
 		ObjectKey:          "media/objects/sha256/ab/cd/" + assetID + ".mp4",
 		SHA256:             "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		MediaType:          "video",
-		ContentType:        "video/mp4",
+		MimeType:           "video/mp4",
 		FileSize:           1024,
 		AccessPolicy:       mediamodel.AccessPolicyOwnerOnly,
 		ProcessingRequired: true,
@@ -296,7 +296,7 @@ func validDescriptor(assetID string) mediamodel.MediaProcessingDescriptor {
 	prefix := "media/video/s/asset/" + assetID + "/v2"
 	return mediamodel.MediaProcessingDescriptor{
 		Video: mediamodel.VideoProcessingDescriptor{
-			ProcessorProfile:             "content_processing_progressive_mp4_v1",
+			ProcessorProfile:             "content_processing_progressive_mp4",
 			VerifiedDurationMs:           12_000,
 			VideoWidth:                   540,
 			VideoHeight:                  960,
@@ -914,7 +914,7 @@ func TestWorkerProcessesImageAssetsThroughTheSharedPipeline(t *testing.T) {
 		ObjectKey:          "media/objects/sha256/ab/cd/asset-image.jpg",
 		SHA256:             "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		MediaType:          "image",
-		ContentType:        "image/jpeg",
+		MimeType:           "image/jpeg",
 		FileSize:           512,
 		AccessPolicy:       mediamodel.AccessPolicyOwnerOnly,
 		ProcessingRequired: true,
@@ -925,10 +925,10 @@ func TestWorkerProcessesImageAssetsThroughTheSharedPipeline(t *testing.T) {
 	}
 	descriptor := mediamodel.MediaProcessingDescriptor{
 		Image: mediamodel.ImageProcessingDescriptor{
-			ProcessorProfile:         "content_image_normalization_v1",
+			ProcessorProfile:         "content_image_normalization",
 			ImageWidth:               1200,
 			ImageHeight:              900,
-			ImageDeliveryContentType: "image/jpeg",
+			ImageDeliveryMimeType:    "image/jpeg",
 			ImageNormalizedObjectKey: "media/processed/image/asset-image/v2/source.jpg",
 			ImagePublicSliceKey:      "media/image/s/asset/asset-image/v2/source.jpg",
 			ImageDominantColor:       "#1A2B3C",

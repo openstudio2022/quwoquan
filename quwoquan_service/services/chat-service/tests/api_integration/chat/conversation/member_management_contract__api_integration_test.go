@@ -1,8 +1,10 @@
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
 package api_integration
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -78,6 +80,88 @@ func TestListMembers(t *testing.T) {
 	}
 	if len(items) < 1 {
 		t.Error("expected at least 1 member (owner)")
+	}
+	for _, raw := range items {
+		item := raw.(map[string]any)
+		if item["memberType"] == "assistant" {
+			continue
+		}
+		userID, _ := item["userId"].(string)
+		if item["userHandle"] != "handle_"+userID {
+			t.Fatalf("member must expose canonical userHandle: %#v", item)
+		}
+	}
+}
+
+func TestListMembersHidesSuspendedMemberAndRestoresVisibility(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	conversation := createConversation(
+		t,
+		`{"type":"group","title":"account restriction roster"}`,
+	)
+	conversationID := conversation["id"].(string)
+	doPost(
+		t,
+		"/chat/conversations/"+conversationID+"/members",
+		`{"userIds":["user_restricted_member"]}`,
+		"user_test_001",
+		200,
+	)
+	if _, err := requireMongoDB(t).Collection("conversation_memberships").UpdateOne(
+		t.Context(),
+		bson.M{
+			"conversationId": conversationID,
+			"userId":         "user_restricted_member",
+		},
+		bson.M{"$set": bson.M{
+			"accountRestricted":         true,
+			"accountRestrictionVersion": int64(7),
+		}},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	code, result := doGet(
+		t,
+		"/chat/conversations/"+conversationID+"/members?limit=50",
+		"user_test_001",
+	)
+	if code != http.StatusOK {
+		t.Fatalf("restricted roster status=%d result=%v", code, result)
+	}
+	for _, userID := range memberItemsUserIDs(t, result["items"].([]any)) {
+		if userID == "user_restricted_member" {
+			t.Fatal("suspended member leaked into visible roster")
+		}
+	}
+	if _, err := requireMongoDB(t).Collection("conversation_memberships").UpdateOne(
+		t.Context(),
+		bson.M{
+			"conversationId": conversationID,
+			"userId":         "user_restricted_member",
+		},
+		bson.M{"$set": bson.M{
+			"accountRestricted":         false,
+			"accountRestrictionVersion": int64(8),
+		}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	code, result = doGet(
+		t,
+		"/chat/conversations/"+conversationID+"/members?limit=50",
+		"user_test_001",
+	)
+	if code != http.StatusOK {
+		t.Fatalf("restored roster status=%d result=%v", code, result)
+	}
+	found := false
+	for _, userID := range memberItemsUserIDs(t, result["items"].([]any)) {
+		found = found || userID == "user_restricted_member"
+	}
+	if !found {
+		t.Fatal("restored member did not return to visible roster")
 	}
 }
 

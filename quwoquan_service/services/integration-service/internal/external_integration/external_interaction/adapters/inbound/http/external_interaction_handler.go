@@ -3,7 +3,6 @@ package httpadapter
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -42,7 +41,7 @@ func (h *Handler) handleSubmitExternalRequest(w http.ResponseWriter, r *http.Req
 	if h.external == nil {
 		rerrors.WriteHTTPError(
 			w,
-			generated.AppErrorFromInternalError("external interaction service unavailable"),
+			generated.AppErrorFromExternalInteractionInternalError("external interaction service unavailable"),
 			rerrors.HTTPWriteOptionsFromRequest(r),
 		)
 		return
@@ -136,7 +135,12 @@ func mapExternalSubmitError(err error) error {
 	if strings.Contains(message, "disabled") || strings.Contains(message, "not supported") {
 		return generated.AppErrorFromUnsupportedOperation(message)
 	}
-	return generated.AppErrorFromInvalidExternalRequest(message)
+	if strings.Contains(message, "required") ||
+		strings.Contains(message, "invalid") ||
+		strings.Contains(message, "payload") {
+		return generated.AppErrorFromInvalidExternalRequest(message)
+	}
+	return generated.AppErrorFromExternalInteractionInternalError(message)
 }
 
 func (h *Handler) handleGetExternalRequest(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +155,7 @@ func (h *Handler) handleGetExternalRequest(w http.ResponseWriter, r *http.Reques
 	requestID := strings.TrimPrefix(r.URL.Path, generated.ExternalRequestsPath+"/")
 	state, found, err := h.external.GetRequest(r.Context(), requestID)
 	if err != nil {
-		rerrors.WriteHTTPError(w, err, rerrors.HTTPWriteOptionsFromRequest(r))
+		rerrors.WriteHTTPError(w, mapExternalInternalError(err), rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	if !found {
@@ -175,9 +179,17 @@ func (h *Handler) handleExternalAttempts(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	requestID := requestIDFromAttemptsPath(r.URL.Path)
+	if strings.TrimSpace(requestID) == "" {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("requestId is required"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
 	items, err := h.external.ListAttempts(r.Context(), requestID)
 	if err != nil {
-		rerrors.WriteHTTPError(w, err, rerrors.HTTPWriteOptionsFromRequest(r))
+		rerrors.WriteHTTPError(w, mapExternalInternalError(err), rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -193,9 +205,17 @@ func (h *Handler) handleExternalDeadLetters(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	requestID := strings.TrimSpace(r.URL.Query().Get("requestId"))
+	if requestID == "" {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("requestId is required"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
 	items, err := h.external.ListDeadLetters(r.Context(), requestID)
 	if err != nil {
-		rerrors.WriteHTTPError(w, err, rerrors.HTTPWriteOptionsFromRequest(r))
+		rerrors.WriteHTTPError(w, mapExternalInternalError(err), rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	if items == nil {
@@ -213,19 +233,52 @@ func (h *Handler) handleRecoverExternalDeadLetter(w http.ResponseWriter, r *http
 		)
 		return
 	}
-	body := map[string]any{}
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	taskID := strings.TrimSpace(anyString(body["taskId"]))
-	if taskID == "" {
+	var body struct {
+		TaskID string `json:"taskId"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
 		rerrors.WriteHTTPError(
 			w,
-			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "taskId required", "missing taskId"),
+			generated.AppErrorFromInvalidExternalRequest("request body must be a typed dead-letter recovery request: "+err.Error()),
 			rerrors.HTTPWriteOptionsFromRequest(r),
 		)
 		return
 	}
-	if err := h.external.RecoverDeadTask(r.Context(), taskID); err != nil {
-		rerrors.WriteHTTPError(w, err, rerrors.HTTPWriteOptionsFromRequest(r))
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("request body contains trailing JSON"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	taskID := strings.TrimSpace(body.TaskID)
+	if taskID == "" {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("taskId is required"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" {
+		rerrors.WriteHTTPError(
+			w,
+			generated.AppErrorFromInvalidExternalRequest("Idempotency-Key is required"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	if err := h.external.RecoverDeadTask(
+		r.Context(),
+		taskID,
+		idempotencyKey,
+	); err != nil {
+		rerrors.WriteHTTPError(w, mapExternalRecoveryError(err), rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"taskId": taskID, "recovered": true})
@@ -242,7 +295,7 @@ func (h *Handler) handleExternalMetricsSnapshot(w http.ResponseWriter, r *http.R
 	}
 	snapshot, err := h.external.Metrics(r.Context())
 	if err != nil {
-		rerrors.WriteHTTPError(w, err, rerrors.HTTPWriteOptionsFromRequest(r))
+		rerrors.WriteHTTPError(w, mapExternalInternalError(err), rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, snapshot)
@@ -253,29 +306,24 @@ func requestIDFromAttemptsPath(path string) string {
 	return strings.TrimSuffix(trimmed, "/attempts")
 }
 
-func anyString(value any) string {
-	switch v := value.(type) {
-	case string:
-		return v
-	case nil:
-		return ""
-	default:
-		return strings.TrimSpace(fmt.Sprint(v))
+func mapExternalInternalError(err error) error {
+	var appError *rerrors.AppError
+	if errors.As(err, &appError) {
+		return appError
 	}
+	return generated.AppErrorFromExternalInteractionInternalError(err.Error())
 }
 
-func stringMap(value any) map[string]string {
-	out := map[string]string{}
-	raw, ok := value.(map[string]any)
-	if !ok {
-		return out
+func mapExternalRecoveryError(err error) error {
+	switch {
+	case errors.Is(err, reliabletask.ErrRecoveryIdempotencyConflict):
+		return generated.AppErrorFromDeadLetterRecoveryConflict(err.Error())
+	case errors.Is(err, reliabletask.ErrRecoveryIdempotencyKey),
+		errors.Is(err, reliabletask.ErrTaskNotFound):
+		return generated.AppErrorFromInvalidExternalRequest(err.Error())
+	default:
+		return mapExternalInternalError(err)
 	}
-	for key, val := range raw {
-		if s := strings.TrimSpace(anyString(val)); s != "" {
-			out[key] = s
-		}
-	}
-	return out
 }
 
 func nonEmpty(value string, fallback string) string {

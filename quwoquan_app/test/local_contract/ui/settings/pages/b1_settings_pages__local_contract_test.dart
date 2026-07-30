@@ -16,7 +16,6 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/assistant_chat_store.dart';
 import 'package:quwoquan_app/core/services/search_recent_history_store.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:quwoquan_app/ui/content/entry/services/post_publication_intent_local_storage.dart';
@@ -85,11 +84,27 @@ void main() {
     final scopeB = CreateDraftLocalStorage.scopeKeyForUser(actorB);
     await preferences.setString(
       CreateDraftLocalStorage.scopedIndexKey(scopeA),
-      '[]',
+      '["draft-a"]',
     );
     await preferences.setString(
       CreateDraftLocalStorage.scopedIndexKey(scopeB),
-      '[]',
+      '["draft-b"]',
+    );
+    await preferences.setString(
+      CreateDraftLocalStorage.scopedCurrentDraftIdKey(scopeA),
+      'draft-a',
+    );
+    await preferences.setString(
+      CreateDraftLocalStorage.scopedCurrentDraftIdKey(scopeB),
+      'draft-b',
+    );
+    await preferences.setString(
+      CreateDraftLocalStorage.scopedDraftPayloadKey(scopeA, 'draft-a'),
+      '{}',
+    );
+    await preferences.setString(
+      CreateDraftLocalStorage.scopedDraftPayloadKey(scopeB, 'draft-b'),
+      '{}',
     );
     await preferences.setString(
       CreateDraftLocalStorage.corruptSidelineKey(
@@ -123,7 +138,6 @@ void main() {
     ).save(const <AssistantSkillConsent>[]);
     final emoji = EmojiRepository(preferences);
     await emoji.setLastReportDate('2026-07-24');
-    AssistantChatStore.addUserMessage('账号 A 本地消息');
 
     final purger = AccountClosureLocalDataPurger(
       clearBehaviorQueue: () async {},
@@ -131,7 +145,6 @@ void main() {
       clearRebuildableUserData: () async {},
       purgePushAndIncomingCallState: () async {},
       clearDraftsAndAccountPreferences: () async {
-        AssistantChatStore.clearForTerminalAccountClosure();
         await Future.wait<void>(<Future<void>>[
           CreateDraftLocalStorage.clearForTerminalAccountClosure(actorA),
           PostPublicationIntentLocalStorage.clearForTerminalAccountClosure(
@@ -158,6 +171,30 @@ void main() {
     );
     expect(
       preferences.containsKey(
+        CreateDraftLocalStorage.scopedCurrentDraftIdKey(scopeA),
+      ),
+      isFalse,
+    );
+    expect(
+      preferences.containsKey(
+        CreateDraftLocalStorage.scopedCurrentDraftIdKey(scopeB),
+      ),
+      isTrue,
+    );
+    expect(
+      preferences.containsKey(
+        CreateDraftLocalStorage.scopedDraftPayloadKey(scopeA, 'draft-a'),
+      ),
+      isFalse,
+    );
+    expect(
+      preferences.containsKey(
+        CreateDraftLocalStorage.scopedDraftPayloadKey(scopeB, 'draft-b'),
+      ),
+      isTrue,
+    );
+    expect(
+      preferences.containsKey(
         PostPublicationIntentLocalStorage.scopeKey(actorA),
       ),
       isFalse,
@@ -179,7 +216,6 @@ void main() {
       ),
       hasLength(1),
     );
-    expect(AssistantChatStore.messages.value, isEmpty);
     expect(emoji.getLastReportDate(), isNull);
   });
 
@@ -471,15 +507,12 @@ Future<void> _seedRecentSearchCacheResidue() async {
   await SearchRecentHistoryStore(
     actorNamespace: 'owner-b::persona-b',
   ).save(const SearchRecentHistoryCacheSnapshot());
-  final preferences = await SharedPreferences.getInstance();
-  await preferences.setString('global_search_recent_entries_v1', 'legacy');
 }
 
 Future<Set<String>> _recentSearchResidualKeys() async {
   final preferences = await SharedPreferences.getInstance();
   return preferences.getKeys().where((key) {
-    return key == 'global_search_recent_entries_v1' ||
-        key.startsWith(SearchRecentHistoryStore.storageKeyPrefix);
+    return key.startsWith(SearchRecentHistoryStore.storageKeyPrefix);
   }).toSet();
 }
 
@@ -540,7 +573,7 @@ final class _TestAuthSessionStore extends AuthSessionStore {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'owner-1',
-    activeSubAccountId: 'sub-1',
+    activePersonaId: 'sub-1',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -564,7 +597,7 @@ final class _TestAuthSessionStore extends AuthSessionStore {
       accessToken: '',
       refreshToken: '',
       ownerId: '',
-      activeSubAccountId: '',
+      activePersonaId: '',
       accountState: '',
       identityOrigin: '',
       installId: stored.installId,

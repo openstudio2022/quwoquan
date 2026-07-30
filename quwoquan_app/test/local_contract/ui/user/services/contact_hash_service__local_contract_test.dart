@@ -8,7 +8,7 @@ void main() {
 
   // 与 Go phonematch.Hash("13800138000") 完全一致。
   const lockedVector =
-      '7b71d6a6e90939d8e0c67aa73853908899db940db3165d196707cd7c3be67e27';
+      'ec1a7eb3a4a2d69b978580e3d74fc3677cb2b4ebc2e1a58be568310147539484';
 
   group('ContactHashService', () {
     test('锁定向量与服务端一致（13800138000）', () {

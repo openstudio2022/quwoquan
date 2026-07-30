@@ -63,10 +63,10 @@ class RemoteIntersectionRepository implements IntersectionRepository {
   }
 
   Map<String, String> _headers(String pageId) {
-    return CloudRequestHeaders.withOwnerSubAccountContext(
+    return CloudRequestHeaders.withOwnerPersonaContext(
       CloudRequestHeaders.forPage(pageId),
       ownerUserId: _currentUserId,
-      subAccountId: _currentUserId,
+      personaId: _currentUserId,
     );
   }
 

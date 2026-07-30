@@ -15,7 +15,7 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
       .where((id) => id.trim().isNotEmpty)
       .toSet();
   final scopeProfileIds = scopedPosts
-      .map((post) => post.subAccountId)
+      .map((post) => post.personaId)
       .where((id) => id.trim().isNotEmpty)
       .toSet();
   final likedPosts = <String>{};
@@ -41,7 +41,7 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
       id,
       fallback: post.commentCount,
     );
-    final profileId = post.subAccountId;
+    final profileId = post.personaId;
     if (profileId.isNotEmpty && relationshipState.isFollowing(profileId)) {
       followingUsers.add(profileId);
     }
@@ -103,10 +103,10 @@ bool effectivePostLiked(WidgetRef ref, String postId) {
   return false;
 }
 
-bool effectiveProfileFollowing(WidgetRef ref, String subAccountId) {
+bool effectiveProfileFollowing(WidgetRef ref, String personaId) {
   final relationshipState = ref.read(userRelationshipStateProvider);
-  if (relationshipState.hasRelationshipStateFor(subAccountId)) {
-    return relationshipState.isFollowing(subAccountId);
+  if (relationshipState.hasRelationshipStateFor(personaId)) {
+    return relationshipState.isFollowing(personaId);
   }
   return false;
 }
@@ -162,7 +162,7 @@ void syncPostLikeIntent(
 
 void syncProfileFollowIntent(
   WidgetRef ref, {
-  required String subAccountId,
+  required String personaId,
   required bool previousFollowing,
   required bool isFollowing,
   required String sourceSurfaceId,
@@ -172,11 +172,11 @@ void syncProfileFollowIntent(
   }
   ref
       .read(userRelationshipStateProvider.notifier)
-      .setFollowing(subAccountId, isFollowing);
+      .setFollowing(personaId, isFollowing);
   ref
       .read(clientStateSyncOutboxProvider.notifier)
       .enqueueFollow(
-        subAccountId: subAccountId,
+        personaId: personaId,
         currentFollowing: previousFollowing,
         shouldFollow: isFollowing,
         sourceSurfaceId: sourceSurfaceId,

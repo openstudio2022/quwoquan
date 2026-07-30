@@ -1,4 +1,3 @@
-version: 1
 routes:
   # 具体受众路由必须排在通用路由之前，否则会被无 audience 的通用规则遮蔽
   - match: { subjectKind: topic, subjectType: 旅行/线路, intent: 路线推荐, audience: selfDriveTraveler }

@@ -1,0 +1,12 @@
+{
+  "label": "戛纳",
+  "labelEn": "Cannes",
+  "description": "电影节与滨海度假城",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

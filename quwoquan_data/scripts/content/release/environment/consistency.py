@@ -6,22 +6,16 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from core.io import read_json, write_json
-from core.media_asset_url import (
-    build_public_media_slice_key,
-    is_public_media_slice_key,
-    sha256_file,
+from content.release.environment.consistency_report import blocking_issue as _issue
+from content.release.environment.release_media_consistency import (
+    release_media_issues,
+    release_private_storage_issues,
 )
+from core.io import read_json, write_json
 from core.paths import PUBLISH_ROOT
 from core.release_layout import payload_file, payload_root
-from core.schema import assert_valid
 
 DESIRED_SCHEMA = "quwoquan_data.release_desired_state"
-
-
-def _issue(code: str, message: str, ref: str = "") -> dict[str, str]:
-    return {"severity": "blocking", "code": code, "message": message, "ref": ref}
-
 
 def _tag_exists(root: Path, ref: str) -> bool:
     if not _safe_local_ref(ref):
@@ -136,211 +130,12 @@ def _cas_issues(root: Path, value: Any, source: str) -> list[dict[str, str]]:
     return issues
 
 
-def _release_private_storage_issues(objects: Path) -> list[dict[str, str]]:
-    """Reject private CAS identity anywhere in the immutable object payload."""
-
-    def contains_private_storage(value: Any) -> bool:
-        if isinstance(value, dict):
-            if "objectKey" in value:
-                return True
-            return any(contains_private_storage(child) for child in value.values())
-        if isinstance(value, list):
-            return any(contains_private_storage(child) for child in value)
-        return isinstance(value, str) and value.startswith("media/objects/sha256/")
-
-    issues: list[dict[str, str]] = []
-    for path in sorted(objects.rglob("*.json")):
-        if contains_private_storage(read_json(path)):
-            issues.append(
-                _issue(
-                    "release_object_private_storage_leak",
-                    "release object snapshot 禁止暴露 private CAS objectKey",
-                    path.relative_to(objects).as_posix(),
-                )
-            )
-    return issues
-
-
-def _object_root(root: Path, kind: str, ref: str) -> Path:
-    return root / kind / ref.removeprefix(f"{kind}/")
-
-
-def _asset_rows(root: Path) -> list[dict[str, Any]]:
-    path = root / "asset.refs.json"
-    if not path.is_file():
-        return []
-    return [row for row in read_json(path).get("assets") or [] if isinstance(row, dict)]
-
-
 def _load_object_manifest(root: Path, kind: str, ref: str) -> tuple[Path, dict[str, Any]] | None:
     object_root = root / kind / ref.removeprefix(f"{kind}/")
     manifest = object_root / "manifest.json"
     if not manifest.is_file():
         return None
     return object_root, read_json(manifest)
-
-
-def _release_media_issues(
-    *,
-    contract: Mapping[str, Any],
-    media_root: Path,
-    objects: Path,
-    release_root: Path,
-) -> list[dict[str, str]]:
-    release_id = str(contract.get("releaseId") or "")
-    desired = contract.get("desiredRefs") if isinstance(contract.get("desiredRefs"), Mapping) else {}
-    issues: list[dict[str, str]] = []
-    expected_assets: dict[str, str] = {}
-    for kind in ("creators", "posts", "entities"):
-        for ref in sorted({str(item) for item in desired.get(kind) or [] if str(item).strip()}):
-            root = _object_root(objects, kind, ref)
-            for row in _asset_rows(root):
-                asset_id = str(row.get("assetId") or "").strip()
-                sha256 = str(row.get("sha256") or "").strip()
-                if not asset_id or not sha256:
-                    issues.append(
-                        _issue(
-                            "release_media_source_identity_invalid",
-                            "asset.refs 必须声明 assetId 与 sha256",
-                            f"{kind}/{ref}",
-                        )
-                    )
-                    continue
-                prior = expected_assets.get(asset_id)
-                if prior is not None and prior != sha256:
-                    issues.append(
-                        _issue(
-                            "release_media_source_identity_collision",
-                            "同一 assetId 绑定了不同 sha256",
-                            asset_id,
-                        )
-                    )
-                    continue
-                expected_assets[asset_id] = sha256
-    path = payload_file(release_root, "media_manifest.json")
-    if not path.is_file():
-        return issues
-    actual = read_json(path)
-    try:
-        assert_valid(
-            actual,
-            "release",
-            "media_manifest",
-            label=f"release_media_manifest:{release_id}",
-        )
-    except ValueError as exc:
-        issues.append(_issue("release_media_schema_invalid", str(exc), release_id))
-    if str(actual.get("releaseId") or "") != release_id:
-        issues.append(
-            _issue(
-                "release_media_identity_mismatch",
-                "media_manifest releaseId 不一致",
-                release_id,
-            )
-        )
-    actual_assets = actual.get("assets")
-    if not isinstance(actual_assets, list):
-        issues.append(
-            _issue(
-                "release_media_assets_invalid",
-                "media_manifest assets 必须为数组",
-                release_id,
-            )
-        )
-        return issues
-    actual_identity: dict[str, str] = {}
-    slice_owners: dict[str, str] = {}
-    for row in actual_assets:
-        if not isinstance(row, Mapping):
-            continue
-        asset_id = str(row.get("assetId") or "").strip()
-        sha256 = str(row.get("sha256") or "").strip()
-        public_slice_key = str(row.get("publicSliceKey") or "").strip()
-        version = row.get("version")
-        expected_slice_key = (
-            build_public_media_slice_key(
-                asset_id=asset_id,
-                kind=str(row.get("kind") or ""),
-                version=version,
-                content_type=str(row.get("contentType") or ""),
-            )
-            if isinstance(version, int) and not isinstance(version, bool)
-            else ""
-        )
-        if "objectKey" in row:
-            issues.append(
-                _issue(
-                    "release_media_private_key_leak",
-                    "media_manifest 禁止暴露 private CAS objectKey",
-                    asset_id,
-                )
-            )
-        if not is_public_media_slice_key(public_slice_key):
-            issues.append(
-                _issue(
-                    "release_media_public_slice_invalid",
-                    "publicSliceKey 不是 avatar/image/video canonical slice",
-                    asset_id,
-                )
-            )
-            continue
-        if public_slice_key != expected_slice_key:
-            issues.append(
-                _issue(
-                    "release_media_public_slice_identity_mismatch",
-                    "publicSliceKey 必须由 MediaAsset kind/assetId/version/contentType 唯一派生",
-                    asset_id,
-                )
-            )
-            continue
-        if asset_id in actual_identity:
-            issues.append(
-                _issue(
-                    "release_media_identity_duplicated",
-                    "media_manifest 内 assetId 必须唯一",
-                    asset_id,
-                )
-            )
-            continue
-        slice_owner = slice_owners.get(public_slice_key)
-        if slice_owner is not None:
-            issues.append(
-                _issue(
-                    "release_media_public_slice_collision",
-                    f"publicSliceKey 同时绑定 {slice_owner} 与 {asset_id}",
-                    public_slice_key,
-                )
-            )
-            continue
-        physical = media_root / public_slice_key
-        if not physical.is_file():
-            issues.append(
-                _issue(
-                    "release_media_public_slice_missing",
-                    f"public slice 不存在: {public_slice_key}",
-                    asset_id,
-                )
-            )
-            continue
-        if sha256_file(physical) != sha256:
-            issues.append(
-                _issue(
-                    "release_media_public_slice_hash_mismatch",
-                    "public slice 与 MediaAsset sha256 不一致",
-                    asset_id,
-                )
-            )
-        actual_identity[asset_id] = sha256
-        slice_owners[public_slice_key] = asset_id
-    if actual_identity != expected_assets:
-        issues.append(
-            _issue(
-                "release_media_closure_mismatch",
-                "media_manifest 必须精确等于 desired objects 的 MediaAsset 身份闭包",
-                release_id,
-            )
-        )
-    return issues
 
 
 def scan_release_contract(
@@ -475,7 +270,7 @@ def scan_release_contract(
             issues.append(_issue("desired_tag_missing", "tag snapshot 不存在", ref))
             continue
     if release_root is not None:
-        issues.extend(_release_private_storage_issues(objects))
+        issues.extend(release_private_storage_issues(objects))
         for kind, refs in (
             ("posts", posts),
             ("entities", entities),
@@ -505,7 +300,7 @@ def scan_release_contract(
             if not payload_file(release_root, name).is_file():
                 issues.append(_issue("release_artifact_missing", name, str(release_root)))
         issues.extend(
-            _release_media_issues(
+            release_media_issues(
                 contract=contract,
                 media_root=media_root,
                 objects=objects,

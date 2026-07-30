@@ -334,10 +334,19 @@ func run() error {
 			log.Printf("notification-service MongoDB disconnect failed: %v", err)
 		}
 	}()
-	store := deliverypersistence.NewMongoNotificationDeliveryJobStore(mongoClient.Database(mongoDatabase))
-	appMessageStore := persistence.NewMongoAppMessageStore(mongoClient.Database(mongoDatabase))
+	notificationDB := mongoClient.Database(mongoDatabase)
+	accountRestrictionProjection, err :=
+		persistence.NewMongoUserAccountRestrictionProjection(notificationDB)
+	if err != nil {
+		return fmt.Errorf("account restriction projection init failed: %w", err)
+	}
+	store := deliverypersistence.NewMongoNotificationDeliveryJobStore(
+		notificationDB,
+		accountRestrictionProjection,
+	)
+	appMessageStore := persistence.NewMongoAppMessageStore(notificationDB)
 	accountClosureProjection, err := persistence.NewMongoUserAccountClosedProjection(
-		mongoClient.Database(mongoDatabase),
+		notificationDB,
 	)
 	if err != nil {
 		return fmt.Errorf("UserAccountClosed projection init failed: %w", err)
@@ -349,6 +358,9 @@ func run() error {
 	}
 	if indexErr == nil {
 		indexErr = accountClosureProjection.EnsureIndexes(indexCtx)
+	}
+	if indexErr == nil {
+		indexErr = accountRestrictionProjection.EnsureIndexes(indexCtx)
 	}
 	cancelIndexes()
 	if indexErr != nil {
@@ -488,6 +500,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("UserAccountClosed consumer init failed: %w", err)
 	}
+	accountClosureConsumer.WithUserAccountRestrictionProjection(
+		accountRestrictionProjection,
+	)
 	accountClosureSetupCtx, cancelAccountClosureSetup := context.WithTimeout(
 		ctx,
 		10*time.Second,

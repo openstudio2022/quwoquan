@@ -2,6 +2,7 @@
   "label": "养车保养",
   "labelEn": "Car Maintenance",
   "description": "汽车保养与维修",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

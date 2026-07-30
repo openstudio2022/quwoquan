@@ -39,12 +39,24 @@ def _report(
             "target": target,
             "env": env,
             "rolloutStage": stage or ("gray-initial" if target == "prod-hosted" else "local"),
-            "mediaVideoBaseUrl": "https://gamma-video.example.test",
+            "mediaVideoBaseUrl": "https://cdn.gamma.example.invalid/media/video",
             "commitSha": "abcdef0123456789",
             "configHash": "sha256:config",
         },
+        "release": {
+            "releaseId": "release-video-a",
+            "sourceOwner": "qwq_data",
+            "manifestDigest": f"sha256:{'2' * 64}",
+            "mediaManifestDigest": f"sha256:{'3' * 64}",
+            "importRunId": f"import-{env}",
+            "verifyRunId": f"verify-{env}",
+            "readinessReceiptRef": (
+                f"env/{env}/runs/data-release/release-video-a/verify-{env}/"
+                "release-readiness.json"
+            ),
+        },
         "media": {
-            "publicSliceKey": "media/video/s/release-video/post/canary.mp4",
+            "publicSliceKey": "media/video/s/release-video/post/v1/canary.mp4",
             "assetId": "media-canary-seek-125s",
             "assetVersion": 1,
             "probeHash": f"sha256:{'1' * 64}",
@@ -128,13 +140,61 @@ def _materialize_valid_artifacts(
     resolve(video_range["reportPath"]).write_text(
         json.dumps(
             {
-                "checks": [
-                    {
-                        "name": "media-public-content-video-primary",
-                        "statusCode": 206,
-                        "contentType": "video/mp4",
-                    }
-                ]
+                "schema": "quwoquan_ops.release_video_delivery_evidence",
+                "status": "passed",
+                "capturedAt": "2026-07-16T00:00:30Z",
+                "environment": evidence["environment"]["env"],
+                "target": evidence["environment"]["target"],
+                "rolloutStage": evidence["environment"]["rolloutStage"],
+                "release": {
+                    **evidence["release"],
+                },
+                "video": {
+                    "workId": evidence["post"]["postId"],
+                    "postId": evidence["post"]["postId"],
+                    "postRef": "video/travel/canary/1",
+                    "assetId": evidence["media"]["assetId"],
+                    "assetVersion": evidence["media"]["assetVersion"],
+                    "publicSliceKey": evidence["media"]["publicSliceKey"],
+                    "publicUrl": "https://cdn.gamma.example.invalid/media/video/s/release-video/post/v1/canary.mp4",
+                    "expectedMimeType": "video/mp4",
+                    "expectedBytes": 4,
+                    "expectedHash": evidence["media"]["probeHash"],
+                },
+                "delivery": {
+                    "tlsSystemTrust": True,
+                    "requestPath": "/media/video/s/release-video/post/v1/canary.mp4",
+                    "requestQuery": "",
+                    "fullStatus": 200,
+                    "rangeStatus": 206,
+                    "mimeType": "video/mp4",
+                    "rangeMimeType": "video/mp4",
+                    "contentLength": 4,
+                    "observedBytes": 4,
+                    "contentRange": "bytes 0-3/4",
+                    "rangeBytes": 4,
+                    "etag": "release-video-a",
+                    "rangeEtag": "release-video-a",
+                    "observedHash": evidence["media"]["probeHash"],
+                    "rangeSha256": f"sha256:{'4' * 64}",
+                    "cacheControl": "public, max-age=31536000, immutable",
+                    "rangeCacheControl": "public, max-age=31536000, immutable",
+                    "corsAllowOrigin": "*",
+                    "rangeCorsAllowOrigin": "*",
+                    "cacheKey": "/media/video/s/release-video/post/v1/canary.mp4",
+                    "rangeCacheKey": "/media/video/s/release-video/post/v1/canary.mp4",
+                    "signedQueryStatus": 200,
+                    "signedQueryCacheControl": "no-store",
+                    "signedQueryCacheKey": "",
+                },
+                "playback": {
+                    "durationMs": 12_500,
+                    "firstFrameDecoded": True,
+                },
+                "rangeStatus": 206,
+                "contentType": "video/mp4",
+                "publicSliceKey": evidence["media"]["publicSliceKey"],
+                "videoAuthority": evidence["environment"]["mediaVideoBaseUrl"],
             }
         ),
         encoding="utf-8",
@@ -269,6 +329,38 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
             issues,
         )
 
+    def test_rejects_missing_or_noncanonical_release_receipt_identity(self) -> None:
+        evidence = _report()
+        evidence["release"]["importRunId"] = ""  # type: ignore[index]
+        evidence["release"]["readinessReceiptRef"] = "parallel/t4.json"  # type: ignore[index]
+
+        issues = validate_evidence_document(evidence)
+
+        self.assertTrue(any("release.importRunId" in issue for issue in issues), issues)
+        self.assertTrue(any("canonical receipt" in issue for issue in issues), issues)
+
+    def test_artifact_validation_rejects_preflight_release_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            artifact_root = Path(temporary_dir)
+            evidence = _report()
+            _materialize_valid_artifacts(artifact_root, evidence)
+            range_ref = evidence["serviceEvidence"]["videoRange"]["reportPath"]  # type: ignore[index]
+            range_path = artifact_root / str(range_ref)
+            range_report = json.loads(range_path.read_text(encoding="utf-8"))
+            range_report["release"]["importRunId"] = "parallel-import"
+            range_path.write_text(json.dumps(range_report), encoding="utf-8")
+
+            issues = validate_evidence_document(
+                evidence,
+                check_artifacts=True,
+                artifact_root=artifact_root,
+            )
+
+        self.assertTrue(
+            any("Range report.release.importRunId 与 T4 release 不一致" in issue for issue in issues),
+            issues,
+        )
+
     def test_artifact_validation_requires_physical_ios_success_run(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             artifact_root = Path(temporary_dir)
@@ -361,6 +453,31 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
 
         self.assertTrue(any("必须位于证据根目录内" in issue for issue in issues), issues)
 
+    def test_artifact_validation_rejects_legacy_range_only_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            artifact_root = Path(temporary_dir)
+            evidence = _report()
+            _materialize_valid_artifacts(artifact_root, evidence)
+            range_ref = evidence["serviceEvidence"]["videoRange"]["reportPath"]  # type: ignore[index]
+            range_path = artifact_root / str(range_ref)
+            range_path.write_text(
+                json.dumps({"rangeStatus": 206, "contentType": "video/mp4"}),
+                encoding="utf-8",
+            )
+
+            issues = validate_evidence_document(
+                evidence,
+                check_artifacts=True,
+                artifact_root=artifact_root,
+            )
+
+        self.assertTrue(
+            any("release-bound video delivery evidence" in issue for issue in issues),
+            issues,
+        )
+        self.assertTrue(any("HTTP 200" in issue for issue in issues), issues)
+        self.assertTrue(any("解码首帧" in issue for issue in issues), issues)
+
     def test_rejects_missing_video_stage_evidence(self) -> None:
         evidence = _report()
         evidence["uiEvidence"]["stageRendered"] = False  # type: ignore[index]
@@ -419,6 +536,11 @@ class RuntimeMediaT4EvidenceContractTest(unittest.TestCase):
         issues = validate_evidence_document(broken_prod)
         self.assertTrue(any("production configHash" in issue for issue in issues), issues)
         self.assertTrue(any("同一 postId" in issue for issue in issues), issues)
+
+        broken_release = copy.deepcopy(matrix)
+        broken_release["reports"][2]["release"]["manifestDigest"] = f"sha256:{'9' * 64}"
+        issues = validate_evidence_document(broken_release)
+        self.assertTrue(any("同一 releaseId/manifestDigest" in issue for issue in issues), issues)
 
     def test_matrix_rejects_missing_and_duplicate_targets(self) -> None:
         duplicate = _report(target="alpha-local", env="alpha")

@@ -15,8 +15,10 @@ import (
 	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	rtredis "quwoquan_service/runtime/redis"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
+	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
@@ -31,6 +33,66 @@ func (allowAllFeedViewerBlockReader) ListBlockedPersonaIDs(
 	_ string,
 ) ([]string, error) {
 	return []string{}, nil
+}
+
+type readyFeedActiveSupplyReader struct{}
+
+type failingBehaviorSignalProcessor struct {
+	err error
+}
+
+func (p failingBehaviorSignalProcessor) ProcessSignal(
+	_ context.Context,
+	_ rtrec.BehaviorSignal,
+) error {
+	return p.err
+}
+
+func (p failingBehaviorSignalProcessor) ProcessSignalBatch(
+	_ context.Context,
+	_ []rtrec.BehaviorSignal,
+) error {
+	return p.err
+}
+
+type releaseBoundLocalCandidateSource struct {
+	inner rtrec.CandidateSource
+}
+
+func (s releaseBoundLocalCandidateSource) Recall(
+	ctx context.Context,
+	req rtrec.RecallRequest,
+) ([]rtrec.ContentCandidate, error) {
+	items, err := s.inner.Recall(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].SourceOwner = "qwq_data"
+		items[i].ReleaseID = req.ActiveReleaseID
+		items[i].ManifestDigest = req.ActiveManifestDigest
+		items[i].LifecycleStatus = "active"
+		if strings.TrimSpace(items[i].SupplySource) == "" {
+			items[i].SupplySource = "data_engineering"
+		}
+	}
+	return items, nil
+}
+
+func (readyFeedActiveSupplyReader) ActiveSupplySnapshot(
+	context.Context,
+) (feedapp.ActiveSupplySnapshot, error) {
+	return feedapp.ActiveSupplySnapshot{
+		Environment:           "local_contract",
+		SourceOwner:           "qwq_data",
+		Status:                "active",
+		ActiveReleaseID:       "rel_local_contract",
+		ManifestDigest:        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ReadbackStatus:        "passed",
+		Posts:                 1,
+		DiscoveryPosts:        1,
+		PremiumPlayableVideos: 1,
+	}, nil
 }
 
 type acceptingActiveTaxonomyLeafValidationPort struct{}
@@ -91,12 +153,18 @@ func newTestHandlerWithHotPath() (http.Handler, *rtrec.HotPath) {
 	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
 	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
-	source := recinfra.NewPostProjectionSource(store, store)
+	source := releaseBoundLocalCandidateSource{
+		inner: recinfra.NewPostProjectionSource(store, store),
+	}
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
 	feedService := feedapp.NewFeedService(
 		engine,
 		testsupport.NewPostFeedReader(store),
 		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
+		feedapp.WithActiveSupplyReader(readyFeedActiveSupplyReader{}),
+		feedapp.WithFeedDeliveryPageStore(
+			deliveryredis.NewStore(rtredis.NewMemoryClient()),
+		),
 	)
 	postService := postapp.NewPostService(
 		postapp.BindDataPorts(store),
@@ -112,8 +180,6 @@ func newTestHandlerWithHotPath() (http.Handler, *rtrec.HotPath) {
 		store,
 		behaviorapp.WithOnboardingInterestTaxonomyValidator(
 			behaviorapp.CatalogBackedOnboardingInterestTaxonomy{
-				Version:                  "v1",
-				TaxonomyReleaseID:        "tag-taxonomy-test-001",
 				DimensionRoots:           map[string]string{"topic": "Topic", "audience": "Audience", "format": "Format", "entity": "Entity"},
 				MinSelections:            1,
 				MaxSelections:            12,
@@ -143,12 +209,18 @@ func newFeedHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
 	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
 	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
-	source := recinfra.NewPostProjectionSource(store, store)
+	source := releaseBoundLocalCandidateSource{
+		inner: recinfra.NewPostProjectionSource(store, store),
+	}
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source}, rtrec.WithFeatureProvider(features))
 	feedService := feedapp.NewFeedService(
 		engine,
 		testsupport.NewPostFeedReader(store),
 		feedapp.WithFeedViewerBlockReader(allowAllFeedViewerBlockReader{}),
+		feedapp.WithActiveSupplyReader(readyFeedActiveSupplyReader{}),
+		feedapp.WithFeedDeliveryPageStore(
+			deliveryredis.NewStore(rtredis.NewMemoryClient()),
+		),
 	)
 	postService := postapp.NewPostService(
 		postapp.BindDataPorts(store),
@@ -183,15 +255,15 @@ func (s *stubFeatureProvider) GetFeatures(_ context.Context, _ string) (*rtrec.U
 	return s.features, nil
 }
 
-func setActorHeaders(req *http.Request, ownerID, subAccountID string) {
+func setActorHeaders(req *http.Request, ownerID, personaID string) {
 	if ownerID != "" {
 		req.Header.Set("X-Client-User-Id", ownerID)
 	}
-	if subAccountID != "" {
-		req.Header.Set("X-Client-Sub-Account-Id", subAccountID)
+	if personaID != "" {
+		req.Header.Set("X-Client-Persona-Id", personaID)
 	}
 	if req.Header.Get("Idempotency-Key") == "" {
-		req.Header.Set("Idempotency-Key", "contract-test-"+subAccountID+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
+		req.Header.Set("Idempotency-Key", "contract-test-"+personaID+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
 	}
 }
 
@@ -209,7 +281,7 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 	feedRec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(feedRec, feedReq)
 	if feedRec.Code != 200 {
-		t.Fatalf("unexpected feed status: %d", feedRec.Code)
+		t.Fatalf("unexpected feed status: %d: %s", feedRec.Code, feedRec.Body.String())
 	}
 	var feedBody struct {
 		Items []map[string]any `json:"items"`
@@ -239,6 +311,36 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 	}
 }
 
+func TestFeedPaginationAdmissionFailsClosedBeforeApplicationDispatch(t *testing.T) {
+	for _, target := range []string{
+		"/content/feed?limit=0",
+		"/content/feed?limit=-1",
+		"/content/feed?limit=21",
+		"/content/feed?limit=not-an-integer",
+	} {
+		t.Run(target, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, target, nil)
+			rec := httptest.NewRecorder()
+
+			newTestHandler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("%s status = %d, want 400: %s", target, rec.Code, rec.Body.String())
+			}
+		})
+	}
+
+	params, err := BindGeneratedGetFeedParams(
+		httptest.NewRequest(http.MethodGet, "/content/feed", nil),
+	)
+	if err != nil {
+		t.Fatalf("default pagination binding failed: %v", err)
+	}
+	if params.Limit != 20 {
+		t.Fatalf("generated default feed limit = %d, want 20", params.Limit)
+	}
+}
+
 func TestAppConfigEndpointIsImplemented(t *testing.T) {
 	req := httptest.NewRequest("GET", "/config/app", nil)
 	rec := httptest.NewRecorder()
@@ -254,10 +356,28 @@ func TestAppConfigEndpointIsImplemented(t *testing.T) {
 	if content == nil {
 		t.Fatalf("missing content config: %+v", body)
 	}
+	if _, exists := body["packageVersion"]; exists {
+		t.Fatalf("app config exposes retired packageVersion: %+v", body)
+	}
+	etag := rec.Header().Get("ETag")
+	if !strings.HasPrefix(etag, `"sha256:`) || !strings.HasSuffix(etag, `"`) {
+		t.Fatalf("app config ETag must be the quoted canonical configHash: %q", etag)
+	}
+
+	conditional := httptest.NewRequest(http.MethodGet, "/config/app", nil)
+	conditional.Header.Set("If-None-Match", etag)
+	conditionalRec := httptest.NewRecorder()
+	newTestHandler().ServeHTTP(conditionalRec, conditional)
+	if conditionalRec.Code != http.StatusNotModified {
+		t.Fatalf("matching canonical ETag status=%d want 304", conditionalRec.Code)
+	}
+	if conditionalRec.Body.Len() != 0 {
+		t.Fatalf("304 response must not include an app config body: %q", conditionalRec.Body.String())
+	}
 }
 
 func TestAuthorImpactEndpointFailsWhenStoreIsNotConfigured(t *testing.T) {
-	req := httptest.NewRequest("GET", "/content/sub-accounts/test_author/author-impact", nil)
+	req := httptest.NewRequest("GET", "/content/personas/test_author/author-impact", nil)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
@@ -271,7 +391,7 @@ func TestAuthorImpactEndpointFailsWhenStoreIsNotConfigured(t *testing.T) {
 func TestAuthorImpactEvidenceEndpointFailsWhenStoreIsNotConfigured(t *testing.T) {
 	req := httptest.NewRequest(
 		"GET",
-		"/content/sub-accounts/test_author/author-impact/evidence?impactId=impact_1",
+		"/content/personas/test_author/author-impact/evidence?impactId=impact_1",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -306,7 +426,7 @@ func TestSubmitPostPublicationRequiresTransportIdempotencyHeader(t *testing.T) {
 		bytes.NewBufferString(`{"publishIntentId":"intent-missing-key","localDraftId":"draft-missing-key","contentType":"micro","body":"缺少幂等键"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-Sub-Account-Id", "persona-idempotency")
+	req.Header.Set("X-Client-Persona-Id", "persona-idempotency")
 
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -348,7 +468,7 @@ func TestSubmitPostPublicationHonorsNonProductionMediaNotReadyInjection(t *testi
 	}
 }
 
-func TestSubmitPostPublicationBodyBindingAcceptsWritableFields(t *testing.T) {
+func TestSubmitPostPublicationBodyBindingAcceptsRequestEntityFields(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/content/posts:publish",
@@ -376,6 +496,76 @@ func TestSubmitPostPublicationBodyBindingAcceptsWritableFields(t *testing.T) {
 	}
 }
 
+func TestPostCommandBodiesBindOnlyCanonicalRequestEntityFields(t *testing.T) {
+	testCases := []struct {
+		name      string
+		operation string
+		body      string
+		wantKey   string
+	}{
+		{
+			name:      "submit publication",
+			operation: "SubmitPostPublication",
+			body:      `{"publishIntentId":"intent-canonical","localDraftId":"draft-canonical","contentType":"micro","body":"canonical"}`,
+			wantKey:   "publishIntentId",
+		},
+		{
+			name:      "update settings",
+			operation: "UpdatePostSettings",
+			body:      `{"visibility":"private","assistantUsePolicy":"exclude"}`,
+			wantKey:   "visibility",
+		},
+		{
+			name:      "promote to work",
+			operation: "PromotePostToWork",
+			body:      `{"contentType":"article","title":"canonical work"}`,
+			wantKey:   "contentType",
+		},
+		{
+			name:      "generate article summary",
+			operation: "GenerateArticleSummary",
+			body:      `{"title":"canonical title","body":"canonical body"}`,
+			wantKey:   "title",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/",
+				bytes.NewBufferString(testCase.body),
+			)
+			payload, err := BindGeneratedRequestBodyFromRequest(
+				request,
+				testCase.operation,
+			)
+			if err != nil {
+				t.Fatalf("BindGeneratedRequestBodyFromRequest() error = %v", err)
+			}
+			if _, exists := payload[testCase.wantKey]; !exists {
+				t.Fatalf(
+					"%s canonical body is missing %s: %v",
+					testCase.operation,
+					testCase.wantKey,
+					payload,
+				)
+			}
+		})
+	}
+
+	pathLeak := httptest.NewRequest(
+		http.MethodPatch,
+		"/",
+		bytes.NewBufferString(`{"postId":"post-must-stay-in-path","visibility":"private"}`),
+	)
+	if _, err := BindGeneratedRequestBodyFromRequest(
+		pathLeak,
+		"UpdatePostSettings",
+	); err == nil {
+		t.Fatal("path-bound postId must not be accepted in the request body")
+	}
+}
+
 func TestReportBehaviorsEndpoint(t *testing.T) {
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	req := httptest.NewRequest(
@@ -393,6 +583,75 @@ func TestReportBehaviorsEndpoint(t *testing.T) {
 	}
 }
 
+func TestReportBehaviorsMapsOperationalFailuresToDeclaredHTTPCodes(t *testing.T) {
+	testCases := []struct {
+		name         string
+		failure      error
+		status       int
+		expectedCode string
+	}{
+		{
+			name:         "storage write failure",
+			failure:      fmt.Errorf("controlled behavior write failure"),
+			status:       http.StatusInternalServerError,
+			expectedCode: "CONTENT.SYSTEM.storage_write_failed",
+		},
+		{
+			name:         "dependency timeout",
+			failure:      context.DeadlineExceeded,
+			status:       http.StatusGatewayTimeout,
+			expectedCode: "CONTENT.MIDDLEWARE.upstream_timeout",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
+			behaviorService := behaviorapp.NewBehaviorService(
+				failingBehaviorSignalProcessor{err: testCase.failure},
+				store,
+			)
+			handler := NewContentHandler(
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				behaviorService,
+			).Routes()
+			occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/content/behaviors",
+				bytes.NewBufferString(fmt.Sprintf(
+					`{"userId":"u-failure","events":[{"clientEventId":"evt-failure-001","occurredAt":%q,"contentId":"post_photo_001","action":"click"}]}`,
+					occurredAt,
+				)),
+			)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != testCase.status {
+				t.Fatalf(
+					"status=%d want=%d: %s",
+					rec.Code,
+					testCase.status,
+					rec.Body.String(),
+				)
+			}
+			if !strings.Contains(rec.Body.String(), testCase.expectedCode) {
+				t.Fatalf(
+					"expected canonical error %s: %s",
+					testCase.expectedCode,
+					rec.Body.String(),
+				)
+			}
+		})
+	}
+}
+
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
 func TestReportBehaviorsOnboardingInterestCreatesCanonicalTagPrior(t *testing.T) {
 	handler, hotPath := newTestHandlerWithHotPath()
@@ -403,7 +662,7 @@ func TestReportBehaviorsOnboardingInterestCreatesCanonicalTagPrior(t *testing.T)
 	)
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	payload := fmt.Sprintf(
-		`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"sessionId":%q,"action":"onboarding_interest","catalogVersion":"v1","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":[" Topic/兴趣/旅行 ","Audience/用户/兴趣偏好/摄影","Topic/兴趣/旅行",""]}]}`,
+		`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"sessionId":%q,"action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":[" Topic/兴趣/旅行 ","Audience/用户/兴趣偏好/摄影","Topic/兴趣/旅行",""]}]}`,
 		userID,
 		eventID,
 		occurredAt,
@@ -452,7 +711,7 @@ func TestReportBehaviorsOnboardingInterestCreatesCanonicalTagPrior(t *testing.T)
 		http.MethodPost,
 		"/content/behaviors",
 		bytes.NewBufferString(fmt.Sprintf(
-			`{"userId":"onboarding-invalid","events":[{"clientEventId":"evt-onboarding-interest-empty","occurredAt":%q,"sessionId":"onboarding-invalid-session","action":"onboarding_interest","catalogVersion":"v1","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":[""," "]}]}`,
+			`{"userId":"onboarding-invalid","events":[{"clientEventId":"evt-onboarding-interest-empty","occurredAt":%q,"sessionId":"onboarding-invalid-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":[""," "]}]}`,
 			occurredAt,
 		)),
 	)
@@ -490,6 +749,40 @@ func TestReportBehaviorsOnboardingInterestCreatesCanonicalTagPrior(t *testing.T)
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
+func TestReportBehaviorsRejectsRetiredCatalogVersionBeforeWrites(t *testing.T) {
+	handler, hotPath := newTestHandlerWithHotPath()
+	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
+	// Retired catalogVersion input must be rejected by the strict decoder; it
+	// cannot be ignored or translated into the canonical taxonomy release.
+	payload := fmt.Sprintf(
+		`{"userId":"onboarding-retired-field","events":[{"clientEventId":"evt-onboarding-retired-field","occurredAt":%q,"sessionId":"onboarding-retired-session","action":"onboarding_interest","catalogVersion":"retired","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/兴趣/旅行"]}]}`,
+		occurredAt,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("retired catalogVersion status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "CONTENT.USER.invalid_argument") {
+		t.Fatalf("expected canonical invalid-argument failure, got: %s", rec.Body.String())
+	}
+	state, err := hotPath.GetSessionState(
+		context.Background(),
+		"onboarding-retired-field",
+		"onboarding-retired-session",
+	)
+	if err != nil {
+		t.Fatalf("read rejected onboarding state: %v", err)
+	}
+	if len(state.TagWeights) != 0 {
+		t.Fatalf("retired catalogVersion input wrote recommendation priors: %+v", state.TagWeights)
+	}
+}
+
 func TestReportBehaviorsAcceptsGzipAndOccurredAt(t *testing.T) {
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	payload := fmt.Sprintf(
@@ -520,20 +813,20 @@ func TestReportBehaviorsAcceptsGzipAndOccurredAt(t *testing.T) {
 }
 
 // TestFeedIssuesServerFeedRequestID 断言首页推荐主链路服务端权威下发 feedRequestId（frq_ 前缀）
-// 与 rankingVersion，并在客户端回显时保持同一归因 id（feedRequestId echo）。
+// 与 policyDigest，并在客户端回显时保持同一归因 id（feedRequestId echo）。
 func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	handler := newTestHandler()
 
 	firstReq := httptest.NewRequest("GET", "/content/feed?sort=recommend&limit=2", nil)
+	firstReq.Header.Set("X-Client-Session-Id", "feed-request-id-session")
 	firstRec := httptest.NewRecorder()
 	handler.ServeHTTP(firstRec, firstReq)
 	if firstRec.Code != http.StatusOK {
 		t.Fatalf("unexpected feed status: %d", firstRec.Code)
 	}
 	var firstBody struct {
-		FeedRequestID  string `json:"feedRequestId"`
-		RankingVersion string `json:"rankingVersion"`
-		ReasonVersion  string `json:"reasonVersion"`
+		FeedRequestID string `json:"feedRequestId"`
+		PolicyDigest  string `json:"policyDigest"`
 	}
 	if err := json.Unmarshal(firstRec.Body.Bytes(), &firstBody); err != nil {
 		t.Fatalf("decode feed response: %v", err)
@@ -541,11 +834,8 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	if !strings.HasPrefix(firstBody.FeedRequestID, "frq_") {
 		t.Fatalf("expected server-issued feedRequestId with frq_ prefix, got %q", firstBody.FeedRequestID)
 	}
-	if firstBody.RankingVersion != rtrec.RankingVersion {
-		t.Fatalf("expected rankingVersion %q, got %q", rtrec.RankingVersion, firstBody.RankingVersion)
-	}
-	if firstBody.ReasonVersion != rtrec.ReasonVersion {
-		t.Fatalf("expected reasonVersion %q, got %q", rtrec.ReasonVersion, firstBody.ReasonVersion)
+	if !strings.HasPrefix(firstBody.PolicyDigest, "sha256:") {
+		t.Fatalf("expected canonical policyDigest, got %q", firstBody.PolicyDigest)
 	}
 
 	echoReq := httptest.NewRequest(
@@ -553,6 +843,7 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 		"/content/feed?sort=recommend&limit=2&feedRequestId="+firstBody.FeedRequestID,
 		nil,
 	)
+	echoReq.Header.Set("X-Client-Session-Id", "feed-request-id-session")
 	echoRec := httptest.NewRecorder()
 	handler.ServeHTTP(echoRec, echoReq)
 	if echoRec.Code != http.StatusOK {
@@ -575,6 +866,7 @@ func TestFeedRecommendUsesLongTermTagFeatures(t *testing.T) {
 	}})
 	req := httptest.NewRequest("GET", "/content/feed?sort=recommend&limit=1", nil)
 	req.Header.Set("X-Client-User-Id", "u1")
+	req.Header.Set("X-Client-Session-Id", "long-term-tag-feature-session")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -605,7 +897,11 @@ func TestFeedWithSessionIdFromHeader(t *testing.T) {
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("unexpected feed status with headers: %d", rec.Code)
+		t.Fatalf(
+			"unexpected feed status with headers: %d: %s",
+			rec.Code,
+			rec.Body.String(),
+		)
 	}
 }
 
@@ -849,7 +1145,7 @@ func TestPostDetailProjectionUsesCanonicalMediaURLsWire(t *testing.T) {
 	wire := ProjectPostDetailForClient(postports.PostDetailSlice{
 		PostID:      postports.NewPostID("post_media_wire"),
 		ContentType: postports.ContentType("image"),
-		MediaURLs:   []string{"media/image/s/asset/example"},
+		MediaURLs:   []string{"media/image/s/asset/example/v1/source.jpg"},
 	})
 	payload, err := json.Marshal(wire)
 	if err != nil {
@@ -863,7 +1159,7 @@ func TestPostDetailProjectionUsesCanonicalMediaURLsWire(t *testing.T) {
 		t.Fatalf("post detail must not expose non-canonical imageUrls: %s", payload)
 	}
 	mediaURLs, found := decoded["mediaUrls"].([]any)
-	if !found || len(mediaURLs) != 1 || mediaURLs[0] != "media/image/s/asset/example" {
+	if !found || len(mediaURLs) != 1 || mediaURLs[0] != "media/image/s/asset/example/v1/source.jpg" {
 		t.Fatalf("post detail mediaUrls mismatch: %s", payload)
 	}
 }

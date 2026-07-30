@@ -43,6 +43,7 @@ business_rules:
 - RemoveDevicePushEndpoint 清除 token material 并迁移为 revoked；provider 永久失效迁移为 stale
 - 父聚合在任一 child active 时为 active；无 active child 时按 revoked/stale child 状态同步
 lifecycle:
+  state_field: status
   states:
   - active
   - revoked

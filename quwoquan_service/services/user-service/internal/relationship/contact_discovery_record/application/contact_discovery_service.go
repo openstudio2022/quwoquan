@@ -102,12 +102,12 @@ func (s *ContactDiscoveryService) Initiate(ctx context.Context, ownerID string, 
 		// Best-effort: complete with empty result rather than fail
 		matches = []model.ContactPhoneMatch{}
 	}
-	matched := subAccountIDsFromMatches(matches)
+	matched := personaIDsFromMatches(matches)
 	if err := s.discoveries.Complete(ctx, record.ID, matched); err != nil {
 		return nil, err
 	}
 	record.Status = "completed"
-	record.MatchedSubAccountIds = matched
+	record.MatchedPersonaIds = matched
 	record.MatchCount = int64(len(matched))
 	_ = s.events.PublishUserEvent(ctx, userevent.ContactDiscoveryCompleted, ownerID, ownerID, map[string]any{
 		"id":             record.ID,
@@ -129,11 +129,11 @@ func (s *ContactDiscoveryService) MatchesFor(ctx context.Context, hashedPhones [
 	return s.discoveries.FindPhoneMatches(ctx, hashedPhones)
 }
 
-func subAccountIDsFromMatches(matches []model.ContactPhoneMatch) []string {
+func personaIDsFromMatches(matches []model.ContactPhoneMatch) []string {
 	ids := make([]string, 0, len(matches))
 	for _, m := range matches {
-		if m.SubAccountID != "" {
-			ids = append(ids, m.SubAccountID)
+		if m.PersonaID != "" {
+			ids = append(ids, m.PersonaID)
 		}
 	}
 	return ids

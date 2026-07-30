@@ -74,15 +74,6 @@ func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
 	}
 	if _, err := store.facts.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys: bson.D{
-				{Key: "eventId", Value: 1},
-				{Key: "eventVersion", Value: 1},
-			},
-			Options: options.Index().
-				SetName("uq_assistant_learning_fact_identity").
-				SetUnique(true),
-		},
-		{
 			Keys: bson.D{{Key: "appendSequence", Value: 1}},
 			Options: options.Index().
 				SetName("uq_assistant_learning_fact_sequence").
@@ -112,17 +103,6 @@ func (store *MongoStore) EnsureIndexes(ctx context.Context) error {
 		},
 	}); err != nil {
 		return unavailable("ensure fact indexes", err)
-	}
-	if _, err := store.receipts.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{Key: "eventId", Value: 1},
-			{Key: "eventVersion", Value: 1},
-		},
-		Options: options.Index().
-			SetName("uq_assistant_learning_fact_receipt_identity").
-			SetUnique(true),
-	}); err != nil {
-		return unavailable("ensure receipt indexes", err)
 	}
 	if _, err := store.outbox.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
@@ -186,7 +166,6 @@ func (store *MongoStore) Append(
 		}
 		result = model.Receipt{
 			EventID:        fact.EventID,
-			EventVersion:   fact.EventVersion,
 			Accepted:       true,
 			AppendSequence: sequence,
 			PayloadDigest:  fact.PayloadDigest,

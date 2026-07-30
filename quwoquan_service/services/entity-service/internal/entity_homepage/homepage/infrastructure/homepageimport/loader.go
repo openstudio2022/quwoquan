@@ -22,11 +22,14 @@ import (
 
 // 数据工程实体类型 → 主页类型闭集（application.validateHomepageInput 同源；
 // 枚举唯一真相源 contracts/metadata/_shared/types.yaml HomepageType）。
-// 地点类覆盖 entity_type_taxonomy.PILOT_PRIMARY_TYPES 试点 scope 全集（裁决 6）。
+// 地点类覆盖 entity_type_taxonomy.PILOT_PRIMARY_TYPES 试点 scope 全集（裁决 6），
+// 并前置登记 taxonomy 已有但尚未进入试点 scope 的 entityType，使试点扩容时无需改码。
 // 未登记的实体类型属于契约缺口：跳过并报 issue，禁止猜测默认值。
 var entityTypeToHomepageType = map[string]string{
 	"景区":   "sight",
-	"机位":   "travel_photo",
+	"机位":   "photo_spot",
+	"交通枢纽": "transport_hub",
+	"城市":   "city",
 	"住宿":   "hotel",
 	"餐饮":   "restaurant",
 	"学校":   "university",
@@ -53,14 +56,40 @@ var assetRoleToIntroductionRole = map[string]string{
 }
 
 type entityHeader struct {
-	Label         string                      `json:"label"`
-	Domain        string                      `json:"domain"`
-	Type          string                      `json:"type"`
-	City          string                      `json:"city"`
-	SourceTaskId  string                      `json:"sourceTaskId"`
-	TagRefs       []string                    `json:"tagRefs"`
-	PrimarySource *application.HomepageSource `json:"primarySource"`
-	SourceURLs    []string                    `json:"sourceUrls"`
+	Label           string                       `json:"label"`
+	Domain          string                       `json:"domain"`
+	Type            string                       `json:"type"`
+	City            string                       `json:"city"`
+	Coordinates     *entityCoordinates           `json:"coordinates"`
+	SourceTaskId    string                       `json:"sourceTaskId"`
+	TagRefs         []string                     `json:"tagRefs"`
+	StructuredFacts *application.StructuredFacts `json:"structuredFacts"`
+	PrimarySource   *application.HomepageSource  `json:"primarySource"`
+	SourceURLs      []string                     `json:"sourceUrls"`
+}
+
+// entityCoordinates 对齐 quwoquan_data/schema/publish/entity.schema.json 的
+// coordinates（lat/lon 双精度、NULLABLE）。这是主页 location 的唯一入口：
+// 缺坐标的实体保持 location 为空，由 App「附近」入口自然缺席，不得就近推断。
+type entityCoordinates struct {
+	Lat *float64 `json:"lat"`
+	Lon *float64 `json:"lon"`
+}
+
+// geoPointFromCoordinates 把发布态坐标翻译成主页 GeoPoint；缺字段或越界一律
+// 返回 nil + 原因，由调用方按 issue 跳过坐标而非跳过整个主页。
+func geoPointFromCoordinates(coordinates *entityCoordinates) (*application.GeoPoint, string) {
+	if coordinates == nil {
+		return nil, ""
+	}
+	if coordinates.Lat == nil || coordinates.Lon == nil {
+		return nil, "coordinates 缺少 lat 或 lon"
+	}
+	point := application.GeoPoint{Latitude: *coordinates.Lat, Longitude: *coordinates.Lon}
+	if !point.InRange() {
+		return nil, fmt.Sprintf("coordinates (%v, %v) 越界或为缺省零点", *coordinates.Lat, *coordinates.Lon)
+	}
+	return &point, ""
 }
 
 var homepageSourceKinds = map[string]bool{
@@ -310,13 +339,25 @@ func LoadHomepageProjections(
 				categoryTags = append(categoryTags, trimmed)
 			}
 		}
+		location, geoIssue := geoPointFromCoordinates(header.Coordinates)
+		if geoIssue != "" {
+			issues = append(issues, fmt.Sprintf("%s: %s，主页 location 留空", entityRef, geoIssue))
+		}
+		// 缺证据或形状非法的事实字段在这里就被丢掉并报 issue：聚合还会再收敛一次，
+		// 但只有导入阶段能把「哪个实体的哪个字段被丢了」交回数据侧修。
+		facts, factIssues := application.SanitizeStructuredFacts(header.StructuredFacts)
+		for _, factIssue := range factIssues {
+			issues = append(issues, fmt.Sprintf("%s: structuredFacts %s，该字段不投影", entityRef, factIssue))
+		}
 		inputs = append(inputs, application.ImportedHomepageInput{
 			EntityRef:            entityRef,
 			Title:                title,
 			HomepageType:         homepageType,
 			City:                 strings.TrimSpace(header.City),
+			Location:             location,
 			IntroductionMarkdown: string(page),
 			IntroductionAssets:   assets,
+			StructuredFacts:      facts,
 			CategoryTags:         categoryTags,
 			SourceTaskID:         sourceTask,
 			PrimarySource:        header.PrimarySource,

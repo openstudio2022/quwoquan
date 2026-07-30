@@ -2,6 +2,7 @@
   "label": "夜市探店",
   "labelEn": "Night Market Visit",
   "description": "夜市美食探访",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

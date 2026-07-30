@@ -210,7 +210,7 @@ coverImage: asset://cover
             'assetId': 'cover',
             'fileName': 'cover.jpg',
             'sourceAssetRef': 'source/cover.jpg',
-            'publicSliceKey': 'media/image/s/runtime-preview/cover.jpg',
+            'publicSliceKey': 'media/image/s/runtime-preview/v1/cover.jpg',
           },
         ],
       };
@@ -238,7 +238,7 @@ coverImage: asset://cover
       expect(doc.html, contains('data-asset-id="cover"'));
       expect(
         doc.html,
-        contains(resolvedMedia('media/image/s/runtime-preview/cover.jpg')),
+        contains(resolvedMedia('media/image/s/runtime-preview/v1/cover.jpg')),
       );
       expect(doc.referencedAssetUrls, isNotEmpty);
       expect(doc.jsonLd['identifier'], 'sha256:pilot-daocheng');

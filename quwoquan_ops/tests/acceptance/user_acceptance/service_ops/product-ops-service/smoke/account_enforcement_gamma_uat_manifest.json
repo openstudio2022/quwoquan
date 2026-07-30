@@ -1,0 +1,79 @@
+{
+  "schema": "qwq.account-enforcement-gamma-uat-manifest",
+  "environment": "gamma",
+  "target": "gamma-local",
+  "composition": "production_remote",
+  "specRefs": [
+    "specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-003",
+    "specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003"
+  ],
+  "publicBaseRoles": [
+    "api",
+    "productOps"
+  ],
+  "operationScopes": {
+    "ops.account_enforcement_case.GetAccountEnforcementCase": "ops.account.enforcement.read",
+    "ops.account_enforcement_case.OpenAccountAppealCase": "ops.account.appeal.write",
+    "ops.account_enforcement_case.OpenAccountModerationCase": "ops.account.moderation.write",
+    "ops.account_enforcement_case.RetryAccountEnforcementDelivery": "ops.account.enforcement.recover",
+    "ops.account_enforcement_case.ReviewAccountEnforcementCase": "ops.account.enforcement.review"
+  },
+  "phaseOrder": [
+    "authorization_preflight",
+    "moderation_dual_approval",
+    "suspend_delivery",
+    "suspended_android_ios",
+    "appeal_dual_approval",
+    "restore_delivery",
+    "restored_android_ios",
+    "recoverable_delivery_failure",
+    "terminal_dead_letter",
+    "same_decision_recovery",
+    "observability_readback",
+    "cleanup"
+  ],
+  "deviceReports": {
+    "suspended": "test/user_acceptance/patrol/user/account_enforcement_suspended__user_acceptance_test.dart",
+    "restored": "test/user_acceptance/patrol/user/account_enforcement_restored__user_acceptance_test.dart",
+    "physicalPlatforms": [
+      "android",
+      "ios"
+    ]
+  },
+  "receiptSchemas": {
+    "evidence": "qwq.account-enforcement-gamma-evidence",
+    "journey": "qwq.account-enforcement-gamma-journey-receipt",
+    "caseResult": "qwq.account-enforcement-gamma-case-result"
+  },
+  "artifactKinds": [
+    "authorization",
+    "storage",
+    "user-account-suspend",
+    "user-account-restore",
+    "moderation",
+    "appeal",
+    "fault-injection",
+    "readiness",
+    "metric-delivery",
+    "metric-dlq",
+    "metric-readiness",
+    "log-readback",
+    "alert-readback",
+    "dlq-readback",
+    "cleanup"
+  ],
+  "assertionIds": [
+    "operator_oidc_and_scope_fail_closed",
+    "distinct_dual_approval_issues_one_suspend",
+    "postgres_transaction_and_outbox_are_atomic",
+    "service_identity_delivers_to_user_account",
+    "old_credentials_are_rejected",
+    "android_and_ios_show_suspended_recovery",
+    "appeal_restores_and_new_session_logs_in",
+    "android_and_ios_restore_remote_session",
+    "recoverable_delivery_failure_is_bounded",
+    "terminal_dlq_blocks_readiness_without_pii",
+    "same_decision_recovery_clears_readiness",
+    "trace_metrics_alerts_and_cleanup_align"
+  ]
+}

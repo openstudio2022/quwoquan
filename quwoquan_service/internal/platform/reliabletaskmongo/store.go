@@ -12,14 +12,15 @@ import (
 
 // Store 使用 MongoDB 持久化可靠任务事实、通知账本与租约。
 type Store struct {
-	db             *mongo.Database
-	outboxes       *mongo.Collection
-	tasks          *mongo.Collection
-	notifications  *mongo.Collection
-	ledgers        *mongo.Collection
-	attempts       *mongo.Collection
-	resultOutboxes *mongo.Collection
-	leases         *mongo.Collection
+	db               *mongo.Database
+	outboxes         *mongo.Collection
+	tasks            *mongo.Collection
+	notifications    *mongo.Collection
+	ledgers          *mongo.Collection
+	attempts         *mongo.Collection
+	resultOutboxes   *mongo.Collection
+	recoveryReceipts *mongo.Collection
+	leases           *mongo.Collection
 }
 
 var (
@@ -27,6 +28,7 @@ var (
 	_ reliabletask.ProviderAttemptLedgerStore       = (*Store)(nil)
 	_ reliabletask.ProviderAttemptResultOutboxStore = (*Store)(nil)
 	_ reliabletask.DLQRecoveryStore                 = (*Store)(nil)
+	_ reliabletask.IdempotentDLQRecoveryStore       = (*Store)(nil)
 	_ reliabletask.RetentionCleanupStore            = (*Store)(nil)
 	_ reliabletask.MetricsStore                     = (*Store)(nil)
 )
@@ -45,14 +47,15 @@ func NewNotificationDeliveryJobs(db *mongo.Database) *Store {
 
 func newStore(db *mongo.Database, notificationCollection, ledgerCollection string) *Store {
 	return &Store{
-		db:             db,
-		outboxes:       db.Collection("reliable_task_outbox"),
-		tasks:          db.Collection("reliable_async_task"),
-		notifications:  db.Collection(notificationCollection),
-		ledgers:        db.Collection(ledgerCollection),
-		attempts:       db.Collection("external_provider_attempt_ledger"),
-		resultOutboxes: db.Collection("external_interaction_result_outbox"),
-		leases:         db.Collection("reliable_task_leases"),
+		db:               db,
+		outboxes:         db.Collection("reliable_task_outbox"),
+		tasks:            db.Collection("reliable_async_task"),
+		notifications:    db.Collection(notificationCollection),
+		ledgers:          db.Collection(ledgerCollection),
+		attempts:         db.Collection("external_provider_attempt_ledger"),
+		resultOutboxes:   db.Collection("external_interaction_result_outbox"),
+		recoveryReceipts: db.Collection("reliable_task_recovery_receipts"),
+		leases:           db.Collection("reliable_task_leases"),
 	}
 }
 
@@ -137,6 +140,21 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 			},
 			Options: options.Index().
 				SetName("idx_ext_result_outbox_pending"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = s.recoveryReceipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "taskId", Value: 1}},
+			Options: options.Index().SetName("idx_reliable_task_recovery_receipt_task"),
+		},
+		{
+			Keys: bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().
+				SetName("idx_reliable_task_recovery_receipt_expiry").
+				SetExpireAfterSeconds(0),
 		},
 	})
 	if err != nil {

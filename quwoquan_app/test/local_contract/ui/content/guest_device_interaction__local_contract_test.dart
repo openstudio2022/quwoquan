@@ -18,7 +18,7 @@ class _GuestAuthStore implements AuthSessionStore {
       accessToken: '',
       refreshToken: '',
       ownerId: '',
-      activeSubAccountId: '',
+      activePersonaId: '',
       accountState: '',
       identityOrigin: '',
       installId: 'install-guest-001',
@@ -47,7 +47,7 @@ class _GuestAuthStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
@@ -73,6 +73,13 @@ void main() {
       expect(RegExp(r'^[0-9a-f]{32}$').hasMatch(a1), isTrue);
       expect(a1, a2, reason: '同一 installId 必须可复算');
       expect(a1, isNot(b), reason: '不同 installId 必须区分');
+    });
+
+    test('冻结 canonical salt 字节，既有安装身份不可漂移', () {
+      expect(
+        deriveDeviceActorId('install-guest-001'),
+        'fe1e74ae2d13dba372708a85bdaac910',
+      );
     });
 
     test('原始 installId 不出现在派生结果中（隐私安全）', () {

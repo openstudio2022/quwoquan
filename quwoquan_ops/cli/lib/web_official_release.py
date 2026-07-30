@@ -73,7 +73,7 @@ def package_web_official_release(
         shutil.copytree(build_root, release_root / "public")
 
     manifest = {
-        "schema": "qwq.public-web.release.v1",
+        "schema": "qwq.public-web.release",
         "environment": environment,
         "publicOrigin": public_origin,
         "releaseId": release_id,
@@ -138,12 +138,17 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
         "gamma": "gamma.quwoquan.com",
         "prod": "quwoquan.com",
     }[environment]
+    try:
+        parsed.port
+    except ValueError as error:
+        raise WebOfficialReleaseError(
+            f"{environment} Web origin must be https://{expected}"
+        ) from error
     if (
         parsed.scheme != "https"
         or parsed.hostname != expected
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.port is not None
         or parsed.path not in {"", "/"}
         or parsed.query
         or parsed.fragment
@@ -151,7 +156,10 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
         raise WebOfficialReleaseError(
             f"{environment} Web origin must be https://{expected}"
         )
-    return value
+    # Local runtime targets expose the canonical host through an isolated
+    # workstation port.  A distributable Web package is host-bound, so remove
+    # that transport-only port instead of persisting it as release identity.
+    return f"https://{expected}"
 
 
 def _verify_web_build(build_root: Path) -> None:

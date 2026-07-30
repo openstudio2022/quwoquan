@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the real canonical Flutter/iOS Simulator hot-restart smoke.
 
-The smoke deliberately launches through ``start_app_instance.sh``. That keeps
+The smoke deliberately launches through ``quwoquan_app/run.sh``. That keeps
 the Flutter CLI define set identical to a developer launch and makes a missing
 define fail before Flutter builds or installs the kernel.
 """
@@ -37,8 +37,8 @@ from verify_flutter_run_defines import validate_flutter_run_defines
 
 APP_DIR = Path(__file__).resolve().parents[2]
 ROOT = APP_DIR.parent
-LAUNCHER = APP_DIR / "scripts/device/start_app_instance.sh"
-ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+LAUNCHER = APP_DIR / "run.sh"
+ENVIRONMENTS = ("alpha",)
 IOS_BUNDLE = "com.example.quwoquanApp"
 
 
@@ -415,14 +415,8 @@ def main(argv: list[str] | None = None) -> int:
     command = [
         "bash",
         str(LAUNCHER),
-        "--env",
-        args.env,
-        "--device-id",
+        "-d",
         args.device_id,
-        "--instance-namespace",
-        "ios-hot-restart-smoke",
-        "--service-mode",
-        "ios-hot-restart-smoke",
     ]
     baseline_captured_at = dt.datetime.now()
     baseline_simulator_log = _read_simulator_startup_log(args.device_id)

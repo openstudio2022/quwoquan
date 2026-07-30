@@ -13,6 +13,7 @@ consumers:
 - app
 client_projection:
   dart_class: ContentPostDetailSlice
+  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
   external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
 fields:
 - name: postId
@@ -56,6 +57,8 @@ fields:
 - name: coverFrameTimeMs
 - name: location
 - name: locationName
+- name: geoTagRef
+- name: visitedAt
 - name: primaryHomepageId
 - name: canonicalEntityId
 - name: primaryHomepageType

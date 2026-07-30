@@ -125,6 +125,20 @@ class ServiceAssetScaffoldContractTest(unittest.TestCase):
                 self.assertTrue((service / required).is_file(), required)
             for forbidden in ("configs", "README.md"):
                 self.assertFalse((service / forbidden).exists())
+            deployment = (service / "deploy/base/deployment.yaml").read_text(
+                encoding="utf-8"
+            )
+            compose = (service / "deploy/compose.yaml").read_text(encoding="utf-8")
+            self.assertEqual(
+                deployment.count("quwoquan.io/image-version: package-required"),
+                2,
+            )
+            self.assertIn(
+                "fieldPath: metadata.annotations['quwoquan.io/image-version']",
+                deployment,
+            )
+            self.assertIn("_IMAGE:?fixed contract-probe-service image", compose)
+            self.assertIn("QWQ_COMPOSE_IMAGE_VERSION:?immutable image identity", compose)
 
     def test_scaffold_declares_object_first_single_track_contract(self) -> None:
         text = SCAFFOLD.read_text(encoding="utf-8")

@@ -24,7 +24,7 @@ var (
 // Invitation 是独立邀请归因聚合；审计字段通过 json:"-" 永不进入 HTTP 响应。
 type Invitation struct {
 	ID                    string     `json:"id"`
-	InviterSubAccountID   string     `json:"inviterSubAccountId"`
+	InviterPersonaID      string     `json:"inviterPersonaId"`
 	InviterOwnerAccountID string     `json:"-"`
 	Channel               string     `json:"channel"`
 	LinkCode              string     `json:"linkCode"`
@@ -40,7 +40,7 @@ type Invitation struct {
 
 func (invitation *Invitation) ValidateNew() error {
 	if strings.TrimSpace(invitation.ID) == "" ||
-		strings.TrimSpace(invitation.InviterSubAccountID) == "" ||
+		strings.TrimSpace(invitation.InviterPersonaID) == "" ||
 		strings.TrimSpace(invitation.InviterOwnerAccountID) == "" ||
 		strings.TrimSpace(invitation.Channel) == "" ||
 		strings.TrimSpace(invitation.LinkCode) == "" ||

@@ -10,7 +10,7 @@ import '../generated/recommendation/intersection_kind_metadata.g.dart';
 ///
 /// - String 常量：把 metadata 闭集固化为端侧分发键，消除魔法字符串散落
 ///   （如旧实体页 `'ask_xiaoqu'` 死分支——该值全仓从无产出）。
-/// - 分类判定（isAssistant / isCompanionAction）：一律委托 codegen
+/// - 分类判定（isAssistant / isGatheringAction）：一律委托 codegen
 ///   `IntersectionActionKeyMeta.dispatch`（M0.7 行动路由类别 dispatch 一等化），
 ///   端不再手写重社交/助手集合，杜绝与 registry 漂移的第二真相源。
 abstract final class IntersectionActionKeys {
@@ -29,11 +29,9 @@ abstract final class IntersectionActionKeys {
 
   // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯（与 registry actionHintLegend 同源）。
   static const String joinTopicRoom = 'join_topic_room';
-  static const String startCompanion = 'start_companion';
-  static const String joinTrip = 'join_trip';
-  static const String joinMeetup = 'join_meetup';
+  static const String startGathering = 'start_gathering';
+  static const String joinGathering = 'join_gathering';
   static const String meetNearby = 'meet_nearby';
-  static const String startVoiceRoom = 'start_voice_room';
   static const String expressInterest = 'express_interest';
   static const String viewOfficialDeals = 'view_official_deals';
   static const String bookTicket = 'book_ticket';
@@ -46,12 +44,12 @@ abstract final class IntersectionActionKeys {
     return IntersectionActionKeyMeta.of(actionKey)?.isAssistant ?? false;
   }
 
-  /// 同行 / 线下约伴类动作（dispatch==companion，即 start_companion / join_trip /
-  /// join_meetup / meet_nearby）：唯一驱动「有人同行」徽标与约伴专属落点。
+  /// 同行 / 线下约伴类动作（dispatch==gathering，即 start_gathering /
+  /// join_gathering / meet_nearby）：唯一驱动「有人同行」徽标与约伴专属落点。
   /// 真相源为 codegen `IntersectionActionKeyMeta.dispatch`（M0.7）；话题房 / 语音房 /
   /// 心动（dispatch==connect）与私信（dispatch==message）不属此类，不再误标为同行。
-  static bool isCompanionAction(String actionKey) {
-    return IntersectionActionKeyMeta.of(actionKey)?.isCompanion ?? false;
+  static bool isGatheringAction(String actionKey) {
+    return IntersectionActionKeyMeta.of(actionKey)?.isGathering ?? false;
   }
 
   /// 商用转化动作（dispatch==commerce）：真实渠道和法务条款未就绪时必须保持

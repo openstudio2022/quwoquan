@@ -135,6 +135,123 @@ func TestSubjectFollow_FullChain(t *testing.T) {
 	}
 }
 
+// TestSubjectFollow_LocationReadAndVisitClosure 固定 FollowSubjectKind 的 location
+// 分支：写聚合、following_subjects 读模型与访问水位必须使用同一值域，不能出现
+// “可关注但不可读/不可清红点”的半条链路。
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/spec.md#sit-001
+func TestSubjectFollow_LocationReadAndVisitClosure(t *testing.T) {
+	requireMongoBackedRuntime(t)
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "sf_location_user", "location-user")
+	createTestPersonaFull(
+		t,
+		"",
+		"sf_location_user",
+		"ps_sf_location",
+		"地点关注者",
+		"default",
+		true,
+	)
+
+	headers := authHeadersForPersona("sf_location_user", "ps_sf_location")
+	follow := doRequest(
+		t,
+		http.MethodPost,
+		"/relationships/subjects/location/location_shenzhen/follow",
+		`{"source":"location_detail"}`,
+		headers,
+	)
+	if follow.Code != http.StatusOK {
+		t.Fatalf("follow location status=%d body=%s", follow.Code, follow.Body.String())
+	}
+	waitForFollowingSubjectRow(
+		t,
+		"ps_sf_location",
+		"location",
+		"location_shenzhen",
+	)
+
+	list := doRequest(
+		t,
+		http.MethodGet,
+		"/user/following-subjects?subjectType=location",
+		"",
+		headers,
+	)
+	if list.Code != http.StatusOK {
+		t.Fatalf("list location subjects status=%d body=%s", list.Code, list.Body.String())
+	}
+	var page struct {
+		Items []struct {
+			SubjectID   string `json:"subjectId"`
+			SubjectType string `json:"subjectType"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(list.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decode location subjects: %v", err)
+	}
+	if len(page.Items) != 1 || page.Items[0].SubjectID != "location_shenzhen" ||
+		page.Items[0].SubjectType != "location" {
+		t.Fatalf("unexpected location subjects: %+v", page.Items)
+	}
+
+	visit := doRequest(
+		t,
+		http.MethodPost,
+		"/user/followed-subjects/location/location_shenzhen:mark-visited",
+		`{"subjectId":"location_shenzhen","subjectType":"location","clientRequestId":"visit-location-1"}`,
+		headers,
+	)
+	if visit.Code != http.StatusOK {
+		t.Fatalf("mark location visited status=%d body=%s", visit.Code, visit.Body.String())
+	}
+	var result struct {
+		SubjectID        string `json:"subjectId"`
+		SubjectType      string `json:"subjectType"`
+		HasUnreadChanges bool   `json:"hasUnreadChanges"`
+	}
+	if err := json.Unmarshal(visit.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode location visit: %v", err)
+	}
+	if result.SubjectID != "location_shenzhen" || result.SubjectType != "location" ||
+		result.HasUnreadChanges {
+		t.Fatalf("unexpected location visit result: %+v", result)
+	}
+
+	// 新请求回读投影，证明 mark-visited 不只是命令响应自称成功：持久水位
+	// 必须已经清除 following_subjects 的红点并可跨请求观察。
+	readback := doRequest(
+		t,
+		http.MethodGet,
+		"/user/following-subjects?subjectType=location",
+		"",
+		headers,
+	)
+	if readback.Code != http.StatusOK {
+		t.Fatalf("read back visited location status=%d body=%s", readback.Code, readback.Body.String())
+	}
+	var visitedPage struct {
+		Items []struct {
+			SubjectID         string `json:"subjectId"`
+			SubjectType       string `json:"subjectType"`
+			LastVisitedAt     string `json:"lastVisitedAt"`
+			UnreadChangeCount int64  `json:"unreadChangeCount"`
+			HasUnreadChanges  bool   `json:"hasUnreadChanges"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(readback.Body.Bytes(), &visitedPage); err != nil {
+		t.Fatalf("decode visited location readback: %v", err)
+	}
+	if len(visitedPage.Items) != 1 ||
+		visitedPage.Items[0].SubjectID != "location_shenzhen" ||
+		visitedPage.Items[0].SubjectType != "location" ||
+		visitedPage.Items[0].LastVisitedAt == "" ||
+		visitedPage.Items[0].UnreadChangeCount != 0 ||
+		visitedPage.Items[0].HasUnreadChanges {
+		t.Fatalf("visited location projection did not converge: %+v", visitedPage.Items)
+	}
+}
+
 // TestSubjectFollow_IdempotentReplayAndUnfollow 验证 set/unset 命名迁移语义：
 // 重复 follow 幂等重放不推进版本、不追加事件；unfollow 后投影行删除。
 func TestSubjectFollow_IdempotentReplayAndUnfollow(t *testing.T) {
@@ -195,7 +312,7 @@ func TestSubjectFollow_IdempotentReplayAndUnfollow(t *testing.T) {
 	for {
 		count, err := mongoDB.Collection("following_subjects").CountDocuments(
 			context.Background(),
-			bson.M{"viewerSubAccountId": "ps_sf_2", "subjectType": "circle", "subjectId": "circle_sichuan"},
+			bson.M{"viewerPersonaId": "ps_sf_2", "subjectType": "circle", "subjectId": "circle_sichuan"},
 		)
 		if err != nil {
 			t.Fatalf("count projection rows: %v", err)
@@ -248,7 +365,7 @@ func TestSubjectFollow_RejectsPersonaSubjectType(t *testing.T) {
 }
 
 // TestPersonaFollow_ProjectsIntoFollowingSubjects 验证 PersonaFollowStateChanged
-// 事件驱动 following_subjects 投影的 user 主体行（首页关注频道跨域聚合）。
+// 事件驱动 following_subjects 投影的 persona 主体行（首页关注频道跨域聚合）。
 func TestPersonaFollow_ProjectsIntoFollowingSubjects(t *testing.T) {
 	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
@@ -260,26 +377,27 @@ func TestPersonaFollow_ProjectsIntoFollowingSubjects(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_sf_5/follow",
+		"/user/personas/ps_sf_5/follow",
 		"",
 		authHeadersForPersona("sf_user_4", "ps_sf_4"),
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("persona follow status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	waitForFollowingSubjectRow(t, "ps_sf_4", "user", "ps_sf_5")
+	waitForFollowingSubjectRow(t, "ps_sf_4", "persona", "ps_sf_5")
 
 	listRec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/following-subjects?subjectType=user",
+		"/user/following-subjects?subjectType=persona",
 		"",
 		authHeadersForPersona("sf_user_4", "ps_sf_4"),
 	)
 	var page struct {
 		Items []struct {
-			SubjectID   string `json:"subjectId"`
-			DisplayName string `json:"displayName"`
+			SubjectID     string `json:"subjectId"`
+			DisplayName   string `json:"displayName"`
+			TargetRouteID string `json:"targetRouteId"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(listRec.Body.Bytes(), &page); err != nil {
@@ -291,6 +409,9 @@ func TestPersonaFollow_ProjectsIntoFollowingSubjects(t *testing.T) {
 	if page.Items[0].DisplayName != "被关注者" {
 		t.Fatalf("user row must be enriched with persona display name: %+v", page.Items[0])
 	}
+	if page.Items[0].TargetRouteID != "user_profile" {
+		t.Fatalf("persona row must retain the canonical profile route: %+v", page.Items[0])
+	}
 }
 
 func waitForFollowingSubjectRow(t *testing.T, personaID, subjectType, subjectID string) {
@@ -300,9 +421,9 @@ func waitForFollowingSubjectRow(t *testing.T, personaID, subjectType, subjectID 
 		count, err := mongoDB.Collection("following_subjects").CountDocuments(
 			context.Background(),
 			bson.M{
-				"viewerSubAccountId": personaID,
-				"subjectType":        subjectType,
-				"subjectId":          subjectID,
+				"viewerPersonaId": personaID,
+				"subjectType":     subjectType,
+				"subjectId":       subjectID,
 			},
 		)
 		if err != nil {

@@ -18,6 +18,7 @@ fields:
   - name: problemClass
     source: problemClass
     dart_type: String
+    enum_ref: ProblemClass
     json_key: problemClass
   - name: shell
     source: shell

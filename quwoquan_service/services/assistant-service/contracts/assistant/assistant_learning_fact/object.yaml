@@ -3,7 +3,6 @@ description: 助手用户反馈、交互结果与服务评分的唯一不可变�
 identity:
   fields:
   - eventId
-  - eventVersion
   version_source: immutable
 access:
   commands: append_only_sink
@@ -62,8 +61,8 @@ capabilities:
 - deduplicated_append
 - transactional_outbox
 business_rules:
-- eventId 与 eventVersion 共同标识唯一事实；相同 identity 与 payload digest 重放返回同一 receipt
-- 相同 eventId 与 eventVersion 但 payload digest 不同必须冲突，不得静默吞掉或覆盖
+- eventId 是唯一事实身份；相同 eventId 与 payload digest 重放返回同一 receipt
+- 相同 eventId 但 payload digest 不同必须冲突，不得静默吞掉或覆盖
 - userId、personaId 与页面上下文只能来自 verified principal 和可信请求上下文
 - assistantTurnId 必须属于当前 verified principal；triggerMessageId 若给出必须与该 turn 的可信触发消息一致
 - referralSource、eventType 与 feedbackType 只接受 metadata 枚举的 canonical wire 值
@@ -71,5 +70,4 @@ business_rules:
 - 公开 outbox、投影和默认训练不得包含 queryText、answerText、feedbackText 或 correctionText 原文
 - trainingEligible 必须显式给出；敏感原文字段存在时默认不得训练
 lifecycle:
-  states:
-  - recorded
+  immutable: true

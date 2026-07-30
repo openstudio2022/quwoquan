@@ -2,6 +2,10 @@
   "label": "雪山",
   "labelEn": "Snow Mountain",
   "description": "雪山冰川与山岳景观",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/用户/兴趣偏好/旅行摄影/雪山"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

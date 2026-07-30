@@ -2,6 +2,8 @@ errors:
 - code: OPS.USER.app_release_query_invalid
   kind: VALIDATION
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [GetAppRecoveryVersion]}
   message_key: opsAppReleaseQueryInvalid
   default_message: 版本查询参数无效
   recovery:
@@ -10,6 +12,8 @@ errors:
 - code: OPS.SYSTEM.app_release_unavailable
   kind: UNAVAILABLE
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [GetAppRecoveryVersion]}
   message_key: opsAppReleaseUnavailable
   default_message: 版本信息暂不可用
   recovery:

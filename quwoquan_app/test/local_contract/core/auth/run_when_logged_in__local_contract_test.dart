@@ -6,8 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../support/fakes/test_auth_facets.dart';
 
 class _TestAuthSessionStore implements AuthSessionStore {
   _TestAuthSessionStore({required this.authenticated});
@@ -20,7 +23,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
       accessToken: authenticated ? 'access-token' : '',
       refreshToken: authenticated ? 'refresh-token' : '',
       ownerId: authenticated ? 'user_001' : '',
-      activeSubAccountId: authenticated ? 'user_001' : '',
+      activePersonaId: authenticated ? 'user_001' : '',
       accountState: authenticated ? 'active' : '',
       identityOrigin: authenticated ? 'phone' : '',
       installId: 'install-id',
@@ -49,7 +52,7 @@ class _TestAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
@@ -73,6 +76,7 @@ void main() {
   });
 
   Widget buildApp({required bool authenticated}) {
+    final authFacets = TestAuthFacets();
     final router = GoRouter(
       initialLocation: '/',
       routes: <RouteBase>[
@@ -111,6 +115,17 @@ void main() {
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
+        ),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          authFacets,
+        ),
+        activePersonaContextProvider.overrideWith(
+          (_) async => ActivePersonaContextViewData.fallback(
+            personaId: authenticated ? 'user_001' : '',
+            ownerUserId: authenticated ? 'user_001' : '',
+            displayName: authenticated ? '测试用户' : '',
+            avatarUrl: '',
+          ),
         ),
       ],
       child: CupertinoApp.router(

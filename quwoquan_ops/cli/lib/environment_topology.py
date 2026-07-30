@@ -18,29 +18,17 @@ TARGETS = (
     "prod-sim",
     "prod-hosted",
 )
-URL_FIELDS = (
-    "api",
-    "realtime",
-    "rtc",
-    "productOps",
-    "publicWeb",
-    "appDownload",
-    "legal",
-    "mediaAvatar",
-    "mediaImage",
-    "mediaVideo",
-    "mediaUpload",
+ROLE_CATALOG_PATH = DEFAULT_PATH / "domain_governance.yaml"
+_ROLE_CATALOG = {
+    str(entry["role"]): entry
+    for entry in load_json_yaml(ROLE_CATALOG_PATH)["endpointRegistry"]
+}
+URL_FIELDS = tuple(_ROLE_CATALOG)
+URL_GOVERNANCE_FIELDS = frozenset(
+    {"name", "role", "classification", "owner", "exposure", "consumers"}
 )
-SECURE_HTTP_FIELDS = (
-    "api",
-    "productOps",
-    "publicWeb",
-    "appDownload",
-    "legal",
-    "mediaAvatar",
-    "mediaImage",
-    "mediaVideo",
-    "mediaUpload",
+URL_SHAPE_FIELDS = frozenset(
+    {"scheme", "host", "portRole", "pathBase", "tlsProfile"}
 )
 REQUIRED_SUBNETS = ("edge", "media", "service", "data")
 REQUIRED_APP_POLICY = (
@@ -82,52 +70,6 @@ LOCAL_ORIGIN_PORT_ROLES = {
 DATA_RELEASE_MODES = {"projection-only", "local-import", "hosted-import"}
 DATA_RELEASE_ENV_KEY_RE = re.compile(r"^QWQ_[A-Z0-9_]+$")
 WORKLOAD_PLANES = {"edge", "media", "service", "data"}
-ROLE_SCHEMES = {
-    "api": "https",
-    "realtime": "wss",
-    "rtc": "wss",
-    "productOps": "https",
-    "publicWeb": "https",
-    "appDownload": "https",
-    "legal": "https",
-    "mediaAvatar": "https",
-    "mediaImage": "https",
-    "mediaVideo": "https",
-    "mediaUpload": "https",
-}
-ROLE_PATH_BASES = {
-    "api": "/",
-    "realtime": "/",
-    "rtc": "/",
-    "productOps": "/",
-    "publicWeb": "/",
-    "appDownload": "/download",
-    "legal": "/legal",
-    "mediaAvatar": "/media/avatar",
-    "mediaImage": "/media/image",
-    "mediaVideo": "/media/video",
-    "mediaUpload": "/",
-}
-ROLE_HOST_LABELS = {
-    "api": "api",
-    "realtime": "api",
-    "rtc": "rtc",
-    "productOps": "ops",
-    "publicWeb": "",
-    "appDownload": "cdn",
-    "legal": "",
-    "mediaAvatar": "cdn",
-    "mediaImage": "cdn",
-    "mediaVideo": "cdn",
-    "mediaUpload": "upload",
-}
-TARGET_HOST_ENV_LABELS = {
-    "alpha-local": "alpha",
-    "beta-local": "beta",
-    "gamma-local": "gamma",
-    "prod-sim": "sim",
-    "prod-hosted": "",
-}
 LOCAL_TLS_PROFILE_BY_TARGET = {
     "alpha-local": "acme-dns01-alpha",
     "beta-local": "acme-dns01-beta",
@@ -251,7 +193,14 @@ def _resolve_target_url_roles(
         override = overrides.get(field) or {}
         if not isinstance(override, dict):
             raise TypeError(f"urlOverrides.{field} must be a mapping")
-        role = {**base, **override}
+        governance = _ROLE_CATALOG[field]
+        overlap = sorted(set(governance).intersection(base))
+        if overlap:
+            raise ValueError(
+                f"urlRoles.{field} duplicates domain governance fields: {overlap}"
+            )
+        role_shape = {**base, **override}
+        role = {**governance, **role_shape}
         port_role = role.get("portRole")
         port: int | None = None
         if backend == "local":
@@ -745,40 +694,38 @@ def _validate_url_role_definition(
     role: dict[str, Any],
 ) -> list[str]:
     issues: list[str] = []
-    allowed_fields = {
-        "exposure",
-        "scheme",
-        "host",
-        "portRole",
-        "pathBase",
-        "tlsProfile",
-        "consumers",
-    }
-    unknown = sorted(set(role) - allowed_fields)
-    if unknown:
-        issues.append(f"{label} contains unsupported fields: {unknown}")
-    if role.get("exposure") != "public":
-        issues.append(f"{label}.exposure must be public")
-    if role.get("scheme") != ROLE_SCHEMES[field]:
-        issues.append(f"{label}.scheme must be {ROLE_SCHEMES[field]}")
+    actual_fields = set(role)
+    if actual_fields != URL_SHAPE_FIELDS:
+        missing = sorted(URL_SHAPE_FIELDS - actual_fields)
+        unsupported = sorted(actual_fields - URL_SHAPE_FIELDS)
+        if missing:
+            issues.append(f"{label} is missing URL shape fields: {missing}")
+        if unsupported:
+            issues.append(
+                f"{label} duplicates governance or contains unsupported fields: "
+                f"{unsupported}"
+            )
+    scheme = str(role.get("scheme") or "").strip()
+    if scheme not in {"https", "wss"}:
+        issues.append(f"{label}.scheme must be https or wss")
     host = str(role.get("host") or "").strip()
     if not re.fullmatch(
         r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+quwoquan\.com",
         host,
     ) and host != "quwoquan.com":
         issues.append(f"{label}.host must be a canonical quwoquan.com hostname")
-    if role.get("pathBase") != ROLE_PATH_BASES[field]:
-        issues.append(f"{label}.pathBase must be {ROLE_PATH_BASES[field]}")
+    path_base = str(role.get("pathBase") or "").strip()
+    if (
+        not path_base.startswith("/")
+        or "//" in path_base
+        or "?" in path_base
+        or "#" in path_base
+        or ".." in Path(path_base).parts
+    ):
+        issues.append(f"{label}.pathBase must be a canonical absolute path")
     tls_profile = str(role.get("tlsProfile") or "").strip()
     if not tls_profile:
         issues.append(f"{label}.tlsProfile is required")
-    consumers = role.get("consumers")
-    if (
-        not isinstance(consumers, list)
-        or not consumers
-        or any(not isinstance(item, str) or not item.strip() for item in consumers)
-    ):
-        issues.append(f"{label}.consumers must be a non-empty string list")
     port_role = role.get("portRole")
     if port_role is not None and (
         not isinstance(port_role, str)
@@ -796,15 +743,21 @@ def _validate_target_public_base(
 ) -> list[str]:
     issues: list[str] = []
     parsed = urlparse(value)
-    if parsed.scheme != ROLE_SCHEMES[field]:
-        issues.append(f"{label} must use {ROLE_SCHEMES[field]}://")
-    expected_host = _expected_role_host(target_name, field)
-    if parsed.hostname != expected_host:
-        issues.append(f"{label} host must be {expected_host}, got {parsed.hostname}")
-    expected_path = ROLE_PATH_BASES[field]
+    if parsed.scheme not in {"https", "wss"}:
+        issues.append(f"{label} must use a secure public scheme")
+    host = parsed.hostname or ""
+    if not re.fullmatch(
+        r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+quwoquan\.com",
+        host,
+    ) and host != "quwoquan.com":
+        issues.append(f"{label} must use a canonical quwoquan.com hostname")
     actual_path = parsed.path or "/"
-    if actual_path != expected_path:
-        issues.append(f"{label} path must be {expected_path}, got {actual_path}")
+    if (
+        not actual_path.startswith("/")
+        or "//" in actual_path
+        or ".." in Path(actual_path).parts
+    ):
+        issues.append(f"{label} path must be canonical")
     if parsed.username or parsed.password:
         issues.append(f"{label} must not contain userinfo")
     if parsed.query or parsed.fragment:
@@ -812,18 +765,6 @@ def _validate_target_public_base(
     if target_name == "prod-hosted" and _url_port(value) is not None:
         issues.append(f"{label} must use implicit port 443")
     return issues
-
-
-def _expected_role_host(target_name: str, field: str) -> str:
-    env_label = TARGET_HOST_ENV_LABELS[target_name]
-    role_label = ROLE_HOST_LABELS[field]
-    if not env_label:
-        return f"{role_label}.quwoquan.com" if role_label else "quwoquan.com"
-    if role_label:
-        return f"{role_label}.{env_label}.quwoquan.com"
-    return f"{env_label}.quwoquan.com"
-
-
 def _url_host(value: str) -> str:
     return (urlparse(value).hostname or "").lower()
 

@@ -221,18 +221,33 @@ abstract class _ChatConversationPageActionsState
     return false;
   }
 
-  void _openMentionProfile(String targetId) {
-    final resolved = targetId.trim();
-    if (resolved.isEmpty || resolved == '__all__' || resolved == 'assistant') {
-      return;
+  String _memberUserHandle(String personaId) {
+    final normalizedPersonaId = personaId.trim();
+    if (normalizedPersonaId.isEmpty) {
+      return '';
     }
     final members = ref
         .read(conversationMembersProvider(widget.conversationId))
         .members;
     for (final member in members) {
-      if (member.userId == resolved && member.memberType == 'assistant') {
-        return;
+      if (member.userId == normalizedPersonaId &&
+          member.memberType != 'assistant') {
+        return member.userHandle.trim();
       }
+    }
+    return '';
+  }
+
+  void _openMentionProfile(String targetId) {
+    final personaId = targetId.trim();
+    if (personaId.isEmpty ||
+        personaId == '__all__' ||
+        personaId == 'assistant') {
+      return;
+    }
+    final userHandle = _memberUserHandle(personaId);
+    if (userHandle.isEmpty) {
+      return;
     }
     unawaited(
       ref
@@ -245,8 +260,8 @@ abstract class _ChatConversationPageActionsState
           ),
     );
     context.push(
-      AppRoutePaths.userProfile(username: resolved),
-      extra: UserProfileRouteExtra(subAccountId: resolved),
+      AppRoutePaths.userProfile(userHandle: userHandle),
+      extra: UserProfileRouteExtra(personaId: personaId),
     );
   }
 

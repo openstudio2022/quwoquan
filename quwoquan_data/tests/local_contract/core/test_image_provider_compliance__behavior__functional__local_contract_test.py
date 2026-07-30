@@ -116,21 +116,21 @@ def test_p4b_full_per_image_authorization_passes_gate():
     assert verdict["passed"], verdict["issues"]
 
 
-def test_p4b_travel_missing_authorization_is_audited_without_blocking():
+def test_p4b_travel_missing_authorization_is_blocked():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0].pop("authorizationProof")
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
-    assert verdict["passed"] is True, verdict["issues"]
+    assert verdict["passed"] is False
     assert verdict["rightsAuditStatus"] == "unverified"
     assert any("authorizationProof" in issue for issue in verdict["rightsAuditIssues"])
 
 
-def test_p4b_travel_unsupported_license_is_audited_without_blocking():
+def test_p4b_travel_unsupported_license_is_blocked():
     bad = copy.deepcopy(_tuchong_collection())
     bad["images"][0]["license"] = "CC BY-NC 4.0"
     bad["images"][0]["termsUrl"] = "https://creativecommons.org/licenses/by-nc/4.0/"
     verdict = _collection_gate(bad, entity_id="九寨沟", vertical="travel")
-    assert verdict["passed"] is True, verdict["issues"]
+    assert verdict["passed"] is False
     assert verdict["rightsAuditStatus"] == "unverified"
     assert verdict["rightsAuditIssues"]
 

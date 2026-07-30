@@ -120,11 +120,11 @@ class MicroBatcher:
         *,
         key: str,
         scenario: str,
-        model_version: str,
+        scorer_kind: str,
         compute: Callable[[], ModelScoreResponse],
     ) -> ModelScoreResponse:
         if self._window_s <= 0:
-            record_score_batch(scenario, model_version, "direct", 1)
+            record_score_batch(scenario, scorer_kind, "direct", 1)
             return compute()
 
         with self._lock:
@@ -145,7 +145,7 @@ class MicroBatcher:
                     state.result = result
                     state.done = True
                     state.condition.notify_all()
-                record_score_batch(scenario, model_version, "coalesced", state.waiters)
+                record_score_batch(scenario, scorer_kind, "coalesced", state.waiters)
                 return result
             except BaseException as exc:
                 with state.condition:
@@ -178,10 +178,10 @@ class _BatchState:
         self.condition = threading.Condition()
 
 
-def score_cache_key(body: ModelScoreRequest, model_version: str) -> str:
+def score_cache_key(body: ModelScoreRequest, scorer_kind: str) -> str:
     payload = {
         "scenario": body.scenario,
-        "modelVersion": model_version,
+        "scorerKind": scorer_kind,
         "userFeatures": body.userFeatures or {},
         "sessionSignals": body.sessionSignals or {},
         "context": body.context or {},
@@ -210,21 +210,21 @@ def clear_score_cache() -> None:
 def score_with_capacity_controls(
     body: ModelScoreRequest,
     *,
-    model_version: str,
+    scorer_kind: str,
     compute: Callable[[], ModelScoreResponse],
 ) -> ModelScoreResponse:
-    key = score_cache_key(body, model_version)
+    key = score_cache_key(body, scorer_kind)
     cached = _score_cache.get(key)
     if cached is not None:
-        record_score_cache_hit(body.scenario, model_version)
+        record_score_cache_hit(body.scenario, scorer_kind)
         return cached
 
-    record_score_cache_miss(body.scenario, model_version)
+    record_score_cache_miss(body.scenario, scorer_kind)
     started = time.perf_counter()
     result = _micro_batcher.run(
         key=key,
         scenario=body.scenario,
-        model_version=model_version,
+        scorer_kind=scorer_kind,
         compute=compute,
     )
     elapsed_ms = (time.perf_counter() - started) * 1000.0

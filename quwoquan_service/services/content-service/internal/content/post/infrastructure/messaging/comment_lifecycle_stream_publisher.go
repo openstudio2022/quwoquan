@@ -43,7 +43,7 @@ func (publisher *CommentLifecycleStreamPublisher) Publish(ctx context.Context, e
 	_, err := publisher.redis.XAdd(ctx, CommentLifecycleStream, map[string]string{
 		"eventId":          event.EventID,
 		"eventType":        event.EventType,
-		"aggregateType":    "Comment",
+		"aggregateType":    commentEventAggregateType(event.EventType),
 		"aggregateId":      event.AggregateID,
 		"aggregateVersion": strconv.FormatInt(event.AggregateVersion, 10),
 		"payload":          string(event.Payload),

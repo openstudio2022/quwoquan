@@ -2,6 +2,7 @@
   "label": "艺术",
   "labelEn": "Arts",
   "description": "艺术、设计、展览、建筑、电影、音乐与手作兴趣",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

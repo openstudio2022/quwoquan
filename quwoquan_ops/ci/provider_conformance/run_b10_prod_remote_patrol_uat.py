@@ -81,7 +81,7 @@ def _request_json(
         "Accept": "application/json",
         "X-Client-Page-Id": "rtc.provider.b10.prod_remote_uat",
         "X-Client-User-Id": owner_id,
-        "X-Client-Sub-Account-Id": persona_id,
+        "X-Client-Persona-Id": persona_id,
         "X-Request-Id": f"B10.{uuid.uuid4().hex}",
         "X-Trace-Id": f"B10.{uuid.uuid4().hex}",
     }
@@ -282,7 +282,6 @@ def _load_operator_receipts(*, call_ids: tuple[str, ...]) -> dict[str, Any]:
         raise ValueError("QWQ_B10_OPERATOR_READBACK_PATH must contain valid JSON") from exc
     required = {
         "schema",
-        "version",
         "imageDigest",
         "configDigest",
         "contractGraphDigest",
@@ -301,7 +300,6 @@ def _load_operator_receipts(*, call_ids: tuple[str, ...]) -> dict[str, Any]:
         not isinstance(payload, dict)
         or set(payload) != required
         or payload.get("schema") != "b10-prod-operator-readback"
-        or payload.get("version") != 1
     ):
         raise ValueError("B10 operator readback has an invalid schema")
     expected_digests = {
@@ -535,7 +533,7 @@ def _role_environment(
             "TEST_AUTH_TOKEN": auth["token"],
             "TEST_REFRESH_TOKEN": auth["refresh"],
             "APP_CURRENT_OWNER_ID": auth["owner"],
-            "APP_CURRENT_SUB_ACCOUNT_ID": auth["persona"],
+            "APP_CURRENT_PERSONA_ID": auth["persona"],
         }
     )
     return environment
@@ -722,7 +720,8 @@ def _build_readback(
     operator: Mapping[str, Any],
     ios_device: str,
     android_device: str,
-    app_version: str,
+    ios_application_digest: str,
+    android_application_digest: str,
     call_ids: list[str],
     journey_digests: list[str],
 ) -> dict[str, Any]:
@@ -754,7 +753,6 @@ def _build_readback(
     )
     return {
         "schema": "b10-remote-uat-readback",
-        "version": 1,
         "status": "passed",
         "capabilityId": _required("QWQ_B10_REMOTE_UAT_CAPABILITY_ID"),
         "adapterId": _required("QWQ_B10_REMOTE_UAT_ADAPTER_ID"),
@@ -768,13 +766,13 @@ def _build_readback(
             {
                 "platform": "ios",
                 "deviceHash": _device_hash(ios_device),
-                "appVersion": app_version,
+                "applicationDigest": ios_application_digest,
                 "caseDirection": "ios_to_android",
             },
             {
                 "platform": "android",
                 "deviceHash": _device_hash(android_device),
-                "appVersion": app_version,
+                "applicationDigest": android_application_digest,
                 "caseDirection": "android_to_ios",
             },
         ],
@@ -829,7 +827,12 @@ def main() -> int:
     android_device = _required("QWQ_B10_ANDROID_DEVICE_ID")
     if ios_device == android_device:
         raise ValueError("B10 Prod Remote Patrol requires distinct iOS and Android devices")
-    app_version = _required("QWQ_B10_APP_VERSION")
+    ios_application_digest = _required("QWQ_B10_IOS_APPLICATION_DIGEST")
+    android_application_digest = _required("QWQ_B10_ANDROID_APPLICATION_DIGEST")
+    if not _SHA256_RE.fullmatch(ios_application_digest) or not _SHA256_RE.fullmatch(
+        android_application_digest
+    ):
+        raise ValueError("B10 application identities must be immutable sha256 digests")
 
     ios_to_android_id, ios_to_android_digest = _run_direction(
         api_base=api_base,
@@ -859,7 +862,8 @@ def main() -> int:
         ),
         ios_device=ios_device,
         android_device=android_device,
-        app_version=app_version,
+        ios_application_digest=ios_application_digest,
+        android_application_digest=android_application_digest,
         call_ids=[ios_to_android_id, android_to_ios_id],
         journey_digests=[ios_to_android_digest, android_to_ios_digest],
     )

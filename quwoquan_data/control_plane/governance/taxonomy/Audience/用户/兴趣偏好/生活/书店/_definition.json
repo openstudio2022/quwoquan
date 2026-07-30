@@ -2,6 +2,7 @@
   "label": "书店",
   "labelEn": "Bookstore",
   "description": "喜欢书店、独立书店与城市文化空间",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

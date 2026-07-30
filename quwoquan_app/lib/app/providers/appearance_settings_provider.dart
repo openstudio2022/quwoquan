@@ -21,7 +21,7 @@ class AppearanceSettingsState {
         source: AppearanceSettingsSource.systemDefault,
         ownerDefaultThemeMode: AppearanceThemeMode.system,
         ownerDefaultFontSizePreset: AppearanceFontSizePreset.md,
-        hasSubAccountOverride: false,
+        hasPersonaOverride: false,
         version: 0,
         updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
       ),
@@ -186,17 +186,17 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
           source: AppearanceSettingsSource.ownerDefault,
           ownerDefaultThemeMode: mutation.themeMode,
           ownerDefaultFontSizePreset: mutation.fontSizePreset,
-          hasSubAccountOverride: false,
+          hasPersonaOverride: false,
           version: current.version + 1,
           updatedAt: now,
           pendingSync: true,
         );
-      case AppearanceApplyScope.currentSubAccount:
+      case AppearanceApplyScope.currentPersona:
         return current.copyWith(
           themeMode: mutation.themeMode,
           fontSizePreset: mutation.fontSizePreset,
           source: AppearanceSettingsSource.subOverride,
-          hasSubAccountOverride: true,
+          hasPersonaOverride: true,
           version: current.version + 1,
           updatedAt: now,
           pendingSync: true,
@@ -206,7 +206,7 @@ class AppearanceSettingsController extends Notifier<AppearanceSettingsState> {
           themeMode: current.ownerDefaultThemeMode,
           fontSizePreset: current.ownerDefaultFontSizePreset,
           source: AppearanceSettingsSource.ownerDefault,
-          hasSubAccountOverride: false,
+          hasPersonaOverride: false,
           version: current.version + 1,
           updatedAt: now,
           pendingSync: true,

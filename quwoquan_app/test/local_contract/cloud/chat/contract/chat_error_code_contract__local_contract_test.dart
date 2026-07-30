@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 
-/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 14 个稳定错误码
+/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中的稳定错误码
 ///
 /// 三维度覆盖：
 ///   常规契约  — 每个已知错误码正确解析，错误码解析与状态码正确
@@ -38,10 +38,9 @@ void main() {
       expect(code.httpStatus, 409);
     });
 
-    test('parse rate_limited → rateLimited', () {
+    test('service-local rate_limited 已退役并 fail-closed 为 unknown', () {
       final code = ChatErrorCode.fromCode('CHAT.USER.rate_limited');
-      expect(code, ChatErrorCode.rateLimited);
-      expect(code.httpStatus, 429);
+      expect(code, ChatErrorCode.unknown);
     });
 
     test('parse not_mutual → notMutual', () {

@@ -8,19 +8,22 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"quwoquan_service/runtime/boundedrecord"
 )
 
 // memoryClient implements Client using in-memory maps.
 // Thread-safe, suitable for dev/test environments.
 type memoryClient struct {
-	mu      sync.RWMutex
-	strings map[string]memEntry
-	hashes  map[string]map[string]string
-	sets    map[string]map[string]struct{}
-	zsets   map[string]map[string]float64
-	streams map[string]*memStream
-	subs    map[string][]chan Message
-	subsMu  sync.RWMutex
+	mu                     sync.RWMutex
+	strings                map[string]memEntry
+	hashes                 map[string]map[string]string
+	sets                   map[string]map[string]struct{}
+	zsets                  map[string]map[string]float64
+	immutableRecordIndexes map[string]map[string]memoryImmutableRecordMetadata
+	streams                map[string]*memStream
+	subs                   map[string][]chan Message
+	subsMu                 sync.RWMutex
 }
 
 type memStream struct {
@@ -41,6 +44,13 @@ type memEntry struct {
 	expires time.Time
 }
 
+type memoryImmutableRecordMetadata struct {
+	ownerDigest  string
+	payloadBytes int64
+	createdAt    time.Time
+	expiresAt    time.Time
+}
+
 func (e memEntry) expired() bool {
 	return !e.expires.IsZero() && time.Now().After(e.expires)
 }
@@ -52,6 +62,9 @@ func NewMemoryClient() Client {
 		hashes:  make(map[string]map[string]string),
 		sets:    make(map[string]map[string]struct{}),
 		zsets:   make(map[string]map[string]float64),
+		immutableRecordIndexes: make(
+			map[string]map[string]memoryImmutableRecordMetadata,
+		),
 		streams: make(map[string]*memStream),
 		subs:    make(map[string][]chan Message),
 	}
@@ -125,6 +138,149 @@ func (m *memoryClient) SetNX(_ context.Context, key, value string, ttl time.Dura
 	return true, nil
 }
 
+func (m *memoryClient) CreateBoundedImmutableRecordAtomic(
+	_ context.Context,
+	request boundedrecord.Request,
+) (boundedrecord.Result, error) {
+	if err := request.Validate(); err != nil {
+		return boundedrecord.Result{}, err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	index := m.immutableRecordIndexes[request.ShardIndexKey]
+	if index == nil {
+		index = make(map[string]memoryImmutableRecordMetadata)
+		m.immutableRecordIndexes[request.ShardIndexKey] = index
+	}
+	if len(index) > request.Policy.MaximumLiveRecordsPerShard {
+		return boundedrecord.Result{}, boundedrecord.ErrRepairBound
+	}
+	for indexedKey, metadata := range index {
+		entry, exists := m.strings[indexedKey]
+		if !exists || entry.expires.IsZero() || !entry.expires.After(now) ||
+			!metadata.expiresAt.After(now) {
+			delete(index, indexedKey)
+			delete(m.strings, indexedKey)
+		}
+	}
+
+	if entry, exists := m.strings[request.RecordKey]; exists {
+		if entry.expires.IsZero() || !entry.expires.After(now) {
+			delete(m.strings, request.RecordKey)
+			delete(index, request.RecordKey)
+		} else {
+			metadata, indexed := index[request.RecordKey]
+			if !indexed || metadata.ownerDigest != request.OwnerDigest ||
+				metadata.payloadBytes != int64(len(entry.strVal)) {
+				return boundedrecord.Result{}, boundedrecord.ErrRepairBound
+			}
+			liveRecords, liveBytes := memoryImmutableRecordUsage(index)
+			return boundedrecord.Result{
+				Winner:        entry.strVal,
+				UsageMeasured: true,
+				LiveRecords:   liveRecords,
+				LiveBytes:     liveBytes,
+			}, nil
+		}
+	}
+
+	ownerVictims, ownerEvictionBytes := oldestMemoryImmutableOwnerRecords(
+		index,
+		request.OwnerDigest,
+		request.Policy.MaximumLiveRecordsPerOwner-1,
+	)
+	liveRecords, liveBytes := memoryImmutableRecordUsage(index)
+	projectedRecords := liveRecords - int64(len(ownerVictims)) + 1
+	projectedBytes := liveBytes - ownerEvictionBytes +
+		int64(len(request.Value))
+	if projectedRecords > int64(request.Policy.MaximumLiveRecordsPerShard) {
+		return boundedrecord.Result{
+			UsageMeasured: true,
+			LiveRecords:   liveRecords,
+			LiveBytes:     liveBytes,
+		}, boundedrecord.ErrShardKeyQuota
+	}
+	if projectedBytes > request.Policy.MaximumLiveBytesPerShard {
+		return boundedrecord.Result{
+			UsageMeasured: true,
+			LiveRecords:   liveRecords,
+			LiveBytes:     liveBytes,
+		}, boundedrecord.ErrShardByteQuota
+	}
+	for _, victim := range ownerVictims {
+		delete(index, victim)
+		delete(m.strings, victim)
+	}
+	expiresAt := now.Add(request.TTL)
+	m.strings[request.RecordKey] = memEntry{
+		strVal:  request.Value,
+		binVal:  []byte(request.Value),
+		expires: expiresAt,
+	}
+	index[request.RecordKey] = memoryImmutableRecordMetadata{
+		ownerDigest:  request.OwnerDigest,
+		payloadBytes: int64(len(request.Value)),
+		createdAt:    now,
+		expiresAt:    expiresAt,
+	}
+	return boundedrecord.Result{
+		Created:       true,
+		OwnerEvicted:  int64(len(ownerVictims)),
+		UsageMeasured: true,
+		LiveRecords:   projectedRecords,
+		LiveBytes:     projectedBytes,
+	}, nil
+}
+
+func memoryImmutableRecordUsage(
+	index map[string]memoryImmutableRecordMetadata,
+) (int64, int64) {
+	var bytes int64
+	for _, metadata := range index {
+		bytes += metadata.payloadBytes
+	}
+	return int64(len(index)), bytes
+}
+
+func oldestMemoryImmutableOwnerRecords(
+	index map[string]memoryImmutableRecordMetadata,
+	ownerDigest string,
+	maxActiveForOwner int,
+) ([]string, int64) {
+	working := make(map[string]memoryImmutableRecordMetadata, len(index))
+	for key, metadata := range index {
+		working[key] = metadata
+	}
+	var victims []string
+	var victimBytes int64
+	for {
+		ownerCount := 0
+		oldestKey := ""
+		var oldestCreatedAt time.Time
+		for candidateKey, metadata := range working {
+			if metadata.ownerDigest != ownerDigest {
+				continue
+			}
+			ownerCount++
+			if oldestKey == "" || metadata.createdAt.Before(oldestCreatedAt) ||
+				(metadata.createdAt.Equal(oldestCreatedAt) &&
+					candidateKey < oldestKey) {
+				oldestKey = candidateKey
+				oldestCreatedAt = metadata.createdAt
+			}
+		}
+		if ownerCount <= maxActiveForOwner || oldestKey == "" {
+			break
+		}
+		victimBytes += working[oldestKey].payloadBytes
+		delete(working, oldestKey)
+		victims = append(victims, oldestKey)
+	}
+	return victims, victimBytes
+}
+
 func (m *memoryClient) Del(_ context.Context, keys ...string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -133,6 +289,10 @@ func (m *memoryClient) Del(_ context.Context, keys ...string) error {
 		delete(m.hashes, k)
 		delete(m.sets, k)
 		delete(m.zsets, k)
+		delete(m.immutableRecordIndexes, k)
+		for _, index := range m.immutableRecordIndexes {
+			delete(index, k)
+		}
 	}
 	return nil
 }

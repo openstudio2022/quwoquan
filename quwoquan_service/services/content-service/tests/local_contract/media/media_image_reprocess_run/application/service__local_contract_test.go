@@ -146,7 +146,7 @@ func readyImageAsset(t *testing.T, assetID string, now time.Time) *mediamodel.Me
 		ID: assetID, OwnerID: "owner", SourceSessionID: "session-" + assetID,
 		ObjectKey: "private/" + assetID + "/source.jpg",
 		SHA256:    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		MediaType: "image", ContentType: "image/jpeg", FileSize: 128,
+		MediaType: mediamodel.MediaTypeImage, MimeType: "image/jpeg", FileSize: 128,
 		AccessPolicy: mediamodel.AccessPolicyOwnerOnly, ProcessingRequired: true, Now: now,
 	})
 	if err != nil {
@@ -166,7 +166,7 @@ func readyImageAsset(t *testing.T, assetID string, now time.Time) *mediamodel.Me
 func testDescriptor(assetID string, version int64) mediamodel.ImageProcessingDescriptor {
 	return mediamodel.ImageProcessingDescriptor{
 		ProcessorProfile: "test", ImageWidth: 100, ImageHeight: 100,
-		ImageDeliveryContentType: "image/jpeg",
+		ImageDeliveryMimeType:    "image/jpeg",
 		ImageNormalizedObjectKey: "private/" + assetID + "/v/source.jpg",
 		ImagePublicSliceKey:      runtimemedia.BuildContentMediaPublicSliceKey("image", assetID, version, "image/jpeg"),
 		ImageDominantColor:       "#112233", ImageLQIP: "data:image/jpeg;base64,/9j/2Q==",

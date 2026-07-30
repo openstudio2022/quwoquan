@@ -360,7 +360,6 @@ def _execute_cell(
     case_result_bytes = case_result_path.read_bytes()
     report: dict[str, Any] = {
         "schema": provider_conformance.EXECUTION_REPORT_SCHEMA,
-        "version": provider_conformance.EXECUTION_REPORT_VERSION,
         "adapterId": args.adapter_id,
         "capabilityId": capability_id,
         "bindingRoots": binding_roots,
@@ -391,7 +390,6 @@ def _execute_cell(
     report_bytes = _write_json(report_path, report)
     evidence: dict[str, Any] = {
         "schema": "provider-conformance-evidence",
-        "version": 4,
         "adapterId": args.adapter_id,
         "capabilityId": capability_id,
         "bindingRoots": binding_roots,

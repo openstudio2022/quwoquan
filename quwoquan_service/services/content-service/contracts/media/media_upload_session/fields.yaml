@@ -1,175 +1,239 @@
 fields:
-- name: id
-  source: id
-  type: string
-  constraints:
-  - PK
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  source: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: ownerId
-  source: ownerId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: objectKey
-  source: objectKey
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: mediaType
-  source: mediaType
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: contentType
-  source: contentType
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: fileSize
-  source: fileSize
-  type: int64
-  constraints:
-  - NOT_NULL
-  - POSITIVE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: expectedSha256
-  source: expectedSha256
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: assetId
-  source: assetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: assetProcessingStatus
-  source: assetProcessingStatus
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: Complete 响应从同一原子事务中新建的 MediaAsset 投影的处理状态；仅 assetId 存在时返回，用于区分会话 completed 与资产 processing。
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: MediaUploadSessionStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: expiresAt
-  source: expiresAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  - TTL_INDEX
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: completedAt
-  source: completedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: abortedAt
-  source: abortedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: id
+    source: id
+    type: string
+    constraints:
+      - PK
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    source: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: ownerId
+    source: ownerId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: objectKey
+    source: objectKey
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: mediaType
+    source: mediaType
+    type: enum
+    enum_ref: MediaType
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: mimeType
+    source: mimeType
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: fileSize
+    source: fileSize
+    type: int64
+    constraints:
+      - NOT_NULL
+      - POSITIVE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: expectedSha256
+    source: expectedSha256
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: assetId
+    source: assetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: assetProcessingStatus
+    source: assetProcessingStatus
+    type: enum
+    enum_ref: MediaAssetStatus
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Complete 响应从同一原子事务中新建的 MediaAsset 投影的处理状态；仅 assetId 存在时返回，用于区分会话 completed 与资产 processing。
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: MediaUploadSessionStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: expiresAt
+    source: expiresAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+      - TTL_INDEX
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: completedAt
+    source: completedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: abortedAt
+    source: abortedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+types:
+  InitMediaUploadRequest:
+    fields:
+      - {name: mediaType, type: enum, enum_ref: MediaType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: mimeType, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: fileSize, type: int64, constraints: [NOT_NULL, POSITIVE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: expectedSha256, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+  CompleteMediaUploadRequest:
+    fields:
+      - {name: accessPolicy, type: enum, enum_ref: MediaAssetAccessPolicy, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  InitContentMediaUploadCommand:
+    fields:
+      - name: mediaType
+        type: string
+        enum_ref: MediaType
+        client_dart_type: ContentMediaType
+        client_wire: canonicalEnum
+      - name: contentType
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: fileSize
+        type: int
+        client_dart_type: int
+      - name: expectedSha256
+        type: string
+        constraints:
+          - SHA256
+        client_dart_type: String
+        client_normalization: sha256
+  CompleteContentMediaUploadCommand:
+    fields:
+      - name: sessionId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: accessPolicy
+        type: string
+        enum_ref: MediaAssetAccessPolicy
+        client_dart_type: ContentMediaAccessPolicy
+        client_default: ContentMediaAccessPolicy.ownerOnly
+        client_wire: canonicalEnum
+  GetContentMediaUploadSessionQuery:
+    fields:
+      - name: sessionId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  AbortContentMediaUploadCommand:
+    fields:
+      - name: sessionId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
 state_machine:
   field: status
   transitions:
-  - from: pending
-    to:
-    - completed
-    - aborted
+    - from: pending
+      to:
+        - completed
+        - aborted

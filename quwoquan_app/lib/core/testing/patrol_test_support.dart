@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/app/navigation/app_router_module.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/app_bootstrap.dart';
@@ -29,8 +30,8 @@ const bool kRunPatrolT4 = bool.fromEnvironment('RUN_T4_PATROL');
 const String kPatrolT4CurrentOwnerId = String.fromEnvironment(
   'APP_CURRENT_OWNER_ID',
 );
-const String kPatrolT4CurrentSubAccountId = String.fromEnvironment(
-  'APP_CURRENT_SUB_ACCOUNT_ID',
+const String kPatrolT4CurrentPersonaId = String.fromEnvironment(
+  'APP_CURRENT_PERSONA_ID',
 );
 const String _patrolSessionMode = String.fromEnvironment(
   'QWQ_PATROL_SESSION_MODE',
@@ -67,13 +68,39 @@ Completer<void> _runtimeAnonymousSessionGate() =>
 /// 仅认证会话控制器允许测试装配；业务 Query/Command 始终使用 production
 /// Remote composition，调用方不能注入业务 Provider double。
 Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
-  _patrolAppLaunch ??= runQuwoquanApp(
-    autoCompleteStartupWelcomeForTest: true,
+  await _launchPatrolAppOnce(
+    $,
     providerScopeOverrides: [
       authSessionControllerProvider.overrideWith(
         _PatrolAuthSessionController.new,
       ),
     ],
+    startRuntimeAnonymousSession: true,
+  );
+}
+
+/// Starts the production Remote App without replacing its authentication
+/// controller. Runtime-recovery acceptance uses this entrypoint so the rebuilt
+/// root must restore the device's real persisted session instead of receiving
+/// a test-installed session again.
+Future<void> launchPatrolAppWithPersistedSessionOnce(
+  PatrolIntegrationTester $,
+) async {
+  await _launchPatrolAppOnce(
+    $,
+    providerScopeOverrides: const <Override>[],
+    startRuntimeAnonymousSession: false,
+  );
+}
+
+Future<void> _launchPatrolAppOnce(
+  PatrolIntegrationTester $, {
+  required List<Override> providerScopeOverrides,
+  required bool startRuntimeAnonymousSession,
+}) async {
+  _patrolAppLaunch ??= runQuwoquanApp(
+    autoCompleteStartupWelcomeForTest: true,
+    providerScopeOverrides: providerScopeOverrides,
   );
   await _patrolAppLaunch!;
   // 本地 Remote 冷启动会带来持续中的初始化任务，直接等待全局 settle
@@ -82,7 +109,7 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
   await $.pump();
   await $.pump(const Duration(milliseconds: 300));
   await _awaitPatrolBootstrap($);
-  if (_usesRuntimeAnonymousSession) {
+  if (startRuntimeAnonymousSession && _usesRuntimeAnonymousSession) {
     await _startRuntimeAnonymousSessionFromMountedApp();
     await _runtimeAnonymousSessionGate().future.timeout(
       const Duration(seconds: 45),
@@ -148,7 +175,7 @@ Future<void> _authenticateLocalRuntimeAnonymously(
     final session = container.read(authSessionControllerProvider);
     if (!session.hasTrustedSession ||
         session.isAuthenticated ||
-        session.activeSubAccountId.trim().isEmpty) {
+        session.activePersonaId.trim().isEmpty) {
       throw StateError(
         'anonymous login did not install a trusted guest session',
       );
@@ -260,12 +287,12 @@ AuthSessionState buildPatrolAcceptanceSession({
   required String accessToken,
   required String refreshToken,
   required String ownerId,
-  required String subAccountId,
+  required String personaId,
 }) {
   if (accessToken.trim().isEmpty ||
       refreshToken.trim().isEmpty ||
       ownerId.trim().isEmpty ||
-      subAccountId.trim().isEmpty) {
+      personaId.trim().isEmpty) {
     throw StateError(
       'Patrol user_acceptance requires a complete access/refresh/owner/persona session',
     );
@@ -275,7 +302,7 @@ AuthSessionState buildPatrolAcceptanceSession({
     accessToken: accessToken.trim(),
     refreshToken: refreshToken.trim(),
     ownerId: ownerId.trim(),
-    activeSubAccountId: subAccountId.trim(),
+    activePersonaId: personaId.trim(),
     accountState: 'active',
     identityOrigin: 'patrol-user-acceptance',
     installId: 'patrol-user-acceptance-install',
@@ -298,7 +325,7 @@ final class _PatrolAuthSessionController extends AuthSessionController {
       accessToken: _patrolT4AuthToken,
       refreshToken: _patrolT4RefreshToken,
       ownerId: kPatrolT4CurrentOwnerId,
-      subAccountId: kPatrolT4CurrentSubAccountId,
+      personaId: kPatrolT4CurrentPersonaId,
     );
   }
 }

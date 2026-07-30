@@ -118,6 +118,20 @@ class _CreatePublishConfirmSheetState
             onTap: _pickLocation,
             borderRadius: BorderRadius.zero,
           ),
+          // 出行时间只在内容已绑定地点事实时出现：脱离地点的时间不构成
+          // 「同地同期」交集，单独填写只会造出无处可用的字段。
+          if (_settings.hasPlaceAnchor) ...<Widget>[
+            const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
+            PublishConfirmSettingRow(
+              key: const ValueKey<String>('publish-confirm-visited-at-row'),
+              title: CreationText.visitedAtLabel,
+              value: _settings.visitedAt == null
+                  ? CreationText.visitedAtUndeclared
+                  : _formatVisitedDate(_settings.visitedAt!),
+              onTap: _pickVisitedAt,
+              borderRadius: BorderRadius.zero,
+            ),
+          ],
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
             title: CreationText.attachHomepageTitle,
@@ -219,6 +233,28 @@ class _CreatePublishConfirmSheetState
     });
   }
 
+  /// 声明实际到访日期。
+  ///
+  /// 只允许选到今天：未来日期是出行计划，不是到访事实，不能进入 `visitedAt`。
+  Future<void> _pickVisitedAt() async {
+    final today = _startOfDay(DateTime.now());
+    final selected = _settings.visitedAt;
+    final selection = await showCupertinoModalPopup<_VisitedAtSelection>(
+      context: context,
+      builder: (sheetContext) => _VisitedAtPickerSheet(
+        initialDate: selected == null ? today : _startOfDay(selected),
+        latestDate: today,
+        canClear: selected != null,
+      ),
+    );
+    if (selection == null || !mounted) return;
+    setState(() {
+      _settings = selection.date == null
+          ? _settings.copyWith(clearVisitedAt: true)
+          : _settings.copyWith(visitedAt: selection.date);
+    });
+  }
+
   Future<void> _pickCircles() async {
     final selected = await Navigator.of(context).push<Map<String, String>>(
       CupertinoPageRoute<Map<String, String>>(
@@ -269,5 +305,85 @@ class _CreatePublishConfirmSheetState
       }
       _settings = next;
     });
+  }
+}
+
+DateTime _startOfDay(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
+String _formatVisitedDate(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
+
+/// 到访时间选择结果。[date] 为 null 表示创作者选择不填写。
+class _VisitedAtSelection {
+  const _VisitedAtSelection(this.date);
+
+  final DateTime? date;
+}
+
+class _VisitedAtPickerSheet extends StatefulWidget {
+  const _VisitedAtPickerSheet({
+    required this.initialDate,
+    required this.latestDate,
+    required this.canClear,
+  });
+
+  final DateTime initialDate;
+  final DateTime latestDate;
+  final bool canClear;
+
+  @override
+  State<_VisitedAtPickerSheet> createState() => _VisitedAtPickerSheetState();
+}
+
+class _VisitedAtPickerSheetState extends State<_VisitedAtPickerSheet> {
+  late DateTime _picked = widget.initialDate;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoActionSheet(
+      key: const ValueKey<String>('publish-confirm-visited-at-sheet'),
+      title: const Text(CreationText.visitedAtSheetTitle),
+      message: Column(
+        children: <Widget>[
+          const Text(CreationText.visitedAtSheetHint),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          SizedBox(
+            height: AppSpacing.twoHundredTwenty,
+            child: CupertinoDatePicker(
+              key: const ValueKey<String>('publish-confirm-visited-at-picker'),
+              mode: CupertinoDatePickerMode.date,
+              initialDateTime: widget.initialDate,
+              minimumDate: DateTime(1970),
+              maximumDate: widget.latestDate,
+              onDateTimeChanged: (value) =>
+                  setState(() => _picked = _startOfDay(value)),
+            ),
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        CupertinoActionSheetAction(
+          key: const ValueKey<String>('publish-confirm-visited-at-confirm'),
+          onPressed: () =>
+              Navigator.of(context).pop(_VisitedAtSelection(_picked)),
+          child: const Text(CreationText.visitedAtConfirm),
+        ),
+        if (widget.canClear)
+          CupertinoActionSheetAction(
+            key: const ValueKey<String>('publish-confirm-visited-at-clear'),
+            isDestructiveAction: true,
+            onPressed: () =>
+                Navigator.of(context).pop(const _VisitedAtSelection(null)),
+            child: const Text(CreationText.visitedAtClear),
+          ),
+      ],
+      cancelButton: CupertinoActionSheetAction(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text(FoundationText.cancel),
+      ),
+    );
   }
 }

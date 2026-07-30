@@ -2,6 +2,7 @@
   "label": "雪山探险",
   "labelEn": "Snow Mountain Adventure",
   "description": "以雪山冰川为目的地的探险旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -60,6 +60,23 @@ func Run() {
 	if err != nil {
 		log.Fatalf("load release desired state: %v", err)
 	}
+	releaseBinding, err := LoadReleaseBinding(*releaseRoot)
+	if err != nil {
+		log.Fatalf("load immutable release binding: %v", err)
+	}
+	if desired.ReleaseID != releaseBinding.ReleaseID {
+		log.Fatalf(
+			"release desired state/header drift: desired=%q header=%q",
+			desired.ReleaseID,
+			releaseBinding.ReleaseID,
+		)
+	}
+	if strings.TrimSpace(*sourceOwner) != releaseBinding.SourceOwner {
+		log.Fatalf(
+			"--source-owner must match immutable release owner %q",
+			releaseBinding.SourceOwner,
+		)
+	}
 	postFilter := ToSet(desired.DesiredRefs.Posts)
 	entityFilter := ToSet(desired.DesiredRefs.Entities)
 	creatorFilter := ToSet(desired.DesiredRefs.Creators)
@@ -114,13 +131,17 @@ func Run() {
 	if *dryRun {
 		log.Printf("[import] dry-run: not writing mongo")
 		_ = WriteImportReport(*reportPath, bson.M{
-			"schema":       "quwoquan.content_import_report",
-			"status":       "dry-run",
-			"environment":  *env,
-			"releaseId":    desired.ReleaseID,
-			"counts":       bson.M{"postsLoaded": len(posts), "entitiesLoaded": len(entities)},
-			"postBindings": postBindings,
-			"auditEvents":  []string{"DataReleasePrepared"},
+			"schema":         "quwoquan.content_import_report",
+			"status":         "dry-run",
+			"environment":    *env,
+			"releaseId":      desired.ReleaseID,
+			"sourceOwner":    releaseBinding.SourceOwner,
+			"manifestDigest": releaseBinding.ManifestDigest,
+			"mode":           *mode,
+			"deletePolicy":   *deletePolicy,
+			"counts":         bson.M{"postsLoaded": len(posts), "entitiesLoaded": len(entities)},
+			"postBindings":   postBindings,
+			"auditEvents":    []string{"DataReleasePrepared"},
 		})
 		return
 	}
@@ -139,10 +160,11 @@ func Run() {
 
 	now := time.Now().UTC()
 	opts := NormalizeImportOptions(ImportOptions{
-		ReleaseID:    desired.ReleaseID,
-		Mode:         *mode,
-		DeletePolicy: *deletePolicy,
-		SourceOwner:  *sourceOwner,
+		ReleaseID:      desired.ReleaseID,
+		ManifestDigest: releaseBinding.ManifestDigest,
+		Mode:           *mode,
+		DeletePolicy:   *deletePolicy,
+		SourceOwner:    *sourceOwner,
 	})
 	np, err := UpsertPostsWithOptions(ctx, postsColl, posts, now, opts)
 	if err != nil {
@@ -164,6 +186,9 @@ func Run() {
 	// 同写发现流 ReadModel（rm_discovery_feed），让冷启动内容进入 tag/hot/explore 等召回通道；
 	// 与在线 DiscoveryFeedProjector / BulkImport 路径字段一致（sourceTaskId + conditionProfile）。
 	feedColl := client.Database(*postsDB).Collection("rm_discovery_feed")
+	if err := recinfra.NewDiscoveryFeedProjector(client.Database(*postsDB)).EnsureIndexes(ctx); err != nil {
+		log.Fatalf("ensure discovery feed indexes: %v", err)
+	}
 	condByEntity := ConditionProfileIndex(entities)
 	nf, err := UpsertDiscoveryFeedWithOptions(ctx, feedColl, posts, condByEntity, now, opts)
 	if err != nil {
@@ -181,13 +206,14 @@ func Run() {
 		log.Fatalf("upsert release state: %v", err)
 	}
 	if err := WriteImportReport(*reportPath, bson.M{
-		"schema":       "quwoquan.content_import_report",
-		"status":       "active",
-		"environment":  *env,
-		"releaseId":    opts.ReleaseID,
-		"sourceOwner":  opts.SourceOwner,
-		"mode":         opts.Mode,
-		"deletePolicy": opts.DeletePolicy,
+		"schema":         "quwoquan.content_import_report",
+		"status":         "active",
+		"environment":    *env,
+		"releaseId":      opts.ReleaseID,
+		"sourceOwner":    opts.SourceOwner,
+		"manifestDigest": opts.ManifestDigest,
+		"mode":           opts.Mode,
+		"deletePolicy":   opts.DeletePolicy,
 		"counts": bson.M{
 			"postsLoaded": len(posts), "entitiesLoaded": len(entities),
 			"postsUpserted": np, "entitiesUpserted": ne, "feedUpserted": nf,
@@ -229,10 +255,11 @@ func UpsertPosts(ctx context.Context, coll *mongo.Collection, posts []PostDoc, n
 }
 
 type ImportOptions struct {
-	ReleaseID    string
-	Mode         string
-	DeletePolicy string
-	SourceOwner  string
+	ReleaseID      string
+	ManifestDigest string
+	Mode           string
+	DeletePolicy   string
+	SourceOwner    string
 }
 
 func NormalizeImportOptions(opts ImportOptions) ImportOptions {
@@ -311,13 +338,17 @@ func ImportedPostBindings(posts []PostDoc) ([]ImportedPostBinding, error) {
 }
 
 func releaseFields(opts ImportOptions, now time.Time, lifecycleStatus string) bson.M {
-	return bson.M{
+	fields := bson.M{
 		"releaseId":            opts.ReleaseID,
 		"visibleFromReleaseId": opts.ReleaseID,
 		"sourceOwner":          opts.SourceOwner,
 		"lifecycleStatus":      lifecycleStatus,
 		"releaseUpdatedAt":     now,
 	}
+	if strings.TrimSpace(opts.ManifestDigest) != "" {
+		fields["manifestDigest"] = strings.TrimSpace(opts.ManifestDigest)
+	}
+	return fields
 }
 
 func desiredPostRefs(posts []PostDoc) []string {
@@ -355,6 +386,10 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 	opts = NormalizeImportOptions(opts)
 	n := 0
 	for _, p := range posts {
+		contentIdentity, err := canonicalImportedContentIdentity(p.ContentIdentity)
+		if err != nil {
+			return n, fmt.Errorf("%s: %w", p.PostRef, err)
+		}
 		postID := RuntimePostID(p.PostRef)
 		if postID == "" {
 			return n, fmt.Errorf("postRef is required to derive runtime postId")
@@ -364,7 +399,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		if len(runtimeEntityRefs) == 0 {
 			runtimeEntityRefs = p.EntityRefs
 		}
-		media := ImportedMediaFields(p.Assets)
+		media := ImportedMediaFields(importedPostAssets(p))
 		body := p.ArticleMarkdown
 		summary := p.ArticleDigest
 		if p.ContentType == "image" {
@@ -372,7 +407,8 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 			summary = p.Body
 		}
 		doc := bson.M{
-			"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType, "title": p.Title,
+			"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType,
+			"contentIdentity": contentIdentity, "title": p.Title,
 			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
 			"intersectionHints":     p.IntersectionHints,
 			"semanticMentions":      p.SemanticMentions,
@@ -704,6 +740,10 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	opts = NormalizeImportOptions(opts)
 	n := 0
 	for _, p := range posts {
+		contentIdentity, err := canonicalImportedContentIdentity(p.ContentIdentity)
+		if err != nil {
+			return n, fmt.Errorf("%s: %w", p.PostRef, err)
+		}
 		postID := RuntimePostID(p.PostRef)
 		if postID == "" {
 			return n, fmt.Errorf("postRef is required to derive discovery feed postId")
@@ -729,7 +769,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"postRef":               p.PostRef,
 			"title":                 p.Title,
 			"contentType":           p.ContentType,
-			"contentIdentity":       "work",
+			"contentIdentity":       contentIdentity,
 			"authorId":              p.AuthorID,
 			"creatorProfileId":      p.CreatorProfileID,
 			"creatorArchetype":      p.CreatorArchetype,
@@ -756,7 +796,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"updatedAt":             p.UpdatedAt,
 			"publishedAt":           p.PublishedAt,
 		}
-		media := ImportedMediaFields(p.Assets)
+		media := ImportedMediaFields(importedPostAssets(p))
 		if len(media.MediaURLs) > 0 {
 			set["mediaUrls"] = media.MediaURLs
 			set["mediaItems"] = media.MediaItems
@@ -785,6 +825,21 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		n++
 	}
 	return n, nil
+}
+
+// importedPostAssets keeps the release-import projection on one canonical
+// media source. LoadPosts promotes articleAssetManifest.assets into Assets,
+// while direct typed callers may still provide only the canonical article
+// manifest. Both posts and rm_discovery_feed must therefore resolve the same
+// effective asset set instead of silently projecting an article without media.
+func importedPostAssets(post PostDoc) []AssetManifestItem {
+	if len(post.Assets) > 0 {
+		return post.Assets
+	}
+	if post.ArticleAssetManifest != nil {
+		return post.ArticleAssetManifest.Assets
+	}
+	return nil
 }
 
 func removePriorDiscoveryFeedIdentity(ctx context.Context, coll *mongo.Collection, postRef string, runtimeID string, opts ImportOptions) error {
@@ -839,6 +894,15 @@ func UpsertReleaseState(ctx context.Context, coll *mongo.Collection, env string,
 		bson.M{"$set": bson.M{
 			"environment": env, "sourceOwner": opts.SourceOwner,
 			"activeReleaseId": opts.ReleaseID, "status": "active",
+			"manifestDigest": opts.ManifestDigest,
+			"readback": bson.M{
+				"status": "content_imported",
+				"counts": bson.M{
+					"posts":          counts["postsUpserted"],
+					"discoveryPosts": counts["feedUpserted"],
+				},
+				"checkedAt": now,
+			},
 			"mode": opts.Mode, "deletePolicy": opts.DeletePolicy,
 			"counts": counts, "updatedAt": now,
 		}, "$setOnInsert": bson.M{"createdAt": now}},

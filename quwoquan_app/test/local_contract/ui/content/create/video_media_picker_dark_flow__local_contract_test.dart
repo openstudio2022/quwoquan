@@ -89,7 +89,7 @@ void main() {
       final service = _FakeMediaPickerService(
         albums: <AssetPathEntity>[_album('recent', '最近项目')],
         assetsByAlbumId: <String, List<AssetEntity>>{
-          'recent': <AssetEntity>[_video('v1'), _image('i1')],
+          'recent': <AssetEntity>[_video('video-one'), _image('image-one')],
         },
       );
 
@@ -123,21 +123,18 @@ void main() {
       final cameraDecoration = cameraTile.decoration! as BoxDecoration;
       expect(cameraDecoration.color, isNot(AppColors.black));
       expect(cameraDecoration.border, isNotNull);
-      expect(
-        find.text(MediaText.mediaPickerVideoCameraEntry),
-        findsOneWidget,
-      );
+      expect(find.text(MediaText.mediaPickerVideoCameraEntry), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('media-picker-one-tap-movie-tile')),
         findsNothing,
       );
       expect(find.text(MediaText.mediaPickerOneTapMovie), findsNothing);
       expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-v1')),
+        find.byKey(const ValueKey<String>('media-picker-asset-video-one')),
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-i1')),
+        find.byKey(const ValueKey<String>('media-picker-asset-image-one')),
         findsNothing,
       );
 
@@ -145,7 +142,7 @@ void main() {
         find.byKey(const ValueKey<String>('media-picker-camera-tile')),
       );
       final videoTopLeft = tester.getTopLeft(
-        find.byKey(const ValueKey<String>('media-picker-asset-v1')),
+        find.byKey(const ValueKey<String>('media-picker-asset-video-one')),
       );
       expect(cameraTopLeft.dx, lessThan(videoTopLeft.dx));
       expect(cameraTopLeft.dy, videoTopLeft.dy);

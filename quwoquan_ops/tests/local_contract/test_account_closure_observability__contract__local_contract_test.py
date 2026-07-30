@@ -49,7 +49,10 @@ class AccountClosureObservabilityContractTest(unittest.TestCase):
     def test_all_stateful_consumers_export_canonical_metrics(self) -> None:
         metric_files = {
             "content": ROOT
-            / "quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure/metrics.go",
+            / (
+                "quwoquan_service/services/content-service/internal/content/"
+                "content_account_closure_workflow/infrastructure/accountclosure/metrics.go"
+            ),
             "chat": ROOT
             / "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq/user_account_closed_metrics.go",
             "circle": ROOT

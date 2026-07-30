@@ -120,22 +120,22 @@ func TestNotificationDeliveryOpsFacadesExposeTypedSlicesAndStableRecoveryFailure
 		t.Fatalf("unexpected typed dead-letter slice: %+v", deadLetters)
 	}
 
-	if _, err := queries.ListDeadLetters(context.Background(), nil, 101); errorCode(err) != "NOTIFICATION.USER.invalid_argument" {
+	if _, err := queries.ListDeadLetters(context.Background(), nil, 101); errorCode(err) != "NOTIFICATION.USER.delivery_job_invalid_argument" {
 		t.Fatalf("invalid limit code=%q err=%v", errorCode(err), err)
 	}
-	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", ""); errorCode(err) != "NOTIFICATION.USER.invalid_argument" {
+	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", ""); errorCode(err) != "NOTIFICATION.USER.delivery_job_invalid_argument" {
 		t.Fatalf("missing idempotency key code=%q err=%v", errorCode(err), err)
 	}
 	store.recoveryError = notification.ErrDeliveryJobNotFound
-	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", "recover-1"); errorCode(err) != "NOTIFICATION.USER.delivery_not_found" {
+	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", "recover-1"); errorCode(err) != "NOTIFICATION.USER.delivery_job_not_found" {
 		t.Fatalf("missing dead-letter code=%q err=%v", errorCode(err), err)
 	}
 	store.recoveryError = notification.ErrDeliveryJobIdempotencyConflict
-	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", "recover-1"); errorCode(err) != "NOTIFICATION.USER.idempotency_conflict" {
+	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", "recover-1"); errorCode(err) != "NOTIFICATION.USER.delivery_job_idempotency_conflict" {
 		t.Fatalf("idempotency conflict code=%q err=%v", errorCode(err), err)
 	}
 	store.recoveryError = errors.New("write failed")
-	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", "recover-2"); errorCode(err) != "NOTIFICATION.SYSTEM.storage_write_failed" {
+	if _, err := commands.RecoverDeliveryJob(context.Background(), "ndj_dead_1", "recover-2"); errorCode(err) != "NOTIFICATION.SYSTEM.delivery_job_storage_write_failed" {
 		t.Fatalf("storage failure code=%q err=%v", errorCode(err), err)
 	}
 }

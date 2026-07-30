@@ -11,10 +11,10 @@ import (
 )
 
 type ObjectGatewayConfig struct {
-	Bucket      string
-	CDNDomain   string
-	CDNSignKey  string
-	DeliveryTTL time.Duration
+	Bucket               string
+	MediaDeliveryBaseURL string
+	CDNSignKey           string
+	DeliveryTTL          time.Duration
 }
 
 type ObjectGateway struct {
@@ -30,10 +30,12 @@ type prefixDeleteClient interface {
 
 func NewObjectGateway(config ObjectGatewayConfig, client runtimemedia.PresignClient) (*ObjectGateway, error) {
 	config.Bucket = strings.TrimSpace(config.Bucket)
-	config.CDNDomain = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(config.CDNDomain, "https://"), "http://"))
+	config.MediaDeliveryBaseURL = runtimemedia.NormalizeMediaDeliveryOrigin(
+		config.MediaDeliveryBaseURL,
+	)
 	config.CDNSignKey = strings.TrimSpace(config.CDNSignKey)
-	if config.Bucket == "" || config.CDNDomain == "" || config.CDNSignKey == "" || client == nil {
-		return nil, errors.New("media object gateway requires bucket, CDN domain, CDN signing key and presign client")
+	if config.Bucket == "" || config.MediaDeliveryBaseURL == "" || config.CDNSignKey == "" || client == nil {
+		return nil, errors.New("media object gateway requires bucket, media delivery base URL, CDN signing key and presign client")
 	}
 	if config.DeliveryTTL <= 0 {
 		return nil, errors.New("media object gateway requires a positive delivery TTL")
@@ -269,17 +271,30 @@ func (g *ObjectGateway) DeliveryURLUntil(_ context.Context, objectKey string, ex
 	// Public slice keys must not be signed as CAS object keys; build from the
 	// injected HTTPS CDN base so path stays environment-stable.
 	if isPublicMediaSliceKey(key) {
-		cdnBase := g.config.CDNDomain
-		if !strings.HasPrefix(strings.ToLower(cdnBase), "https://") {
-			cdnBase = "https://" + strings.TrimPrefix(strings.TrimPrefix(cdnBase, "http://"), "https://")
+		version, ok := runtimemedia.PublicSliceVersion(key)
+		if !ok {
+			return "", errors.New("media delivery public slice key requires one path version")
 		}
-		deliveryURI := runtimemedia.BuildPublicMediaURL(cdnBase, key, 0)
+		deliveryURI := runtimemedia.BuildPublicMediaURL(
+			g.config.MediaDeliveryBaseURL,
+			key,
+			version,
+		)
 		if deliveryURI == "" {
 			return "", errors.New("media delivery public slice key requires HTTPS CDN domain")
 		}
 		return deliveryURI, nil
 	}
-	return runtimemedia.SignCDNURLUntil(g.config.CDNDomain, key, g.config.CDNSignKey, expiresAt), nil
+	signedURL := runtimemedia.SignCDNURLUntil(
+		g.config.MediaDeliveryBaseURL,
+		key,
+		g.config.CDNSignKey,
+		expiresAt,
+	)
+	if signedURL == "" {
+		return "", errors.New("media delivery private object key is invalid")
+	}
+	return signedURL, nil
 }
 
 func isPublicMediaSliceKey(key string) bool {

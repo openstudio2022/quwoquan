@@ -27,6 +27,45 @@ from core.video_source_admission import (
 )
 
 
+def _commercial_source_use_mode(
+    *,
+    publication_admission: str,
+    commercial_authorization_status: str,
+    rights_basis: str,
+    authorization_proof_url: str | None,
+) -> str:
+    """Derive a publishable use mode only from verified commercial rights."""
+    if publication_admission != "commercial_release":
+        raise ValueError(
+            "risk-only sourced video is not eligible for canonical commercial publish"
+        )
+    if commercial_authorization_status != "verified":
+        raise ValueError(
+            "commercial sourced video requires verified authorization"
+        )
+    normalized_rights_basis = str(rights_basis or "").strip()
+    non_licensed_markers = {
+        "attribution_no_watermark",
+        "risk_accepted_attribution_only",
+        "unknown",
+        "unverified",
+        "not_verified",
+        "unspecified",
+        "none",
+        "n/a",
+    }
+    if (
+        not normalized_rights_basis
+        or normalized_rights_basis.casefold() in non_licensed_markers
+    ):
+        raise ValueError("commercial sourced video requires a licensed rights basis")
+    if not str(authorization_proof_url or "").strip().startswith("https://"):
+        raise ValueError(
+            "commercial sourced video requires HTTPS authorization proof"
+        )
+    return "licensed_adaptation"
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -77,6 +116,12 @@ def write_admitted_sourced_video_unit(
         source_kind=source_kind,
         publication_admission=publication_admission,
     )
+    source_use_mode = _commercial_source_use_mode(
+        publication_admission=publication_admission,
+        commercial_authorization_status=commercial_authorization_status,
+        rights_basis=rights_basis,
+        authorization_proof_url=authorization_proof_url,
+    )
     manifest = write_source_unit(
         object_dir,
         ordinal=int(source_unit.get("ordinal") or 1),
@@ -87,8 +132,9 @@ def write_admitted_sourced_video_unit(
         source_category="tourism_video",
         source_kind=source_kind,
         extractor="sourced_video_direct_download",
-        policy_revision="sourced-video-attribution-v1",
-        source_use_mode="attribution_no_watermark",
+        policy_revision="sourced-video-attribution",
+        source_use_mode=source_use_mode,
+        rights_mode="attribution_no_watermark",
         publish_media_mode="attributed_external_video",
         source_role="primary_video",
         research_lane="video",

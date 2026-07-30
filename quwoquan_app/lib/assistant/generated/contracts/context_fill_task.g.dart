@@ -6,25 +6,37 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 class ContextFillTaskDto {
   const ContextFillTaskDto({
+    this.slotId = "",
     this.fillType = ContextFillType.unknown,
     this.targetSlot = ContextTargetSlot.unknown,
     this.reason = "",
+    this.prompt = "",
+    this.required = true,
+    this.suggestions = const <String>[],
     this.generatedQueryConditions = const <String>[],
     this.scopeExpansionPolicy = ContextScopeExpansionPolicy.none,
     this.retryPolicy = ContextRetryPolicy.singleRetry,
   });
 
+  final String slotId;
   final ContextFillType fillType;
   final ContextTargetSlot targetSlot;
   final String reason;
+  final String prompt;
+  final bool required;
+  final List<String> suggestions;
   final List<String> generatedQueryConditions;
   final ContextScopeExpansionPolicy scopeExpansionPolicy;
   final ContextRetryPolicy retryPolicy;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
+        'slotId': slotId,
         'fillType': fillType.wireName,
         'targetSlot': targetSlot.wireName,
         'reason': reason,
+        'prompt': prompt,
+        'required': required,
+        'suggestions': suggestions,
         'generatedQueryConditions': generatedQueryConditions,
         'scopeExpansionPolicy': scopeExpansionPolicy.wireName,
         'retryPolicy': retryPolicy.wireName,
@@ -32,9 +44,13 @@ class ContextFillTaskDto {
 
   factory ContextFillTaskDto.fromJson(Map<String, dynamic> json) {
     return ContextFillTaskDto(
+      slotId: (json['slotId'] as String?)?.trim() ?? "",
       fillType: parseContextFillType((json['fillType'] as String?)?.trim() ?? ""),
       targetSlot: parseContextTargetSlot((json['targetSlot'] as String?)?.trim() ?? ""),
       reason: (json['reason'] as String?)?.trim() ?? "",
+      prompt: (json['prompt'] as String?)?.trim() ?? "",
+      required: json['required'] != false,
+      suggestions: _assistantStringList(json['suggestions']),
       generatedQueryConditions: _assistantStringList(json['generatedQueryConditions']),
       scopeExpansionPolicy: parseContextScopeExpansionPolicy((json['scopeExpansionPolicy'] as String?)?.trim() ?? "none"),
       retryPolicy: parseContextRetryPolicy((json['retryPolicy'] as String?)?.trim() ?? "single_retry"),
@@ -50,9 +66,13 @@ class ContextFillTaskDto {
 }
 
 class ContextFillTaskDtoFields {
+  static const String slotId = 'slotId';
   static const String fillType = 'fillType';
   static const String targetSlot = 'targetSlot';
   static const String reason = 'reason';
+  static const String prompt = 'prompt';
+  static const String required = 'required';
+  static const String suggestions = 'suggestions';
   static const String generatedQueryConditions = 'generatedQueryConditions';
   static const String scopeExpansionPolicy = 'scopeExpansionPolicy';
   static const String retryPolicy = 'retryPolicy';

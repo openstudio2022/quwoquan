@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/streaming"
-	app "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 )
 
@@ -47,29 +47,29 @@ func TestRunner_RunReplayCases(t *testing.T) {
 
 func migratedRunnerAssertReplayGoldenEvents(t *testing.T, replay assistant.ReplayCase, events []streaming.Envelope) {
 	t.Helper()
-	if events[0].EventType != string(app.AssistantStreamEventRunStarted) {
+	if events[0].EventType != string(assistantstreaming.AssistantStreamEventRunStarted) {
 		t.Fatalf(
 			"replay %s first event=%q, want %q",
 			replay.ReplayCaseID,
 			events[0].EventType,
-			app.AssistantStreamEventRunStarted,
+			assistantstreaming.AssistantStreamEventRunStarted,
 		)
 	}
 	validTypes := map[string]bool{
-		string(app.AssistantStreamEventRunStarted):     true,
-		string(app.AssistantStreamEventProcessReplace): true,
-		string(app.AssistantStreamEventProcessAppend):  true,
-		string(app.AssistantStreamEventProcessCommit):  true,
-		string(app.AssistantStreamEventAnswerDelta):    true,
-		string(app.AssistantStreamEventCompleted):      true,
-		string(app.AssistantStreamEventFailed):         true,
-		string(app.AssistantStreamEventCancelled):      true,
+		string(assistantstreaming.AssistantStreamEventRunStarted):     true,
+		string(assistantstreaming.AssistantStreamEventProcessReplace): true,
+		string(assistantstreaming.AssistantStreamEventProcessAppend):  true,
+		string(assistantstreaming.AssistantStreamEventProcessCommit):  true,
+		string(assistantstreaming.AssistantStreamEventAnswerDelta):    true,
+		string(assistantstreaming.AssistantStreamEventCompleted):      true,
+		string(assistantstreaming.AssistantStreamEventFailed):         true,
+		string(assistantstreaming.AssistantStreamEventCancelled):      true,
 	}
 	seenReplace := false
 	terminalCount := 0
-	wantTerminal := string(app.AssistantStreamEventCompleted)
+	wantTerminal := string(assistantstreaming.AssistantStreamEventCompleted)
 	if replay.ExpectedRunResponse.Status == "failed" {
-		wantTerminal = string(app.AssistantStreamEventFailed)
+		wantTerminal = string(assistantstreaming.AssistantStreamEventFailed)
 	}
 	var previousSeq uint64
 	for _, event := range events {
@@ -89,12 +89,12 @@ func migratedRunnerAssertReplayGoldenEvents(t *testing.T, replay assistant.Repla
 				event.EventType,
 			)
 		}
-		if event.EventType == string(app.AssistantStreamEventProcessReplace) {
+		if event.EventType == string(assistantstreaming.AssistantStreamEventProcessReplace) {
 			seenReplace = true
 		}
-		if event.EventType == string(app.AssistantStreamEventCompleted) ||
-			event.EventType == string(app.AssistantStreamEventFailed) ||
-			event.EventType == string(app.AssistantStreamEventCancelled) {
+		if event.EventType == string(assistantstreaming.AssistantStreamEventCompleted) ||
+			event.EventType == string(assistantstreaming.AssistantStreamEventFailed) ||
+			event.EventType == string(assistantstreaming.AssistantStreamEventCancelled) {
 			terminalCount++
 			if event.EventType != wantTerminal {
 				t.Fatalf(

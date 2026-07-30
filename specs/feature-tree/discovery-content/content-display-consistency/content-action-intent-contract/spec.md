@@ -51,7 +51,7 @@
 
 - canonical：`quwoquan_service/services/content-service/contracts/trust_safety/report/operations.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/trust_safety/report/events.yaml`
-- canonical：`quwoquan_service/services/content-service/contracts/content/post/behaviors.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/content_behavior_fact/behaviors.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/trust_safety/post_moderation_case/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_settings/operations.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/relationship/persona_relationship/operations.yaml`

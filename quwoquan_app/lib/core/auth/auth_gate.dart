@@ -90,7 +90,7 @@ authGateMatrix = <AuthGateReason, AuthGateEntry>{
     subtitle: FoundationText.authGateSubtitleProfile,
     prompt: FoundationText.authGatePromptProfile,
     // 个人页读取契约允许游客查看其他公开资料；「我的」tab 的登录门是产品
-    // 导航决策，不得错误绑定 optional 的 GetSubAccountProfile operation。
+    // 导航决策，不得错误绑定 optional 的 GetPersonaProfile operation。
     requiredOperations: <String>[],
   ),
   AuthGateReason.createPost: AuthGateEntry(
@@ -352,6 +352,35 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
 }
 
 enum LoginDismissPolicy { popPrevious, safeFallback, hostControlledClose }
+
+/// Converts the canonical suspended-session presentation signal into one
+/// global, safe login surface while preserving the protected route as the
+/// post-login target.
+///
+/// Closing that surface must first acknowledge the notice and then route to
+/// home; otherwise the same prompt would immediately redirect again.
+String? accountSuspensionLoginRedirect({
+  required AuthSessionState session,
+  required String currentLocation,
+}) {
+  if (session.status == AuthSessionStatus.restoring ||
+      session.isAuthenticated ||
+      session.promptReason != AuthPromptReason.accountSuspended) {
+    return null;
+  }
+  final location = currentLocation.trim();
+  final uri = Uri.tryParse(location);
+  if (uri?.path == AppRoutePaths.loginPathTemplate) {
+    return null;
+  }
+  final continuationTarget = location.isEmpty ? AppRoutePaths.home : location;
+  return buildLoginRouteLocation(
+    reasonName: AuthPromptReason.accountSuspended.name,
+    redirect: continuationTarget,
+    dismissFallback: AppRoutePaths.home,
+    dismissPolicy: LoginDismissPolicy.safeFallback,
+  );
+}
 
 String buildLoginRouteLocation({
   required String reasonName,

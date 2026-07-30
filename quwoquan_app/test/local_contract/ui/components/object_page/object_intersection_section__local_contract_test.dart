@@ -152,7 +152,7 @@ Widget _host({
 }
 
 /// N4（断点2）：未传 onReasonTap 时 section 内部默认走统一 navigator 下钻，
-/// GoRouter host 验证整行对象级可达；`/user/:username` 复用 resolvePath(person) 的
+/// GoRouter host 验证整行对象级可达；`/user/:userHandle` 复用 resolvePath(person) 的
 /// codegen 路由（userProfile）。
 Widget _routerHost({
   required List<IntersectionReason> reasons,
@@ -173,8 +173,9 @@ Widget _routerHost({
         ),
       ),
       GoRoute(
-        path: '/user/:username',
-        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+        path: '/user/:userHandle',
+        builder: (_, state) =>
+            Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -186,8 +187,8 @@ Widget _routerHost({
   );
 }
 
-/// C0：交集卡渲染 companion「发起结伴」pill，点击经统一 navigator._openCompanion 进
-/// 发起群聊承接页（最薄真实约伴闭环）。router 含 /chat/start-group 与 /user/:username。
+/// C0：交集卡渲染 gathering「发起结伴」pill，点击经统一 navigator._openGathering 进
+/// 发起群聊承接页（最薄真实约伴闭环）。router 含 /chat/start-group 与 /user/:userHandle。
 Widget _companionHost({required List<IntersectionReason> reasons}) {
   final router = GoRouter(
     initialLocation: '/',
@@ -207,8 +208,9 @@ Widget _companionHost({required List<IntersectionReason> reasons}) {
         builder: (_, _) => const Text('START_GROUP_CHAT'),
       ),
       GoRoute(
-        path: '/user/:username',
-        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+        path: '/user/:userHandle',
+        builder: (_, state) =>
+            Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -415,7 +417,7 @@ void main() {
     expect(find.text('USER:u_lin'), findsNothing);
   });
 
-  testWidgets('C0：companion actionHint → 渲染可点「发起结伴」pill，点击进发起群聊承接页（北极星闭环）', (
+  testWidgets('C0：gathering actionHint → 渲染可点「发起结伴」pill，点击进发起群聊承接页（北极星闭环）', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -430,9 +432,9 @@ void main() {
             source: 'coWishlistedEntity',
             actionHints: <IntersectionActionHint>[
               IntersectionActionHint(
-                actionKey: 'start_companion',
+                actionKey: 'start_gathering',
                 label: '发起结伴',
-                dispatch: 'companion',
+                dispatch: 'gathering',
                 targetAvailability: 'available',
                 isPrimary: true,
                 target: IntersectionTarget(
@@ -453,11 +455,11 @@ void main() {
     await tester.tap(find.text('发起结伴'));
     await tester.pumpAndSettle();
 
-    // 点击 → navigator._openCompanion → 真实发起群聊承接页（不 fallback 对象下钻）。
+    // 点击 → navigator._openGathering → 真实发起群聊承接页（不 fallback 对象下钻）。
     expect(find.text('START_GROUP_CHAT'), findsOneWidget);
   });
 
-  testWidgets('C0 诚实红线：message dispatch actionHint 不渲染 pill，整行仍回退对象级下钻', (
+  testWidgets('message dispatch actionHint 渲染可点 pill，落到对方主页的破冰承接', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -489,12 +491,46 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 私信端无真实破冰 handler → 不渲染可点 pill（§24.10，不伪造重社交行动）。
-    expect(find.text('私信'), findsNothing);
+    // 私信 / 打招呼有真实承接（对方主页的 greeting 破冰状态机）→ 渲染可点 pill。
+    expect(find.text('私信'), findsOneWidget);
 
-    // 但整行仍对象级可达：点击主句走统一下钻到 person 承接页（不制造死行）。
-    await _tapIntersectionRowContaining(tester, '共同联系人');
+    // 点击 pill → navigator._openMessage → 对方主页承接页（不 fallback 成普通下钻）。
+    await tester.tap(find.text('私信'));
     await tester.pumpAndSettle();
     expect(find.text('USER:u_zhou'), findsOneWidget);
+  });
+
+  testWidgets('message dispatch 的 target 不是 person 时不渲染 pill', (tester) async {
+    await tester.pumpWidget(
+      _companionHost(
+        reasons: <IntersectionReason>[
+          _reason(
+            dimension: 'relationship',
+            label: '你们的共同联系人',
+            count: 1,
+            actionTargetId: 'fixture_circle_photo',
+            objectKind: 'circle',
+            source: 'commonContact',
+            actionHints: <IntersectionActionHint>[
+              IntersectionActionHint(
+                actionKey: 'message_person',
+                label: '私信',
+                dispatch: 'message',
+                targetAvailability: 'available',
+                isPrimary: true,
+                target: IntersectionTarget(
+                  objectId: 'fixture_circle_photo',
+                  objectKind: 'circle',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 无真实 person 承接对象时不渲染「私信」，避免退化成对象下钻（§24.10 诚实红线）。
+    expect(find.text('私信'), findsNothing);
   });
 }

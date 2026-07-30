@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	ErrMessageNotFound             = errors.New("message not found")
-	ErrMessageIdempotencyConflict  = errors.New("message idempotency conflict")
-	ErrMessageReceiptAlreadyExists = errors.New("message receipt already exists")
+	ErrMessageNotFound                 = errors.New("message not found")
+	ErrMessageIdempotencyConflict      = errors.New("message idempotency conflict")
+	ErrMessageReceiptFactAlreadyExists = errors.New("message receipt fact already exists")
 )
 
 // Message is the aggregate root for one immutable send followed by an optional
@@ -38,7 +38,7 @@ type Message struct {
 // MessageCard is a Message-owned value object. It has no identity, Store or
 // public mutation entrypoint outside the Message aggregate.
 type MessageCard struct {
-	Kind         string                 `json:"kind" bson:"kind"`
+	Kind         MessageCardKind        `json:"kind" bson:"kind"`
 	Title        string                 `json:"title" bson:"title"`
 	Subtitle     string                 `json:"subtitle,omitempty" bson:"subtitle,omitempty"`
 	ThumbnailURL string                 `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
@@ -47,6 +47,33 @@ type MessageCard struct {
 	ShareText    string                 `json:"shareText,omitempty" bson:"shareText,omitempty"`
 	Message      string                 `json:"message,omitempty" bson:"message,omitempty"`
 	Attributes   []MessageCardAttribute `json:"attributes" bson:"attributes"`
+}
+
+// MessageCardKind is the closed, snake_case wire set owned by MessageCard.
+// Legacy camelCase and the ambiguous "post" value are intentionally rejected.
+type MessageCardKind string
+
+const (
+	MessageCardKindProfileQR     MessageCardKind = "profile_qr"
+	MessageCardKindContentPost   MessageCardKind = "content_post"
+	MessageCardKindUserProfile   MessageCardKind = "user_profile"
+	MessageCardKindEntityProfile MessageCardKind = "entity_profile"
+	MessageCardKindCircle        MessageCardKind = "circle"
+	MessageCardKindRTCCallLog    MessageCardKind = "rtc_call_log"
+)
+
+func (kind MessageCardKind) Valid() bool {
+	switch kind {
+	case MessageCardKindProfileQR,
+		MessageCardKindContentPost,
+		MessageCardKindUserProfile,
+		MessageCardKindEntityProfile,
+		MessageCardKindCircle,
+		MessageCardKindRTCCallLog:
+		return true
+	default:
+		return false
+	}
 }
 
 type MessageCardAttribute struct {
@@ -76,8 +103,8 @@ func (m Message) PreviewText() string {
 	}
 }
 
-// MessageReceipt is an append-only read fact emitted for a Message.
-type MessageReceipt struct {
+// MessageReceiptFact is an append-only read fact emitted for a Message.
+type MessageReceiptFact struct {
 	ID             string    `json:"id" bson:"_id"`
 	MessageID      string    `json:"messageId" bson:"messageId"`
 	ConversationID string    `json:"conversationId" bson:"conversationId"`

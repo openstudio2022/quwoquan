@@ -111,7 +111,10 @@ def resolve_media_cdn_bases(
         manifest = load_environment_topology(topology_manifest)
     else:
         manifest = load_environment_topology()
-    node = get_environment(manifest, environment)
+    try:
+        node = get_environment(manifest, environment)
+    except KeyError:
+        node = {}
     public_bases = node.get("publicBases") or {}
     image_base = str(public_bases.get("mediaImage") or "").strip().rstrip("/")
     video_base = str(public_bases.get("mediaVideo") or "").strip().rstrip("/")
@@ -199,9 +202,16 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _asset_rows(root: Path) -> Iterable[dict[str, Any]]:
-    path = root / "asset.refs.json"
-    if not path.is_file():
+    paths = [
+        path
+        for path in (root / "asset.refs.json", root / "assets.refs.json")
+        if path.is_file()
+    ]
+    if not paths:
         return
+    if len(paths) != 1:
+        raise ValueError(f"object must own exactly one asset refs document: {root}")
+    path = paths[0]
     for row in _read_json(path).get("assets") or []:
         if isinstance(row, dict):
             yield row

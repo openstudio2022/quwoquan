@@ -27,18 +27,21 @@ final class AlphaRtcCallSessionFacets
     final participants = <CallParticipantDto>[
       const CallParticipantDto(
         userId: 'fixture_user_current',
-        role: 'initiator',
-        status: 'connecting',
+        role: ParticipantRole.initiator,
+        status: ParticipantStatus.connecting,
       ),
       ...command.inviteeIds.map(
-        (id) =>
-            CallParticipantDto(userId: id, role: 'invitee', status: 'ringing'),
+        (id) => CallParticipantDto(
+          userId: id,
+          role: ParticipantRole.invitee,
+          status: ParticipantStatus.ringing,
+        ),
       ),
     ];
     final session = CallSessionDto(
       callId: callId,
       callType: command.callType,
-      status: 'ringing',
+      status: CallStatus.ringing,
       initiatorId: 'fixture_user_current',
       conversationId: command.conversationId,
       circleId: command.circleId,
@@ -60,7 +63,7 @@ final class AlphaRtcCallSessionFacets
 
   @override
   Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) async {
-    final session = _updateStatus(command.callId, 'in_call');
+    final session = _updateStatus(command.callId, CallStatus.inCall);
     return RtcAnswerCallResultDto(
       session: session,
       mediaAccess: RtcMediaSessionAccessDto(
@@ -71,19 +74,19 @@ final class AlphaRtcCallSessionFacets
 
   @override
   Future<CallSessionDto> rejectCall(RtcCallIdCommand command) async =>
-      _end(command.callId, 'rejected');
+      _end(command.callId, EndReason.rejected);
 
   @override
   Future<CallSessionDto> cancelCall(RtcCallIdCommand command) async =>
-      _end(command.callId, 'cancelled');
+      _end(command.callId, EndReason.cancelled);
 
   @override
   Future<CallSessionDto> hangupCall(RtcCallIdCommand command) async =>
-      _end(command.callId, 'normal');
+      _end(command.callId, EndReason.normal);
 
   @override
   Future<RtcJoinCredentialsDto> joinCall(RtcCallIdCommand command) async {
-    final session = _updateStatus(command.callId, 'in_call');
+    final session = _updateStatus(command.callId, CallStatus.inCall);
     return RtcJoinCredentialsDto(
       session: session,
       mediaAccess: RtcMediaSessionAccessDto(
@@ -94,7 +97,7 @@ final class AlphaRtcCallSessionFacets
 
   @override
   Future<CallSessionDto> leaveCall(RtcCallIdCommand command) async =>
-      _end(command.callId, 'last_leave');
+      _end(command.callId, EndReason.lastLeave);
 
   @override
   Future<CallSessionDto> inviteToCall(RtcInviteToCallCommand command) async {
@@ -105,8 +108,8 @@ final class AlphaRtcCallSessionFacets
         .map(
           (id) => CallParticipantDto(
             userId: id,
-            role: 'invitee',
-            status: 'ringing',
+            role: ParticipantRole.invitee,
+            status: ParticipantStatus.ringing,
           ),
         );
     final participants = <CallParticipantDto>[
@@ -125,24 +128,27 @@ final class AlphaRtcCallSessionFacets
   @override
   Future<CallSessionDto> reportMediaConnected(RtcCallIdCommand command) async {
     final current = _require(command.callId);
-    if (current.status == 'ended') {
+    if (current.status == CallStatus.ended) {
       return current;
     }
     final participants = current.participants
         .map(
           (participant) => participant.userId == 'fixture_user_current'
-              ? participant.copyWith(status: 'connected')
+              ? participant.copyWith(status: ParticipantStatus.connected)
               : participant,
         )
         .toList(growable: false);
     final connectedCount = participants
-        .where((participant) => participant.status == 'connected')
+        .where(
+          (participant) => participant.status == ParticipantStatus.connected,
+        )
         .length;
-    final becomesInCall = connectedCount >= 2 && current.status != 'in_call';
+    final becomesInCall =
+        connectedCount >= 2 && current.status != CallStatus.inCall;
     return _save(
       current.copyWith(
         participants: participants,
-        status: becomesInCall ? 'in_call' : current.status,
+        status: becomesInCall ? CallStatus.inCall : current.status,
         startedAt: becomesInCall ? _seedTime : current.startedAt,
         updatedAt: _seedTime,
       ),
@@ -232,17 +238,23 @@ final class AlphaRtcCallSessionFacets
       if (callId.isEmpty || callerId.isEmpty || participantIds is! List) {
         continue;
       }
-      final callType = raw['type'] == 'video' ? 'video' : 'audio';
-      final state = raw['state'] == 'incoming' ? 'ringing' : 'initiated';
+      final callType = raw['type'] == 'video' ? CallType.video : CallType.audio;
+      final state = raw['state'] == 'incoming'
+          ? CallStatus.ringing
+          : CallStatus.initiated;
       final participants = participantIds
           .map((value) => value.toString().trim())
           .where((id) => id.isNotEmpty)
           .map(
             (id) => CallParticipantDto(
               userId: id,
-              role: id == callerId ? 'initiator' : 'invitee',
-              status: state == 'ringing' ? 'ringing' : 'invited',
-              isCameraOn: callType == 'video',
+              role: id == callerId
+                  ? ParticipantRole.initiator
+                  : ParticipantRole.invitee,
+              status: state == CallStatus.ringing
+                  ? ParticipantStatus.ringing
+                  : ParticipantStatus.invited,
+              isCameraOn: callType == CallType.video,
             ),
           )
           .toList(growable: false);
@@ -274,16 +286,16 @@ final class AlphaRtcCallSessionFacets
     return session;
   }
 
-  CallSessionDto _updateStatus(String callId, String status) {
+  CallSessionDto _updateStatus(String callId, CallStatus status) {
     final current = _require(callId);
     return _save(current.copyWith(status: status, updatedAt: _seedTime));
   }
 
-  CallSessionDto _end(String callId, String reason) {
+  CallSessionDto _end(String callId, EndReason reason) {
     final current = _require(callId);
     return _save(
       current.copyWith(
-        status: 'ended',
+        status: CallStatus.ended,
         endReason: reason,
         endedAt: _seedTime,
         updatedAt: _seedTime,

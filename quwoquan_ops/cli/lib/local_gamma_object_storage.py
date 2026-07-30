@@ -15,7 +15,5 @@ def prepare_local_gamma_object_storage(*, edge_port: int) -> LocalGammaObjectSto
         environment="gamma",
         target_name="gamma-local",
         edge_port=edge_port,
-        public_host="upload.gamma.quwoquan.com",
-        local_host="gamma-upload.localhost",
         environment_prefix="LOCAL_GAMMA",
     )

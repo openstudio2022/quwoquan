@@ -9,8 +9,8 @@ class AuthLoginResultDto {
   final String identityOrigin;
   final int logicalShard;
   final String anonymousRetentionPolicy;
-  final Map<String, dynamic>? activeSub;
-  final int subAccountCount;
+  final Map<String, dynamic>? activePersona;
+  final int personaCount;
   final int sessionRememberTtlSeconds;
   final Map<String, dynamic>? accountHint;
 
@@ -22,8 +22,8 @@ class AuthLoginResultDto {
     this.identityOrigin = '',
     this.logicalShard = 0,
     this.anonymousRetentionPolicy = '',
-    this.activeSub,
-    this.subAccountCount = 0,
+    this.activePersona,
+    this.personaCount = 0,
     this.sessionRememberTtlSeconds = 0,
     this.accountHint,
   });
@@ -37,8 +37,8 @@ class AuthLoginResultDto {
       identityOrigin: m['identityOrigin']?.toString() ?? '',
       logicalShard: (m['logicalShard'] as num?)?.toInt() ?? 0,
       anonymousRetentionPolicy: m['anonymousRetentionPolicy']?.toString() ?? '',
-      activeSub: _parseStringKeyMap(m['activeSub']) ?? null,
-      subAccountCount: (m['subAccountCount'] as num?)?.toInt() ?? 0,
+      activePersona: _parseStringKeyMap(m['activePersona']) ?? null,
+      personaCount: (m['personaCount'] as num?)?.toInt() ?? 0,
       sessionRememberTtlSeconds: (m['sessionRememberTtlSeconds'] as num?)?.toInt() ?? 0,
       accountHint: _parseStringKeyMap(m['accountHint']) ?? null,
     );
@@ -53,8 +53,8 @@ class AuthLoginResultDto {
       'identityOrigin': identityOrigin,
       'logicalShard': logicalShard,
       'anonymousRetentionPolicy': anonymousRetentionPolicy,
-      'activeSub': activeSub,
-      'subAccountCount': subAccountCount,
+      'activePersona': activePersona,
+      'personaCount': personaCount,
       'sessionRememberTtlSeconds': sessionRememberTtlSeconds,
       'accountHint': accountHint,
     };
@@ -68,8 +68,8 @@ class AuthLoginResultDto {
     String? identityOrigin,
     int? logicalShard,
     String? anonymousRetentionPolicy,
-    Map<String, dynamic>? activeSub,
-    int? subAccountCount,
+    Map<String, dynamic>? activePersona,
+    int? personaCount,
     int? sessionRememberTtlSeconds,
     Map<String, dynamic>? accountHint,
   }) {
@@ -81,8 +81,8 @@ class AuthLoginResultDto {
       identityOrigin: identityOrigin ?? this.identityOrigin,
       logicalShard: logicalShard ?? this.logicalShard,
       anonymousRetentionPolicy: anonymousRetentionPolicy ?? this.anonymousRetentionPolicy,
-      activeSub: activeSub ?? this.activeSub,
-      subAccountCount: subAccountCount ?? this.subAccountCount,
+      activePersona: activePersona ?? this.activePersona,
+      personaCount: personaCount ?? this.personaCount,
       sessionRememberTtlSeconds: sessionRememberTtlSeconds ?? this.sessionRememberTtlSeconds,
       accountHint: accountHint ?? this.accountHint,
     );

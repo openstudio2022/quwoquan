@@ -7,20 +7,20 @@ const ExternalProviderBindingOwner = "integration-service"
 const ExternalProviderBindingObject = "integration.external_integration.location"
 
 type ExternalProviderBinding struct {
-	State string
-	AdapterID string
-	EndpointRef string
+	State                   string
+	AdapterID               string
+	EndpointRef             string
 	EndpointEnvironmentKeys map[string]string
-	SecretEnvironmentKeys []string
-	TimeoutMilliseconds int
-	RequiredRedisScenes []string
+	SecretEnvironmentKeys   []string
+	TimeoutMilliseconds     int
+	RequiredRedisScenes     []string
 }
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"integration.location.lookup": {
-			State: "enabled",
-			AdapterID: "ext.map.protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.map.protocol_fixture",
 			EndpointRef: "environment_binding:integration.location_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"base": "INTEGRATION_LOCATION_FIXTURE_BASE_URL",
@@ -29,14 +29,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_LOCATION_FIXTURE_AK",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 	"beta": {
 		"integration.location.lookup": {
-			State: "enabled",
-			AdapterID: "ext.map.protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.map.protocol_fixture",
 			EndpointRef: "environment_binding:integration.location_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"base": "INTEGRATION_LOCATION_FIXTURE_BASE_URL",
@@ -45,14 +44,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_LOCATION_FIXTURE_AK",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 	"gamma": {
 		"integration.location.lookup": {
-			State: "enabled",
-			AdapterID: "ext.map.protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.map.protocol_fixture",
 			EndpointRef: "environment_binding:integration.location_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"base": "INTEGRATION_LOCATION_FIXTURE_BASE_URL",
@@ -61,14 +59,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_LOCATION_FIXTURE_AK",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 	"prod": {
 		"integration.location.lookup": {
-			State: "enabled",
-			AdapterID: "ext.map.baidu",
+			State:       "enabled",
+			AdapterID:   "ext.map.baidu",
 			EndpointRef: "environment_binding:integration.location",
 			EndpointEnvironmentKeys: map[string]string{
 				"base": "INTEGRATION_LOCATION_BAIDU_BASE_URL",
@@ -77,15 +74,16 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_LOCATION_BAIDU_AK",
 			},
 			TimeoutMilliseconds: 1200,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 }
 
 func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {
 	byCapability, ok := ExternalProviderBindings[environment]
-	if !ok { return ExternalProviderBinding{}, false }
+	if !ok {
+		return ExternalProviderBinding{}, false
+	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }

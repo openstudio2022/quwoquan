@@ -13,6 +13,231 @@ class AppTelemetryEventDefinition {
   Set<String> get allowedExtensions => <String>{...requiredExtensions, ...optionalExtensions};
 }
 
+abstract final class AppTelemetryValueBackgroundRetryTerminal {
+  static const String notApplicable = "not_applicable";
+  static const String retryScheduled = "retry_scheduled";
+  static const String retryExhausted = "retry_exhausted";
+  static const String published = "published";
+  static const String pendingReview = "pending_review";
+  static const String rejected = "rejected";
+  static const String cancelled = "cancelled";
+  static const Set<String> values = <String>{notApplicable, retryScheduled, retryExhausted, published, pendingReview, rejected, cancelled};
+}
+
+abstract final class AppTelemetryValueCacheAgeBucket {
+  static const String notApplicable = "not_applicable";
+  static const String under1h = "under_1h";
+  static const String oneTo24h = "one_to_24h";
+  static const String over24h = "over_24h";
+  static const Set<String> values = <String>{notApplicable, under1h, oneTo24h, over24h};
+}
+
+abstract final class AppTelemetryValueCallType {
+  static const String audio = "audio";
+  static const String video = "video";
+  static const Set<String> values = <String>{audio, video};
+}
+
+abstract final class AppTelemetryValueCatalogSource {
+  static const String remote = "remote";
+  static const String verifiedCache = "verified_cache";
+  static const String bootstrapReplica = "bootstrap_replica";
+  static const Set<String> values = <String>{remote, verifiedCache, bootstrapReplica};
+}
+
+abstract final class AppTelemetryValueChatAction {
+  static const String candidateSourceOpen = "candidate_source_open";
+  static const String candidateSourceSelect = "candidate_source_select";
+  static const String groupCreate = "group_create";
+  static const String memberAdd = "member_add";
+  static const String mentionSelect = "mention_select";
+  static const String mentionSend = "mention_send";
+  static const String readWatermark = "read_watermark";
+  static const String groupGovernance = "group_governance";
+  static const Set<String> values = <String>{candidateSourceOpen, candidateSourceSelect, groupCreate, memberAdd, mentionSelect, mentionSend, readWatermark, groupGovernance};
+}
+
+abstract final class AppTelemetryValueChatOutcome {
+  static const String succeeded = "succeeded";
+  static const String failed = "failed";
+  static const String rejected = "rejected";
+  static const String cancelled = "cancelled";
+  static const String unchanged = "unchanged";
+  static const Set<String> values = <String>{succeeded, failed, rejected, cancelled, unchanged};
+}
+
+abstract final class AppTelemetryValueChatSource {
+  static const String contacts = "contacts";
+  static const String group = "group";
+  static const String circle = "circle";
+  static const String roster = "roster";
+  static const String composer = "composer";
+  static const String conversation = "conversation";
+  static const String settings = "settings";
+  static const Set<String> values = <String>{contacts, group, circle, roster, composer, conversation, settings};
+}
+
+abstract final class AppTelemetryValueContentType {
+  static const String micro = "micro";
+  static const String article = "article";
+  static const String image = "image";
+  static const String video = "video";
+  static const String unknown = "unknown";
+  static const Set<String> values = <String>{micro, article, image, video, unknown};
+}
+
+abstract final class AppTelemetryValueDecoderQueueMode {
+  static const String synchronous = "synchronous";
+  static const Set<String> values = <String>{synchronous};
+}
+
+abstract final class AppTelemetryValueDetectionSource {
+  static const String dartEventLoopWatchdog = "dart_event_loop_watchdog";
+  static const String androidApplicationExitInfo = "android_application_exit_info";
+  static const String iosMetricKit = "ios_metric_kit";
+  static const Set<String> values = <String>{dartEventLoopWatchdog, androidApplicationExitInfo, iosMetricKit};
+}
+
+abstract final class AppTelemetryValueDevicePlatform {
+  static const String android = "android";
+  static const String ios = "ios";
+  static const String ohos = "ohos";
+  static const String web = "web";
+  static const String desktop = "desktop";
+  static const Set<String> values = <String>{android, ios, ohos, web, desktop};
+}
+
+abstract final class AppTelemetryValueEnvironment {
+  static const String alpha = "alpha";
+  static const String beta = "beta";
+  static const String gamma = "gamma";
+  static const String prod = "prod";
+  static const Set<String> values = <String>{alpha, beta, gamma, prod};
+}
+
+abstract final class AppTelemetryValueGovernanceAction {
+  static const String none = "none";
+  static const String announcementUpdate = "announcement_update";
+  static const String adminAssign = "admin_assign";
+  static const String adminRevoke = "admin_revoke";
+  static const String ownershipTransfer = "ownership_transfer";
+  static const String memberRemove = "member_remove";
+  static const String memberLeave = "member_leave";
+  static const Set<String> values = <String>{none, announcementUpdate, adminAssign, adminRevoke, ownershipTransfer, memberRemove, memberLeave};
+}
+
+abstract final class AppTelemetryValueMemberCountBucket {
+  static const String zero = "zero";
+  static const String one = "one";
+  static const String twoToFive = "two_to_five";
+  static const String sixToFifty = "six_to_fifty";
+  static const String fiftyOneToFiveHundred = "fifty_one_to_five_hundred";
+  static const String fiveHundredOneToOneThousand = "five_hundred_one_to_one_thousand";
+  static const Set<String> values = <String>{zero, one, twoToFive, sixToFifty, fiftyOneToFiveHundred, fiveHundredOneToOneThousand};
+}
+
+abstract final class AppTelemetryValueMentionScope {
+  static const String none = "none";
+  static const String member = "member";
+  static const String all = "all";
+  static const String assistant = "assistant";
+  static const Set<String> values = <String>{none, member, all, assistant};
+}
+
+abstract final class AppTelemetryValueNetworkQuality {
+  static const String excellent = "excellent";
+  static const String good = "good";
+  static const String poor = "poor";
+  static const String unknown = "unknown";
+  static const Set<String> values = <String>{excellent, good, poor, unknown};
+}
+
+abstract final class AppTelemetryValueObjectState {
+  static const String draft = "draft";
+  static const String submitting = "submitting";
+  static const String retryWait = "retry_wait";
+  static const String pendingReview = "pending_review";
+  static const String blocked = "blocked";
+  static const String published = "published";
+  static const String cancelled = "cancelled";
+  static const Set<String> values = <String>{draft, submitting, retryWait, pendingReview, blocked, published, cancelled};
+}
+
+abstract final class AppTelemetryValuePublicationStage {
+  static const String editorReady = "editor_ready";
+  static const String draftSaved = "draft_saved";
+  static const String draftRestored = "draft_restored";
+  static const String submitStarted = "submit_started";
+  static const String queued = "queued";
+  static const String retryScheduled = "retry_scheduled";
+  static const String retryExhausted = "retry_exhausted";
+  static const String pendingReview = "pending_review";
+  static const String cancelled = "cancelled";
+  static const String blocked = "blocked";
+  static const String published = "published";
+  static const Set<String> values = <String>{editorReady, draftSaved, draftRestored, submitStarted, queued, retryScheduled, retryExhausted, pendingReview, cancelled, blocked, published};
+}
+
+abstract final class AppTelemetryValueRendererMode {
+  static const String platformView = "platform_view";
+  static const String textureView = "texture_view";
+  static const Set<String> values = <String>{platformView, textureView};
+}
+
+abstract final class AppTelemetryValueSeekEvidenceSource {
+  static const String controllerCommandCompletion = "controller_command_completion";
+  static const String nativeSettled = "native_settled";
+  static const String sourceSwitchNativeSettled = "source_switch_native_settled";
+  static const String sourceSwitchPositionReadbackNativeUnsupported = "source_switch_position_readback_native_unsupported";
+  static const String sourceSwitchNativeSettleTimeout = "source_switch_native_settle_timeout";
+  static const String sourceSwitchSettleUnsupported = "source_switch_settle_unsupported";
+  static const String sourceSwitchCommandFailed = "source_switch_command_failed";
+  static const String sourceSwitchSuperseded = "source_switch_superseded";
+  static const Set<String> values = <String>{controllerCommandCompletion, nativeSettled, sourceSwitchNativeSettled, sourceSwitchPositionReadbackNativeUnsupported, sourceSwitchNativeSettleTimeout, sourceSwitchSettleUnsupported, sourceSwitchCommandFailed, sourceSwitchSuperseded};
+}
+
+abstract final class AppTelemetryValueTerminalState {
+  static const String content = "content";
+  static const String empty = "empty";
+  static const String error = "error";
+  static const Set<String> values = <String>{content, empty, error};
+}
+
+abstract final class AppTelemetryValueTransport {
+  static const String websocket = "websocket";
+  static const String longPoll = "long_poll";
+  static const Set<String> values = <String>{websocket, longPoll};
+}
+
+abstract final class AppTelemetryValueTurnAction {
+  static const String submit = "submit";
+  static const String firstAnswer = "first_answer";
+  static const String completed = "completed";
+  static const String failed = "failed";
+  static const String cancelled = "cancelled";
+  static const String streamFailure = "stream_failure";
+  static const Set<String> values = <String>{submit, firstAnswer, completed, failed, cancelled, streamFailure};
+}
+
+abstract final class AppTelemetryValueUnreadCountBucket {
+  static const String zero = "zero";
+  static const String one = "one";
+  static const String twoToFive = "two_to_five";
+  static const String sixToFifty = "six_to_fifty";
+  static const String fiftyOneToFiveHundred = "fifty_one_to_five_hundred";
+  static const String fiveHundredOneToOneThousand = "five_hundred_one_to_one_thousand";
+  static const Set<String> values = <String>{zero, one, twoToFive, sixToFifty, fiftyOneToFiveHundred, fiveHundredOneToOneThousand};
+}
+
+abstract final class AppTelemetryValueWatermarkResult {
+  static const String none = "none";
+  static const String advanced = "advanced";
+  static const String alreadyCurrent = "already_current";
+  static const String rejected = "rejected";
+  static const String failed = "failed";
+  static const Set<String> values = <String>{none, advanced, alreadyCurrent, rejected, failed};
+}
+
 class AppTelemetryPayload {
   const AppTelemetryPayload._(this.eventType, this.logType, this.extensions);
   final String eventType;
@@ -103,6 +328,47 @@ class AppTelemetryPayload {
       if (result != null) 'result': result,
       if (failReasonCode != null) 'failReasonCode': failReasonCode,
       if (recoveryAction != null) 'recoveryAction': recoveryAction,
+      if (requestId != null) 'requestId': requestId,
+      if (traceId != null) 'traceId': traceId,
+    });
+  }
+
+  factory AppTelemetryPayload.loginFunnel({required String action, required String flowId, required String step, required String result, String? entryMode, String? fromStep, String? toStep, String? provider, String? otpPurpose, String? consentState, int? durationMs, int? attemptIndex, String? countdownBucket, bool? motionReduced, String? dismissPolicy}) {
+    return AppTelemetryPayload._('login_funnel', 'event', <String, Object?>{
+      'action': action,
+      'flowId': flowId,
+      'step': step,
+      'result': result,
+      if (entryMode != null) 'entryMode': entryMode,
+      if (fromStep != null) 'fromStep': fromStep,
+      if (toStep != null) 'toStep': toStep,
+      if (provider != null) 'provider': provider,
+      if (otpPurpose != null) 'otpPurpose': otpPurpose,
+      if (consentState != null) 'consentState': consentState,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (attemptIndex != null) 'attemptIndex': attemptIndex,
+      if (countdownBucket != null) 'countdownBucket': countdownBucket,
+      if (motionReduced != null) 'motionReduced': motionReduced,
+      if (dismissPolicy != null) 'dismissPolicy': dismissPolicy,
+    });
+  }
+
+  factory AppTelemetryPayload.loginOperation({required String operationId, required String surfaceId, required String result, String? flowId, String? step, String? provider, String? otpPurpose, String? failReasonCode, String? failureKind, String? recoveryAction, String? copyKey, String? feedbackSurface, int? durationMs, int? attemptIndex, String? requestId, String? traceId}) {
+    return AppTelemetryPayload._('login_operation', 'event', <String, Object?>{
+      'operationId': operationId,
+      'surfaceId': surfaceId,
+      'result': result,
+      if (flowId != null) 'flowId': flowId,
+      if (step != null) 'step': step,
+      if (provider != null) 'provider': provider,
+      if (otpPurpose != null) 'otpPurpose': otpPurpose,
+      if (failReasonCode != null) 'failReasonCode': failReasonCode,
+      if (failureKind != null) 'failureKind': failureKind,
+      if (recoveryAction != null) 'recoveryAction': recoveryAction,
+      if (copyKey != null) 'copyKey': copyKey,
+      if (feedbackSurface != null) 'feedbackSurface': feedbackSurface,
+      if (durationMs != null) 'durationMs': durationMs,
+      if (attemptIndex != null) 'attemptIndex': attemptIndex,
       if (requestId != null) 'requestId': requestId,
       if (traceId != null) 'traceId': traceId,
     });
@@ -379,6 +645,8 @@ abstract final class AppTelemetryCatalog {
     'app_startup': AppTelemetryEventDefinition(eventType: 'app_startup', logType: 'event', requiredExtensions: <String>{'tClickToFirstFrameMs', 'tFirstFrameToShellMs', 'tShellToContentMs', 'tClickToContentMs', 'hasError'}, optionalExtensions: <String>{}, normalSampleRate: 1, slowThresholdMs: 3000, internalPriority: 'critical'),
     'runtime_exception': AppTelemetryEventDefinition(eventType: 'runtime_exception', logType: 'error', requiredExtensions: <String>{'errorCode'}, optionalExtensions: <String>{'operationId', 'httpStatus', 'callStack'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'error'),
     'product_action': AppTelemetryEventDefinition(eventType: 'product_action', logType: 'event', requiredExtensions: <String>{'journey', 'action'}, optionalExtensions: <String>{'surfaceId', 'objectType', 'objectId', 'reasonId', 'targetType', 'targetId', 'environment', 'durationMs', 'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'login_funnel': AppTelemetryEventDefinition(eventType: 'login_funnel', logType: 'event', requiredExtensions: <String>{'action', 'flowId', 'step', 'result'}, optionalExtensions: <String>{'entryMode', 'fromStep', 'toStep', 'provider', 'otpPurpose', 'consentState', 'durationMs', 'attemptIndex', 'countdownBucket', 'motionReduced', 'dismissPolicy'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
+    'login_operation': AppTelemetryEventDefinition(eventType: 'login_operation', logType: 'event', requiredExtensions: <String>{'operationId', 'surfaceId', 'result'}, optionalExtensions: <String>{'flowId', 'step', 'provider', 'otpPurpose', 'failReasonCode', 'failureKind', 'recoveryAction', 'copyKey', 'feedbackSurface', 'durationMs', 'attemptIndex', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'chat_interaction_outcome': AppTelemetryEventDefinition(eventType: 'chat_interaction_outcome', logType: 'event', requiredExtensions: <String>{'chatAction', 'chatOutcome'}, optionalExtensions: <String>{'chatSource', 'mentionScope', 'governanceAction', 'watermarkResult', 'memberCountBucket', 'unreadCountBucket', 'surfaceId', 'durationMs', 'failReasonCode', 'recoveryAction'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
     'performance_sample': AppTelemetryEventDefinition(eventType: 'performance_sample', logType: 'event', requiredExtensions: <String>{'operationId', 'durationMs'}, optionalExtensions: <String>{'result', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 0.1, slowThresholdMs: 0, internalPriority: 'normal'),
     'operation_result': AppTelemetryEventDefinition(eventType: 'operation_result', logType: 'event', requiredExtensions: <String>{'operationId', 'result'}, optionalExtensions: <String>{'surfaceId', 'hasCache', 'durationMs', 'failReasonCode', 'recoveryAction', 'requestId', 'traceId'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
@@ -403,11 +671,43 @@ abstract final class AppTelemetryCatalog {
     'search_result_dwell': AppTelemetryEventDefinition(eventType: 'search_result_dwell', logType: 'event', requiredExtensions: <String>{'requestId', 'durationMs', 'resultCount'}, optionalExtensions: <String>{'action'}, normalSampleRate: 1, slowThresholdMs: 0, internalPriority: 'critical'),
   };
 
+  static const Map<String, Set<String>> extensionEnumValues = <String, Set<String>>{
+    "backgroundRetryTerminal": AppTelemetryValueBackgroundRetryTerminal.values,
+    "cacheAgeBucket": AppTelemetryValueCacheAgeBucket.values,
+    "callType": AppTelemetryValueCallType.values,
+    "catalogSource": AppTelemetryValueCatalogSource.values,
+    "chatAction": AppTelemetryValueChatAction.values,
+    "chatOutcome": AppTelemetryValueChatOutcome.values,
+    "chatSource": AppTelemetryValueChatSource.values,
+    "contentType": AppTelemetryValueContentType.values,
+    "decoderQueueMode": AppTelemetryValueDecoderQueueMode.values,
+    "detectionSource": AppTelemetryValueDetectionSource.values,
+    "devicePlatform": AppTelemetryValueDevicePlatform.values,
+    "environment": AppTelemetryValueEnvironment.values,
+    "governanceAction": AppTelemetryValueGovernanceAction.values,
+    "memberCountBucket": AppTelemetryValueMemberCountBucket.values,
+    "mentionScope": AppTelemetryValueMentionScope.values,
+    "networkQuality": AppTelemetryValueNetworkQuality.values,
+    "objectState": AppTelemetryValueObjectState.values,
+    "publicationStage": AppTelemetryValuePublicationStage.values,
+    "rendererMode": AppTelemetryValueRendererMode.values,
+    "seekEvidenceSource": AppTelemetryValueSeekEvidenceSource.values,
+    "terminalState": AppTelemetryValueTerminalState.values,
+    "transport": AppTelemetryValueTransport.values,
+    "turnAction": AppTelemetryValueTurnAction.values,
+    "unreadCountBucket": AppTelemetryValueUnreadCountBucket.values,
+    "watermarkResult": AppTelemetryValueWatermarkResult.values,
+  };
+
   static String? validate(AppTelemetryPayload payload) {
     final definition = events[payload.eventType];
     if (definition == null || definition.logType != payload.logType) return 'unknown_event';
     if (!payload.extensions.keys.every(definition.allowedExtensions.contains)) return 'unknown_extension';
     if (!definition.requiredExtensions.every(payload.extensions.containsKey)) return 'missing_extension';
+    for (final extension in payload.extensions.entries) {
+      final allowedValues = extensionEnumValues[extension.key];
+      if (allowedValues != null && !allowedValues.contains(extension.value)) return 'invalid_extension_value';
+    }
     return null;
   }
 }

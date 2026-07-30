@@ -233,7 +233,6 @@ extension AssistantStreamEventTypeX on AssistantStreamEventType {
 }
 
 enum SkillSubscriptionStatus {
-  unknown,
   active,
   paused,
   archived,
@@ -241,8 +240,6 @@ enum SkillSubscriptionStatus {
 
 SkillSubscriptionStatus parseSkillSubscriptionStatusStrict(String raw) {
   switch (raw.trim()) {
-    case "":
-      return SkillSubscriptionStatus.unknown;
     case "active":
       return SkillSubscriptionStatus.active;
     case "paused":
@@ -254,24 +251,9 @@ SkillSubscriptionStatus parseSkillSubscriptionStatusStrict(String raw) {
   }
 }
 
-SkillSubscriptionStatus parseSkillSubscriptionStatus(String raw) {
-  switch (raw.trim()) {
-    case "active":
-      return SkillSubscriptionStatus.active;
-    case "paused":
-      return SkillSubscriptionStatus.paused;
-    case "archived":
-      return SkillSubscriptionStatus.archived;
-    default:
-      return SkillSubscriptionStatus.unknown;
-  }
-}
-
 extension SkillSubscriptionStatusX on SkillSubscriptionStatus {
   String get wireName {
     switch (this) {
-      case SkillSubscriptionStatus.unknown:
-        return "";
       case SkillSubscriptionStatus.active:
         return "active";
       case SkillSubscriptionStatus.paused:
@@ -755,120 +737,6 @@ extension QueryIntentX on QueryIntent {
   }
 }
 
-enum AnswerShape {
-  unspecified,
-  directAnswer,
-  comparison,
-  options,
-  decisionReady,
-  actionPlan,
-}
-
-AnswerShape parseAnswerShapeStrict(String raw) {
-  switch (raw.trim()) {
-    case "":
-      return AnswerShape.unspecified;
-    case "direct_answer":
-      return AnswerShape.directAnswer;
-    case "comparison":
-      return AnswerShape.comparison;
-    case "options":
-      return AnswerShape.options;
-    case "decision_ready":
-      return AnswerShape.decisionReady;
-    case "action_plan":
-      return AnswerShape.actionPlan;
-    default:
-      throw AssistantRuntimeEnumParseFailure("AnswerShape", raw.trim());
-  }
-}
-
-AnswerShape parseAnswerShape(String raw) {
-  switch (raw.trim()) {
-    case "direct_answer":
-      return AnswerShape.directAnswer;
-    case "comparison":
-      return AnswerShape.comparison;
-    case "options":
-      return AnswerShape.options;
-    case "decision_ready":
-      return AnswerShape.decisionReady;
-    case "action_plan":
-      return AnswerShape.actionPlan;
-    default:
-      return AnswerShape.unspecified;
-  }
-}
-
-extension AnswerShapeX on AnswerShape {
-  String get wireName {
-    switch (this) {
-      case AnswerShape.unspecified:
-        return "";
-      case AnswerShape.directAnswer:
-        return "direct_answer";
-      case AnswerShape.comparison:
-        return "comparison";
-      case AnswerShape.options:
-        return "options";
-      case AnswerShape.decisionReady:
-        return "decision_ready";
-      case AnswerShape.actionPlan:
-        return "action_plan";
-    }
-  }
-}
-
-enum FreshnessNeed {
-  unspecified,
-  stable,
-  recent,
-  realtime,
-}
-
-FreshnessNeed parseFreshnessNeedStrict(String raw) {
-  switch (raw.trim()) {
-    case "":
-      return FreshnessNeed.unspecified;
-    case "stable":
-      return FreshnessNeed.stable;
-    case "recent":
-      return FreshnessNeed.recent;
-    case "realtime":
-      return FreshnessNeed.realtime;
-    default:
-      throw AssistantRuntimeEnumParseFailure("FreshnessNeed", raw.trim());
-  }
-}
-
-FreshnessNeed parseFreshnessNeed(String raw) {
-  switch (raw.trim()) {
-    case "stable":
-      return FreshnessNeed.stable;
-    case "recent":
-      return FreshnessNeed.recent;
-    case "realtime":
-      return FreshnessNeed.realtime;
-    default:
-      return FreshnessNeed.unspecified;
-  }
-}
-
-extension FreshnessNeedX on FreshnessNeed {
-  String get wireName {
-    switch (this) {
-      case FreshnessNeed.unspecified:
-        return "";
-      case FreshnessNeed.stable:
-        return "stable";
-      case FreshnessNeed.recent:
-        return "recent";
-      case FreshnessNeed.realtime:
-        return "realtime";
-    }
-  }
-}
-
 enum SkillMode {
   qa,
   task,
@@ -1050,56 +918,6 @@ extension StopPolicyX on StopPolicy {
         return "strict";
       case StopPolicy.exhaustive:
         return "explore";
-    }
-  }
-}
-
-enum SearchIterationConvergenceStatus {
-  unknown,
-  improving,
-  flat,
-  saturated,
-}
-
-SearchIterationConvergenceStatus parseSearchIterationConvergenceStatusStrict(String raw) {
-  switch (raw.trim()) {
-    case "":
-      return SearchIterationConvergenceStatus.unknown;
-    case "improving":
-      return SearchIterationConvergenceStatus.improving;
-    case "flat":
-      return SearchIterationConvergenceStatus.flat;
-    case "saturated":
-      return SearchIterationConvergenceStatus.saturated;
-    default:
-      throw AssistantRuntimeEnumParseFailure("SearchIterationConvergenceStatus", raw.trim());
-  }
-}
-
-SearchIterationConvergenceStatus parseSearchIterationConvergenceStatus(String raw) {
-  switch (raw.trim()) {
-    case "improving":
-      return SearchIterationConvergenceStatus.improving;
-    case "flat":
-      return SearchIterationConvergenceStatus.flat;
-    case "saturated":
-      return SearchIterationConvergenceStatus.saturated;
-    default:
-      return SearchIterationConvergenceStatus.unknown;
-  }
-}
-
-extension SearchIterationConvergenceStatusX on SearchIterationConvergenceStatus {
-  String get wireName {
-    switch (this) {
-      case SearchIterationConvergenceStatus.unknown:
-        return "";
-      case SearchIterationConvergenceStatus.improving:
-        return "improving";
-      case SearchIterationConvergenceStatus.flat:
-        return "flat";
-      case SearchIterationConvergenceStatus.saturated:
-        return "saturated";
     }
   }
 }
@@ -1310,63 +1128,6 @@ extension EvidenceSourceTierX on EvidenceSourceTier {
       case EvidenceSourceTier.web:
         return "web";
       case EvidenceSourceTier.unknown:
-        return "";
-    }
-  }
-}
-
-enum SkillExecutionTarget {
-  toolChain,
-  nativeApi,
-  iosIntent,
-  androidIntent,
-  unknown,
-}
-
-SkillExecutionTarget parseSkillExecutionTargetStrict(String raw) {
-  switch (raw.trim()) {
-    case "tool_chain":
-      return SkillExecutionTarget.toolChain;
-    case "native_api":
-      return SkillExecutionTarget.nativeApi;
-    case "ios_intent":
-      return SkillExecutionTarget.iosIntent;
-    case "android_intent":
-      return SkillExecutionTarget.androidIntent;
-    case "":
-      return SkillExecutionTarget.unknown;
-    default:
-      throw AssistantRuntimeEnumParseFailure("SkillExecutionTarget", raw.trim());
-  }
-}
-
-SkillExecutionTarget parseSkillExecutionTarget(String raw) {
-  switch (raw.trim()) {
-    case "tool_chain":
-      return SkillExecutionTarget.toolChain;
-    case "native_api":
-      return SkillExecutionTarget.nativeApi;
-    case "ios_intent":
-      return SkillExecutionTarget.iosIntent;
-    case "android_intent":
-      return SkillExecutionTarget.androidIntent;
-    default:
-      return SkillExecutionTarget.unknown;
-  }
-}
-
-extension SkillExecutionTargetX on SkillExecutionTarget {
-  String get wireName {
-    switch (this) {
-      case SkillExecutionTarget.toolChain:
-        return "tool_chain";
-      case SkillExecutionTarget.nativeApi:
-        return "native_api";
-      case SkillExecutionTarget.iosIntent:
-        return "ios_intent";
-      case SkillExecutionTarget.androidIntent:
-        return "android_intent";
-      case SkillExecutionTarget.unknown:
         return "";
     }
   }
@@ -1906,6 +1667,119 @@ extension ProcessDisplayBlockKindX on ProcessDisplayBlockKind {
   }
 }
 
+enum SearchPlanDimension {
+  unknown,
+  currentState,
+  decisionImpact,
+  candidateSpace,
+  tradeoffs,
+  fitConstraints,
+  fitScenarios,
+  riskBoundaries,
+  keyFacts,
+  decisionThreshold,
+  coreObject,
+  supportingEvidence,
+  latestSignal,
+}
+
+SearchPlanDimension parseSearchPlanDimensionStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return SearchPlanDimension.unknown;
+    case "current_state":
+      return SearchPlanDimension.currentState;
+    case "decision_impact":
+      return SearchPlanDimension.decisionImpact;
+    case "candidate_space":
+      return SearchPlanDimension.candidateSpace;
+    case "tradeoffs":
+      return SearchPlanDimension.tradeoffs;
+    case "fit_constraints":
+      return SearchPlanDimension.fitConstraints;
+    case "fit_scenarios":
+      return SearchPlanDimension.fitScenarios;
+    case "risk_boundaries":
+      return SearchPlanDimension.riskBoundaries;
+    case "key_facts":
+      return SearchPlanDimension.keyFacts;
+    case "decision_threshold":
+      return SearchPlanDimension.decisionThreshold;
+    case "core_object":
+      return SearchPlanDimension.coreObject;
+    case "supporting_evidence":
+      return SearchPlanDimension.supportingEvidence;
+    case "latest_signal":
+      return SearchPlanDimension.latestSignal;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SearchPlanDimension", raw.trim());
+  }
+}
+
+SearchPlanDimension parseSearchPlanDimension(String raw) {
+  switch (raw.trim()) {
+    case "current_state":
+      return SearchPlanDimension.currentState;
+    case "decision_impact":
+      return SearchPlanDimension.decisionImpact;
+    case "candidate_space":
+      return SearchPlanDimension.candidateSpace;
+    case "tradeoffs":
+      return SearchPlanDimension.tradeoffs;
+    case "fit_constraints":
+      return SearchPlanDimension.fitConstraints;
+    case "fit_scenarios":
+      return SearchPlanDimension.fitScenarios;
+    case "risk_boundaries":
+      return SearchPlanDimension.riskBoundaries;
+    case "key_facts":
+      return SearchPlanDimension.keyFacts;
+    case "decision_threshold":
+      return SearchPlanDimension.decisionThreshold;
+    case "core_object":
+      return SearchPlanDimension.coreObject;
+    case "supporting_evidence":
+      return SearchPlanDimension.supportingEvidence;
+    case "latest_signal":
+      return SearchPlanDimension.latestSignal;
+    default:
+      return SearchPlanDimension.unknown;
+  }
+}
+
+extension SearchPlanDimensionX on SearchPlanDimension {
+  String get wireName {
+    switch (this) {
+      case SearchPlanDimension.unknown:
+        return "";
+      case SearchPlanDimension.currentState:
+        return "current_state";
+      case SearchPlanDimension.decisionImpact:
+        return "decision_impact";
+      case SearchPlanDimension.candidateSpace:
+        return "candidate_space";
+      case SearchPlanDimension.tradeoffs:
+        return "tradeoffs";
+      case SearchPlanDimension.fitConstraints:
+        return "fit_constraints";
+      case SearchPlanDimension.fitScenarios:
+        return "fit_scenarios";
+      case SearchPlanDimension.riskBoundaries:
+        return "risk_boundaries";
+      case SearchPlanDimension.keyFacts:
+        return "key_facts";
+      case SearchPlanDimension.decisionThreshold:
+        return "decision_threshold";
+      case SearchPlanDimension.coreObject:
+        return "core_object";
+      case SearchPlanDimension.supportingEvidence:
+        return "supporting_evidence";
+      case SearchPlanDimension.latestSignal:
+        return "latest_signal";
+    }
+  }
+}
+
 enum TraceVisibility {
   userVisible,
   system,
@@ -1947,6 +1821,106 @@ extension TraceVisibilityX on TraceVisibility {
         return "system";
       case TraceVisibility.internal:
         return "internal";
+    }
+  }
+}
+
+enum ToolRecoveryAction {
+  unknown,
+  failTurn,
+  skipTool,
+  degradeAnswer,
+}
+
+ToolRecoveryAction parseToolRecoveryActionStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return ToolRecoveryAction.unknown;
+    case "fail_turn":
+      return ToolRecoveryAction.failTurn;
+    case "skip_tool":
+      return ToolRecoveryAction.skipTool;
+    case "degrade_answer":
+      return ToolRecoveryAction.degradeAnswer;
+    default:
+      throw AssistantRuntimeEnumParseFailure("ToolRecoveryAction", raw.trim());
+  }
+}
+
+ToolRecoveryAction parseToolRecoveryAction(String raw) {
+  switch (raw.trim()) {
+    case "fail_turn":
+      return ToolRecoveryAction.failTurn;
+    case "skip_tool":
+      return ToolRecoveryAction.skipTool;
+    case "degrade_answer":
+      return ToolRecoveryAction.degradeAnswer;
+    default:
+      return ToolRecoveryAction.unknown;
+  }
+}
+
+extension ToolRecoveryActionX on ToolRecoveryAction {
+  String get wireName {
+    switch (this) {
+      case ToolRecoveryAction.unknown:
+        return "";
+      case ToolRecoveryAction.failTurn:
+        return "fail_turn";
+      case ToolRecoveryAction.skipTool:
+        return "skip_tool";
+      case ToolRecoveryAction.degradeAnswer:
+        return "degrade_answer";
+    }
+  }
+}
+
+enum ToolDisruptionLevel {
+  unknown,
+  none,
+  partial,
+  full,
+}
+
+ToolDisruptionLevel parseToolDisruptionLevelStrict(String raw) {
+  switch (raw.trim()) {
+    case "":
+      return ToolDisruptionLevel.unknown;
+    case "none":
+      return ToolDisruptionLevel.none;
+    case "partial":
+      return ToolDisruptionLevel.partial;
+    case "full":
+      return ToolDisruptionLevel.full;
+    default:
+      throw AssistantRuntimeEnumParseFailure("ToolDisruptionLevel", raw.trim());
+  }
+}
+
+ToolDisruptionLevel parseToolDisruptionLevel(String raw) {
+  switch (raw.trim()) {
+    case "none":
+      return ToolDisruptionLevel.none;
+    case "partial":
+      return ToolDisruptionLevel.partial;
+    case "full":
+      return ToolDisruptionLevel.full;
+    default:
+      return ToolDisruptionLevel.unknown;
+  }
+}
+
+extension ToolDisruptionLevelX on ToolDisruptionLevel {
+  String get wireName {
+    switch (this) {
+      case ToolDisruptionLevel.unknown:
+        return "";
+      case ToolDisruptionLevel.none:
+        return "none";
+      case ToolDisruptionLevel.partial:
+        return "partial";
+      case ToolDisruptionLevel.full:
+        return "full";
     }
   }
 }
@@ -2688,127 +2662,6 @@ extension AssessmentTypeX on AssessmentType {
   }
 }
 
-enum QueryNormalizationIssue {
-  pinyinInput,
-  noTimeSpecified,
-  noLocation,
-  ambiguousIntent,
-  nonStandardLanguage,
-  unknown,
-}
-
-QueryNormalizationIssue parseQueryNormalizationIssueStrict(String raw) {
-  switch (raw.trim()) {
-    case "pinyin_input":
-      return QueryNormalizationIssue.pinyinInput;
-    case "no_time_specified":
-      return QueryNormalizationIssue.noTimeSpecified;
-    case "no_location":
-      return QueryNormalizationIssue.noLocation;
-    case "ambiguous_intent":
-      return QueryNormalizationIssue.ambiguousIntent;
-    case "non_standard_language":
-      return QueryNormalizationIssue.nonStandardLanguage;
-    case "":
-      return QueryNormalizationIssue.unknown;
-    default:
-      throw AssistantRuntimeEnumParseFailure("QueryNormalizationIssue", raw.trim());
-  }
-}
-
-QueryNormalizationIssue parseQueryNormalizationIssue(String raw) {
-  switch (raw.trim()) {
-    case "pinyin_input":
-      return QueryNormalizationIssue.pinyinInput;
-    case "no_time_specified":
-      return QueryNormalizationIssue.noTimeSpecified;
-    case "no_location":
-      return QueryNormalizationIssue.noLocation;
-    case "ambiguous_intent":
-      return QueryNormalizationIssue.ambiguousIntent;
-    case "non_standard_language":
-      return QueryNormalizationIssue.nonStandardLanguage;
-    default:
-      return QueryNormalizationIssue.unknown;
-  }
-}
-
-extension QueryNormalizationIssueX on QueryNormalizationIssue {
-  String get wireName {
-    switch (this) {
-      case QueryNormalizationIssue.pinyinInput:
-        return "pinyin_input";
-      case QueryNormalizationIssue.noTimeSpecified:
-        return "no_time_specified";
-      case QueryNormalizationIssue.noLocation:
-        return "no_location";
-      case QueryNormalizationIssue.ambiguousIntent:
-        return "ambiguous_intent";
-      case QueryNormalizationIssue.nonStandardLanguage:
-        return "non_standard_language";
-      case QueryNormalizationIssue.unknown:
-        return "";
-    }
-  }
-}
-
-enum EvidenceStatus {
-  full,
-  bounded,
-  notRequired,
-  retry,
-  unknown,
-}
-
-EvidenceStatus parseEvidenceStatusStrict(String raw) {
-  switch (raw.trim()) {
-    case "full":
-      return EvidenceStatus.full;
-    case "bounded":
-      return EvidenceStatus.bounded;
-    case "not_required":
-      return EvidenceStatus.notRequired;
-    case "retry":
-      return EvidenceStatus.retry;
-    case "":
-      return EvidenceStatus.unknown;
-    default:
-      throw AssistantRuntimeEnumParseFailure("EvidenceStatus", raw.trim());
-  }
-}
-
-EvidenceStatus parseEvidenceStatus(String raw) {
-  switch (raw.trim()) {
-    case "full":
-      return EvidenceStatus.full;
-    case "bounded":
-      return EvidenceStatus.bounded;
-    case "not_required":
-      return EvidenceStatus.notRequired;
-    case "retry":
-      return EvidenceStatus.retry;
-    default:
-      return EvidenceStatus.unknown;
-  }
-}
-
-extension EvidenceStatusX on EvidenceStatus {
-  String get wireName {
-    switch (this) {
-      case EvidenceStatus.full:
-        return "full";
-      case EvidenceStatus.bounded:
-        return "bounded";
-      case EvidenceStatus.notRequired:
-        return "not_required";
-      case EvidenceStatus.retry:
-        return "retry";
-      case EvidenceStatus.unknown:
-        return "";
-    }
-  }
-}
-
 enum ContextFillType {
   contextFill,
   gapFill,
@@ -3100,6 +2953,10 @@ enum AssistantPreferenceKind {
   replyLength,
   tone,
   language,
+  frequentLocations,
+  familyTerms,
+  dietaryRestrictions,
+  travelPreferences,
   unknown,
 }
 
@@ -3113,6 +2970,14 @@ AssistantPreferenceKind parseAssistantPreferenceKindStrict(String raw) {
       return AssistantPreferenceKind.tone;
     case "language":
       return AssistantPreferenceKind.language;
+    case "frequent_locations":
+      return AssistantPreferenceKind.frequentLocations;
+    case "family_terms":
+      return AssistantPreferenceKind.familyTerms;
+    case "dietary_restrictions":
+      return AssistantPreferenceKind.dietaryRestrictions;
+    case "travel_preferences":
+      return AssistantPreferenceKind.travelPreferences;
     case "":
       return AssistantPreferenceKind.unknown;
     default:
@@ -3130,6 +2995,14 @@ AssistantPreferenceKind parseAssistantPreferenceKind(String raw) {
       return AssistantPreferenceKind.tone;
     case "language":
       return AssistantPreferenceKind.language;
+    case "frequent_locations":
+      return AssistantPreferenceKind.frequentLocations;
+    case "family_terms":
+      return AssistantPreferenceKind.familyTerms;
+    case "dietary_restrictions":
+      return AssistantPreferenceKind.dietaryRestrictions;
+    case "travel_preferences":
+      return AssistantPreferenceKind.travelPreferences;
     default:
       return AssistantPreferenceKind.unknown;
   }
@@ -3146,6 +3019,14 @@ extension AssistantPreferenceKindX on AssistantPreferenceKind {
         return "tone";
       case AssistantPreferenceKind.language:
         return "language";
+      case AssistantPreferenceKind.frequentLocations:
+        return "frequent_locations";
+      case AssistantPreferenceKind.familyTerms:
+        return "family_terms";
+      case AssistantPreferenceKind.dietaryRestrictions:
+        return "dietary_restrictions";
+      case AssistantPreferenceKind.travelPreferences:
+        return "travel_preferences";
       case AssistantPreferenceKind.unknown:
         return "";
     }
@@ -3155,6 +3036,7 @@ extension AssistantPreferenceKindX on AssistantPreferenceKind {
 enum AssistantPreferenceSourceType {
   explicitRewrite,
   management,
+  conversationConfirmed,
   unknown,
 }
 
@@ -3164,6 +3046,8 @@ AssistantPreferenceSourceType parseAssistantPreferenceSourceTypeStrict(String ra
       return AssistantPreferenceSourceType.explicitRewrite;
     case "management":
       return AssistantPreferenceSourceType.management;
+    case "conversation_confirmed":
+      return AssistantPreferenceSourceType.conversationConfirmed;
     case "":
       return AssistantPreferenceSourceType.unknown;
     default:
@@ -3177,6 +3061,8 @@ AssistantPreferenceSourceType parseAssistantPreferenceSourceType(String raw) {
       return AssistantPreferenceSourceType.explicitRewrite;
     case "management":
       return AssistantPreferenceSourceType.management;
+    case "conversation_confirmed":
+      return AssistantPreferenceSourceType.conversationConfirmed;
     default:
       return AssistantPreferenceSourceType.unknown;
   }
@@ -3189,6 +3075,8 @@ extension AssistantPreferenceSourceTypeX on AssistantPreferenceSourceType {
         return "explicit_rewrite";
       case AssistantPreferenceSourceType.management:
         return "management";
+      case AssistantPreferenceSourceType.conversationConfirmed:
+        return "conversation_confirmed";
       case AssistantPreferenceSourceType.unknown:
         return "";
     }
@@ -3198,7 +3086,6 @@ extension AssistantPreferenceSourceTypeX on AssistantPreferenceSourceType {
 enum AssistantPreferenceStatus {
   active,
   revoked,
-  unknown,
 }
 
 AssistantPreferenceStatus parseAssistantPreferenceStatusStrict(String raw) {
@@ -3207,21 +3094,8 @@ AssistantPreferenceStatus parseAssistantPreferenceStatusStrict(String raw) {
       return AssistantPreferenceStatus.active;
     case "revoked":
       return AssistantPreferenceStatus.revoked;
-    case "":
-      return AssistantPreferenceStatus.unknown;
     default:
       throw AssistantRuntimeEnumParseFailure("AssistantPreferenceStatus", raw.trim());
-  }
-}
-
-AssistantPreferenceStatus parseAssistantPreferenceStatus(String raw) {
-  switch (raw.trim()) {
-    case "active":
-      return AssistantPreferenceStatus.active;
-    case "revoked":
-      return AssistantPreferenceStatus.revoked;
-    default:
-      return AssistantPreferenceStatus.unknown;
   }
 }
 
@@ -3232,7 +3106,62 @@ extension AssistantPreferenceStatusX on AssistantPreferenceStatus {
         return "active";
       case AssistantPreferenceStatus.revoked:
         return "revoked";
-      case AssistantPreferenceStatus.unknown:
+    }
+  }
+}
+
+enum AssistantResponseType {
+  text,
+  structured,
+  actionCard,
+  stream,
+  unknown,
+}
+
+AssistantResponseType parseAssistantResponseTypeStrict(String raw) {
+  switch (raw.trim()) {
+    case "text":
+      return AssistantResponseType.text;
+    case "structured":
+      return AssistantResponseType.structured;
+    case "action_card":
+      return AssistantResponseType.actionCard;
+    case "stream":
+      return AssistantResponseType.stream;
+    case "":
+      return AssistantResponseType.unknown;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantResponseType", raw.trim());
+  }
+}
+
+AssistantResponseType parseAssistantResponseType(String raw) {
+  switch (raw.trim()) {
+    case "text":
+      return AssistantResponseType.text;
+    case "structured":
+      return AssistantResponseType.structured;
+    case "action_card":
+      return AssistantResponseType.actionCard;
+    case "stream":
+      return AssistantResponseType.stream;
+    default:
+      return AssistantResponseType.unknown;
+  }
+}
+
+extension AssistantResponseTypeX on AssistantResponseType {
+  String get wireName {
+    switch (this) {
+      case AssistantResponseType.text:
+        return "text";
+      case AssistantResponseType.structured:
+        return "structured";
+      case AssistantResponseType.actionCard:
+        return "action_card";
+      case AssistantResponseType.stream:
+        return "stream";
+      case AssistantResponseType.unknown:
         return "";
     }
   }

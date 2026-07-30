@@ -7,10 +7,10 @@ import (
 	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 )
 
-// PersonaStore 组合分身读写能力；事务切换与历史查询保持独立端口。
+// PersonaStore 是 Persona 在 UserAccount 编排层的只读视图。所有写入必须经
+// persona_management 的 PersonaCommandStore，禁止绕过 receipt/outbox。
 type PersonaStore interface {
 	userrepo.PersonaReader
-	userrepo.PersonaWriter
 }
 
 // ProfileSnapshotCache 是完整用户资料快照的缓存端口。

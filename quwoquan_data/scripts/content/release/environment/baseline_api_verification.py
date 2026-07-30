@@ -63,8 +63,6 @@ def write_baseline_api_verification(
     importer_report_path: Path,
     output_path: Path,
     api_base_url: str,
-    insecure_tls: bool,
-    resolve_host: str = "",
 ) -> Path:
     try:
         importer_ref = importer_report_path.relative_to(OUTPUT_ROOT).as_posix()
@@ -79,12 +77,13 @@ def write_baseline_api_verification(
     try:
         client = PublicApiClient(
             base_url=api_base_url,
-            insecure_tls=insecure_tls,
-            resolve_host=resolve_host.strip(),
         )
         offlined = []
         for homepage_id in offlined_ids:
-            response = client.get_json(f"homepages/{quote(homepage_id, safe='')}")
+            response = client.get_json(
+                f"homepages/{quote(homepage_id, safe='')}",
+                page_id="entity.homepage.detail",
+            )
             if response.status != HTTPStatus.GONE:
                 raise BaselineApiVerificationError(
                     f"offlined homepage {homepage_id} returned HTTP {response.status}, expected 410"
@@ -92,6 +91,7 @@ def write_baseline_api_verification(
             offlined.append(OfflinedHomepageEvidence(homepage_id, response.status))
         search = client.get_json(
             "homepages/search",
+            page_id="entity.homepage.search",
             query={"status": "published", "limit": "1"},
         )
         items = search.payload.get("items")
@@ -106,7 +106,10 @@ def write_baseline_api_verification(
             witness_title = str(witness.get("title") or "").strip()
             if not witness_id or not witness_title or witness_id in offlined_ids:
                 raise BaselineApiVerificationError("preserved homepage witness identity is invalid")
-            detail = client.get_json(f"homepages/{quote(witness_id, safe='')}")
+            detail = client.get_json(
+                f"homepages/{quote(witness_id, safe='')}",
+                page_id="entity.homepage.detail",
+            )
             if detail.status != HTTPStatus.OK or str(detail.payload.get("homepageId") or "").strip() != witness_id:
                 raise BaselineApiVerificationError("preserved homepage witness is not readable through detail API")
             preserved = {
@@ -129,8 +132,6 @@ def write_baseline_api_verification(
         "preserved": preserved,
         "issues": [],
     }
-    if resolve_host.strip():
-        payload["apiResolveHost"] = resolve_host.strip()
     try:
         assert_valid(payload, "release", "baseline_api_verification", label="baseline_api_verification")
     except (TypeError, ValueError) as exc:

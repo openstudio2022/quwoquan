@@ -4,6 +4,7 @@ events:
   consumers:
   - projection-workers
   channel: transactional_outbox
+  payload_entity: ConversationMembership
   payload_fields:
   - conversationId
   - memberId
@@ -25,6 +26,7 @@ events:
   consumers:
   - projection-workers
   channel: transactional_outbox
+  payload_entity: ConversationMembership
   payload_fields:
   - conversationId
   - memberId
@@ -43,6 +45,7 @@ events:
   consumers:
   - projection-workers
   channel: transactional_outbox
+  payload_entity: ConversationMembership
   payload_fields:
   - conversationId
   - memberId
@@ -55,6 +58,7 @@ events:
   consumers:
   - projection-workers
   channel: transactional_outbox
+  payload_entity: ConversationMembership
   payload_fields:
   - conversationId
   - memberId

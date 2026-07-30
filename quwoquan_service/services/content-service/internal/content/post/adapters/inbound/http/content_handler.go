@@ -20,11 +20,11 @@ import (
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	importerapp "quwoquan_service/services/content-service/internal/content/post/application/importer"
@@ -103,6 +103,8 @@ type postDetailClientWire struct {
 	CoverFrameTimeMS        int64                                    `json:"coverFrameTimeMs,omitempty"`
 	Location                *postports.PostLocationSlice             `json:"location,omitempty"`
 	LocationName            string                                   `json:"locationName,omitempty"`
+	GeoTagRef               string                                   `json:"geoTagRef,omitempty"`
+	VisitedAt               time.Time                                `json:"visitedAt,omitempty"`
 	PrimaryHomepageID       string                                   `json:"primaryHomepageId,omitempty"`
 	CanonicalEntityID       string                                   `json:"canonicalEntityId,omitempty"`
 	PrimaryHomepageType     string                                   `json:"primaryHomepageType,omitempty"`
@@ -157,6 +159,8 @@ func ProjectPostDetailForClient(
 		CoverFrameTimeMS:        detail.CoverFrameTimeMS,
 		Location:                detail.Location,
 		LocationName:            detail.LocationName,
+		GeoTagRef:               detail.GeoTagRef,
+		VisitedAt:               detail.VisitedAt,
 		PrimaryHomepageID:       detail.PrimaryHomepageID,
 		CanonicalEntityID:       detail.CanonicalEntityID,
 		PrimaryHomepageType:     detail.PrimaryHomepageType,
@@ -418,7 +422,15 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
-	params := BindGeneratedGetFeedParams(r, 20)
+	params, err := BindGeneratedGetFeedParams(r)
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"invalid feed pagination",
+			err.Error(),
+		))
+		return
+	}
 	recommendationActorID := ResolveRecommendationActorID(r)
 	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
 		UserID:          recommendationActorID,
@@ -504,7 +516,7 @@ func (h *ContentHandler) handleSubmitPostPublication(
 		)
 		return
 	}
-	payload, err := BindGeneratedWritableBodyFromRequest(
+	payload, err := BindGeneratedRequestBodyFromRequest(
 		r,
 		"SubmitPostPublication",
 	)
@@ -620,7 +632,7 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http.Request) {
-	payload, err := BindGeneratedWritableBodyFromRequest(r, "UpdatePostSettings")
+	payload, err := BindGeneratedRequestBodyFromRequest(r, "UpdatePostSettings")
 	if err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
@@ -644,7 +656,7 @@ func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http
 }
 
 func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.Request) {
-	payload, err := BindGeneratedWritableBodyFromRequest(r, "PromotePostToWork")
+	payload, err := BindGeneratedRequestBodyFromRequest(r, "PromotePostToWork")
 	if err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
@@ -784,8 +796,9 @@ func (h *ContentHandler) handleGetAppConfig(w http.ResponseWriter, r *http.Reque
 	payload := h.postService.GetAppConfig()
 	hash, _ := payload["configHash"].(string)
 	if hash != "" {
-		w.Header().Set("ETag", hash)
-		if strings.TrimSpace(r.Header.Get("If-None-Match")) == hash {
+		etag := `"` + hash + `"`
+		w.Header().Set("ETag", etag)
+		if strings.TrimSpace(r.Header.Get("If-None-Match")) == etag {
 			w.WriteHeader(http.StatusNotModified)
 			return
 		}
@@ -814,7 +827,7 @@ func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Reques
 
 func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Request) {
 	contentID := pathParamAfter(r.URL.Path, "/content/helper-read/", "")
-	result, err := h.postService.GetHelperRead(r.Context(), contentID)
+	result, err := h.postQueryService.GetHelperRead(r.Context(), contentID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -830,7 +843,7 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			userID = strings.TrimSpace(raw[:idx])
 		}
 	}
-	if raw := strings.TrimPrefix(r.URL.Path, "/content/sub-accounts/"); raw != r.URL.Path {
+	if raw := strings.TrimPrefix(r.URL.Path, "/content/personas/"); raw != r.URL.Path {
 		if idx := strings.Index(raw, "/posts"); idx > 0 {
 			userID = strings.TrimSpace(raw[:idx])
 		}

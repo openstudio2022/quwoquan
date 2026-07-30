@@ -1,0 +1,11 @@
+read_model: HomepageViewerFollowSlice
+description: 当前 viewer 对 Homepage 的关注切片；真相源为 user.SubjectFollow 的本地可重建投影，不进入 Homepage 写聚合。
+source_entities:
+- HomepageFollowerProjection
+consumers:
+- app
+fields:
+- name: viewerFollowsHomepage
+  type: bool
+- name: followerCount
+  type: int

@@ -18,17 +18,12 @@ type UserProfileResolver struct {
 }
 
 type userProfileSnapshotResponse struct {
-	Profile struct {
-		Nickname      string `json:"nickname"`
-		Bio           string `json:"bio"`
-		AvatarURL     string `json:"avatarUrl"`
-		AvatarAssetID string `json:"avatarAssetId"`
-		AvatarVersion int    `json:"avatarVersion"`
-	} `json:"profile"`
-	ActivePersona *struct {
-		DisplayName string `json:"displayName"`
-		AvatarURL   string `json:"avatarUrl"`
-	} `json:"activePersona,omitempty"`
+	PersonaID     string `json:"personaId"`
+	UserHandle    string `json:"userHandle"`
+	DisplayName   string `json:"displayName"`
+	AvatarURL     string `json:"avatarUrl"`
+	AvatarVersion int    `json:"avatarVersion"`
+	Bio           string `json:"bio"`
 }
 
 func NewUserProfileResolver(baseURL string, client *http.Client) *UserProfileResolver {
@@ -68,7 +63,7 @@ func (r *UserProfileResolver) resolveOne(
 	ctx context.Context,
 	userID string,
 ) (application.ProfileSnapshot, error) {
-	requestURL := fmt.Sprintf("%s/user/profile/%s", r.baseURL, url.PathEscape(userID))
+	requestURL := fmt.Sprintf("%s/user/%s", r.baseURL, url.PathEscape(userID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return application.ProfileSnapshot{}, err
@@ -90,21 +85,11 @@ func (r *UserProfileResolver) resolveOne(
 		return application.ProfileSnapshot{}, err
 	}
 
-	displayName := strings.TrimSpace(payload.Profile.Nickname)
-	avatarURL := strings.TrimSpace(payload.Profile.AvatarURL)
-	if payload.ActivePersona != nil {
-		if text := strings.TrimSpace(payload.ActivePersona.DisplayName); text != "" {
-			displayName = text
-		}
-		if text := strings.TrimSpace(payload.ActivePersona.AvatarURL); text != "" {
-			avatarURL = text
-		}
-	}
 	return application.ProfileSnapshot{
-		DisplayName:   displayName,
-		AvatarURL:     avatarURL,
-		AvatarAssetID: strings.TrimSpace(payload.Profile.AvatarAssetID),
-		AvatarVersion: payload.Profile.AvatarVersion,
-		Bio:           strings.TrimSpace(payload.Profile.Bio),
+		UserHandle:    strings.TrimSpace(payload.UserHandle),
+		DisplayName:   strings.TrimSpace(payload.DisplayName),
+		AvatarURL:     strings.TrimSpace(payload.AvatarURL),
+		AvatarVersion: payload.AvatarVersion,
+		Bio:           strings.TrimSpace(payload.Bio),
 	}, nil
 }

@@ -24,7 +24,7 @@ abstract class AssistantHistoryLoader {
 
   /// 恢复最近一个会话的 transcript；[conversationId] 非空时恢复指定会话。
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   });
 }
@@ -38,7 +38,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   }) async {
     var targetConversationId = conversationId.trim();
@@ -76,7 +76,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: question,
             senderId: 'current_user',
             senderName: AssistantText.assistantCurrentUserSenderName,
-            timestamp: turn.createdAt,
+            timestamp: turn.createdAt ?? '',
             status: '',
             isRead: true,
           ),
@@ -92,7 +92,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: answer,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
-            timestamp: turn.completedAt ?? turn.createdAt,
+            timestamp: turn.completedAt ?? turn.createdAt ?? '',
             anchor: AssistantAnswerAnchor(
               runId: turn.turnId,
               sourceQuery: question,
@@ -109,7 +109,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: AssistantText.assistantUnavailable,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
-            timestamp: turn.completedAt ?? turn.createdAt,
+            timestamp: turn.completedAt ?? turn.createdAt ?? '',
             anchor: AssistantAnswerAnchor(
               runId: turn.turnId,
               sourceQuery: question,
@@ -126,7 +126,7 @@ class CloudAssistantHistoryLoader implements AssistantHistoryLoader {
             content: AssistantText.assistantTaskStatusCancelled,
             senderId: AppConceptConstants.assistantSenderId,
             senderName: AppConceptConstants.assistantLabel,
-            timestamp: turn.completedAt ?? turn.createdAt,
+            timestamp: turn.completedAt ?? turn.createdAt ?? '',
             anchor: AssistantAnswerAnchor(
               runId: turn.turnId,
               sourceQuery: question,

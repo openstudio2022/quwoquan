@@ -2,6 +2,7 @@
   "label": "注册会计师",
   "labelEn": "CPA Exam",
   "description": "注册会计师资格考试",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

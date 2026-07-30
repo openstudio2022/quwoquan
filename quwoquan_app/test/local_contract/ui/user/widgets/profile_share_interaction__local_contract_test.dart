@@ -1,7 +1,7 @@
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-001
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-002
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-003
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-006
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-003
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-006
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -219,10 +219,10 @@ ShareInteractionItem _item(
         ? 'share-received'
         : 'share-initiated',
     direction: direction,
-    displaySubAccountId: 'fixture_user_photo',
+    displayPersonaId: 'fixture_user_photo',
     displayName: '纸上旅行',
     displayAvatarUrl: '',
-    targetSubAccountId: 'fixture_user_current',
+    targetPersonaId: 'fixture_user_current',
     targetContentId: 'fixture_photo_001',
     targetContentType: 'image',
     targetSummary: '川西晨光',

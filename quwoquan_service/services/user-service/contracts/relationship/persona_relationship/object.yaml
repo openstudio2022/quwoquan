@@ -40,9 +40,11 @@ business_rules:
 - 所有写入在 canonical pair 行锁内串行提交，并以 version 单调递增和 idempotency receipt 保证可重放
 - follower/following 是 outbox 驱动的派生读模型；命令事务禁止同步全表 COUNT，投影按 eventId 幂等并按 aggregate version 顺序消费
 lifecycle:
-  states:
-  - active
-  - tombstoned
+  state_model: directional_flags
+  state_sources:
+  - directions.following
+  - directions.blocked
+  terminal_state: none
   write_serialization: canonical_pair_row_lock
   versioning: monotonic
   idempotency: command_receipt

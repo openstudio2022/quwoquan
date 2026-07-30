@@ -35,11 +35,11 @@ void main() {
       ),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-maintenance')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).first, '新的主页名称');
     await tester.tap(find.text(ObjectHomepageText.homepageMaintenanceSave));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(repository.updateCalls, 1);
     expect(repository.lastDraft?.title, '新的主页名称');
@@ -65,7 +65,7 @@ void main() {
         child: const HomepageMaintenancePage(homepageId: _homepageId),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(find.text(SearchText.recoveryNoAccessTitle), findsOneWidget);
@@ -87,10 +87,10 @@ void main() {
         child: const HomepageMaintenancePage(homepageId: _homepageId),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.enterText(find.byType(CupertinoTextField).first, '新的主页名称');
     await tester.tap(find.text(ObjectHomepageText.homepageMaintenanceSave));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.byType(AppFormErrorCard), findsOneWidget);
     expect(
@@ -126,11 +126,11 @@ void main() {
         child: const HomepageMaintenancePage(homepageId: _homepageId),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).first, '过期资料');
     await tester.tap(find.text(ObjectHomepageText.homepageMaintenanceSave));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     final errorCard = tester.widget<AppFormErrorCard>(
       find.byType(AppFormErrorCard),
@@ -138,7 +138,7 @@ void main() {
     expect(errorCard.semantic.sourceCode, EntityErrorCode.versionConflict.code);
     expect(errorCard.semantic.primaryAction, isNotNull);
     await tester.tap(find.text(errorCard.semantic.primaryAction!.label));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(repository.updateCalls, 1);
     expect(repository.detailLoadCalls, 2);
@@ -161,7 +161,7 @@ void main() {
         child: const HomepageMaintenancePage(homepageId: _homepageId),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(find.text(SearchText.reload), findsOneWidget);
@@ -215,11 +215,11 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.tap(
       find.byKey(const ValueKey<String>('maintenance-login-close')),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.pump();
 
     expect(find.text('MAINTENANCE_SAFE_DETAIL'), findsOneWidget);
@@ -236,6 +236,25 @@ Widget _buildApp({
   required RecordingAppTelemetryRecorder telemetry,
   required Widget child,
 }) {
+  final router = GoRouter(
+    initialLocation: AppRoutePaths.home,
+    routes: <RouteBase>[
+      GoRoute(path: AppRoutePaths.home, builder: (_, _) => child),
+      GoRoute(
+        path: AppRoutePaths.homepageMaintenancePathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        builder: (_, _) =>
+            const HomepageMaintenancePage(homepageId: _homepageId),
+      ),
+      GoRoute(
+        path: AppRoutePaths.loginPathTemplate,
+        builder: (_, _) => const Text('UNEXPECTED_LOGIN'),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
@@ -243,14 +262,14 @@ Widget _buildApp({
       appTelemetryReporterProvider.overrideWithValue(telemetry),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'viewer-persona',
+          personaId: 'viewer-persona',
           ownerUserId: viewerOwnerId,
           displayName: '主页维护者',
           avatarUrl: '',
         ),
       ),
     ],
-    child: MaterialApp(home: child),
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -272,11 +291,8 @@ class _MaintenanceHostState extends State<_MaintenanceHost> {
           TextButton(
             key: const ValueKey<String>('open-maintenance'),
             onPressed: () async {
-              final result = await Navigator.of(context).push<bool>(
-                CupertinoPageRoute<bool>(
-                  builder: (_) =>
-                      const HomepageMaintenancePage(homepageId: _homepageId),
-                ),
+              final result = await context.push<bool>(
+                AppRoutePaths.homepageMaintenance(id: _homepageId),
               );
               if (mounted) {
                 setState(() => _result = result);
@@ -312,7 +328,7 @@ class _MaintenanceRepository extends MockHomepageRepository {
     return detail.copyWith(
       claimStatus: 'claimed',
       ownerUserId: ownerId,
-      ownerSubAccountId: 'owner-persona',
+      ownerPersonaId: 'owner-persona',
     );
   }
 
@@ -352,8 +368,9 @@ class _AuthenticatedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'entity-test-token',
+    refreshToken: 'entity-test-refresh-token',
     ownerId: _ownerId,
-    activeSubAccountId: 'viewer-persona',
+    activePersonaId: 'viewer-persona',
   );
 }
 
@@ -361,4 +378,11 @@ class _GuestSession extends AuthSessionController {
   @override
   AuthSessionState build() =>
       const AuthSessionState(status: AuthSessionStatus.guest);
+}
+
+Future<void> _pumpUi(WidgetTester tester) async {
+  await tester.pump();
+  for (var frame = 0; frame < 6; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }

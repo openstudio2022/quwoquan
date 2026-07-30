@@ -18,8 +18,6 @@ class DialogueRoundScriptDto {
     this.passCriteriaRound = const <String, dynamic>{},
     this.statePromptExcerpt = "",
     this.stateMachineExcerpt = "",
-    this.routingCatalogVersion = "",
-    this.eventCatalogVersion = "",
   });
 
   final String domainId;
@@ -36,8 +34,6 @@ class DialogueRoundScriptDto {
   final Map<String, dynamic> passCriteriaRound;
   final String statePromptExcerpt;
   final String stateMachineExcerpt;
-  final String routingCatalogVersion;
-  final String eventCatalogVersion;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'domainId': domainId,
@@ -54,8 +50,6 @@ class DialogueRoundScriptDto {
         'passCriteriaRound': passCriteriaRound,
         'statePromptExcerpt': statePromptExcerpt,
         'stateMachineExcerpt': stateMachineExcerpt,
-        'routingCatalogVersion': routingCatalogVersion,
-        'eventCatalogVersion': eventCatalogVersion,
       };
 
   factory DialogueRoundScriptDto.fromJson(Map<String, dynamic> json) {
@@ -74,8 +68,6 @@ class DialogueRoundScriptDto {
       passCriteriaRound: (json['passCriteriaRound'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       statePromptExcerpt: (json['statePromptExcerpt'] as String?)?.trim() ?? "",
       stateMachineExcerpt: (json['stateMachineExcerpt'] as String?)?.trim() ?? "",
-      routingCatalogVersion: (json['routingCatalogVersion'] as String?)?.trim() ?? "",
-      eventCatalogVersion: (json['eventCatalogVersion'] as String?)?.trim() ?? "",
     );
   }
 
@@ -102,6 +94,4 @@ class DialogueRoundScriptDtoFields {
   static const String passCriteriaRound = 'passCriteriaRound';
   static const String statePromptExcerpt = 'statePromptExcerpt';
   static const String stateMachineExcerpt = 'stateMachineExcerpt';
-  static const String routingCatalogVersion = 'routingCatalogVersion';
-  static const String eventCatalogVersion = 'eventCatalogVersion';
 }

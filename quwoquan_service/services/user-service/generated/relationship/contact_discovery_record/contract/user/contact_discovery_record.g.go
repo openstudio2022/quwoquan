@@ -6,13 +6,13 @@ import (
 )
 
 type ContactDiscoveryRecord struct {
-	ID                   string     `json:"id" db:"id"`
-	OwnerAccountID       string     `json:"-" db:"owner_account_id"`
-	HashedPhones         []string   `json:"-" db:"hashed_phones"`
-	MatchedSubAccountIds []string   `json:"matchedSubAccountIds" db:"matched_sub_account_ids"`
-	Status               string     `json:"status" db:"status"`
-	MatchCount           int64      `json:"matchCount" db:"match_count"`
-	ExpireAt             time.Time  `json:"expireAt" db:"expire_at"`
-	CreatedAt            time.Time  `json:"createdAt" db:"created_at"`
-	CompletedAt          *time.Time `json:"completedAt" db:"completed_at"`
+	ID                string     `json:"id" db:"id"`
+	OwnerAccountID    string     `json:"-" db:"owner_account_id"`
+	HashedPhones      []string   `json:"-" db:"hashed_phones"`
+	MatchedPersonaIds []string   `json:"matchedPersonaIds" db:"matched_persona_ids"`
+	Status            string     `json:"status" db:"status"`
+	MatchCount        int64      `json:"matchCount" db:"match_count"`
+	ExpireAt          time.Time  `json:"expireAt" db:"expire_at"`
+	CreatedAt         time.Time  `json:"createdAt" db:"created_at"`
+	CompletedAt       *time.Time `json:"completedAt" db:"completed_at"`
 }

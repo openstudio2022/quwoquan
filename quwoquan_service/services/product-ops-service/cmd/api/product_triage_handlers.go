@@ -9,6 +9,7 @@ import (
 
 	"quwoquan_service/runtime/controlplane"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
+	visitapplication "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 )
 
 type productProjectionSummaryResponse struct {
@@ -28,7 +29,7 @@ type dimensionCount struct {
 type productTriageSummaryResponse struct {
 	ProjectionSummary productProjectionSummaryResponse `json:"projectionSummary"`
 	EventSummary      application.EventSummary         `json:"eventSummary"`
-	VisitSummary      application.VisitStats           `json:"visitSummary"`
+	VisitSummary      visitapplication.VisitStats      `json:"visitSummary"`
 	TopEventHotspots  map[string][]dimensionCount      `json:"topEventHotspots"`
 	RecentEvents      []application.EventDrilldownItem `json:"recentEvents"`
 	BacklogCandidates []controlplane.BacklogCandidate  `json:"backlogCandidates"`
@@ -113,7 +114,7 @@ func (s *productService) handleGetTriageSummary(w http.ResponseWriter, r *http.R
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	visitSummary, err := s.telemetry.GetVisitStats(r.Context(), application.VisitStatsQuery{
+	visitSummary, err := s.visits.GetVisitStats(r.Context(), visitapplication.VisitStatsQuery{
 		TargetType: firstNonEmpty(strings.TrimSpace(r.URL.Query().Get("visitTargetType")), "page"),
 		TargetKey:  strings.TrimSpace(r.URL.Query().Get("visitTargetKey")),
 	})
@@ -185,7 +186,7 @@ func firstNonEmpty(values ...string) string {
 func buildProductBacklogCandidates(
 	projectionSummary productProjectionSummaryResponse,
 	eventSummary application.EventSummary,
-	visitSummary application.VisitStats,
+	visitSummary visitapplication.VisitStats,
 	recentEvents []application.EventDrilldownItem,
 ) []controlplane.BacklogCandidate {
 	candidates := make([]controlplane.BacklogCandidate, 0, 5)

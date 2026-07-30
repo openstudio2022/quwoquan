@@ -8,8 +8,8 @@ class AppRemoteConfigStore {
   const AppRemoteConfigStore();
 
   static const String boxName = 'app_remote_config';
-  static const String activeSnapshotKey = 'active_snapshot_v1';
-  static const String previousSnapshotKey = 'previous_snapshot_v1';
+  static const String activeSnapshotKey = 'active_snapshot';
+  static const String previousSnapshotKey = 'previous_snapshot';
 
   Future<AppRemoteConfigSnapshot?> readActiveSnapshot() async {
     try {

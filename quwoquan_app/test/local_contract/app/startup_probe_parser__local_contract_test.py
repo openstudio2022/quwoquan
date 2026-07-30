@@ -1,4 +1,11 @@
+# spec_ref: specs/feature-tree/spec.md#uat-003
+# spec_ref: specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-001
+# spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
+
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -21,7 +28,6 @@ from verify_startup_first_frame import (
     detect_prolonged_system_blue,
     detect_repeated_splash,
     extract_startup_watchdog_evidence,
-    inspect_android_local_ca,
     native_launch_visual_provenance,
     android_gate_main_order_observed,
     parse_android_launcher_resolution,
@@ -36,7 +42,18 @@ from build_launcher_handoff import (
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_startup_ttid_baseline import main as verify_startup_ttid_main
 from verify_startup_ttid_baseline import validate_commercial_uat
-from verify_startup_environment_matrix import _validate_runtime_evidence
+from run_dual_platform_usability_matrix import (
+    _load_execution_input,
+    _validate_execution_preconditions,
+)
+import verify_startup_environment_matrix as startup_matrix
+from verify_startup_environment_matrix import (
+    _case_counts,
+    _report_status,
+    _validate_observability_evidence,
+    _validate_readback_evidence,
+    _validate_runtime_evidence,
+)
 from verify_startup_web import (
     build_arg_parser as build_web_arg_parser,
     overlay_removed_event,
@@ -48,6 +65,522 @@ from verify_startup_web import (
 
 
 class StartupProbeParserContractTest(unittest.TestCase):
+    def test_release_bound_matrix_passes_only_with_all_real_case_results(
+        self,
+    ) -> None:
+        digest = "sha256:" + "d" * 64
+        baseline_id = "baseline-001"
+        release_id = "release-001"
+        runtime_cases = (
+            ("alpha", "alpha-local"),
+            ("beta", "beta-local"),
+            ("gamma", "gamma-local"),
+            ("prod", "prod-hosted"),
+        )
+        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+
+        def environment_defines(environment: str) -> dict[str, str]:
+            return {**defines, "APP_RUNTIME_ENV": environment}
+
+        def handoff(environment: str, target: str | None = None) -> dict[str, str]:
+            resolved_target = target or startup_matrix.RUNTIME_TARGETS[environment]
+            return {
+                "target": resolved_target,
+                "entrypoint": "lib/main_prod.dart",
+                "dartDefinesDigest": digest,
+                "runtimeConfigDigest": digest,
+                "effectiveLaunchManifestDigest": digest,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "evidence"
+            report_path = Path(directory) / "report.json"
+            for environment, target in runtime_cases:
+                target_root = root / target
+                target_root.mkdir(parents=True, exist_ok=True)
+                attempt_ids: list[str] = []
+                device_ids: list[str] = []
+                for platform, device_kind, evidence_stem in (
+                    startup_matrix.DEVICE_PROFILES[target]
+                ):
+                    device_id = f"{evidence_stem}-device"
+                    device_ids.append(device_id)
+                    samples = []
+                    for index in range(2):
+                        attempt_id = f"{target}-{evidence_stem}-{index}"
+                        attempt_ids.append(attempt_id)
+                        sample = {
+                            "runtimeEnv": environment,
+                            "runtimeTarget": target,
+                            "platform": platform,
+                            "deviceId": device_id,
+                            "deviceKind": device_kind,
+                            "passed": True,
+                            "attemptId": attempt_id,
+                            "rendererFirstFrameMs": 900,
+                            "safeTerminalMs": 1200,
+                            "reportedSafeTerminalMs": 1190,
+                            "nativeReceivedSafeTerminalMs": 1210,
+                            "watchdogOutcome": "safe_terminal",
+                            "canonicalTerminal": "routerShell",
+                            "launchMode": "release_package",
+                            "runtimeConfigurationState": "complete",
+                            "missingDefineKeys": "",
+                            "failureCode": "",
+                            "startupSequenceMotionCurrent": True,
+                            "effectiveLaunchManifestDigest": digest,
+                            "telemetryAcknowledged": True,
+                            "sourceReport": f"{target}-{evidence_stem}.json",
+                        }
+                        if platform == "android":
+                            sample.update(
+                                {
+                                    "launcherIntentUsed": True,
+                                    "launcherStarted": True,
+                                    "launcherResolution": {
+                                        "matchesExpectedGate": True,
+                                    },
+                                    "gateMainOrderObserved": True,
+                                    "taskSnapshot": {
+                                        "singleMainTask": True,
+                                        "mainActivityInstances": 1,
+                                    },
+                                    "launchVisual": {
+                                        "contractVerified": True,
+                                        "sourceDigest": "d" * 64,
+                                        "profile": "default",
+                                    },
+                                }
+                            )
+                        else:
+                            sample.update(
+                                {
+                                    "sceneLaunchUsed": True,
+                                    "sceneStarted": True,
+                                    "sceneLauncher": (
+                                        "xcrun_devicectl"
+                                        if device_kind == "physical"
+                                        else "xcrun_simctl"
+                                    ),
+                                }
+                            )
+                        samples.append(sample)
+                    (target_root / f"{evidence_stem}.json").write_text(
+                        json.dumps(
+                            {
+                                "schema": startup_matrix.RUNTIME_EVIDENCE_SCHEMA,
+                                "baselineId": baseline_id,
+                                "releaseId": release_id,
+                                "releaseDigest": digest,
+                                "runtimeEnv": environment,
+                                "runtimeTarget": target,
+                                "platform": platform,
+                                "runs": len(samples),
+                                "passed": True,
+                                "specRefs": list(startup_matrix.SPEC_REFS),
+                                "samples": samples,
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    (target_root / f"{evidence_stem}.readback.json").write_text(
+                        json.dumps(
+                            {
+                                "schema": startup_matrix.READBACK_EVIDENCE_SCHEMA,
+                                "status": "passed",
+                                "baselineId": baseline_id,
+                                "releaseId": release_id,
+                                "releaseDigest": digest,
+                                "environment": environment,
+                                "target": target,
+                                "platform": platform,
+                                "deviceId": device_id,
+                                "deviceKind": (
+                                    "physical"
+                                    if device_kind in {
+                                        "physical",
+                                        "true_device",
+                                    }
+                                    else "simulator"
+                                ),
+                                "effectiveLaunchManifestDigest": digest,
+                                "executed": 1,
+                                "required": 1,
+                                "skipped": 0,
+                                "failed": 0,
+                                "specRefs": list(startup_matrix.SPEC_REFS),
+                                "caseResults": [
+                                    {
+                                        "caseId": "readback",
+                                        "status": "passed",
+                                        "testExecution": {
+                                            "executed": 1,
+                                            "skipped": 0,
+                                            "failed": 0,
+                                        },
+                                    }
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                (target_root / "observability.json").write_text(
+                    json.dumps(
+                        {
+                            "schema": (
+                                startup_matrix.OBSERVABILITY_EVIDENCE_SCHEMA
+                            ),
+                            "status": "passed",
+                            "environment": environment,
+                            "target": target,
+                            "baselineId": baseline_id,
+                            "releaseId": release_id,
+                            "releaseDigest": digest,
+                            "effectiveLaunchManifestDigest": digest,
+                            "attemptIds": attempt_ids,
+                            "deviceIds": device_ids,
+                            "telemetryBackend": "product-ops-event-record",
+                            "backendReceiptRef": f"{target}/telemetry.json",
+                            "required": len(attempt_ids),
+                            "executed": len(attempt_ids),
+                            "skipped": 0,
+                            "failed": 0,
+                            "specRefs": list(startup_matrix.SPEC_REFS),
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            argv = [
+                "verify_startup_environment_matrix.py",
+                "--evidence-root",
+                str(root),
+                "--require-runtime-evidence",
+                "--require-readback",
+                "--require-observability",
+                "--require-physical-release",
+                "--minimum-runtime-runs",
+                "2",
+                "--baseline-id",
+                baseline_id,
+                "--release-id",
+                release_id,
+                "--release-digest",
+                digest,
+                "--report",
+                str(report_path),
+            ]
+            with (
+                mock.patch.object(
+                    startup_matrix,
+                    "_runtime_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix,
+                    "_ios_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(startup_matrix, "_launcher_handoff", side_effect=handoff),
+                mock.patch.object(sys, "argv", argv),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(startup_matrix.main(), 0)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["required"], 30)
+            self.assertEqual(report["executed"], 30)
+            self.assertEqual(report["skipped"], 0)
+            self.assertEqual(report["failed"], 0)
+
+    def test_startup_matrix_status_distinguishes_component_and_release_evidence(
+        self,
+    ) -> None:
+        component = {
+            "caseId": "component:alpha",
+            "required": True,
+            "status": "component_ready",
+        }
+        self.assertEqual(
+            _report_status([component], release_gate=False),
+            "component_ready",
+        )
+        blocked = {
+            "caseId": "startup:alpha-local/android",
+            "required": True,
+            "status": "gate_block",
+        }
+        self.assertEqual(
+            _report_status([component, blocked], release_gate=True),
+            "gate_block",
+        )
+        self.assertEqual(
+            _case_counts([component, blocked]),
+            {"required": 2, "executed": 1, "skipped": 0, "failed": 0},
+        )
+
+    def test_partial_release_evidence_request_is_gate_blocked(self) -> None:
+        digest = "sha256:" + "e" * 64
+        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+
+        def environment_defines(environment: str) -> dict[str, str]:
+            return {**defines, "APP_RUNTIME_ENV": environment}
+
+        def handoff(environment: str, target: str | None = None) -> dict[str, str]:
+            return {
+                "target": target or startup_matrix.RUNTIME_TARGETS[environment],
+                "entrypoint": "lib/main_prod.dart",
+                "dartDefinesDigest": digest,
+                "runtimeConfigDigest": digest,
+                "effectiveLaunchManifestDigest": digest,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.json"
+            argv = [
+                "verify_startup_environment_matrix.py",
+                "--evidence-root",
+                str(Path(directory) / "evidence"),
+                "--require-runtime-evidence",
+                "--require-physical-release",
+                "--baseline-id",
+                "baseline-001",
+                "--release-id",
+                "release-001",
+                "--release-digest",
+                digest,
+                "--report",
+                str(report_path),
+            ]
+            with (
+                mock.patch.object(
+                    startup_matrix,
+                    "_runtime_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix,
+                    "_ios_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix,
+                    "_launcher_handoff",
+                    side_effect=handoff,
+                ),
+                mock.patch.object(sys, "argv", argv),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(startup_matrix.main(), 2)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "gate_block")
+            blocked_ids = {
+                case["caseId"]
+                for case in report["cases"]
+                if case["status"] == "gate_block"
+            }
+            self.assertIn("matrix-policy:app-core-readback", blocked_ids)
+            self.assertIn("matrix-policy:observability-readback", blocked_ids)
+
+    def test_execution_input_requires_unique_real_candidate_cases(self) -> None:
+        digest = "sha256:" + "b" * 64
+        payload = {
+            "schema": "qwq.startup-matrix-execution-input",
+            "baselineId": "baseline-001",
+            "releaseId": "release-001",
+            "releaseDigest": digest,
+            "cases": [
+                {
+                    "environment": "prod",
+                    "target": "prod-hosted",
+                    "platform": "ios",
+                    "deviceId": "iphone-real-001",
+                    "deviceKind": "physical",
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "execution.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            cases = _load_execution_input(
+                path,
+                baseline_id="baseline-001",
+                release_id="release-001",
+                release_digest=digest,
+            )
+            self.assertEqual(cases[0]["deviceId"], "iphone-real-001")
+
+            payload["cases"][0]["deviceKind"] = "simulator"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "physical device"):
+                _load_execution_input(
+                    path,
+                    baseline_id="baseline-001",
+                    release_id="release-001",
+                    release_digest=digest,
+                )
+
+    def test_execution_preconditions_gate_block_missing_release_inputs(self) -> None:
+        case = {
+            "environment": "beta",
+            "target": "beta-local",
+            "platform": "android",
+            "deviceId": "android-emulator-001",
+            "deviceKind": "emulator",
+            "install": False,
+        }
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "GATE_BLOCK"):
+                _validate_execution_preconditions(case)
+
+    def test_readback_evidence_requires_real_non_skipped_case_result(self) -> None:
+        digest = "sha256:" + "c" * 64
+        payload = {
+            "schema": startup_matrix.READBACK_EVIDENCE_SCHEMA,
+            "status": "passed",
+            "baselineId": "baseline-001",
+            "releaseId": "release-001",
+            "releaseDigest": digest,
+            "environment": "gamma",
+            "target": "gamma-local",
+            "platform": "android",
+            "deviceId": "android-real-001",
+            "effectiveLaunchManifestDigest": digest,
+            "required": 1,
+            "executed": 1,
+            "skipped": 0,
+            "failed": 0,
+            "specRefs": list(startup_matrix.SPEC_REFS),
+            "caseResults": [
+                {
+                    "caseId": "readback",
+                    "status": "passed",
+                    "testExecution": {
+                        "executed": 1,
+                        "skipped": 0,
+                        "failed": 0,
+                    },
+                }
+            ],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "android.readback.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            issues, _ = _validate_readback_evidence(
+                path,
+                expected_environment="gamma",
+                expected_target="gamma-local",
+                expected_platform="android",
+                expected_effective_manifest_digest=digest,
+                expected_baseline_id="baseline-001",
+                expected_release_id="release-001",
+                expected_release_digest=digest,
+            )
+            self.assertEqual(issues, [])
+
+            payload["executed"] = 0
+            payload["skipped"] = 1
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            issues, _ = _validate_readback_evidence(
+                path,
+                expected_environment="gamma",
+                expected_target="gamma-local",
+                expected_platform="android",
+                expected_effective_manifest_digest=digest,
+                expected_baseline_id="baseline-001",
+                expected_release_id="release-001",
+                expected_release_digest=digest,
+            )
+            self.assertTrue(any("executed" in issue for issue in issues))
+            self.assertTrue(any("skipped" in issue for issue in issues))
+
+    def test_observability_readback_binds_attempt_device_and_candidate(self) -> None:
+        digest = "sha256:" + "f" * 64
+        payload = {
+            "schema": startup_matrix.OBSERVABILITY_EVIDENCE_SCHEMA,
+            "status": "passed",
+            "environment": "beta",
+            "target": "beta-local",
+            "baselineId": "baseline-001",
+            "releaseId": "release-001",
+            "releaseDigest": digest,
+            "effectiveLaunchManifestDigest": digest,
+            "attemptIds": ["attempt-beta-01", "attempt-beta-02"],
+            "deviceIds": ["emulator-5554", "android-real-001"],
+            "telemetryBackend": "product-ops-event-record",
+            "backendReceiptRef": "beta/telemetry-readback.json",
+            "required": 2,
+            "executed": 2,
+            "skipped": 0,
+            "failed": 0,
+            "specRefs": list(startup_matrix.SPEC_REFS),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "observability.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            issues, _ = _validate_observability_evidence(
+                path,
+                expected_environment="beta",
+                expected_target="beta-local",
+                expected_effective_manifest_digest=digest,
+                expected_baseline_id="baseline-001",
+                expected_release_id="release-001",
+                expected_release_digest=digest,
+                expected_attempt_ids=["attempt-beta-01", "attempt-beta-02"],
+                expected_device_ids=["emulator-5554", "android-real-001"],
+            )
+            self.assertEqual(issues, [])
+
+            payload["attemptIds"][1] = "unknown"
+            payload["backendReceiptRef"] = ""
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            issues, _ = _validate_observability_evidence(
+                path,
+                expected_environment="beta",
+                expected_target="beta-local",
+                expected_effective_manifest_digest=digest,
+                expected_baseline_id="baseline-001",
+                expected_release_id="release-001",
+                expected_release_digest=digest,
+                expected_attempt_ids=["attempt-beta-01", "attempt-beta-02"],
+                expected_device_ids=["emulator-5554", "android-real-001"],
+            )
+            self.assertTrue(any("attemptIds" in issue for issue in issues))
+            self.assertTrue(any("backendReceiptRef" in issue for issue in issues))
+
+    def test_required_startup_uat_has_no_dynamic_skip_and_make_is_candidate_bound(
+        self,
+    ) -> None:
+        web_uat = (
+            APP_DIR
+            / "test/user_acceptance/quality/performance/"
+            "startup_web_3s_6s_report__user_acceptance_test.dart"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("skip:", web_uat)
+
+        makefile = (APP_DIR.parent / "Makefile").read_text(encoding="utf-8")
+        for target in (
+            "verify-app-startup-environment-uat:",
+            "verify-app-startup-observability-release:",
+        ):
+            start = makefile.index(target)
+            next_target = makefile.find("\nverify-", start + len(target))
+            block = makefile[start : next_target if next_target >= 0 else None]
+            for token in (
+                "GATE_BLOCK: STARTUP_EVIDENCE_ROOT is required",
+                "GATE_BLOCK: STARTUP_BASELINE_ID is required",
+                "GATE_BLOCK: STARTUP_RELEASE_ID is required",
+                "GATE_BLOCK: STARTUP_RELEASE_DIGEST is required",
+                "--require-runtime-evidence",
+                "--require-readback",
+                "--require-observability",
+                "--require-physical-release",
+                '--baseline-id "$(STARTUP_BASELINE_ID)"',
+                '--release-id "$(STARTUP_RELEASE_ID)"',
+                '--release-digest "$(STARTUP_RELEASE_DIGEST)"',
+            ):
+                self.assertIn(token, block, msg=f"{target} missing {token}")
+
     def test_runtime_matrix_requires_each_of_twenty_real_samples(self) -> None:
         digest = "sha256:" + "a" * 64
         sample = {
@@ -69,6 +602,9 @@ class StartupProbeParserContractTest(unittest.TestCase):
             "startupSequenceMotionCurrent": True,
             "effectiveLaunchManifestDigest": digest,
             "telemetryAcknowledged": True,
+            "sceneLaunchUsed": True,
+            "sceneStarted": True,
+            "sceneLauncher": "xcrun_devicectl",
         }
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "ios.json"
@@ -110,9 +646,22 @@ class StartupProbeParserContractTest(unittest.TestCase):
             )
             self.assertTrue(any("attemptId missing" in issue for issue in issues))
 
+            payload["samples"][7]["attemptId"] = "attempt_real_07"
+            payload["samples"][7]["sceneStarted"] = False
+            report.write_text(json.dumps(payload), encoding="utf-8")
+            issues, _ = _validate_runtime_evidence(
+                report,
+                expected_environment="prod",
+                expected_target="prod-hosted",
+                expected_platform="ios",
+                expected_effective_manifest_digest=digest,
+                minimum_runs=20,
+            )
+            self.assertTrue(any("iOS scene did not start" in issue for issue in issues))
+
     def test_effective_launch_manifest_digest_is_order_independent(self) -> None:
-        left = {"schema": "app-effective-launch-manifest-v1", "target": "prod-hosted"}
-        right = {"target": "prod-hosted", "schema": "app-effective-launch-manifest-v1"}
+        left = {"schema": "app-effective-launch-manifest", "target": "prod-hosted"}
+        right = {"target": "prod-hosted", "schema": "app-effective-launch-manifest"}
         self.assertEqual(
             effective_launch_manifest_digest(left),
             effective_launch_manifest_digest(right),
@@ -504,16 +1053,6 @@ QWQStartup android_gate_main_handoff
                 safe_terminal_reached=True,
             )
         )
-
-    def test_reports_missing_and_placeholder_android_debug_ca(self) -> None:
-        missing = inspect_android_local_ca("/definitely/not/a/certificate.pem")
-        self.assertEqual(missing["state"], "missing")
-
-        with tempfile.NamedTemporaryFile() as ca:
-            ca.write(b"quwoquan-local-debug-placeholder")
-            ca.flush()
-            placeholder = inspect_android_local_ca(ca.name)
-        self.assertEqual(placeholder["state"], "placeholder")
 
     def test_commercial_gate_rejects_simulator_or_fewer_than_twenty_runs(self) -> None:
         sample = {

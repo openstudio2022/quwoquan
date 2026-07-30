@@ -1,0 +1,15 @@
+{
+  "label": "颗粒质感",
+  "labelEn": "Film Grain",
+  "description": "叠加颗粒与漏光模拟胶片物理质感",
+  "axisRole": "contentFormat",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

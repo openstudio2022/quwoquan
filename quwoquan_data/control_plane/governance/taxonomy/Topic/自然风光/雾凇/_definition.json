@@ -2,6 +2,7 @@
   "label": "雾凇",
   "labelEn": "Rime Ice",
   "description": "雾凇冰挂等冬季凝结景观",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

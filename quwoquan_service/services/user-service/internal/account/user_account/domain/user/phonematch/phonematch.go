@@ -16,9 +16,9 @@ import (
 )
 
 // Salt namespaces the hash so the same phone hashed for an unrelated purpose
-// never collides with a contact-discovery hash. Bump the version suffix only
-// together with the Dart client constant.
-const Salt = "qwq.contact.v1"
+// never collides with a contact-discovery hash. Client and server keep this
+// one canonical value; no versioned salt or compatibility path exists.
+const Salt = "qwq.contact"
 
 // Canonicalize normalizes a raw phone string toward an E.164-ish form so that
 // the same number stored in different shapes ("138 1234 5678", "+8613...",

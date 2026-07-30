@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_landscape_photographer_001
-subAccountId: builtin_travel_landscape_photographer
+personaId: builtin_travel_landscape_photographer
 authorId: builtin_travel_landscape_photographer
 isSystemBuiltin: true
 displayName: 林间取景
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.87
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/旅行/玩法/摄影旅拍
   - Format/内容载体/图文/图集
@@ -48,3 +47,11 @@ carrierAffinity:
   article: 0.2
   image: 0.75
   video: 0.05
+avatarAsset:
+  assetId: creator-avatar-qwq_creator_landscape_photographer_001-8afb0ece7d71ca69
+  kind: avatar
+  sha256: sha256:8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd
+  objectKey: media/objects/sha256/8a/fb/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.webp
+  bytes: 428956
+  mimeType: image/webp
+  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_landscape_photographer_001/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.json

@@ -3,5 +3,10 @@
   "labelEn": "鱼台县",
   "description": "济宁市鱼台县",
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ]
 }

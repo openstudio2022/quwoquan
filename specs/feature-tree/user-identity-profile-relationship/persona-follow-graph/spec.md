@@ -32,11 +32,6 @@
   - 本能力处理：组合本目录 Story 的可观察行为。
   - 本能力输出：本能力统一分身生命周期、公开身份、关系隔离与跨域透传，并将可观察结果交给下游。
   - 失败时终态：可解释、可恢复且不伪造成功。
-- [`JNY-011 / SCN-028`](../../spec.md#scn-028)
-  - 本能力处理：组合本目录 Story 的可观察行为。
-  - 本能力输出：本能力统一分身生命周期、公开身份、关系隔离与跨域透传，并将可观察结果交给下游。
-  - 失败时终态：可解释、可恢复且不伪造成功。
-
 ## 4. Story
 
 
@@ -54,6 +49,8 @@
 
 - 本能力必须组合直属 Story 与公开契约，交付“本能力统一分身生命周期、公开身份、关系隔离与跨域透传”所定义的业务结果；失败终态必须可区分且不得伪造成功。
 - PersonaRelationship 关注/拉黑命令具备服务端 CAS + 幂等 receipt + 事务 outbox；capability wire 端云 16 字段对齐。
+- PersonaRelationship 是关系能力读模型的唯一事实所有者；主页、关系搜索与联系人发现统一嵌套 `user.persona_relationship.projection.relationship_capability_wire`，不得维护字段子集或第二 client projection。
+- 关注、打招呼、会话、音视频通话与拉黑能力必须由 PersonaRelationship 内的唯一领域策略根据相同 viewer-target 事实推导；主页、关系搜索与联系人发现不得各自计算或改写动作矩阵。
 - SubjectFollow 是主页/圈子/地点关注唯一真相源（entity.FollowHomepage 已退役），事件驱动 following_subjects 投影与 homepage follower 投影。
 - FollowedSubjectVisitState 水位单调推进且 clientRequestId 重放安全；关注频道红点点击后跨会话不复现。
 - 拉黑与打招呼用户旅程可逆：拉黑列表可查看/解除，收到的打招呼可回复/忽略，发出的 pending 请求可撤回；动作失败均有结构化反馈。
@@ -87,6 +84,8 @@
 - WHEN 参与者发起“persona follow graph 能力”对应动作。
 - THEN 直属 Story 共同交付“本能力统一分身生命周期、公开身份、关系隔离与跨域透传”，失败终态可区分且不产生伪成功事实。
 - THEN PersonaRelationship 关注/拉黑命令具备服务端 CAS + 幂等 receipt + 事务 outbox；capability wire 端云 16 字段对齐。
+- THEN 主页、关系搜索与联系人发现只消费 PersonaRelationship 所有的 canonical relationship capability wire，metadata 门禁拒绝任何重复 `dart_class` 或生成 `output_path`。
+- THEN 对同一 viewer-target 的关系、打招呼会话与拉黑事实，所有公开 surface 返回由同一 PersonaRelationship 策略推导的 16 字段动作矩阵；自己、拉黑或被拉黑时所有关系动作 fail closed。
 - THEN SubjectFollow 是主页/圈子/地点关注唯一真相源（entity.FollowHomepage 已退役），事件驱动 following_subjects 投影与 homepage follower 投影。
 - THEN FollowedSubjectVisitState 水位单调推进且 clientRequestId 重放安全；关注频道红点点击后跨会话不复现。
 - THEN 拉黑与打招呼用户旅程可逆：拉黑列表可查看/解除，收到的打招呼可回复/忽略，发出的 pending 请求可撤回；动作失败均有结构化反馈。
@@ -101,3 +100,21 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：本能力统一分身生命周期、公开身份、关系隔离与跨域透传。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 subjectType 同名 wire 键绑三套不相交值域，关注地点在读侧不可表达
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：存在写读配对模型的值域矛盾。`quwoquan_service/contracts/metadata/_shared/types.yaml` 用同一 wire 键 `subjectType` 绑定三个枚举：`FollowSubjectType=[homepage,circle,location]`（写聚合 `relationship/subject_follow` 使用）、`FollowingSubjectType=[user,circle,homepage]`（读模型 `profile_projection/following_subject` 与写聚合 `relationship/followed_subject_visit_state` 使用）、`ProfileSubjectType=[user,persona]`。写读配对模型的值域互不包含，产生两个方向的真实业务断点：用户可以关注一个地点，但该关注永远不可能出现在 `ListFollowingSubjects` 返回中，也无法 mark-visited，即"关注地点"在读侧不存在；反向读侧的 `user` 值来自 `persona_relationship` 而非 `subject_follow`，而 `subject_follow` 的 business_rules 明令禁止 persona。第三个枚举里 `user` 的含义又与前两个不同（账号主体 vs 人）。端侧 `FollowingSubjectItemViewDto.subjectType` 是 String，无法穷举。
+- 完成判定：收敛为唯一 `FollowSubjectKind`，写侧对 persona 的拒绝由错误码承载而非靠枚举缺值，读模型补齐 location 分支；`ProfileSubjectType` 因语义无关改名以消除 `user` 一词的双重指代。`SIT-001` 中 SubjectFollow 作为唯一真相源的行为覆盖 location。
+
+<a id="open-004"></a>
+### OPEN-004 同一 actor 概念存在四种字段名，单次关注在三跳内换三个键名
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 generated client 的统一重建、数据库与 App 本地存储的保数据迁移复跑，以及单次 follow 端云对账证据。在这些验收完成前，不能证明 command、receipt/outbox、event、projection 与 App wire 使用同一 Persona 主体键。
+- 完成判定：聚合主键统一为 `personaId`，角色只增加 `actor / source / target / viewer / requester / inviter / active / primary` 等明确前缀。登录摘要统一为 `activePersona`，路径与请求头同步收敛。物理列通过一次性保数据迁移原位改名。metadata 与全仓源码门禁 fail closed 拒绝退役词汇。单次 follow 的 command → receipt/outbox → event → projection → App wire 可按相同 Persona ID 对账，且不设 dual-read、dual-write、alias 或旧 wire fallback。

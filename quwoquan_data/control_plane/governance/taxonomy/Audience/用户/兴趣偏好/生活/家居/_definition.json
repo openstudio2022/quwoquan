@@ -2,6 +2,10 @@
   "label": "家居",
   "labelEn": "Home",
   "description": "关注家居布置、收纳与生活空间",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/家居生活"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

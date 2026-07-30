@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan search API
-    version: v1
+    version: canonical
 paths:
     /internal/search/account-closure/dead-letters:recover:
         post:
@@ -56,6 +56,11 @@ paths:
                 reader: ObjectSearchReader
                 slice: SearchResponseView
             parameters:
+                - name: X-Session-Id
+                  in: header
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: false
@@ -67,7 +72,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/SearchQuery'
+                            $ref: '#/components/schemas/CanonicalSearchQuery'
             responses:
                 "200":
                     description: OK
@@ -107,7 +112,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/FeedbackFact'
+                            $ref: '#/components/schemas/ReportSearchFeedbackCommand'
             responses:
                 "204":
                     description: No Content
@@ -132,6 +137,12 @@ paths:
                 method: listHotQueries
                 reader: TermHeatReader
                 slice: HotQuerySlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -160,6 +171,12 @@ paths:
                 method: listRecentSearches
                 reader: ListRecentSearchesReader
                 slice: ListRecentSearchesSlice
+            parameters:
+                - name: scope
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -197,7 +214,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/RecentSearchEntryView'
+                            $ref: '#/components/schemas/UpsertRecentSearchCommand'
             responses:
                 "200":
                     description: OK
@@ -224,6 +241,11 @@ paths:
                 method: clearRecentSearches
                 aggregateOwner: RecentSearchState
             parameters:
+                - name: scope
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: true
@@ -280,10 +302,10 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        FeedbackFact:
+        CanonicalSearchQuery:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: FeedbackFact
+            x-contract-entity: CanonicalSearchQuery
             x-contract-placeholder: true
         HotQueryView:
             type: object
@@ -295,6 +317,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecentSearchEntryView
             x-contract-placeholder: true
+        ReportSearchFeedbackCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReportSearchFeedbackCommand
+            x-contract-placeholder: true
         SearchAccountClosureDeadLetterRecoveryAccepted:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -305,13 +332,13 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SearchAccountClosureDeadLetterRecoveryRequest
             x-contract-placeholder: true
-        SearchQuery:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: SearchQuery
-            x-contract-placeholder: true
         SearchResponseView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SearchResponseView
+            x-contract-placeholder: true
+        UpsertRecentSearchCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UpsertRecentSearchCommand
             x-contract-placeholder: true

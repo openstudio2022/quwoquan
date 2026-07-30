@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -15,19 +16,29 @@ void main() {
           profileQueryProvider.overrideWith(
             (ref, surface) => ContactProfileQueryFake(
               searchItems: <SocialRelationSearchItemView>[
-                const SocialRelationSearchItemView(
-                  subAccountId: 'persona-alice',
-                  username: 'alice',
+                SocialRelationSearchItemView(
+                  personaId: 'persona-alice',
+                  userHandle: 'alice',
                   displayName: 'Alice',
                   headline: '摄影作者',
                   chatAvailable: false,
-                  relationshipCapability: SocialRelationshipCapabilityView(
+                  relationshipCapability: RelationshipCapabilityDto(
+                    viewerPersonaId: 'persona-viewer',
+                    targetPersonaId: 'persona-alice',
                     relationState: 'not_following',
                     canFollow: true,
                     canUnfollow: false,
+                    canFollowBack: false,
+                    canGreet: true,
                     canOpenConversation: false,
+                    canCreateDirectConversation: false,
+                    canSendMessage: false,
+                    hasPendingGreeting: false,
+                    hasFormalConversation: false,
                     canStartVoiceCall: false,
                     canStartVideoCall: false,
+                    isBlocked: false,
+                    isBlockedBy: false,
                   ),
                 ),
               ],

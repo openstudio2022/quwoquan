@@ -24,8 +24,10 @@ type ImportedInput struct {
 	Title                string
 	HomepageType         string
 	City                 string
+	Location             *GeoPoint
 	IntroductionMarkdown string
 	IntroductionAssets   []IntroductionAsset
+	StructuredFacts      *StructuredFacts
 	PrimarySource        *Source
 	SourceURLs           []string
 	CategoryTags         []string
@@ -161,8 +163,10 @@ func (f *ImportFacade) createImported(
 		SourceReleaseID:      request.SourceReleaseID,
 		CategoryTags:         input.CategoryTags,
 		City:                 input.City,
+		Location:             input.Location,
 		IntroductionMarkdown: input.IntroductionMarkdown,
 		IntroductionAssets:   input.IntroductionAssets,
+		StructuredFacts:      input.StructuredFacts,
 		PrimarySource:        input.PrimarySource,
 		SourceURLs:           input.SourceURLs,
 		PublishImmediately:   true,
@@ -210,8 +214,10 @@ func (f *ImportFacade) updateImported(
 			Title:                input.Title,
 			HomepageType:         input.HomepageType,
 			City:                 input.City,
+			Location:             input.Location,
 			IntroductionMarkdown: input.IntroductionMarkdown,
 			IntroductionAssets:   input.IntroductionAssets,
+			StructuredFacts:      input.StructuredFacts,
 			PrimarySource:        input.PrimarySource,
 			SourceURLs:           input.SourceURLs,
 			CategoryTags:         input.CategoryTags,
@@ -297,6 +303,11 @@ func validateImportedInputs(inputs []ImportedInput) error {
 		if strings.TrimSpace(input.Title) == "" || !homepagemodel.ValidHomepageType(input.HomepageType) {
 			return generated.AppErrorFromInvalidArgument(
 				fmt.Sprintf("homepage import input %q is invalid", ref),
+			)
+		}
+		if input.Location != nil && !input.Location.InRange() {
+			return generated.AppErrorFromInvalidArgument(
+				fmt.Sprintf("homepage import input %q has out-of-range coordinates", ref),
 			)
 		}
 	}

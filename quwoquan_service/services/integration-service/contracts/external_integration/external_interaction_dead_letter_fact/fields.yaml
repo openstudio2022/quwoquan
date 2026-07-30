@@ -10,6 +10,16 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+- name: taskId
+  source: taskId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
 - name: requestId
   source: requestId
   type: string
@@ -32,9 +42,30 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
+- name: provider
+  source: provider
+  type: enum
+  enum_ref: ExternalInteractionProvider
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
 - name: finalError
   source: finalError
   type: string
+  constraints:
+  - NOT_NULL
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: append_only_fact
+- name: retryable
+  source: retryable
+  type: bool
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -44,10 +75,10 @@ fields:
   role: append_only_fact
 - name: recoveryAction
   source: recoveryAction
-  type: bool
+  type: string
   constraints:
   - NOT_NULL
-  classification: PUBLIC
+  classification: INTERNAL
   log_policy: allow
   api_exposure: read
   ops_exposure: read
@@ -62,33 +93,3 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: append_only_fact
-enums:
-  ExternalInteractionOperation:
-    values:
-    - sms_otp.send
-    - push_delivery.send
-    - one_tap_phone.resolve
-    - webhook.deliver
-  ExternalInteractionStatus:
-    values:
-    - accepted
-    - pending_dispatch
-    - processing
-    - sent_unconfirmed
-    - delivered
-    - failed
-    - dead_letter
-  ExternalInteractionSensitivity:
-    values:
-    - public
-    - private
-    - secret
-  ExternalInteractionProvider:
-    values:
-    - mock_sms
-    - aliyun_sms
-    - tencent_sms
-    - apns_voip
-    - fcm
-    - alpha_fake
-    - webhook

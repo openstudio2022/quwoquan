@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	sharemodel "quwoquan_service/services/content-service/internal/content/outbound_share_fact/domain/model"
 	shareports "quwoquan_service/services/content-service/internal/content/outbound_share_fact/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
-	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 )
 
 type Service struct {
@@ -83,8 +83,8 @@ func (s *Service) AppendOutboundShare(ctx context.Context, command AppendOutboun
 func normalizeCommand(command AppendOutboundShareCommand) AppendOutboundShareCommand {
 	command.PostID = strings.TrimSpace(command.PostID)
 	command.ActorID = strings.TrimSpace(command.ActorID)
-	command.Channel = strings.TrimSpace(command.Channel)
-	command.DestinationKind = strings.TrimSpace(command.DestinationKind)
+	command.Channel = sharemodel.Channel(strings.TrimSpace(string(command.Channel)))
+	command.DestinationKind = sharemodel.DestinationKind(strings.TrimSpace(string(command.DestinationKind)))
 	command.Destination = strings.TrimSpace(command.Destination)
 	command.ReferralID = strings.TrimSpace(command.ReferralID)
 	command.ProviderReceiptID = strings.TrimSpace(command.ProviderReceiptID)
@@ -100,6 +100,12 @@ func validateCommand(command AppendOutboundShareCommand) error {
 	}
 	if command.ActorDimension != sharemodel.ActorDimensionPersona && command.ActorDimension != sharemodel.ActorDimensionDevice {
 		return &validationError{"actor dimension must be persona or device"}
+	}
+	if !command.Channel.Valid() {
+		return &validationError{"outbound share channel is invalid"}
+	}
+	if !command.DestinationKind.Valid() {
+		return &validationError{"outbound share destination kind is invalid"}
 	}
 	return nil
 }
@@ -118,14 +124,14 @@ func digestDestination(destination string) string {
 
 func outboundShareCommandDigest(fact sharemodel.Fact, providerReceiptID string) (string, error) {
 	payload, err := json.Marshal(struct {
-		PostID                string                    `json:"postId"`
-		ActorDimension        sharemodel.ActorDimension `json:"actorDimension"`
-		ActorID               string                    `json:"actorId"`
-		Channel               string                    `json:"channel"`
-		DestinationKind       string                    `json:"destinationKind"`
-		DestinationDigest     string                    `json:"destinationDigest,omitempty"`
-		ReferralID            string                    `json:"referralId"`
-		ProviderReceiptDigest string                    `json:"providerReceiptDigest"`
+		PostID                string                     `json:"postId"`
+		ActorDimension        sharemodel.ActorDimension  `json:"actorDimension"`
+		ActorID               string                     `json:"actorId"`
+		Channel               sharemodel.Channel         `json:"channel"`
+		DestinationKind       sharemodel.DestinationKind `json:"destinationKind"`
+		DestinationDigest     string                     `json:"destinationDigest,omitempty"`
+		ReferralID            string                     `json:"referralId"`
+		ProviderReceiptDigest string                     `json:"providerReceiptDigest"`
 	}{
 		fact.PostID, fact.ActorDimension, fact.ActorID, fact.Channel,
 		fact.DestinationKind, fact.DestinationDigest, fact.ReferralID,
@@ -140,16 +146,16 @@ func outboundShareCommandDigest(fact sharemodel.Fact, providerReceiptID string) 
 
 func outboundShareEventPayload(fact sharemodel.Fact, providerReceiptID string) ([]byte, error) {
 	payload, err := json.Marshal(struct {
-		EventID               string                    `json:"eventId"`
-		PostID                string                    `json:"postId"`
-		ActorDimension        sharemodel.ActorDimension `json:"actorDimension"`
-		ActorID               string                    `json:"actorId"`
-		Channel               string                    `json:"channel"`
-		DestinationKind       string                    `json:"destinationKind"`
-		DestinationDigest     string                    `json:"destinationDigest,omitempty"`
-		ReferralID            string                    `json:"referralId"`
-		ProviderReceiptDigest string                    `json:"providerReceiptDigest"`
-		OccurredAt            time.Time                 `json:"occurredAt"`
+		EventID               string                     `json:"eventId"`
+		PostID                string                     `json:"postId"`
+		ActorDimension        sharemodel.ActorDimension  `json:"actorDimension"`
+		ActorID               string                     `json:"actorId"`
+		Channel               sharemodel.Channel         `json:"channel"`
+		DestinationKind       sharemodel.DestinationKind `json:"destinationKind"`
+		DestinationDigest     string                     `json:"destinationDigest,omitempty"`
+		ReferralID            string                     `json:"referralId"`
+		ProviderReceiptDigest string                     `json:"providerReceiptDigest"`
+		OccurredAt            time.Time                  `json:"occurredAt"`
 	}{fact.EventID, fact.PostID, fact.ActorDimension, fact.ActorID, fact.Channel, fact.DestinationKind, fact.DestinationDigest, fact.ReferralID, digestDestination(providerReceiptID), fact.OccurredAt})
 	return payload, err
 }

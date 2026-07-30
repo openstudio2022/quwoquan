@@ -19,6 +19,7 @@ class IntersectionReason {
   final String relationObjectId;
   final double strength;
   final String primaryText;
+  final String primaryTextL10nKey;
   final String displayBinding;
   final String secondaryText;
   final String weightTier;
@@ -56,6 +57,8 @@ class IntersectionReason {
   final double strengthDelta;
   final double edgeWeight;
   final String iconKey;
+  final String tone;
+  final IntersectionVisual? typeVisual;
   final IntersectionVisual? objectVisual;
   final String timeBucket;
   final String dedupeKey;
@@ -75,6 +78,7 @@ class IntersectionReason {
     this.relationObjectId = '',
     this.strength = 0.0,
     this.primaryText = '',
+    this.primaryTextL10nKey = '',
     this.displayBinding = 'explicit_link',
     this.secondaryText = '',
     this.weightTier = '',
@@ -112,6 +116,8 @@ class IntersectionReason {
     this.strengthDelta = 0.0,
     this.edgeWeight = 0.0,
     this.iconKey = '',
+    this.tone = '',
+    this.typeVisual,
     this.objectVisual,
     this.timeBucket = '',
     this.dedupeKey = '',
@@ -133,6 +139,7 @@ class IntersectionReason {
       relationObjectId: m['relationObjectId']?.toString() ?? '',
       strength: (m['strength'] as num?)?.toDouble() ?? 0.0,
       primaryText: m['primaryText']?.toString() ?? '',
+      primaryTextL10nKey: m['primaryTextL10nKey']?.toString() ?? '',
       displayBinding: m['displayBinding']?.toString() ?? 'explicit_link',
       secondaryText: m['secondaryText']?.toString() ?? '',
       weightTier: m['weightTier']?.toString() ?? '',
@@ -170,6 +177,8 @@ class IntersectionReason {
       strengthDelta: (m['strengthDelta'] as num?)?.toDouble() ?? 0.0,
       edgeWeight: (m['edgeWeight'] as num?)?.toDouble() ?? 0.0,
       iconKey: m['iconKey']?.toString() ?? '',
+      tone: m['tone']?.toString() ?? '',
+      typeVisual: m['typeVisual'] == null ? null : IntersectionVisual.fromMap(_parseStringKeyMap(m['typeVisual'])!),
       objectVisual: m['objectVisual'] == null ? null : IntersectionVisual.fromMap(_parseStringKeyMap(m['objectVisual'])!),
       timeBucket: m['timeBucket']?.toString() ?? '',
       dedupeKey: m['dedupeKey']?.toString() ?? '',
@@ -192,6 +201,7 @@ class IntersectionReason {
       'relationObjectId': relationObjectId,
       'strength': strength,
       'primaryText': primaryText,
+      'primaryTextL10nKey': primaryTextL10nKey,
       'displayBinding': displayBinding,
       'secondaryText': secondaryText,
       'weightTier': weightTier,
@@ -229,6 +239,8 @@ class IntersectionReason {
       'strengthDelta': strengthDelta,
       'edgeWeight': edgeWeight,
       'iconKey': iconKey,
+      'tone': tone,
+      'typeVisual': typeVisual,
       'objectVisual': objectVisual,
       'timeBucket': timeBucket,
       'dedupeKey': dedupeKey,
@@ -250,6 +262,7 @@ class IntersectionReason {
     String? relationObjectId,
     double? strength,
     String? primaryText,
+    String? primaryTextL10nKey,
     String? displayBinding,
     String? secondaryText,
     String? weightTier,
@@ -287,6 +300,8 @@ class IntersectionReason {
     double? strengthDelta,
     double? edgeWeight,
     String? iconKey,
+    String? tone,
+    IntersectionVisual? typeVisual,
     IntersectionVisual? objectVisual,
     String? timeBucket,
     String? dedupeKey,
@@ -306,6 +321,7 @@ class IntersectionReason {
       relationObjectId: relationObjectId ?? this.relationObjectId,
       strength: strength ?? this.strength,
       primaryText: primaryText ?? this.primaryText,
+      primaryTextL10nKey: primaryTextL10nKey ?? this.primaryTextL10nKey,
       displayBinding: displayBinding ?? this.displayBinding,
       secondaryText: secondaryText ?? this.secondaryText,
       weightTier: weightTier ?? this.weightTier,
@@ -343,6 +359,8 @@ class IntersectionReason {
       strengthDelta: strengthDelta ?? this.strengthDelta,
       edgeWeight: edgeWeight ?? this.edgeWeight,
       iconKey: iconKey ?? this.iconKey,
+      tone: tone ?? this.tone,
+      typeVisual: typeVisual ?? this.typeVisual,
       objectVisual: objectVisual ?? this.objectVisual,
       timeBucket: timeBucket ?? this.timeBucket,
       dedupeKey: dedupeKey ?? this.dedupeKey,

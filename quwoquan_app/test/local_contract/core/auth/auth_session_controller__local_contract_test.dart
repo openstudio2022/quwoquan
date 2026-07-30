@@ -1,6 +1,9 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-005
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,13 +92,13 @@ void main() {
     expect(receiptStore.clearCalls, 1);
   });
 
-  test('restore 遇到陈旧会话时静默 refresh 成功并保留 owner/sub 快照', () async {
+  test('restore 遇到陈旧会话时静默 refresh 成功并保留 owner/persona 快照', () async {
     final store = _MemoryAuthSessionStore(
       stored: const StoredAuthSession(
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
         ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
+        activePersonaId: 'sub-1',
         accountState: 'active',
         identityOrigin: 'phone',
         installId: 'install-id',
@@ -132,11 +135,11 @@ void main() {
     expect(refreshed.accessToken, 'new-access');
     expect(refreshed.refreshToken, 'new-refresh');
     expect(refreshed.ownerId, 'owner-1');
-    expect(refreshed.activeSubAccountId, 'sub-1');
+    expect(refreshed.activePersonaId, 'sub-1');
   });
 
   test('静默 refresh 返回 401 时清理会话并进入 sessionExpired', () async {
-    final store = _MemoryAuthSessionStore.authenticated();
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
     final container = ProviderContainer(
       overrides: [
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
@@ -170,7 +173,7 @@ void main() {
   });
 
   test('静默 refresh 返回 account_suspended 时清除凭证并保留受限原因', () async {
-    final store = _MemoryAuthSessionStore.authenticated();
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
     final container = ProviderContainer(
       overrides: [
         startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
@@ -180,10 +183,10 @@ void main() {
             throw CloudException(
               type: CloudErrorType.forbidden,
               message: 'account restricted',
-              code: 'USER.AUTH.account_suspended',
+              code: UserErrorCode.accountSuspended.code,
               statusCode: 403,
               runtimeFailure: testRuntimeFailure(
-                code: 'USER.AUTH.account_suspended',
+                code: UserErrorCode.accountSuspended.code,
                 kind: RuntimeFailureKind.auth,
               ),
             );
@@ -207,6 +210,115 @@ void main() {
     final persisted = await store.read();
     expect(persisted.accessToken, isEmpty);
     expect(persisted.refreshToken, isEmpty);
+  });
+
+  test('generated 403 按实际旧 bearer 立即清凭证，关闭说明后仍不恢复旧 token', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async => throw StateError('not expected')),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    await notifier.handleAuthoritativeSessionFailure(
+      _accountSuspendedFailure(),
+      presentedAccessToken: 'access-token',
+    );
+
+    var state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.promptReason, AuthPromptReason.accountSuspended);
+    expect(state.accessToken, isEmpty);
+    expect(state.refreshToken, isEmpty);
+    expect((await store.read()).hasValidQuickLoginCredential, isFalse);
+
+    notifier.acknowledgeAccountRestrictionNotice();
+    state = container.read(authSessionControllerProvider);
+    expect(state.promptReason, isNull);
+    expect(state.hasTrustedSession, isFalse);
+    expect((await store.read()).accessToken, isEmpty);
+    expect((await store.read()).refreshToken, isEmpty);
+  });
+
+  test('同一 bearer 的并发 authoritative 403 在会话串行边界只清理一次', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async => throw StateError('not expected')),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    await Future.wait<void>(<Future<void>>[
+      notifier.handleAuthoritativeSessionFailure(
+        _accountSuspendedFailure(),
+        presentedAccessToken: 'access-token',
+      ),
+      notifier.handleAuthoritativeSessionFailure(
+        _accountSuspendedFailure(),
+        presentedAccessToken: 'access-token',
+      ),
+    ]);
+
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isFalse);
+    expect(state.promptReason, AuthPromptReason.accountSuspended);
+    expect(store.clearSessionCalls, 1);
+  });
+
+  test('旧 refresh 的迟到 account_suspended 不会清除已经换发的新会话', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    final refreshStarted = Completer<void>();
+    final delayedRefresh = Completer<TokenRefreshGrant>();
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) {
+            refreshStarted.complete();
+            return delayedRefresh.future;
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    final oldRefresh = notifier.refreshSessionIfNeeded(force: true);
+    await refreshStarted.future;
+    await notifier.applyRefreshGrant(
+      const TokenRefreshGrant(
+        accessToken: 'new-session-access',
+        refreshToken: 'new-session-refresh',
+        sessionRememberTtlSeconds: 2592000,
+      ),
+    );
+    delayedRefresh.completeError(_accountSuspendedFailure());
+
+    expect(await oldRefresh, isFalse);
+    final state = container.read(authSessionControllerProvider);
+    expect(state.isAuthenticated, isTrue);
+    expect(state.accessToken, 'new-session-access');
+    expect(state.refreshToken, 'new-session-refresh');
+    expect(state.promptReason, isNull);
   });
 
   test('静默 refresh 返回 account_deleted 410 时清除本地可换发凭证', () async {
@@ -313,14 +425,179 @@ void main() {
     expect(state.errorMessage, isNotNull);
   });
 
-  test('操作取消时不应用迟到的 refresh token', () async {
+  test('普通请求在 access token 到期前主动单飞 refresh', () async {
+    final now = DateTime.now();
+    final store = _MemoryAuthSessionStore(
+      stored: _currentStoredSession(
+        accessToken: _schedulingJwt(now.add(const Duration(seconds: 30))),
+      ),
+    );
+    var refreshCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
+            refreshCalls += 1;
+            return const TokenRefreshGrant(
+              accessToken: 'refreshed-access',
+              refreshToken: 'rotated-refresh',
+              sessionRememberTtlSeconds: 0,
+            );
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final token = await container
+        .read(authSessionControllerProvider.notifier)
+        .accessTokenForRequest();
+
+    expect(token, 'refreshed-access');
+    expect(refreshCalls, 1);
+    expect(store.stored.refreshToken, 'rotated-refresh');
+  });
+
+  test('并发 force refresh 也只旋转一次 refresh token', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    final refreshStarted = Completer<void>();
+    final delayedResult = Completer<TokenRefreshGrant>();
+    var refreshCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) {
+            refreshCalls += 1;
+            if (!refreshStarted.isCompleted) {
+              refreshStarted.complete();
+            }
+            return delayedResult.future;
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    final first = notifier.refreshSessionIfNeeded(force: true);
+    await refreshStarted.future;
+    final second = notifier.refreshSessionIfNeeded(force: true);
+    delayedResult.complete(
+      const TokenRefreshGrant(
+        accessToken: 'refreshed-access',
+        refreshToken: 'rotated-refresh',
+        sessionRememberTtlSeconds: 0,
+      ),
+    );
+
+    expect(await Future.wait(<Future<bool>>[first, second]), <bool>[
+      true,
+      true,
+    ]);
+    expect(refreshCalls, 1);
+  });
+
+  test('首个等待者取消不会退休仍在执行的 refresh singleflight', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    final refreshStarted = Completer<void>();
+    final delayedResult = Completer<TokenRefreshGrant>();
+    final abortFirstWaiter = Completer<void>();
+    var refreshCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((command) {
+            refreshCalls += 1;
+            expect(command.refreshToken, 'refresh-token');
+            if (!refreshStarted.isCompleted) {
+              refreshStarted.complete();
+            }
+            return delayedResult.future;
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    final first = notifier.refreshSessionIfNeeded(
+      force: true,
+      abortTrigger: abortFirstWaiter.future,
+    );
+    await refreshStarted.future;
+    final second = notifier.refreshSessionIfNeeded(force: true);
+    abortFirstWaiter.complete();
+    expect(await first, isFalse);
+
+    final third = notifier.refreshSessionIfNeeded(force: true);
+    expect(refreshCalls, 1);
+    delayedResult.complete(
+      const TokenRefreshGrant(
+        accessToken: 'refreshed-access',
+        refreshToken: 'rotated-refresh',
+        sessionRememberTtlSeconds: 0,
+      ),
+    );
+
+    expect(await Future.wait(<Future<bool>>[second, third]), <bool>[
+      true,
+      true,
+    ]);
+    expect(refreshCalls, 1);
+    expect(store.stored.refreshToken, 'rotated-refresh');
+  });
+
+  test('不可解析的旧 access token 不触发推测性 refresh', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    var refreshCalls = 0;
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) async {
+            refreshCalls += 1;
+            return const TokenRefreshGrant(
+              accessToken: 'unused',
+              refreshToken: 'unused',
+              sessionRememberTtlSeconds: 0,
+            );
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final token = await container
+        .read(authSessionControllerProvider.notifier)
+        .accessTokenForRequest();
+
+    expect(token, 'access-token');
+    expect(refreshCalls, 0);
+  });
+
+  test('操作取消只停止等待且会采纳同一会话迟到的 rotated token', () async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final store = _MemoryAuthSessionStore(
       stored: StoredAuthSession(
         accessToken: 'old-access',
         refreshToken: 'old-refresh',
         ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
+        activePersonaId: 'sub-1',
         accountState: 'active',
         identityOrigin: 'phone',
         installId: 'install-id',
@@ -373,12 +650,53 @@ void main() {
 
     expect(
       container.read(authSessionControllerProvider).accessToken,
-      'old-access',
+      'late-access',
     );
+    expect(store.stored.refreshToken, 'late-refresh');
+  });
+
+  test('退出登录胜出时迟到的 refresh grant 不会复活旧会话', () async {
+    final store = _MemoryAuthSessionStore(stored: _currentStoredSession());
+    final refreshStarted = Completer<void>();
+    final delayedResult = Completer<TokenRefreshGrant>();
+    final container = ProviderContainer(
+      overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+        authSessionStoreProvider.overrideWithValue(store),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+          _lifecycleWriter((_) {
+            refreshStarted.complete();
+            return delayedResult.future;
+          }),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(authSessionControllerProvider);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    final notifier = container.read(authSessionControllerProvider.notifier);
+    final refresh = notifier.refreshSessionIfNeeded(force: true);
+    await refreshStarted.future;
+    await notifier.hardLogout();
+    delayedResult.complete(
+      const TokenRefreshGrant(
+        accessToken: 'late-access',
+        refreshToken: 'late-refresh',
+        sessionRememberTtlSeconds: 0,
+      ),
+    );
+
+    expect(await refresh, isFalse);
+    final session = container.read(authSessionControllerProvider);
+    expect(session.hasTrustedSession, isFalse);
+    expect(session.accessToken, isEmpty);
+    expect(session.refreshToken, isEmpty);
+    expect(store.stored.refreshToken, isEmpty);
   });
 
   test(
-    'softLogout 置 guest+manualLoggedOut，保留 refreshToken 与 remembered 摘要',
+    'softLogout 置 guest+manualLoggedOut，分槽保留 remembered credential 与摘要',
     () async {
       final nowMs = DateTime.now().millisecondsSinceEpoch;
       final store = _MemoryAuthSessionStore(
@@ -386,7 +704,7 @@ void main() {
           accessToken: 'access-token',
           refreshToken: 'refresh-token',
           ownerId: 'owner-1',
-          activeSubAccountId: 'sub-1',
+          activePersonaId: 'sub-1',
           accountState: 'active',
           identityOrigin: 'phone',
           installId: 'install-id',
@@ -429,7 +747,9 @@ void main() {
 
       final stored = await store.read();
       expect(stored.accessToken, isEmpty);
-      expect(stored.refreshToken, 'refresh-token');
+      expect(stored.refreshToken, isEmpty);
+      expect(stored.rememberedRefreshToken, 'refresh-token');
+      expect(stored.quickLoginRefreshToken, 'refresh-token');
       expect(stored.manualLoggedOut, isTrue);
       expect(stored.hasValidQuickLoginCredential, isTrue);
     },
@@ -442,7 +762,7 @@ void main() {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
         ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
+        activePersonaId: 'sub-1',
         accountState: 'active',
         identityOrigin: 'phone',
         installId: 'install-id',
@@ -539,7 +859,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
         ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
+        activePersonaId: 'sub-1',
         accountState: 'active',
         identityOrigin: 'phone',
         installId: 'install-id',
@@ -552,6 +872,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
   }
 
   StoredAuthSession stored;
+  int clearSessionCalls = 0;
 
   @override
   Future<StoredAuthSession> read() async => stored;
@@ -571,7 +892,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -595,12 +916,12 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {
+  Future<void> updateActivePersona(String personaId) async {
     stored = StoredAuthSession(
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: subAccountId,
+      activePersonaId: personaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -613,11 +934,12 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {
+    clearSessionCalls += 1;
     stored = StoredAuthSession(
       accessToken: '',
       refreshToken: '',
       ownerId: '',
-      activeSubAccountId: '',
+      activePersonaId: '',
       accountState: '',
       identityOrigin: '',
       installId: stored.installId,
@@ -635,9 +957,9 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
         kDefaultSessionRememberTtlSeconds * 1000;
     stored = StoredAuthSession(
       accessToken: '',
-      refreshToken: stored.refreshToken,
+      refreshToken: '',
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -647,6 +969,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
       rememberedDisplayName: stored.rememberedDisplayName,
       rememberedAvatarUrl: stored.rememberedAvatarUrl,
+      rememberedRefreshToken: stored.refreshToken,
       quickLoginExpiresAtEpochMs: expiresAtMs,
       sessionRememberTtlSeconds: stored.sessionRememberTtlSeconds,
       manualLoggedOut: true,
@@ -660,7 +983,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -677,7 +1000,7 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -687,4 +1010,42 @@ final class _MemoryAuthSessionStore implements AuthSessionStore {
       launchPromptDismissed: stored.launchPromptDismissed,
     );
   }
+}
+
+StoredAuthSession _currentStoredSession({String accessToken = 'access-token'}) {
+  final nowMs = DateTime.now().millisecondsSinceEpoch;
+  return StoredAuthSession(
+    accessToken: accessToken,
+    refreshToken: 'refresh-token',
+    ownerId: 'owner-1',
+    activePersonaId: 'sub-1',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+    lastRefreshAtEpochMs: nowMs,
+    lastForegroundAuthCheckAtEpochMs: nowMs,
+    manualLoggedOut: false,
+    launchPromptDismissed: true,
+  );
+}
+
+String _schedulingJwt(DateTime expiry) {
+  String encode(Object value) =>
+      base64Url.encode(utf8.encode(jsonEncode(value))).replaceAll('=', '');
+  return '${encode(<String, String>{'alg': 'none'})}.'
+      '${encode(<String, int>{'exp': expiry.millisecondsSinceEpoch ~/ 1000})}.'
+      'test-signature';
+}
+
+CloudException _accountSuspendedFailure() {
+  return CloudException(
+    type: CloudErrorType.forbidden,
+    message: 'authoritative account restriction',
+    code: UserErrorCode.accountSuspended.code,
+    statusCode: 403,
+    runtimeFailure: testRuntimeFailure(
+      code: UserErrorCode.accountSuspended.code,
+      kind: RuntimeFailureKind.auth,
+    ),
+  );
 }

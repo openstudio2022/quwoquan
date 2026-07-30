@@ -41,7 +41,7 @@ func (g *UserRelationshipGate) GetCapability(
 		return application.RelationshipCapability{}, nil
 	}
 	requestURL := fmt.Sprintf(
-		"%s/user/sub-accounts/%s/relationship/capability",
+		"%s/user/personas/%s/relationship/capability",
 		g.baseURL,
 		url.PathEscape(strings.TrimSpace(targetID)),
 	)

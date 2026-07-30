@@ -9,6 +9,7 @@ from typing import Mapping
 
 
 _LOCAL_TARGETS = {
+    "alpha": "alpha-local",
     "beta": "beta-local",
     "gamma": "gamma-local",
 }

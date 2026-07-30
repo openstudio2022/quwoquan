@@ -52,7 +52,9 @@ YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<pilot|scale|full>-<sequen
 ```text
 quwoquan_data/publish/                         approved canonical objects
 .qwq_output/data/releases/<releaseId>/         immutable environment-neutral package
-.qwq_output/env/<env>/runs/data-release/...    ship/import/API/UAT evidence
+.qwq_output/env/<env>/runs/data-release/...              ship/import/API/readiness evidence
+.qwq_output/env/<env>/runs/release-lifecycle-exit/...    rollback/replay Exit receipts
+.qwq_output/env/<env>/runs/release-acceptance/...        append-only UAT lease events
 ```
 
 `publish/**` 只允许最终 `creators/entities/posts/media` 对象，以及被这些对象引用的
@@ -87,9 +89,12 @@ python3 quwoquan_data/scripts/cli.py verify runtime-input-ownership
 python3 quwoquan_data/scripts/cli.py verify publish-purity
 python3 quwoquan_data/scripts/cli.py verify output-root-isolation
 python3 quwoquan_data/scripts/cli.py verify release-lifecycle --release <releaseId>
+python3 quwoquan_data/scripts/cli.py verify release-lifecycle-exit --environment <env> --original-release <releaseId> --exit-run <runId>
 
 # Canonical 发布与 taxonomy
 python3 quwoquan_data/scripts/cli.py release --help
+python3 quwoquan_data/scripts/cli.py release lifecycle-exit --help
+python3 quwoquan_data/scripts/cli.py release acceptance-lease --help
 python3 quwoquan_data/scripts/cli.py governance taxonomy --help
 
 # 全量 Data gate

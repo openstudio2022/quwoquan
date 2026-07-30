@@ -2,6 +2,7 @@ package api_integration
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -155,11 +156,37 @@ func TestCreateConversationRejectsClientSuppliedOriginFields(t *testing.T) {
 	rejected := doPost(
 		t,
 		"/chat/conversations",
-		`{"type":"group","title":"班级群","circleId":"school_circle_001","circleGroupId":"classroom_group_001","originType":"organization_node_group","bindingType":"organization_node","lifecyclePolicy":"bound_to_organization_node","maxGroupSize":500,"initialMemberIds":["user_test_002"]}`,
+		`{"type":"group","title":"班级群","circleId":"school_circle_001","circleGroupId":"classroom_group_001","originType":"circle_group","bindingType":"organization_node","lifecyclePolicy":"bound_to_organization_node","maxGroupSize":500,"initialMemberIds":["user_test_002"]}`,
 		"user_test_001",
 		http.StatusBadRequest,
 	)
 	if rejected["code"] != "CHAT.USER.circle_group_binding_write_forbidden" {
 		t.Fatalf("client origin fields must return dedicated rejection, got %#v", rejected)
+	}
+}
+
+func TestCreateConversationRejectsRetiredOriginValues(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	for _, retired := range []string{
+		"circle_default_group",
+		"circle_self_built_group",
+		"organization_node_group",
+		"homepage_related_group",
+		"assistant_invited",
+	} {
+		rejected := doPost(
+			t,
+			"/chat/conversations",
+			fmt.Sprintf(
+				`{"type":"group","title":"退役来源拒绝","originType":%q,"maxGroupSize":500}`,
+				retired,
+			),
+			"user_test_001",
+			http.StatusBadRequest,
+		)
+		if rejected["code"] != "CHAT.USER.circle_group_binding_write_forbidden" {
+			t.Fatalf("retired originType %q must be rejected: %#v", retired, rejected)
+		}
 	}
 }

@@ -2,6 +2,7 @@
   "label": "短视频优先",
   "labelEn": "Short Video First",
   "description": "偏好短视频内容消费",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

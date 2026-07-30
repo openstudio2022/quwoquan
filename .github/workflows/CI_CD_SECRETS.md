@@ -13,11 +13,11 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 |----------|------|------|----------|
 | **delivery-gate.yml** | `pull_request(main)`、手动 | PR 主门禁：拓扑校验、L1+L2 | G0~G3 |
 | **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| **app_pipeline.yml** | `v*` tag、手动 | Android AAB、iOS IPA、macOS 与 Web 正式构建及制品纯度证明 | G2 / 发布 |
+| **app_pipeline.yml** | 仅由 mainline `workflow_call` | 四环境 Android/iOS/macOS/Web、Prod Ops Portal 与 immutable App OCI evidence | G2 / 候选 |
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
-| **deploy-prod-gray.yml** | 手动 | prod `gray-initial` 发布与验证 | G5c |
 | **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `gray-initial` 承接真实远端集成复验 | G5c |
+| **domain-governance.yml** | 每周、手动 | DNS 唯一记录收敛、DNS-01 续期与加密证书交接 | 环境治理 |
 
 ---
 
@@ -51,7 +51,11 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 
 ## 四、App Pipeline（app_pipeline.yml）
 
-### 必须配置（Android / iOS 正式发布）
+### `release-signing` Environment 必须配置
+
+`release-signing` 只保护候选签名和构建材料，不承担 production rollout 审批；
+Production approval 仍只存在于 Prod 事务 job。该 Environment 若未配置或误设人工审批，
+App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关键路径。
 
 | Secret | 用途 |
 |--------|------|
@@ -60,7 +64,10 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 | **QWQ_ANDROID_RELEASE_KEY_ALIAS** | Android 签名 key alias |
 | **QWQ_ANDROID_RELEASE_KEY_PASSWORD** | Android 签名 key 密码 |
 | **QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256** | 受保护环境登记的 Android 正式签名证书 SHA-256；必须与 APK 实际签名一致 |
-| **QWQ_ANDROID_GOOGLE_SERVICES_JSON** | Android release Firebase 配置原文 |
+| **QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON** | Alpha Android Remote composition 的 Firebase 配置原文 |
+| **QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON** | Beta Android Remote composition 的 Firebase 配置原文 |
+| **QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON** | Gamma Android Remote composition 的 Firebase 配置原文 |
+| **QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON** | Prod Android Remote composition 的 Firebase 配置原文 |
 | **QWQ_IOS_DISTRIBUTION_CERT_P12_B64** | Base64 编码的 iOS Distribution P12 |
 | **QWQ_IOS_DISTRIBUTION_CERT_PASSWORD** | iOS Distribution P12 密码 |
 | **QWQ_IOS_PROVISIONING_PROFILE_B64** | Base64 编码的正式 Provisioning Profile |
@@ -68,10 +75,16 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 
 ### 发布证明
 
-- 每次 tag / 手动正式构建都会产出 Android AAB、iOS IPA、macOS 和 Web 制品，并上传
-  对应的 SPDX SBOM、SHA-256、源码 revision 与 test/fixture/Mock 扫描报告。
-- 任何缺失移动端签名材料、非 `prod` runtime environment 或命中 test-only 标识都会硬失败；
-  不允许以 unsigned、alpha runner 或 fixture 包替代正式制品。
+- 本 workflow 不再接受 tag 或独立手动发布；只能绑定 mainline 传入的完整 Git SHA。
+- Android、iOS、macOS、Web 四个平台矩阵并行展开 16 个环境 shard；Prod 同时生成
+  Android official、Public Web 和 Ops Portal 真实 payload。任一环境/平台缺失即硬失败。
+- 每个矩阵 shard 直接写入 run/attempt 唯一的 GHCR OCI transport tag；aggregate 先将 tag
+  原子解析为 digest，再只按 exact `ghcr.io/...@sha256:...` 回读并拒绝文件冲突。Actions
+  Artifact 不参与 job 间交换。aggregate 校验全部实际 payload 后发布唯一正式 App evidence OCI；
+  后续 seal 和环境晋级只接受该 workflow 输出的 exact digest ref。
+- `ReleaseEvidenceManifest.applicationPackages[*][*].sourceRef` 使用
+  `oci://ghcr.io/...@sha256:...`，`packageDigest` 来自实际 payload 内容；OCI transport digest
+  仅证明传输物，不替代 candidate digest。
 
 ---
 
@@ -150,7 +163,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 
 ---
 
-## 八、Prod Hosted Deploy（deploy-prod-gray.yml / deploy-prod-auto.yml）
+## 八、Prod Hosted Deploy（deploy-prod-auto.yml）
 
 > 远端唯一托管目标为 `prod-hosted`（backend=ssh-hosted，与原 gamma 同台 ECS，rootless podman compose）。
 > 已**退役** `PROD_KUBECONFIG` 单一全权凭据，改为按 `edge / media / service / data` 四平面去 root 隔离的 SSH 凭据。
@@ -163,6 +176,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 | **PROD_EDGE_SSH_KEY** | `edge` 平面账号 `prod-edge-svc` 的 SSH 私钥（realtime-gateway / rtc-service） |
 | **PROD_MEDIA_SSH_KEY** | `media` 平面账号 `prod-media-svc` 的 SSH 私钥（livekit-sfu / coturn） |
 | **PROD_SERVICE_SSH_KEY** | `service` 平面账号 `prod-service-svc` 的 SSH 私钥（各第一方服务自治 workload） |
+| **AI_CI_SHADOW_TOKEN** | 仅可调用脱敏 CI 建议端点的短期只读 token；不得拥有仓库、门禁、部署或云资源权限 |
 | **PROD_PROMETHEUS_URL**（Environment variable） | 生产 Prometheus API base URL，供 `stackctl deploy` 自动回读 error rate/P95/Redis error rate |
 | **PROD_SERVICE_NETWORK**（prod-hosted 主机变量） | Prometheus/Alertmanager/OTel Collector 加入的 service plane 共享 rootless network 名称 |
 | **OTEL_EXPORTER_OTLP_ENDPOINT**（prod-hosted 主机变量，可选） | 服务 trace 的 OTLP/HTTP 接收端（`host:port`）；未设置时使用共享网络内 `otel-collector:4318` |
@@ -173,12 +187,26 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 | **OPS_OIDC_ISSUER / OPS_OIDC_AUDIENCE / OPS_OIDC_JWKS_URL**（prod-hosted 主机变量） | 两个 Ops 服务的服务端 OIDC 验签配置；任一缺失时 production composition 拒绝启动 |
 | **ALERT_INGEST_TOKEN**（prod-hosted 主机变量） | Alertmanager → platform-ops-service 告警回流 ingest 的机器 token；与观测栈 `ALERT_INGEST_TOKEN_SECRET_FILE` 内容一致 |
 | **RUNTIME_LOG_INGEST_TOKEN**（prod-hosted 主机变量） | 云侧服务日志上云内部通道（各服务 → product-ops `/ops/internal/runtime-logs:ingest`）的机器 token；服务端 fail-closed |
+| **PROD_RELEASE_STATE_DIR**（Environment variable） | Prod runner 的可删除 hosted-ledger 回读缓存目录；不作为发布真相源 |
+| **PROD_BACKUP_RECOVERY_RECEIPT**（Environment variable） | 当前有效的 hosted 备份与隔离恢复回执路径；校验失败或过期时阻断发布 |
+| **PROD_ROLLBACK_DRILL_RECEIPT_ID**（Environment variable） | 已成功真实回滚的 hosted ledger receipt SHA-256 id；发布前必须从 service plane 按 id 回读并验真 |
+| **PROD_PROVIDER_EVIDENCE_REF**（Repository variable） | 受控 Provider conformance 原始证据的 exact GHCR OCI digest ref；Delivery runner 只按 digest 回读 |
+| **PROD_PROVIDER_EVIDENCE_DIGEST**（Repository variable） | 上述 Provider evidence OCI 的 `sha256:...` transport digest，必须与 ref 一致 |
+| **RELEASE_USER_ACCEPTANCE_EVIDENCE_REF**（Repository variable） | 与待发布 Git tree、ContractGraph 和候选制品内容摘要一致的真实 Remote `user_acceptance` 证据 exact GHCR OCI digest ref；禁止用 contract smoke 代替 |
+| **RELEASE_USER_ACCEPTANCE_EVIDENCE_DIGEST**（Repository variable） | 上述真实 Remote `user_acceptance` OCI 的 `sha256:...` transport digest，必须与 ref 一致 |
 
 ### 说明
 
-- 每个平面 SSH 私钥都是 **OpenSSH/PEM 私钥原文**（含 `BEGIN ... PRIVATE KEY`），不是文件路径。
-- prod SSH host 默认从 `quwoquan_ops/environments/prod/runtime.yaml` 的 `prod-hosted.publicBases.api` 解析，不再单独维护 `PROD_SSH_HOST` secret。
-- `deploy-prod-gray.yml` 与 `deploy-prod-auto.yml` 在真实发布（`dry_run != true`）前会调用 `quwoquan_ops/cli/prod/validate_prod_plane_credentials.py` 按 rollout stage 硬校验对应平面凭据；缺失/非法即硬失败。
+- 每个 GitHub Secret 保存 **OpenSSH/PEM 私钥原文**（含 `BEGIN ... PRIVATE KEY`），不是文件路径。workflow 必须在 `$RUNNER_TEMP` 以 `0600` 权限一次性物化，并仅通过 `<SSH_KEY_SECRET>_FILE` 交给发布 CLI；CLI 不把原文或本地缓存当作 hosted authority。
+- `PROD_SSH_HOST` 属于受限管理面，必须单独注入；禁止从面向 App 的
+  `prod-hosted.publicBases.api` 推导。
+- `AI_CI_SHADOW_ENDPOINT` 是 repository variable，必须是无凭据的 HTTPS URL；
+  对应 shadow job 不在候选制品、四环境或 Prod 晋级的依赖链中，输出仅为
+  canonical `AiCiAdvisory`，失败不得修改任何确定性门禁结果。
+- `deploy-prod-auto.yml` 在真实发布（`dry_run != true`）前会调用 `quwoquan_ops/cli/prod/validate_prod_plane_credentials.py` 按 rollout stage 硬校验对应平面凭据；缺失/非法即硬失败。生产灰度只是 `prod` 的 rollout stage，不存在第二个 Prod workflow 或环境。
+- `deploy-prod-auto.yml` 的 dry-run 同样读取托管 ledger、真实回滚演练和备份恢复证据；三者缺一时停在 `candidate-ready`，不得生成 `deployable` 或伪造 Prod 回执。
+- mainline `CiTimingSummary` 由最终 summary job 以 exact GHCR OCI digest 发布，并使用 `PROD_SERVICE_SSH_KEY` 写入 `/home/prod-service-svc/stack/ci-timing-ledger` 的独立 append-only authority；该 authority 不复用 Prod rollout CAS。
+- hosted timing authority 必须由运维预先执行 `hosted_ci_timing_ledger.py --action initialize` 建立 marker。workflow 只有 bind/query 路径，缺 marker、SSH、exact OCI digest 或读后不一致均 `GATE_BLOCK`；三天 Actions Artifact 只是诊断副本。
 - `quwoquan_ops/cli/prod/deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录，`podman compose` 拉起本平面 governedWorkloads + rollout 等待 + 失败回滚；**不再允许**凭据缺失时以 warning 形式跳过并返回成功。
 - `PROD_KUBECONFIG` 已退役：一旦检测到该变量被注入，`deploy_to_prod.sh` 与凭据校验脚本都会直接硬失败，禁止 kube 路径复活。
 - `PROD_OPS_SSH_KEY`（relay）与 `PROD_DATA_SSH_KEY`（readonly audit）只在本地 bootstrap / 审计场景下按需生成，不属于当前 GitHub Actions 发布最小 secret 集。
@@ -206,13 +234,31 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
     ├── service_pipeline.yml
     ├── app_pipeline.yml
     ├── pre-release-gate.yml
+    ├── domain-governance.yml
     ├── deploy-prod-auto.yml
     └── app-env-device-matrix-self-hosted.yml
 ```
 
 ---
 
-## 十、配置步骤
+## 十、Domain Governance
+
+在 GitHub `domain-governance` Environment 配置：
+
+| Secret | 用途 |
+|--------|------|
+| `QWQ_DNS_PROVISIONING_API_TOKEN` | Cloudflare DNS provisioning token，仅供 canonical A/AAAA/CAA/MX/TXT/CNAME apply |
+| `QWQ_ACME_DNS_API_TOKEN` | Cloudflare DNS-01 challenge-only token，仅授权非生产 `_acme-challenge` authority，禁止生产区变更 |
+| `QWQ_DNS_ZONE_ID` | `quwoquan.com` zone id |
+| `QWQ_ACME_ACCOUNT_EMAIL` | Let's Encrypt ACME account |
+| `QWQ_TLS_AGE_RECIPIENT` | 证书部署方持有私钥的 age 公钥；CI 只上传加密后的证书包 |
+
+Workflow 不上传明文私钥；证书包以 age 加密、保留 7 天。DNS apply 与 live DNS
+证据不含 token，保留 30 天。生产证书仍由 `public-ca-prod` 外部发布面管理。
+
+---
+
+## 十一、配置步骤
 
 1. 进入仓库 **Settings → Secrets and variables → Actions**。
 2. 点击 **New repository secret**。

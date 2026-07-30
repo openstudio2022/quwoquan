@@ -20,11 +20,12 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 	socialServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/user/sub-accounts/viewer_1/following":
+		case "/user/personas/viewer_1/following":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"subAccountId":  "user_a",
+						"personaId":     "user_a",
+						"userHandle":    "alice_follow",
 						"displayName":   "Alice Follow",
 						"avatarUrl":     "https://avatar/a.png",
 						"followedAt":    "2026-06-06T12:00:00Z",
@@ -33,18 +34,20 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 				},
 				"cursor": "",
 			})
-		case "/user/sub-accounts/viewer_1/followers":
+		case "/user/personas/viewer_1/followers":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"subAccountId":  "user_a",
+						"personaId":     "user_a",
+						"userHandle":    "alice_follow",
 						"displayName":   "Alice Follow",
 						"avatarUrl":     "https://avatar/a.png",
 						"followedAt":    "2026-06-06T12:02:00Z",
 						"relationState": "followed_by",
 					},
 					{
-						"subAccountId":  "user_b",
+						"personaId":     "user_b",
+						"userHandle":    "bob_follower",
 						"displayName":   "Bob Follower",
 						"avatarUrl":     "https://avatar/b.png",
 						"followedAt":    "2026-06-06T12:03:00Z",
@@ -55,10 +58,10 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 			})
 		case "/user/contact-discovery/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":                   "discovery_1",
-				"matchedSubAccountIds": []string{"user_c"},
-				"status":               "completed",
-				"createdAt":            time.Date(2026, 6, 6, 12, 4, 0, 0, time.UTC),
+				"id":                "discovery_1",
+				"matchedPersonaIds": []string{"user_c"},
+				"status":            "completed",
+				"createdAt":         time.Date(2026, 6, 6, 12, 4, 0, 0, time.UTC),
 			})
 		default:
 			writeTestUserNotFound(w, r, "unexpected "+r.Method+" "+r.URL.Path)
@@ -93,7 +96,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/chat/contacts?limit=10", nil)
 	req.Header.Set("X-Client-User-Id", "viewer_1")
-	req.Header.Set("X-Client-Sub-Account-Id", "viewer_1")
+	req.Header.Set("X-Client-Persona-Id", "viewer_1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -128,6 +131,9 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 	if got := byID["user_a"]["source"]; got != "mutual" {
 		t.Fatalf("expected user_a source mutual, got %v", got)
 	}
+	if got := byID["user_a"]["userHandle"]; got != "alice_follow" {
+		t.Fatalf("expected user_a canonical userHandle, got %v", got)
+	}
 	if got := byID["user_b"]["source"]; got != "following" {
 		t.Fatalf("expected user_b source following, got %v", got)
 	}
@@ -140,6 +146,9 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 	if got := byID["user_c"]["bio"]; got != "Bio_user_c" {
 		t.Fatalf("expected user_c bio from profile snapshot, got %v", got)
 	}
+	if got := byID["user_c"]["userHandle"]; got != "handle_user_c" {
+		t.Fatalf("expected discovery profile userHandle, got %v", got)
+	}
 
 	cursor := ""
 	seenCursors := map[string]struct{}{}
@@ -151,7 +160,7 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 			nil,
 		)
 		req.Header.Set("X-Client-User-Id", "viewer_1")
-		req.Header.Set("X-Client-Sub-Account-Id", "viewer_1")
+		req.Header.Set("X-Client-Persona-Id", "viewer_1")
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -200,11 +209,11 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 	socialServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/user/sub-accounts/viewer_1/following":
+		case "/user/personas/viewer_1/following":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"subAccountId":  "user_a",
+						"personaId":     "user_a",
 						"displayName":   "Alice Follow",
 						"avatarUrl":     "https://avatar/a.png",
 						"followedAt":    "2026-06-06T12:00:00Z",
@@ -213,11 +222,11 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 				},
 				"cursor": "",
 			})
-		case "/user/sub-accounts/viewer_1/followers":
+		case "/user/personas/viewer_1/followers":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"subAccountId":  "user_a",
+						"personaId":     "user_a",
 						"displayName":   "Alice Follow",
 						"avatarUrl":     "https://avatar/a.png",
 						"followedAt":    "2026-06-06T12:02:00Z",
@@ -228,10 +237,10 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 			})
 		case "/user/contact-discovery/latest":
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":                   "discovery_1",
-				"matchedSubAccountIds": []string{"user_b"},
-				"status":               "completed",
-				"createdAt":            time.Date(2026, 6, 6, 12, 4, 0, 0, time.UTC),
+				"id":                "discovery_1",
+				"matchedPersonaIds": []string{"user_b"},
+				"status":            "completed",
+				"createdAt":         time.Date(2026, 6, 6, 12, 4, 0, 0, time.UTC),
 			})
 		default:
 			writeTestUserNotFound(w, r, "unexpected "+r.Method+" "+r.URL.Path)
@@ -269,7 +278,7 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/chat/contacts?limit=10", nil)
 	req.Header.Set("X-Client-User-Id", "viewer_1")
-	req.Header.Set("X-Client-Sub-Account-Id", "viewer_1")
+	req.Header.Set("X-Client-Persona-Id", "viewer_1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

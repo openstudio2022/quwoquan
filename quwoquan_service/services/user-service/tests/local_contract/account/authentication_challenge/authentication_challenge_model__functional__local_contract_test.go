@@ -190,6 +190,42 @@ func TestAuthenticationChallengeCancellationIsTerminal(t *testing.T) {
 	}
 }
 
+func TestAuthenticationChallengeScopesFederatedPhoneBindingOTPToTicket(t *testing.T) {
+	t.Parallel()
+
+	createdAt := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+	challenge, err := challengemodel.New(challengemodel.CreateParams{
+		ID:               "challenge-social-bind",
+		Purpose:          "bind_phone",
+		Channel:          "sms",
+		DestinationHash:  "destination-fingerprint",
+		SecretRef:        "opaque-secret-reference",
+		BindingTicketRef: "fbt_ticket-1",
+		ExpiresAt:        createdAt.Add(5 * time.Minute),
+		CreatedAt:        createdAt,
+	})
+	if err != nil {
+		t.Fatalf("创建 ticket-scoped challenge: %v", err)
+	}
+	if challenge.Snapshot().BindingTicketRef != "fbt_ticket-1" {
+		t.Fatalf("binding ticket ref 丢失: %+v", challenge.Snapshot())
+	}
+
+	_, err = challengemodel.New(challengemodel.CreateParams{
+		ID:               "challenge-invalid-scope",
+		Purpose:          "phone_login",
+		Channel:          "sms",
+		DestinationHash:  "destination-fingerprint",
+		SecretRef:        "opaque-secret-reference",
+		BindingTicketRef: "fbt_ticket-1",
+		ExpiresAt:        createdAt.Add(5 * time.Minute),
+		CreatedAt:        createdAt,
+	})
+	if err == nil {
+		t.Fatal("phone_login challenge must reject a federated binding ticket ref")
+	}
+}
+
 func newAuthenticationChallenge(
 	t *testing.T,
 	createdAt time.Time,

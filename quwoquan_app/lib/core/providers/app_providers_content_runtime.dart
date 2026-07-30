@@ -35,7 +35,6 @@ class ContentRuntimeConfigState {
     required this.clientStateSync,
     required this.comment,
     required this.configHash,
-    required this.packageVersion,
     required this.source,
     this.homeChannels = ContentUIConfig.homeChannels,
     this.intersectionDisplay = IntersectionDisplayConfig.fallback,
@@ -47,8 +46,7 @@ class ContentRuntimeConfigState {
   final List<ContentCanaryStage> canaryStages;
   final ClientStateSyncConfig clientStateSync;
   final CommentRemoteConfig comment;
-  final String configHash;
-  final String packageVersion;
+  final String? configHash;
   final AppRemoteConfigSource source;
 
   /// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels]，远程整体覆盖、失败回退默认。
@@ -107,7 +105,6 @@ class ContentRuntimeConfigState {
       ),
       comment: commentOverride ?? fallback.comment,
       configHash: snapshot?.configHash ?? fallback.configHash,
-      packageVersion: snapshot?.packageVersion ?? fallback.packageVersion,
       source: snapshot?.source ?? fallback.source,
       homeChannels: homeChannelsOverride ?? fallback.homeChannels,
       intersectionDisplay:
@@ -281,9 +278,8 @@ final homeChannelsProvider = Provider<List<HomeChannelConfig>>((ref) {
   return ref.watch(contentRuntimeConfigProvider).homeChannels;
 });
 
-const String _personaManagementFeatureFlag = 'ops.user.persona_management_v1';
-const String _personaProfileSyncFeatureFlag =
-    'ops.user.persona_profile_sync_v1';
+const String _personaManagementFeatureFlag = 'ops.user.persona_management';
+const String _personaProfileSyncFeatureFlag = 'ops.user.persona_profile_sync';
 
 bool _runtimeFlagOrEnabledDefault(Ref ref, String flag) {
   final config = ref.watch(contentRuntimeConfigProvider);

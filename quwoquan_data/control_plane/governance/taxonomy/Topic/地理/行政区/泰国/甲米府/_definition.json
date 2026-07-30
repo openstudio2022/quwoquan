@@ -1,0 +1,12 @@
+{
+  "label": "甲米府",
+  "labelEn": "Krabi Province",
+  "description": "安达曼海石灰岩海岸与攀岩胜地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

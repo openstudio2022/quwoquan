@@ -90,21 +90,28 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/app_pipeline.yml").read_text(
             encoding="utf-8"
         )
-        for job_name, platform, command in (
-            ("build-android-release", "android", "flutter build appbundle --release"),
-            ("build-ios-release", "ios", "flutter build ipa --release"),
-            ("build-macos", "macos", "flutter build macos --release"),
-            ("build-web-release", "web", "flutter build web --release"),
+        for job_name, command in (
+            ("android:", "flutter build appbundle --release"),
+            ("ios:", "flutter build ipa --release"),
+            ("macos:", "flutter build macos --release"),
+            ("web:", "--kind web"),
         ):
             self.assertIn(job_name, workflow)
             self.assertIn(command, workflow)
-            self.assertIn(f"--platform {platform}", workflow)
-        self.assertIn("QWQ_APP_RUNTIME_ENV: prod", workflow)
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            self.assertIn(environment, workflow)
+        for surface in ("android", "ios", "web", "macos"):
+            self.assertIn(f"--surface {surface}", workflow)
         self.assertIn("verify_production_release_artifact.py", workflow)
         self.assertIn("apksigner", workflow)
         self.assertIn("codesign --verify --deep --strict", workflow)
-        self.assertIn("ios-launcher-handoff.json", workflow)
+        self.assertIn("${env_name}-ios-launcher-handoff.json", workflow)
         self.assertIn("QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST", workflow)
+        self.assertIn("app_candidate_evidence.Dockerfile", workflow)
+        self.assertIn("app_evidence_ref", workflow)
+        self.assertIn("critical_path_seconds", workflow)
+        self.assertNotIn("refs/tags", workflow)
+        self.assertNotIn("workflow_dispatch", workflow)
 
 
 def _run(

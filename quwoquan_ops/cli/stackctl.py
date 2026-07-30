@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import codecs
+import concurrent.futures
 import contextlib
 import fcntl
 import hashlib
@@ -13,7 +14,6 @@ import selectors
 import shlex
 import shutil
 import socket
-import ssl
 import subprocess
 import sys
 import tempfile
@@ -53,11 +53,11 @@ from quwoquan_ops.cli.lib.official_distribution_release import (
     deploy_official_distribution,
     inspect_official_distribution,
 )
-from quwoquan_ops.cli.prod.collect_release_artifact_descriptors import (
-    ARTIFACT_SCHEMAS as _RELEASE_ARTIFACT_SCHEMAS,
-)
 from quwoquan_ops.cli.prod import collect_release_artifact_descriptors
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact
+from quwoquan_ops.cli.prod import hosted_release_ledger
+from quwoquan_ops.cli.prod import oci_supply_chain
+from quwoquan_ops.cli.alpha import content_release_runtime as alpha_content_release_runtime
 from quwoquan_ops.cli.lib.compose_layout import compose_file_args, gamma_compose_files
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
@@ -65,10 +65,6 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_environment,
     get_target,
     load_environment_topology,
-)
-from quwoquan_ops.cli.lib.media_delivery_manifest import (
-    build_media_delivery_url,
-    load_media_delivery_manifest,
 )
 from quwoquan_ops.cli.lib.local_environment_auth import (
     LocalAcceptanceSession,
@@ -81,14 +77,27 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
 from quwoquan_ops.cli.lib.local_gamma_object_storage import (
     prepare_local_gamma_object_storage,
 )
+from quwoquan_ops.cli.lib.local_environment_object_storage import (
+    prepare_local_environment_object_storage,
+)
 from quwoquan_ops.cli.lib.product_telemetry_log_sink import (
     load_product_telemetry_log_sink,
+)
+from quwoquan_ops.cli.lib.public_domain_tls import (
+    PublicDomainTlsError,
+    issue_certificate,
+    load_policy as load_public_domain_policy,
+    verify_certificate,
 )
 from quwoquan_ops.cli.lib.local_provider_credentials import (
     prepare_local_provider_credentials,
 )
 from quwoquan_ops.cli.lib.video_playback_evidence import (
     read_native_video_playback_evidence,
+)
+from quwoquan_ops.cli.lib.release_video_delivery import (
+    ReleaseVideoDeliveryError,
+    load_release_video_binding,
 )
 from quwoquan_ops.cli.lib.content_release_readiness import (
     ProbeOutcome,
@@ -100,10 +109,6 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
 )
 from quwoquan_ops.cli.lib.data_execution_fleet import (
     resolve_data_execution_fleet_endpoint,
-)
-from quwoquan_ops.cli.lib.local_gamma_media import (
-    LocalGammaMediaError,
-    materialize_local_gamma_media,
 )
 from quwoquan_ops.cli.lib.local_runtime_reservation import (
     assert_local_runtime_available,
@@ -119,14 +124,28 @@ from quwoquan_ops.cli.lib.local_env_gate_matrix import (
     PROFILE_LOCAL_ENV_GATE,
     run_local_env_gate_matrix,
 )
+from quwoquan_ops.cli.lib.immutable_image_composition import (
+    bind_packaged_image_composition,
+    compose_image_environment_key,
+    first_party_service_names,
+    immutable_image_digest,
+    local_release_image_environment_key,
+    packaged_service_source_image_ref,
+)
+from quwoquan_ops.cli.lib.immutable_configuration_composition import (
+    packaged_configuration_digest,
+)
 from quwoquan_ops.cli.lib.local_postgres_migration_drift import (
     format_drift_gate_block,
     probe_migration_drift,
-    wipe_local_postgres_volumes,
 )
 from quwoquan_ops.cli.lib.package_reuse import (
     can_reuse_package,
+    workspace_snapshot,
     write_package_fingerprint,
+)
+from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+    write_candidate_manifest,
 )
 from quwoquan_ops.cli.lib.dev_up import (
     DEV_UP_ENVS,
@@ -152,12 +171,18 @@ from quwoquan_ops.cli.lib.observability import (
     write_stackctl_links,
 )
 from quwoquan_ops.cli.lib.output_paths import (
+    PACKAGE_ROOT_OVERRIDE_ENV,
+    activate_deployment_candidate,
+    active_deployment_candidate,
     app_deployment_package_dir,
+    deployment_candidate_dir,
     deployment_target_for_env,
     deployment_target_path,
+    deployment_work_root,
     env_observability_run_dir,
     env_runs_root,
     legal_static_deployment_package_dir,
+    output_root,
     portal_deployment_package_dir,
     repo_local_dir,
     repo_run_dir,
@@ -180,9 +205,8 @@ VERIFY_COMMAND_GROUPS = {
         ["python3", "quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py"],
         ["python3", "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py"],
         ["python3", "quwoquan_ops/gate/verify_media_delivery_contract.py"],
-        # N2-2：gamma-local 推荐 policy overlay 与 metadata 单真相源一致性
-        # （objectCards 环境开关是唯一允许差异）。
-        ["python3", "quwoquan_ops/gate/verify_gamma_policy_overlay.py"],
+        # 推荐 policy 单轨：gamma 只绑定 canonical 内容摘要，不允许环境变体。
+        ["python3", "quwoquan_ops/gate/verify_canonical_recommendation_policy.py"],
     ],
     "packaging": [
         ["python3", "quwoquan_ops/gate/verify_environment_packaging_contract.py"],
@@ -206,6 +230,22 @@ RELEASE_HOMEPAGE_UAT_TEST_TARGET = (
     "release_homepage__consumer_render__functional__user_acceptance_test.dart"
 )
 VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET = "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart"
+RUNTIME_RECOVERY_UAT_TEST_TARGET = (
+    "test/user_acceptance/patrol/environment/"
+    "runtime_recovery_journey__user_acceptance_test.dart"
+)
+ACCOUNT_ENFORCEMENT_GAMMA_UAT_MANIFEST = (
+    "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+    "product-ops-service/smoke/account_enforcement_gamma_uat_manifest.json"
+)
+ACCOUNT_ENFORCEMENT_GAMMA_UAT_VALIDATOR = (
+    "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+    "product-ops-service/smoke/account_enforcement_gamma_uat.py"
+)
+ACCOUNT_ENFORCEMENT_GAMMA_DEVICE_RUNNER = (
+    "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+    "product-ops-service/smoke/run_account_enforcement_device_matrix.py"
+)
 
 # CLI summaries should retain every concise prerequisite failure while keeping
 # the terminal surface bounded. Full child-process output remains in report.json.
@@ -245,22 +285,9 @@ def _provider_conformance():
     from quwoquan_ops.cli.lib import provider_conformance
 
     return provider_conformance
-GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS: tuple[tuple[str, str], ...] = (
-    ("recommendation-service", "LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE"),
-    ("content-service", "LOCAL_GAMMA_CONTENT_SERVICE_IMAGE"),
-    ("chat-service", "LOCAL_GAMMA_CHAT_SERVICE_IMAGE"),
-    ("user-service", "LOCAL_GAMMA_USER_SERVICE_IMAGE"),
-    ("assistant-service", "LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE"),
-    ("product-ops-service", "LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE"),
-    ("platform-ops-service", "LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE"),
-    ("tag-service", "LOCAL_GAMMA_TAG_SERVICE_IMAGE"),
-    ("search-service", "LOCAL_GAMMA_SEARCH_SERVICE_IMAGE"),
-    ("entity-service", "LOCAL_GAMMA_ENTITY_SERVICE_IMAGE"),
-    ("circle-service", "LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE"),
-    ("integration-service", "LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE"),
-    ("notification-service", "LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE"),
-    ("rtc-service", "LOCAL_GAMMA_RTC_SERVICE_IMAGE"),
-    ("realtime-gateway", "LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE"),
+GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS: tuple[tuple[str, str], ...] = tuple(
+    (service, local_release_image_environment_key(service))
+    for service in first_party_service_names()
 )
 
 
@@ -286,33 +313,398 @@ def _sha256_tree(directory: Path) -> str:
 
 
 def _packaged_service_source_image_ref(env_name: str, service: str) -> str:
-    report_path = service_deployment_package_dir(env_name, service) / "provenance.json"
-    if not report_path.is_file():
-        raise FileNotFoundError(f"service package provenance missing: {report_path}")
-    report = json.loads(report_path.read_text(encoding="utf-8"))
+    return packaged_service_source_image_ref(env_name, service)
+
+
+PACKAGE_OCI_IMAGES_SCHEMA = "stackctl-package-oci-images"
+
+
+def _bind_gamma_build_service_image_refs(
+    env_name: str,
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    """Bind deterministic build tags only while materializing a candidate."""
+
+    refs: dict[str, str] = {}
+    for service, local_key in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        ref = _packaged_service_source_image_ref(env_name, service)
+        refs[service] = ref
+        environment[local_key] = ref
+        environment[compose_image_environment_key(service)] = ref
+    composition_version = immutable_image_digest(refs)
+    environment["LOCAL_GAMMA_IMAGE_VERSION"] = composition_version
+    environment["QWQ_COMPOSE_IMAGE_VERSION"] = composition_version
+    composition: dict[str, Any] = {
+        "imageVersion": composition_version,
+        "images": {
+            service: {"ref": ref}
+            for service, ref in sorted(refs.items())
+        },
+    }
+    _bind_gamma_packaged_configuration_digest(env_name, environment, composition)
+    return composition
+
+
+def _load_package_bound_local_image_composition(
+    env_name: str,
+    target_name: str,
+) -> dict[str, Any]:
+    """Load exact image IDs from the activated or staging package manifest."""
+
+    manifest_path = (
+        runtime_shared_deployment_package_dir(env_name, target=target_name)
+        / "oci-images.json"
+    )
     try:
-        source_digest = str(report["digests"]["sourceTree"])
-    except (KeyError, TypeError) as exc:
-        raise ValueError(
-            f"service source provenance missing: {report_path}"
-        ) from exc
-    if not re.fullmatch(r"sha256:[0-9a-f]{64}", source_digest):
-        raise ValueError(f"invalid service source digest: {report_path}")
-    repository = service.replace("-", "_")
-    return f"localhost/quwoquan_service_{repository}:{source_digest[7:19]}"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"package OCI image manifest is unreadable: {exc}") from exc
+    required = {
+        "schema",
+        "environment",
+        "target",
+        "configurationDigest",
+        "buildInputDigest",
+        "imageDigest",
+        "images",
+    }
+    if not isinstance(manifest, dict) or set(manifest) != required:
+        raise ValueError("package OCI image manifest fields mismatch")
+    if manifest.get("schema") != PACKAGE_OCI_IMAGES_SCHEMA:
+        raise ValueError("package OCI image manifest schema mismatch")
+    if manifest.get("environment") != env_name or manifest.get("target") != target_name:
+        raise ValueError("package OCI image manifest target identity mismatch")
+    for field in ("configurationDigest", "buildInputDigest", "imageDigest"):
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(manifest.get(field) or "")) is None:
+            raise ValueError(f"package OCI image manifest {field} is invalid")
+    images = manifest.get("images")
+    expected_services = {
+        service for service, _ in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
+    }
+    if not isinstance(images, dict) or set(images) != expected_services:
+        raise ValueError("package OCI image manifest service set mismatch")
+    runtime_refs: dict[str, str] = {}
+    normalized_images: dict[str, dict[str, str]] = {}
+    for service in sorted(expected_services):
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict) or set(descriptor) != {
+            "ref",
+            "imageDigest",
+        }:
+            raise ValueError(f"package OCI image descriptor fields mismatch: {service}")
+        build_ref = str(descriptor.get("ref") or "")
+        image_digest = str(descriptor.get("imageDigest") or "")
+        if build_ref != _packaged_service_source_image_ref(env_name, service):
+            raise ValueError(f"package OCI build ref mismatch: {service}")
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", image_digest) is None:
+            raise ValueError(f"package OCI image digest is invalid: {service}")
+        runtime_refs[service] = image_digest
+        normalized_images[service] = {
+            "ref": build_ref,
+            "imageDigest": image_digest,
+        }
+    actual_set_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            normalized_images,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    if actual_set_digest != manifest["imageDigest"]:
+        raise ValueError("package OCI image set digest mismatch")
+    configuration_digest = packaged_configuration_digest(
+        env_name,
+        target=target_name,
+    )
+    if configuration_digest != manifest["configurationDigest"]:
+        raise ValueError("package OCI configuration digest mismatch")
+    return {
+        "imageVersion": immutable_image_digest(runtime_refs),
+        "configurationDigest": configuration_digest,
+        "buildInputDigest": manifest["buildInputDigest"],
+        "imageDigest": manifest["imageDigest"],
+        "images": {
+            service: {"ref": image_digest, "digest": image_digest}
+            for service, image_digest in sorted(runtime_refs.items())
+        },
+    }
 
 
 def _bind_gamma_packaged_service_image_refs(
     env_name: str,
     environment: dict[str, str],
-) -> None:
-    """把本次 package 的源码指纹显式绑定到 Gamma Compose 镜像引用。"""
+) -> dict[str, Any]:
+    """Bind only exact OCI image IDs attested by the immutable package."""
 
+    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
+    if not target_name:
+        raise ValueError("package-bound runtime target is missing")
+    composition = _load_package_bound_local_image_composition(
+        env_name,
+        target_name,
+    )
+    _apply_gamma_image_composition(composition, environment)
+    return composition
+
+
+def _bind_gamma_packaged_configuration_digest(
+    env_name: str,
+    environment: dict[str, str],
+    composition: dict[str, Any] | None = None,
+) -> str:
+    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
+    digest = packaged_configuration_digest(
+        env_name,
+        target=target_name,
+    )
+    environment["LOCAL_GAMMA_CONFIG_VERSION"] = digest
+    if composition is not None:
+        composition["configurationDigest"] = digest
+    return digest
+
+
+def _resolve_gamma_release_image_composition(
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Resolve one validated candidate manifest without mutating or pulling."""
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"formal release manifest is unreadable: {error}") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("formal release manifest must be an object")
+    finalize_mainline_release_artifact.validate_manifest(
+        manifest,
+        allowed_statuses={"candidate-ready", "deployable", "released"},
+    )
+    finalize_mainline_release_artifact.validate_manifest_files(
+        manifest_path.parent,
+        manifest,
+    )
+    images = manifest.get("images")
+    if not isinstance(images, dict):
+        raise ValueError("formal release manifest has no images")
+    bound: dict[str, dict[str, str]] = {}
+    for service, _ in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"formal release image is missing: {service}")
+        digest = str(descriptor.get("digest") or "")
+        ref = str(descriptor.get("ref") or "")
+        repository = str(descriptor.get("repository") or "")
+        if (
+            re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
+            or ref != f"{repository}@{digest}"
+        ):
+            raise ValueError(f"formal release image is not exact: {service}")
+        bound[service] = {"ref": ref, "digest": digest}
+    composition_version = immutable_image_digest(
+        {service: descriptor["ref"] for service, descriptor in bound.items()}
+    )
+    return {
+        "candidateId": str(manifest["candidateId"]),
+        "artifactDigest": str(manifest["artifactDigest"]),
+        "imageVersion": composition_version,
+        "images": bound,
+    }
+
+
+def _apply_gamma_image_composition(
+    composition: dict[str, Any],
+    environment: dict[str, str],
+) -> None:
+    """Project one already-validated composition into both Compose aliases."""
+
+    configuration_digest = str(composition.get("configurationDigest") or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
+        raise ValueError("immutable runtime composition has no configuration digest")
+    environment["LOCAL_GAMMA_CONFIG_VERSION"] = configuration_digest
+    images = composition.get("images")
+    if not isinstance(images, dict) or not images:
+        raise ValueError("immutable image composition has no images")
+    refs: dict[str, str] = {}
+    for service, local_key in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"immutable image composition is missing: {service}")
+        ref = str(descriptor.get("ref") or "")
+        refs[service] = ref
+        environment[local_key] = ref
+        environment[compose_image_environment_key(service)] = ref
+    actual_version = immutable_image_digest(refs)
+    expected_version = str(composition.get("imageVersion") or "")
+    if actual_version != expected_version:
+        raise ValueError("immutable image composition version mismatch")
+    environment["LOCAL_GAMMA_IMAGE_VERSION"] = actual_version
+    environment["QWQ_COMPOSE_IMAGE_VERSION"] = actual_version
+    candidate_id = str(composition.get("candidateId") or "")
+    artifact_digest = str(composition.get("artifactDigest") or "")
+    if candidate_id:
+        environment["QWQ_RELEASE_CANDIDATE_DIGEST"] = candidate_id
+    if artifact_digest:
+        environment["QWQ_RELEASE_ARTIFACT_DIGEST"] = artifact_digest
+
+
+def _bind_gamma_release_image_refs(
+    manifest_path: Path,
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    """Pull and bind exact candidate OCI refs for a formal local release."""
+
+    composition = _resolve_gamma_release_image_composition(manifest_path)
+    planned: list[tuple[str, str, str, str]] = []
     for service, environment_key in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
-        environment[environment_key] = _packaged_service_source_image_ref(
-            env_name,
-            service,
+        descriptor = composition["images"][service]
+        digest = descriptor["digest"]
+        ref = descriptor["ref"]
+        planned.append((service, environment_key, ref, digest))
+
+    def pull_exact_image(
+        item: tuple[str, str, str, str],
+    ) -> tuple[tuple[str, str, str, str], subprocess.CompletedProcess[str]]:
+        return item, run(["docker", "pull", "--platform", "linux/amd64", item[2]])
+
+    failures: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, len(planned))
+    ) as executor:
+        futures = [executor.submit(pull_exact_image, item) for item in planned]
+        for future in concurrent.futures.as_completed(futures):
+            item, pull = future.result()
+            if pull.returncode != 0:
+                failures.append(
+                    f"{item[0]}: "
+                    + (pull.stderr.strip() or pull.stdout.strip() or "pull failed")
+                )
+    if failures:
+        raise ValueError(
+            "formal release exact OCI pull failed: " + "; ".join(sorted(failures))
         )
+
+    _bind_gamma_packaged_configuration_digest(
+        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
+        environment,
+        composition,
+    )
+    _apply_gamma_image_composition(composition, environment)
+    return composition
+
+
+def _bind_gamma_release_teardown_image_refs(
+    manifest_path: Path,
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    """Bind the exact candidate identity for teardown without pulling images."""
+
+    composition = _resolve_gamma_release_image_composition(manifest_path)
+    _bind_gamma_packaged_configuration_digest(
+        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
+        environment,
+        composition,
+    )
+    _apply_gamma_image_composition(composition, environment)
+    return composition
+
+
+def _inspect_gamma_release_runtime(
+    release_composition: dict[str, Any],
+    environment: dict[str, str],
+) -> dict[str, dict[str, str]]:
+    """Prove that local containers actually run every exact candidate ref."""
+
+    images = release_composition.get("images")
+    if not isinstance(images, dict) or not images:
+        raise ValueError("formal release composition has no images")
+    project = str(
+        environment.get("LOCAL_GAMMA_COMPOSE_PROJECT_NAME") or "quwoquan_service"
+    ).strip()
+    def inspect_service(item: tuple[str, Any]) -> tuple[str, dict[str, str]]:
+        service, descriptor = item
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"formal image descriptor is invalid: {service}")
+        expected_ref = str(descriptor.get("ref") or "")
+        expected_digest = str(descriptor.get("digest") or "")
+        container_lookup = run(
+            [
+                "docker",
+                "ps",
+                "-aq",
+                "--filter",
+                f"label=com.docker.compose.project={project}",
+                "--filter",
+                f"label=com.docker.compose.service={service}",
+            ],
+            env=environment,
+        )
+        container_ids = [
+            line.strip()
+            for line in container_lookup.stdout.splitlines()
+            if line.strip()
+        ]
+        if container_lookup.returncode != 0 or len(container_ids) != 1:
+            raise ValueError(
+                f"formal runtime must have exactly one {service} container; "
+                f"found {len(container_ids)}"
+            )
+        container_id = container_ids[0]
+        inspect_result = run(["docker", "inspect", container_id], env=environment)
+        if inspect_result.returncode != 0:
+            raise ValueError(f"formal runtime inspect failed: {service}")
+        try:
+            inspected = json.loads(inspect_result.stdout)
+            container = inspected[0]
+            actual_ref = str(container["Config"]["Image"])
+            runtime_image_id = str(container["Image"])
+            state = container["State"]
+            status = str(state["Status"])
+            health = str((state.get("Health") or {}).get("Status") or "not-declared")
+        except (IndexError, KeyError, TypeError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"formal runtime inspect is not canonical: {service}"
+            ) from error
+        if actual_ref != expected_ref:
+            raise ValueError(
+                f"formal runtime image differs from candidate: {service}"
+            )
+        if status != "running" or health not in {"healthy", "not-declared"}:
+            raise ValueError(
+                f"formal runtime is not ready: {service} status={status} health={health}"
+            )
+        image_result = run(["docker", "image", "inspect", expected_ref], env=environment)
+        if image_result.returncode != 0:
+            raise ValueError(f"formal local image inspect failed: {service}")
+        try:
+            local_images = json.loads(image_result.stdout)
+            repo_digests = local_images[0].get("RepoDigests") or []
+        except (IndexError, TypeError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"formal local image inspect is not canonical: {service}"
+            ) from error
+        if expected_ref not in repo_digests:
+            raise ValueError(
+                f"formal local image has no exact pulled digest: {service}"
+            )
+        return service, {
+            "ref": expected_ref,
+            "digest": expected_digest,
+            "containerId": container_id,
+            "runtimeImageId": runtime_image_id,
+            "status": status,
+            "health": health,
+        }
+
+    items = sorted(images.items())
+    runtime_images: dict[str, dict[str, str]] = {}
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, len(items))
+    ) as executor:
+        futures = [executor.submit(inspect_service, item) for item in items]
+        for future in concurrent.futures.as_completed(futures):
+            service, runtime = future.result()
+            runtime_images[service] = runtime
+    return dict(sorted(runtime_images.items()))
 
 
 def _bind_gamma_external_provider_environment(
@@ -364,12 +756,82 @@ def _bind_gamma_object_storage_environment(
         "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL",
         storage.host_endpoint,
     )
+    public_bases = (
+        get_target(load_environment_topology(), "gamma-local").get("publicBases")
+        or {}
+    )
+    media_delivery_origin = _public_url_origin(str(public_bases["mediaImage"]))
+    environment.setdefault(
+        "CONTENT_MEDIA_DELIVERY_BASE_URL",
+        media_delivery_origin,
+    )
+    environment.setdefault(
+        "CONTENT_MEDIA_UPLOAD_BASE_URL",
+        str(public_bases["mediaUpload"]),
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL",
+        media_delivery_origin,
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL",
+        str(public_bases["mediaUpload"]),
+    )
     _sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
     return None
 
 
-def _bind_gamma_down_compose_placeholders(environment: dict[str, str]) -> None:
-    """Satisfy Compose interpolation for teardown without runtime credentials."""
+def _bind_formal_local_release_provider_environment(
+    environment: dict[str, str],
+    *,
+    environment_name: str,
+    target_name: str,
+) -> str | None:
+    """Materialize target-isolated substitutes for the shared OCI runtime."""
+
+    try:
+        auth = prepare_local_environment_auth(environment_name, target_name)
+        storage = prepare_local_environment_object_storage(
+            environment=environment_name,
+            target_name=target_name,
+            edge_port=profile_ports(
+                load_port_manifest(),
+                str(get_target(load_environment_topology(), target_name)["portProfile"]),
+            )["object-storage-edge"],
+            # The shared infrastructure Compose retains this private adapter
+            # prefix. Service workloads consume only QWQ_COMPOSE_* aliases.
+            environment_prefix="LOCAL_GAMMA",
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return f"{target_name} provider materialization failed: {exc}"
+    environment.update(auth.environment)
+    environment.update(storage.environment)
+    public_bases = get_target(load_environment_topology(), target_name).get(
+        "publicBases"
+    ) or {}
+    media_delivery_origin = _public_url_origin(str(public_bases["mediaImage"]))
+    environment.setdefault("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", storage.host_endpoint)
+    environment.setdefault("CONTENT_MEDIA_DELIVERY_BASE_URL", media_delivery_origin)
+    environment.setdefault(
+        "CONTENT_MEDIA_UPLOAD_BASE_URL", str(public_bases["mediaUpload"])
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL", media_delivery_origin
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL", str(public_bases["mediaUpload"])
+    )
+    _sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
+    return _bind_local_external_provider_environment(
+        environment,
+        environment_name=environment_name,
+        target_name=target_name,
+        storage_prefix="LOCAL_GAMMA",
+    )
+
+
+def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
+    """Satisfy non-identity Compose interpolation used only while tearing down."""
 
     storage_placeholders = {
         "ENDPOINT": "https://unused.invalid",
@@ -378,7 +840,6 @@ def _bind_gamma_down_compose_placeholders(environment: dict[str, str]) -> None:
         "ACCESS_KEY_ID": "unused",
         "ACCESS_KEY_SECRET": "unused",
         "CDN_SIGN_KEY": "unused",
-        "CA_FILE": "/dev/null",
         "TLS_DIR": "/tmp",
     }
     for suffix, value in storage_placeholders.items():
@@ -386,6 +847,68 @@ def _bind_gamma_down_compose_placeholders(environment: dict[str, str]) -> None:
         compose_key = f"QWQ_COMPOSE_OBJECT_STORAGE_{suffix}"
         environment.setdefault(source_key, value)
         environment.setdefault(compose_key, environment[source_key])
+    environment.update(
+        {
+            "AUTH_JWT_SECRET": "down-not-used",
+            "AUTH_JWT_ISSUER": "down-not-used",
+            "AUTH_JWT_AUDIENCE": "down-not-used",
+            "AUTH_JWT_TOKEN_VERSION": "down-not-used",
+            "AUTH_DEVICE_TICKET_SECRET": "down-not-used",
+            "AUTH_DEVICE_TICKET_ISSUER": "down-not-used",
+            "AUTH_DEVICE_TICKET_AUDIENCE": "down-not-used",
+            "AUTH_DEVICE_TICKET_TOKEN_VERSION": "down-not-used",
+            "OTP_CODE_REF_ACTIVE_KEY_VERSION": "down-not-used",
+            "OTP_CODE_REF_KEYS_JSON": '{"down-not-used":"down-not-used"}',
+            "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": "down-not-used",
+            "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": "down-not-used",
+        }
+    )
+
+
+def _load_gamma_runtime_image_composition(
+    target_name: str,
+) -> tuple[dict[str, Any], str] | None:
+    """Read the exact successful runtime binding; absence permits package derivation."""
+
+    receipt_path = target_process_dir(target_name) / "stack_status.json"
+    if not receipt_path.is_file():
+        return None
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"runtime image composition receipt is unreadable: {exc}") from exc
+    if not isinstance(receipt, dict) or receipt.get("status") != "passed":
+        raise ValueError("runtime image composition receipt is not a successful runtime")
+    expected_environment = target_name.removesuffix("-local")
+    if receipt.get("runtimeEnv") != expected_environment:
+        raise ValueError("runtime image composition receipt environment mismatch")
+    compose_project = str(receipt.get("composeProject") or "").strip()
+    if not compose_project:
+        raise ValueError("runtime image composition receipt has no Compose project")
+    composition = receipt.get("imageComposition")
+    if not isinstance(composition, dict):
+        raise ValueError("runtime image composition receipt has no image composition")
+    images = composition.get("images")
+    if not isinstance(images, dict):
+        raise ValueError("runtime image composition receipt has invalid images")
+    refs: dict[str, str] = {}
+    for service, _ in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"runtime image composition is missing: {service}")
+        refs[service] = str(descriptor.get("ref") or "")
+    actual_version = immutable_image_digest(refs)
+    expected_version = str(composition.get("imageVersion") or "")
+    if actual_version != expected_version:
+        raise ValueError("runtime image composition version mismatch")
+    if str(receipt.get("imageTransportTag") or "") != actual_version:
+        raise ValueError("runtime image composition receipt version mismatch")
+    configuration_digest = str(receipt.get("configurationDigest") or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
+        raise ValueError("runtime image composition receipt has no configuration digest")
+    composition = dict(composition)
+    composition["configurationDigest"] = configuration_digest
+    return composition, compose_project
 
 
 def _bind_beta_external_provider_environment(
@@ -453,9 +976,7 @@ def _sync_object_storage_binding_aliases(
         f"{prefix}_OBJECT_STORAGE_REGION": "CONTENT_OSS_REGION",
         f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "CONTENT_OSS_ACCESS_KEY_ID",
         f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "CONTENT_OSS_ACCESS_KEY_SECRET",
-        f"{prefix}_OBJECT_STORAGE_CDN_DOMAIN": "CONTENT_CDN_DOMAIN",
         f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "CONTENT_CDN_SIGN_KEY",
-        f"{prefix}_OBJECT_STORAGE_CA_FILE": "CONTENT_OSS_CA_FILE",
     }
     storage_to_compose = {
         f"{prefix}_OBJECT_STORAGE_ENDPOINT": "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT",
@@ -463,9 +984,7 @@ def _sync_object_storage_binding_aliases(
         f"{prefix}_OBJECT_STORAGE_REGION": "QWQ_COMPOSE_OBJECT_STORAGE_REGION",
         f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID",
         f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET",
-        f"{prefix}_OBJECT_STORAGE_CDN_DOMAIN": "QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN",
         f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY",
-        f"{prefix}_OBJECT_STORAGE_CA_FILE": "QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE",
     }
     for storage_key, content_key in storage_to_content.items():
         value = environment.get(storage_key)
@@ -481,6 +1000,8 @@ def _gamma_start_command(args: argparse.Namespace) -> list[str]:
     command = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
     if getattr(args, "skip_build", False):
         command.append("--skip-build")
+    if getattr(args, "formal_release", False):
+        command.append("--formal-release")
     if getattr(args, "build_only", False):
         command.append("--build-only")
         build_services = str(getattr(args, "build_services", "")).strip()
@@ -529,15 +1050,110 @@ def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
     return package_dir
 
 
-def _materialize_prod_release_artifact(*, target: str = "") -> str:
-    """校验 CI release artifact 与服务自治 prod 包一致，并记录供应链证据。
+def _build_package_bound_local_images(
+    env_name: str,
+    target_name: str,
+    *,
+    report_dir: Path,
+) -> tuple[Path, dict[str, Any]]:
+    """Build and attest the exact local OCI inputs during package, never during up."""
+    topology = load_environment_topology()
+    environment = _gamma_env_from_port_manifest(topology, target_name)
+    _bind_gamma_down_parse_environment(environment)
+    environment.update(
+        {
+            "QWQ_RUN_ROOT": str(report_dir.resolve()),
+            "QWQ_OBSERVABILITY_RUN_ROOT": str(
+                env_observability_run_dir(env_name, report_dir.name).resolve()
+            ),
+            "QWQ_WORKLOAD": "full",
+            "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
+            # Compose parses storage/provider variables while building, but no
+            # build step may contact or persist them into an image.
+            "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT": "https://127.0.0.1",
+            "LOCAL_GAMMA_OBJECT_STORAGE_BUCKET": "package-build-only",
+            "LOCAL_GAMMA_OBJECT_STORAGE_REGION": "local",
+            "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID": "package-build-only",
+            "LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET": "package-build-only",
+            "LOCAL_GAMMA_OBJECT_STORAGE_CDN_SIGN_KEY": "package-build-only",
+            "LOCAL_GAMMA_OBJECT_STORAGE_TLS_DIR": str(
+                (target_cache_dir(target_name) / "package" / "tls").resolve()
+            ),
+        }
+    )
+    _sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
+    provider_error = _bind_local_external_provider_environment(
+        environment,
+        environment_name=env_name,
+        target_name=target_name,
+        storage_prefix="LOCAL_GAMMA",
+    )
+    if provider_error:
+        raise RuntimeError(provider_error)
+    composition = _bind_gamma_build_service_image_refs(env_name, environment)
+    command = [
+        "bash",
+        "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+        "--build-only",
+    ]
+    result = run(command, env=environment)
+    if result.returncode != 0:
+        raise RuntimeError(
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"package-bound OCI build failed with exit={result.returncode}"
+        )
+    images: dict[str, dict[str, str]] = {}
+    for service, descriptor in sorted(composition["images"].items()):
+        image_ref = str(descriptor["ref"])
+        inspect = run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image_ref]
+        )
+        image_digest = inspect.stdout.strip()
+        if (
+            inspect.returncode != 0
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", image_digest) is None
+        ):
+            raise RuntimeError(f"package-bound OCI digest is unavailable: {service}")
+        images[service] = {"ref": image_ref, "imageDigest": image_digest}
+    image_set_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            images,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    manifest = {
+        "schema": PACKAGE_OCI_IMAGES_SCHEMA,
+        "environment": env_name,
+        "target": target_name,
+        "configurationDigest": composition["configurationDigest"],
+        "buildInputDigest": composition["imageVersion"],
+        "imageDigest": image_set_digest,
+        "images": images,
+    }
+    manifest_path = (
+        runtime_shared_deployment_package_dir(env_name, target=target_name)
+        / "oci-images.json"
+    )
+    write_json(manifest_path, manifest)
+    return manifest_path, manifest
 
-    release artifact 是可删除的发布证据，不再成为第二份运行配置。运行时始终只消费
+
+def _materialize_release_evidence_configuration(
+    env_name: str,
+    *,
+    target: str = "",
+) -> dict[str, str]:
+    """校验 CI release evidence 与环境自治服务包一致，并记录供应链证据。
+
+    Release evidence 是可删除的回读副本，不再成为第二份运行配置。运行时始终只消费
     服务包中的 config/config.yaml，其 CONFIG_VERSION 为内容摘要。
     """
     artifact_root_value = os.environ.get("QWQ_PROD_RELEASE_ARTIFACT_ROOT", "").strip()
     if not artifact_root_value:
-        return ""
+        return {}
     artifact_root = Path(artifact_root_value).expanduser()
     if not artifact_root.is_absolute():
         artifact_root = ROOT / artifact_root
@@ -545,20 +1161,35 @@ def _materialize_prod_release_artifact(*, target: str = "") -> str:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"prod release artifact manifest missing: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    config_version = str((manifest.get("versions") or {}).get("configVersion") or "").strip()
-    release_files = manifest.get("releaseFiles")
-    if not config_version or not isinstance(release_files, dict):
-        raise ValueError(f"invalid prod release artifact manifest: {manifest_path}")
+    if not isinstance(manifest, dict):
+        raise ValueError(f"invalid release evidence manifest: {manifest_path}")
+    allowed_statuses = (
+        {"deployable", "released"}
+        if env_name == "prod"
+        else {"candidate-ready", "deployable", "released"}
+    )
+    finalize_mainline_release_artifact.validate_manifest(
+        manifest, allowed_statuses=allowed_statuses
+    )
+    finalize_mainline_release_artifact.validate_manifest_files(
+        artifact_root,
+        manifest,
+    )
+    candidate_id = str(manifest["candidateId"])
+    configuration_packages = manifest["configurationPackages"][env_name]
     package_root = deployment_target_path(
-        deployment_target_for_env("prod", target=target),
+        deployment_target_for_env(env_name, target=target),
         "packages",
         "services",
     )
-    artifact_digest = _sha256_file(manifest_path)
-    for service, relative_path in release_files.items():
-        source = artifact_root / str(relative_path)
+    archive_digest = _sha256_file(manifest_path)
+    for service, descriptor in configuration_packages.items():
+        relative_path = str(descriptor["path"])
+        source = artifact_root / relative_path
         if not source.is_file():
-            raise FileNotFoundError(f"prod release artifact file missing: {source}")
+            raise FileNotFoundError(
+                f"{env_name} release evidence file missing: {source}"
+            )
         destination_dir = package_root / str(service)
         report_path = destination_dir / "provenance.json"
         effective_config = destination_dir / "config/config.yaml"
@@ -568,21 +1199,29 @@ def _materialize_prod_release_artifact(*, target: str = "") -> str:
         effective_digest = _sha256_file(effective_config)
         if source_digest != effective_digest:
             raise ValueError(
-                f"release artifact config differs from autonomous package: {service}"
+                "release evidence config differs from autonomous package: "
+                f"{env_name}/{service}"
             )
         provenance = json.loads(report_path.read_text(encoding="utf-8"))
         if not isinstance(provenance, dict):
             raise ValueError(f"service package provenance missing: {report_path}")
         if (provenance.get("digests") or {}).get("config") != effective_digest:
             raise ValueError(f"service package config provenance invalid: {report_path}")
-        provenance["releaseArtifact"] = {
+        provenance["releaseEvidence"] = {
             "manifest": relpath(manifest_path),
-            "manifestSha256": artifact_digest,
-            "releaseId": config_version,
+            "evidenceFileDigest": archive_digest,
+            "artifactDigest": manifest["artifactDigest"],
+            "candidateId": candidate_id,
             "verifiedConfigDigest": effective_digest,
         }
         write_json(report_path, provenance)
-    return config_version
+    source = manifest["source"]
+    return {
+        "candidateId": candidate_id,
+        "artifactDigest": str(manifest["artifactDigest"]),
+        "sourceGitSha": str(source["gitSha"]),
+        "sourceTreeDigest": str(source["treeDigest"]),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -610,8 +1249,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     package_parser.add_argument("--service", default="")
     package_parser.add_argument("--include-services", action="store_true")
+    package_parser.add_argument(
+        "--release-attestation",
+        default="",
+        help="Canonical candidate Data release attestation bound into a full package.",
+    )
+    package_parser.add_argument(
+        "--rollback-release-attestation",
+        default="",
+        help="Canonical rollback Data release attestation bound into a full package.",
+    )
     package_parser.add_argument("--target", choices=TARGETS, default="")
-    package_parser.add_argument("--version", default="")
     package_parser.add_argument("--ops-base-url", default="")
     package_parser.add_argument("--content-base-url", default="")
     package_parser.add_argument("--entity-base-url", default="")
@@ -623,11 +1271,15 @@ def build_parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--apk-path", default="")
     package_parser.add_argument("--verify-remote-apk", action="store_true")
     package_parser.add_argument("--release-artifact-dir", default="")
+    package_parser.add_argument("--application-packages-dir", default="")
+    package_parser.add_argument("--application-package-payloads-dir", default="")
+    package_parser.add_argument("--application-evidence-ref", default="")
     package_parser.add_argument("--public-web-manifest", default="")
     package_parser.add_argument("--android-release-manifest", default="")
     package_parser.add_argument("--ops-portal-provenance", default="")
     package_parser.add_argument("--contract-graph", default="")
-    package_parser.add_argument("--provider-bindings", default="")
+    package_parser.add_argument("--provider-evidence", default="")
+    package_parser.add_argument("--provider-raw-dir", default="")
     package_parser.add_argument("--test-evidence", default="")
 
     verify_parser = subparsers.add_parser("verify")
@@ -656,22 +1308,25 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--error-rate", default="")
     verify_parser.add_argument("--p95-ms", default="")
     verify_parser.add_argument("--redis-error-rate", default="")
+    verify_parser.add_argument("--data-release-id", default="")
+    verify_parser.add_argument("--data-verify-run-id", default="")
+    verify_parser.add_argument("--data-manifest-digest", default="")
+    verify_parser.add_argument(
+        "--data-lifecycle-exit-ref",
+        default="",
+        help="release profile 绑定的 canonical rollback/replay lifecycle Exit ref",
+    )
     verify_parser.add_argument(
         "--backup-recovery-receipt",
         default="",
         help="prod release 的 hosted 灾备隔离恢复 receipt；缺失即阻断",
-    )
-    verify_parser.add_argument(
-        "--reuse-package",
-        action="store_true",
-        help="若近期 package fingerprint 仍有效则跳过 verify 内嵌 package",
     )
     verify_parser.add_argument("--distribution-root", default="")
     verify_parser.add_argument("--verify-hosted", action="store_true")
 
     matrix_parser = subparsers.add_parser(
         "matrix",
-        help="串行本地四环境门禁矩阵（local-env-gate）",
+        help="串行 Alpha/Beta/Gamma 本地门禁矩阵（local-env-gate）",
     )
     matrix_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     matrix_parser.add_argument(
@@ -680,20 +1335,37 @@ def build_parser() -> argparse.ArgumentParser:
         default=PROFILE_LOCAL_ENV_GATE,
     )
     matrix_parser.add_argument(
-        "--cache-mode",
-        choices=("auto", "warm", "cold"),
-        default="auto",
-        help="warm 启用 skip-build + gamma data-plane 短路；cold 强制重建",
+        "--targets",
+        required=True,
+        help="必须为 alpha-local,beta-local,gamma-local",
     )
     matrix_parser.add_argument(
         "--skip-l0",
         action="store_true",
         help="跳过 make commit-gate（仅编排环境段）",
     )
-    matrix_parser.add_argument(
-        "--no-auto-wipe-drift",
+    matrix_parser.add_argument("--release-attestation", required=True)
+    matrix_parser.add_argument("--rollback-release-attestation", required=True)
+
+    tls_parser = subparsers.add_parser(
+        "tls",
+        help="公共 DNS-01 TLS 的只读预检、验证与受保护签发门面",
+    )
+    tls_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
+    tls_parser.add_argument(
+        "--target",
+        choices=("alpha-local", "beta-local", "gamma-local"),
+        required=True,
+    )
+    tls_parser.add_argument(
+        "--action",
+        choices=("prevalidate", "verify", "issue"),
+        required=True,
+    )
+    tls_parser.add_argument(
+        "--confirm-protected-apply",
         action="store_true",
-        help="迁移 checksum 漂移时不自动 wipe local postgres",
+        help="明确确认 DNS-01 challenge 与 ACME 外部状态变更",
     )
 
     provider_conformance_parser = subparsers.add_parser(
@@ -726,6 +1398,16 @@ def build_parser() -> argparse.ArgumentParser:
     up_parser.add_argument("--skip-app", action="store_true")
     up_parser.add_argument("--skip-build", action="store_true")
     up_parser.add_argument(
+        "--formal-release",
+        action="store_true",
+        help="Fail-closed release mode: exact candidate images, no automatic repair or cleanup.",
+    )
+    up_parser.add_argument(
+        "--release-manifest",
+        default="",
+        help="Canonical ReleaseEvidenceManifest required by --formal-release.",
+    )
+    up_parser.add_argument(
         "--build-only",
         action="store_true",
         help="仅构建 Gamma 本地服务镜像，不启动 Compose 或 App。",
@@ -739,6 +1421,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--workload",
         choices=["content-release", "full"],
         default="full",
+    )
+    up_parser.add_argument(
+        "--data-release-readiness",
+        default="",
+        help=(
+            "prod-sim 媒体演练必须消费的 canonical Data "
+            "release-readiness.json；也可由 DATA_RELEASE_READINESS_RECEIPT 提供"
+        ),
     )
     up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
 
@@ -761,6 +1451,16 @@ def build_parser() -> argparse.ArgumentParser:
     down_parser = subparsers.add_parser("down")
     down_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     down_parser.add_argument("--target", choices=TARGETS, required=True)
+    down_parser.add_argument(
+        "--formal-release",
+        action="store_true",
+        help="Stop only the candidate-scoped immutable Compose project.",
+    )
+    down_parser.add_argument(
+        "--release-manifest",
+        default="",
+        help="Canonical ReleaseEvidenceManifest required by formal teardown.",
+    )
 
     consumer_lease_parser = subparsers.add_parser(
         "consumer-lease",
@@ -869,6 +1569,26 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
     content_readiness_parser.add_argument("--env", choices=ENVIRONMENTS, required=True)
+    content_readiness_parser.add_argument(
+        "--release-id",
+        default="",
+        help="consumer/commercial readiness 绑定的 canonical Data releaseId",
+    )
+    content_readiness_parser.add_argument(
+        "--verify-run-id",
+        default="",
+        help="canonical Data environment verify runId；禁止隐式选择 latest",
+    )
+    content_readiness_parser.add_argument(
+        "--manifest-digest",
+        default="",
+        help="预期 immutable Data payload digest（sha256:...）",
+    )
+    content_readiness_parser.add_argument(
+        "--lifecycle-exit-ref",
+        default="",
+        help="commercial phase 必需的 canonical rollback/replay lifecycle Exit ref",
+    )
 
     subparsers.add_parser(
         "data-execution-fleet",
@@ -887,11 +1607,77 @@ def build_parser() -> argparse.ArgumentParser:
     )
     content_uat_parser.add_argument("--release-uat-cases", required=True)
     content_uat_parser.add_argument(
+        "--data-verify-run-id",
+        required=True,
+        help="与案例 import run 配对的 canonical Data verify runId；禁止选择 latest",
+    )
+    content_uat_parser.add_argument(
+        "--acceptance-lease-id",
+        required=True,
+        help="本次真实设备 UAT 的 create-once acceptance lease id",
+    )
+    content_uat_parser.add_argument(
         "--platform",
         choices=("android", "ios", "all"),
         default="all",
     )
     content_uat_parser.add_argument("--device-id", action="append", default=[])
+
+    account_enforcement_uat_parser = subparsers.add_parser(
+        "account-enforcement-uat",
+        help=(
+            "在统一 Gamma 环境树中执行 account-enforcement 真机阶段，或聚合 "
+            "GWT-003 的 fail-closed CaseResult"
+        ),
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--report-dir", default=argparse.SUPPRESS
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--target",
+        choices=("gamma-local",),
+        default="gamma-local",
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--action",
+        choices=("device-suspended", "device-restored", "verify"),
+        required=True,
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--manifest",
+        default=ACCOUNT_ENFORCEMENT_GAMMA_UAT_MANIFEST,
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--run-id",
+        default=os.environ.get("QWQ_ACCOUNT_ENFORCEMENT_GAMMA_RUN_ID", ""),
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--candidate-digest",
+        default=os.environ.get(
+            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_CANDIDATE_DIGEST", ""
+        ),
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--journey-receipt",
+        default=os.environ.get(
+            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_JOURNEY_RECEIPT", ""
+        ),
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--suspended-device-report",
+        default=os.environ.get(
+            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_SUSPENDED_DEVICE_REPORT", ""
+        ),
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--restored-device-report",
+        default=os.environ.get(
+            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_RESTORED_DEVICE_REPORT", ""
+        ),
+    )
+    account_enforcement_uat_parser.add_argument(
+        "--device-id", action="append", default=[]
+    )
 
     filter_catalog_parser = subparsers.add_parser(
         "filter-catalog",
@@ -927,11 +1713,19 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[
             "rebuild-packages",
             "reclaim-build-cache",
+            "reclaim-orphaned-processes",
             "restart-stack",
             "reclaim-ports",
-            "materialize-media",
         ],
         required=True,
+    )
+    repair_parser.add_argument(
+        "--confirm-orphaned-process-reclaim",
+        action="store_true",
+        help=(
+            "Confirm termination of ledger-less Alpha process groups only after "
+            "their target-scoped wrapper and canonical port signatures match."
+        ),
     )
 
     roll_parser = subparsers.add_parser("roll")
@@ -943,12 +1737,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     roll_parser.add_argument("--mode", choices=("restart", "rollout"), default="restart")
     roll_parser.add_argument("--stage", default="")
-    roll_parser.add_argument("--image-version", default="")
-    roll_parser.add_argument("--previous-image-version", default="")
-    roll_parser.add_argument("--image-repository-root", default="")
-    roll_parser.add_argument("--image-registry", default="")
-    roll_parser.add_argument("--registry-username", default="")
-    roll_parser.add_argument("--registry-password", default="")
 
     deploy_parser = subparsers.add_parser("deploy")
     deploy_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -960,8 +1748,6 @@ def build_parser() -> argparse.ArgumentParser:
             "restart",
             "rollout",
             "cold-build",
-            "config-gray",
-            "config-rollback",
             "environment-assembly",
             "prevalidate",
         ),
@@ -973,18 +1759,22 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="显式 rollout stage；未指定时按 step 映射为 5=gray-initial、25/50=carry-on、100=full",
     )
-    deploy_parser.add_argument("--image-version", default="")
-    deploy_parser.add_argument("--previous-image-version", default="")
-    deploy_parser.add_argument("--image-repository-root", default="")
-    deploy_parser.add_argument("--image-registry", default="")
-    deploy_parser.add_argument("--registry-username", default="")
-    deploy_parser.add_argument("--registry-password", default="")
     deploy_parser.add_argument("--service", default="")
-    deploy_parser.add_argument("--from-image", default="")
-    deploy_parser.add_argument("--to-image", default="")
-    deploy_parser.add_argument("--from-config", default="")
-    deploy_parser.add_argument("--to-config", default="")
-    deploy_parser.add_argument("--rollback-config", default="")
+    deploy_parser.add_argument(
+        "--from-candidate-digest",
+        default="",
+        help="hosted ledger 当前稳定候选的 sha256 摘要；只用于发布 CAS",
+    )
+    deploy_parser.add_argument(
+        "--to-candidate-digest",
+        default="",
+        help="ReleaseEvidenceManifest candidateId；只用于发布 CAS",
+    )
+    deploy_parser.add_argument(
+        "--release-evidence-ref",
+        default="",
+        help="Prod apply/resume 使用的精确 ReleaseEvidenceManifest OCI 引用",
+    )
     deploy_parser.add_argument("--step", default="")
     deploy_parser.add_argument("--cloud-provider", choices=["aliyun", "volcengine", "huaweicloud"], default="aliyun")
     deploy_parser.add_argument("--dry-run", choices=["true", "false"], default="false")
@@ -1022,6 +1812,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--prometheus-url",
         default="",
         help="生产 SLO readback 的 Prometheus base URL；非 dry-run 必须提供",
+    )
+    deploy_parser.add_argument(
+        "--promotion-deadline-epoch",
+        type=int,
+        default=0,
+        help="停止 Prod 晋级并切入回滚的绝对 UTC epoch；正式发布必须提供",
+    )
+    deploy_parser.add_argument(
+        "--hard-deadline-epoch",
+        type=int,
+        default=0,
+        help="Prod 发布或回滚必须完成的绝对 UTC epoch；正式发布必须提供",
+    )
+    deploy_parser.add_argument(
+        "--rollback-budget-seconds",
+        type=int,
+        default=300,
+        help="Prod 自动回滚与 ready 恢复的硬预算",
     )
     deploy_parser.add_argument(
         "--release-image-digest",
@@ -1091,6 +1899,17 @@ def _finish_timing(started_monotonic: float, started_at: str) -> dict[str, Any]:
         "endedAt": utc_now(),
         "durationMs": int((time.monotonic() - started_monotonic) * 1000),
     }
+
+
+class _SloSamplesInsufficient(RuntimeError):
+    """A deterministic pause condition, never an automatic rollback signal."""
+
+
+def _remaining_deadline_seconds(deadline_epoch: int, label: str) -> float:
+    remaining = float(deadline_epoch) - time.time()
+    if remaining <= 0:
+        raise RuntimeError(f"{label} deadline has been reached")
+    return remaining
 
 
 def _format_duration_ms(duration_ms: int | None) -> str:
@@ -1592,7 +2411,8 @@ def _tail_gamma_container_logs() -> dict[str, Any]:
 
 
 def _local_runtime_log_root(target: str) -> Path:
-    state_path = target_process_dir(target) / "local_run.json"
+    state_name = "content-release.json" if target == "alpha-local" else "local_run.json"
+    state_path = target_process_dir(target) / state_name
     try:
         payload = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -1754,10 +2574,24 @@ def _sanitized_provider_readiness_report(
     )
     report_is_valid = (
         parsed is not None
+        and set(parsed)
+        == {
+            "schema",
+            "evidenceCount",
+            "executableSourceCount",
+            "sourceCoverageIssues",
+            "readiness",
+            "issues",
+        }
         and parsed.get("schema") == "provider-conformance-readiness"
-        and parsed.get("version") == 1
         and isinstance(issues, list)
         and all(isinstance(issue, str) for issue in issues)
+        and isinstance(parsed.get("sourceCoverageIssues"), list)
+        and all(
+            isinstance(issue, str) for issue in parsed["sourceCoverageIssues"]
+        )
+        and isinstance(parsed.get("executableSourceCount"), int)
+        and parsed["executableSourceCount"] >= 0
         and isinstance(environment_readiness, dict)
         and isinstance(parsed.get("evidenceCount"), int)
         and parsed["evidenceCount"] >= 0
@@ -1798,6 +2632,8 @@ def _sanitized_provider_readiness_report(
         child_exit_code == 0
         and report_is_valid
         and not issues
+        and parsed is not None
+        and parsed["evidenceCount"] > 0
         and required_capabilities_ready
     )
     return (
@@ -1826,7 +2662,12 @@ def _run_provider_readiness_preflight(
         environment,
     ]
     try:
-        result = run(command)
+        result = run(
+            command,
+            # Provider readiness is environment-scoped. Neutralize any shell
+            # target instead of incorrectly selecting one of prod's targets.
+            env=_verify_child_environment(""),
+        )
         child_exit_code = result.returncode
         child_stdout = str(result.stdout or "")
     except OSError:
@@ -1857,6 +2698,19 @@ def _run_provider_readiness_preflight(
         "details": details,
         "report": report,
     }
+
+
+def _verify_child_environment(
+    target_name: str,
+    extra: dict[str, str] | None = None,
+) -> dict[str, str]:
+    """Bind every verify child to its selected target, never the parent shell."""
+
+    environment = dict(extra or {})
+    environment["QWQ_DEPLOY_TARGET"] = (
+        target_name if target_name in TARGETS else ""
+    )
+    return environment
 
 
 def _selected_verify_commands(
@@ -1899,79 +2753,13 @@ def _selected_verify_commands(
     return list(VERIFY_COMMAND_GROUPS[kind])
 
 
-def _local_target_edge_ready(target_name: str) -> bool:
-    try:
-        manifest = load_port_manifest()
-    except Exception:
-        return False
-    for plane in ("api-edge", "product-ops-edge", "media-edge"):
-        try:
-            port = canonical_port(manifest, target_name, plane)
-        except Exception:
-            return False
-        if not socket_probe(port):
-            return False
-    return True
-
-
-def _local_target_runtime_ready(
-    target_name: str,
-    *,
-    workload: str = "full",
-) -> bool:
-    try:
-        topology = load_environment_topology()
-        target = get_target(topology, target_name)
-        profile_name = str(target.get("portProfile") or "")
-        manifest = load_port_manifest()
-    except Exception:
-        return False
-    if not profile_name:
-        return _local_target_edge_ready(target_name)
-    for role_name in _expected_local_roles(target_name, workload=workload):
-        if role_name not in manifest.get("roles", {}):
-            return False
-        try:
-            port = canonical_port(manifest, profile_name, role_name)
-        except Exception:
-            return False
-        if not socket_probe(port):
-            return False
-    return True
-
-
-def _gamma_data_plane_watermark_path() -> Path:
-    from quwoquan_ops.cli.lib.output_paths import output_root
-
-    return (
-        output_root()
-        / "env"
-        / "gamma"
-        / "local"
-        / "gamma-local"
-        / "cache"
-        / "data-plane-watermark.json"
-    )
-
-
-def _gamma_data_plane_reuse_ready() -> bool:
-    """True when gamma up wrote a ready data-plane watermark (seed/ES already done)."""
-    path = _gamma_data_plane_watermark_path()
-    if not path.is_file():
-        return False
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return False
-    return str(payload.get("status") or "") == "ready" and bool(payload.get("digest"))
-
-
 def _selected_profile_commands(
     env_name: str,
     target_name: str,
     profile: VerificationProfile,
     report_dir: Path | None = None,
     service: str = "",
+    data_readiness_path: Path | None = None,
 ) -> list[dict[str, Any]]:
     commands: list[dict[str, Any]] = []
     if profile.requires_environment and target_name in {
@@ -1980,60 +2768,25 @@ def _selected_profile_commands(
         "gamma-local",
         "prod-sim",
     }:
-        workload = (
-            "content-release"
-            if profile in {
-                VerificationProfile.SMOKE,
-                VerificationProfile.INTEGRATION,
+        # verify is read-only with respect to package/build/deployment selection.
+        # A missing or unhealthy runtime must block instead of triggering nested up.
+        commands.append(
+            {
+                "name": f"{target_name}-health-preflight",
+                "argv": [
+                    "python3",
+                    "quwoquan_ops/cli/stackctl.py",
+                    "--output-format",
+                    "json",
+                    "health",
+                    "--target",
+                    target_name,
+                    "--scope",
+                    "full",
+                ],
+                "cwd": ROOT,
             }
-            else "full"
         )
-        skip_nested_up = os.environ.get("STACKCTL_SKIP_NESTED_UP", "").strip() in {
-            "1",
-            "true",
-            "TRUE",
-            "yes",
-            "YES",
-        }
-        if skip_nested_up or _local_target_runtime_ready(
-            target_name, workload=workload
-        ):
-            commands.append(
-                {
-                    "name": f"{target_name}-health-preflight",
-                    "argv": [
-                        "python3",
-                        "-c",
-                        (
-                            "print('local runtime ports already listening; "
-                            f"skip stackctl up for {target_name}')"
-                            if not skip_nested_up
-                            else (
-                                "print('STACKCTL_SKIP_NESTED_UP=1; "
-                                f"skip nested stackctl up for {target_name}')"
-                            )
-                        ),
-                    ],
-                    "cwd": ROOT,
-                }
-            )
-        else:
-            commands.append(
-                {
-                    "name": f"{target_name}-up",
-                    "argv": [
-                        "python3",
-                        "quwoquan_ops/cli/stackctl.py",
-                        "up",
-                        "--target",
-                        target_name,
-                        "--workload",
-                        workload,
-                        "--skip-app",
-                    ],
-                    "cwd": ROOT,
-                }
-            )
     if service:
         if (
             service == "assistant-service"
@@ -2157,6 +2910,7 @@ def _selected_profile_commands(
         target_name,
         profile,
         report_dir,
+        data_readiness_path=data_readiness_path,
     )
     if search_remote_api_command is not None:
         commands.append(search_remote_api_command)
@@ -2184,24 +2938,42 @@ def _selected_profile_commands(
         media_preflight_command = _target_media_preflight_profile_command(
             target_name,
             report_dir,
+            data_readiness_path=data_readiness_path,
         )
         if media_preflight_command is not None:
             commands.append(media_preflight_command)
-        media_surface_command = _seeded_media_surface_profile_command(
-            env_name,
-            target_name,
-        )
-        if media_surface_command is not None:
-            media_surface_command["stopOnFailure"] = True
-            commands.append(media_surface_command)
         smoke_command = _environment_page_smoke_profile_command(
             env_name,
             target_name,
             report_dir,
+            data_readiness_path=data_readiness_path,
         )
         if smoke_command is not None:
             commands.append(smoke_command)
+        if env_name in {"beta", "gamma"} and target_name in {
+            "beta-local",
+            "gamma-local",
+        }:
+            runtime_recovery_command = _environment_page_smoke_profile_command(
+                env_name,
+                target_name,
+                report_dir,
+                suite_name="runtime-recovery-patrol",
+                patrol_target=RUNTIME_RECOVERY_UAT_TEST_TARGET,
+                persisted_device_session=True,
+            )
+            if runtime_recovery_command is not None:
+                commands.append(runtime_recovery_command)
         if env_name == "gamma" and target_name == "gamma-local":
+            account_enforcement_command = (
+                _account_enforcement_gamma_uat_profile_command(
+                    target_name,
+                    profile,
+                    report_dir,
+                )
+            )
+            if account_enforcement_command is not None:
+                commands.append(account_enforcement_command)
             search_api_report = (
                 report_dir
                 / "search-remote-api-integration"
@@ -2316,6 +3088,8 @@ def _search_remote_api_integration_profile_command(
     target_name: str,
     profile: VerificationProfile,
     report_dir: Path | None,
+    *,
+    data_readiness_path: Path | None = None,
 ) -> dict[str, Any] | None:
     """Bind Gamma search/query feedback Remote evidence to release verification."""
 
@@ -2343,6 +3117,9 @@ def _search_remote_api_integration_profile_command(
         "env": {
             "QWQ_RUN_ROOT": str(evidence_root),
             "LOCAL_GAMMA_SEARCH_API_UAT_REPORT": str(report_path),
+            "DATA_RELEASE_READINESS_RECEIPT": (
+                str(data_readiness_path) if data_readiness_path is not None else ""
+            ),
         },
         "stopOnFailure": True,
         "reportPath": relpath(report_path),
@@ -2484,13 +3261,6 @@ def _report_feedback_lifecycle_profile_command(
         "--report",
         str(probe_report),
     ]
-    resolve_host = _local_public_connect_host(
-        topology,
-        target_name,
-        api_base_url,
-    )
-    if resolve_host:
-        argv.extend(["--resolve-host", resolve_host])
     return {
         "name": f"{target_name}-report-feedback-lifecycle",
         "argv": argv,
@@ -2563,13 +3333,6 @@ def _media_publication_lifecycle_profile_command(
     ]
     if moderation_base_url:
         argv.extend(["--moderation-base-url", moderation_base_url])
-    resolve_host = _local_public_connect_host(
-        topology,
-        target_name,
-        api_base_url,
-    )
-    if resolve_host:
-        argv.extend(["--resolve-host", resolve_host])
     return {
         "name": f"{target_name}-media-publication-lifecycle",
         "argv": argv,
@@ -2628,13 +3391,6 @@ def _chat_group_lifecycle_profile_command(
     ]
     if mutating:
         argv.append("--mutating")
-    resolve_host = _local_public_connect_host(
-        topology,
-        target_name,
-        api_base_url,
-    )
-    if resolve_host:
-        argv.extend(["--resolve-host", resolve_host])
     return {
         "name": f"{target_name}-chat-group-lifecycle",
         "argv": argv,
@@ -2647,59 +3403,44 @@ def _chat_group_lifecycle_profile_command(
 def _target_media_preflight_profile_command(
     target_name: str,
     report_dir: Path | None,
+    *,
+    data_readiness_path: Path | None = None,
 ) -> dict[str, Any] | None:
     """在设备 Patrol 之前验证 canonical media 的 Range/MIME。"""
 
-    if target_name == "prod-hosted":
-        health_report_path = (
-            report_dir / "video-range-mime-preflight" / "report.json"
-            if report_dir is not None
-            else env_runs_root("prod")
-            / "device-matrix"
-            / "video-range-mime-preflight"
-            / target_name
-            / "report.json"
-        )
-        return {
-            "name": "prod-hosted-release-video-canary-preflight",
-            "argv": [
-                "python3",
-                "quwoquan_ops/cli/smoke/verify_video_playback_canary.py",
-                "--target",
-                "prod-hosted",
-                "--report",
-                str(health_report_path),
-            ],
-            "stopOnFailure": True,
-            "reportPath": relpath(health_report_path),
-        }
-    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
+    if target_name not in {
+        "alpha-local",
+        "beta-local",
+        "gamma-local",
+        "prod-sim",
+        "prod-hosted",
+    }:
         return None
-    health_report_dir = (
-        report_dir / "video-range-mime-preflight"
+    health_report_path = (
+        report_dir / "video-range-mime-preflight" / "report.json"
         if report_dir is not None
-        else env_runs_root(get_target(load_environment_topology(), target_name)["env"])
+        else env_runs_root(
+            str(get_target(load_environment_topology(), target_name)["env"]),
+        )
         / "device-matrix"
         / "video-range-mime-preflight"
         / target_name
+        / "report.json"
     )
     return {
-        "name": f"{target_name}-video-range-mime-preflight",
+        "name": f"{target_name}-release-video-canary-preflight",
         "argv": [
             "python3",
-            "quwoquan_ops/cli/stackctl.py",
-            "--output-format",
-            "json",
-            "--report-dir",
-            str(health_report_dir),
-            "health",
+            "quwoquan_ops/cli/smoke/verify_video_playback_canary.py",
             "--target",
             target_name,
-            "--scope",
-            "media",
+            "--release-readiness",
+            str(data_readiness_path) if data_readiness_path is not None else "",
+            "--report",
+            str(health_report_path),
         ],
         "stopOnFailure": True,
-        "reportPath": relpath(health_report_dir / "report.json"),
+        "reportPath": relpath(health_report_path),
     }
 
 
@@ -2744,97 +3485,6 @@ def _runtime_media_config_hash(target_name: str) -> str:
     return f"sha256:{digest.hexdigest()}"
 
 
-def _local_video_canary_slice_key() -> str:
-    try:
-        assets = load_media_delivery_manifest()
-    except ValueError:
-        return ""
-    for asset in assets:
-        if (
-            str(asset.get("logicalAssetId") or "").strip()
-            == "media-canary-seek-125s-video"
-        ):
-            return str(asset.get("publicSliceKey") or "").strip().lstrip("/")
-    return ""
-
-
-def _video_canary_identity(target_name: str) -> dict[str, Any]:
-    target = get_target(load_environment_topology(), target_name)
-    playback_canary = target.get("playbackCanary")
-    published_release = (
-        isinstance(playback_canary, dict)
-        and str(playback_canary.get("source") or "").strip()
-        == "published-release"
-    )
-    if published_release:
-        try:
-            asset_version = int(
-                os.environ.get("VIDEO_PLAYBACK_CANARY_ASSET_VERSION", "0").strip(),
-            )
-        except ValueError:
-            asset_version = 0
-        return {
-            "assetId": os.environ.get(
-                "VIDEO_PLAYBACK_CANARY_ASSET_ID",
-                "",
-            ).strip(),
-            "assetVersion": asset_version,
-            "probeHash": os.environ.get(
-                "VIDEO_PLAYBACK_CANARY_PROBE_HASH",
-                "",
-            ).strip(),
-        }
-    descriptor_path = (
-        ROOT
-        / "quwoquan_service"
-        / "contracts"
-        / "metadata"
-        / "_shared"
-        / "test_fixtures"
-        / "media"
-        / "media"
-        / "video"
-        / "s"
-        / "media-canary-seek-125s"
-        / "v1"
-        / "descriptor.json"
-    )
-    descriptor = _read_json_object(str(descriptor_path))
-    return {
-        "assetId": str(
-            descriptor.get("assetId") or "media-canary-seek-125s",
-        ).strip(),
-        "assetVersion": int(descriptor.get("assetVersion") or 1),
-        "probeHash": str(descriptor.get("probeHash") or "").strip(),
-    }
-
-
-def _video_canary_public_slice_key(target_name: str) -> str:
-    target = get_target(load_environment_topology(), target_name)
-    playback_canary = target.get("playbackCanary")
-    if not isinstance(playback_canary, dict):
-        return ""
-    configured = str(playback_canary.get("publicSliceKey") or "").strip()
-    if configured:
-        return configured.lstrip("/")
-    env_name = str(playback_canary.get("publicSliceKeyEnv") or "").strip()
-    if env_name:
-        return os.environ.get(env_name, "").strip().lstrip("/")
-    return _local_video_canary_slice_key()
-
-
-def _video_canary_post_id(target_name: str) -> str:
-    target = get_target(load_environment_topology(), target_name)
-    playback_canary = target.get("playbackCanary")
-    if not isinstance(playback_canary, dict):
-        return ""
-    configured = str(playback_canary.get("workId") or "").strip()
-    if configured:
-        return configured
-    env_name = str(playback_canary.get("workIdEnv") or "").strip()
-    return os.environ.get(env_name or "VIDEO_PLAYBACK_CANARY_WORK_ID", "").strip()
-
-
 def _profile_step(steps: list[dict[str, Any]], name_fragment: str) -> dict[str, Any]:
     for step in steps:
         if name_fragment in str(step.get("name") or ""):
@@ -2842,42 +3492,38 @@ def _profile_step(steps: list[dict[str, Any]], name_fragment: str) -> dict[str, 
     return {}
 
 
+def _release_video_preflight_from_steps(
+    steps: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Load the one typed release canary report from this T4 execution."""
+
+    step = _profile_step(steps, "release-video-canary-preflight")
+    report = _read_json_object(str(step.get("reportPath") or ""))
+    if not report:
+        try:
+            parsed_stdout = json.loads(str(step.get("stdout") or ""))
+        except json.JSONDecodeError:
+            parsed_stdout = {}
+        report = parsed_stdout if isinstance(parsed_stdout, dict) else {}
+    if report:
+        report["_reportPath"] = str(step.get("reportPath") or "")
+        return report
+    return {}
+
+
 def _video_range_evidence_from_preflight(
     steps: list[dict[str, Any]],
-    target_name: str,
 ) -> dict[str, Any]:
-    """从同一次 T4 preflight 的结构化 health/report 取 Range 与 MIME。"""
+    """Project Range/MIME only from the typed release canary report."""
 
-    if target_name == "prod-hosted":
-        step = _profile_step(steps, "release-video-canary-preflight")
-        try:
-            payload = json.loads(str(step.get("stdout") or ""))
-        except json.JSONDecodeError:
-            payload = {}
-        if isinstance(payload, dict):
-            return {
-                "statusCode": payload.get("rangeStatus"),
-                "mimeType": payload.get("contentType"),
-                "reportPath": str(step.get("reportPath") or ""),
-            }
-        return {}
-
-    step = _profile_step(steps, "video-range-mime-preflight")
-    report = _read_json_object(str(step.get("reportPath") or ""))
-    checks = report.get("checks")
-    if not isinstance(checks, list):
-        return {}
-    for check in checks:
-        if not isinstance(check, dict):
-            continue
-        if str(check.get("name") or "") != "media-public-content-video-primary":
-            continue
-        return {
-            "statusCode": check.get("statusCode"),
-            "mimeType": check.get("contentType"),
-            "reportPath": str(step.get("reportPath") or ""),
-        }
-    return {}
+    report = _release_video_preflight_from_steps(steps)
+    delivery = report.get("delivery") if isinstance(report, dict) else None
+    delivery = delivery if isinstance(delivery, dict) else {}
+    return {
+        "statusCode": delivery.get("rangeStatus"),
+        "mimeType": delivery.get("mimeType"),
+        "reportPath": str(report.get("_reportPath") or ""),
+    }
 
 
 def _video_ui_evidence_from_smoke(steps: list[dict[str, Any]]) -> dict[str, Any]:
@@ -3033,13 +3679,28 @@ def _runtime_media_t4_evidence(
     env_name = str(target.get("env") or "").strip()
     public_bases = target.get("publicBases")
     public_bases = public_bases if isinstance(public_bases, dict) else {}
-    public_slice_key = _video_canary_public_slice_key(target_name)
+    preflight = _release_video_preflight_from_steps(steps)
+    release_identity = (
+        dict(preflight.get("release"))
+        if isinstance(preflight.get("release"), dict)
+        else {}
+    )
+    video_identity = (
+        dict(preflight.get("video"))
+        if isinstance(preflight.get("video"), dict)
+        else {}
+    )
     service_evidence = {
-        "videoRange": _video_range_evidence_from_preflight(steps, target_name),
+        "videoRange": _video_range_evidence_from_preflight(steps),
     }
     ui_evidence = _video_ui_evidence_from_smoke(steps)
-    media_identity = _video_canary_identity(target_name)
-    post_id = _video_canary_post_id(target_name)
+    media_identity = {
+        "assetId": str(video_identity.get("assetId") or ""),
+        "assetVersion": video_identity.get("assetVersion"),
+        "probeHash": str(video_identity.get("expectedHash") or ""),
+    }
+    public_slice_key = str(video_identity.get("publicSliceKey") or "")
+    post_id = str(video_identity.get("postId") or "")
     video_range = service_evidence["videoRange"]
     dry_run = os.environ.get("STACKCTL_PAGE_SMOKE_DRY_RUN", "").strip().lower() in {
         "1",
@@ -3049,8 +3710,27 @@ def _runtime_media_t4_evidence(
     is_passed = (
         bool(public_slice_key)
         and bool(post_id)
+        and preflight.get("schema")
+        == "quwoquan_ops.release_video_delivery_evidence"
+        and preflight.get("status") == "passed"
+        and preflight.get("target") == target_name
+        and release_identity.get("sourceOwner") == "qwq_data"
+        and bool(release_identity.get("releaseId"))
+        and bool(release_identity.get("importRunId"))
+        and bool(release_identity.get("verifyRunId"))
+        and bool(release_identity.get("readinessReceiptRef"))
+        and _DATA_READINESS_DIGEST_RE.fullmatch(
+            str(release_identity.get("manifestDigest") or "")
+        )
+        is not None
+        and _DATA_READINESS_DIGEST_RE.fullmatch(
+            str(release_identity.get("mediaManifestDigest") or "")
+        )
+        is not None
         and bool(media_identity.get("assetId"))
-        and int(media_identity.get("assetVersion") or 0) > 0
+        and isinstance(media_identity.get("assetVersion"), int)
+        and not isinstance(media_identity.get("assetVersion"), bool)
+        and media_identity["assetVersion"] > 0
         and bool(media_identity.get("probeHash"))
         and not dry_run
         and video_range.get("statusCode") == 206
@@ -3084,6 +3764,7 @@ def _runtime_media_t4_evidence(
             "commitSha": _current_commit_sha(),
             "configHash": _runtime_media_config_hash(target_name),
         },
+        "release": release_identity,
         "media": {
             "publicSliceKey": public_slice_key,
             **media_identity,
@@ -3096,29 +3777,6 @@ def _runtime_media_t4_evidence(
     }
 
 
-def _seeded_media_surface_profile_command(
-    env_name: str,
-    target_name: str,
-) -> dict[str, Any] | None:
-    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim"}:
-        return None
-    target = get_target(load_environment_topology(), target_name)
-    runtime_env = str(target.get("env") or env_name or "")
-    if runtime_env not in {"alpha", "beta", "gamma", "prod"}:
-        return None
-    return {
-        "name": "seeded-media-surface",
-        "argv": [
-            "python3",
-            "quwoquan_ops/gate/verify_alpha_media_fixture_surface.py",
-            "--env",
-            runtime_env,
-            "--target",
-            target_name,
-        ],
-    }
-
-
 def _environment_page_smoke_profile_command(
     env_name: str,
     target_name: str,
@@ -3127,6 +3785,8 @@ def _environment_page_smoke_profile_command(
     suite_name: str = "environment-page-smoke",
     patrol_target: str = VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
     remote_api_evidence_report: Path | None = None,
+    data_readiness_path: Path | None = None,
+    persisted_device_session: bool = False,
 ) -> dict[str, Any] | None:
     if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}:
         return None
@@ -3161,6 +3821,18 @@ def _environment_page_smoke_profile_command(
         configured_canary_work_id
         or os.environ.get(canary_work_id_env, "").strip()
     )
+    if data_readiness_path is not None:
+        try:
+            release_binding = load_release_video_binding(
+                data_readiness_path,
+                expected_environment=runtime_env,
+            )
+        except ReleaseVideoDeliveryError:
+            # The preceding release-video-canary preflight owns the typed
+            # GATE_BLOCK. Never fall back to an environment identity here.
+            video_playback_canary_work_id = ""
+        else:
+            video_playback_canary_work_id = str(release_binding["workId"])
     token = "" if target_name == "gamma-local" else _resolve_test_auth_token(runtime_env)
     smoke_report = (
         report_dir / suite_name / "report.json"
@@ -3215,6 +3887,12 @@ def _environment_page_smoke_profile_command(
                 video_playback_canary_work_id,
             )
         )
+    if persisted_device_session:
+        if patrol_target != RUNTIME_RECOVERY_UAT_TEST_TARGET:
+            raise ValueError(
+                "persisted device session is only valid for runtime recovery UAT"
+            )
+        argv.append("--persisted-device-session")
     platform = os.environ.get("STACKCTL_PAGE_SMOKE_PLATFORM", "").strip()
     if platform:
         argv.extend(["--platform", platform])
@@ -3224,13 +3902,13 @@ def _environment_page_smoke_profile_command(
     if os.environ.get("STACKCTL_PAGE_SMOKE_DRY_RUN", "").strip() in {"1", "true", "yes"}:
         argv.append("--dry-run")
     command_env: dict[str, str] = {}
-    if target_name != "gamma-local":
+    if target_name != "gamma-local" and not persisted_device_session:
         if token:
             command_env["TEST_AUTH_TOKEN"] = token
         for key in (
             "TEST_REFRESH_TOKEN",
             "APP_CURRENT_OWNER_ID",
-            "APP_CURRENT_SUB_ACCOUNT_ID",
+            "APP_CURRENT_PERSONA_ID",
         ):
             value = os.environ.get(key, "").strip()
             if value:
@@ -3245,6 +3923,42 @@ def _environment_page_smoke_profile_command(
     if command_env:
         command["env"] = command_env
     return command
+
+
+def _account_enforcement_gamma_uat_profile_command(
+    target_name: str,
+    profile: VerificationProfile,
+    report_dir: Path | None,
+) -> dict[str, Any] | None:
+    """Bind the immutable GWT-003 CaseResult to Gamma release verification."""
+
+    if (
+        target_name != "gamma-local"
+        or profile is not VerificationProfile.RELEASE
+    ):
+        return None
+    evidence_root = (
+        report_dir / "account-enforcement-gamma-uat"
+        if report_dir is not None
+        else env_runs_root("gamma")
+        / "account-enforcement-gamma-uat"
+        / target_name
+    )
+    report_path = evidence_root / "case-result.json"
+    return {
+        "name": "gamma-local-account-enforcement-uat",
+        "argv": [
+            "python3",
+            ACCOUNT_ENFORCEMENT_GAMMA_UAT_VALIDATOR,
+            "--manifest",
+            ACCOUNT_ENFORCEMENT_GAMMA_UAT_MANIFEST,
+            "--report",
+            str(report_path),
+        ],
+        "cwd": ROOT,
+        "stopOnFailure": True,
+        "reportPath": relpath(report_path),
+    }
 
 
 def _content_release_uat_command(
@@ -3281,7 +3995,6 @@ def fetch_url(
     retry_attempts: int = 2,
     retry_sleep_seconds: float = 2.0,
     headers: dict[str, str] | None = None,
-    resolve_host: str = "",
 ) -> tuple[bool, int | None, str, str]:
     retry_markers = (
         "timed out",
@@ -3295,19 +4008,10 @@ def fetch_url(
     for attempt in range(1, total_attempts + 1):
         try:
             request = urllib.request.Request(url, headers=headers or {})
-            with _temporary_host_resolution(url, resolve_host):
-                if resolve_host:
-                    opener = urllib.request.build_opener(
-                        urllib.request.ProxyHandler({}),
-                        urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
-                    )
-                    response = opener.open(request, timeout=timeout)
-                else:
-                    response = urllib.request.urlopen(
-                        request,
-                        timeout=timeout,
-                        context=ssl._create_unverified_context(),
-                    )
+            response = urllib.request.urlopen(
+                request,
+                timeout=timeout,
+            )
             with response:
                 body = response.read().decode("utf-8", errors="replace")
                 return (
@@ -3354,46 +4058,6 @@ def _is_retryable_fetch_error(exc: Exception, retry_markers: tuple[str, ...]) ->
     return any(marker in str(exc) for marker in retry_markers)
 
 
-@contextlib.contextmanager
-def _temporary_host_resolution(url: str, resolve_host: str):
-    """Connect a local public host to loopback while retaining its TLS SNI name."""
-    expected_host = urllib.parse.urlparse(url).hostname or ""
-    if not resolve_host or not expected_host:
-        yield
-        return
-
-    original_getaddrinfo = socket.getaddrinfo
-
-    def getaddrinfo(host: str | bytes | None, *args: Any, **kwargs: Any) -> Any:
-        if host == expected_host:
-            return original_getaddrinfo(resolve_host, *args, **kwargs)
-        return original_getaddrinfo(host, *args, **kwargs)
-
-    socket.getaddrinfo = getaddrinfo
-    try:
-        yield
-    finally:
-        socket.getaddrinfo = original_getaddrinfo
-
-
-def _local_public_connect_host(
-    topology: dict[str, Any],
-    target_name: str,
-    url: str,
-) -> str:
-    target = get_target(topology, target_name)
-    if str(target.get("backend") or "").strip() != "local":
-        return ""
-    hostname = urllib.parse.urlparse(url).hostname or ""
-    public_bases = target.get("publicBases") or {}
-    public_hosts = {
-        urllib.parse.urlparse(str(base)).hostname
-        for base in public_bases.values()
-        if urllib.parse.urlparse(str(base)).hostname
-    }
-    return "127.0.0.1" if hostname in public_hosts else ""
-
-
 def _content_release_public_ready_attempts(target: dict[str, Any]) -> int:
     data_release = target.get("dataRelease")
     if not isinstance(data_release, dict):
@@ -3436,8 +4100,9 @@ def _run_script_probe(
     argv: list[str],
     report_file: Path | None = None,
     env: dict[str, str] | None = None,
+    timeout_seconds: float | None = None,
 ) -> tuple[dict[str, Any], str, list[str]]:
-    result = run(argv, env=env)
+    result = run(argv, env=env, timeout_seconds=timeout_seconds)
     output = "\n".join(filter(None, [result.stdout, result.stderr])).strip()
     report_payload = _read_json_payload(report_file) if report_file else None
     report_status = ""
@@ -3480,6 +4145,13 @@ def _run_environment_integration_probe(
     topology: dict[str, Any],
     target_name: str,
     report_dir: Path,
+    *,
+    require_non_empty_content_feed: bool = False,
+    release_post_expectations: dict[str, set[str]] | None = None,
+    release_readiness_path: Path | None = None,
+    only_checks: tuple[str, ...] = (),
+    probe_name: str = "integration-readonly",
+    timeout_seconds: float | None = None,
 ) -> tuple[dict[str, Any], str, list[str]]:
     target = get_target(topology, target_name)
     env_name = str(target["env"])
@@ -3495,25 +4167,54 @@ def _run_environment_integration_probe(
         "--report",
         str(report_file),
     ]
+    if require_non_empty_content_feed:
+        argv.append("--require-non-empty-content-feed")
+    for check_name in only_checks:
+        argv.extend(["--only-check", check_name])
+    expectation_flags = {
+        "content_feed": "--expected-discovery-post-id",
+        "video_book_feed": "--expected-video-post-id",
+        "premium_feed": "--expected-premium-video-post-id",
+    }
+    for check_name, post_ids in (release_post_expectations or {}).items():
+        flag = expectation_flags.get(check_name)
+        if flag is None:
+            raise ValueError(f"unsupported release feed expectation: {check_name}")
+        for post_id in sorted(post_ids):
+            argv.extend([flag, post_id])
     if target_name == "prod-hosted":
+        request_timeout = 20
+        retry_attempts = 3
+        retry_sleep_seconds = 3
+        if timeout_seconds is not None:
+            request_timeout = max(1, min(request_timeout, int(timeout_seconds)))
+            retry_attempts = 1
+            retry_sleep_seconds = 0
         argv.extend(
             [
                 "--mode",
                 "post-deploy",
                 "--request-timeout-seconds",
-                "20",
+                str(request_timeout),
                 "--retry-attempts",
-                "3",
+                str(retry_attempts),
                 "--retry-sleep-seconds",
-                "3",
+                str(retry_sleep_seconds),
             ]
         )
     product_ops = str(public_bases.get("productOps") or "").strip()
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
     media_image = str(public_bases.get("mediaImage") or "").strip()
-    if media_image:
-        argv.extend(["--media-image-base-url", media_image])
+    if media_image and release_readiness_path is not None:
+        argv.extend(
+            [
+                "--media-image-base-url",
+                media_image,
+                "--release-readiness",
+                str(release_readiness_path),
+            ]
+        )
     token = _resolve_test_auth_token(env_name)
     if env_name in {"beta", "gamma"} and not token:
         try:
@@ -3530,11 +4231,11 @@ def _run_environment_integration_probe(
                 str(public_bases["api"]),
                 **session_kwargs,
             ).access_token
-        except (RuntimeError, ValueError) as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             finding = f"{target_name} integration auth failed: {exc}"
             return (
                 {
-                    "name": "integration-readonly",
+                    "name": probe_name,
                     "scope": "full",
                     "type": "script",
                     "argv": argv,
@@ -3557,11 +4258,12 @@ def _run_environment_integration_probe(
         elif env_name == "prod":
             probe_env["PROD_TEST_AUTH_TOKEN"] = token
     return _run_script_probe(
-        name="integration-readonly",
+        name=probe_name,
         scope="full",
         argv=argv,
         report_file=report_file,
         env=probe_env,
+        timeout_seconds=timeout_seconds,
     )
 
 
@@ -3608,19 +4310,31 @@ def _script_probes_for_target(
     target_name: str,
     scope: str,
     report_dir: Path,
+    *,
+    require_non_empty_content_feed: bool = False,
+    deadline_epoch: int = 0,
 ) -> tuple[list[dict[str, Any]], list[tuple[str, str]], list[str]]:
-    if scope != "full":
+    if scope != "full" and not require_non_empty_content_feed:
         return [], [], []
     statuses: list[dict[str, Any]] = []
     stdout_sections: list[tuple[str, str]] = []
     findings: list[str] = []
 
     if target_name in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}:
+        probe_timeout = (
+            _remaining_deadline_seconds(deadline_epoch, "health verification")
+            if deadline_epoch > 0
+            else None
+        )
         status, output, probe_findings = _run_environment_integration_probe(
             topology,
             target_name,
             report_dir,
+            require_non_empty_content_feed=require_non_empty_content_feed,
+            timeout_seconds=probe_timeout,
         )
+        if require_non_empty_content_feed and scope != "full":
+            status["scope"] = scope
         statuses.append(status)
         stdout_sections.append((status["name"], output))
         findings.extend(probe_findings)
@@ -3664,12 +4378,9 @@ def _release_stage_from_state(state: dict[str, str]) -> str:
 def _validate_release_transition(
     state: dict[str, str],
     *,
-    from_image: str,
-    to_image: str,
-    from_config: str,
-    to_config: str,
+    from_candidate_digest: str,
+    to_candidate_digest: str,
     stage: str,
-    manifest_digest: str,
 ) -> tuple[str, int]:
     if not state:
         if stage != "gray-initial":
@@ -3679,14 +4390,10 @@ def _validate_release_transition(
     generation = int(state.get("generation") or 0)
     current_stage = _release_stage_from_state(state)
     same_target = (
-        state.get("from_image") == from_image
-        and state.get("to_image") == to_image
-        and state.get("from_config") == from_config
-        and state.get("to_config") == to_config
+        state.get("from_candidate_digest") == from_candidate_digest
+        and state.get("to_candidate_digest") == to_candidate_digest
     )
     if same_target:
-        if state.get("manifest_digest") and state.get("manifest_digest") != manifest_digest:
-            raise RuntimeError("release ledger manifest digest drift")
         if current_stage == stage:
             decision = state.get("decision", "continue")
             if decision == "continue":
@@ -3707,9 +4414,10 @@ def _validate_release_transition(
 
     if stage != "gray-initial":
         raise RuntimeError("new release target must start at gray-initial")
-    if state.get("to_image") != from_image or state.get("to_config") != from_config:
+    if state.get("to_candidate_digest") != from_candidate_digest:
         raise RuntimeError(
-            "release ledger base CAS conflict: requested from image/config do not match current stable target"
+            "release ledger base CAS conflict: requested source candidate does not "
+            "match the current stable candidate"
         )
     if current_stage != "full" or state.get("decision", "continue") not in {
         "continue",
@@ -3774,6 +4482,31 @@ def _local_stack_operation_lock(target_name: str) -> Any:
         handle.seek(0)
         handle.truncate()
         handle.write(owner + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            handle.truncate()
+            handle.flush()
+            os.fsync(handle.fileno())
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def _target_package_lock(target_name: str) -> Any:
+    """Serialize package materialization per target without blocking other envs."""
+    target = str(target_name).strip()
+    if target not in TARGETS:
+        raise ValueError(f"package lock does not support {target!r}")
+    lock_path = deployment_target_path(target, "locks", "package.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"pid={os.getpid()} target={target} startedAt={utc_now()}\n")
         handle.flush()
         os.fsync(handle.fileno())
         try:
@@ -3871,10 +4604,10 @@ def _required_release_candidate_digests(
     return fields
 
 
-def _archive_release_artifact(manifest_path: Path, manifest_digest: str) -> Path:
+def _archive_release_artifact(manifest_path: Path, artifact_digest: str) -> Path:
     archive_root = _release_state_dir() / "artifacts"
     archive_root.mkdir(parents=True, exist_ok=True)
-    digest_id = manifest_digest.removeprefix("sha256:")
+    digest_id = artifact_digest.removeprefix("sha256:")
     if re.fullmatch(r"[0-9a-f]{64}", digest_id) is None:
         raise RuntimeError("release artifact digest is invalid")
     target = archive_root / digest_id
@@ -3884,8 +4617,8 @@ def _archive_release_artifact(manifest_path: Path, manifest_digest: str) -> Path
         if not archived_manifest.is_file():
             raise RuntimeError(f"release artifact archive is incomplete: {target}")
         archived = json.loads(archived_manifest.read_text(encoding="utf-8"))
-        declared = str(archived.get("manifestDigest") or "") if isinstance(archived, dict) else ""
-        if declared != manifest_digest:
+        declared = str(archived.get("artifactDigest") or "") if isinstance(archived, dict) else ""
+        if declared != artifact_digest:
             raise RuntimeError(f"release artifact archive digest collision: {target}")
         return target
     temporary = archive_root / f".{digest_id}.{os.getpid()}.tmp"
@@ -3905,9 +4638,14 @@ def _fetch_hosted_release_ledger_projection(
     service: str,
     *,
     allow_uninitialized: bool,
+    deadline_epoch: int = 0,
 ) -> tuple[dict[str, str], Path | None]:
     """Fetch a digest-verified state/receipt pair from the hosted authority."""
-    readback = _run_hosted_release_ledger(service=service, action="fetch")
+    readback = _run_hosted_release_ledger(
+        service=service,
+        action="fetch",
+        deadline_epoch=deadline_epoch,
+    )
     state = readback["state"]
     receipt = readback["receipt"]
     if not state:
@@ -3920,11 +4658,14 @@ def _fetch_hosted_release_ledger_projection(
 def _sync_release_ledger_projection(
     service: str,
     receipt_id: str,
+    *,
+    deadline_epoch: int = 0,
 ) -> Path:
     """Read back an already committed hosted receipt; never publish local state."""
     hosted_state, hosted_receipt_path = _fetch_hosted_release_ledger_projection(
         service,
         allow_uninitialized=False,
+        deadline_epoch=deadline_epoch,
     )
     if hosted_receipt_path is None:
         raise RuntimeError("hosted release receipt readback is missing")
@@ -3964,25 +4705,70 @@ def _validate_hosted_release_readback(
     receipt = payload["receipt"]
     if not state and not receipt and payload.get("receiptRef") == "":
         return payload
-    receipt_id = str(receipt.get("receiptId") or "")
     if (
-        state.get("schema") != "prod-release-ledger"
-        or state.get("authority") != "prod-hosted-service-plane"
+        set(state) != hosted_release_ledger.STATE_FIELDS
+        or set(receipt) != hosted_release_ledger.RECEIPT_FIELDS
+    ):
+        raise RuntimeError(
+            "hosted release ledger state or receipt shape is not canonical"
+        )
+    receipt_id = str(receipt.get("receiptId") or "")
+    for field in hosted_release_ledger.STAGE_RECEIPT_ID_FIELDS.values():
+        history_receipt_id = state.get(field)
+        if not isinstance(history_receipt_id, str) or (
+            history_receipt_id
+            and hosted_release_ledger.RECEIPT_ID_RE.fullmatch(history_receipt_id)
+            is None
+        ):
+            raise RuntimeError(
+                "hosted release ledger stage receipt history is invalid"
+            )
+    active_history_field = hosted_release_ledger.STAGE_RECEIPT_ID_FIELDS.get(
+        state.get("trigger_stage", "")
+    )
+    if (
+        active_history_field is None
+        or state.get(active_history_field) != receipt_id
+    ):
+        raise RuntimeError(
+            "hosted release ledger current receipt is not trigger-stage bound"
+        )
+    if (
+        state.get("schema") != hosted_release_ledger.STATE_SCHEMA
+        or state.get("authority") != hosted_release_ledger.AUTHORITY
         or state.get("service") != service
-        or receipt.get("schema") != "prod-hosted-release-receipt"
-        or receipt.get("authority") != "prod-hosted-service-plane"
+        or receipt.get("schema") != hosted_release_ledger.RECEIPT_SCHEMA
+        or receipt.get("authority") != hosted_release_ledger.AUTHORITY
         or receipt.get("service") != service
         or re.fullmatch(r"[0-9a-f]{64}", receipt_id) is None
         or receipt_id != _hosted_receipt_id(receipt)
         or state.get("receipt_id") != receipt_id
         or payload.get("receiptRef") != f"receipt:hosted:{receipt_id}"
         or str(receipt.get("committedGeneration")) != state.get("generation")
-        or receipt.get("manifestDigest") != state.get("manifest_digest")
+        or receipt.get("artifactDigest") != state.get("artifact_digest")
+        or receipt.get("fromCandidateDigest")
+        != state.get("from_candidate_digest")
+        or receipt.get("toCandidateDigest") != state.get("to_candidate_digest")
+        or receipt.get("step") != state.get("step")
+        or receipt.get("stage") != state.get("stage")
+        or receipt.get("decision") != state.get("decision")
         or receipt.get("imageDigest") != state.get("image_digest")
         or receipt.get("configDigest") != state.get("config_digest")
         or receipt.get("contractGraphDigest") != state.get("contract_graph_digest")
         or receipt.get("adapterDigest") != state.get("adapter_digest")
         or receipt.get("rollbackOutcome") != state.get("rollback_outcome")
+        or receipt.get("triggerStage") != state.get("trigger_stage")
+        or receipt.get("fromReleaseEvidenceRef")
+        != state.get("from_release_evidence_ref")
+        or receipt.get("toReleaseEvidenceRef")
+        != state.get("to_release_evidence_ref")
+        or receipt.get("fromImageTransportTag")
+        != state.get("from_image_transport_tag")
+        or receipt.get("toImageTransportTag")
+        != state.get("to_image_transport_tag")
+        or receipt.get("lastGoodCandidateDigest")
+        != state.get("last_good_candidate_digest")
+        or receipt.get("verifiedAt") != state.get("updated_at")
     ):
         raise RuntimeError("hosted release ledger receipt digest or state binding is invalid")
     return payload
@@ -3994,6 +4780,7 @@ def _run_hosted_release_ledger(
     action: str,
     request: dict[str, Any] | None = None,
     receipt_id: str = "",
+    deadline_epoch: int = 0,
 ) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="quwoquan-hosted-release-ledger-") as temporary:
         root = Path(temporary)
@@ -4018,7 +4805,15 @@ def _run_hosted_release_ledger(
             command.extend(("--request-path", str(request_path)))
         elif action == "receipt":
             command.extend(("--receipt-id", receipt_id))
-        result = run(command)
+        timeout_seconds = (
+            _remaining_deadline_seconds(
+                deadline_epoch,
+                "hosted release ledger authority I/O",
+            )
+            if deadline_epoch > 0
+            else None
+        )
+        result = run(command, timeout_seconds=timeout_seconds)
         if result.returncode != 0:
             raise RuntimeError(
                 f"hosted release ledger {action} failed: "
@@ -4058,6 +4853,19 @@ def _cache_hosted_release_readback(
     receipt: dict[str, Any],
 ) -> tuple[dict[str, str], Path]:
     """Persist a disposable local copy after hosted digest verification."""
+    receipt_id = str(receipt.get("receiptId") or "")
+    validated = _validate_hosted_release_readback(
+        {
+            "schema": hosted_release_ledger.READBACK_SCHEMA,
+            "authority": hosted_release_ledger.AUTHORITY,
+            "state": state,
+            "receipt": receipt,
+            "receiptRef": f"receipt:hosted:{receipt_id}",
+        },
+        service=service,
+    )
+    state = dict(validated["state"])
+    receipt = dict(validated["receipt"])
     cache_dir = _release_state_dir()
     cache_dir.mkdir(parents=True, exist_ok=True)
     state_path = cache_dir / f"{service}.state"
@@ -4065,10 +4873,18 @@ def _cache_hosted_release_readback(
         "\n".join(f"{key}={value}" for key, value in state.items()) + "\n",
         encoding="utf-8",
     )
-    receipt_id = str(receipt["receiptId"])
     receipt_path = cache_dir / "receipts" / f"{receipt_id}.json"
     write_json(receipt_path, receipt)
     return state, receipt_path
+
+
+def _check_exit_passed(item: dict[str, Any]) -> bool:
+    exit_code = item.get("exitCode")
+    return (
+        isinstance(exit_code, int)
+        and not isinstance(exit_code, bool)
+        and exit_code == 0
+    )
 
 
 def _release_check_receipts(
@@ -4077,9 +4893,7 @@ def _release_check_receipts(
     return [
         {
             "name": f"post-check-{index}",
-            "status": "passed"
-            if int(item.get("exitCode", 1) or 0) == 0
-            else "failed",
+            "status": "passed" if _check_exit_passed(item) else "failed",
             "receiptDigest": "sha256:"
             + hashlib.sha256(
                 json.dumps(
@@ -4097,35 +4911,44 @@ def _release_check_receipts(
 def _commit_hosted_release_transition(
     *,
     service: str,
-    from_image: str,
-    to_image: str,
-    from_config: str,
-    to_config: str,
+    from_candidate_digest: str,
+    to_candidate_digest: str,
     step: str,
     stage: str,
     decision: str,
-    manifest_digest: str,
+    artifact_digest: str,
     expected_generation: int,
     receipt_id: str,
     slo_readback: dict[str, Any] | None,
     candidate_digests: dict[str, str],
-    last_good_target: dict[str, str],
+    last_good_candidate_digest: str,
     post_deploy_checks: list[dict[str, Any]],
     rollback_outcome: str,
+    rollback_evidence: dict[str, Any],
+    from_release_evidence_ref: str,
+    to_release_evidence_ref: str,
+    from_image_transport_tag: str,
+    to_image_transport_tag: str,
+    deadline_epoch: int = 0,
+    trigger_stage: str = "",
 ) -> tuple[dict[str, str], Path]:
     del receipt_id
     request = {
         "schema": "prod-hosted-release-transition-request",
         "service": service,
-        "fromImage": from_image,
-        "toImage": to_image,
-        "fromConfig": from_config,
-        "toConfig": to_config,
+        "fromCandidateDigest": from_candidate_digest,
+        "toCandidateDigest": to_candidate_digest,
         "step": step,
         "stage": stage,
+        "triggerStage": trigger_stage or stage,
+        "fromReleaseEvidenceRef": from_release_evidence_ref,
+        "toReleaseEvidenceRef": to_release_evidence_ref,
+        "fromImageTransportTag": from_image_transport_tag,
+        "toImageTransportTag": to_image_transport_tag,
         "decision": decision,
         "rollbackOutcome": rollback_outcome,
-        "manifestDigest": manifest_digest,
+        "rollbackEvidence": rollback_evidence,
+        "artifactDigest": artifact_digest,
         "imageDigest": candidate_digests["imageDigest"],
         "configDigest": candidate_digests["configDigest"],
         "contractGraphDigest": candidate_digests["contractGraphDigest"],
@@ -4133,25 +4956,21 @@ def _commit_hosted_release_transition(
         "expectedGeneration": expected_generation,
         "sloReadback": slo_readback or {},
         "postChecks": _release_check_receipts(post_deploy_checks),
-        "lastGoodTarget": last_good_target,
+        "lastGoodCandidateDigest": last_good_candidate_digest,
         "verifiedAt": utc_now(),
     }
     committed = _run_hosted_release_ledger(
         service=service,
         action="commit",
         request=request,
+        deadline_epoch=deadline_epoch,
     )
-    fetched = _run_hosted_release_ledger(service=service, action="fetch")
-    if (
-        committed["receiptRef"] != fetched["receiptRef"]
-        or committed["receipt"] != fetched["receipt"]
-        or committed["state"] != fetched["state"]
-    ):
-        raise RuntimeError("hosted release ledger commit/readback mismatch")
+    # The hosted commit action fsyncs state/receipt and returns its own validated
+    # readback. A second network fetch adds no authority and extends the Prod path.
     return _cache_hosted_release_readback(
         service,
-        fetched["state"],
-        fetched["receipt"],
+        committed["state"],
+        committed["receipt"],
     )
 
 
@@ -4305,9 +5124,6 @@ def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
         details.append("ops-portal package is supported only for prod/prod-hosted")
     if args.service or args.include_services:
         details.append("ops-portal packages cannot include service packages")
-    version = str(getattr(args, "version", "") or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", version):
-        details.append("ops-portal package requires a safe --version")
     oidc_values = {
         "issuer": str(
             getattr(args, "oidc_issuer", "") or os.environ.get("PROD_OPS_OIDC_ISSUER", "")
@@ -4352,8 +5168,6 @@ def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
     command = [
         "python3",
         "quwoquan_ops/cli/prod/build_portal_release.py",
-        "--version",
-        version,
         "--oidc-issuer",
         oidc_values["issuer"],
         "--oidc-client-id",
@@ -4377,7 +5191,9 @@ def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
         command.append("--skip-install")
 
     result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
-    package_dir = portal_deployment_package_dir(env_name, target=target_name) / version
+    package_root = portal_deployment_package_dir(env_name, target=target_name)
+    current_package = package_root / "current"
+    package_dir = current_package.resolve()
     if result.returncode == 0:
         manifest_path = package_dir / "manifest.json"
         dist_dir = package_dir / "dist"
@@ -4408,20 +5224,34 @@ def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
                     ),
                 )
             else:
+                portal_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                package_digest = str(portal_manifest.get("packageDigest") or "")
+                if (
+                    not re.fullmatch(r"sha256:[0-9a-f]{64}", package_digest)
+                    or package_dir.name != package_digest.removeprefix("sha256:")
+                ):
+                    result = subprocess.CompletedProcess(
+                        command,
+                        1,
+                        stdout=result.stdout,
+                        stderr="ops-portal builder produced invalid packageDigest identity",
+                    )
+                    package_digest = ""
                 provenance = {
-                    "schema": "qwq.ops_portal_package.v1",
+                    "schema": "qwq.ops_portal_package",
                     "packageKind": "ops-portal",
                     "environment": env_name,
                     "target": target_name,
-                    "version": version,
+                    "packageDigest": package_digest,
                     "gitRevision": revision,
                     "digests": {
                         "manifest": _sha256_file(manifest_path),
                         "distTree": _sha256_tree(dist_dir),
                     },
                 }
-                write_json(package_dir / "provenance.json", provenance)
-                details.append(f"ops-portal package ready: {relpath(package_dir)}")
+                if result.returncode == 0:
+                    write_json(package_dir / "provenance.json", provenance)
+                    details.append(f"ops-portal package ready: {relpath(package_dir)}")
     if result.returncode != 0:
         details.extend(_command_details(result))
     timing = _finish_timing(started_monotonic, started_at)
@@ -4475,7 +5305,7 @@ def _command_package_ops_portal(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any]:
-    """Attach the six real component artifacts to the existing service manifest."""
+    """Seal the canonical release evidence into the existing service manifest."""
     env_name = args.env
     target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
     report_dir = resolve_report_dir(args, env_name, target_name)
@@ -4492,13 +5322,35 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
         ).strip(),
         "opsPortal": str(getattr(args, "ops_portal_provenance", "") or "").strip(),
         "contractGraph": str(getattr(args, "contract_graph", "") or "").strip(),
-        "providerBindings": str(
-            getattr(args, "provider_bindings", "") or ""
+        "providerEvidence": str(
+            getattr(args, "provider_evidence", "") or ""
         ).strip(),
         "testEvidence": str(getattr(args, "test_evidence", "") or "").strip(),
     }
+    application_packages_dir_value = str(
+        getattr(args, "application_packages_dir", "") or ""
+    ).strip()
+    application_package_payloads_dir_value = str(
+        getattr(args, "application_package_payloads_dir", "") or ""
+    ).strip()
+    application_evidence_ref = str(
+        getattr(args, "application_evidence_ref", "") or ""
+    ).strip()
+    provider_raw_dir_value = str(
+        getattr(args, "provider_raw_dir", "") or ""
+    ).strip()
     if not artifact_dir_value:
         issues.append("release-manifest assembly requires --release-artifact-dir")
+    if not application_packages_dir_value:
+        issues.append("release-manifest assembly requires --application-packages-dir")
+    if not application_package_payloads_dir_value:
+        issues.append(
+            "release-manifest assembly requires --application-package-payloads-dir"
+        )
+    if not application_evidence_ref:
+        issues.append("release-manifest assembly requires --application-evidence-ref")
+    if not provider_raw_dir_value:
+        issues.append("release-manifest assembly requires --provider-raw-dir")
     for artifact_id, value in source_values.items():
         if not value:
             issues.append(f"release-manifest assembly requires {artifact_id}")
@@ -4511,6 +5363,20 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
                 artifact_dir=artifact_dir,
                 descriptors_dir=descriptors_dir,
                 sources={key: Path(value) for key, value in source_values.items()},
+                application_package_sources=(
+                    collect_release_artifact_descriptors.load_application_package_sources(
+                        Path(application_packages_dir_value).expanduser().resolve()
+                    )
+                ),
+                application_package_payloads=(
+                    collect_release_artifact_descriptors.load_application_package_payloads(
+                        Path(application_package_payloads_dir_value)
+                        .expanduser()
+                        .resolve()
+                    )
+                ),
+                application_evidence_ref=application_evidence_ref,
+                provider_raw_dir=Path(provider_raw_dir_value).expanduser().resolve(),
             )
             manifest = finalize_mainline_release_artifact.finalize(
                 artifact_dir,
@@ -4522,8 +5388,12 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
     timing = _finish_timing(started_monotonic, started_at)
     status = "ok" if not issues else ProbeOutcome.GATE_BLOCK.value
     details = issues or [
-        f"releaseManifestDigest={manifest.get('manifestDigest')}",
-        "artifacts=" + ",".join(sorted(_REQUIRED_RELEASE_ARTIFACTS)),
+        f"candidateId={manifest.get('candidateId')}",
+        f"artifactDigest={manifest.get('artifactDigest')}",
+        "evidence="
+        + ",".join(
+            sorted(finalize_mainline_release_artifact.REQUIRED_RELEASE_EVIDENCE)
+        ),
     ]
     _write_summary_bundle(
         report_dir,
@@ -4547,7 +5417,8 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
             "env": env_name,
             "target": target_name,
             "status": status,
-            "manifestDigest": manifest.get("manifestDigest"),
+            "candidateId": manifest.get("candidateId"),
+            "artifactDigest": manifest.get("artifactDigest"),
             "issues": issues,
             **timing,
         },
@@ -4566,6 +5437,131 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
 
 
 def command_package(args: argparse.Namespace) -> dict[str, Any]:
+    if getattr(args, "kind", "runtime") != "runtime":
+        return _command_package_unlocked(args, package_snapshot=None)
+    env_name = str(getattr(args, "env", "") or "").strip()
+    target_name = str(getattr(args, "target", "") or "").strip()
+    if not target_name and env_name in DEFAULT_TARGET_BY_ENV:
+        target_name = DEFAULT_TARGET_BY_ENV[env_name]
+    if not target_name:
+        return _command_package_unlocked(args)
+    with _target_package_lock(target_name):
+        package_snapshot = (
+            workspace_snapshot()
+            if getattr(args, "kind", "runtime") == "runtime"
+            else None
+        )
+        if package_snapshot is None:
+            return _command_package_unlocked(args, package_snapshot=None)
+
+        baseline_id = str(package_snapshot["baselineId"])
+        candidate_dir = deployment_candidate_dir(target_name, baseline_id)
+        previous_override = os.environ.get(PACKAGE_ROOT_OVERRIDE_ENV)
+        if candidate_dir.exists():
+            os.environ[PACKAGE_ROOT_OVERRIDE_ENV] = str(candidate_dir / "packages")
+            try:
+                reusable, detail = can_reuse_package(
+                    env_name,
+                    target_name,
+                    include_services=bool(args.include_services or args.service),
+                    required_services=[args.service] if args.service else None,
+                )
+            finally:
+                if previous_override is None:
+                    os.environ.pop(PACKAGE_ROOT_OVERRIDE_ENV, None)
+                else:
+                    os.environ[PACKAGE_ROOT_OVERRIDE_ENV] = previous_override
+            if not reusable:
+                return {
+                    "exitCode": 2,
+                    "summary": f"stackctl package candidate collision for {target_name}",
+                    "details": [detail, f"candidateDir={candidate_dir}"],
+                    "baselineId": baseline_id,
+                }
+            reused_fingerprint_path = (
+                candidate_dir / "packages" / "app" / "package-fingerprint.json"
+            )
+            reused_fingerprint = json.loads(
+                reused_fingerprint_path.read_text(encoding="utf-8")
+            )
+            pointer = activate_deployment_candidate(target_name, baseline_id)
+            return {
+                "exitCode": 0,
+                "summary": f"stackctl package reused immutable candidate for {env_name}",
+                "details": [detail, f"candidateDir={candidate_dir}"],
+                "baselineId": baseline_id,
+                "candidateDir": str(candidate_dir),
+                "activeCandidateRef": str(pointer),
+                "reportDir": str(reused_fingerprint.get("reportRef") or ""),
+                "packageFingerprint": str(reused_fingerprint_path),
+            }
+
+        candidate_parent = candidate_dir.parent
+        candidate_parent.mkdir(parents=True, exist_ok=True)
+        staging_dir = Path(
+            tempfile.mkdtemp(
+                prefix=f".{candidate_dir.name}.staging-",
+                dir=str(candidate_parent),
+            )
+        )
+        os.environ[PACKAGE_ROOT_OVERRIDE_ENV] = str(staging_dir / "packages")
+        try:
+            payload = _command_package_unlocked(
+                args,
+                package_snapshot=package_snapshot,
+            )
+        finally:
+            if previous_override is None:
+                os.environ.pop(PACKAGE_ROOT_OVERRIDE_ENV, None)
+            else:
+                os.environ[PACKAGE_ROOT_OVERRIDE_ENV] = previous_override
+        if int(payload.get("exitCode") or 0) != 0:
+            shutil.rmtree(staging_dir)
+            return payload
+        if candidate_dir.exists():
+            shutil.rmtree(staging_dir)
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package candidate collision for {target_name}",
+                "details": [f"candidate already exists: {candidate_dir}"],
+                "baselineId": baseline_id,
+            }
+        staging_dir.replace(candidate_dir)
+        pointer = activate_deployment_candidate(target_name, baseline_id)
+        staging_text = str(staging_dir)
+        candidate_text = str(candidate_dir)
+        payload = json.loads(
+            json.dumps(payload, ensure_ascii=False).replace(
+                staging_text,
+                candidate_text,
+            )
+        )
+        report_ref = str(payload.get("reportDir") or "").strip()
+        if report_ref:
+            evidence_root = (ROOT / report_ref).resolve()
+            if evidence_root.is_dir() and evidence_root.is_relative_to(ROOT):
+                for evidence_path in evidence_root.rglob("*"):
+                    if not evidence_path.is_file() or evidence_path.suffix not in {
+                        ".json",
+                        ".md",
+                    }:
+                        continue
+                    evidence_text = evidence_path.read_text(encoding="utf-8")
+                    if staging_text in evidence_text:
+                        evidence_path.write_text(
+                            evidence_text.replace(staging_text, candidate_text),
+                            encoding="utf-8",
+                        )
+        payload["candidateDir"] = str(candidate_dir)
+        payload["activeCandidateRef"] = str(pointer)
+        return payload
+
+
+def _command_package_unlocked(
+    args: argparse.Namespace,
+    *,
+    package_snapshot: dict[str, object] | None = None,
+) -> dict[str, Any]:
     if getattr(args, "kind", "runtime") == "release-manifest":
         return _command_package_release_manifest(args)
     if getattr(args, "kind", "runtime") == "legal-static":
@@ -4652,7 +5648,54 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
     started_monotonic, started_at = _start_timing()
     details: list[str] = []
     reports: list[dict[str, Any]] = []
-    package_environment = {"QWQ_DEPLOY_TARGET": target_name}
+    packaged_services: list[str] = []
+    package_cache = target_cache_dir(target_name) / "package"
+    go_build_cache = package_cache / "go-build"
+    go_tmp = package_cache / "go-tmp"
+    go_build_cache.mkdir(parents=True, exist_ok=True)
+    go_tmp.mkdir(parents=True, exist_ok=True)
+    package_environment = {
+        "QWQ_DEPLOY_TARGET": target_name,
+        "GOCACHE": str(go_build_cache),
+        "GOTMPDIR": str(go_tmp),
+    }
+
+    if not args.service:
+        legal_result, legal_payload = _legal_static_command(
+            "package",
+            env_name,
+            target=target_name,
+        )
+        reports.append(
+            {
+                "name": "legal-static-package",
+                "argv": legal_payload.get("argv", []),
+                "exitCode": legal_result.returncode,
+                "stdout": legal_result.stdout,
+                "stderr": legal_result.stderr,
+            }
+        )
+        if legal_result.returncode != 0:
+            timing = _finish_timing(started_monotonic, started_at)
+            detail = (
+                legal_result.stderr.strip()
+                or legal_result.stdout.strip()
+                or "legal-static package failed"
+            )
+            write_json(
+                report_dir / "report.json",
+                {"status": "failed", "steps": reports, **timing},
+            )
+            return {
+                "exitCode": legal_result.returncode,
+                "summary": f"stackctl package failed for legal-static/{env_name}",
+                "details": [detail],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        details.append(
+            f"legal-static package ready: {legal_payload.get('packageDir', '')}"
+        )
 
     if not args.service:
         app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
@@ -4693,6 +5736,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
 
     if args.include_services or args.service:
         services = [args.service] if args.service else _all_services()
+        packaged_services = list(services)
         for service in services:
             svc_cmd = [
                 "bash",
@@ -4741,10 +5785,12 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 f"{relpath(service_deployment_package_dir(env_name, service, target=target_name))}"
             )
 
-    if env_name == "prod" and not args.service:
+    materialized_release_evidence: dict[str, str] = {}
+    if not args.service:
         try:
-            materialized_config_version = _materialize_prod_release_artifact(
-                target=target_name
+            materialized_release_evidence = _materialize_release_evidence_configuration(
+                env_name,
+                target=target_name,
             )
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             timing = _finish_timing(started_monotonic, started_at)
@@ -4754,21 +5800,28 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 command="package",
                 target=target_name,
                 status="failed",
-                summary="stackctl package failed while materializing prod release artifact",
+                summary=(
+                    "stackctl package failed while materializing release evidence "
+                    f"for {env_name}"
+                ),
                 details=[str(exc)],
                 extra={"env": env_name},
                 timing=timing,
             )
             return {
                 "exitCode": 1,
-                "summary": "stackctl package failed while materializing prod release artifact",
+                "summary": (
+                    "stackctl package failed while materializing release evidence "
+                    f"for {env_name}"
+                ),
                 "details": [str(exc)],
                 "reportDir": relpath(report_dir),
                 **timing,
             }
-        if materialized_config_version:
+        if materialized_release_evidence:
             details.append(
-                f"prod release artifact materialized: configVersion={materialized_config_version}"
+                f"{env_name} release evidence materialized: "
+                f"candidateId={materialized_release_evidence['candidateId']}"
             )
 
     if not args.service:
@@ -4799,17 +5852,101 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             }
         details.append(f"runtime shared package ready: {relpath(shared_package_dir)}")
 
+    if (
+        bool(args.include_services)
+        and not args.service
+        and target_name in {"alpha-local", "beta-local", "gamma-local"}
+    ):
+        try:
+            image_manifest_path, image_manifest = _build_package_bound_local_images(
+                env_name,
+                target_name,
+                report_dir=report_dir,
+            )
+        except RuntimeError as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            detail = str(exc)
+            write_json(
+                report_dir / "report.json",
+                {
+                    "status": "GATE_BLOCK",
+                    "command": "package",
+                    "env": env_name,
+                    "target": target_name,
+                    "details": [detail],
+                    "steps": reports,
+                    **timing,
+                },
+            )
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package OCI build blocked for {env_name}",
+                "details": [detail],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        details.extend(
+            [
+                f"OCI image manifest ready: {relpath(image_manifest_path)}",
+                f"buildInputDigest: {image_manifest['buildInputDigest']}",
+                f"imageDigest: {image_manifest['imageDigest']}",
+            ]
+        )
+
+    ending_snapshot = workspace_snapshot()
+    if package_snapshot is None:
+        package_snapshot = ending_snapshot
+    if ending_snapshot != package_snapshot:
+        timing = _finish_timing(started_monotonic, started_at)
+        details = [
+            "workspace changed while package was being materialized",
+            f"startBaselineId={package_snapshot.get('baselineId', '')}",
+            f"endBaselineId={ending_snapshot.get('baselineId', '')}",
+        ]
+        write_json(
+            report_dir / "report.json",
+            {
+                "status": "GATE_BLOCK",
+                "command": "package",
+                "env": env_name,
+                "target": target_name,
+                "details": details,
+                **timing,
+            },
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="package",
+            target=target_name,
+            status="GATE_BLOCK",
+            summary=f"stackctl package blocked for {env_name}",
+            details=details,
+            extra={"env": env_name},
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl package blocked for {env_name}",
+            "details": details,
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
+
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
         "status": "ok",
         "command": "package",
         "env": env_name,
         "target": target_name,
+        "baselineId": package_snapshot["baselineId"],
+        "sourceRevision": package_snapshot["sourceRevision"],
+        "workspaceStatusDigest": package_snapshot["workspaceStatusDigest"],
         "timestamp": utc_now(),
         "reportDir": relpath(report_dir),
         "steps": reports,
         **timing,
     }
+    payload.update(materialized_release_evidence)
     if topology is not None:
         payload["topologyTarget"] = get_target(topology, target_name)
     write_json(report_dir / "report.json", payload)
@@ -4829,14 +5966,41 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         report_dir=relpath(report_dir),
         include_services=bool(args.include_services or args.service),
         details=details,
+        service_packages=packaged_services,
+        expected_snapshot=package_snapshot,
     )
+    try:
+        candidate_manifest = write_candidate_manifest(
+            env_name,
+            target_name,
+            package_snapshot=package_snapshot,
+            release_attestation=str(
+                getattr(args, "release_attestation", "") or ""
+            ),
+            rollback_release_attestation=str(
+                getattr(args, "rollback_release_attestation", "") or ""
+            ),
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl package candidate manifest blocked for {env_name}",
+            "details": [str(exc)],
+            "reportDir": relpath(report_dir),
+            "baselineId": package_snapshot["baselineId"],
+            **timing,
+        }
     details.append(f"package fingerprint: {relpath(fingerprint)}")
+    details.append(f"candidate manifest: {candidate_manifest}")
+    details.append(f"baselineId: {package_snapshot['baselineId']}")
     return {
         "exitCode": 0,
         "summary": f"stackctl package completed for {env_name}",
         "details": details,
         "reportDir": relpath(report_dir),
         "packageFingerprint": relpath(fingerprint),
+        "baselineId": package_snapshot["baselineId"],
         **timing,
     }
 
@@ -5129,6 +6293,11 @@ def _command_verify_service_environment(args: argparse.Namespace) -> dict[str, A
             profile,
             report_dir,
             service=args.service,
+            data_readiness_path=_data_readiness_path_from_verify_args(
+                args,
+                environment=env_name,
+                profile=profile,
+            ),
         ):
             profile_result = run(
                 profile_command["argv"],
@@ -5328,6 +6497,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
     issues: list[str] = []
     provider_readiness: dict[str, Any] = {}
+    force_deadline_rollback = False
     if (
         profile is VerificationProfile.RELEASE
         and env_name in {"gamma", "prod"}
@@ -5349,6 +6519,38 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 f"provider readiness: {detail}"
                 for detail in provider_preflight["details"]
             )
+            timing = _finish_timing(started_monotonic, started_at)
+            payload = {
+                "status": ProbeOutcome.GATE_BLOCK.value,
+                "command": "verify",
+                "timestamp": utc_now(),
+                "kind": args.kind,
+                "profile": profile.value,
+                "environment": env_name,
+                "target": target_name,
+                "providerReadiness": provider_readiness,
+                "steps": steps,
+                **timing,
+            }
+            write_json(report_dir / "report.json", payload)
+            write_json(report_dir / "findings.json", {"issues": issues})
+            _write_summary_bundle(
+                report_dir,
+                command="verify",
+                target=target_name,
+                status="blocked",
+                summary="stackctl verify is GATE_BLOCK by Provider readiness",
+                details=issues,
+                extra={"kind": args.kind, "profile": profile.value},
+                timing=timing,
+            )
+            return {
+                "exitCode": 2,
+                "summary": "stackctl verify is GATE_BLOCK by Provider readiness",
+                "details": issues,
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
     if profile is VerificationProfile.RELEASE and target_name == "prod-hosted":
         receipt = str(
             getattr(args, "backup_recovery_receipt", "")
@@ -5375,7 +6577,10 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             )
             issues.append("backup recovery hosted receipt is required for prod release")
         else:
-            result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
+            result = run(
+                command,
+                env=_verify_child_environment(target_name),
+            )
             steps.append(
                 {
                     "kind": "backup-recovery",
@@ -5412,60 +6617,28 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             f"distribution: {issue}" for issue in distribution_issues
         )
     package_envs = [env_name] if env_name in ENVIRONMENTS and profile.requires_environment else []
-    reuse_package = bool(getattr(args, "reuse_package", False))
     for package_env in package_envs:
         package_target = args.target or DEFAULT_TARGET_BY_ENV[package_env]
-        if reuse_package:
-            ok, reuse_detail = can_reuse_package(
-                package_env,
-                package_target,
-                include_services=True,
-            )
-            if ok:
-                steps.append(
-                    {
-                        "kind": "package",
-                        "env": package_env,
-                        "exitCode": 0,
-                        "reused": True,
-                        "details": [reuse_detail],
-                        "reportDir": "",
-                    }
-                )
-                continue
-            steps.append(
-                {
-                    "kind": "package",
-                    "env": package_env,
-                    "exitCode": 0,
-                    "reused": False,
-                    "details": [f"reuse unavailable: {reuse_detail}; packaging"],
-                    "reportDir": "",
-                }
-            )
-        package_args = argparse.Namespace(
-            command="package",
-            kind="runtime",
-            env=package_env,
-            service="",
+        ok, package_detail = can_reuse_package(
+            package_env,
+            package_target,
             include_services=True,
-            target=package_target,
-            output_format="json",
-            report_dir=str(report_dir / f"package-{package_env}"),
         )
-        package_payload = command_package(package_args)
         steps.append(
             {
                 "kind": "package",
                 "env": package_env,
-                "exitCode": package_payload["exitCode"],
-                "reused": False,
-                "details": package_payload.get("details", []),
-                "reportDir": package_payload.get("reportDir", ""),
+                "exitCode": 0 if ok else 2,
+                "consumed": ok,
+                "details": [package_detail],
+                "reportDir": "",
             }
         )
-        if package_payload["exitCode"] != 0:
-            issues.append(f"package failed for {package_env}: {'; '.join(package_payload.get('details', []))}")
+        if not ok:
+            issues.append(
+                f"fixed package is unavailable for {package_env}/{package_target}: "
+                f"{package_detail}; run stackctl package explicitly"
+            )
     stdout_sections: list[tuple[str, str]] = []
     commands = _selected_verify_commands(
         args.kind,
@@ -5474,7 +6647,10 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         profile=profile,
     )
     for command in commands:
-        result = run(command, env={"QWQ_DEPLOY_TARGET": target_name})
+        result = run(
+            command,
+            env=_verify_child_environment(target_name),
+        )
         command_key = " ".join(command)
         steps.append(
             {
@@ -5495,6 +6671,14 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 command="content-readiness",
                 phase=phase.value,
                 env=env_name,
+                release_id=getattr(args, "data_release_id", ""),
+                verify_run_id=getattr(args, "data_verify_run_id", ""),
+                manifest_digest=getattr(args, "data_manifest_digest", ""),
+                lifecycle_exit_ref=getattr(
+                    args,
+                    "data_lifecycle_exit_ref",
+                    "",
+                ),
                 output_format="json",
                 report_dir=str(report_dir / "content-readiness"),
             )
@@ -5519,11 +6703,19 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         profile,
         report_dir,
         service=service_name,
+        data_readiness_path=_data_readiness_path_from_verify_args(
+            args,
+            environment=env_name,
+            profile=profile,
+        ),
     ):
         result = run(
             profile_command["argv"],
             cwd=profile_command.get("cwd"),
-            env=profile_command.get("env"),
+            env=_verify_child_environment(
+                target_name,
+                profile_command.get("env"),
+            ),
         )
         blocking = bool(profile_command.get("blocking", True))
         steps.append(
@@ -5769,7 +6961,6 @@ def _log_sink_control_query_session(
     api_base: str,
     environment: str,
     target_name: str,
-    resolve_host: str,
 ) -> LocalAcceptanceSession:
     """Resolve a query session without serializing a bearer token into evidence."""
     query_token = os.environ.get("PRODUCT_TELEMETRY_QUERY_TOKEN", "").strip()
@@ -5785,7 +6976,6 @@ def _log_sink_control_query_session(
             environment=environment,
             target_name=target_name,
             profile="product-telemetry-query",
-            resolve_host=resolve_host,
         )
     raise RuntimeError("product telemetry query authorization is unavailable")
 
@@ -5842,13 +7032,10 @@ def _run_product_telemetry_log_sink_control_action(
     product_ops_base = str(public_bases.get("productOps") or "").strip()
     if not api_base or not product_ops_base:
         raise RuntimeError("product-ops public base is unavailable")
-    resolve_host = _local_public_connect_host(topology, target_name, api_base)
-
     session = open_local_acceptance_session(
         api_base,
         environment=environment,
         target_name=target_name,
-        resolve_host=resolve_host,
     )
     if action == "permission-failure":
         try:
@@ -5856,7 +7043,6 @@ def _run_product_telemetry_log_sink_control_action(
                 product_ops_base,
                 path="/ops/events/summary",
                 session=session,
-                resolve_host=resolve_host,
             )
         except LocalEnvironmentHTTPError as exc:
             if exc.status == 403:
@@ -5897,19 +7083,16 @@ def _run_product_telemetry_log_sink_control_action(
         method="POST",
         body=body,
         headers={"Idempotency-Key": idempotency_key},
-        resolve_host=resolve_host,
     )
     query_session = _log_sink_control_query_session(
         api_base=api_base,
         environment=environment,
         target_name=target_name,
-        resolve_host=resolve_host,
     )
     request_local_environment_json(
         product_ops_base,
         path="/ops/events/summary",
         session=query_session,
-        resolve_host=resolve_host,
     )
 
 
@@ -6002,6 +7185,27 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             requested_target = app_target_for_env(args.env)
 
     build_only = bool(getattr(args, "build_only", False))
+    formal_release = bool(getattr(args, "formal_release", False))
+    release_composition: dict[str, Any] = {}
+    runtime_images: dict[str, dict[str, str]] = {}
+    destructive_actions: list[str] = []
+    if formal_release and (
+        requested_target not in {"alpha-local", "beta-local", "gamma-local"}
+        or not getattr(args, "skip_build", False)
+        or not getattr(args, "skip_app", False)
+        or args.workload != "full"
+        or not str(getattr(args, "release_manifest", "") or "").strip()
+    ):
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl up formal release is GATE_BLOCK",
+            "details": [
+                "formal release requires alpha/beta/gamma, --workload full, "
+                "--skip-build, --skip-app and a canonical --release-manifest"
+            ],
+            **timing,
+        }
     build_services = str(getattr(args, "build_services", "")).strip()
     if build_services and not build_only:
         timing = _finish_timing(started_monotonic, started_at)
@@ -6032,57 +7236,64 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(target["env"])
     report_target = args.env or requested_target
     report_dir = resolve_report_dir(args, env_name, report_target)
-    # Local alpha/beta: migrate checksum drift → wipe once before readiness wait.
+    if requested_target in {"alpha-local", "beta-local", "gamma-local"}:
+        if build_only:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl up build-only is retired",
+                "details": [
+                    "up only consumes a fixed candidate; run stackctl package explicitly"
+                ],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        package_ok, package_detail = can_reuse_package(
+            env_name,
+            requested_target,
+            include_services=True,
+        )
+        if not package_ok:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl up GATE_BLOCK: fixed package missing for {requested_target}",
+                "details": [package_detail, "run stackctl package explicitly"],
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
+        # Local start scripts must never compile or re-package the workspace.
+        args.skip_build = True
+    # Migration drift is diagnostic input only. Destructive repair is never implicit.
     if requested_target in {"alpha-local", "beta-local"} and not build_only:
         drift = probe_migration_drift(requested_target)
         if drift.has_drift:
-            auto_wipe = os.environ.get(
-                "STACKCTL_AUTO_WIPE_MIGRATION_DRIFT", "1"
-            ).strip() not in {"0", "false", "FALSE", "no", "NO"}
-            if not auto_wipe:
-                timing = _finish_timing(started_monotonic, started_at)
-                details = [
-                    format_drift_gate_block(drift),
-                    "set STACKCTL_AUTO_WIPE_MIGRATION_DRIFT=1 to wipe",
-                ]
-                write_json(
-                    report_dir / "report.json",
-                    {
-                        "command": "up",
-                        "target": report_target,
-                        "resolvedTarget": requested_target,
-                        "status": "gate_block",
-                        "migrationDrift": drift.detail,
-                        "details": details,
-                        **timing,
-                    },
-                )
-                return {
-                    "exitCode": 2,
-                    "summary": (
-                        f"stackctl up GATE_BLOCK: migration drift on {requested_target}"
-                    ),
+            timing = _finish_timing(started_monotonic, started_at)
+            details = [
+                format_drift_gate_block(drift),
+                "use an explicitly approved stackctl repair action; up never wipes data",
+            ]
+            write_json(
+                report_dir / "report.json",
+                {
+                    "command": "up",
+                    "target": report_target,
+                    "resolvedTarget": requested_target,
+                    "status": "gate_block",
+                    "migrationDrift": drift.detail,
                     "details": details,
-                    "reportDir": relpath(report_dir),
                     **timing,
-                }
-            wipe_ok, wipe_detail = wipe_local_postgres_volumes(requested_target)
-            if not wipe_ok:
-                timing = _finish_timing(started_monotonic, started_at)
-                details = [format_drift_gate_block(drift), wipe_detail]
-                return {
-                    "exitCode": 2,
-                    "summary": (
-                        f"stackctl up GATE_BLOCK: drift wipe failed on {requested_target}"
-                    ),
-                    "details": details,
-                    "reportDir": relpath(report_dir),
-                    **timing,
-                }
-            _progress_print(
-                f"[stackctl up] wiped local postgres for {requested_target} "
-                "after migration drift"
+                },
             )
+            return {
+                "exitCode": 2,
+                "summary": (
+                    f"stackctl up GATE_BLOCK: migration drift on {requested_target}"
+                ),
+                "details": details,
+                "reportDir": relpath(report_dir),
+                **timing,
+            }
     # A content release starts only the import/consumer data plane. Device
     # selection belongs to a separate App UAT command, never to server startup.
     if args.workload == "content-release":
@@ -6094,7 +7305,11 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         "redactedDigest": "",
     }
     log_sink_redaction_values: tuple[str, ...] = ()
-    if args.workload == "full" and requested_target in {"beta-local", "gamma-local"}:
+    if args.workload == "full" and requested_target in {
+        "alpha-local",
+        "beta-local",
+        "gamma-local",
+    }:
         try:
             log_sink_bundle = load_product_telemetry_log_sink(
                 env_name,
@@ -6286,7 +7501,171 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             max_follow_seconds=20.0,
         )
 
-    if requested_target == "beta-local":
+    if formal_release:
+        env = _gamma_env_from_port_manifest(topology, requested_target)
+        env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
+        env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
+            env_observability_run_dir(env_name, report_dir.name).resolve()
+        )
+        env["QWQ_WORKLOAD"] = "full"
+        env["LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS"] = "420"
+        telemetry_env, telemetry_advisory = _optional_product_telemetry_environment(
+            env_name, requested_target
+        )
+        env.update(telemetry_env)
+        if telemetry_advisory:
+            steps.append(
+                {
+                    "kind": "observability-prerequisite",
+                    "exitCode": 2,
+                    "blocking": True,
+                    "stdout": "",
+                    "stderr": telemetry_advisory,
+                }
+            )
+        cmd = _gamma_start_command(args)
+        syntax_cmd = [
+            "bash",
+            "-n",
+            "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+        ]
+        syntax_result = run(syntax_cmd, env=env)
+        provider_error = None
+        if syntax_result.returncode == 0:
+            provider_error = _bind_formal_local_release_provider_environment(
+                env,
+                environment_name=env_name,
+                target_name=requested_target,
+            )
+        steps.append(
+            {
+                "name": "formal-local-release-script-syntax",
+                "argv": syntax_cmd,
+                "exitCode": syntax_result.returncode,
+                "stdout": syntax_result.stdout,
+                "stderr": syntax_result.stderr,
+            }
+        )
+        if provider_error is not None or telemetry_advisory or syntax_result.returncode:
+            result = subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr=provider_error or telemetry_advisory or syntax_result.stderr,
+            )
+        else:
+            try:
+                release_composition = _bind_gamma_release_image_refs(
+                    Path(str(args.release_manifest)).expanduser().resolve(),
+                    env,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    2,
+                    stdout="",
+                    stderr=str(exc),
+                )
+            else:
+                result = run_stage(
+                    requested_target,
+                    cmd,
+                    env=env,
+                    live_prefix=f"[{requested_target}] ",
+                )
+                if result.returncode == 0:
+                    try:
+                        runtime_images = _inspect_gamma_release_runtime(
+                            release_composition,
+                            env,
+                        )
+                    except ValueError as exc:
+                        result = subprocess.CompletedProcess(
+                            cmd,
+                            2,
+                            stdout=result.stdout,
+                            stderr=str(exc),
+                        )
+    elif requested_target in {"alpha-local", "beta-local", "gamma-local"}:
+        # Every supported local workload consumes the same packaged OCI
+        # composition.  content-release only narrows runtime probes; it never
+        # selects the retired Alpha/Beta build-from-worktree implementations.
+        env = _gamma_env_from_port_manifest(topology, requested_target)
+        env["QWQ_RUN_ROOT"] = str(report_dir.resolve())
+        env["QWQ_OBSERVABILITY_RUN_ROOT"] = str(
+            env_observability_run_dir(env_name, report_dir.name).resolve()
+        )
+        env["QWQ_WORKLOAD"] = args.workload
+        telemetry_advisory = ""
+        if args.workload == "full":
+            telemetry_env, telemetry_advisory = (
+                _optional_product_telemetry_environment(
+                    env_name,
+                    requested_target,
+                )
+            )
+            env.update(telemetry_env)
+        else:
+            env["QWQ_PRODUCT_TELEMETRY_AVAILABLE"] = "0"
+        cmd = _gamma_start_command(args)
+        syntax_cmd = [
+            "bash",
+            "-n",
+            "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+        ]
+        syntax_result = run(syntax_cmd, env=env)
+        provider_error = None
+        if syntax_result.returncode == 0:
+            provider_error = _bind_formal_local_release_provider_environment(
+                env,
+                environment_name=env_name,
+                target_name=requested_target,
+            )
+        steps.append(
+            {
+                "name": "shared-local-runtime-script-syntax",
+                "argv": syntax_cmd,
+                "exitCode": syntax_result.returncode,
+                "stdout": syntax_result.stdout,
+                "stderr": syntax_result.stderr,
+            }
+        )
+        if provider_error is not None or telemetry_advisory or syntax_result.returncode:
+            result = subprocess.CompletedProcess(
+                cmd,
+                2,
+                stdout="",
+                stderr=provider_error or telemetry_advisory or syntax_result.stderr,
+            )
+        else:
+            try:
+                release_composition = _bind_gamma_packaged_service_image_refs(
+                    env_name,
+                    env,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                result = subprocess.CompletedProcess(
+                    cmd,
+                    2,
+                    stdout="",
+                    stderr=str(exc),
+                )
+            else:
+                steps.append(
+                    {
+                        "name": "package-bound-runtime-composition",
+                        "exitCode": 0,
+                        "stdout": release_composition["imageVersion"],
+                        "stderr": "",
+                    }
+                )
+                result = run_stage(
+                    requested_target,
+                    cmd,
+                    env=env,
+                    live_prefix=f"[{requested_target}] ",
+                )
+    elif requested_target == "beta-local":
         app_launch = None
         if not args.skip_app:
             args.device_id = maybe_resolve_device_id(include_web=True)
@@ -6303,6 +7682,32 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         # Beta 的自治配置明确启用内容向量能力；content-release 只缩小
         # workload/观测面，不得暗中改写服务配置或绕过 provider binding。
         external_provider_error = _bind_beta_external_provider_environment(env)
+        package_cmd = ["stackctl", "package", "--env", "beta", "--include-services"]
+        package_result = subprocess.CompletedProcess(
+            package_cmd,
+            2 if external_provider_error else 0,
+            stdout="consuming fixed beta deployment package",
+            stderr=external_provider_error or "",
+        )
+        if not external_provider_error:
+            try:
+                bind_packaged_image_composition("beta", env)
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+                package_result = subprocess.CompletedProcess(
+                    package_cmd,
+                    2,
+                    stdout=package_result.stdout,
+                    stderr=str(exc),
+                )
+        steps.append(
+            {
+                "name": "beta-package-consumption",
+                "argv": package_cmd,
+                "exitCode": package_result.returncode,
+                "stdout": package_result.stdout,
+                "stderr": package_result.stderr,
+            }
+        )
         if external_provider_error:
             steps.append(
                 {
@@ -6322,25 +7727,40 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     "stderr": telemetry_advisory,
                 }
             )
-        if external_provider_error:
+        if package_result.returncode != 0:
             result = subprocess.CompletedProcess(
                 cmd,
                 2,
-                stdout="",
-                stderr=external_provider_error,
+                stdout=package_result.stdout,
+                stderr=package_result.stderr,
             )
         else:
             result = run_stage("beta-local", cmd, env=env, live_prefix="[beta] ")
-            background_tail = tail_beta_background_logs()
-            steps.append(
-                {
-                    "kind": "beta-background-tail",
-                    "exitCode": 0,
-                    "stdout": "tailed beta background logs",
-                    "stderr": "",
-                    "tail": background_tail,
-                }
-            )
+            if result.returncode == 0:
+                try:
+                    background_tail = tail_beta_background_logs()
+                except RuntimeError as exc:
+                    steps.append(
+                        {
+                            "kind": "beta-background-tail",
+                            "exitCode": 1,
+                            "stdout": "",
+                            "stderr": str(exc),
+                        }
+                    )
+                    result = subprocess.CompletedProcess(
+                        cmd, 1, stdout=result.stdout, stderr=str(exc)
+                    )
+                else:
+                    steps.append(
+                        {
+                            "kind": "beta-background-tail",
+                            "exitCode": 0,
+                            "stdout": "tailed beta background logs",
+                            "stderr": "",
+                            "tail": background_tail,
+                        }
+                    )
         if result.returncode == 0:
             beta_content_port = canonical_port(
                 load_port_manifest(),
@@ -6393,11 +7813,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     public_url,
                     retry_attempts=public_ready_attempts,
                     retry_sleep_seconds=1.0,
-                    resolve_host=_local_public_connect_host(
-                        topology,
-                        requested_target,
-                        public_url,
-                    ),
                 )
                 steps.append(
                     {
@@ -6571,7 +7986,13 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             )
         else:
             try:
-                _bind_gamma_packaged_service_image_refs("gamma", env)
+                if formal_release:
+                    release_composition = _bind_gamma_release_image_refs(
+                        Path(str(args.release_manifest)).expanduser().resolve(),
+                        env,
+                    )
+                else:
+                    _bind_gamma_packaged_service_image_refs("gamma", env)
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 result = subprocess.CompletedProcess(
                     cmd,
@@ -6586,6 +8007,19 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     env=env,
                     live_prefix="[gamma-local] ",
                 )
+                if result.returncode == 0 and formal_release:
+                    try:
+                        runtime_images = _inspect_gamma_release_runtime(
+                            release_composition,
+                            env,
+                        )
+                    except ValueError as exc:
+                        result = subprocess.CompletedProcess(
+                            cmd,
+                            2,
+                            stdout=result.stdout,
+                            stderr=str(exc),
+                        )
         if result.returncode == 0 and not args.skip_app and not build_only:
             args.device_id = maybe_resolve_device_id(include_web=True)
             try:
@@ -6680,16 +8114,31 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                 env=alpha_env,
                 live_prefix="[alpha] ",
             )
-        background_tail = tail_alpha_background_logs()
-        steps.append(
-            {
-                "kind": "alpha-background-tail",
-                "exitCode": 0,
-                "stdout": "tailed alpha background logs",
-                "stderr": "",
-                "tail": background_tail,
-            }
-        )
+        if result.returncode == 0:
+            try:
+                background_tail = tail_alpha_background_logs()
+            except RuntimeError as exc:
+                steps.append(
+                    {
+                        "kind": "alpha-background-tail",
+                        "exitCode": 1,
+                        "stdout": "",
+                        "stderr": str(exc),
+                    }
+                )
+                result = subprocess.CompletedProcess(
+                    cmd, 1, stdout=result.stdout, stderr=str(exc)
+                )
+            else:
+                steps.append(
+                    {
+                        "kind": "alpha-background-tail",
+                        "exitCode": 0,
+                        "stdout": "tailed alpha background logs",
+                        "stderr": "",
+                        "tail": background_tail,
+                    }
+                )
         if result.returncode == 0:
             alpha_content_port = canonical_port(
                 load_port_manifest(),
@@ -6738,11 +8187,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     public_url,
                     retry_attempts=public_ready_attempts,
                     retry_sleep_seconds=1.0,
-                    resolve_host=_local_public_connect_host(
-                        topology,
-                        requested_target,
-                        public_url,
-                    ),
                 )
                 steps.append(
                     {
@@ -6826,17 +8270,41 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
                     )
     elif requested_target == "prod-sim":
         cmd = ["bash", "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh", "up"]
-        result = run_stage("prod-sim", cmd, live_prefix="[prod-sim] ")
-        background_tail = tail_prod_sim_background_logs()
-        steps.append(
-            {
-                "kind": "prod-sim-background-tail",
-                "exitCode": 0,
-                "stdout": "tailed prod-sim background logs",
-                "stderr": "",
-                "tail": background_tail,
-            }
+        readiness_value = str(
+            getattr(args, "data_release_readiness", "")
+            or os.environ.get("DATA_RELEASE_READINESS_RECEIPT", "")
+        ).strip()
+        result = run_stage(
+            "prod-sim",
+            cmd,
+            env={"DATA_RELEASE_READINESS_RECEIPT": readiness_value},
+            live_prefix="[prod-sim] ",
         )
+        if result.returncode == 0:
+            try:
+                background_tail = tail_prod_sim_background_logs()
+            except RuntimeError as exc:
+                steps.append(
+                    {
+                        "kind": "prod-sim-background-tail",
+                        "exitCode": 1,
+                        "stdout": "",
+                        "stderr": str(exc),
+                    }
+                )
+                result = subprocess.CompletedProcess(
+                    cmd, 1, stdout=result.stdout, stderr=str(exc)
+                )
+            else:
+                steps.append(
+                    {
+                        "kind": "prod-sim-background-tail",
+                        "exitCode": 0,
+                        "stdout": "tailed prod-sim background logs",
+                        "stderr": "",
+                        "tail": background_tail,
+                    }
+                )
         if result.returncode == 0 and not args.skip_app:
             args.device_id = maybe_resolve_device_id(include_web=True)
             try:
@@ -7038,6 +8506,17 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             "resolvedTarget": requested_target,
             "workload": args.workload,
             "commercialClaim": commercial_claim,
+            "formalRelease": formal_release,
+            "releaseComposition": release_composition,
+            "runtimeMode": "immutable-oci" if formal_release else "",
+            "runtimeCandidateDigest": (
+                str(release_composition.get("candidateId") or "")
+                if formal_release
+                else ""
+            ),
+            "runtimeImages": runtime_images,
+            "destructiveRepairPerformed": bool(destructive_actions),
+            "destructiveActions": destructive_actions,
             "logSink": log_sink_receipt,
             "steps": steps,
             **timing,
@@ -7063,6 +8542,17 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         extra={
             "workload": args.workload,
             "commercialClaim": commercial_claim,
+            "formalRelease": formal_release,
+            "releaseComposition": release_composition,
+            "runtimeMode": "immutable-oci" if formal_release else "",
+            "runtimeCandidateDigest": (
+                str(release_composition.get("candidateId") or "")
+                if formal_release
+                else ""
+            ),
+            "runtimeImages": runtime_images,
+            "destructiveRepairPerformed": bool(destructive_actions),
+            "destructiveActions": destructive_actions,
             "logSink": log_sink_receipt,
         },
         timing=timing,
@@ -7253,38 +8743,95 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
+    formal_release = bool(getattr(args, "formal_release", False))
+    release_composition: dict[str, Any] = {}
+    runtime_composition_source = ""
 
-    if args.target == "beta-local":
-        cmd = ["bash", "quwoquan_ops/cli/beta/start_beta_stack.sh", "down"]
-        result = run(cmd)
-    elif args.target == "gamma-local":
+    if formal_release:
+        manifest_value = str(getattr(args, "release_manifest", "") or "").strip()
+        if args.target not in {"alpha-local", "beta-local", "gamma-local"}:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                "details": ["formal teardown supports only Alpha/Beta/Gamma local targets"],
+            }
+        if not manifest_value:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                "details": ["formal teardown requires --release-manifest"],
+            }
+        manifest_path = Path(manifest_value).expanduser().resolve()
+        env = _gamma_env_from_port_manifest(topology, args.target)
+        try:
+            release_composition = _bind_gamma_release_teardown_image_refs(
+                manifest_path,
+                env,
+            )
+            runtime_composition_source = "release-manifest"
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                "details": [str(exc)],
+            }
+        cmd = [
+            "bash",
+            "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh",
+            "--down",
+            "--formal-release-teardown",
+        ]
+        _bind_gamma_down_parse_environment(env)
+        result = run(cmd, env=env)
+    elif args.target in {"alpha-local", "beta-local", "gamma-local"}:
         cmd = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh", "--down"]
         env = _gamma_env_from_port_manifest(topology, args.target)
-        _bind_gamma_down_compose_placeholders(env)
-        result = run(cmd, env=env)
-    elif args.target == "alpha-local":
-        release_cmd = [
-            "bash",
-            "quwoquan_ops/cli/alpha/start_alpha_content_release_stack.sh",
-            "down",
-        ]
+        try:
+            runtime_receipt = _load_gamma_runtime_image_composition(args.target)
+            if runtime_receipt is None:
+                release_composition = _bind_gamma_packaged_service_image_refs(
+                    env_name,
+                    env,
+                )
+                runtime_composition_source = "service-package-provenance"
+            else:
+                release_composition, compose_project = runtime_receipt
+                expected_project = str(
+                    env.get("LOCAL_GAMMA_COMPOSE_PROJECT_NAME") or ""
+                )
+                if compose_project != expected_project:
+                    raise ValueError(
+                        "runtime image composition receipt Compose project mismatch"
+                    )
+                _apply_gamma_image_composition(release_composition, env)
+                runtime_composition_source = "runtime-receipt"
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                "details": [
+                    f"{args.target} teardown requires a canonical runtime receipt or service-package provenance",
+                    str(exc),
+                ],
+            }
+        _bind_gamma_down_parse_environment(env)
+        runtime_result = run(cmd, env=env)
         app_cmd = [
             "bash",
             "quwoquan_app/scripts/device/stop_app_instance.sh",
             "--env",
-            "alpha",
+            env_name,
             "--quiet",
         ]
-        release_result = run(release_cmd)
         app_result = run(app_cmd)
-        cmd = [*release_cmd, "&&", *app_cmd]
+        cmd = [*cmd, "&&", *app_cmd]
         result = next(
             (
                 candidate
-                for candidate in (release_result, app_result)
+                for candidate in (runtime_result, app_result)
                 if candidate.returncode != 0
             ),
-            release_result,
+            runtime_result,
         )
     elif args.target == "prod-sim":
         app_cmd = [
@@ -7305,6 +8852,23 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             "details": ["hosted targets should be rolled back or redeployed via deploy commands"],
         }
 
+    resource_release_issues: list[str] = []
+    if result.returncode == 0:
+        occupied = [
+            item for item in _network_report(args.target)["ports"] if item["open"]
+        ]
+        resource_release_issues = [
+            f"canonical port remains occupied after down: {item['name']}:{item['port']}"
+            for item in occupied
+        ]
+        if resource_release_issues:
+            result = subprocess.CompletedProcess(
+                result.args,
+                2,
+                stdout=result.stdout,
+                stderr="\n".join(resource_release_issues),
+            )
+
     write_json(
         report_dir / "report.json",
         {
@@ -7314,6 +8878,15 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
             "exitCode": result.returncode,
             "stdout": result.stdout,
             "stderr": result.stderr,
+            "formalRelease": formal_release,
+            "releaseComposition": release_composition,
+            "runtimeMode": "immutable-oci" if formal_release else (
+                "immutable-local" if release_composition else ""
+            ),
+            "runtimeCompositionSource": runtime_composition_source,
+            "destructiveRepairPerformed": False,
+            "destructiveActions": [],
+            "resourceReleaseIssues": resource_release_issues,
         },
     )
     _write_summary_bundle(
@@ -7411,6 +8984,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         command="health",
         target=args.target,
         scope=scope,
+        read_only=True,
         output_format=getattr(args, "output_format", "text"),
         report_dir=str(resolve_report_dir(args, str(get_target(load_environment_topology(), args.target)["env"]), args.target)),
     )
@@ -7445,28 +9019,44 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
     statuses: list[dict[str, Any]] = []
     findings: list[str] = []
     stdout_sections: list[tuple[str, str]] = []
-    for item in checks:
+    read_only = bool(getattr(args, "read_only", False))
+    deadline_epoch = int(getattr(args, "deadline_epoch", 0) or 0)
+    if deadline_epoch > 0:
+        retry_attempts = 1
+        retry_sleep_seconds = 0.0
+
+    def probe_http_check(item: dict[str, Any]) -> dict[str, Any]:
         if item.get("skip"):
-            statuses.append(
-                {
-                    "name": item["name"],
-                    "scope": item["scope"],
-                    "url": item["url"],
-                    "ok": True,
-                    "statusCode": None,
-                    "bodyPreview": str(item.get("reason", "skipped")),
-                    "skipped": True,
-                }
+            return {
+                "name": item["name"],
+                "scope": item["scope"],
+                "url": item["url"],
+                "ok": True,
+                "statusCode": None,
+                "bodyPreview": str(item.get("reason", "skipped")),
+                "skipped": True,
+            }
+        try:
+            effective_timeout = (
+                min(
+                    timeout_seconds,
+                    _remaining_deadline_seconds(
+                        deadline_epoch, "health verification"
+                    ),
+                )
+                if deadline_epoch > 0
+                else timeout_seconds
             )
-            continue
-        ok, status_code, body, content_type = fetch_url(
-            item["url"],
-            timeout=timeout_seconds,
-            retry_attempts=retry_attempts,
-            retry_sleep_seconds=retry_sleep_seconds,
-            headers=item.get("headers"),
-            resolve_host=_local_public_connect_host(topology, args.target, item["url"]),
-        )
+        except RuntimeError as error:
+            ok, status_code, body, content_type = False, None, str(error), ""
+        else:
+            ok, status_code, body, content_type = fetch_url(
+                item["url"],
+                timeout=max(0.05, effective_timeout),
+                retry_attempts=retry_attempts,
+                retry_sleep_seconds=retry_sleep_seconds,
+                headers=item.get("headers"),
+            )
         expected_status = item.get("expectedStatus")
         if ok and expected_status is not None and status_code != int(expected_status):
             ok = False
@@ -7482,30 +9072,94 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 f"expected Content-Type {expected_content_type_prefix}*, "
                 f"got {content_type or '<empty>'}"
             )
-        if not ok:
-            findings.append(f"{item['scope']}/{item['name']} failed: {status_code or 'ERR'} {item['url']}")
+        return {
+            "name": item["name"],
+            "scope": item["scope"],
+            "url": item["url"],
+            "ok": ok,
+            "statusCode": status_code,
+            "contentType": content_type,
+            "bodyPreview": body,
+            "skipped": False,
+        }
+
+    probe_concurrency = min(16, len(checks))
+    if probe_concurrency:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=probe_concurrency,
+            thread_name_prefix="stackctl-health",
+        ) as executor:
+            statuses = list(executor.map(probe_http_check, checks))
+    for status in statuses:
+        if not status["ok"]:
+            findings.append(
+                f"{status['scope']}/{status['name']} failed: "
+                f"{status['statusCode'] or 'ERR'} {status['url']}"
+            )
+        if not status["skipped"]:
+            stdout_sections.append(
+                (
+                    status["name"],
+                    f"{status['statusCode'] or 'ERR'} {status['url']}\n"
+                    f"{status['bodyPreview']}",
+                )
+            )
+    api_prerequisite = next(
+        (
+            item
+            for item in statuses
+            if item.get("scope") == "edge" and item.get("name") == "api-health"
+        ),
+        None,
+    )
+    if not read_only and api_prerequisite is not None and not api_prerequisite["ok"]:
+        blocked = "integration-readonly blocked by failed edge/api-health prerequisite"
         statuses.append(
             {
-                "name": item["name"],
-                "scope": item["scope"],
-                "url": item["url"],
-                "ok": ok,
-                "statusCode": status_code,
-                "contentType": content_type,
-                "bodyPreview": body,
-                "skipped": False,
+                "name": "integration-readonly",
+                "scope": args.scope,
+                "type": "script",
+                "argv": [],
+                "ok": False,
+                "statusCode": None,
+                "bodyPreview": blocked,
+                "skipped": True,
+                "reportPath": "",
             }
         )
-        stdout_sections.append((item["name"], f"{status_code or 'ERR'} {item['url']}\n{body}"))
-    script_statuses, script_stdout_sections, script_findings = _script_probes_for_target(
-        topology,
-        args.target,
-        args.scope,
-        report_dir,
-    )
-    statuses.extend(script_statuses)
-    stdout_sections.extend(script_stdout_sections)
-    findings.extend(script_findings)
+        stdout_sections.append(("integration-readonly", blocked))
+        findings.append(blocked)
+    elif not read_only:
+        try:
+            script_statuses, script_stdout_sections, script_findings = _script_probes_for_target(
+                topology,
+                args.target,
+                args.scope,
+                report_dir,
+                require_non_empty_content_feed=bool(
+                    getattr(args, "require_non_empty_content_feed", False)
+                ),
+                deadline_epoch=deadline_epoch,
+            )
+        except RuntimeError as error:
+            script_statuses = [
+                {
+                    "name": "integration-readonly",
+                    "scope": args.scope,
+                    "type": "script",
+                    "argv": [],
+                    "ok": False,
+                    "statusCode": 124,
+                    "bodyPreview": str(error),
+                    "skipped": False,
+                    "reportPath": "",
+                }
+            ]
+            script_stdout_sections = [("integration-readonly", str(error))]
+            script_findings = [str(error)]
+        statuses.extend(script_statuses)
+        stdout_sections.extend(script_stdout_sections)
+        findings.extend(script_findings)
     ok_count = sum(1 for item in statuses if item["ok"])
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
@@ -7515,10 +9169,12 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
         "requestTimeoutSeconds": timeout_seconds,
         "retryAttempts": retry_attempts,
         "retrySleepSeconds": retry_sleep_seconds,
+        "httpProbeConcurrency": probe_concurrency,
         "checks": statuses,
         "findings": findings,
         "timestamp": utc_now(),
         "scriptProbes": _script_probe_plan_for_target(topology, args.target),
+        "readOnly": read_only,
         **timing,
     }
     write_json(report_dir / "report.json", payload)
@@ -7601,7 +9257,23 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     if "metrics" in scopes:
         inspection["metrics"] = _metrics_report(topology, args.target)
     if "security" in scopes:
-        inspection["security"] = _security_report(topology, args.target)
+        security = _security_report(topology, args.target)
+        if args.target in {"alpha-local", "beta-local", "gamma-local"}:
+            try:
+                tls = verify_certificate(args.target)
+                security["publicTls"] = {
+                    key: value
+                    for key, value in tls.items()
+                    if key not in {"certificate", "privateKey"}
+                }
+            except PublicDomainTlsError as error:
+                detail = str(error)
+                security["publicTls"] = {
+                    "status": ProbeOutcome.GATE_BLOCK.value,
+                    "issues": [detail],
+                }
+                findings.append(f"public TLS: {detail}")
+        inspection["security"] = security
     if "release" in scopes:
         try:
             release_inspection, _, _ = _inspect_distribution_for_target(
@@ -7620,21 +9292,6 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
             }
             findings.append(f"release distribution: {error}")
     output_inspection = dict(inspection)
-    if "config" in inspection:
-        config_workspace = deployment_target_path(
-            args.target,
-            "inspection",
-            report_dir.name,
-        )
-        config_workspace.mkdir(parents=True, exist_ok=True)
-        write_json(config_workspace / "config.json", inspection["config"])
-        output_inspection["config"] = {
-            "status": "stored_outside_output",
-            "externalConfigRef": (
-                f"deployment-work://{args.target}/inspection/"
-                f"{report_dir.name}/config.json"
-            ),
-        }
     timing = _finish_timing(started_monotonic, started_at)
     write_json(
         report_dir / "report.json",
@@ -7733,8 +9390,17 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                 advisories.append(
                     "prod rollout release-state is missing (local cache empty; hosted deploy workflow can resolve current state via service-plane SSH)"
                 )
-            elif not state.get("to_image") or not state.get("to_config"):
-                findings.append("prod release-state missing image/config target")
+            elif not all(
+                state.get(field)
+                for field in (
+                    "to_candidate_digest",
+                    "to_release_evidence_ref",
+                    "to_image_transport_tag",
+                )
+            ):
+                findings.append(
+                    "prod release-state missing canonical candidate authority metadata"
+                )
             runtime = _prod_plane_runtime_report(
                 "service",
                 report_dir / "prod_rootless_service_runtime.json",
@@ -7993,6 +9659,821 @@ def _write_filter_catalog_command_report(
     )
 
 
+_DATA_READINESS_SCHEMA = "quwoquan_data.environment_release_readiness"
+_DATA_LIFECYCLE_EXIT_SCHEMA = "quwoquan_data.environment_release_lifecycle_exit"
+_DATA_READINESS_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_DATA_READINESS_QUERY_NAMES = frozenset(
+    {
+        "discovery_work",
+        "typed_article",
+        "typed_image",
+        "typed_video",
+        "homepage_recommend",
+        "premium_stream",
+    }
+)
+
+
+def _data_readiness_segment(value: str, *, label: str) -> str:
+    segment = str(value or "").strip()
+    candidate = Path(segment)
+    if (
+        not segment
+        or segment in {".", ".."}
+        or candidate.is_absolute()
+        or len(candidate.parts) != 1
+        or "/" in segment
+        or "\\" in segment
+    ):
+        raise ValueError(f"{label} must be one non-empty path segment")
+    return segment
+
+
+def _data_release_readiness_path(
+    *,
+    environment: str,
+    release_id: str,
+    verify_run_id: str,
+) -> Path:
+    release_segment = _data_readiness_segment(release_id, label="releaseId")
+    verify_segment = _data_readiness_segment(verify_run_id, label="verifyRunId")
+    return (
+        env_runs_root(environment)
+        / "data-release"
+        / release_segment
+        / verify_segment
+        / "release-readiness.json"
+    )
+
+
+def _data_readiness_path_from_verify_args(
+    args: argparse.Namespace,
+    *,
+    environment: str,
+    profile: VerificationProfile,
+) -> Path | None:
+    if profile is not VerificationProfile.RELEASE:
+        return None
+    release_id = str(getattr(args, "data_release_id", "") or "").strip()
+    verify_run_id = str(getattr(args, "data_verify_run_id", "") or "").strip()
+    manifest_digest = str(
+        getattr(args, "data_manifest_digest", "") or ""
+    ).strip()
+    if not release_id or not verify_run_id or not manifest_digest:
+        return None
+    return _data_release_readiness_path(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+    )
+
+
+def _canonical_document_checksum(document: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        document,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+
+def _validate_data_operation_evidence(
+    value: object,
+    *,
+    label: str,
+    expected_path: str,
+    expected_page_id: str,
+    expected_status: int,
+    issues: list[str],
+) -> tuple[str, str]:
+    required = {
+        "path",
+        "pageId",
+        "status",
+        "requestId",
+        "traceId",
+        "startedAt",
+        "endedAt",
+        "durationMs",
+    }
+    if not isinstance(value, dict):
+        issues.append(f"Data readiness {label} must be an object")
+        return "", ""
+    if set(value) != required:
+        issues.append(
+            f"Data readiness {label} must contain only canonical operation evidence"
+        )
+    if value.get("path") != expected_path:
+        issues.append(f"Data readiness {label}.path is not canonical")
+    if value.get("pageId") != expected_page_id:
+        issues.append(f"Data readiness {label}.pageId is not canonical")
+    if value.get("status") != expected_status:
+        issues.append(f"Data readiness {label}.status must be {expected_status}")
+    request_id = str(value.get("requestId") or "").strip()
+    trace_id = str(value.get("traceId") or "").strip()
+    started_at = str(value.get("startedAt") or "").strip()
+    ended_at = str(value.get("endedAt") or "").strip()
+    duration_ms = value.get("durationMs")
+    if not request_id or not trace_id:
+        issues.append(f"Data readiness {label} lacks requestId/traceId")
+    if not started_at or not ended_at or ended_at < started_at:
+        issues.append(f"Data readiness {label} timing is invalid")
+    if (
+        not isinstance(duration_ms, int)
+        or isinstance(duration_ms, bool)
+        or duration_ms < 0
+    ):
+        issues.append(f"Data readiness {label}.durationMs is invalid")
+    return request_id, trace_id
+
+
+def _validated_string_set(
+    value: object,
+    *,
+    label: str,
+    issues: list[str],
+) -> set[str]:
+    if not isinstance(value, list):
+        issues.append(f"Data readiness {label} must be an array")
+        return set()
+    items = [str(item).strip() for item in value]
+    if not items or any(not item for item in items) or len(items) != len(set(items)):
+        issues.append(
+            f"Data readiness {label} must contain unique non-empty strings"
+        )
+        return set(items)
+    return set(items)
+
+
+def _load_data_release_readiness(
+    *,
+    environment: str,
+    release_id: str,
+    verify_run_id: str,
+    manifest_digest: str,
+) -> tuple[dict[str, Any], Path]:
+    """Load and fail-closed validate the single Data-owned environment receipt."""
+
+    if _DATA_READINESS_DIGEST_RE.fullmatch(str(manifest_digest or "").strip()) is None:
+        raise ValueError("manifestDigest must use canonical sha256:<64 lowercase hex>")
+    receipt_path = _data_release_readiness_path(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+    )
+    try:
+        raw = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(
+            f"canonical Data readiness receipt is missing: {relpath(receipt_path)}"
+        ) from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"canonical Data readiness receipt is unreadable: {relpath(receipt_path)}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise ValueError("canonical Data readiness receipt must be a JSON object")
+    receipt = dict(raw)
+    issues: list[str] = []
+    expected_values = {
+        "schema": _DATA_READINESS_SCHEMA,
+        "environment": environment,
+        "releaseId": release_id,
+        "releaseKind": "content",
+        "sourceOwner": "qwq_data",
+        "manifestDigest": manifest_digest,
+        "verifyRunId": verify_run_id,
+        "passed": True,
+    }
+    for key, expected in expected_values.items():
+        if receipt.get(key) != expected:
+            issues.append(
+                f"Data readiness {key}={receipt.get(key)!r}, expected {expected!r}"
+            )
+    for digest_key in ("manifestDigest", "mediaManifestDigest"):
+        if _DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(digest_key) or "")) is None:
+            issues.append(f"Data readiness {digest_key} is not a canonical digest")
+    if not str(receipt.get("importRunId") or "").strip():
+        issues.append("Data readiness importRunId is missing")
+    if _DATA_READINESS_DIGEST_RE.fullmatch(
+        str(receipt.get("guestActorHash") or "")
+    ) is None:
+        issues.append("Data readiness guestActorHash is not a canonical digest")
+    observed_request_ids: set[str] = set()
+    observed_trace_ids: set[str] = set()
+    request_id, trace_id = _validate_data_operation_evidence(
+        receipt.get("guestLogin"),
+        label="guestLogin",
+        expected_path="/auth/login/anonymous",
+        expected_page_id="user.login.anonymous",
+        expected_status=200,
+        issues=issues,
+    )
+    if request_id:
+        observed_request_ids.add(request_id)
+    if trace_id:
+        observed_trace_ids.add(trace_id)
+
+    declared_checksum = str(receipt.get("verificationChecksum") or "")
+    checksum_document = dict(receipt)
+    checksum_document.pop("verificationChecksum", None)
+    actual_checksum = _canonical_document_checksum(checksum_document)
+    if declared_checksum != actual_checksum:
+        issues.append("Data readiness verificationChecksum does not match the receipt")
+
+    collections = {
+        "entities": _validated_string_set(
+            receipt.get("entityRefs"), label="entityRefs", issues=issues
+        ),
+        "posts": _validated_string_set(
+            receipt.get("postIds"), label="postIds", issues=issues
+        ),
+        "creators": _validated_string_set(
+            receipt.get("creatorIds"), label="creatorIds", issues=issues
+        ),
+        "tags": _validated_string_set(
+            receipt.get("tagRefs"), label="tagRefs", issues=issues
+        ),
+        "mediaAssets": _validated_string_set(
+            receipt.get("mediaAssetIds"), label="mediaAssetIds", issues=issues
+        ),
+    }
+    counts = receipt.get("counts")
+    if not isinstance(counts, dict):
+        issues.append("Data readiness counts must be an object")
+        counts = {}
+    for count_name, identifiers in collections.items():
+        count = counts.get(count_name)
+        if not isinstance(count, int) or isinstance(count, bool) or count != len(identifiers):
+            issues.append(
+                f"Data readiness counts.{count_name} must equal {len(identifiers)}"
+            )
+    avatar_count = counts.get("avatarAssets")
+    if (
+        not isinstance(avatar_count, int)
+        or isinstance(avatar_count, bool)
+        or avatar_count != len(collections["creators"])
+    ):
+        issues.append(
+            "Data readiness counts.avatarAssets must equal release-bound creators"
+        )
+    image_count = counts.get("imageAssets")
+    if (
+        not isinstance(image_count, int)
+        or isinstance(image_count, bool)
+        or image_count < 1
+        or image_count > len(collections["mediaAssets"])
+    ):
+        issues.append(
+            "Data readiness counts.imageAssets must be non-zero and release-bound"
+        )
+
+    queries = receipt.get("feedQueries")
+    queries_by_name: dict[str, dict[str, Any]] = {}
+    if not isinstance(queries, list):
+        issues.append("Data readiness feedQueries must be an array")
+        queries = []
+    for index, item in enumerate(queries):
+        if not isinstance(item, dict):
+            issues.append(f"Data readiness feedQueries[{index}] must be an object")
+            continue
+        name = str(item.get("name") or "")
+        if not name or name in queries_by_name:
+            issues.append(f"Data readiness feed query name is empty or duplicated: {name!r}")
+            continue
+        queries_by_name[name] = item
+        matched = _validated_string_set(
+            item.get("matchedPostIds"),
+            label=f"feedQueries.{name}.matchedPostIds",
+            issues=issues,
+        )
+        if not matched.issubset(collections["posts"]):
+            issues.append(f"Data readiness feed query {name} is not release-bound")
+        if (
+            item.get("path") != "/content/feed"
+            or item.get("status") != 200
+            or item.get("releaseBound") is not True
+        ):
+            issues.append(f"Data readiness feed query {name} lacks canonical 200 binding")
+        requests = item.get("requests")
+        if not isinstance(requests, list) or not requests:
+            issues.append(f"Data readiness feed query {name} lacks request evidence")
+            continue
+        for request_index, request_evidence in enumerate(requests):
+            request_id, trace_id = _validate_data_operation_evidence(
+                request_evidence,
+                label=f"feedQueries.{name}.requests[{request_index}]",
+                expected_path="/content/feed",
+                expected_page_id="content.feed.list",
+                expected_status=200,
+                issues=issues,
+            )
+            if request_id in observed_request_ids:
+                issues.append(
+                    f"Data readiness feed query {name} reuses requestId {request_id!r}"
+                )
+            elif request_id:
+                observed_request_ids.add(request_id)
+            if trace_id in observed_trace_ids:
+                issues.append(
+                    f"Data readiness feed query {name} reuses traceId {trace_id!r}"
+                )
+            elif trace_id:
+                observed_trace_ids.add(trace_id)
+    if set(queries_by_name) != _DATA_READINESS_QUERY_NAMES:
+        issues.append(
+            "Data readiness feedQueries must contain exactly discovery, article, image, "
+            "video, homepage recommend and premium_stream"
+        )
+    expected_query_patterns = {
+        "discovery_work": r"^identity=work&limit=[1-9][0-9]*$",
+        "typed_video": r"^identity=work&type=video&limit=[1-9][0-9]*$",
+        "premium_stream": r"^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$",
+    }
+    for name, pattern in expected_query_patterns.items():
+        query = str(queries_by_name.get(name, {}).get("query") or "")
+        if re.fullmatch(pattern, query) is None:
+            issues.append(f"Data readiness {name} exact query is not canonical")
+    discovery_ids = set(
+        queries_by_name.get("discovery_work", {}).get("matchedPostIds") or []
+    )
+    video_ids = set(queries_by_name.get("typed_video", {}).get("matchedPostIds") or [])
+    premium_ids = set(
+        queries_by_name.get("premium_stream", {}).get("matchedPostIds") or []
+    )
+    premium_video_ids = premium_ids & video_ids
+    if not discovery_ids:
+        issues.append("Data readiness discovery exact query is empty")
+    if not video_ids:
+        issues.append("Data readiness video-book exact query is empty")
+    if not premium_video_ids:
+        issues.append("Data readiness premium_stream has no release-bound playable video")
+    for count_name, expected_count in (
+        ("discoveryPosts", len(discovery_ids)),
+        ("premiumPlayableVideos", len(premium_video_ids)),
+    ):
+        value = counts.get(count_name)
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or value < 1
+            or value != expected_count
+        ):
+            issues.append(
+                f"Data readiness counts.{count_name} must equal {expected_count} and be non-zero"
+            )
+
+    evidence_root = output_root().expanduser().resolve()
+    expected_media_ref = (
+        Path("data") / "releases" / release_id / "payload" / "media_manifest.json"
+    ).as_posix()
+    if receipt.get("mediaManifestRef") != expected_media_ref:
+        issues.append("Data readiness mediaManifestRef is not the canonical release payload")
+    evidence_refs = (
+        "contentImportReportRef",
+        "creatorAttributionRef",
+        "tagAttributionRef",
+        "homepageApiVerificationRef",
+        "postApiVerificationRef",
+        "mediaManifestRef",
+    )
+    resolved_evidence: dict[str, Path] = {}
+    for key in evidence_refs:
+        ref = str(receipt.get(key) or "").strip()
+        candidate = (evidence_root / ref).resolve()
+        try:
+            candidate.relative_to(evidence_root)
+        except ValueError:
+            issues.append(f"Data readiness {key} escapes QWQ_OUTPUT_ROOT")
+            continue
+        if not ref or not candidate.is_file():
+            issues.append(f"Data readiness {key} evidence is missing: {ref or '<empty>'}")
+            continue
+        resolved_evidence[key] = candidate
+    media_path = resolved_evidence.get("mediaManifestRef")
+    if media_path is not None:
+        actual_media_digest = f"sha256:{hashlib.sha256(media_path.read_bytes()).hexdigest()}"
+        if actual_media_digest != receipt.get("mediaManifestDigest"):
+            issues.append("Data readiness mediaManifestDigest does not match payload bytes")
+    post_verification_path = resolved_evidence.get("postApiVerificationRef")
+    if post_verification_path is not None:
+        try:
+            post_verification = json.loads(
+                post_verification_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError):
+            issues.append("Data readiness postApiVerificationRef is unreadable")
+        else:
+            if not isinstance(post_verification, dict):
+                issues.append("Data readiness post API verification must be an object")
+            elif (
+                post_verification.get("guestActorHash")
+                != receipt.get("guestActorHash")
+                or post_verification.get("guestLogin") != receipt.get("guestLogin")
+                or post_verification.get("feedQueries") != receipt.get("feedQueries")
+            ):
+                issues.append(
+                    "Data readiness guest/feed operation evidence drifts from post verification"
+                )
+            else:
+                creator_evidence = [
+                    row
+                    for row in post_verification.get("creators") or []
+                    if isinstance(row, dict)
+                ]
+                creator_refs = {
+                    str(row.get("creatorRef") or "").strip()
+                    for row in creator_evidence
+                }
+                avatar_asset_ids = {
+                    str(row.get("avatarAssetId") or "").strip()
+                    for row in creator_evidence
+                }
+                if (
+                    creator_refs != collections["creators"]
+                    or len(avatar_asset_ids) != len(collections["creators"])
+                    or "" in avatar_asset_ids
+                    or any(
+                        row.get("profileStatus") != 200
+                        or row.get("avatarMediaReady") is not True
+                        or row.get("avatarProbeCount") != 1
+                        or not isinstance(row.get("avatarProbe"), dict)
+                        or row["avatarProbe"].get("publicUrl")
+                        != row.get("avatarUrl")
+                        or row["avatarProbe"].get("status") != 200
+                        or not str(row["avatarProbe"].get("mimeType") or "").startswith(
+                            "image/"
+                        )
+                        or not isinstance(row["avatarProbe"].get("bytes"), int)
+                        or row["avatarProbe"].get("bytes", 0) <= 0
+                        or _DATA_READINESS_DIGEST_RE.fullmatch(
+                            str(row["avatarProbe"].get("sha256") or "")
+                        )
+                        is None
+                        or row["avatarProbe"].get("hashVerified") is not True
+                        for row in creator_evidence
+                    )
+                ):
+                    issues.append(
+                        "Data readiness creator avatar evidence is not release-bound"
+                    )
+                image_asset_ids = {
+                    str(probe.get("assetId") or "").strip()
+                    for row in post_verification.get("posts") or []
+                    if isinstance(row, dict)
+                    for probe in row.get("mediaProbes") or []
+                    if isinstance(probe, dict)
+                    and probe.get("kind") == "image"
+                    and probe.get("status") == 200
+                    and str(probe.get("mimeType") or "").startswith("image/")
+                    and probe.get("bytes") == probe.get("expectedBytes")
+                    and probe.get("sha256") == probe.get("expectedSha256")
+                    and probe.get("hashVerified") is True
+                }
+                if (
+                    "" in image_asset_ids
+                    or len(image_asset_ids) != image_count
+                    or not image_asset_ids.issubset(collections["mediaAssets"])
+                ):
+                    issues.append(
+                        "Data readiness image delivery evidence is not hash-bound"
+                    )
+                if any(
+                    not isinstance(row, dict)
+                    or not isinstance(row.get("mediaProbes"), list)
+                    or row.get("mediaProbeCount")
+                    != len(row.get("mediaProbes") or [])
+                    for row in post_verification.get("posts") or []
+                ):
+                    issues.append(
+                        "Data readiness mediaProbeCount drifts from typed probes"
+                    )
+    attestation_path = (
+        evidence_root / "data" / "releases" / release_id / "attestations" / "release.json"
+    )
+    try:
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        issues.append(
+            f"Data release attestation is missing or unreadable: {relpath(attestation_path)}"
+        )
+    else:
+        if not isinstance(attestation, dict) or any(
+            (
+                attestation.get("releaseId") != release_id,
+                attestation.get("sourceOwner") != "qwq_data",
+                attestation.get("payloadSha256") != manifest_digest,
+            )
+        ):
+            issues.append("Data release attestation does not bind the expected payload digest")
+
+    if issues:
+        raise ValueError("; ".join(issues))
+    return receipt, receipt_path
+
+
+def _load_data_release_lifecycle_exit(
+    *,
+    environment: str,
+    release_id: str,
+    manifest_digest: str,
+    readiness: dict[str, Any],
+    lifecycle_exit_ref: str,
+) -> tuple[dict[str, Any], Path]:
+    """Load the commercial-only rollback/replay proof and recompute its bindings."""
+
+    ref = str(lifecycle_exit_ref or "").strip()
+    if not ref:
+        raise ValueError(
+            "commercial readiness requires canonical data lifecycleExitRef"
+        )
+    relative = Path(ref)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise ValueError("data lifecycleExitRef must stay below QWQ_OUTPUT_ROOT")
+    expected_prefix = (
+        "env",
+        environment,
+        "runs",
+        "release-lifecycle-exit",
+        release_id,
+    )
+    if (
+        len(relative.parts) != 7
+        or tuple(relative.parts[:5]) != expected_prefix
+        or relative.parts[-1] != "lifecycle-exit.json"
+    ):
+        raise ValueError(
+            "data lifecycleExitRef must bind environment/release/exitRunId"
+        )
+    exit_run_id = _data_readiness_segment(
+        relative.parts[5],
+        label="lifecycle exitRunId",
+    )
+    evidence_root = output_root().expanduser().resolve()
+    path = (evidence_root / relative).resolve()
+    try:
+        path.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError("data lifecycleExitRef escapes QWQ_OUTPUT_ROOT") from exc
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(f"data lifecycle Exit receipt is missing: {ref}") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"data lifecycle Exit receipt is unreadable: {ref}") from exc
+    if not isinstance(raw, dict):
+        raise ValueError("data lifecycle Exit receipt must be a JSON object")
+    receipt = dict(raw)
+    expected_keys = {
+        "schema",
+        "environment",
+        "sourceOwner",
+        "exitRunId",
+        "originalReleaseId",
+        "originalManifestDigest",
+        "originalImportRunId",
+        "originalVerifyRunId",
+        "originalImportResultRef",
+        "originalVerifyResultRef",
+        "rollbackToReleaseId",
+        "rollbackToManifestDigest",
+        "rollbackRunId",
+        "rollbackVerifyRunId",
+        "rollbackResultRef",
+        "rollbackVerifyResultRef",
+        "replayImportRunId",
+        "replayVerifyRunId",
+        "replayManifestDigest",
+        "replayImportResultRef",
+        "replayVerifyResultRef",
+        "recordedAt",
+        "verificationChecksum",
+        "passed",
+    }
+    issues: list[str] = []
+    if set(receipt) != expected_keys:
+        issues.append("data lifecycle Exit receipt fields drift from canonical schema")
+    expected_values = {
+        "schema": _DATA_LIFECYCLE_EXIT_SCHEMA,
+        "environment": environment,
+        "sourceOwner": "qwq_data",
+        "exitRunId": exit_run_id,
+        "originalReleaseId": release_id,
+        "originalManifestDigest": manifest_digest,
+        "originalImportRunId": readiness.get("importRunId"),
+        "originalVerifyRunId": readiness.get("verifyRunId"),
+        "replayManifestDigest": manifest_digest,
+        "passed": True,
+    }
+    for field, expected in expected_values.items():
+        if receipt.get(field) != expected:
+            issues.append(
+                f"data lifecycle Exit {field}={receipt.get(field)!r}, expected {expected!r}"
+            )
+    rollback_release_id = str(receipt.get("rollbackToReleaseId") or "").strip()
+    if not rollback_release_id or rollback_release_id == release_id:
+        issues.append(
+            "data lifecycle Exit rollbackToReleaseId must name another release"
+        )
+    for field in (
+        "originalManifestDigest",
+        "rollbackToManifestDigest",
+        "replayManifestDigest",
+    ):
+        if _DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(field) or "")) is None:
+            issues.append(f"data lifecycle Exit {field} is not a canonical digest")
+    declared_checksum = str(receipt.get("verificationChecksum") or "")
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum", None)
+    if declared_checksum != _canonical_document_checksum(unsigned):
+        issues.append("data lifecycle Exit verificationChecksum drift")
+
+    run_ids = [
+        str(receipt.get(field) or "").strip()
+        for field in (
+            "originalImportRunId",
+            "originalVerifyRunId",
+            "rollbackRunId",
+            "rollbackVerifyRunId",
+            "replayImportRunId",
+            "replayVerifyRunId",
+        )
+    ]
+    if any(not value for value in run_ids) or len(set(run_ids)) != len(run_ids):
+        issues.append("data lifecycle Exit run IDs must be non-empty and distinct")
+
+    def result_ref(bound_release_id: str, run_id_field: str) -> str:
+        return (
+            Path("env")
+            / environment
+            / "runs"
+            / "data-release"
+            / bound_release_id
+            / str(receipt.get(run_id_field) or "")
+            / "result.json"
+        ).as_posix()
+
+    expected_refs = {
+        "originalImportResultRef": result_ref(release_id, "originalImportRunId"),
+        "originalVerifyResultRef": result_ref(release_id, "originalVerifyRunId"),
+        "rollbackResultRef": result_ref(rollback_release_id, "rollbackRunId"),
+        "rollbackVerifyResultRef": result_ref(
+            rollback_release_id,
+            "rollbackVerifyRunId",
+        ),
+        "replayImportResultRef": result_ref(release_id, "replayImportRunId"),
+        "replayVerifyResultRef": result_ref(release_id, "replayVerifyRunId"),
+    }
+    for field, expected in expected_refs.items():
+        if receipt.get(field) != expected:
+            issues.append(f"data lifecycle Exit {field} is not canonical")
+            continue
+        if not (evidence_root / expected).is_file():
+            issues.append(f"data lifecycle Exit evidence is missing: {expected}")
+
+    for bound_release_id, digest in (
+        (release_id, manifest_digest),
+        (rollback_release_id, str(receipt.get("rollbackToManifestDigest") or "")),
+    ):
+        attestation_path = (
+            evidence_root
+            / "data"
+            / "releases"
+            / bound_release_id
+            / "attestations"
+            / "release.json"
+        )
+        try:
+            attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            issues.append(
+                "data lifecycle Exit release attestation is missing or unreadable: "
+                + relpath(attestation_path)
+            )
+            continue
+        if (
+            not isinstance(attestation, dict)
+            or attestation.get("releaseId") != bound_release_id
+            or attestation.get("sourceOwner") != "qwq_data"
+            or attestation.get("payloadSha256") != digest
+        ):
+            issues.append(
+                f"data lifecycle Exit attestation drift for {bound_release_id}"
+            )
+    if issues:
+        raise ValueError("; ".join(issues))
+    return receipt, path
+
+
+def _run_release_video_delivery_probe(
+    *,
+    target: str,
+    readiness_path: Path,
+    report_dir: Path,
+) -> tuple[dict[str, Any], Path]:
+    """Prove release-bound HTTPS bytes, Range 206, duration and first frame."""
+
+    report_path = report_dir / "report.json"
+    result = run(
+        [
+            "python3",
+            "quwoquan_ops/cli/smoke/verify_video_playback_canary.py",
+            "--target",
+            target,
+            "--release-readiness",
+            str(readiness_path),
+            "--report",
+            str(report_path),
+        ]
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ValueError(
+            "release video delivery probe failed: "
+            + (detail[:800] if detail else f"exit={result.returncode}")
+        )
+    evidence = _read_json_object(str(report_path))
+    if (
+        evidence.get("schema") != "quwoquan_ops.release_video_delivery_evidence"
+        or evidence.get("status") != "passed"
+    ):
+        raise ValueError("release video delivery probe did not emit a passed typed report")
+    return evidence, report_path
+
+
+def _release_feed_post_expectations(
+    receipt: dict[str, Any],
+) -> dict[str, set[str]]:
+    """Return the immutable-release post IDs each live exact query must expose."""
+
+    queries = {
+        str(item.get("name") or ""): item
+        for item in receipt.get("feedQueries") or []
+        if isinstance(item, dict)
+    }
+    discovery_ids = {
+        str(item).strip()
+        for item in queries.get("discovery_work", {}).get("matchedPostIds") or []
+        if str(item).strip()
+    }
+    video_ids = {
+        str(item).strip()
+        for item in queries.get("typed_video", {}).get("matchedPostIds") or []
+        if str(item).strip()
+    }
+    premium_ids = {
+        str(item).strip()
+        for item in queries.get("premium_stream", {}).get("matchedPostIds") or []
+        if str(item).strip()
+    }
+    premium_video_ids = premium_ids.intersection(video_ids)
+    expectations = {
+        "content_feed": discovery_ids,
+        "video_book_feed": video_ids,
+        "premium_feed": premium_video_ids,
+    }
+    empty = sorted(name for name, post_ids in expectations.items() if not post_ids)
+    if empty:
+        raise ValueError(
+            "canonical Data readiness has no release-bound expectation for: "
+            + ", ".join(empty)
+        )
+    return expectations
+
+
+def _run_release_feed_readback_probe(
+    *,
+    target: str,
+    receipt: dict[str, Any],
+    readiness_path: Path,
+    report_dir: Path,
+) -> tuple[dict[str, Any], Path]:
+    """Re-read live discovery/video/premium and bind results to receipt post IDs."""
+
+    report_file = report_dir / "integration-probe.json"
+    check, _output, findings = _run_environment_integration_probe(
+        load_environment_topology(),
+        target,
+        report_dir,
+        require_non_empty_content_feed=True,
+        release_post_expectations=_release_feed_post_expectations(receipt),
+        release_readiness_path=readiness_path,
+        only_checks=(
+            "content_feed",
+            "video_book_feed",
+            "premium_feed",
+            "media_sample",
+        ),
+        probe_name="release-bound-feed-readback",
+    )
+    report = _read_json_object(str(report_file))
+    if not bool(check.get("ok")) or findings or report.get("status") != "passed":
+        details = findings or ["release-bound feed readback did not pass"]
+        raise ValueError("; ".join(str(item) for item in details))
+    return report, report_file
+
+
 def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     """Assess one release phase against its minimal, typed capability set.
 
@@ -8014,6 +10495,10 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             command="health",
             target=requirement.target,
             scope=requirement.health_scope,
+            require_non_empty_content_feed=phase in {
+                ReadinessPhase.CONSUMER,
+                ReadinessPhase.COMMERCIAL,
+            },
             output_format="json",
             report_dir=str(report_dir / "health"),
         )
@@ -8026,6 +10511,67 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
     ]
     probes = [str(item["name"]) for item in executed_checks]
     executed_scopes = {str(item.get("scope") or "") for item in executed_checks}
+    data_readiness_receipt: dict[str, Any] | None = None
+    data_readiness_path: Path | None = None
+    feed_readback_evidence: dict[str, Any] | None = None
+    feed_readback_path: Path | None = None
+    video_delivery_evidence: dict[str, Any] | None = None
+    video_delivery_path: Path | None = None
+    lifecycle_exit_receipt: dict[str, Any] | None = None
+    lifecycle_exit_path: Path | None = None
+    if phase in {ReadinessPhase.CONSUMER, ReadinessPhase.COMMERCIAL}:
+        try:
+            data_readiness_receipt, data_readiness_path = _load_data_release_readiness(
+                environment=args.env,
+                release_id=getattr(args, "release_id", ""),
+                verify_run_id=getattr(args, "verify_run_id", ""),
+                manifest_digest=getattr(args, "manifest_digest", ""),
+            )
+            probes.append("canonical-data-release-readiness")
+        except ValueError as exc:
+            details.append(str(exc))
+        if data_readiness_path is not None and data_readiness_receipt is not None:
+            if phase is ReadinessPhase.COMMERCIAL:
+                try:
+                    lifecycle_exit_receipt, lifecycle_exit_path = (
+                        _load_data_release_lifecycle_exit(
+                            environment=args.env,
+                            release_id=getattr(args, "release_id", ""),
+                            manifest_digest=getattr(args, "manifest_digest", ""),
+                            readiness=data_readiness_receipt,
+                            lifecycle_exit_ref=getattr(
+                                args,
+                                "lifecycle_exit_ref",
+                                "",
+                            ),
+                        )
+                    )
+                    probes.append("canonical-data-release-lifecycle-exit")
+                except ValueError as exc:
+                    details.append(str(exc))
+            try:
+                feed_readback_evidence, feed_readback_path = (
+                    _run_release_feed_readback_probe(
+                        target=requirement.target,
+                        receipt=data_readiness_receipt,
+                        readiness_path=data_readiness_path,
+                        report_dir=report_dir / "release-feed-readback",
+                    )
+                )
+                probes.append("release-bound-feed-readback")
+            except ValueError as exc:
+                details.append(f"release-bound feed readback failed: {exc}")
+            try:
+                video_delivery_evidence, video_delivery_path = (
+                    _run_release_video_delivery_probe(
+                        target=requirement.target,
+                        readiness_path=data_readiness_path,
+                        report_dir=report_dir / "release-video-delivery",
+                    )
+                )
+                probes.append("release-video-delivery")
+            except ValueError as exc:
+                details.append(str(exc))
     for capability in requirement.capabilities:
         binding = policy.probe_binding_for(capability)
         if binding.source is ProbeSource.HEALTH_SCOPE and binding.health_scope not in executed_scopes:
@@ -8090,6 +10636,27 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
         "capabilities": [item.value for item in receipt.capabilities],
         "probes": list(receipt.probes),
         "reportDir": receipt.report_dir,
+        "dataRelease": {
+            "releaseId": getattr(args, "release_id", ""),
+            "verifyRunId": getattr(args, "verify_run_id", ""),
+            "manifestDigest": getattr(args, "manifest_digest", ""),
+            "receiptRef": relpath(data_readiness_path) if data_readiness_path else "",
+            "receipt": data_readiness_receipt,
+            "lifecycleExitRef": (
+                str(getattr(args, "lifecycle_exit_ref", "")).strip()
+                if lifecycle_exit_path
+                else ""
+            ),
+            "lifecycleExit": lifecycle_exit_receipt,
+            "feedReadbackEvidenceRef": (
+                relpath(feed_readback_path) if feed_readback_path else ""
+            ),
+            "feedReadback": feed_readback_evidence,
+            "videoDeliveryEvidenceRef": (
+                relpath(video_delivery_path) if video_delivery_path else ""
+            ),
+            "videoDelivery": video_delivery_evidence,
+        },
         **timing,
     }
     write_json(report_dir / "report.json", payload)
@@ -8105,7 +10672,12 @@ def command_content_readiness(args: argparse.Namespace) -> dict[str, Any]:
             else f"content readiness {phase.value}/{args.env} is GATE_BLOCK"
         ),
         details=details or ["all required capabilities are available"],
-        extra={"policyId": policy.policy_id, "phase": phase.value, "outcome": outcome.value},
+        extra={
+            "policyId": policy.policy_id,
+            "phase": phase.value,
+            "outcome": outcome.value,
+            "dataRelease": payload["dataRelease"],
+        },
         timing=timing,
     )
     return {
@@ -8126,15 +10698,43 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
     started_monotonic, started_at = _start_timing()
     cases_path = Path(args.release_uat_cases).expanduser()
     allowed_root = env_runs_root("gamma") / "data-release"
+    release_id = ""
+    import_run_id = ""
+    lease_acquire: dict[str, Any] | None = None
     try:
         resolved_cases = cases_path.resolve(strict=True)
-        resolved_cases.relative_to(allowed_root.resolve(strict=True))
+        case_ref = resolved_cases.relative_to(allowed_root.resolve(strict=True))
+        if (
+            len(case_ref.parts) != 3
+            or case_ref.parts[2] != "homepage_verification_cases.json"
+        ):
+            raise ValueError(
+                "release UAT cases must be exactly "
+                "<releaseId>/<importRunId>/homepage_verification_cases.json"
+            )
+        release_id, import_run_id, _filename = case_ref.parts
+        verify_run_id = _data_readiness_segment(
+            str(getattr(args, "data_verify_run_id", "")),
+            label="dataVerifyRunId",
+        )
+        lease_id = _data_readiness_segment(
+            str(getattr(args, "acceptance_lease_id", "")),
+            label="acceptanceLeaseId",
+        )
         command = _content_release_uat_command(
             target_name=args.target,
             release_uat_cases=resolved_cases,
             platform=args.platform,
             device_ids=list(args.device_id),
             report_dir=report_dir,
+        )
+        lease_acquire = _run_data_acceptance_lease(
+            action="acquire",
+            environment="gamma",
+            release_id=release_id,
+            import_run_id=import_run_id,
+            verify_run_id=verify_run_id,
+            lease_id=lease_id,
         )
     except (OSError, ValueError) as exc:
         timing = _finish_timing(started_monotonic, started_at)
@@ -8166,17 +10766,31 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
             **timing,
         }
 
-    result = run(
-        command["argv"],
-        cwd=command["cwd"],
-        env=command.get("env"),
-    )
+    result = run(command["argv"], cwd=command["cwd"], env=command.get("env"))
     runner_report = _read_json_object(str(ROOT / str(command["reportPath"])))
     runner_status = str(runner_report.get("status") or "failed")
+    lease_revoke: dict[str, Any] | None = None
+    lease_revoke_error = ""
+    try:
+        lease_revoke = _run_data_acceptance_lease(
+            action="revoke",
+            environment="gamma",
+            release_id=release_id,
+            lease_id=str(lease_acquire["leaseId"]),
+            acquire_event_ref=str(lease_acquire["eventRef"]),
+        )
+    except ValueError as exc:
+        lease_revoke_error = str(exc)
     status = "ok" if result.returncode == 0 and runner_status == "passed" else (
         "gate_block" if result.returncode == 2 or runner_status == "gate_block" else "failed"
     )
     details = _command_details(result)
+    if lease_revoke_error:
+        status = "gate_block"
+        details.append(
+            "acceptance lease revoke failed; release remains protected: "
+            + lease_revoke_error
+        )
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
         "command": "content-uat",
@@ -8185,6 +10799,11 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
         "releaseUatCases": relpath(resolved_cases),
         "runnerReport": command["reportPath"],
         "runnerStatus": runner_status,
+        "acceptanceLease": {
+            "acquireEventRef": str((lease_acquire or {}).get("eventRef") or ""),
+            "revokeEventRef": str((lease_revoke or {}).get("eventRef") or ""),
+            "closed": lease_revoke is not None,
+        },
         "details": details,
         **timing,
     }
@@ -8205,6 +10824,7 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
             "releaseUatCases": relpath(resolved_cases),
             "runnerReport": command["reportPath"],
             "runnerStatus": runner_status,
+            "acceptanceLease": payload["acceptanceLease"],
         },
         timing=timing,
     )
@@ -8221,12 +10841,321 @@ def command_content_uat(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def command_account_enforcement_uat(args: argparse.Namespace) -> dict[str, Any]:
+    """Run one controlled App phase or aggregate the immutable Gamma CaseResult."""
+
+    report_dir = resolve_report_dir(args, "gamma", args.target)
+    started_monotonic, started_at = _start_timing()
+    action = str(args.action)
+    if action == "verify":
+        child_report = report_dir / "case-result.json"
+        journey_receipt = str(args.journey_receipt).strip() or str(
+            report_dir / "journey-receipt.json"
+        )
+        suspended_device_report = str(args.suspended_device_report).strip() or str(
+            report_dir / "suspended-device-report.json"
+        )
+        restored_device_report = str(args.restored_device_report).strip() or str(
+            report_dir / "restored-device-report.json"
+        )
+        command = [
+            "python3",
+            ACCOUNT_ENFORCEMENT_GAMMA_UAT_VALIDATOR,
+            "--manifest",
+            str(args.manifest),
+            "--run-id",
+            str(args.run_id),
+            "--candidate-digest",
+            str(args.candidate_digest),
+            "--journey-receipt",
+            journey_receipt,
+            "--suspended-device-report",
+            suspended_device_report,
+            "--restored-device-report",
+            restored_device_report,
+            "--report",
+            str(child_report),
+        ]
+    else:
+        phase = action.removeprefix("device-")
+        child_report = report_dir / f"{phase}-device-report.json"
+        command = [
+            "python3",
+            ACCOUNT_ENFORCEMENT_GAMMA_DEVICE_RUNNER,
+            "--manifest",
+            str(args.manifest),
+            "--phase",
+            phase,
+            "--candidate-digest",
+            str(args.candidate_digest),
+            "--report",
+            str(child_report),
+        ]
+        for device_id in list(args.device_id):
+            normalized = str(device_id).strip()
+            if normalized:
+                command.extend(("--device-id", normalized))
+
+    result = run(command, cwd=ROOT)
+    child_payload = _read_json_object(str(child_report))
+    child_status = str(child_payload.get("status") or "failed")
+    status = (
+        "ok"
+        if result.returncode == 0 and child_status == "passed"
+        else "gate_block"
+        if result.returncode == 2 or child_status == "gate_block"
+        else "failed"
+    )
+    details = _command_details(result)
+    if not child_payload:
+        details.append("account-enforcement child report is missing or unreadable")
+    timing = _finish_timing(started_monotonic, started_at)
+    payload = {
+        "command": "account-enforcement-uat",
+        "target": args.target,
+        "action": action,
+        "status": status,
+        "candidateDigest": str(args.candidate_digest),
+        "childReport": relpath(child_report),
+        "childStatus": child_status,
+        "details": details,
+        **timing,
+    }
+    write_json(report_dir / "report.json", payload)
+    write_json(
+        report_dir / "findings.json",
+        {"issues": details if status != "ok" else []},
+    )
+    summary = (
+        f"account-enforcement UAT {action} passed"
+        if status == "ok"
+        else f"account-enforcement UAT {action} is GATE_BLOCK"
+        if status == "gate_block"
+        else f"account-enforcement UAT {action} failed"
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="account-enforcement-uat",
+        target=args.target,
+        status=status,
+        summary=summary,
+        details=details,
+        extra={
+            "action": action,
+            "candidateDigest": str(args.candidate_digest),
+            "childReport": relpath(child_report),
+            "childStatus": child_status,
+        },
+        timing=timing,
+    )
+    return {
+        "exitCode": 0 if status == "ok" else 2 if status == "gate_block" else 1,
+        "summary": summary,
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
+def _run_data_acceptance_lease(
+    *,
+    action: str,
+    environment: str,
+    release_id: str,
+    lease_id: str,
+    import_run_id: str = "",
+    verify_run_id: str = "",
+    acquire_event_ref: str = "",
+) -> dict[str, Any]:
+    """Invoke the Data-owned lease writer; stackctl never writes its schema."""
+
+    argv = [
+        "python3",
+        "-B",
+        "quwoquan_data/scripts/cli.py",
+        "release",
+        "acceptance-lease",
+        action,
+        "--env",
+        environment,
+        "--release-id",
+        release_id,
+        "--lease-id",
+        lease_id,
+    ]
+    if action == "acquire":
+        argv.extend(
+            (
+                "--import-run-id",
+                import_run_id,
+                "--verify-run-id",
+                verify_run_id,
+            )
+        )
+    elif action == "revoke":
+        argv.extend(("--acquire-event-ref", acquire_event_ref))
+    else:
+        raise ValueError("acceptance lease action must be acquire or revoke")
+    result = run(argv, cwd=ROOT)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise ValueError(
+            "Data acceptance lease command failed: "
+            + (detail[:800] if detail else f"exit={result.returncode}")
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Data acceptance lease command returned invalid JSON") from exc
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "quwoquan_data.release_acceptance_lease_event"
+        or payload.get("action") != action
+        or payload.get("environment") != environment
+        or payload.get("releaseId") != release_id
+        or payload.get("leaseId") != lease_id
+        or not str(payload.get("eventRef") or "")
+    ):
+        raise ValueError("Data acceptance lease command returned identity-drifted evidence")
+    return payload
+
+
 def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     topology = load_environment_topology()
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
     steps: list[dict[str, Any]] = []
+    if args.fix == "reclaim-orphaned-processes":
+        if args.target != "alpha-local":
+            summary = "reclaim-orphaned-processes is only available for alpha-local"
+            _write_summary_bundle(
+                report_dir,
+                command="repair",
+                target=args.target,
+                status="failed",
+                summary=summary,
+                details=[summary],
+            )
+            return {
+                "exitCode": 2,
+                "summary": summary,
+                "details": [summary],
+                "reportDir": relpath(report_dir),
+            }
+        try:
+            reclaimed = alpha_content_release_runtime.reclaim_orphaned_managed_processes(
+                confirm=bool(
+                    getattr(args, "confirm_orphaned_process_reclaim", False)
+                )
+            )
+            occupied = [
+                item
+                for item in _network_report(args.target)["ports"]
+                if item["open"]
+            ]
+            if occupied:
+                raise RuntimeError(
+                    "canonical Alpha ports remain occupied after orphan repair: "
+                    + ", ".join(
+                        f"{item['name']}:{item['port']}" for item in occupied
+                    )
+                )
+            preserved_observability: list[str] = []
+            observability_root = output_root() / "env/alpha/observability"
+            if observability_root.is_dir():
+                incomplete_runs = [
+                    entry
+                    for entry in sorted(observability_root.iterdir())
+                    if entry.is_dir() and not (entry / "manifest.json").is_file()
+                ]
+                if incomplete_runs:
+                    preservation_root = (
+                        report_dir / "attachments/incomplete-observability"
+                    )
+                    preservation_root.mkdir(parents=True, exist_ok=True)
+                    for incomplete_run in incomplete_runs:
+                        destination = preservation_root / incomplete_run.name
+                        if destination.exists():
+                            raise RuntimeError(
+                                "incomplete observability preservation target already exists: "
+                                + str(destination)
+                            )
+                        shutil.move(str(incomplete_run), str(destination))
+                        preserved_observability.append(relpath(destination))
+        except RuntimeError as exc:
+            summary = f"stackctl repair orphan reclaim is GATE_BLOCK for {args.target}"
+            details = [str(exc)]
+            write_json(
+                report_dir / "report.json",
+                {
+                    "command": "repair",
+                    "target": args.target,
+                    "fix": args.fix,
+                    "status": "gate_block",
+                    "destructiveRepairPerformed": False,
+                    "details": details,
+                },
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="repair",
+                target=args.target,
+                status="failed",
+                summary=summary,
+                details=details,
+            )
+            return {
+                "exitCode": 2,
+                "summary": summary,
+                "details": details,
+                "reportDir": relpath(report_dir),
+            }
+        details = [
+            f"reclaimed managed role={name} pid={record['pid']} pgid={record['pgid']}"
+            for name, record in sorted(reclaimed.items())
+        ] or ["no orphaned Alpha managed process matched"]
+        details.extend(
+            f"preserved incomplete observability as repair attachment: {path}"
+            for path in preserved_observability
+        )
+        summary = f"stackctl repair reclaimed orphaned Alpha processes for {args.target}"
+        write_json(
+            report_dir / "report.json",
+            {
+                "command": "repair",
+                "target": args.target,
+                "fix": args.fix,
+                "status": "passed",
+                "destructiveRepairPerformed": bool(reclaimed),
+                "destructiveActions": details if reclaimed else [],
+                "preservedIncompleteObservability": preserved_observability,
+            },
+        )
+        write_json(
+            report_dir / "repair_plan.json",
+            {
+                "target": args.target,
+                "fix": args.fix,
+                "actions": [
+                    "terminate only ledger-less Alpha wrappers matching the repository path and canonical port signatures"
+                ],
+            },
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=args.target,
+            status="ok",
+            summary=summary,
+            details=details,
+        )
+        return {
+            "exitCode": 0,
+            "summary": summary,
+            "details": details,
+            "reportDir": relpath(report_dir),
+        }
     if args.fix == "reclaim-build-cache":
         if args.target != "gamma-local":
             summary = "reclaim-build-cache is only available for gamma-local"
@@ -8320,83 +11249,6 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             {"target": args.target, "fix": args.fix, "actions": ["rebuild environment packages"]},
         )
         return payload
-    if args.fix == "materialize-media":
-        if args.target != "gamma-local":
-            summary = (
-                "materialize-media is only available for gamma-local curated "
-                "media; prod uses a published release canary"
-            )
-            write_json(
-                report_dir / "repair_plan.json",
-                {"target": args.target, "fix": args.fix, "actions": [], "error": summary},
-            )
-            _write_summary_bundle(
-                report_dir,
-                command="repair",
-                target=args.target,
-                status="failed",
-                summary=summary,
-                details=[summary],
-            )
-            return {
-                "exitCode": 2,
-                "summary": summary,
-                "details": [summary],
-                "reportDir": relpath(report_dir),
-            }
-        try:
-            materialized = materialize_local_gamma_media(
-                target_cache_dir(args.target) / "media",
-            )
-        except (LocalGammaMediaError, OSError) as exc:
-            summary = f"gamma local media materialization failed: {exc}"
-            write_json(
-                report_dir / "repair_plan.json",
-                {"target": args.target, "fix": args.fix, "actions": [], "error": summary},
-            )
-            _write_summary_bundle(
-                report_dir,
-                command="repair",
-                target=args.target,
-                status="failed",
-                summary=summary,
-                details=[summary],
-            )
-            return {
-                "exitCode": 1,
-                "summary": summary,
-                "details": [summary],
-                "reportDir": relpath(report_dir),
-            }
-        write_json(report_dir / "media_materialization.json", materialized)
-        write_json(
-            report_dir / "repair_plan.json",
-            {
-                "target": args.target,
-                "fix": args.fix,
-                "actions": ["materialize canonical local-gamma media cache"],
-            },
-        )
-        _write_summary_bundle(
-            report_dir,
-            command="repair",
-            target=args.target,
-            status="ok",
-            summary="gamma local canonical media materialized",
-            details=[
-                f"copied files: {materialized['copiedFiles']}",
-                f"canonical video: {materialized['publicSliceKey']}",
-            ],
-        )
-        return {
-            "exitCode": 0,
-            "summary": "gamma local canonical media materialized",
-            "details": [
-                f"copied files: {materialized['copiedFiles']}",
-                f"canonical video: {materialized['publicSliceKey']}",
-            ],
-            "reportDir": relpath(report_dir),
-        }
     if args.fix == "restart-stack":
         # Restart is destructive for local state. Validate every external
         # deployment prerequisite before stopping a currently running stack;
@@ -8513,12 +11365,9 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-_REQUIRED_RELEASE_ARTIFACTS = {
-    "publicWeb",
-    "androidOfficialRelease",
-    "opsPortal",
+_REQUIRED_RELEASE_EVIDENCE = {
     "contractGraph",
-    "providerBindings",
+    "providerEvidence",
     "testEvidence",
 }
 
@@ -8528,47 +11377,39 @@ def _validate_release_artifacts(
     *,
     artifact_root: Path,
 ) -> None:
-    required = manifest.get("requiredArtifacts")
-    artifacts = manifest.get("artifacts")
-    if (
-        not isinstance(required, list)
-        or set(required) != _REQUIRED_RELEASE_ARTIFACTS
-        or not isinstance(artifacts, dict)
-        or set(artifacts) != _REQUIRED_RELEASE_ARTIFACTS
+    if set(finalize_mainline_release_artifact.REQUIRED_RELEASE_EVIDENCE) != (
+        _REQUIRED_RELEASE_EVIDENCE
     ):
-        raise RuntimeError(
-            "release manifest must bind Web, Android, Portal, ContractGraph, "
-            "Provider bindings, and three-layer test evidence"
+        raise RuntimeError("release evidence set differs from the canonical contract")
+    try:
+        finalize_mainline_release_artifact.validate_manifest_files(
+            artifact_root,
+            manifest,
         )
-    for artifact_id in sorted(_REQUIRED_RELEASE_ARTIFACTS):
-        artifact = artifacts.get(artifact_id)
-        if (
-            not isinstance(artifact, dict)
-            or artifact.get("schema") != _RELEASE_ARTIFACT_SCHEMAS[artifact_id]
-        ):
-            raise RuntimeError(f"release manifest artifact is invalid: {artifact_id}")
-        relative = Path(str(artifact.get("path") or ""))
-        if relative.is_absolute() or ".." in relative.parts or not relative.parts:
-            raise RuntimeError(f"release manifest artifact path is unsafe: {artifact_id}")
-        path = (artifact_root / relative).resolve()
-        if artifact_root.resolve() not in path.parents or not path.is_file():
-            raise RuntimeError(f"release manifest artifact is missing: {artifact_id}")
-        digest_field = (
-            "manifestSHA256"
-            if artifact_id in {"publicWeb", "androidOfficialRelease"}
-            else "contentSHA256"
-        )
-        expected = str(artifact.get(digest_field) or "")
-        actual = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
-        if expected != actual:
-            raise RuntimeError(f"release manifest artifact digest mismatch: {artifact_id}")
+    except ValueError as error:
+        raise RuntimeError(f"release evidence files are invalid: {error}") from error
+
+
+def _release_transport_tag(manifest: dict[str, Any]) -> str:
+    tags: set[str] = set()
+    for service, descriptor in manifest["images"].items():
+        repository = str(descriptor["repository"])
+        transport_ref = str(descriptor["transportRef"])
+        prefix = repository + ":"
+        if not transport_ref.startswith(prefix):
+            raise RuntimeError(
+                f"release evidence image transport reference is invalid: {service}"
+            )
+        tags.add(transport_ref.removeprefix(prefix))
+    if len(tags) != 1:
+        raise RuntimeError("release evidence images must share one transport tag")
+    return next(iter(tags))
 
 
 def _deployable_release_manifest(
     path_value: str,
     *,
-    image_version: str,
-    config_version: str,
+    candidate_digest: str,
 ) -> tuple[Path, str, dict[str, Any]]:
     path = Path(path_value).expanduser().resolve()
     try:
@@ -8577,31 +11418,16 @@ def _deployable_release_manifest(
         raise RuntimeError(f"release manifest unreadable: {error}") from error
     if not isinstance(manifest, dict):
         raise RuntimeError("release manifest must be an object")
-    if (
-        manifest.get("schema") != "mainline-release-artifact"
-        or manifest.get("status") != "deployable"
-    ):
-        raise RuntimeError("release manifest is not deployable")
-    declared_digest = str(manifest.get("manifestDigest") or "")
-    unsigned = dict(manifest)
-    unsigned.pop("manifestDigest", None)
-    actual_digest = "sha256:" + hashlib.sha256(
-        json.dumps(
-            unsigned,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
-    if declared_digest != actual_digest:
-        raise RuntimeError("release manifest digest mismatch")
-    versions = manifest.get("versions")
-    if not isinstance(versions, dict):
-        raise RuntimeError("release manifest versions are missing")
-    if versions.get("imageVersion") != image_version:
-        raise RuntimeError("release manifest image version mismatch")
-    if versions.get("configVersion") != config_version:
-        raise RuntimeError("release manifest config version mismatch")
+    try:
+        finalize_mainline_release_artifact.validate_manifest(
+            manifest,
+            allowed_statuses={"deployable"},
+        )
+    except ValueError as error:
+        raise RuntimeError(f"release evidence manifest is not deployable: {error}") from error
+    declared_digest = str(manifest["artifactDigest"])
+    if candidate_digest != str(manifest["candidateId"]):
+        raise RuntimeError("release candidate digest does not match reviewed evidence")
     source = manifest.get("source")
     source_sha = str(source.get("gitSha") or "") if isinstance(source, dict) else ""
     head = run(["git", "rev-parse", "HEAD"])
@@ -8619,47 +11445,11 @@ def _deployable_release_manifest(
         or governance.get("schema") != "prod-release-governance-receipt"
         or governance.get("repository") != (manifest.get("source") or {}).get("repository")
         or governance.get("gitSha") != source_sha
-        or governance.get("manifestDigest") != declared_digest
+        or governance.get("artifactDigest") != declared_digest
         or not governance.get("approvers")
         or len(set(governance.get("distinctPrincipals") or [])) < 2
     ):
         raise RuntimeError("release governance receipt does not bind this reviewed artifact")
-    required_images = manifest.get("requiredImages")
-    images = manifest.get("images")
-    if (
-        not isinstance(required_images, list)
-        or not required_images
-        or not isinstance(images, dict)
-        or set(required_images) != set(images)
-    ):
-        raise RuntimeError("release manifest image set is incomplete")
-    for service in required_images:
-        image = images.get(service)
-        if not isinstance(image, dict):
-            raise RuntimeError(f"release manifest image is invalid: {service}")
-        digest = str(image.get("digest") or "")
-        repository = str(image.get("repository") or "")
-        if re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
-            raise RuntimeError(f"release manifest image digest is invalid: {service}")
-        if image.get("ref") != f"{repository}@{digest}":
-            raise RuntimeError(f"release manifest image ref is not digest-pinned: {service}")
-        attestations = image.get("attestations")
-        if not isinstance(attestations, dict) or not all(
-            attestations.get(kind) == f"oci://{repository}@{digest}#{kind}"
-            for kind in ("spdxSbom", "slsaProvenance")
-        ):
-            raise RuntimeError(f"release manifest attestations are incomplete: {service}")
-    release_files = manifest.get("releaseFiles")
-    release_digests = manifest.get("releaseFileDigests")
-    if not isinstance(release_files, dict) or not isinstance(release_digests, dict):
-        raise RuntimeError("release manifest config digests are missing")
-    for service, relative in release_files.items():
-        config_path = path.parent / str(relative)
-        if not config_path.is_file():
-            raise RuntimeError(f"release manifest config file is missing: {service}")
-        digest = hashlib.sha256(config_path.read_bytes()).hexdigest()
-        if release_digests.get(service) != f"sha256:{digest}":
-            raise RuntimeError(f"release manifest config digest mismatch: {service}")
     _validate_release_artifacts(manifest, artifact_root=path.parent)
     return path, declared_digest, manifest
 
@@ -8714,36 +11504,35 @@ def _prevalidation_release_manifest(
         raise RuntimeError(f"release manifest unreadable: {error}") from error
     if not isinstance(manifest, dict):
         raise RuntimeError("release manifest must be an object")
-    if (
-        manifest.get("schema") != "mainline-release-artifact"
-        or manifest.get("artifactName") != "mainline-release-artifact"
-        or manifest.get("status") != "deployable"
-    ):
-        raise RuntimeError("prevalidation requires a deployable Service Pipeline artifact")
-    unsigned = dict(manifest)
-    declared_digest = str(unsigned.pop("manifestDigest", ""))
-    actual_digest = "sha256:" + hashlib.sha256(
-        json.dumps(
-            unsigned,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
-    if declared_digest != actual_digest:
-        raise RuntimeError("release manifest digest mismatch")
+    try:
+        finalize_mainline_release_artifact.validate_manifest(
+            manifest,
+            allowed_statuses={"deployable"},
+        )
+        finalize_mainline_release_artifact.validate_manifest_files(
+            path.parent,
+            manifest,
+        )
+    except ValueError as error:
+        raise RuntimeError(
+            f"prevalidation requires canonical deployable release evidence: {error}"
+        ) from error
+    declared_digest = str(manifest["artifactDigest"])
     source = manifest.get("source")
     source_sha = str(source.get("gitSha") or "") if isinstance(source, dict) else ""
     repository = str(source.get("repository") or "") if isinstance(source, dict) else ""
-    run_number = source.get("runNumber") if isinstance(source, dict) else None
-    if re.fullmatch(r"[0-9a-f]{40}", source_sha) is None or not repository or not isinstance(run_number, int):
+    workflow_run_id = (
+        str(source.get("workflowRunId") or "") if isinstance(source, dict) else ""
+    )
+    if (
+        re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", source_sha) is None
+        or not repository
+        or not workflow_run_id
+    ):
         raise RuntimeError("release manifest source is not a Service Pipeline commit")
-    versions = manifest.get("versions")
-    image_version = str(versions.get("imageVersion") or "") if isinstance(versions, dict) else ""
-    config_version = str(versions.get("configVersion") or "") if isinstance(versions, dict) else ""
-    if not image_version or not config_version or image_version == "latest":
-        raise RuntimeError("release manifest versions must be immutable")
-    required_images = manifest.get("requiredImages")
+    image_transport_tag = _release_transport_tag(manifest)
+    candidate_digest = str(manifest["candidateId"])
+    required_images = manifest["requiredEvidence"]["images"]
     images = manifest.get("images")
     if (
         not isinstance(required_images, list)
@@ -8788,18 +11577,6 @@ def _prevalidation_release_manifest(
             for kind in ("spdxSbom", "slsaProvenance")
         ):
             raise RuntimeError(f"release manifest attestations are incomplete: {service}")
-    release_files = manifest.get("releaseFiles")
-    release_digests = manifest.get("releaseFileDigests")
-    if not isinstance(release_files, dict) or not isinstance(release_digests, dict):
-        raise RuntimeError("release manifest config digests are missing")
-    for service, relative in release_files.items():
-        config_path = path.parent / str(relative)
-        if not config_path.is_file():
-            raise RuntimeError(f"release manifest config file is missing: {service}")
-        digest = "sha256:" + hashlib.sha256(config_path.read_bytes()).hexdigest()
-        if release_digests.get(service) != digest:
-            raise RuntimeError(f"release manifest config digest mismatch: {service}")
-    _validate_release_artifacts(manifest, artifact_root=path.parent)
     head = run(["git", "rev-parse", "HEAD"])
     if head.returncode != 0 or head.stdout.strip() != source_sha:
         raise RuntimeError("release manifest source SHA does not match checked-out code")
@@ -8809,28 +11586,60 @@ def _prevalidation_release_manifest(
     reviewed_main = run(["git", "merge-base", "--is-ancestor", source_sha, "origin/main"])
     if reviewed_main.returncode != 0:
         raise RuntimeError("release manifest source is not present on reviewed origin/main")
-    return path, declared_digest, manifest, image_version, config_version
+    return path, declared_digest, manifest, image_transport_tag, candidate_digest
 
 
-def _verify_release_registry_attestations(manifest: dict[str, Any]) -> None:
+def _verify_release_registry_attestations(
+    manifest: dict[str, Any], *, deadline_epoch: int
+) -> None:
     images = manifest.get("images")
     if not isinstance(images, dict):
         raise RuntimeError("release manifest images are missing")
+    source = manifest.get("source")
+    repository = str(source.get("repository") or "") if isinstance(source, dict) else ""
+    signer_workflow = f"{repository}/.github/workflows/service_pipeline.yml"
+    verification_inputs: list[tuple[str, str]] = []
     for service, image in images.items():
         if not isinstance(image, dict):
             raise RuntimeError(f"release manifest image is invalid: {service}")
-        ref = str(image.get("ref") or "")
-        result = run(["docker", "buildx", "imagetools", "inspect", ref])
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"OCI digest/attestation lookup failed for {service}: "
-                f"{result.stderr.strip() or result.stdout.strip()}"
+        verification_inputs.append((str(service), str(image.get("ref") or "")))
+
+    def verify_one(service: str, ref: str) -> None:
+        try:
+            oci_supply_chain.verify_oci_supply_chain(
+                ref,
+                repository=repository,
+                signer_workflow=signer_workflow,
+                timeout_seconds=_remaining_deadline_seconds(
+                    deadline_epoch, "Prod registry signed-attestation verification"
+                ),
             )
-        evidence = f"{result.stdout}\n{result.stderr}".lower()
-        if "provenance" not in evidence or "sbom" not in evidence:
+        except (
+            OSError,
+            ValueError,
+            RuntimeError,
+            subprocess.TimeoutExpired,
+        ) as error:
             raise RuntimeError(
-                f"OCI registry does not expose both provenance and SBOM for {service}"
-            )
+                f"OCI signed SBOM/provenance verification failed for {service}: {error}"
+            ) from error
+
+    failures: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, max(1, len(verification_inputs))),
+        thread_name_prefix="prod-oci-attestation",
+    ) as executor:
+        futures = {
+            executor.submit(verify_one, service, ref): service
+            for service, ref in verification_inputs
+        }
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except RuntimeError as error:
+                failures.append(str(error))
+    if failures:
+        raise RuntimeError("; ".join(sorted(failures)))
 
 
 def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
@@ -8893,7 +11702,9 @@ def _prod_gray_canary_contract(rollout_stage: str) -> dict[str, Any]:
     }
 
 
-def _emit_prod_gray_canary_traffic(canary: dict[str, Any]) -> dict[str, Any]:
+def _emit_prod_gray_canary_traffic(
+    canary: dict[str, Any], *, deadline_epoch: int
+) -> dict[str, Any]:
     topology = load_environment_topology()
     api_base = str(
         ((((topology or {}).get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api")
@@ -8907,12 +11718,18 @@ def _emit_prod_gray_canary_traffic(canary: dict[str, Any]) -> dict[str, Any]:
     headers = {str(key): str(value) for key, value in canary["headers"].items()}
     started = time.monotonic()
     for index in range(requests):
+        request_timeout = min(
+            5.0,
+            _remaining_deadline_seconds(deadline_epoch, "Prod canary traffic"),
+        )
         request = urllib.request.Request(
             f"{api_base}{path}",
             headers={**headers, "User-Agent": "quwoquan-release-canary/1"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=5) as response:
+            with urllib.request.urlopen(
+                request, timeout=max(0.05, request_timeout)
+            ) as response:
                 if response.status < 200 or response.status >= 300:
                     raise RuntimeError(
                         f"synthetic canary request {index + 1} returned {response.status}"
@@ -8922,7 +11739,13 @@ def _emit_prod_gray_canary_traffic(canary: dict[str, Any]) -> dict[str, Any]:
                 f"synthetic canary request {index + 1}/{requests} failed: {error}"
             ) from error
         if interval_ms > 0 and index + 1 < requests:
-            time.sleep(interval_ms / 1000)
+            sleep_seconds = interval_ms / 1000
+            remaining = _remaining_deadline_seconds(
+                deadline_epoch, "Prod canary traffic"
+            )
+            if sleep_seconds >= remaining:
+                raise RuntimeError("Prod canary interval would cross promotion cutoff")
+            time.sleep(sleep_seconds)
     return {
         "source": "prod-public-api",
         "path": path,
@@ -8932,11 +11755,17 @@ def _emit_prod_gray_canary_traffic(canary: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _prometheus_query_value(base_url: str, expression: str) -> float:
+def _prometheus_query_value(
+    base_url: str, expression: str, *, deadline_epoch: int
+) -> float:
     request_url = f"{base_url.rstrip('/')}/api/v1/query?{urllib.parse.urlencode({'query': expression})}"
     request = urllib.request.Request(request_url, headers={"Accept": "application/json"})
     try:
-        with urllib.request.urlopen(request, timeout=5) as response:
+        timeout = min(
+            5.0,
+            _remaining_deadline_seconds(deadline_epoch, "Prometheus SLO readback"),
+        )
+        with urllib.request.urlopen(request, timeout=max(0.05, timeout)) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError, json.JSONDecodeError) as error:
         raise RuntimeError(f"Prometheus SLO readback request failed: {error}") from error
@@ -8954,7 +11783,9 @@ def _prometheus_query_value(base_url: str, expression: str) -> float:
         raise RuntimeError("Prometheus SLO readback value is not numeric") from error
 
 
-def _read_prometheus_slo(base_url: str, service: str) -> dict[str, Any]:
+def _read_prometheus_slo(
+    base_url: str, service: str, *, deadline_epoch: int
+) -> dict[str, Any]:
     policy_path = ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml"
     policy = load_json_yaml(policy_path)
     if not isinstance(policy, dict) or not isinstance(policy.get("readback"), dict):
@@ -8985,9 +11816,14 @@ def _read_prometheus_slo(base_url: str, service: str) -> dict[str, Any]:
         ),
         "sampleCount": f"sum(increase(http_server_requests_total{service_label}[{window}]))",
     }
-    values = {name: _prometheus_query_value(base_url, expression) for name, expression in queries.items()}
+    values = {
+        name: _prometheus_query_value(
+            base_url, expression, deadline_epoch=deadline_epoch
+        )
+        for name, expression in queries.items()
+    }
     if values["sampleCount"] < minimum_samples:
-        raise RuntimeError(
+        raise _SloSamplesInsufficient(
             f"Prometheus SLO readback has insufficient samples: "
             f"{values['sampleCount']} < {minimum_samples}"
         )
@@ -9001,7 +11837,11 @@ def _read_prometheus_slo(base_url: str, service: str) -> dict[str, Any]:
         "values": values,
     }
     recommendation = _read_recommendation_slo(
-        base_url, service, window, readback_policy.get("recommendation")
+        base_url,
+        service,
+        window,
+        readback_policy.get("recommendation"),
+        deadline_epoch=deadline_epoch,
     )
     if recommendation is not None:
         result["recommendation"] = recommendation
@@ -9026,6 +11866,8 @@ def _read_recommendation_slo(
     service: str,
     window: str,
     rec_policy: Any,
+    *,
+    deadline_epoch: int,
 ) -> dict[str, Any] | None:
     """N2-5：prod gray readback 纳入推荐业务指标（空 feed 率 / 负反馈率 / CTR）。
 
@@ -9054,7 +11896,9 @@ def _read_recommendation_slo(
         ),
     }
     values = {
-        name: _prometheus_query_value(base_url, expression)
+        name: _prometheus_query_value(
+            base_url, expression, deadline_epoch=deadline_epoch
+        )
         for name, expression in queries.items()
     }
     breaches: list[str] = []
@@ -9093,6 +11937,8 @@ def _read_recommendation_slo(
 
 
 def _decision_from_slo_output(output: str, rollout_stage: str) -> tuple[str, str]:
+    if "decision=pause reason=insufficient_samples" in output:
+        return "pause", "SLO sample evidence is insufficient; promotion remains paused"
     if "decision=pause" in output:
         if rollout_stage == "full":
             return "rollback", "full rollout cannot remain paused on warning SLO"
@@ -9109,6 +11955,10 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     rollback_post_checks: list[dict[str, Any]] = []
     deploy_result: Any | None = None
     rollback_result: Any | None = None
+    rollback_started_at = ""
+    rollback_ended_at = ""
+    rollback_duration_ms = 0
+    rollback_deadline_epoch = 0
     rollback_reason = ""
     rollback_state: dict[str, str] | None = None
     rollout_decision = "continue"
@@ -9117,7 +11967,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     slo_readback: dict[str, Any] | None = None
     prometheus_url = ""
     release_manifest_path: Path | None = None
-    release_manifest_digest = ""
+    release_artifact_digest = ""
     release_manifest_payload: dict[str, Any] = {}
     expected_generation = 0
     transition_action = "advance"
@@ -9126,10 +11976,21 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     release_receipt_path: Path | None = None
     release_state_snapshot: dict[str, str] = {}
     release_candidate_digests: dict[str, str] = {}
-    last_good_target: dict[str, str] = {}
+    from_release_evidence_ref = ""
+    to_release_evidence_ref = ""
+    from_image_transport_tag = ""
+    to_image_transport_tag = ""
+    last_good_candidate_digest = ""
     gray_canary_contract: dict[str, Any] | None = None
     gray_canary_traffic: dict[str, Any] | None = None
     provider_readiness: dict[str, Any] = {}
+    promotion_deadline_epoch = int(
+        getattr(args, "promotion_deadline_epoch", 0) or 0
+    )
+    hard_deadline_epoch = int(getattr(args, "hard_deadline_epoch", 0) or 0)
+    rollback_budget_seconds = int(
+        getattr(args, "rollback_budget_seconds", 300) or 0
+    )
     if args.target == "prod-hosted":
         try:
             rollout_stage = _resolve_prod_rollout_stage(args.step, args.stage)
@@ -9189,6 +12050,20 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             getattr(args, "prometheus_url", "")
             or os.environ.get("PROMETHEUS_URL", "")
         ).strip()
+        if not dry_run_requested and (
+            promotion_deadline_epoch <= 0
+            or hard_deadline_epoch <= promotion_deadline_epoch
+            or rollback_budget_seconds <= 0
+            or hard_deadline_epoch - promotion_deadline_epoch
+            < rollback_budget_seconds
+        ):
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": "stackctl deploy blocked: canonical Prod deadlines are required",
+                "details": [],
+                **timing,
+            }
         if not dry_run_requested and not prometheus_url:
             timing = _finish_timing(started_monotonic, started_at)
             return {
@@ -9210,17 +12085,16 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 }
         required = [
             args.service,
-            args.from_image,
-            args.to_image,
-            args.from_config,
-            args.to_config,
+            args.from_candidate_digest,
+            args.to_candidate_digest,
+            args.release_evidence_ref,
             args.step,
         ]
         if not all(required):
             timing = _finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
-                "summary": "stackctl deploy prod-hosted requires service/image/config/step arguments",
+                "summary": "stackctl deploy prod-hosted requires candidate digests, exact release evidence and step",
                 "details": [],
                 **timing,
             }
@@ -9239,43 +12113,106 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
         try:
             (
                 release_manifest_path,
-                release_manifest_digest,
+                release_artifact_digest,
                 release_manifest_payload,
             ) = _deployable_release_manifest(
                 manifest_value,
-                image_version=args.to_image,
-                config_version=args.to_config,
+                candidate_digest=args.to_candidate_digest,
             )
+            for label, value in (
+                ("from candidate", args.from_candidate_digest),
+                ("to candidate", args.to_candidate_digest),
+            ):
+                if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+                    raise RuntimeError(f"{label} digest is invalid")
             if not dry_run_requested:
                 release_candidate_digests = _required_release_candidate_digests(
                     args,
                     release_manifest_payload,
                 )
-            if dry_run_requested:
-                release_state_snapshot = _load_release_state(args.service)
-            else:
-                release_state_snapshot, _ = _fetch_hosted_release_ledger_projection(
-                    args.service,
-                    allow_uninitialized=rollout_stage == "gray-initial",
+            release_state_snapshot, _ = _fetch_hosted_release_ledger_projection(
+                args.service,
+                allow_uninitialized=False,
+                deadline_epoch=promotion_deadline_epoch,
+            )
+            to_release_evidence_ref = str(args.release_evidence_ref).strip()
+            if re.fullmatch(
+                r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
+                to_release_evidence_ref,
+            ) is None:
+                raise RuntimeError("target release evidence ref is not exact OCI")
+            to_image_transport_tag = _release_transport_tag(
+                release_manifest_payload
+            )
+            if release_state_snapshot.get("to_candidate_digest") == args.to_candidate_digest:
+                restored_candidate_noop = (
+                    release_state_snapshot.get("decision") == "rolled_back"
+                    and args.from_candidate_digest == args.to_candidate_digest
                 )
-            last_good_target = {
-                "image": release_state_snapshot.get("to_image", args.from_image),
-                "config": release_state_snapshot.get("to_config", args.from_config),
-            }
+                from_release_evidence_ref = release_state_snapshot.get(
+                    (
+                        "to_release_evidence_ref"
+                        if restored_candidate_noop
+                        else "from_release_evidence_ref"
+                    ),
+                    "",
+                )
+                from_image_transport_tag = release_state_snapshot.get(
+                    (
+                        "to_image_transport_tag"
+                        if restored_candidate_noop
+                        else "from_image_transport_tag"
+                    ),
+                    "",
+                )
+                if (
+                    release_state_snapshot.get("to_release_evidence_ref")
+                    != to_release_evidence_ref
+                    or release_state_snapshot.get("to_image_transport_tag")
+                    != to_image_transport_tag
+                ):
+                    raise RuntimeError(
+                        "hosted ledger target transport does not match resume candidate"
+                    )
+            else:
+                from_release_evidence_ref = release_state_snapshot.get(
+                    "to_release_evidence_ref", ""
+                )
+                from_image_transport_tag = release_state_snapshot.get(
+                    "to_image_transport_tag", ""
+                )
+            if (
+                re.fullmatch(
+                    r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
+                    from_release_evidence_ref,
+                )
+                is None
+                or not from_image_transport_tag
+            ):
+                raise RuntimeError(
+                    "hosted ledger lacks canonical source transport metadata; historical cutover is required"
+                )
+            # The deployment adapter still needs transport coordinates, but
+            # callers can no longer supply them as release identity. They are
+            # derived exclusively from the two candidate authorities.
+            last_good_candidate_digest = release_state_snapshot.get(
+                "last_good_candidate_digest",
+                args.from_candidate_digest,
+            )
             transition_action, expected_generation = _validate_release_transition(
                 release_state_snapshot,
-                from_image=args.from_image,
-                to_image=args.to_image,
-                from_config=args.from_config,
-                to_config=args.to_config,
+                from_candidate_digest=args.from_candidate_digest,
+                to_candidate_digest=args.to_candidate_digest,
                 stage=rollout_stage,
-                manifest_digest=release_manifest_digest,
             )
             if not dry_run_requested:
-                _verify_release_registry_attestations(release_manifest_payload)
+                _verify_release_registry_attestations(
+                    release_manifest_payload,
+                    deadline_epoch=promotion_deadline_epoch,
+                )
                 _archive_release_artifact(
                     release_manifest_path,
-                    release_manifest_digest,
+                    release_artifact_digest,
                 )
         except RuntimeError as error:
             timing = _finish_timing(started_monotonic, started_at)
@@ -9287,27 +12224,28 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             }
         release_receipt_id = hashlib.sha256(
             (
-                f"{args.service}\0{release_manifest_digest}\0{rollout_stage}\0"
+                f"{args.service}\0{release_artifact_digest}\0{rollout_stage}\0"
                 f"{expected_generation + (0 if transition_action == 'replay' else 1)}"
             ).encode("utf-8")
         ).hexdigest()
         if transition_action == "replay" and not dry_run_requested:
             release_receipt_id = release_state_snapshot.get("receipt_id", "")
-            receipt_path = (
-                _release_state_dir() / "receipts" / f"{release_receipt_id}.json"
-            )
-            if not release_receipt_id or not receipt_path.is_file():
+            if not release_receipt_id:
                 timing = _finish_timing(started_monotonic, started_at)
                 return {
                     "exitCode": 2,
-                    "summary": "stackctl deploy blocked: committed ledger receipt is missing",
-                    "details": [str(receipt_path)],
+                    "summary": "stackctl deploy blocked: hosted ledger receipt identity is missing",
+                    "details": [],
                     **timing,
                 }
             try:
+                # Recovery must be reconstructable from the hosted authority.
+                # A disposable local receipt from an earlier runner is never a
+                # prerequisite for replay.
                 release_receipt_path = _sync_release_ledger_projection(
                     args.service,
                     release_receipt_id,
+                    deadline_epoch=promotion_deadline_epoch,
                 )
             except RuntimeError as error:
                 timing = _finish_timing(started_monotonic, started_at)
@@ -9317,7 +12255,36 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "details": [str(error)],
                     **timing,
                 }
+            hosted_receipt = _read_json_object(str(release_receipt_path))
             timing = _finish_timing(started_monotonic, started_at)
+            replay_payload = {
+                "command": "deploy",
+                "target": args.target,
+                "argv": [],
+                "exitCode": 0,
+                "stdout": "hosted release ledger replay matched",
+                "stderr": "",
+                "rolloutStage": rollout_stage,
+                "rolloutDecision": hosted_receipt.get("decision"),
+                "artifactDigest": release_artifact_digest,
+                "candidateId": release_manifest_payload.get("candidateId"),
+                "releaseReceiptId": release_receipt_id,
+                "releaseReceiptRef": f"receipt:hosted:{release_receipt_id}",
+                "releaseReceiptAuthority": "prod-hosted-service-plane",
+                "releaseReceiptPath": str(release_receipt_path),
+                "releaseState": release_state_snapshot,
+                "wiredWorkloads": _prod_rollout_workloads(),
+                "providerReadiness": provider_readiness,
+                "postDeployChecks": [],
+                "postDeployFailures": [],
+                "rollbackPostChecks": [],
+                "sloReadback": hosted_receipt.get("sloReadback") or {},
+                "dryRun": False,
+                "replayed": True,
+                "rollback": {"triggered": False, "reason": "", "result": {}, "releaseState": {}},
+                **timing,
+            }
+            write_json(report_dir / "report.json", replay_payload)
             return {
                 "exitCode": 0,
                 "summary": "stackctl deploy replay matched committed release ledger",
@@ -9325,39 +12292,96 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "releaseReceiptId": release_receipt_id,
                 **timing,
             }
-        package_cmd = [
-            "python3",
-            "quwoquan_ops/cli/stackctl.py",
-            "package",
-            "--env",
-            "prod",
-            "--include-services",
-        ]
-        package_result = run(package_cmd)
-        if package_result.returncode != 0:
+        if not dry_run_requested:
+            try:
+                _remaining_deadline_seconds(
+                    promotion_deadline_epoch, "Prod promotion cutoff"
+                )
+            except RuntimeError as error:
+                active_candidate = (
+                    release_state_snapshot.get("to_candidate_digest")
+                    == args.to_candidate_digest
+                    and release_state_snapshot.get("last_good_candidate_digest")
+                    == args.from_candidate_digest
+                    and release_state_snapshot.get("stage")
+                    in {"gray-initial", "carry-on"}
+                )
+                if active_candidate:
+                    force_deadline_rollback = True
+                else:
+                    timing = _finish_timing(started_monotonic, started_at)
+                    return {
+                        "exitCode": 2,
+                        "summary": "stackctl deploy blocked: promotion cutoff reached before mutation",
+                        "details": [str(error)],
+                        **timing,
+                    }
+        try:
+            package_binding = _materialize_release_evidence_configuration(
+                "prod", target=args.target
+            )
+            if package_binding.get("candidateId") != args.to_candidate_digest:
+                raise ValueError(
+                    "fixed prod package does not bind the rollout candidate"
+                )
+        except (OSError, ValueError, json.JSONDecodeError) as error:
             timing = _finish_timing(started_monotonic, started_at)
             return {
-                "exitCode": package_result.returncode,
-                "summary": "stackctl deploy blocked: prod environment package failed",
-                "details": [package_result.stderr.strip() or package_result.stdout.strip()],
+                "exitCode": 2,
+                "summary": "stackctl deploy blocked: fixed prod package is invalid",
+                "details": [str(error)],
                 **timing,
             }
         cmd: list[str] = []
-        deploy_result = run(
-            ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
-            env={
-                "CLOUD_PROVIDER": args.cloud_provider,
-                "SERVICE": args.service,
-                "IMAGE_VERSION": args.to_image,
-                "CONFIG_VERSION": args.to_config,
-                "PREVIOUS_IMAGE_VERSION": args.from_image,
-                "ROLLOUT_STAGE": rollout_stage,
-                "DRY_RUN": args.dry_run,
-                "RELEASE_MANIFEST": str(release_manifest_path),
-                "RELEASE_MANIFEST_DIGEST": release_manifest_digest,
-            },
-        )
-        if deploy_result.returncode != 0:
+        if force_deadline_rollback:
+            deploy_result = subprocess.CompletedProcess(
+                ["prod-apply"],
+                0,
+                stdout="promotion cutoff reached while a candidate stage is active",
+                stderr="",
+            )
+            result = subprocess.CompletedProcess(
+                ["promotion-deadline"],
+                12,
+                stdout="decision=rollback",
+                stderr="promotion cutoff reached; reserved time is now rollback-only",
+            )
+        elif transition_action == "reevaluate" and not dry_run_requested:
+            deploy_result = subprocess.CompletedProcess(
+                ["prod-apply"],
+                0,
+                stdout="paused hosted stage re-evaluation reused the existing apply",
+                stderr="",
+            )
+        else:
+            try:
+                apply_timeout = (
+                    _remaining_deadline_seconds(
+                        promotion_deadline_epoch, "Prod promotion cutoff"
+                    )
+                    if not dry_run_requested
+                    else None
+                )
+            except RuntimeError as error:
+                apply_timeout = 0.001
+            deploy_result = run(
+                ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
+                env={
+                    "CLOUD_PROVIDER": args.cloud_provider,
+                    "SERVICE": args.service,
+                    "IMAGE_TRANSPORT_TAG": to_image_transport_tag,
+                    "CANDIDATE_DIGEST": args.to_candidate_digest,
+                    "PREVIOUS_IMAGE_TRANSPORT_TAG": from_image_transport_tag,
+                    "ROLLOUT_STAGE": rollout_stage,
+                    "DRY_RUN": args.dry_run,
+                    "RELEASE_MANIFEST": str(release_manifest_path),
+                    "RELEASE_EVIDENCE_DIGEST": release_artifact_digest,
+                },
+                timeout_seconds=apply_timeout,
+            )
+        if force_deadline_rollback:
+            pass
+        elif deploy_result.returncode != 0:
             result = subprocess.CompletedProcess(
                 ["prod-apply"],
                 deploy_result.returncode,
@@ -9379,18 +12403,42 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 if gray_canary_contract is None:
                     raise RuntimeError("gray canary contract was not loaded")
                 gray_canary_traffic = _emit_prod_gray_canary_traffic(
-                    gray_canary_contract
+                    gray_canary_contract,
+                    deadline_epoch=promotion_deadline_epoch,
                 )
                 settle_seconds = _slo_settle_seconds(rollout_stage)
                 if settle_seconds:
+                    remaining = _remaining_deadline_seconds(
+                        promotion_deadline_epoch, "Prod promotion cutoff"
+                    )
+                    if settle_seconds >= remaining:
+                        raise RuntimeError(
+                            "SLO settle interval would cross the Prod promotion cutoff"
+                        )
                     time.sleep(settle_seconds)
                 slo_service = (
                     "content-service"
                     if args.service == PROD_RELEASE_UNIT
                     else args.service
                 )
-                slo_readback = _read_prometheus_slo(prometheus_url, slo_service)
+                slo_readback = _read_prometheus_slo(
+                    prometheus_url,
+                    slo_service,
+                    deadline_epoch=promotion_deadline_epoch,
+                )
                 slo_readback["canaryTraffic"] = gray_canary_traffic
+            except _SloSamplesInsufficient as error:
+                slo_readback = {
+                    "canaryTraffic": gray_canary_traffic or {},
+                    "status": "insufficient_samples",
+                    "error": str(error),
+                }
+                result = subprocess.CompletedProcess(
+                    ["prometheus-slo-readback"],
+                    10,
+                    stdout="decision=pause reason=insufficient_samples",
+                    stderr=str(error),
+                )
             except RuntimeError as error:
                 slo_readback = {
                     "canaryTraffic": gray_canary_traffic or {},
@@ -9411,14 +12459,6 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "quwoquan_ops/cli/prod/config_release_apply_stage.sh",
                     "--service",
                     args.service,
-                    "--from-image",
-                    args.from_image,
-                    "--to-image",
-                    args.to_image,
-                    "--from-config",
-                    args.from_config,
-                    "--to-config",
-                    args.to_config,
                     "--step",
                     args.step,
                     "--error-rate",
@@ -9428,12 +12468,40 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     "--redis-error-rate",
                     args.redis_error_rate,
                 ]
-                result = run(cmd)
+                try:
+                    gate_timeout = _remaining_deadline_seconds(
+                        promotion_deadline_epoch, "Prod promotion cutoff"
+                    )
+                except RuntimeError as error:
+                    result = subprocess.CompletedProcess(
+                        cmd,
+                        12,
+                        stdout="decision=rollback",
+                        stderr=str(error),
+                    )
+                else:
+                    gate_result = run(cmd, timeout_seconds=gate_timeout)
+                    result = (
+                        gate_result
+                        if gate_result.returncode == 0
+                        else subprocess.CompletedProcess(
+                            gate_result.args,
+                            gate_result.returncode,
+                            stdout="decision=rollback\n" + gate_result.stdout,
+                            stderr=gate_result.stderr,
+                        )
+                    )
     run_post_deploy_checks = result.returncode == 0 and not (
         args.target == "prod-hosted" and dry_run_requested
     )
     if run_post_deploy_checks:
-        def _deploy_health_args(target_name: str, scope_name: str, out_dir: Path) -> argparse.Namespace:
+        def _deploy_health_args(
+            target_name: str,
+            scope_name: str,
+            out_dir: Path,
+            *,
+            deadline_epoch: int,
+        ) -> argparse.Namespace:
             return argparse.Namespace(
                 command="health",
                 target=target_name,
@@ -9443,55 +12511,78 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 request_timeout_seconds=0,
                 retry_attempts=0,
                 retry_sleep_seconds=-1.0,
+                deadline_epoch=deadline_epoch,
             )
 
-        for nested_command, nested_scope in (
-            ("health", "full"),
-            ("inspect", "all"),
-            ("doctor", ""),
-        ):
+        for nested_command, nested_scope in (("health", "full"),):
             nested_dir = report_dir / nested_command
             if nested_command == "health":
-                nested_args = _deploy_health_args(args.target, nested_scope, nested_dir)
+                nested_args = _deploy_health_args(
+                    args.target,
+                    nested_scope,
+                    nested_dir,
+                    deadline_epoch=promotion_deadline_epoch,
+                )
                 post_deploy_checks.append(command_health(nested_args))
-            elif nested_command == "inspect":
-                nested_args = argparse.Namespace(
-                    command="inspect",
-                    target=args.target,
-                    scope=nested_scope,
-                    output_format="json",
-                    report_dir=str(nested_dir),
-                )
-                post_deploy_checks.append(command_inspect(nested_args))
-            else:
-                nested_args = argparse.Namespace(
-                    command="doctor",
-                    target=args.target,
-                    output_format="json",
-                    report_dir=str(nested_dir),
-                )
-                post_deploy_checks.append(command_doctor(nested_args))
         if args.target == "prod-hosted" and rollout_stage == "gray-initial":
             nested_dir = report_dir / "environment-page-smoke"
-            nested_args = argparse.Namespace(
-                command="verify",
-                env="",
-                target=args.target,
-                kind="topology",
-                profile="release",
-                output_format="json",
-                report_dir=str(nested_dir),
+            verify_command = [
+                "python3",
+                "quwoquan_ops/cli/stackctl.py",
+                "verify",
+                "--target",
+                args.target,
+                "--kind",
+                "topology",
+                "--profile",
+                "release",
+                "--report-dir",
+                str(nested_dir),
+                "--output-format",
+                "json",
+            ]
+            verify_result = run(
+                verify_command,
+                timeout_seconds=_remaining_deadline_seconds(
+                    promotion_deadline_epoch,
+                    "Prod release environment verification",
+                ),
             )
-            post_deploy_checks.append(command_verify(nested_args))
+            try:
+                verify_payload = json.loads(verify_result.stdout)
+            except json.JSONDecodeError:
+                verify_payload = {
+                    "exitCode": verify_result.returncode,
+                    "summary": "bounded Prod release environment verification failed",
+                    "details": _command_details(verify_result),
+                }
+            post_deploy_checks.append(verify_payload)
     post_deploy_failures = [
         item["summary"]
         for item in post_deploy_checks
-        if int(item.get("exitCode", 0) or 0) != 0
+        if not _check_exit_passed(item)
     ]
     final_exit_code = result.returncode
     findings = list(post_deploy_failures)
     if final_exit_code == 0 and post_deploy_failures:
         final_exit_code = 1
+    if (
+        args.target == "prod-hosted"
+        and not dry_run_requested
+        and final_exit_code == 0
+    ):
+        try:
+            _remaining_deadline_seconds(
+                promotion_deadline_epoch, "Prod promotion cutoff"
+            )
+        except RuntimeError as error:
+            result = subprocess.CompletedProcess(
+                result.args,
+                12,
+                stdout="decision=rollback\n" + (result.stdout or ""),
+                stderr="\n".join(filter(None, [result.stderr, str(error)])),
+            )
+            final_exit_code = 12
     if args.target == "prod-hosted":
         stdout_combined = "\n".join(filter(None, [result.stdout, result.stderr]))
         slo_decision, slo_reason = _decision_from_slo_output(
@@ -9508,20 +12599,39 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
         if dry_run_requested and result.returncode == 0:
             findings.append("prod dry-run: skipped hosted post-deploy health/inspect/doctor and rollback")
         if rollback_reason and not dry_run_requested:
+            rollback_started_at = utc_now()
+            rollback_started_monotonic = time.monotonic()
+            rollback_deadline_epoch = min(
+                hard_deadline_epoch,
+                int(time.time()) + rollback_budget_seconds,
+            )
             rollback_env = {
                 "CLOUD_PROVIDER": args.cloud_provider,
                 "SERVICE": args.service,
-                "IMAGE_VERSION": args.from_image,
-                "CONFIG_VERSION": args.from_config,
-                "PREVIOUS_IMAGE_VERSION": args.to_image,
+                "IMAGE_TRANSPORT_TAG": from_image_transport_tag,
+                "CANDIDATE_DIGEST": args.from_candidate_digest,
+                "PREVIOUS_IMAGE_TRANSPORT_TAG": to_image_transport_tag,
                 "ROLLOUT_STAGE": "full",
                 "DRY_RUN": "false",
                 "PROD_IMAGE_DELIVERY_MODE": "skip",
             }
-            rollback_result = run(
-                ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
-                env=rollback_env,
-            )
+            try:
+                rollback_timeout = min(
+                    float(rollback_budget_seconds),
+                    _remaining_deadline_seconds(
+                        rollback_deadline_epoch, "Prod rollback recovery"
+                    ),
+                )
+            except RuntimeError as error:
+                rollback_result = subprocess.CompletedProcess(
+                    ["prod-rollback"], 124, stdout="", stderr=str(error)
+                )
+            else:
+                rollback_result = run(
+                    ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
+                    env=rollback_env,
+                    timeout_seconds=rollback_timeout,
+                )
             if rollback_result.returncode == 0:
                 for nested_command, nested_scope in (("health", "full"),):
                     nested_dir = report_dir / "rollback" / nested_command
@@ -9532,110 +12642,196 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                             scope=nested_scope,
                             output_format="json",
                             report_dir=str(nested_dir),
+                            request_timeout_seconds=0,
+                            retry_attempts=0,
+                            retry_sleep_seconds=-1.0,
+                            deadline_epoch=rollback_deadline_epoch,
                         )
                         rollback_post_checks.append(command_health(nested_args))
                 rollback_failures = [
                     item["summary"]
                     for item in rollback_post_checks
-                    if int(item.get("exitCode", 0) or 0) != 0
+                    if not _check_exit_passed(item)
                 ]
                 findings.extend(f"rollback {item}" for item in rollback_failures)
                 if rollback_failures and final_exit_code == 0:
                     final_exit_code = 1
+                rollback_duration_ms = int(
+                    (time.monotonic() - rollback_started_monotonic) * 1000
+                )
+                rollback_ended_at = utc_now()
+                rollback_evidence = {
+                    "triggered": True,
+                    "startedAt": rollback_started_at,
+                    "endedAt": rollback_ended_at,
+                    "durationMs": rollback_duration_ms,
+                    "postChecks": _release_check_receipts(rollback_post_checks),
+                }
                 rollback_decision = (
                     "rollback_failed" if rollback_failures else "rolled_back"
                 )
+                rollback_succeeded = rollback_decision == "rolled_back"
                 rollback_state, release_receipt_path = _commit_hosted_release_transition(
                     service=args.service,
-                    from_image=args.to_image,
-                    to_image=args.from_image,
-                    from_config=args.to_config,
-                    to_config=args.from_config,
-                    step="100",
-                    stage="full",
+                    from_candidate_digest=(
+                        args.to_candidate_digest
+                        if rollback_succeeded
+                        else args.from_candidate_digest
+                    ),
+                    to_candidate_digest=(
+                        args.from_candidate_digest
+                        if rollback_succeeded
+                        else args.to_candidate_digest
+                    ),
+                    step="100" if rollback_succeeded else args.step,
+                    stage="full" if rollback_succeeded else rollout_stage,
                     decision=rollback_decision,
-                    manifest_digest=release_manifest_digest,
+                    artifact_digest=release_artifact_digest,
                     expected_generation=expected_generation,
                     receipt_id=release_receipt_id,
                     slo_readback=slo_readback,
                     candidate_digests=release_candidate_digests,
-                    last_good_target=last_good_target,
+                    last_good_candidate_digest=args.from_candidate_digest,
                     post_deploy_checks=post_deploy_checks + rollback_post_checks,
                     rollback_outcome=rollback_decision,
+                    rollback_evidence=rollback_evidence,
+                    from_release_evidence_ref=(
+                        to_release_evidence_ref
+                        if rollback_succeeded
+                        else from_release_evidence_ref
+                    ),
+                    to_release_evidence_ref=(
+                        from_release_evidence_ref
+                        if rollback_succeeded
+                        else to_release_evidence_ref
+                    ),
+                    from_image_transport_tag=(
+                        to_image_transport_tag
+                        if rollback_succeeded
+                        else from_image_transport_tag
+                    ),
+                    to_image_transport_tag=(
+                        from_image_transport_tag
+                        if rollback_succeeded
+                        else to_image_transport_tag
+                    ),
+                    deadline_epoch=rollback_deadline_epoch,
+                    trigger_stage=rollout_stage,
                 )
                 committed_release_state = rollback_state
+                # The execution/readiness interval is sealed before commit;
+                # hosted verifiedAt separately proves durable authority writeback.
+                if rollback_duration_ms > rollback_budget_seconds * 1000:
+                    findings.append(
+                        "rollback exceeded the deterministic recovery budget"
+                    )
+                    final_exit_code = 1
+                if time.time() > hard_deadline_epoch:
+                    findings.append(
+                        "rollback authority readback completed after the hard release deadline"
+                    )
+                    final_exit_code = 1
             else:
                 findings.append("live rollback apply failed")
                 final_exit_code = rollback_result.returncode
+                rollback_duration_ms = int(
+                    (time.monotonic() - rollback_started_monotonic) * 1000
+                )
+                rollback_ended_at = utc_now()
                 committed_release_state, release_receipt_path = _commit_hosted_release_transition(
                     service=args.service,
-                    from_image=args.from_image,
-                    to_image=args.to_image,
-                    from_config=args.from_config,
-                    to_config=args.to_config,
+                    from_candidate_digest=args.from_candidate_digest,
+                    to_candidate_digest=args.to_candidate_digest,
                     step=args.step,
                     stage=rollout_stage,
                     decision="rollback_failed",
-                    manifest_digest=release_manifest_digest,
+                    artifact_digest=release_artifact_digest,
                     expected_generation=expected_generation,
                     receipt_id=release_receipt_id,
                     slo_readback=slo_readback,
                     candidate_digests=release_candidate_digests,
-                    last_good_target=last_good_target,
+                    last_good_candidate_digest=last_good_candidate_digest,
                     post_deploy_checks=post_deploy_checks + rollback_post_checks,
                     rollback_outcome="rollback_failed",
+                    rollback_evidence={
+                        "triggered": True,
+                        "startedAt": rollback_started_at,
+                        "endedAt": rollback_ended_at,
+                        "durationMs": rollback_duration_ms,
+                        "postChecks": _release_check_receipts(rollback_post_checks),
+                    },
+                    from_release_evidence_ref=from_release_evidence_ref,
+                    to_release_evidence_ref=to_release_evidence_ref,
+                    from_image_transport_tag=from_image_transport_tag,
+                    to_image_transport_tag=to_image_transport_tag,
+                    deadline_epoch=rollback_deadline_epoch,
+                    trigger_stage=rollout_stage,
                 )
         elif rollout_decision == "pause" and final_exit_code == 10:
             final_exit_code = 10
             if not dry_run_requested:
                 committed_release_state, release_receipt_path = _commit_hosted_release_transition(
                     service=args.service,
-                    from_image=args.from_image,
-                    to_image=args.to_image,
-                    from_config=args.from_config,
-                    to_config=args.to_config,
+                    from_candidate_digest=args.from_candidate_digest,
+                    to_candidate_digest=args.to_candidate_digest,
                     step=args.step,
                     stage=rollout_stage,
                     decision="pause",
-                    manifest_digest=release_manifest_digest,
+                    artifact_digest=release_artifact_digest,
                     expected_generation=expected_generation,
                     receipt_id=release_receipt_id,
                     slo_readback=slo_readback,
                     candidate_digests=release_candidate_digests,
-                    last_good_target=last_good_target,
+                    last_good_candidate_digest=last_good_candidate_digest,
                     post_deploy_checks=post_deploy_checks,
                     rollback_outcome="not_triggered",
+                    rollback_evidence={"triggered": False},
+                    from_release_evidence_ref=from_release_evidence_ref,
+                    to_release_evidence_ref=to_release_evidence_ref,
+                    from_image_transport_tag=from_image_transport_tag,
+                    to_image_transport_tag=to_image_transport_tag,
+                    deadline_epoch=promotion_deadline_epoch,
                 )
         elif final_exit_code == 0 and not dry_run_requested:
-            committed_last_good_target = (
-                {"image": args.to_image, "config": args.to_config}
+            committed_last_good_candidate_digest = (
+                args.to_candidate_digest
                 if rollout_stage == "full"
-                else last_good_target
+                else last_good_candidate_digest
             )
             committed_release_state, release_receipt_path = _commit_hosted_release_transition(
                 service=args.service,
-                from_image=args.from_image,
-                to_image=args.to_image,
-                from_config=args.from_config,
-                to_config=args.to_config,
+                from_candidate_digest=args.from_candidate_digest,
+                to_candidate_digest=args.to_candidate_digest,
                 step=args.step,
                 stage=rollout_stage,
                 decision="continue",
-                manifest_digest=release_manifest_digest,
+                artifact_digest=release_artifact_digest,
                 expected_generation=expected_generation,
                 receipt_id=release_receipt_id,
                 slo_readback=slo_readback,
                 candidate_digests=release_candidate_digests,
-                last_good_target=committed_last_good_target,
+                last_good_candidate_digest=committed_last_good_candidate_digest,
                 post_deploy_checks=post_deploy_checks,
                 rollback_outcome="not_triggered",
+                rollback_evidence={"triggered": False},
+                from_release_evidence_ref=from_release_evidence_ref,
+                to_release_evidence_ref=to_release_evidence_ref,
+                from_image_transport_tag=from_image_transport_tag,
+                to_image_transport_tag=to_image_transport_tag,
+                deadline_epoch=promotion_deadline_epoch,
             )
         if committed_release_state is not None:
             release_receipt_id = committed_release_state["receipt_id"]
-            release_receipt_path = _sync_release_ledger_projection(
-                args.service,
-                release_receipt_id,
-            )
+            if release_receipt_path is None:
+                release_receipt_path = _sync_release_ledger_projection(
+                    args.service,
+                    release_receipt_id,
+                    deadline_epoch=(
+                        rollback_deadline_epoch
+                        if rollback_reason
+                        else promotion_deadline_epoch
+                    ),
+                )
     timing = _finish_timing(started_monotonic, started_at)
     write_json(
         report_dir / "report.json",
@@ -9647,8 +12843,22 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "stdout": result.stdout,
             "stderr": result.stderr,
             "rolloutStage": rollout_stage,
+            "triggerStage": (
+                (committed_release_state or {}).get("trigger_stage")
+                or rollout_stage
+            ),
+            "terminalStage": (
+                (committed_release_state or {}).get("stage")
+                or rollout_stage
+            ),
             "rolloutDecision": rollout_decision,
-            "releaseManifestDigest": release_manifest_digest,
+            "artifactDigest": release_artifact_digest,
+            "releaseEvidenceRef": to_release_evidence_ref,
+            "candidateId": (
+                release_manifest_payload.get("candidateId")
+                if release_manifest_payload
+                else ""
+            ),
             "releaseReceiptId": release_receipt_id,
             "releaseReceiptRef": (
                 f"receipt:hosted:{release_receipt_id}"
@@ -9674,6 +12884,9 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             "rollback": {
                 "triggered": bool(rollback_reason),
                 "reason": rollback_reason,
+                "startedAt": rollback_started_at,
+                "endedAt": rollback_ended_at,
+                "durationMs": rollback_duration_ms,
                 "result": (
                     {
                         "exitCode": rollback_result.returncode,
@@ -9802,118 +13015,6 @@ def _command_deploy_service_environment(args: argparse.Namespace) -> dict[str, A
     }
 
 
-def _command_private_deploy_operation(
-    args: argparse.Namespace,
-    *,
-    operation: str,
-    command: list[str],
-) -> dict[str, Any]:
-    """执行已收口到 stackctl 的私有 Bash 实现，并留下统一报告。"""
-    report_dir = resolve_report_dir(args, "prod", "prod-hosted")
-    started_monotonic, started_at = _start_timing()
-    result = run(command, env={"QWQ_DEPLOY_TARGET": "prod-hosted"})
-    timing = _finish_timing(started_monotonic, started_at)
-    details = _command_details(result)
-    status = "ok" if result.returncode == 0 else "failed"
-    write_json(
-        report_dir / "report.json",
-        {
-            "status": status,
-            "command": "deploy",
-            "operation": operation,
-            "target": "prod-hosted",
-            "argv": command,
-            "exitCode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            **timing,
-        },
-    )
-    _write_summary_bundle(
-        report_dir,
-        command="deploy",
-        target="prod-hosted",
-        status=status,
-        summary=(
-            f"stackctl {operation} completed"
-            if status == "ok"
-            else f"stackctl {operation} failed"
-        ),
-        details=details,
-        extra={"operation": operation},
-        timing=timing,
-    )
-    _write_stdout_markdown(
-        report_dir,
-        [(operation, "\n".join(filter(None, [result.stdout, result.stderr])))],
-    )
-    return {
-        "exitCode": result.returncode,
-        "summary": (
-            f"stackctl {operation} completed"
-            if status == "ok"
-            else f"stackctl {operation} failed"
-        ),
-        "details": details,
-        "reportDir": relpath(report_dir),
-        **timing,
-    }
-
-
-def _command_config_gray_rollout(args: argparse.Namespace) -> dict[str, Any]:
-    required = (
-        ("--service", str(args.service or "").strip()),
-        ("--from-image", str(args.from_image or "").strip()),
-        ("--to-image", str(args.to_image or "").strip()),
-        ("--from-config", str(args.from_config or "").strip()),
-        ("--to-config", str(args.to_config or "").strip()),
-        ("--step", str(args.step or "").strip()),
-    )
-    missing = [flag for flag, value in required if not value]
-    if missing:
-        return {
-            "exitCode": 2,
-            "summary": "stackctl config-gray rollout failed",
-            "details": ["config-gray requires " + ", ".join(missing)],
-        }
-    command = ["bash", "quwoquan_ops/cli/prod/config_release_gray_rollout.sh"]
-    for flag, value in required:
-        command.extend((flag, value))
-    return _command_private_deploy_operation(
-        args,
-        operation="config-gray rollout",
-        command=command,
-    )
-
-
-def _command_config_rollback(args: argparse.Namespace) -> dict[str, Any]:
-    service = str(args.service or "").strip()
-    target_config = str(getattr(args, "rollback_config", "") or "").strip()
-    missing = [
-        flag
-        for flag, value in (("--service", service), ("--rollback-config", target_config))
-        if not value
-    ]
-    if missing:
-        return {
-            "exitCode": 2,
-            "summary": "stackctl config rollback failed",
-            "details": ["config-rollback requires " + ", ".join(missing)],
-        }
-    return _command_private_deploy_operation(
-        args,
-        operation="config rollback",
-        command=[
-            "bash",
-            "quwoquan_ops/cli/prod/config_release_rollback.sh",
-            "--service",
-            service,
-            "--to-config-version",
-            target_config,
-        ],
-    )
-
-
 def _command_environment_assembly(args: argparse.Namespace) -> dict[str, Any]:
     env_name = str(getattr(args, "env", "") or "").strip()
     if env_name not in {"beta", "gamma"} or getattr(args, "target", ""):
@@ -9978,8 +13079,8 @@ def _prod_prevalidation_executor(
     args: argparse.Namespace,
     *,
     manifest_path: Path,
-    image_version: str,
-    config_version: str,
+    image_transport_tag: str,
+    candidate_digest: str,
     dry_run: bool,
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     argv = [
@@ -9989,10 +13090,10 @@ def _prod_prevalidation_executor(
         str(args.ssh_host),
         "--release-manifest",
         str(manifest_path),
-        "--image-version",
-        image_version,
-        "--config-version",
-        config_version,
+        "--image-transport-tag",
+        image_transport_tag,
+        "--candidate-digest",
+        candidate_digest,
         "--data-mode",
         str(args.data_mode),
         "--scope",
@@ -10051,22 +13152,15 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         for name in (
             "stage",
             "service",
-            "from_image",
-            "to_image",
-            "from_config",
-            "to_config",
-            "rollback_config",
+            "from_candidate_digest",
+            "to_candidate_digest",
+            "release_evidence_ref",
             "step",
             "prometheus_url",
             "release_image_digest",
             "release_config_digest",
             "contract_graph_digest",
             "adapter_digest",
-            "previous_image_version",
-            "image_repository_root",
-            "image_registry",
-            "registry_username",
-            "registry_password",
         )
     }
     if args.target != "prod-hosted" or args.env:
@@ -10101,20 +13195,20 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         if manifest_value and not manifest_value.startswith("oci://")
         else ROOT
     )
-    manifest_digest = ""
+    artifact_digest = ""
     manifest_payload: dict[str, Any] = {}
-    image_version = "unresolved"
-    config_version = "unresolved"
+    image_transport_tag = "unresolved"
+    candidate_digest = "unresolved"
     if not manifest_value:
         request_issues.append("immutable Service Pipeline --release-manifest is required")
     else:
         try:
             (
                 manifest_path,
-                manifest_digest,
+                artifact_digest,
                 manifest_payload,
-                image_version,
-                config_version,
+                image_transport_tag,
+                candidate_digest,
             ) = _prevalidation_release_manifest(manifest_value)
         except RuntimeError as error:
             request_issues.append(str(error))
@@ -10125,8 +13219,8 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         host_result, host_payload = _prod_prevalidation_executor(
             args,
             manifest_path=manifest_path,
-            image_version=image_version,
-            config_version=config_version,
+            image_transport_tag=image_transport_tag,
+            candidate_digest=candidate_digest,
             dry_run=True,
         )
         host_issues = (
@@ -10177,8 +13271,8 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
             executor_result, executor_payload = _prod_prevalidation_executor(
                 args,
                 manifest_path=manifest_path,
-                image_version=image_version,
-                config_version=config_version,
+                image_transport_tag=image_transport_tag,
+                candidate_digest=candidate_digest,
                 dry_run=False,
             )
             executor_step = {
@@ -10229,11 +13323,11 @@ def _command_prod_prevalidate(args: argparse.Namespace) -> dict[str, Any]:
         "dataMode": str(args.data_mode),
         "scope": str(args.prevalidate_scope),
         "dryRun": dry_run,
-        "releaseManifest": {
+        "releaseEvidence": {
             "path": str(manifest_path) if manifest_value else "",
-            "digest": manifest_digest,
+            "artifactDigest": artifact_digest,
+            "candidateId": manifest_payload.get("candidateId") or "",
             "source": manifest_payload.get("source") or {},
-            "versions": manifest_payload.get("versions") or {},
         },
         "hostPreflight": host_payload.get("hostPreflight") or {},
         "containerDeployment": deployment_payload,
@@ -10336,13 +13430,14 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
     if target_name == "prod-hosted" and not dry_run:
         try:
             release_payload = json.loads(Path(release_manifest).read_text(encoding="utf-8"))
-            versions = release_payload.get("versions") if isinstance(release_payload, dict) else None
-            image_version = str(versions.get("imageVersion") or "") if isinstance(versions, dict) else ""
-            config_version = str(versions.get("configVersion") or "") if isinstance(versions, dict) else ""
+            candidate_digest = (
+                str(release_payload.get("candidateId") or "")
+                if isinstance(release_payload, dict)
+                else ""
+            )
             _deployable_release_manifest(
                 release_manifest,
-                image_version=image_version,
-                config_version=config_version,
+                candidate_digest=candidate_digest,
             )
         except (OSError, ValueError, json.JSONDecodeError, RuntimeError) as error:
             return {
@@ -10415,7 +13510,8 @@ def _command_deploy_distribution(args: argparse.Namespace) -> dict[str, Any]:
             else f"stackctl {args.artifact_kind} distribution is GATE_BLOCK"
         ),
         "details": issues or [
-            f"releaseManifestDigest={receipt.get('releaseManifestDigest')}",
+            f"artifactDigest={receipt.get('artifactDigest')}",
+            f"candidateId={receipt.get('candidateId')}",
             f"receiptSHA256={receipt.get('receiptSHA256')}",
         ],
         "reportDir": relpath(report_dir),
@@ -10430,24 +13526,6 @@ def command_deploy(args: argparse.Namespace) -> dict[str, Any]:
         return _command_environment_assembly(args)
     if args.mode == "prevalidate":
         return _command_prod_prevalidate(args)
-    if args.mode in {"config-gray", "config-rollback"}:
-        if args.target != "prod-hosted" or args.env:
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl {args.mode} failed",
-                "details": [f"{args.mode} requires --target prod-hosted"],
-            }
-        try:
-            with _prod_release_lock():
-                if args.mode == "config-gray":
-                    return _command_config_gray_rollout(args)
-                return _command_config_rollback(args)
-        except RuntimeError as error:
-            return {
-                "exitCode": 2,
-                "summary": f"stackctl {args.mode} blocked by prod release transaction",
-                "details": [str(error)],
-            }
     if getattr(args, "service", "") and getattr(args, "env", ""):
         return _command_deploy_service_environment(args)
     if not args.target:
@@ -10515,21 +13593,15 @@ def command_hosted_release_receipt(args: argparse.Namespace) -> dict[str, Any]:
             receipt.get("stage") == "full"
             and receipt.get("decision") == "continue"
             and receipt.get("rollbackOutcome") == "not_triggered"
-            and receipt.get("lastGoodTarget")
-            == {
-                "image": receipt.get("toImage"),
-                "config": receipt.get("toConfig"),
-            }
+            and receipt.get("lastGoodCandidateDigest")
+            == receipt.get("toCandidateDigest")
         ):
             raise RuntimeError("hosted receipt is not a stable full last-good release")
         if purpose == "rollback" and not (
             receipt.get("decision") == "rolled_back"
             and receipt.get("rollbackOutcome") == "rolled_back"
-            and receipt.get("lastGoodTarget")
-            == {
-                "image": receipt.get("toImage"),
-                "config": receipt.get("toConfig"),
-            }
+            and receipt.get("lastGoodCandidateDigest")
+            == receipt.get("toCandidateDigest")
         ):
             raise RuntimeError("hosted receipt does not prove a successful rollback")
     except (RuntimeError, json.JSONDecodeError) as error:
@@ -10593,6 +13665,13 @@ def _all_services() -> list[str]:
     return sorted(set(services))
 
 
+def _public_url_origin(raw_url: str) -> str:
+    parsed = urllib.parse.urlsplit(raw_url)
+    if parsed.scheme not in {"https", "wss"} or not parsed.netloc:
+        raise RuntimeError(f"GATE_BLOCK: invalid public URL projection: {raw_url!r}")
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+
+
 def _beta_env_from_port_manifest(
     topology: dict[str, Any],
     target_name: str,
@@ -10630,14 +13709,35 @@ def _beta_env_from_port_manifest(
         "QWQ_COMPOSE_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL": _public_url_origin(
+            str(public_bases["mediaImage"])
+        ),
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
     }
 
 
+def _formal_release_compose_project_name(target_name: str) -> str:
+    run_id = re.sub(r"[^a-zA-Z0-9_-]", "", os.environ.get("GITHUB_RUN_ID", ""))
+    attempt = re.sub(
+        r"[^a-zA-Z0-9_-]", "", os.environ.get("GITHUB_RUN_ATTEMPT", "")
+    )
+    environment_name = target_name.removesuffix("-local")
+    suffix = f"_{run_id}_{attempt}" if run_id and attempt else ""
+    return f"quwoquan_{environment_name}_release{suffix}"
+
+
 def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) -> dict[str, str]:
+    """Project any Alpha/Beta/Gamma local target into the shared OCI runtime."""
+
     manifest = load_port_manifest()
     profile_name = str(get_target(topology, target_name).get("portProfile"))
     ports = profile_ports(manifest, profile_name)
     target = get_target(topology, target_name)
+    environment_name = str(target["env"])
+    if environment_name not in {"alpha", "beta", "gamma"}:
+        raise RuntimeError(
+            f"GATE_BLOCK: shared local release runtime does not support {target_name}"
+        )
     public_bases = target.get("publicBases") or {}
     startup = target.get("startup")
     if not isinstance(startup, dict):
@@ -10675,11 +13775,21 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL": str(public_bases["mediaImage"]),
         "LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL": str(public_bases["mediaVideo"]),
         "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
+        "CONTENT_MEDIA_DELIVERY_BASE_URL": _public_url_origin(
+            str(public_bases["mediaImage"])
+        ),
+        "CONTENT_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL": _public_url_origin(
+            str(public_bases["mediaImage"])
+        ),
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL": str(public_bases["mediaUpload"]),
         "LOCAL_GAMMA_RTC_MEDIA_CONNECTION_URL": str(public_bases["rtc"]),
         "LOCAL_GAMMA_CONTENT_PORT": str(ports["content-service"]),
         "LOCAL_GAMMA_CHAT_PORT": str(ports["chat-service"]),
         "LOCAL_GAMMA_USER_PORT": str(ports["user-service"]),
         "LOCAL_GAMMA_ASSISTANT_PORT": str(ports["assistant-service"]),
+        "LOCAL_GAMMA_ENTITY_PORT": str(ports["entity-service"]),
+        "LOCAL_GAMMA_CIRCLE_PORT": str(ports["circle-service"]),
         "LOCAL_GAMMA_INTEGRATION_PORT": str(ports["integration-service"]),
         "LOCAL_GAMMA_NOTIFICATION_PORT": str(ports["notification-service"]),
         "LOCAL_GAMMA_REALTIME_PORT": str(ports["realtime-gateway"]),
@@ -10693,6 +13803,14 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_REDIS_PORT": str(ports["redis"]),
         "LOCAL_GAMMA_POSTGRES_PORT": str(ports["postgres"]),
         "LOCAL_GAMMA_ES_PORT": str(ports["elasticsearch"]),
+        "LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT": str(ports["object-storage-edge"]),
+        "LOCAL_GAMMA_MEDIA_ORIGIN_PORT": str(ports["media-origin"]),
+        "LOCAL_GAMMA_LIVEKIT_HTTP_PORT": str(ports["livekit-http"]),
+        "LOCAL_GAMMA_LIVEKIT_RTC_TCP_PORT": str(ports["livekit-rtc-tcp"]),
+        "LOCAL_GAMMA_LIVEKIT_RTC_UDP_PORT": str(ports["livekit-rtc-udp"]),
+        "LOCAL_GAMMA_LIVEKIT_METRICS_PORT": str(ports["livekit-metrics"]),
+        "LOCAL_GAMMA_TURN_TCP_PORT": str(ports["coturn"]),
+        "LOCAL_GAMMA_TURN_UDP_PORT": str(ports["coturn"]),
         "LOCAL_GAMMA_DOCKER_PROBE_TIMEOUT_SECONDS": required_positive_seconds(
             "dockerProbeTimeoutSeconds"
         ),
@@ -10709,10 +13827,12 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
+        "QWQ_LOCAL_RELEASE_ENV": environment_name,
+        "QWQ_LOCAL_RELEASE_TARGET": target_name,
+        "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": _formal_release_compose_project_name(
+            target_name
+        ),
     }
-    environment.update(
-        prepare_local_environment_auth("gamma", "gamma-local").environment
-    )
     return environment
 
 
@@ -10721,9 +13841,6 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
     env_name = str(target["env"])
     env_cfg = topology["environments"][env_name]
     public_bases = target.get("publicBases") or {}
-    origins = target.get("origins") or {}
-    service_policy = ((env_cfg.get("artifactPolicy") or {}).get("service") or {})
-    allow_fixture_refs = bool(service_policy.get("allowFixtureRefs")) or target_name == "prod-sim"
     checks: list[dict[str, Any]] = []
     if scope in {"edge", "full", "content-import", "content-consumer"}:
         checks.append(
@@ -10749,48 +13866,6 @@ def _health_checks_for_target(topology: dict[str, Any], target_name: str, scope:
                 "url": f"{str(public_bases['mediaImage']).rstrip('/')}/healthz",
             }
         )
-        if allow_fixture_refs:
-            for asset in load_media_delivery_manifest():
-                url = build_media_delivery_url(public_bases, asset)
-                check = {
-                    "name": f"media-public-{asset['logicalAssetId']}",
-                    "scope": "media",
-                    "url": url,
-                }
-                mime_type = str(asset.get("mimeType") or "").strip().lower()
-                if mime_type.startswith("video/"):
-                    check["headers"] = {"Range": "bytes=0-1"}
-                    check["expectedStatus"] = 206
-                    check["expectedContentTypePrefix"] = "video/"
-                elif mime_type:
-                    check["expectedContentTypePrefix"] = mime_type
-                checks.append(check)
-        media_origin = str(origins.get("mediaOrigin") or "").rstrip("/")
-        if media_origin and allow_fixture_refs:
-            origin_bases = {
-                "mediaAvatar": media_origin,
-                "mediaImage": media_origin,
-                "mediaVideo": media_origin,
-            }
-            for asset in load_media_delivery_manifest():
-                url = build_media_delivery_url(
-                    origin_bases,
-                    asset,
-                    require_https=False,
-                )
-                check = {
-                    "name": f"media-origin-{asset['logicalAssetId']}",
-                    "scope": "media",
-                    "url": url,
-                }
-                mime_type = str(asset.get("mimeType") or "").strip().lower()
-                if mime_type.startswith("video/"):
-                    check["headers"] = {"Range": "bytes=0-1"}
-                    check["expectedStatus"] = 206
-                    check["expectedContentTypePrefix"] = "video/"
-                elif mime_type:
-                    check["expectedContentTypePrefix"] = mime_type
-                checks.append(check)
     if scope in {"service", "full"}:
         checks.extend(_service_health_checks_for_target(target_name))
     if scope in {"content-import", "content-consumer", "full"}:
@@ -11059,7 +14134,6 @@ def _expected_local_roles(
             "assistant-service",
             "chat-service",
             "notification-service",
-            "fixture-gateway",
         ],
         "gamma-local": [
             "api-edge",
@@ -11308,6 +14382,111 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def command_tls(args: argparse.Namespace) -> dict[str, Any]:
+    """Expose DNS/TLS through stackctl without duplicating certificate logic."""
+    env_name = str(get_target(load_environment_topology(), args.target)["env"])
+    report_dir = resolve_report_dir(args, env_name, args.target)
+    started_monotonic, started_at = _start_timing()
+    details: list[str] = []
+    evidence: dict[str, Any] = {}
+    exit_code = 0
+    try:
+        if args.action == "prevalidate":
+            policy = load_public_domain_policy()
+            profile = next(
+                (
+                    value
+                    for value in (policy.get("tlsProfiles") or {}).values()
+                    if isinstance(value, dict) and value.get("target") == args.target
+                ),
+                None,
+            )
+            if not isinstance(profile, dict):
+                raise PublicDomainTlsError(
+                    f"GATE_BLOCK: no DNS-01 TLS profile for target {args.target}"
+                )
+            acme = policy.get("acme") or {}
+            authority = policy.get("acmeChallengeAuthority") or {}
+            required_envs = (
+                str(acme.get("accountEmailEnv") or ""),
+                str(authority.get("apiTokenEnv") or ""),
+            )
+            missing_envs = [
+                name for name in required_envs if not name or not os.environ.get(name, "").strip()
+            ]
+            client = str(acme.get("client") or "lego")
+            if shutil.which(client) is None:
+                details.append(f"required ACME client is unavailable: {client}")
+            if missing_envs:
+                details.append("missing protected environment inputs: " + ", ".join(missing_envs))
+            if details:
+                exit_code = 2
+            evidence = {
+                "target": args.target,
+                "action": "prevalidate",
+                "apex": str(profile.get("apex") or ""),
+                "wildcard": str(profile.get("wildcard") or ""),
+                "clientAvailable": shutil.which(client) is not None,
+                "protectedInputsReady": not missing_envs,
+                "status": "passed" if exit_code == 0 else ProbeOutcome.GATE_BLOCK.value,
+            }
+            if exit_code == 0:
+                details.append("DNS-01 TLS protected inputs and client are ready")
+        elif args.action == "verify":
+            verified = verify_certificate(args.target)
+            evidence = {
+                key: value
+                for key, value in verified.items()
+                if key not in {"certificate", "privateKey"}
+            }
+            details.append("public certificate, private-key match and SAN verified")
+        else:
+            if not args.confirm_protected_apply:
+                raise PublicDomainTlsError(
+                    "GATE_BLOCK: issue requires --confirm-protected-apply after prevalidate"
+                )
+            issued = issue_certificate(args.target)
+            evidence = {
+                key: value
+                for key, value in issued.items()
+                if key not in {"certificate", "privateKey"}
+            }
+            details.append("DNS-01 certificate issued and verified")
+    except PublicDomainTlsError as error:
+        exit_code = 2
+        details = [str(error)]
+        evidence = {
+            "target": args.target,
+            "action": args.action,
+            "status": ProbeOutcome.GATE_BLOCK.value,
+        }
+    timing = _finish_timing(started_monotonic, started_at)
+    status = "passed" if exit_code == 0 else "gate_block"
+    write_json(
+        report_dir / "report.json",
+        {
+            "command": "tls",
+            "target": args.target,
+            "action": args.action,
+            "status": status,
+            "evidence": evidence,
+            "details": details,
+            **timing,
+        },
+    )
+    write_json(
+        report_dir / "findings.json",
+        {"issues": [] if exit_code == 0 else details},
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": f"stackctl tls {args.action} {status} for {args.target}",
+        "details": details,
+        "reportDir": relpath(report_dir),
+        **timing,
+    }
+
+
 def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
     profile = str(getattr(args, "profile", PROFILE_LOCAL_ENV_GATE) or PROFILE_LOCAL_ENV_GATE)
     if profile != PROFILE_LOCAL_ENV_GATE:
@@ -11316,15 +14495,25 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
             "summary": f"unsupported matrix profile: {profile}",
             "details": [f"supported: {PROFILE_LOCAL_ENV_GATE}"],
         }
+    targets = tuple(
+        item.strip()
+        for item in str(getattr(args, "targets", "") or "").split(",")
+        if item.strip()
+    )
     return run_local_env_gate_matrix(
         package_fn=command_package,
         up_fn=command_up,
         health_fn=command_health,
         verify_fn=command_verify,
         down_fn=command_down,
+        targets=targets,
         include_l0=not bool(getattr(args, "skip_l0", False)),
-        cache_mode=str(getattr(args, "cache_mode", "auto") or "auto"),
-        auto_wipe_drift=not bool(getattr(args, "no_auto_wipe_drift", False)),
+        release_attestation=str(
+            getattr(args, "release_attestation", "") or ""
+        ),
+        rollback_release_attestation=str(
+            getattr(args, "rollback_release_attestation", "") or ""
+        ),
     )
 
 
@@ -11335,6 +14524,7 @@ def main() -> int:
         "package": command_package,
         "verify": command_verify,
         "matrix": command_matrix,
+        "tls": command_tls,
         "provider-conformance": command_provider_conformance,
         "up": command_up,
         "product-telemetry-log-sink": command_product_telemetry_log_sink,
@@ -11347,6 +14537,7 @@ def main() -> int:
         "content-readiness": command_content_readiness,
         "data-execution-fleet": command_data_execution_fleet,
         "content-uat": command_content_uat,
+        "account-enforcement-uat": command_account_enforcement_uat,
         "filter-catalog": command_filter_catalog,
         "repair": command_repair,
         "roll": command_roll,

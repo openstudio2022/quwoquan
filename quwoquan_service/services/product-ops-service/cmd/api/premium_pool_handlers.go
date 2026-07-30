@@ -391,7 +391,7 @@ func premiumPoolWorkflow(entry premiumPoolEntry, state string) controlplane.Work
 	return controlplane.WorkflowState{
 		ObjectType: "premium_pool_entry",
 		ObjectID:   entry.ID,
-		WorkflowID: "global_premium_pool_v1:" + entry.ID,
+		WorkflowID: "global_premium_pool:" + entry.ID,
 		State:      state,
 		History: []controlplane.WorkflowTransition{{
 			From:   "",

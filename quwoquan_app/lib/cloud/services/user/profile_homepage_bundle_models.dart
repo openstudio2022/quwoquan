@@ -52,7 +52,7 @@ class UserHomepageTabCountsViewData {
 @immutable
 class UserHomepageViewerContextViewData {
   const UserHomepageViewerContextViewData({
-    required this.viewerSubAccountId,
+    required this.viewerPersonaId,
     required this.isOwner,
     required this.isGuest,
     required this.relationToTarget,
@@ -61,13 +61,13 @@ class UserHomepageViewerContextViewData {
 
   /// 游客保守回退：viewerContext 缺失时按未登录处理（不下发关系能力）。
   const UserHomepageViewerContextViewData.guest()
-    : viewerSubAccountId = '',
+    : viewerPersonaId = '',
       isOwner = false,
       isGuest = true,
       relationToTarget = 'not_following',
       canViewFullProfile = true;
 
-  final String viewerSubAccountId;
+  final String viewerPersonaId;
   final bool isOwner;
   final bool isGuest;
   final String relationToTarget;
@@ -81,7 +81,7 @@ class UserHomepageViewerContextViewData {
     UserHomepageViewerContextWireDto w,
   ) {
     return UserHomepageViewerContextViewData(
-      viewerSubAccountId: w.viewerSubAccountId,
+      viewerPersonaId: w.viewerPersonaId,
       isOwner: w.isOwner,
       isGuest: w.isGuest,
       relationToTarget: w.relationToTarget,
@@ -105,7 +105,7 @@ class UserHomepageBundleViewData {
     required this.cacheVersion,
   });
 
-  final SubAccountProfileViewData profile;
+  final PersonaProfileViewData profile;
   final UserProfileStatsViewData stats;
 
   /// viewer→target 关系能力位（关注/私信/打招呼/通话/拉黑），统一复用既有
@@ -118,7 +118,7 @@ class UserHomepageBundleViewData {
   final String cacheVersion;
 
   /// 首屏 header 直接展示用：profile 已合并 stats 计数（同源）。
-  SubAccountProfileViewData get profileWithStats => profile.mergeStats(stats);
+  PersonaProfileViewData get profileWithStats => profile.mergeStats(stats);
 
   factory UserHomepageBundleViewData.fromUserHomepageBundleWire(
     UserHomepageBundleWireDto w,
@@ -127,9 +127,7 @@ class UserHomepageBundleViewData {
     if (profileWire == null) {
       throw const FormatException('homepage-bundle 响应缺少 profile');
     }
-    final profile = SubAccountProfileViewData.fromSubAccountProfileWire(
-      profileWire,
-    );
+    final profile = PersonaProfileViewData.fromPersonaProfileWire(profileWire);
     final stats = w.stats != null
         ? UserProfileStatsViewData.fromUserProfileStatsWire(w.stats!)
         : UserProfileStatsViewData.fromProfile(profile);
@@ -165,7 +163,7 @@ class UserHomepageBundleViewData {
     if (profileProjection == null) {
       throw const FormatException('homepage-bundle 响应缺少 profile');
     }
-    final profile = SubAccountProfileViewData.fromSubAccountProfileProjection(
+    final profile = PersonaProfileViewData.fromPersonaProfileProjection(
       profileProjection,
     );
     final stats = projection.stats == null
@@ -181,25 +179,7 @@ class UserHomepageBundleViewData {
       stats: stats,
       relationshipCapability: capability == null
           ? null
-          : RelationshipCapabilityDto(
-              viewerSubAccountId: capability.viewerSubAccountId,
-              targetSubAccountId: capability.targetSubAccountId,
-              relationState: capability.relationState,
-              canFollow: capability.canFollow,
-              canUnfollow: capability.canUnfollow,
-              canFollowBack: capability.canFollowBack,
-              canGreet: capability.canGreet,
-              canCreateDirectConversation:
-                  capability.canCreateDirectConversation,
-              canSendMessage: capability.canSendMessage,
-              canOpenConversation: capability.canOpenConversation,
-              hasPendingGreeting: capability.hasPendingGreeting,
-              hasFormalConversation: capability.hasFormalConversation,
-              canStartVoiceCall: capability.canStartVoiceCall,
-              canStartVideoCall: capability.canStartVideoCall,
-              isBlocked: capability.isBlocked,
-              isBlockedBy: capability.isBlockedBy,
-            ),
+          : RelationshipCapabilityDto.fromContract(capability),
       tabCounts: counts == null
           ? UserHomepageTabCountsViewData.fromStats(stats)
           : UserHomepageTabCountsViewData(
@@ -211,7 +191,7 @@ class UserHomepageBundleViewData {
       viewerContext: viewer == null
           ? const UserHomepageViewerContextViewData.guest()
           : UserHomepageViewerContextViewData(
-              viewerSubAccountId: viewer.viewerSubAccountId,
+              viewerPersonaId: viewer.viewerPersonaId,
               isOwner: viewer.isOwner,
               isGuest: viewer.isGuest,
               relationToTarget: viewer.relationToTarget,

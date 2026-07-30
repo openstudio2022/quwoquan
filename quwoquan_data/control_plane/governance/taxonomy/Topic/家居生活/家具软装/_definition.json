@@ -2,6 +2,7 @@
   "label": "家具软装",
   "labelEn": "Furniture & Decor",
   "description": "家具选购与软装搭配",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

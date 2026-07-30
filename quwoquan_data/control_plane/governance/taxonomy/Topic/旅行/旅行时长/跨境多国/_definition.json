@@ -2,6 +2,7 @@
   "label": "跨境多国",
   "labelEn": "Multi-country",
   "description": "跨越多个国家的长途旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

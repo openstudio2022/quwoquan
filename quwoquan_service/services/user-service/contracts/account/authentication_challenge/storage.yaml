@@ -4,5 +4,5 @@ tables:
     entity: AuthenticationChallenge
     role: authoritative
     description: challenge 行自身承载幂等：创建按 idempotency key 去重，一次性消费以 consumed_at + 结果指纹记录，同一凭据重复成功验证返回同一结果；
-      失败计数与锁定为原子单行更新。不设独立 receipt/outbox 表。
+      失败计数与锁定为原子单行更新。bind_phone challenge 额外保存内部 binding_ticket_id，禁止与另一 ticket 交换。不设独立 receipt/outbox 表。
 role: authoritative

@@ -2,6 +2,7 @@
   "label": "语言学习",
   "labelEn": "Language Learning",
   "description": "外语能力培养方法与技巧，聚焦语言能力本身而非应试",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

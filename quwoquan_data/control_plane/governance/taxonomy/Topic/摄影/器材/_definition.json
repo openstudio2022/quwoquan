@@ -1,0 +1,14 @@
+{
+  "label": "器材",
+  "labelEn": "Gear",
+  "description": "拍摄所用器材类别，全部由 EXIF 的 cameraMake/cameraModel/lensModel 派生",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

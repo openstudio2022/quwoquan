@@ -15,7 +15,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/domain/model"
 )
 
-const ReleaseArtifactSchema = "assistant.policy_release.v1"
+const ReleaseArtifactSchema = "assistant.policy_release"
 
 var ErrInvalidArtifact = errors.New("assistant policy release artifact is invalid")
 
@@ -61,7 +61,7 @@ func LoadReleaseArtifact(
 	}
 	expectedCommandID := "policy-release:" +
 		strings.TrimSpace(artifact.Release.PolicyID) + ":" +
-		strings.TrimSpace(artifact.Release.ReleaseVersion)
+		strings.TrimSpace(artifact.Release.ReleaseDigest)
 	if artifact.CommandID != expectedCommandID {
 		return ReleaseArtifact{}, ErrInvalidArtifact
 	}
@@ -69,8 +69,8 @@ func LoadReleaseArtifact(
 	if err != nil {
 		return ReleaseArtifact{}, fmt.Errorf("%w: %v", ErrInvalidArtifact, err)
 	}
-	if !strings.EqualFold(digest, artifact.Release.CanonicalDigest) {
-		return ReleaseArtifact{}, fmt.Errorf("%w: canonical digest mismatch", ErrInvalidArtifact)
+	if digest != artifact.Release.ReleaseDigest {
+		return ReleaseArtifact{}, fmt.Errorf("%w: release digest mismatch", ErrInvalidArtifact)
 	}
 	return artifact, nil
 }

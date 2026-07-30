@@ -5,13 +5,14 @@ import (
 	"errors"
 	"strings"
 
+	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
-	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 )
 
 type QueryFacade struct {
 	reader    homepageports.Reader
+	details   homepageports.DetailProjectionStore
 	followers homepageports.FollowerProjectionStore
 }
 
@@ -22,7 +23,11 @@ func NewQueryFacade(
 	if reader == nil {
 		return nil, errors.New("homepage query facade requires reader")
 	}
-	return &QueryFacade{reader: reader, followers: followers}, nil
+	details, ok := reader.(homepageports.DetailProjectionStore)
+	if !ok {
+		return nil, errors.New("homepage query facade requires detail projection store")
+	}
+	return &QueryFacade{reader: reader, details: details, followers: followers}, nil
 }
 
 func (f *QueryFacade) Get(
@@ -44,14 +49,19 @@ func (f *QueryFacade) Get(
 	if snapshot.Status == homepagemodel.StatusOffline && !includeOffline {
 		return View{}, generated.AppErrorFromHomepageOffline("homepage offline")
 	}
-	view := ViewFromSnapshot(snapshot)
+	view, err := f.detailView(ctx, snapshot)
+	if err != nil {
+		return View{}, err
+	}
 	if f.followers != nil {
 		followerView, followerErr := f.followers.ResolveFollowerView(ctx, snapshot.ID, viewerPersonaID)
 		if followerErr != nil {
 			return View{}, unavailable(followerErr)
 		}
-		view.FollowerCount = followerView.Count
-		view.ViewerFollows = followerView.ViewerFollows
+		view.ViewerFollow = ViewerFollowSlice{
+			ViewerFollowsHomepage: followerView.ViewerFollows,
+			FollowerCount:         followerView.Count,
+		}
 	}
 	return view, nil
 }
@@ -81,6 +91,10 @@ func (f *QueryFacade) Search(
 	}
 	result := SearchSlice{NextCursor: page.NextCursor, Items: []SearchItemView{}}
 	for _, snapshot := range page.Items {
+		projection, _, projectionErr := f.details.LoadDetailProjection(ctx, snapshot.ID)
+		if projectionErr != nil {
+			return SearchSlice{}, unavailable(projectionErr)
+		}
 		result.Items = append(result.Items, SearchItemView{
 			HomepageID:        snapshot.ID,
 			CanonicalEntityID: snapshot.CanonicalEntityID,
@@ -91,8 +105,8 @@ func (f *QueryFacade) Search(
 			City:              snapshot.City,
 			Address:           snapshot.Address,
 			Status:            string(snapshot.Status),
-			AverageRating:     cloneFloat(snapshot.AverageRating),
-			RatingCount:       snapshot.RatingCount,
+			AverageRating:     cloneFloat(projection.AverageRating),
+			RatingCount:       projection.RatingCount,
 		})
 	}
 	return result, nil
@@ -109,9 +123,28 @@ func (f *QueryFacade) Scan(
 	}
 	views := make([]View, 0, len(page.Items))
 	for _, snapshot := range page.Items {
-		views = append(views, ViewFromSnapshot(snapshot))
+		view, detailErr := f.detailView(ctx, snapshot)
+		if detailErr != nil {
+			return nil, "", detailErr
+		}
+		views = append(views, view)
 	}
 	return views, page.NextCursor, nil
+}
+
+func (f *QueryFacade) detailView(
+	ctx context.Context,
+	snapshot homepagemodel.Snapshot,
+) (View, error) {
+	view := ViewFromSnapshot(snapshot)
+	projection, found, err := f.details.LoadDetailProjection(ctx, snapshot.ID)
+	if err != nil {
+		return View{}, unavailable(err)
+	}
+	if found {
+		view = ApplyDetailProjection(view, projection)
+	}
+	return view, nil
 }
 
 func (f *QueryFacade) Count(ctx context.Context) (int64, error) {

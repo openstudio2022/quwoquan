@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_student_mentor_001
-subAccountId: builtin_student_mentor
+personaId: builtin_student_mentor
 authorId: builtin_student_mentor
 isSystemBuiltin: true
 displayName: 学长姐备忘录
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.84
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Format/内容角度/攻略/新生攻略
   - Topic/教育成长/校园生活/开学季

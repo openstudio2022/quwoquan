@@ -1,0 +1,12 @@
+{
+  "label": "优胜美地",
+  "labelEn": "Yosemite",
+  "description": "花岗岩巨壁与瀑布国家公园",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

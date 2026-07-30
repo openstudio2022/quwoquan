@@ -1,4 +1,23 @@
 read_model: MediaImageReprocessRunDetail
 description: 内部运维面读取图片 descriptor 重处理任务状态的具名投影。
+source_entities:
+- MediaImageReprocessRun
 consumers:
 - platform-ops
+fields:
+- {name: runId, type: string}
+- {name: version, type: int}
+- {name: targetDerivativePolicyVersion, type: int}
+- {name: status, type: string}
+- {name: assetIds, type: '[]string'}
+- {name: nextAssetIndex, type: int}
+- {name: processedCount, type: int}
+- {name: failedCount, type: int}
+- {name: rollbackIndex, type: int}
+- {name: activations, type: '[]MediaImageReprocessActivation'}
+- {name: failureReason, type: string, nullable: true}
+- {name: startedAt, type: timestamp}
+- {name: pausedAt, type: timestamp, nullable: true}
+- {name: completedAt, type: timestamp, nullable: true}
+- {name: rolledBackAt, type: timestamp, nullable: true}
+- {name: updatedAt, type: timestamp}

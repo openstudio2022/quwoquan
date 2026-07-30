@@ -2,6 +2,7 @@
   "label": "6-9日长线",
   "labelEn": "6-9 Day Trip",
   "description": "6至9天的长线旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

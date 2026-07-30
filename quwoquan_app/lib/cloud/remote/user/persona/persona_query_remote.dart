@@ -19,7 +19,7 @@ final class RemotePersonaQuery implements PersonaQuery {
   @override
   Future<List<PersonaManagementItemViewData>> listPersonas() async {
     final result = await managementQuery.listPersonas(
-      const ListPersonasQuery(),
+      ListPersonasQuery(),
     );
     return result.items
         .map(PersonaManagementItemViewData.fromPersonaManagementItemProjection)
@@ -29,7 +29,7 @@ final class RemotePersonaQuery implements PersonaQuery {
   @override
   Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
     final projection = await managementQuery.getPersonaManagementSummary(
-      const GetPersonaManagementSummaryQuery(),
+      GetPersonaManagementSummaryQuery(),
     );
     return PersonaManagementSummaryViewData.fromProjection(projection);
   }
@@ -37,7 +37,7 @@ final class RemotePersonaQuery implements PersonaQuery {
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
     final projection = await managementQuery.getActivePersonaContext(
-      const GetActivePersonaContextQuery(),
+      GetActivePersonaContextQuery(),
     );
     return ActivePersonaContextViewData.fromActivePersonaContextProjection(
       projection,
@@ -46,10 +46,10 @@ final class RemotePersonaQuery implements PersonaQuery {
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
+    String personaId,
   ) async {
     final projection = await managementQuery.getPersonaLifecycleGuard(
-      GetPersonaLifecycleGuardQuery(subAccountId: subAccountId),
+      GetPersonaLifecycleGuardQuery(personaId: personaId),
     );
     return PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardProjection(
       projection,
@@ -57,14 +57,10 @@ final class RemotePersonaQuery implements PersonaQuery {
   }
 
   @override
-  Future<SubAccountProfileViewData> getSubAccountProfile(
-    String subAccountId,
-  ) async {
-    final projection = await publicProfileQuery.getSubAccountProfile(
-      GetSubAccountProfileQuery(subAccountId: subAccountId),
+  Future<PersonaProfileViewData> getPersonaProfile(String personaId) async {
+    final projection = await publicProfileQuery.getPersonaProfile(
+      GetPersonaProfileQuery(personaId: personaId),
     );
-    return SubAccountProfileViewData.fromSubAccountProfileProjection(
-      projection,
-    );
+    return PersonaProfileViewData.fromPersonaProfileProjection(projection);
   }
 }

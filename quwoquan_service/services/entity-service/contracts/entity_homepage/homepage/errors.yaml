@@ -8,6 +8,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
@@ -18,46 +21,22 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_status_report.CreateHomepageStatusReport]
   recovery_action: surface
   dart_const: homepageNotFound
   go_const: ErrHomepageNotFound
   user_message:
     zh: 主页不存在或已下线
     en: Homepage not found or offline
-- code: ENTITY.USER.homepage_attach_required
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: homepageAttachRequired
-  go_const: ErrHomepageAttachRequired
-  user_message:
-    zh: 口碑必须绑定一个主页
-    en: A review must be attached to one homepage
-- code: ENTITY.USER.claim_material_missing
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: claimMaterialMissing
-  go_const: ErrClaimMaterialMissing
-  user_message:
-    zh: 认领材料不完整，请补充后重试
-    en: Claim materials are incomplete
-- code: ENTITY.USER.already_claimed
-  kind: USER
-  reason: conflict
-  http_status: 409
-  recovery_action: surface
-  dart_const: alreadyClaimed
-  go_const: ErrAlreadyClaimed
-  user_message:
-    zh: 该主页已被认领
-    en: Homepage has already been claimed
 - code: ENTITY.USER.homepage_offline
   kind: USER
   reason: gone
   http_status: 410
+  emitted_by:
+  - surface: http
+    operations: [GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_review.CreateHomepageReview]
   recovery_action: surface
   dart_const: homepageOffline
   go_const: ErrHomepageOffline
@@ -68,6 +47,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [IntakeHomepageCandidate, SuggestHomepageCandidate]
   recovery_action: surface
   dart_const: invalidHomepageType
   go_const: ErrInvalidHomepageType
@@ -78,6 +60,9 @@ errors:
   kind: USER
   reason: forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [ListHomepageCandidates, IntakeHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
   dart_const: permissionDenied
   go_const: ErrPermissionDenied
@@ -88,6 +73,9 @@ errors:
   kind: USER
   reason: version_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: refresh
   dart_const: versionConflict
   go_const: ErrVersionConflict
@@ -98,6 +86,9 @@ errors:
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, UpdateClaimedHomepageBasics, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
@@ -108,6 +99,9 @@ errors:
   kind: SYSTEM
   reason: internal_error
   http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [SearchHomepages, ListHomepageCandidates, IntakeHomepageCandidate, SuggestHomepageCandidate, PublishHomepageCandidate, GetHomepageDetail, GetHomepageShell, GetHomepageIntroduction, GetObjectPageBundle, GetEntityImpact, GetHomepageReviewSummary, GetHomepageRelatedGroups, UpdateClaimedHomepageBasics, entity.homepage_claim_request.ListHomepageClaimRequests, entity.homepage_claim_request.CreateHomepageClaimRequest, entity.homepage_claim_request.ReviewHomepageClaimRequest, entity.homepage_review.CreateHomepageReview, entity.homepage_review.UpdateHomepageReview, entity.homepage_review.DeleteHomepageReview, entity.homepage_review.ListHomepageReviews, entity.homepage_review.GetMyHomepageReview, entity.homepage_status_report.ListHomepageStatusReports, entity.homepage_status_report.CreateHomepageStatusReport, entity.homepage_status_report.ReviewHomepageStatusReport]
   recovery_action: surface
   dart_const: internalError
   go_const: ErrInternalError

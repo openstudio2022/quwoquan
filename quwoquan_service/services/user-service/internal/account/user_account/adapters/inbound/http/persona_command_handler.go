@@ -78,8 +78,6 @@ type createPersonaWire struct {
 // updatePersonaWire 对齐 UpdatePersona request_fields（PATCH 语义）。
 type updatePersonaWire struct {
 	DisplayName    *string  `json:"displayName"`
-	Phone          *string  `json:"phone"`
-	Email          *string  `json:"email"`
 	AvatarURL      *string  `json:"avatarUrl"`
 	BackgroundURL  *string  `json:"backgroundUrl"`
 	IsolationLevel *string  `json:"isolationLevel"`
@@ -151,7 +149,7 @@ func writeHandleReadonlyIfRequested(w http.ResponseWriter, r *http.Request, user
 	if userHandle == nil {
 		return false
 	}
-	writeHTTPError(w, r, personagenerated.AppErrorFromSubAccountHandleReadonly(
+	writeHTTPError(w, r, personagenerated.AppErrorFromPersonaHandleReadonly(
 		"userHandle is system assigned",
 	))
 	return true

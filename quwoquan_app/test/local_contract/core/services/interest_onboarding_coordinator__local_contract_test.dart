@@ -18,8 +18,7 @@ void main() {
         );
 
         final selected = await coordinator.select(
-          catalogVersion: 'v1',
-          taxonomyReleaseId: 'release-v1',
+          taxonomyReleaseId: ' tag-taxonomy-current ',
           tagRefs: const <String>[
             'Topic/兴趣/旅行',
             'Topic/兴趣/旅行',
@@ -43,8 +42,10 @@ void main() {
           selected.clientEventId,
           selected.clientEventId,
         ]);
-        expect(writer.catalogVersions, <String>['v1', 'v1']);
-        expect(writer.taxonomyReleaseIds, <String>['release-v1', 'release-v1']);
+        expect(writer.taxonomyReleaseIds, <String>[
+          'tag-taxonomy-current',
+          'tag-taxonomy-current',
+        ]);
       },
     );
 
@@ -57,8 +58,7 @@ void main() {
       );
 
       final skipped = await coordinator.skip(
-        catalogVersion: 'v1',
-        taxonomyReleaseId: 'release-v1',
+        taxonomyReleaseId: 'tag-taxonomy-current',
       );
 
       expect(skipped.status, InterestOnboardingStatus.skipped);
@@ -73,15 +73,13 @@ void main() {
         writer: _RecordingWriter(),
       );
       const restored = InterestOnboardingDraft(
-        catalogVersion: 'v1',
-        taxonomyReleaseId: 'release-v1',
+        taxonomyReleaseId: 'tag-taxonomy-current',
         clientEventId: 'onboarding:stable-intent',
         tagRefs: <String>['Topic/兴趣/旅行'],
         status: InterestOnboardingStatus.unseen,
       );
 
       final selected = await coordinator.select(
-        catalogVersion: restored.catalogVersion,
         taxonomyReleaseId: restored.taxonomyReleaseId,
         tagRefs: restored.tagRefs,
         previous: restored,
@@ -100,7 +98,6 @@ void main() {
           writer: _RecordingWriter(),
         );
         const previous = InterestOnboardingDraft(
-          catalogVersion: 'v1',
           taxonomyReleaseId: 'tag-taxonomy-old',
           clientEventId: 'onboarding:old-release-intent',
           tagRefs: <String>['Topic/兴趣/旅行'],
@@ -108,7 +105,6 @@ void main() {
         );
 
         final selected = await coordinator.select(
-          catalogVersion: 'v1',
           taxonomyReleaseId: 'tag-taxonomy-current',
           tagRefs: previous.tagRefs,
           previous: previous,
@@ -119,12 +115,41 @@ void main() {
       },
     );
 
+    test('rejects retired catalogVersion draft instead of dual-reading', () {
+      final parsed = InterestOnboardingDraft.tryParse(<String, Object?>{
+        // Retired catalogVersion input is a negative fixture and must fail closed.
+        'catalogVersion': 'retired',
+        'taxonomyReleaseId': 'tag-taxonomy-current',
+        'clientEventId': 'onboarding:retired-draft',
+        'tagRefs': <String>['Topic/兴趣/旅行'],
+        'status': 'pending',
+      });
+
+      expect(parsed, isNull);
+    });
+
+    test('persists only the canonical taxonomy release identity', () {
+      const draft = InterestOnboardingDraft(
+        taxonomyReleaseId: 'tag-taxonomy-current',
+        clientEventId: 'onboarding:canonical-draft',
+        tagRefs: <String>['Topic/兴趣/旅行'],
+        status: InterestOnboardingStatus.pending,
+      );
+
+      expect(draft.toJson().keys, <String>[
+        'taxonomyReleaseId',
+        'clientEventId',
+        'tagRefs',
+        'status',
+      ]);
+      expect(InterestOnboardingDraft.tryParse(draft.toJson()), isNotNull);
+    });
+
     test('账号 closed 终态清除加密兴趣草稿并读回验证', () async {
       FlutterSecureStorage.setMockInitialValues(<String, String>{});
       const store = SecureInterestOnboardingDraftStore();
       const draft = InterestOnboardingDraft(
-        catalogVersion: 'v1',
-        taxonomyReleaseId: 'release-v1',
+        taxonomyReleaseId: 'tag-taxonomy-current',
         clientEventId: 'onboarding:closed',
         tagRefs: <String>['Topic/兴趣/旅行'],
         status: InterestOnboardingStatus.pending,
@@ -156,18 +181,15 @@ final class _RecordingWriter implements ConfirmedOnboardingInterestWriter {
 
   final bool failFirst;
   final List<String> clientEventIds = <String>[];
-  final List<String> catalogVersions = <String>[];
   final List<String> taxonomyReleaseIds = <String>[];
 
   @override
   Future<void> submit({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
     clientEventIds.add(clientEventId);
-    catalogVersions.add(catalogVersion);
     taxonomyReleaseIds.add(taxonomyReleaseId);
     if (failFirst && clientEventIds.length == 1) {
       throw StateError('offline');

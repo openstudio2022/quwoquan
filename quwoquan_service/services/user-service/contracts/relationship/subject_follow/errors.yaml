@@ -4,6 +4,11 @@ errors:
 - code: USER.SUBJECT_FOLLOW.invalid_subject_type
   kind: SUBJECT_FOLLOW
   reason: invalid_subject_type
+  emitted_by:
+  - surface: http
+    operations:
+    - FollowSubject
+    - UnfollowSubject
   http_status: 400
   recovery_action: surface
   go_const: ErrSubjectFollowInvalidSubjectType

@@ -27,10 +27,11 @@
 
 - 每个发布对象必须闭合 creator、tag、entity、media 与 source 引用；运行 receipt 只能写入输出目录，不得回写静态真相源。
 - homepage、article、image、video 不以彼此的 execution 或 publish 结果作为运行前置；post 只依赖可解析的 canonical entity identity。
-- 四个 execution 必须从同一 reviewed commit、source digest 与 entity catalog digest 并行运行，单一载体失败不得覆盖其他载体工作包。
-- `task execute --stage submit-only|campaign-run|review-only` 是唯一 campaign 门面；controller 等齐四份 immutable submission 后才冻结唯一 plan 与 `planDigest`，collision、commit/source/catalog mismatch、主工作树漂移或超时均 fail closed。
+- 四个 execution 必须从同一 reviewed named main branch、commit、source digest 与 entity catalog digest 并行运行，单一载体失败不得覆盖其他载体工作包。
+- `task execute --stage submit-only|campaign-run|review-only` 是唯一 campaign 门面；controller 等齐四份 immutable submission 后才冻结唯一 plan 与 `planDigest`，collision、branch/commit/source/catalog mismatch、主工作树漂移或超时均 fail closed。
 - controller 为四个 lane 建立同一 frozen commit 的 detached disposable clone，四 lane 并发到 review barrier；仅当四份 review receipt 均达到各自 quota 后才可进入 publish，任一 publish/finalize 失败使整个 campaign 终态为 blocked，结束时必须清理 clone。
-- campaign report 必须保留 status、phase、review/publish return code、clone ref、qualified/finalized count 与 cleanup 终态；报告是运行回执，不得成为新的内容或 release 真相源。
+- article/image/video 的 canonical Post manifest 必须显式声明 `contentIdentity=work`；schema、promotion 与 importer 任一层发现缺失或非 `work` 均阻断整个 campaign，禁止由消费者默认补值。
+- campaign report 必须保留 named main branch、status、phase、review/publish return code、clone ref、qualified/finalized count 与 cleanup 终态；报告是运行回执，不得成为新的内容或 release 真相源。
 
 ## 4. 契约引用
 
@@ -42,7 +43,7 @@
 <a id="gwt-001"></a>
 ### GWT-001 独立载体并行且引用闭包后才允许 promotion
 
-- GIVEN homepage、article、image、video 各有一个 immutable execution，并共享同一 commit、source digest 与 entity catalog digest。
+- GIVEN homepage、article、image、video 各有一个 immutable execution，并共享同一 named main branch、commit、source digest 与 entity catalog digest。
 - WHEN 四个 execution 并行生产且操作者请求聚合并 promotion release。
 - THEN post 不等待 homepage execution 或 publish，任一载体失败只保留在自身 evidence。
 - THEN 仅当全部 approved 对象的 entity identity、creator、tag、source 与媒体处置闭合时生成 immutable release；任一悬挂引用使整次 promotion 失败。

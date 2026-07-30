@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/circle/generated/circle_errors.g.dart';
+import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -129,7 +129,10 @@ class CircleStateNotifier extends Notifier<CircleState> {
               .getMyMembership(MyCircleMembershipQuery(circleId: _circleId));
           if (!ref.mounted) return;
         } on CloudException catch (error) {
-          if (error.code != CircleErrorCode.membershipNotFound.code) rethrow;
+          if (error.domainErrorCode?.value !=
+              CircleMembershipErrorCode.membershipNotFound) {
+            rethrow;
+          }
         }
       }
       if (!ref.mounted) return;
@@ -190,9 +193,15 @@ class CircleStateNotifier extends Notifier<CircleState> {
   Future<void> joinCircle() async {
     final previousStatus = state.joinStatus;
     final previousVersion = state.membershipVersion;
-    final nextJoinStatus = state.circleData?.joinPolicy == 'approval'
-        ? 'pending'
-        : 'joined';
+    final joinPolicy = state.circleData?.joinPolicy ?? CircleJoinPolicy.open;
+    if (joinPolicy == CircleJoinPolicy.inviteOnly) {
+      return;
+    }
+    final nextJoinStatus = switch (joinPolicy) {
+      CircleJoinPolicy.open => 'joined',
+      CircleJoinPolicy.approval => 'pending',
+      CircleJoinPolicy.inviteOnly => previousStatus,
+    };
     state = state.copyWith(joinStatus: nextJoinStatus, clearLoadError: true);
     try {
       await ref.read(activePersonaContextProvider.future);

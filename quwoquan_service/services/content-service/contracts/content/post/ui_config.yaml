@@ -58,7 +58,10 @@ home_channels:
   layout_template: singleColumnMultiForm
   phone_columns: 1
   supports_full_span_modules: false
-  intersection_module_policy: inlineOnly
+  # 旅游是首批上线垂类，也是交集事实供给最密的频道（同地到访 / 同期出行 /
+  # 同兴趣地点），因此 spotlight 横滑模块只在这里开：其他频道保持 inlineOnly，
+  # 由卡片内联句承载。runtime_overridable 为 true，供给不足时可远程回退到 inlineOnly。
+  intersection_module_policy: spotlightSegment
   content_card_policy: richMultiForm
   feed_query:
     channel: travel
@@ -151,9 +154,10 @@ discovery_rails:
   identity: work
   default: false
   order: 1
+# taxonomy 发布身份不在此登记：它是 tag-service 活跃发布的运行时事实，
+# 客户端回显加载目录时下发的 TagChild.releaseId，服务端原样转交 tag-service 判定。
+# 固化到本文件会让「发一个新 tag 发布」变成「重发 content-service + 重发端」。
 onboarding_interest_catalog:
-  version: v1
-  taxonomy_release_id: tag-taxonomy-20260723-001
   min_selection_count: 1
   max_selection_count: 12
   dimensions:
@@ -445,6 +449,10 @@ feature_flags:
   default: false
   runtime_overridable: true
   description: 启用 asset/version 绑定的 storyboard 拖动预览；失败或关闭时降级为时间浮标
+- flag: enable_hls_cmaf_abr
+  default: false
+  runtime_overridable: true
+  description: 在平台声明 adaptive playback capability 且 descriptor 完整时优先 HLS/CMAF；初始化失败必须回退同资产同版本 progressive MP4
 - flag: enable_assistant_content_identity_index
   default: false
   runtime_overridable: true
@@ -482,11 +490,6 @@ empty_states:
     subtitle_key: feed_load_error_subtitle
     retry: true
     retry_label_key: retry_load
-  feed_rate_limited:
-    illustration: slow_down
-    title_key: feed_rate_limited_title
-    subtitle_key: feed_rate_limited_subtitle
-    show_countdown: true
   post_not_found:
     illustration: post_deleted
     title_key: post_not_found_title

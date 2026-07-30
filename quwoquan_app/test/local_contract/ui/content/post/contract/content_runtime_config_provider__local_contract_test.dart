@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import '../../../../../support/cloud_services/content_facet_overrides.dart';
@@ -17,6 +18,12 @@ class _RuntimeConfigRepository extends MockContentRepository {
   @override
   Future<ContentAppConfigWire> getAppConfig() async =>
       ContentAppConfigWire.fromResponseObject(_config);
+}
+
+Map<String, dynamic> _remoteConfig(Map<String, dynamic> root) {
+  return AppRemoteConfigSnapshot.defaults(
+    ContentAppConfigWire.fromResponseObject(root),
+  ).toPersistedMap();
 }
 
 ContentRuntimeConfigState _effectiveState(ProviderContainer container) {
@@ -41,29 +48,31 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(
-          _RuntimeConfigRepository({
-            'content': {
-              'feature_flags': {
-                'enable_create_action_entry': false,
-                'enable_unified_create_editor': true,
-                'enable_identity_based_surfaces': false,
-                'enable_identity_share_template': true,
-                'enable_article_book_reader': false,
-                'enable_article_page_curl': true,
-                'enable_assistant_content_identity_index': true,
+          _RuntimeConfigRepository(
+            _remoteConfig({
+              'content': {
+                'feature_flags': {
+                  'enable_create_action_entry': false,
+                  'enable_unified_create_editor': true,
+                  'enable_identity_based_surfaces': false,
+                  'enable_identity_share_template': true,
+                  'enable_article_book_reader': false,
+                  'enable_article_page_curl': true,
+                  'enable_assistant_content_identity_index': true,
+                },
+                'gray_release': {
+                  'experiment_bucket': 'rollout_20',
+                  'current_stage': '20%',
+                  'canary_matrix': [
+                    {'stage': '5%', 'rolloutPercent': 5},
+                    {'stage': '20%', 'rolloutPercent': 20},
+                    {'stage': '50%', 'rolloutPercent': 50},
+                    {'stage': '100%', 'rolloutPercent': 100},
+                  ],
+                },
               },
-              'gray_release': {
-                'experiment_bucket': 'rollout_20',
-                'current_stage': '20%',
-                'canary_matrix': [
-                  {'stage': '5%', 'rolloutPercent': 5},
-                  {'stage': '20%', 'rolloutPercent': 20},
-                  {'stage': '50%', 'rolloutPercent': 50},
-                  {'stage': '100%', 'rolloutPercent': 100},
-                ],
-              },
-            },
-          }),
+            }),
+          ),
         ),
       ],
     );
@@ -97,22 +106,24 @@ void main() {
   });
 
   test('refresh 会重新拉取远端 runtime config', () async {
-    final repo = _RuntimeConfigRepository({
-      'content': {
-        'feature_flags': {
-          'enable_identity_share_template': true,
-          'enable_assistant_content_identity_index': true,
+    final repo = _RuntimeConfigRepository(
+      _remoteConfig({
+        'content': {
+          'feature_flags': {
+            'enable_identity_share_template': true,
+            'enable_assistant_content_identity_index': true,
+          },
+          'gray_release': {
+            'experiment_bucket': 'rollout_20',
+            'current_stage': '20%',
+            'canary_matrix': [
+              {'stage': '5%', 'rolloutPercent': 5},
+              {'stage': '20%', 'rolloutPercent': 20},
+            ],
+          },
         },
-        'gray_release': {
-          'experiment_bucket': 'rollout_20',
-          'current_stage': '20%',
-          'canary_matrix': [
-            {'stage': '5%', 'rolloutPercent': 5},
-            {'stage': '20%', 'rolloutPercent': 20},
-          ],
-        },
-      },
-    });
+      }),
+    );
     final container = ProviderContainer(
       overrides: [...mockContentFacetOverrides(repo)],
     );
@@ -122,23 +133,25 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    repo.replace({
-      'content': {
-        'feature_flags': {
-          'enable_identity_share_template': false,
-          'enable_assistant_content_identity_index': false,
+    repo.replace(
+      _remoteConfig({
+        'content': {
+          'feature_flags': {
+            'enable_identity_share_template': false,
+            'enable_assistant_content_identity_index': false,
+          },
+          'gray_release': {
+            'experiment_bucket': 'rollout_50',
+            'current_stage': '50%',
+            'canary_matrix': [
+              {'stage': '5%', 'rolloutPercent': 5},
+              {'stage': '20%', 'rolloutPercent': 20},
+              {'stage': '50%', 'rolloutPercent': 50},
+            ],
+          },
         },
-        'gray_release': {
-          'experiment_bucket': 'rollout_50',
-          'current_stage': '50%',
-          'canary_matrix': [
-            {'stage': '5%', 'rolloutPercent': 5},
-            {'stage': '20%', 'rolloutPercent': 20},
-            {'stage': '50%', 'rolloutPercent': 50},
-          ],
-        },
-      },
-    });
+      }),
+    );
 
     await container.read(appRemoteConfigProvider.notifier).refresh();
     final state = _effectiveState(container);
@@ -158,18 +171,20 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(
-          _RuntimeConfigRepository({
-            'content': {
-              'client_state_sync': {
-                'flush_delay_sec': 15,
-                'retry_delay_sec': 90,
-                'max_batch_size': 8,
-                'max_pending_age_sec': 3600,
-                'flush_on_foreground_resume': false,
-                'flush_on_network_recovered': true,
+          _RuntimeConfigRepository(
+            _remoteConfig({
+              'content': {
+                'client_state_sync': {
+                  'flush_delay_sec': 15,
+                  'retry_delay_sec': 90,
+                  'max_batch_size': 8,
+                  'max_pending_age_sec': 3600,
+                  'flush_on_foreground_resume': false,
+                  'flush_on_network_recovered': true,
+                },
               },
-            },
-          }),
+            }),
+          ),
         ),
       ],
     );
@@ -205,14 +220,16 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(
-          _RuntimeConfigRepository({
-            'content': {
-              'feature_flags': {
-                'ops.user.persona_management_v1': false,
-                'ops.user.persona_profile_sync_v1': false,
+          _RuntimeConfigRepository(
+            _remoteConfig({
+              'content': {
+                'feature_flags': {
+                  'ops.user.persona_management': false,
+                  'ops.user.persona_profile_sync': false,
+                },
               },
-            },
-          }),
+            }),
+          ),
         ),
       ],
     );
@@ -223,7 +240,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
     final pending = container.read(appRemoteConfigProvider).pending;
-    expect(pending?.isEnabled('ops.user.persona_management_v1'), isFalse);
-    expect(pending?.isEnabled('ops.user.persona_profile_sync_v1'), isFalse);
+    expect(pending?.isEnabled('ops.user.persona_management'), isFalse);
+    expect(pending?.isEnabled('ops.user.persona_profile_sync'), isFalse);
   });
 }

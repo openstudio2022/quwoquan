@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
-	generated "quwoquan_service/services/notification-service/generated/notification_delivery/notification"
+	jobgenerated "quwoquan_service/services/notification-service/generated/notification_delivery/notification_delivery_job"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 )
 
@@ -85,7 +85,7 @@ func (handler *Handler) listDeadLetters(w http.ResponseWriter, r *http.Request) 
 func (handler *Handler) recover(w http.ResponseWriter, r *http.Request) {
 	jobAction := strings.TrimSpace(r.PathValue("jobAction"))
 	if !strings.HasSuffix(jobAction, ":recover") {
-		writeError(w, r, generated.AppErrorFromInvalidArgument("delivery job action must be :recover"))
+		writeError(w, r, jobgenerated.AppErrorFromDeliveryJobInvalidArgument("delivery job action must be :recover"))
 		return
 	}
 	result, err := handler.commands.RecoverDeliveryJob(
@@ -107,7 +107,7 @@ func parseLimit(raw string) (int, error) {
 	}
 	limit, err := strconv.Atoi(raw)
 	if err != nil || limit <= 0 {
-		return 0, generated.AppErrorFromInvalidArgument("limit must be a positive integer")
+		return 0, jobgenerated.AppErrorFromDeliveryJobInvalidArgument("limit must be a positive integer")
 	}
 	return limit, nil
 }

@@ -27,6 +27,7 @@ var (
 	notificationReliableStore   *deliverypersistence.MongoNotificationDeliveryJobStore
 	notificationAppMessageStore *persistence.MongoAppMessageStore
 	notificationAccountClosure  *persistence.MongoUserAccountClosedProjection
+	notificationRestriction     *persistence.MongoUserAccountRestrictionProjection
 	notificationRedisRuntime    *testinfra.RealRedis
 	notificationRedisRouter     *rtredis.Router
 	notificationRedisClient     rtredis.Client
@@ -67,7 +68,18 @@ func TestMain(m *testing.M) {
 	notificationMongoDB = notificationMongoClient.Database(
 		fmt.Sprintf("notification_service_api_integration_%d", time.Now().UnixNano()),
 	)
-	notificationReliableStore = deliverypersistence.NewMongoNotificationDeliveryJobStore(notificationMongoDB)
+	notificationRestriction, err =
+		persistence.NewMongoUserAccountRestrictionProjection(notificationMongoDB)
+	if err != nil {
+		panic("create notification-service account-restriction projection: " + err.Error())
+	}
+	if err := notificationRestriction.EnsureIndexes(startupCtx); err != nil {
+		panic("ensure notification-service account-restriction indexes: " + err.Error())
+	}
+	notificationReliableStore = deliverypersistence.NewMongoNotificationDeliveryJobStore(
+		notificationMongoDB,
+		notificationRestriction,
+	)
 	if err := notificationReliableStore.EnsureIndexes(startupCtx); err != nil {
 		panic("ensure notification-service reliable-task indexes: " + err.Error())
 	}
@@ -162,6 +174,9 @@ func resetNotificationCollections(t *testing.T) {
 		"reliable_task_leases",
 		persistence.UserAccountClosedInboxCollection,
 		persistence.UserAccountClosedFailureCollection,
+		"notification_user_account_restrictions",
+		"notification_user_account_restriction_inbox",
+		"notification_user_account_restriction_watermarks",
 	} {
 		if _, err := notificationMongoDB.Collection(collection).DeleteMany(ctx, bson.D{}); err != nil {
 			t.Fatalf("clean %s: %v", collection, err)

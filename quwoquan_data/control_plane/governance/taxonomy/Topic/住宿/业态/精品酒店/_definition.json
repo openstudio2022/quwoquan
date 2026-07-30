@@ -2,6 +2,7 @@
   "label": "精品酒店",
   "labelEn": "Boutique Hotel",
   "description": "设计感精品酒店",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

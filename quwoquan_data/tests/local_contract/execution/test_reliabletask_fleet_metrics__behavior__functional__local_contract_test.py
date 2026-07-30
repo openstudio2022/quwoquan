@@ -17,6 +17,11 @@ if str(DATA_ROOT / "scripts") not in sys.path:
 from content.execution.controller.metrics import (  # noqa: E402
     _reliabletask_accepted_throughput,
 )
+from content.execution import reliabletask_fleet  # noqa: E402
+from content.execution.reliabletask_fleet import (  # noqa: E402
+    ReliableTaskFleetTransport,
+)
+from core.control_types import QueueJobStage  # noqa: E402
 from core.io import write_json  # noqa: E402
 
 
@@ -134,3 +139,71 @@ def test_metrics_reject_accepted_below_quota(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="已达标 5 / 配额 9"):
         _reliabletask_accepted_throughput(tmp_path)
+
+
+def test_failed_publish_fleet_report_remains_projectable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A valid failed receipt is business evidence, not environment unavailability."""
+    report = _report(passed=False)
+    report["taskOutcomes"] = [
+        {
+            "jobId": f"job-{index}",
+            "status": "dead" if index == 0 else "succeeded",
+            "attempts": 3 if index == 0 else 1,
+            **(
+                {"failureCode": "RELIABLETASK.WORKER.handler_failed"}
+                if index == 0
+                else {}
+            ),
+        }
+        for index in range(10)
+    ]
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "resolve_reliabletask_fleet_transport",
+        lambda: ReliableTaskFleetTransport(
+            target="test",
+            mongo_uri="mongodb://127.0.0.1:27017/quwoquan",
+            redis_addr="127.0.0.1:6379",
+        ),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "build_fleet_request",
+        lambda _execution_id, _stage: {
+            "objectTimeoutMilliseconds": 1_000,
+            "jobs": [{} for _index in range(10)],
+        },
+    )
+    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_command",
+        lambda: (["fleet"], tmp_path),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_agent_python",
+        lambda: Path("/usr/bin/python3"),
+    )
+
+    def _run(command: list[str], **_kwargs: object) -> int:
+        write_json(Path(command[-1]), report)
+        return 1
+
+    monkeypatch.setattr(reliabletask_fleet, "_run_fleet_process", _run)
+
+    decoded = reliabletask_fleet.run_reliabletask_fleet(
+        "20260728--travel-video-supply--test-region-a--pilot-001",
+        QueueJobStage.PUBLISH,
+        workers=2,
+        completion_grace_seconds=1,
+    )
+
+    assert decoded.passed is False
+    assert decoded.accepted_content_throughput_status == (
+        "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
+    )
+    assert decoded.outcomes[0].failure_code == "RELIABLETASK.WORKER.handler_failed"

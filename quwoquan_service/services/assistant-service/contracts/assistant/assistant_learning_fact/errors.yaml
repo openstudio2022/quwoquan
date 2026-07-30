@@ -6,6 +6,9 @@ errors:
   kind: USER
   reason: learning_fact_invalid
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
   recovery_action: surface
   dart_const: learningFactInvalid
   go_const: ErrLearningFactInvalid
@@ -16,6 +19,9 @@ errors:
   kind: USER
   reason: learning_fact_unauthorized
   http_status: 401
+  emitted_by:
+  - surface: http
+    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact, GetLearningOpsSummary]
   recovery_action: reauth
   dart_const: learningFactUnauthorized
   go_const: ErrLearningFactUnauthorized
@@ -26,6 +32,9 @@ errors:
   kind: USER
   reason: learning_fact_owner_mismatch
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [AppendAssistantLearningFact]
   recovery_action: surface
   dart_const: learningFactOwnerMismatch
   go_const: ErrLearningFactOwnerMismatch
@@ -36,6 +45,9 @@ errors:
   kind: USER
   reason: learning_fact_run_not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
   recovery_action: refresh
   dart_const: learningFactRunNotFound
   go_const: ErrLearningFactRunNotFound
@@ -46,6 +58,9 @@ errors:
   kind: USER
   reason: learning_fact_identity_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
   recovery_action: refresh
   dart_const: learningFactIdentityConflict
   go_const: ErrLearningFactIdentityConflict
@@ -56,6 +71,9 @@ errors:
   kind: SYSTEM
   reason: learning_fact_sink_unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [AppendAssistantLearningFact, AppendAssistantServiceLearningFact]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: learningFactSinkUnavailable
@@ -63,3 +81,17 @@ errors:
   user_message:
     zh: 助手反馈暂时无法保存，请稍后重试
     en: Assistant learning fact storage is temporarily unavailable
+- code: ASSISTANT.SYSTEM.learning_ops_unavailable
+  kind: SYSTEM
+  reason: learning_ops_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [GetLearningOpsSummary]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: learningOpsUnavailable
+  go_const: ErrLearningOpsUnavailable
+  user_message:
+    zh: 助手学习摘要暂时无法读取，请稍后重试
+    en: Assistant learning summary is temporarily unavailable

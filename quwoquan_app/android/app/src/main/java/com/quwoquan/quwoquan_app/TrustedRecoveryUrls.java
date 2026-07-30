@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
-import java.util.Locale;
 
 /** 原生恢复与 Flutter bridge 共用的受信 HTTPS URL 解析器。 */
 final class TrustedRecoveryUrls {
@@ -38,7 +37,10 @@ final class TrustedRecoveryUrls {
           || host == null
           || host.isEmpty()
           || uri.getUserInfo() != null
-          || !isTrustedHost(host)) {
+          || uri.getFragment() != null
+          || (!matchesConfiguredBase(uri, BuildConfig.QWQ_RECOVERY_BASE_URL)
+              && !matchesConfiguredBase(uri, BuildConfig.QWQ_PUBLIC_WEB_URL)
+              && !matchesConfiguredBase(uri, BuildConfig.QWQ_APP_DOWNLOAD_BASE_URL))) {
         return null;
       }
       return uri;
@@ -47,8 +49,22 @@ final class TrustedRecoveryUrls {
     }
   }
 
-  private static boolean isTrustedHost(String rawHost) {
-    String host = rawHost.toLowerCase(Locale.ROOT);
-    return host.equals("quwoquan.com") || host.endsWith(".quwoquan.com");
+  private static boolean matchesConfiguredBase(Uri candidate, String rawBase) {
+    Uri base = Uri.parse(rawBase == null ? "" : rawBase.trim());
+    if (!"https".equalsIgnoreCase(base.getScheme())
+        || base.getHost() == null
+        || !base.getHost().equalsIgnoreCase(candidate.getHost())
+        || effectivePort(base) != effectivePort(candidate)) {
+      return false;
+    }
+    String basePath = base.getPath() == null ? "" : base.getPath().replaceAll("/+$", "");
+    String candidatePath = candidate.getPath() == null ? "" : candidate.getPath();
+    return basePath.isEmpty()
+        || candidatePath.equals(basePath)
+        || candidatePath.startsWith(basePath + "/");
+  }
+
+  private static int effectivePort(Uri uri) {
+    return uri.getPort() == -1 ? 443 : uri.getPort();
   }
 }

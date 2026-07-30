@@ -285,7 +285,7 @@ func (w *Worker) handleEvent(
 		AssetVersion:    asset.Version() + 1,
 		SourceObjectKey: asset.ObjectKey(),
 		MediaType:       asset.MediaType(),
-		ContentType:     asset.ContentType(),
+		MimeType:        asset.MimeType(),
 		FileSize:        asset.FileSize(),
 	})
 	duration := w.now().Sub(started)

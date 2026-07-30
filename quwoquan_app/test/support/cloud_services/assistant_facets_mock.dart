@@ -118,17 +118,17 @@ class AlphaAssistantFacets
       <AssistantPreferenceFact>[];
 
   @override
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AppendAssistantLearningFactRequest request,
+  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+    required AssistantLearningFactAppendCommand request,
   }) async {
-    return AssistantLearningFactReceipt(
+    return AssistantLearningFactAppendReceipt(
       eventId: request.eventId,
-      eventVersion: request.eventVersion,
       accepted: true,
       deduplicated: false,
       appendSequence: 1,
-      payloadDigest: 'alpha_mock',
-      recordedAt: DateTime.now().toUtc().toIso8601String(),
+      payloadDigest:
+          '0000000000000000000000000000000000000000000000000000000000000000',
+      recordedAt: DateTime.now().toUtc(),
     );
   }
 
@@ -160,7 +160,7 @@ class AlphaAssistantFacets
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     // alpha/test 确定性 fixture（production Remote 失败一律抛 CloudException，
@@ -416,11 +416,11 @@ class AlphaAssistantFacets
   }
 
   @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+  Future<List<AssistantSkillCatalogItemProjection>> listSkillCatalog({
     int limit = kAssistantSkillCatalogDefaultLimit,
   }) async {
-    final p0Skills = <AssistantSkillCatalogItemView>[
-      const AssistantSkillCatalogItemView(
+    final p0Skills = <AssistantSkillCatalogItemProjection>[
+      const AssistantSkillCatalogItemProjection(
         skillId: 'daily_assistant',
         displayName: '每日助手',
         description: '管理待办、日历、会议、作息和学习计划。',
@@ -428,7 +428,7 @@ class AlphaAssistantFacets
         requiresConsent: false,
         iconHint: 'checkmark',
       ),
-      const AssistantSkillCatalogItemView(
+      const AssistantSkillCatalogItemProjection(
         skillId: 'news_briefing',
         displayName: '新闻简报',
         description: '按关注话题定时生成新闻摘要。',
@@ -436,7 +436,7 @@ class AlphaAssistantFacets
         requiresConsent: false,
         iconHint: 'news',
       ),
-      const AssistantSkillCatalogItemView(
+      const AssistantSkillCatalogItemProjection(
         skillId: 'stock_sentinel',
         displayName: '股票哨兵',
         description: '跟踪关注股票的重大消息面和行情变化。',
@@ -444,7 +444,7 @@ class AlphaAssistantFacets
         requiresConsent: false,
         iconHint: 'chart',
       ),
-      const AssistantSkillCatalogItemView(
+      const AssistantSkillCatalogItemProjection(
         skillId: 'travel_journey_manager',
         displayName: '出行旅程管家',
         description: '结合天气、路况和景点拥堵提醒行程风险。',
@@ -452,7 +452,7 @@ class AlphaAssistantFacets
         requiresConsent: false,
         iconHint: 'airplane',
       ),
-      const AssistantSkillCatalogItemView(
+      const AssistantSkillCatalogItemProjection(
         skillId: 'creation_assistant',
         displayName: '创作助手',
         description: '帮助整理草稿摘要、推荐标签和关联主页。',
@@ -462,14 +462,14 @@ class AlphaAssistantFacets
       ),
     ];
     final prototypeSkills = AssistantPrototypeFixture.instance.skills.map(
-      (row) => AssistantSkillCatalogItemView(
+      (row) => AssistantSkillCatalogItemProjection(
         skillId: row.skillId,
         displayName: row.name,
         description: row.description,
         requiresConsent: false,
       ),
     );
-    return <AssistantSkillCatalogItemView>[
+    return <AssistantSkillCatalogItemProjection>[
       ...p0Skills,
       ...prototypeSkills,
     ].take(limit).toList(growable: false);
@@ -737,16 +737,16 @@ class AlphaAssistantFacets
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$runId:tool_execution',
+      eventId: '$runId:searching',
       conversationId: 'acv_mock_personal_assistant',
       turnId: runId,
       seq: 3,
       eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
-          'processId': 'tool_execution',
+          'processId': 'searching',
           'scope': 'skill',
-          'stage': 'tool_execution',
+          'stage': 'searching',
           'status': 'completed',
           'order': 1,
           'summary': '已完成可用信息的核对。',

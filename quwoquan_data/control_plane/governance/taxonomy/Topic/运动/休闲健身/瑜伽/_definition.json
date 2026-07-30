@@ -2,6 +2,7 @@
   "label": "瑜伽",
   "labelEn": "Yoga",
   "description": "瑜伽练习与教学",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

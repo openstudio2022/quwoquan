@@ -2,6 +2,7 @@
   "label": "影视解说",
   "labelEn": "Movie Commentary",
   "description": "电影电视剧解说与分析",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

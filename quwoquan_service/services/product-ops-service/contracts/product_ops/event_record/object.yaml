@@ -17,11 +17,10 @@ access:
   cross_context: event_only
   queries: named_reader
 relationships: []
-local_identity_reasons:
-  operationId: generated route, surface, or operation registry key used only for navigation or telemetry
-    attribution
 capabilities:
 - queryable
 - aggregatable
 taggable: false
 vector_enabled: false
+lifecycle:
+  immutable: true

@@ -87,6 +87,14 @@ fields:
   type: int
   nullable: true
   description: storyboard 预览轨版本
+- name: hlsCmafMasterManifestUrl
+  type: string
+  nullable: true
+  description: ready MediaAsset 的 HLS/CMAF master manifest URL；渐进式 videoUrl 始终保留为同资产同版本回退
+- name: hlsCmafDescriptorVersion
+  type: int
+  nullable: true
+  description: HLS/CMAF descriptor 版本
 - name: likeCount
   type: int
 - name: commentCount
@@ -282,6 +290,18 @@ client_projection:
     source: previewTrackVersion
     default: 'null'
     description: storyboard 预览轨版本
+  - name: hlsCmafMasterManifestUrl
+    dart_type: String
+    nullable: true
+    source: hlsCmafMasterManifestUrl
+    default: 'null'
+    description: ready MediaAsset 的 HLS/CMAF master manifest URL；仅 capability 与 feature flag 同时开启时优先播放
+  - name: hlsCmafDescriptorVersion
+    dart_type: int
+    nullable: true
+    source: hlsCmafDescriptorVersion
+    default: 'null'
+    description: HLS/CMAF descriptor 版本；缺失时强制回退 progressive MP4
   - name: likeCount
     dart_type: int
     nullable: false

@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	behaviorerrors "quwoquan_service/services/circle-service/generated/circle_management/circle_behavior_fact"
 	behaviorfactmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/domain/model"
 	behaviorfactports "quwoquan_service/services/circle-service/internal/circle_management/circle_behavior_fact/domain/ports"
 )
@@ -42,21 +43,21 @@ func (writer *Writer) Append(ctx context.Context, command AppendCommand) (Append
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Validate(operation.ActorPersonaOrDevice) != nil ||
 		strings.TrimSpace(current.IdempotencyKey) == "" || strings.TrimSpace(current.SessionID) == "" {
-		return AppendResult{}, generated.AppErrorFromInvalidArgument("trusted actor, session and Idempotency-Key are required")
+		return AppendResult{}, circleerrors.AppErrorFromInvalidArgument("trusted actor, session and Idempotency-Key are required")
 	}
 	circleID := strings.TrimSpace(command.CircleID)
 	if circleID == "" || !behaviorfactmodel.IsValidBehaviorEventType(command.EventType) {
-		return AppendResult{}, generated.AppErrorFromInvalidArgument("circleId and registered eventType are required")
+		return AppendResult{}, circleerrors.AppErrorFromInvalidArgument("circleId and registered eventType are required")
 	}
 	state, found, err := writer.circles.ReadCircleState(ctx, circleID)
 	if err != nil {
-		return AppendResult{}, generated.AppErrorFromBehaviorFactWriteFailed(err.Error())
+		return AppendResult{}, behaviorerrors.AppErrorFromBehaviorFactWriteFailed(err.Error())
 	}
 	if !found {
-		return AppendResult{}, generated.AppErrorFromCircleNotFound("CircleBehaviorFact target Circle not found")
+		return AppendResult{}, circleerrors.AppErrorFromCircleNotFound("CircleBehaviorFact target Circle not found")
 	}
 	if state != "active" {
-		return AppendResult{}, generated.AppErrorFromInvalidArgument("CircleBehaviorFact target Circle is not active")
+		return AppendResult{}, circleerrors.AppErrorFromInvalidArgument("CircleBehaviorFact target Circle is not active")
 	}
 	actorKind, actorID := trustedFactActor(current.Actor)
 	factID := stableFactID(actorKind, actorID, current.IdempotencyKey)
@@ -72,14 +73,14 @@ func (writer *Writer) Append(ctx context.Context, command AppendCommand) (Append
 	}
 	digest, err := factCommandDigest(actorKind, actorID, current.SessionID, circleID, command.EventType)
 	if err != nil {
-		return AppendResult{}, generated.AppErrorFromBehaviorFactWriteFailed(err.Error())
+		return AppendResult{}, behaviorerrors.AppErrorFromBehaviorFactWriteFailed(err.Error())
 	}
 	receipt, err := writer.sink.Append(ctx, behaviorfactports.AppendRequest{Fact: fact, CommandDigest: digest})
 	if err != nil {
 		if errors.Is(err, behaviorfactmodel.ErrIdempotencyConflict) {
-			return AppendResult{}, generated.AppErrorFromBehaviorFactIdempotencyConflict(err.Error())
+			return AppendResult{}, behaviorerrors.AppErrorFromBehaviorFactIdempotencyConflict(err.Error())
 		}
-		return AppendResult{}, generated.AppErrorFromBehaviorFactWriteFailed(err.Error())
+		return AppendResult{}, behaviorerrors.AppErrorFromBehaviorFactWriteFailed(err.Error())
 	}
 	return AppendResult{FactID: receipt.FactID, IdempotentReplay: receipt.Replayed}, nil
 }

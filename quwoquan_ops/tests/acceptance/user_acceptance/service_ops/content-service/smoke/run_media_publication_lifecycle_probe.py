@@ -98,7 +98,6 @@ def _parse_args() -> argparse.Namespace:
         default="",
         help="仅本地 lifecycle 使用的 content-service loopback origin。",
     )
-    parser.add_argument("--resolve-host", default="")
     parser.add_argument(
         "--mode",
         choices=("read-only", "lifecycle"),
@@ -119,8 +118,6 @@ def _parse_args() -> argparse.Namespace:
         default=".qwq_output/env/repo/runs/content-media-publication/report.json",
     )
     args = parser.parse_args()
-    if args.env in LOCAL_TARGETS and not args.resolve_host:
-        args.resolve_host = "127.0.0.1"
     if args.mode == "lifecycle":
         parsed = urllib.parse.urlparse(args.moderation_base_url)
         host = parsed.hostname or ""
@@ -305,7 +302,6 @@ def _upload_complete_and_wait(
         payload=payload,
         content_type=content_type,
         sha256_digest=initialized["sha256"],
-        resolve_host=client.resolve_host,
     )
     complete_path = (
         f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}:complete"
@@ -359,7 +355,6 @@ def _upload_complete_lost_response_and_wait(
         payload=payload,
         content_type=content_type,
         sha256_digest=initialized["sha256"],
-        resolve_host=client.resolve_host,
     )
     complete_path = (
         f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}:complete"
@@ -872,7 +867,6 @@ def _verify_abort_cleanup(
         payload=_PNG_PAYLOAD,
         content_type="image/png",
         sha256_digest=initialized["sha256"],
-        resolve_host=client.resolve_host,
     )
     abort_path = (
         f"/content/media/uploads/{urllib.parse.quote(initialized['sessionId'])}:abort"
@@ -951,11 +945,10 @@ def main() -> int:
         session = build_reporter_session(
             environment=args.env,
             base_url=args.base_url,
-            resolve_host=args.resolve_host,
             hosted_token_env=args.auth_token_env,
             target_name=args.target_name,
         )
-        client = ProbeClient(args.base_url, args.resolve_host, session)
+        client = ProbeClient(args.base_url, session)
         client.request("GET", "/healthz", operation_id="Health")
         report["steps"].append({"name": "healthz", "status": "passed"})
         if args.mode == "read-only":
@@ -966,29 +959,24 @@ def main() -> int:
             viewer = build_media_viewer_session(
                 environment=args.env,
                 base_url=args.base_url,
-                resolve_host=args.resolve_host,
                 target_name=args.target_name,
                 subject=MEDIA_VIEWER_SUBJECT,
             )
             viewer_client = ProbeClient(
                 args.base_url,
-                args.resolve_host,
                 viewer,
             )
             operator = build_moderation_operator_session(
                 environment=args.env,
                 base_url=args.base_url,
-                resolve_host=args.resolve_host,
                 target_name=args.target_name,
             )
             operator_client = ProbeClient(
                 args.moderation_base_url,
-                args.resolve_host,
                 operator,
             )
             owner_query_client = ProbeClient(
                 args.moderation_base_url,
-                args.resolve_host,
                 session,
             )
             image_asset_id = ""

@@ -13,7 +13,7 @@ import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 /// 我的主页入口；`ProfileShell` 经对象级 ProfileQuery 加载公开分身资料。
 ///
 /// 路由：/profile（MainAppShell IndexedStack 第4项）
-/// 也可通过 /user/:username（当前用户）push 进入，此时传入 onBack 显示返回按钮。
+/// 也可通过 /user/:userHandle（当前用户）push 进入，此时传入 onBack 显示返回按钮。
 /// 进入时自动加载当前用户档案，确保 displayName、avatar、background 正确展示。
 class MyProfilePage extends ConsumerStatefulWidget {
   const MyProfilePage({super.key, this.onBack});
@@ -25,7 +25,7 @@ class MyProfilePage extends ConsumerStatefulWidget {
 }
 
 class _MyProfilePageState extends ConsumerState<MyProfilePage> {
-  bool _didTriggerLoad = false;
+  String _scheduledUserLoadId = '';
   bool _didTrackImpression = false;
   final Stopwatch _dwell = Stopwatch();
   String _trackedUserId = '';
@@ -53,21 +53,38 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     super.dispose();
   }
 
+  void _scheduleUserLoad(String userId) {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty || _scheduledUserLoadId == normalizedUserId) {
+      return;
+    }
+    _scheduledUserLoadId = normalizedUserId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final auth = ref.read(authSessionControllerProvider);
+      final activeUserId = ref.read(currentUserIdProvider).trim();
+      if (!auth.isAuthenticated || activeUserId != normalizedUserId) {
+        if (_scheduledUserLoadId == normalizedUserId) {
+          _scheduledUserLoadId = '';
+        }
+        return;
+      }
+      ref
+          .read(userDataProvider.notifier)
+          .loadUser(normalizedUserId, sourceSurface: AppUiSurfaces.profileHome);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authSessionControllerProvider);
     if (!auth.isAuthenticated) {
+      _scheduledUserLoadId = '';
       return const _LoggedOutProfilePrompt();
     }
-    if (!_didTriggerLoad) {
-      _didTriggerLoad = true;
-      final currentUserId = ref.read(currentUserIdProvider);
-      ref
-          .read(userDataProvider.notifier)
-          .loadUser(currentUserId, sourceSurface: AppUiSurfaces.profileHome);
-    }
-    final userData = ref.watch(userDataProvider);
     final currentUserId = ref.watch(currentUserIdProvider);
+    _scheduleUserLoad(currentUserId);
+    final userData = ref.watch(userDataProvider);
     final userId = userData?.id ?? currentUserId;
     _trackedUserId = userId;
     final tracker = ref.read(contentBehaviorTrackerProvider);
@@ -84,7 +101,7 @@ class _MyProfilePageState extends ConsumerState<MyProfilePage> {
     return ProfileShell(
       mode: ProfileMode.mine,
       userId: userId,
-      initialAvatarUrl: userData?.avatar ?? userData?.avatarUrl,
+      initialAvatarUrl: userData?.avatarUrl,
       initialDisplayName: userData?.displayName,
       initialBackgroundUrl: userData?.backgroundImage,
       onBack: widget.onBack,

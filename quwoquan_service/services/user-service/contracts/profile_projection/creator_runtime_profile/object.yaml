@@ -20,7 +20,7 @@ relationships:
   name: persona
   on_delete: tombstone
   reference_fields:
-  - subAccountId
+  - personaId
   target_object: user.Persona
 local_identity_reasons:
   avatarAssetId: immutable release MediaAsset authority reference; validated against media_manifest.json

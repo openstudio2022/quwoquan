@@ -13,16 +13,47 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def _release_import_roots() -> tuple[Path, Path, Path]:
+    services = ROOT / "quwoquan_service" / "services"
+    return (
+        services
+        / "content-service"
+        / "internal"
+        / "content"
+        / "post"
+        / "infrastructure"
+        / "releaseimport",
+        services
+        / "entity-service"
+        / "internal"
+        / "entity_homepage"
+        / "homepage"
+        / "infrastructure"
+        / "homepageimport",
+        services
+        / "user-service"
+        / "internal"
+        / "account"
+        / "user_account"
+        / "infrastructure"
+        / "releaseimport",
+    )
+
+
 def _required_markers() -> dict[Path, tuple[str, ...]]:
     data = ROOT / "quwoquan_data" / "scripts"
     content_service = ROOT / "quwoquan_service" / "services" / "content-service"
-    importer = content_service / "internal" / "content" / "post" / "infrastructure" / "releaseimport"
+    importer, entity_importer, user_importer = _release_import_roots()
+    entity_service = ROOT / "quwoquan_service" / "services" / "entity-service"
     return {
         data / "content" / "release" / "environment" / "handler.py": (
             "_sync_media",
-            "target.media_avatar_base_url",
-            "target.media_image_base_url",
-            "target.media_video_base_url",
+        ),
+        data / "content" / "release" / "environment" / "_ship_operations.py": (
+            "target.media_delivery_base_url",
+            "media_avatar_base_url=target.media_delivery_base_url",
+            "media_image_base_url=target.media_delivery_base_url",
+            "media_video_base_url=target.media_delivery_base_url",
         ),
         data / "content" / "release" / "environment" / "release_runtime.py": (
             "release_media_public_slices",
@@ -35,9 +66,20 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
             "asset_ref_path_escape",
             "non_cas_asset_ref",
             "dangling_asset_ref",
+            "release_media_issues",
+            "release_private_storage_issues",
+        ),
+        data
+        / "content"
+        / "release"
+        / "environment"
+        / "release_media_consistency.py": (
             "release_media_private_key_leak",
             "release_object_private_storage_leak",
             "release_media_public_slice_hash_mismatch",
+            "release_media_owner_closure_mismatch",
+            "release_media_rights_identity_mismatch",
+            "release_media_owner_rights_missing",
         ),
         data / "content" / "release" / "environment" / "importers.py": (
             '"--media-avatar-base-url"',
@@ -80,11 +122,26 @@ def _required_markers() -> dict[Path, tuple[str, ...]]:
             "BindPostAssetURLs",
         ),
         content_service / "cmd" / "import" / "main.go": ("releaseimport.Run()",),
+        entity_service / "cmd" / "homepage-import" / "main.go": (
+            "LoadReleaseMediaAssets",
+            "LoadHomepageProjections",
+        ),
+        entity_importer / "loader.go": (
+            "ResolveReleaseMediaAsset",
+            "contains forbidden objectKey",
+        ),
+        user_importer / "runtime.go": (
+            "LoadReleaseMediaAssets",
+            "ResolveReleaseMediaAsset",
+            "contains forbidden avatar objectKey",
+        ),
         ROOT / "quwoquan_service" / "runtime" / "media" / "release_media_asset.go": (
             "ReleaseMediaAsset",
             "ResolveReleaseMediaAsset",
             "RightsSnapshotRefs",
             "MediaDeliveryBases",
+            "validateReleaseMediaAssetClosure",
+            "validateReleaseRightsBinding",
         ),
         ROOT / "quwoquan_app" / "lib" / "core" / "media" / "asset_url_resolver.dart": (
             "resolveManifestUrls",
@@ -129,6 +186,19 @@ def _contract_violations() -> list[str]:
                 violations.append(f"{relative}: forbidden mediaBaseURL + private objectKey projection")
             if '"--media-base-url"' in source:
                 violations.append(f"{relative}: generic media base URL is retired")
+
+    for base in _release_import_roots():
+        for path in sorted(base.rglob("*.go")):
+            source = _read(path)
+            relative = path.relative_to(ROOT)
+            for bypass in (
+                "BuildContentMediaPublicSliceKey(",
+                "BuildPublicMediaURL(",
+            ):
+                if bypass in source:
+                    violations.append(
+                        f"{relative}: release importer bypasses MediaAsset authority via {bypass}"
+                    )
 
     canonical_roots = (
         ROOT / "quwoquan_data" / "scripts" / "content" / "release" / "canonical",

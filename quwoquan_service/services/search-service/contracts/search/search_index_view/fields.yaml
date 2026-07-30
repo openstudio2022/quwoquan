@@ -10,6 +10,7 @@ fields:
   constraints:
   - NOT_NULL
   role: projection
+  reference: true
 - name: title
   type: string
   constraints:
@@ -21,7 +22,7 @@ fields:
   - NULLABLE
   role: projection
 - name: payload
-  type: object
+  type: CanonicalSearchPayload
   constraints:
   - NULLABLE
   classification: PUBLIC
@@ -31,12 +32,13 @@ fields:
   description: 各对象公开展示切片；ES 仅保存在 _source 且禁止参与动态字段索引，结果页不得回源拼装
   role: projection
 - name: tagRefs
-  type: array
+  type: '[]string'
   constraints:
   - NULLABLE
   role: projection
 - name: visibility
-  type: string
+  type: enum
+  enum_ref: Visibility
   constraints:
   - NOT_NULL
   role: projection

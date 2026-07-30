@@ -41,7 +41,10 @@ RESOLVER = REPO_ROOT / "quwoquan_app/lib/components/object_page/intersection_ico
 
 LANG_GO = SVC / "services/content-service/internal/content/post/application/authorimpact/author_impact_language.go"
 EVIDENCE_GO = SVC / "services/content-service/internal/content/post/application/authorimpact/author_impact_evidence_view.go"
-BEHAVIOR_GO = SVC / "services/content-service/internal/content/post/application/behavior/behavior_service.go"
+BEHAVIOR_GO = (
+    SVC
+    / "services/content-service/internal/content/content_behavior_fact/application/behavior_service.go"
+)
 STORE_GO = SVC / "services/content-service/internal/content/post/infrastructure/persistence/author_impact_store.go"
 CIRCLE_GO = SVC / "services/circle-service/internal/circle_management/circle/application/circle_service.go"
 

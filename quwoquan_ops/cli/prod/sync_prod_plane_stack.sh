@@ -154,19 +154,10 @@ fi
 
 host="$host_override"
 if [[ -z "$host" ]]; then
-  host="$(python3 - "$TOPOLOGY_MANIFEST" <<'PY'
-import sys
-import yaml
-from urllib.parse import urlparse
-
-data = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-api = (((data.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api", "")
-print(urlparse(api).hostname or "")
-PY
-)"
+  host="${PROD_SSH_HOST:-}"
 fi
 if [[ -z "$host" ]]; then
-  echo "FAIL: unable to resolve prod host" >&2
+  echo "FAIL: --host or PROD_SSH_HOST is required for the management plane" >&2
   exit 2
 fi
 

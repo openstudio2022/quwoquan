@@ -17,6 +17,7 @@
 ### Out of Scope
 
 - 其他 L2 的事实所有权、metadata schema 与实现施工步骤。
+- 消息时间线的本地落盘、历史游标分页、断连补洞、离线推送与会话性能预算，由 [`message-reliability-foundation`](../message-reliability-foundation/spec.md) 负责。
 
 ## 3. Journey / Scenario 贡献
 
@@ -49,8 +50,6 @@
 - [`conversation-list-source-switch`](./conversation-list-source-switch/spec.md)：定义“会话列表来源切换”的可观察主路径、失败语义及父能力交接。
 - [`delivery-and-read-receipt`](./delivery-and-read-receipt/spec.md)：定义“投递与读取回执”的可观察主路径、失败语义及父能力交接。
 - [`message-interaction-polish`](./message-interaction-polish/spec.md)：**会话列表数据源**：ChatPage 混用 `ChatRepository` 和 `appContentRepository`，数据源不统一导致列表内容不一致。
-- [`message-paging-and-ordering`](./message-paging-and-ordering/spec.md)：定义“消息分页与排序”的可观察主路径、失败语义及父能力交接。
-- [`realtime-push-and-offline-sync`](./realtime-push-and-offline-sync/spec.md)：`ConversationMemberAdded` 作为独立分支有专门测试证据，且能在 contract fixture 中追溯到对应 payload。
 - [`rich-media-message`](./rich-media-message/spec.md)：Office 文档优先调用系统可用应用打开；存在 canonical PDF 派生资源时使用统一预览器。
 - [`voice-message`](./voice-message/spec.md)：完成录音、取消、上传、发送与播放，并防止页面退出或重复按下产生幽灵录音。
 
@@ -92,3 +91,21 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：保证消息从发送、确认、重试到列表与详情展示的一致性。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 会话来源用三个交叠枚举加三个外键表达，非法组合无契约约束
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：存在语义交叠且缺少一致性不变量。`chat/conversation/fields.yaml` 用 `originType`（8 值）、`bindingType`（5 值）、`lifecyclePolicy`（5 值）三个枚举加 `circleId`/`circleGroupId`/`entityId` 三个外键共同表达"这个会话从哪来"，其中 `bindingType: circle_group` 与 `circleGroupId != null` 完全同义，`lifecyclePolicy: bound_to_circle` 与 `bindingType: circle` 完全同义，而 `object.yaml` 的 business_rules 对三者之间没有任何一致性不变量，导致 `bindingType: none` + `circleGroupId != null` 这类非法组合在契约层无法被拒绝。同一文件的 `status` 写了 `type: enum` 却没有 `enum_ref`，值域只存在于 description 文本里，而它是会话终态判定字段。另有 typed 语义泄漏：`message.type` 是 `MessageType` 枚举，但 `conversation.lastMessageType` 与 `chat_inbox_view.lastMessageType` 都是裸 string，而后者的注释明确说它驱动会话列表副标题图标，端侧要靠字符串匹配选图标。
+- 完成判定：保留 `originType` 与外键，删除可推导的 `bindingType` 与 `lifecyclePolicy`（或在 business_rules 补齐三者对应表并由 local_contract 穷举非法组合断言拒绝）；`status` 补 `enum_ref`。两处 `lastMessageType` 改用 `MessageType`。`SIT-001` 的列表与详情一致性覆盖消息类型渲染。
+
+<a id="open-003"></a>
+### OPEN-003 conversation 概念在两个域同名，且 conversationId 跨域类型不一致
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：存在跨域命名歧义。`chat.conversation` 与 `assistant.assistant_conversation` 经核查是合理的不同概念而非概念冲突——前者是人际消息流的成员与序号容器（核心不变量是 seq 单调与成员治理），后者是 AI 编排上下文容器（核心不变量是"同一 conversation 最多一个 active run"），两者关系与字段零交集，且 chat 侧已明确把助手降级为 `memberType=assistant` 成员，说明概念切分本身做对了。但命名不够无歧义：两者在文档、日志与埋点里都被称作 conversation，且 `conversationId` 在 chat 域是 ObjectId、在 assistant 域是 string，跨域传参无编译期保护。
+- 完成判定：assistant 侧改名为体现"一段连续交互 + 当前执行策略"的 session 语义（或退而统一 chat 侧对外类名为 ChatConversation），并明确 `conversationId` 仅指 chat 域；由 runtime-governance `OPEN-003` 的跨域同名字段类型一致门禁防回归。

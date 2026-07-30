@@ -24,7 +24,7 @@ RETIRED_PRODUCTION_FIXTURE_TOKENS = (
     "prefab_user_resolver",
     "mock_session_identity",
     "kMockCurrentOwnerId",
-    "kMockCurrentSubAccountId",
+    "kMockCurrentPersonaId",
     "PrefabUserMetadata",
     "prefab_user_metadata",
     "prefab_user_provenance",

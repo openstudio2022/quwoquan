@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/entity/homepage_review_contracts.requests.g.dart';
 
 // HomepageReview 对象专属 pure contracts：
 // 命令（create/update/delete）与查询（list/mine）。
@@ -38,142 +39,6 @@ enum HomepageReviewStatus {
       _ => throw FormatException('unknown HomepageReview status "$value"'),
     };
   }
-}
-
-final class CreateHomepageReviewCommand {
-  CreateHomepageReviewCommand({
-    required String homepageId,
-    required this.rating,
-    String? body,
-    List<String> tagRefs = const <String>[],
-    String? authorDisplayNameSnapshot,
-    String? authorAvatarUrlSnapshot,
-  }) : homepageId = _required(homepageId, 'homepageId'),
-       body = _optional(body),
-       tagRefs = _tagRefs(tagRefs),
-       authorDisplayNameSnapshot = _optional(authorDisplayNameSnapshot),
-       authorAvatarUrlSnapshot = _optional(authorAvatarUrlSnapshot) {
-    _requireRating(rating);
-  }
-
-  final String homepageId;
-  final int rating;
-  final String? body;
-  final List<String> tagRefs;
-  final String? authorDisplayNameSnapshot;
-  final String? authorAvatarUrlSnapshot;
-}
-
-CloudOperationRequestPayload encodeCreateHomepageReviewCommand(
-  CreateHomepageReviewCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'homepageId': command.homepageId},
-    body: _reviewBody(
-      rating: command.rating,
-      body: command.body,
-      tagRefs: command.tagRefs,
-      authorDisplayNameSnapshot: command.authorDisplayNameSnapshot,
-      authorAvatarUrlSnapshot: command.authorAvatarUrlSnapshot,
-    ),
-  );
-}
-
-final class UpdateHomepageReviewCommand {
-  UpdateHomepageReviewCommand({
-    required String reviewId,
-    required this.rating,
-    String? body,
-    List<String> tagRefs = const <String>[],
-    String? authorDisplayNameSnapshot,
-    String? authorAvatarUrlSnapshot,
-  }) : reviewId = _required(reviewId, 'reviewId'),
-       body = _optional(body),
-       tagRefs = _tagRefs(tagRefs),
-       authorDisplayNameSnapshot = _optional(authorDisplayNameSnapshot),
-       authorAvatarUrlSnapshot = _optional(authorAvatarUrlSnapshot) {
-    _requireRating(rating);
-  }
-
-  final String reviewId;
-  final int rating;
-  final String? body;
-  final List<String> tagRefs;
-  final String? authorDisplayNameSnapshot;
-  final String? authorAvatarUrlSnapshot;
-}
-
-CloudOperationRequestPayload encodeUpdateHomepageReviewCommand(
-  UpdateHomepageReviewCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'reviewId': command.reviewId},
-    body: _reviewBody(
-      rating: command.rating,
-      body: command.body,
-      tagRefs: command.tagRefs,
-      authorDisplayNameSnapshot: command.authorDisplayNameSnapshot,
-      authorAvatarUrlSnapshot: command.authorAvatarUrlSnapshot,
-    ),
-  );
-}
-
-final class DeleteHomepageReviewCommand {
-  DeleteHomepageReviewCommand({required String reviewId})
-    : reviewId = _required(reviewId, 'reviewId');
-
-  final String reviewId;
-}
-
-CloudOperationRequestPayload encodeDeleteHomepageReviewCommand(
-  DeleteHomepageReviewCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'reviewId': command.reviewId},
-  );
-}
-
-final class HomepageReviewListQuery {
-  HomepageReviewListQuery({
-    required String homepageId,
-    this.cursor,
-    this.limit = 20,
-  }) : homepageId = _required(homepageId, 'homepageId') {
-    if (limit < 1 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be within 1..100');
-    }
-  }
-
-  final String homepageId;
-  final String? cursor;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeHomepageReviewListQuery(
-  HomepageReviewListQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'homepageId': query.homepageId},
-    queryParameters: <String, String>{
-      'cursor': ?_optional(query.cursor),
-      'limit': '${query.limit}',
-    },
-  );
-}
-
-final class MyHomepageReviewQuery {
-  MyHomepageReviewQuery({required String homepageId})
-    : homepageId = _required(homepageId, 'homepageId');
-
-  final String homepageId;
-}
-
-CloudOperationRequestPayload encodeMyHomepageReviewQuery(
-  MyHomepageReviewQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'homepageId': query.homepageId},
-  );
 }
 
 final class HomepageReviewView {
@@ -257,34 +122,6 @@ HomepageReviewView _decodeReview(Map<Object?, Object?> root) {
   );
 }
 
-Map<String, Object?> _reviewBody({
-  required int rating,
-  required String? body,
-  required List<String> tagRefs,
-  required String? authorDisplayNameSnapshot,
-  required String? authorAvatarUrlSnapshot,
-}) {
-  return <String, Object?>{
-    'rating': rating,
-    'body': ?body,
-    if (tagRefs.isNotEmpty) 'tagRefs': tagRefs,
-    'authorDisplayNameSnapshot': ?authorDisplayNameSnapshot,
-    'authorAvatarUrlSnapshot': ?authorAvatarUrlSnapshot,
-  };
-}
-
-void _requireRating(int rating) {
-  if (rating < 1 || rating > 5) {
-    throw ArgumentError.value(rating, 'rating', 'must be within 1..5');
-  }
-}
-
-List<String> _tagRefs(List<String> tagRefs) {
-  return List<String>.unmodifiable(
-    tagRefs.map((tag) => tag.trim()).where((tag) => tag.isNotEmpty),
-  );
-}
-
 Map<Object?, Object?> _expectObject(Object? value, String context) {
   if (value is! Map<Object?, Object?>) {
     throw FormatException('$context must be a JSON object');
@@ -320,14 +157,6 @@ DateTime _timestamp(Object? value, String name) {
     throw FormatException('$name must be an ISO-8601 string');
   }
   return DateTime.parse(value.trim()).toUtc();
-}
-
-String _required(String value, String name) {
-  final text = value.trim();
-  if (text.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return text;
 }
 
 String? _optional(String? value) {

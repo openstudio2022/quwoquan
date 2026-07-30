@@ -1,0 +1,12 @@
+{
+  "label": "湖区",
+  "labelEn": "Lake District",
+  "description": "湖泊与山地国家公园",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

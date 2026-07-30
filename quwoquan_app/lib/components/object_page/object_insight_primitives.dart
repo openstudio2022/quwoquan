@@ -243,6 +243,8 @@ class ProfileIntersectionPreviewRow extends StatelessWidget {
               iconKey: displayReason.iconKey,
               sourceRef: profileIntersectionSourceRef(displayReason),
               dimension: displayReason.dimension,
+              tone: displayReason.tone,
+              assetUrl: displayReason.typeVisual?.imageUrl ?? '',
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(

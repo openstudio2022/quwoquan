@@ -2,6 +2,7 @@
   "label": "儿童教育",
   "labelEn": "Child Education",
   "description": "学龄前后儿童教育",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

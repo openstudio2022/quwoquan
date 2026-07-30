@@ -57,6 +57,8 @@ type Post struct {
 	CoverFrameTimeMs          int64          `json:"coverFrameTimeMs" bson:"coverFrameTimeMs"`
 	Location                  GeoPoint       `json:"location" bson:"location"`
 	LocationName              string         `json:"locationName" bson:"locationName"`
+	GeoTagRef                 string         `json:"geoTagRef" bson:"geoTagRef"`
+	VisitedAt                 time.Time      `json:"visitedAt" bson:"visitedAt"`
 	PrimaryHomepageId         string         `json:"primaryHomepageId" bson:"primaryHomepageId"`
 	PrimaryHomepageType       string         `json:"primaryHomepageType" bson:"primaryHomepageType"`
 	PrimaryHomepageSnapshot   map[string]any `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`

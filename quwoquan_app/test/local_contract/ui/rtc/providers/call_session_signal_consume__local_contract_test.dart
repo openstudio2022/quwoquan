@@ -22,12 +22,12 @@ void main() {
 
   CallSessionDto session({
     String callId = 'call_signal_001',
-    String status = 'in_call',
+    CallStatus status = CallStatus.inCall,
   }) {
     final now = DateTime.utc(2026, 7, 20);
     return CallSessionDto(
       callId: callId,
-      callType: 'audio',
+      callType: CallType.audio,
       status: status,
       initiatorId: 'user_a',
       roomId: 'rtc-room-$callId',
@@ -36,13 +36,13 @@ void main() {
       participants: const <CallParticipantDto>[
         CallParticipantDto(
           userId: 'user_a',
-          role: 'initiator',
-          status: 'connected',
+          role: ParticipantRole.initiator,
+          status: ParticipantStatus.connected,
         ),
         CallParticipantDto(
           userId: 'user_b',
-          role: 'invitee',
-          status: 'connected',
+          role: ParticipantRole.invitee,
+          status: ParticipantStatus.connected,
         ),
       ],
       createdAt: now,
@@ -109,14 +109,14 @@ void main() {
 
       final state = container.read(callSessionProvider);
       expect(state.status, CallStatus.ended);
-      expect(state.session?.endReason, 'normal');
+      expect(state.session?.endReason, EndReason.normal);
       expect(container.read(activeCallProvider).isInCall, isFalse);
     });
 
     test('connecting 阶段对端取消：无媒体连接也必须收尾（悬挂修复）', () async {
       final (container, bus) = createHarness();
       final notifier = container.read(callSessionProvider.notifier);
-      notifier.loadFromSession(session(status: 'connecting'));
+      notifier.loadFromSession(session(status: CallStatus.connecting));
       expect(container.read(callSessionProvider).status, CallStatus.connecting);
 
       bus.emit(<String, dynamic>{
@@ -131,14 +131,14 @@ void main() {
 
       final state = container.read(callSessionProvider);
       expect(state.status, CallStatus.ended);
-      expect(state.session?.endReason, 'cancelled');
+      expect(state.session?.endReason, EndReason.cancelled);
     });
 
     test('服务端 no_answer 超时信令映射到未接终态语义', () async {
       final (container, bus) = createHarness();
       container
           .read(callSessionProvider.notifier)
-          .loadFromSession(session(status: 'ringing'));
+          .loadFromSession(session(status: CallStatus.ringing));
 
       bus.emit(<String, dynamic>{
         'type': 'call.ended',
@@ -152,12 +152,12 @@ void main() {
 
       final state = container.read(callSessionProvider);
       expect(state.status, CallStatus.ended);
-      expect(EndReason.fromString(state.session?.endReason), EndReason.timeout);
+      expect(state.session?.endReason, EndReason.noAnswer);
       expect(
         resolveCallStage(
           status: state.status,
           connectedPeerCount: 0,
-          endReason: EndReason.fromString(state.session?.endReason),
+          endReason: state.session?.endReason,
         ),
         CallStage.peerNoAnswer,
       );
@@ -183,9 +183,11 @@ void main() {
     testWidgets('客户端振铃截止只刷新服务端 no_answer，不误发 CancelCall', (tester) async {
       final lifecycle = _RecordingCallLifecycle();
       final participantWriter = _RecordingParticipantWriter(
-        reportStatus: 'ringing',
+        reportStatus: CallStatus.ringing,
       );
-      final ended = session(status: 'ended').copyWith(endReason: 'no_answer');
+      final ended = session(
+        status: CallStatus.ended,
+      ).copyWith(endReason: EndReason.noAnswer);
       final query = _RecordingCallQuery(response: ended);
       final (container, _) = createHarness(
         lifecycle: lifecycle,
@@ -212,7 +214,7 @@ void main() {
       expect(container.read(callSessionProvider).status, CallStatus.ended);
       expect(
         container.read(callSessionProvider).session?.endReason,
-        'no_answer',
+        EndReason.noAnswer,
       );
     });
   });
@@ -222,7 +224,7 @@ void main() {
       final (container, bus) = createHarness();
       container
           .read(callSessionProvider.notifier)
-          .loadFromSession(session(status: 'ringing'));
+          .loadFromSession(session(status: CallStatus.ringing));
 
       bus.emit(<String, dynamic>{
         'type': 'call.answered',
@@ -256,12 +258,14 @@ void main() {
   group('A4 connected/participant 信令刷新聚合事实', () {
     test('call.connected 立即推进 in_call，并按 active callId 刷新一次', () async {
       final query = _RecordingCallQuery(
-        response: session(status: 'in_call').copyWith(participantCount: 3),
+        response: session(
+          status: CallStatus.inCall,
+        ).copyWith(participantCount: 3),
       );
       final (container, bus) = createHarness(query: query);
       container
           .read(callSessionProvider.notifier)
-          .loadFromSession(session(status: 'connecting'));
+          .loadFromSession(session(status: CallStatus.connecting));
 
       bus.emit(<String, dynamic>{
         'type': 'call.connected',
@@ -357,7 +361,7 @@ void main() {
         liveKit: liveKit,
       );
       final notifier = container.read(callSessionProvider.notifier);
-      notifier.loadFromSession(session().copyWith(callType: 'video'));
+      notifier.loadFromSession(session().copyWith(callType: CallType.video));
 
       await notifier.startScreenShare();
       var state = container.read(callSessionProvider);
@@ -387,7 +391,7 @@ void main() {
         liveKit: liveKit,
       );
       final notifier = container.read(callSessionProvider.notifier);
-      notifier.loadFromSession(session().copyWith(callType: 'video'));
+      notifier.loadFromSession(session().copyWith(callType: CallType.video));
 
       await notifier.startScreenShare();
 
@@ -441,7 +445,7 @@ void main() {
       );
       final notifier = container.read(callSessionProvider.notifier);
       notifier.loadFromSession(
-        session().copyWith(callType: 'video', status: 'in_call'),
+        session().copyWith(callType: CallType.video, status: CallStatus.inCall),
       );
 
       await notifier.toggleCamera();
@@ -529,7 +533,7 @@ void main() {
         );
         final (container, _) = createHarness(lifecycle: lifecycle);
         final notifier = container.read(callSessionProvider.notifier);
-        notifier.loadFromSession(session(status: 'ringing'));
+        notifier.loadFromSession(session(status: CallStatus.ringing));
         container
             .read(activeCallProvider.notifier)
             .startCall(callId: 'call_signal_001', callType: 'audio');
@@ -618,12 +622,12 @@ void main() {
 
 CallSessionDto _fixtureSession({
   String callId = 'call_signal_001',
-  String status = 'in_call',
+  CallStatus status = CallStatus.inCall,
 }) {
   final now = DateTime.utc(2026, 7, 20);
   return CallSessionDto(
     callId: callId,
-    callType: 'audio',
+    callType: CallType.audio,
     status: status,
     initiatorId: 'user_a',
     roomId: 'rtc-room-$callId',
@@ -632,13 +636,13 @@ CallSessionDto _fixtureSession({
     participants: const <CallParticipantDto>[
       CallParticipantDto(
         userId: 'user_a',
-        role: 'initiator',
-        status: 'connected',
+        role: ParticipantRole.initiator,
+        status: ParticipantStatus.connected,
       ),
       CallParticipantDto(
         userId: 'user_b',
-        role: 'invitee',
-        status: 'connected',
+        role: ParticipantRole.invitee,
+        status: ParticipantStatus.connected,
       ),
     ],
     createdAt: now,
@@ -679,7 +683,10 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
   @override
   Future<RtcAnswerCallResultDto> answerCall(RtcCallIdCommand command) async {
     return RtcAnswerCallResultDto(
-      session: _fixtureSession(callId: command.callId, status: 'connecting'),
+      session: _fixtureSession(
+        callId: command.callId,
+        status: CallStatus.connecting,
+      ),
       mediaAccess: const RtcMediaSessionAccessDto(
         accessToken: 'fixture-media-access',
       ),
@@ -694,8 +701,8 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
     }
     return _fixtureSession(
       callId: command.callId,
-      status: 'ended',
-    ).copyWith(endReason: 'normal');
+      status: CallStatus.ended,
+    ).copyWith(endReason: EndReason.normal);
   }
 
   @override
@@ -706,8 +713,8 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
     }
     return _fixtureSession(
       callId: command.callId,
-      status: 'ended',
-    ).copyWith(endReason: 'cancelled');
+      status: CallStatus.ended,
+    ).copyWith(endReason: EndReason.cancelled);
   }
 
   @override
@@ -715,7 +722,7 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
     RtcInitiateCallCommand command,
   ) async {
     return RtcInitiateCallResultDto(
-      session: _fixtureSession(status: 'ringing').copyWith(
+      session: _fixtureSession(status: CallStatus.ringing).copyWith(
         callType: command.callType,
         conversationId: command.conversationId,
       ),
@@ -732,8 +739,8 @@ final class _RecordingCallLifecycle implements CallLifecycleCommandWriter {
     }
     return _fixtureSession(
       callId: command.callId,
-      status: 'ended',
-    ).copyWith(endReason: 'rejected');
+      status: CallStatus.ended,
+    ).copyWith(endReason: EndReason.rejected);
   }
 }
 
@@ -741,11 +748,11 @@ final class _RecordingParticipantWriter
     implements CallParticipantCommandWriter {
   _RecordingParticipantWriter({
     this.shouldFailLeave = false,
-    this.reportStatus = 'in_call',
+    this.reportStatus = CallStatus.inCall,
   });
 
   final bool shouldFailLeave;
-  final String reportStatus;
+  final CallStatus reportStatus;
   final List<String> reportedCallIds = <String>[];
 
   @override
@@ -765,8 +772,8 @@ final class _RecordingParticipantWriter
     }
     return _fixtureSession(
       callId: command.callId,
-      status: 'ended',
-    ).copyWith(endReason: 'last_leave');
+      status: CallStatus.ended,
+    ).copyWith(endReason: EndReason.lastLeave);
   }
 
   @override
@@ -810,7 +817,9 @@ final class _RecordingMediaControlWriter implements CallMediaControlWriter {
   @override
   Future<CallSessionDto> toggleCamera(RtcToggleCameraCommand command) async {
     events.add('command.camera:${command.cameraOn}');
-    return _fixtureSession(callId: command.callId).copyWith(callType: 'video');
+    return _fixtureSession(
+      callId: command.callId,
+    ).copyWith(callType: CallType.video);
   }
 }
 
@@ -856,7 +865,7 @@ final class _RecordingScreenShareWriter implements CallScreenShareWriter {
     startCount += 1;
     events?.add('command.start');
     return _fixtureSession(callId: command.callId).copyWith(
-      callType: 'video',
+      callType: CallType.video,
       isScreenSharing: true,
       screenShareUserId: 'user_b',
     );
@@ -866,7 +875,9 @@ final class _RecordingScreenShareWriter implements CallScreenShareWriter {
   Future<CallSessionDto> stopScreenShare(RtcCallIdCommand command) async {
     stopCount += 1;
     events?.add('command.stop');
-    return _fixtureSession(callId: command.callId).copyWith(callType: 'video');
+    return _fixtureSession(
+      callId: command.callId,
+    ).copyWith(callType: CallType.video);
   }
 }
 

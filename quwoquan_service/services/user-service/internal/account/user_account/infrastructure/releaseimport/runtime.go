@@ -48,7 +48,7 @@ type creatorProfile struct {
 	CreatorID            string                `json:"creatorId"`
 	UserID               string                `json:"userId"`
 	AuthorID             string                `json:"authorId"`
-	SubAccountID         string                `json:"subAccountId"`
+	PersonaID            string                `json:"personaId"`
 	DisplayName          string                `json:"displayName"`
 	UserHandle           string                `json:"userHandle"`
 	AvatarAsset          *creatorMediaAssetRef `json:"avatarAsset"`
@@ -74,6 +74,31 @@ type creatorRecord struct {
 	Works   []model.CreatorWorkRef
 }
 
+// CreatorPersonaState is the immutable-release input for the Persona command
+// adapter composed by cmd/release-import. The release importer owns source
+// validation; Persona state/receipt/outbox and UserAccount projection remain
+// behind their owning object adapters.
+type CreatorPersonaState struct {
+	ReleaseID          string
+	UserID             string
+	PersonaID          string
+	DisplayName        string
+	UserHandle         string
+	Bio                string
+	IdentityTags       []string
+	AvatarMediaAssetID string
+	AvatarURL          string
+	AvatarVersion      int
+}
+
+type CreatorPersonaMaterializer interface {
+	UpsertAndProject(context.Context, CreatorPersonaState) error
+}
+
+type CreatorPersonaMaterializerFactory func(
+	*pgxpool.Pool,
+) (CreatorPersonaMaterializer, error)
+
 type importReport struct {
 	Schema             string   `json:"schema"`
 	Status             string   `json:"status"`
@@ -96,7 +121,7 @@ type counts struct {
 	CreatorsRemoved  int `json:"creatorsRemoved"`
 }
 
-func Run() {
+func Run(personaFactory CreatorPersonaMaterializerFactory) {
 	releaseRoot := flag.String("release-root", "", "immutable release root (required)")
 	postgresDSN := flag.String("postgres-dsn", "", "user-service PostgreSQL DSN (required)")
 	mongoURI := flag.String("mongo-uri", "", "user-service MongoDB URI (required)")
@@ -110,7 +135,10 @@ func Run() {
 	if err := requireArguments(*releaseRoot, *postgresDSN, *mongoURI, *environment, *reportPath, *mode); err != nil {
 		fatal(err)
 	}
-	state, creators, err := loadCreators(*releaseRoot, *mediaAvatarBaseURL)
+	state, creators, err := LoadCreatorsForRelease(
+		*releaseRoot,
+		*mediaAvatarBaseURL,
+	)
 	if err != nil {
 		fatal(err)
 	}
@@ -134,6 +162,13 @@ func Run() {
 		fatal(fmt.Errorf("connect user postgres: %w", err))
 	}
 	defer pool.Close()
+	if personaFactory == nil {
+		fatal(fmt.Errorf("creator Persona materializer factory is required"))
+	}
+	personaMaterializer, err := personaFactory(pool)
+	if err != nil {
+		fatal(fmt.Errorf("initialize creator Persona materializer: %w", err))
+	}
 	client, err := mongo.Connect(options.Client().ApplyURI(*mongoURI))
 	if err != nil {
 		fatal(fmt.Errorf("connect user mongo: %w", err))
@@ -143,7 +178,13 @@ func Run() {
 	if err := assertNoForeignUserCollision(ctx, pool, creators); err != nil {
 		fatal(err)
 	}
-	usersUpserted, err := upsertUsers(ctx, pool, creators)
+	usersUpserted, err := upsertUsers(
+		ctx,
+		pool,
+		personaMaterializer,
+		creators,
+		state.ReleaseID,
+	)
 	if err != nil {
 		fatal(err)
 	}
@@ -191,7 +232,9 @@ func requireArguments(values ...string) error {
 	return nil
 }
 
-func loadCreators(
+// LoadCreatorsForRelease validates and projects creator objects from one
+// immutable Data release without performing environment writes.
+func LoadCreatorsForRelease(
 	releaseRoot string,
 	mediaAvatarBaseURL string,
 ) (desiredState, []creatorRecord, error) {
@@ -285,7 +328,7 @@ func loadCreatorProfile(root, ref string) (creatorProfile, error) {
 	}
 	if profile.Schema != "quwoquan_data.creator_profile" || profile.CreatorID != ref ||
 		profile.UserID == "" || profile.AuthorID == "" || profile.UserID != profile.AuthorID ||
-		profile.SubAccountID == "" || profile.DisplayName == "" {
+		profile.PersonaID == "" || profile.DisplayName == "" {
 		return creatorProfile{}, fmt.Errorf("invalid creator profile: %s", ref)
 	}
 	return profile, nil
@@ -330,16 +373,19 @@ func assertNoForeignUserCollision(ctx context.Context, pool *pgxpool.Pool, creat
 	return nil
 }
 
-func upsertUsers(ctx context.Context, pool *pgxpool.Pool, creators []creatorRecord) (int, error) {
+func upsertUsers(
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	personaMaterializer CreatorPersonaMaterializer,
+	creators []creatorRecord,
+	releaseID string,
+) (int, error) {
 	const query = `INSERT INTO user_profiles (
 		user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
-		phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, identity_tags,
-		status, profile_version, owner_display_name, sub_account_count, created_at, updated_at
-	) VALUES ($1, 'active', 'content_release', 0, 'preserve', NULL, $2, $3, $4, $5, $6, '', 'active', 1, $2, 0, NOW(), NOW())
-	ON CONFLICT (user_id) DO UPDATE SET nickname=EXCLUDED.nickname,
-		avatar_url=EXCLUDED.avatar_url, avatar_asset_id=EXCLUDED.avatar_asset_id,
-		avatar_version=EXCLUDED.avatar_version, bio=EXCLUDED.bio,
-		owner_display_name=EXCLUDED.owner_display_name, updated_at=NOW()
+		phone, nickname, nickname_customized, avatar_version, profile_version,
+		owner_display_name, persona_count, created_at, updated_at
+	) VALUES ($1, 'active', 'content_release', 0, 'preserve', NULL, '', false, 0, 0, '', 1, NOW(), NOW())
+	ON CONFLICT (user_id) DO UPDATE SET account_state='active', updated_at=NOW()
 	WHERE user_profiles.identity_origin='content_release'`
 	count := 0
 	for _, creator := range creators {
@@ -352,11 +398,6 @@ func upsertUsers(ctx context.Context, pool *pgxpool.Pool, creators []creatorReco
 			ctx,
 			query,
 			profile.UserID,
-			profile.DisplayName,
-			nullableString(profile.AvatarURL),
-			nullableString(avatarAssetID),
-			profile.AvatarVersion,
-			profile.Bio,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("upsert creator user %s: %w", creator.Profile.UserID, err)
@@ -364,16 +405,23 @@ func upsertUsers(ctx context.Context, pool *pgxpool.Pool, creators []creatorReco
 		if tag.RowsAffected() != 1 {
 			return 0, fmt.Errorf("creator user not owned by release: %s", creator.Profile.UserID)
 		}
+		if err := personaMaterializer.UpsertAndProject(ctx, CreatorPersonaState{
+			ReleaseID:          releaseID,
+			UserID:             profile.UserID,
+			PersonaID:          profile.PersonaID,
+			DisplayName:        profile.DisplayName,
+			UserHandle:         profile.UserHandle,
+			Bio:                profile.Bio,
+			IdentityTags:       append([]string(nil), profile.PublicProfileTagRefs...),
+			AvatarMediaAssetID: avatarAssetID,
+			AvatarURL:          profile.AvatarURL,
+			AvatarVersion:      int(profile.AvatarVersion),
+		}); err != nil {
+			return 0, fmt.Errorf("upsert creator Persona %s: %w", profile.PersonaID, err)
+		}
 		count++
 	}
 	return count, nil
-}
-
-func nullableString(value string) any {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	return value
 }
 
 func upsertCreatorProfiles(ctx context.Context, database *mongo.Database, creators []creatorRecord, releaseID string) (int, error) {
@@ -382,7 +430,7 @@ func upsertCreatorProfiles(ctx context.Context, database *mongo.Database, creato
 	for _, creator := range creators {
 		profile := creator.Profile
 		runtime := model.CreatorRuntimeProfile{
-			CreatorID: profile.CreatorID, SubAccountID: profile.SubAccountID, Handle: profile.UserHandle,
+			CreatorID: profile.CreatorID, PersonaID: profile.PersonaID, Handle: profile.UserHandle,
 			DisplayName: profile.DisplayName, Headline: profile.Headline, Bio: profile.Bio,
 			AvatarURL: profile.AvatarURL, AvatarVersion: profile.AvatarVersion,
 			AvatarPublicSliceKey: profile.AvatarPublicSliceKey,
@@ -416,11 +464,11 @@ func verifyCreatorProfileReadback(
 		profile := creator.Profile
 		var persisted model.CreatorRuntimeProfile
 		err := collection.FindOne(ctx, bson.M{
-			"creatorId":    profile.CreatorID,
-			"subAccountId": profile.SubAccountID,
-			"releaseId":    releaseID,
-			"managedBy":    dataSourceOwner,
-			"status":       "active",
+			"creatorId": profile.CreatorID,
+			"personaId": profile.PersonaID,
+			"releaseId": releaseID,
+			"managedBy": dataSourceOwner,
+			"status":    "active",
 		}).Decode(&persisted)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -431,7 +479,7 @@ func verifyCreatorProfileReadback(
 			)
 		}
 		if persisted.CreatorID != profile.CreatorID ||
-			persisted.SubAccountID != profile.SubAccountID {
+			persisted.PersonaID != profile.PersonaID {
 			return nil, fmt.Errorf(
 				"creator projection identity drift after readback: %s",
 				profile.CreatorID,

@@ -5,10 +5,11 @@ events:
   consumers:
   - notification-service
   channel: event_store
+  payload_entity: GreetingRequest
   payload_fields:
   - id
-  - requesterSubAccountId
-  - targetSubAccountId
+  - requesterPersonaId
+  - targetPersonaId
   - source
   - expireAt
   side_effects:
@@ -19,13 +20,13 @@ events:
   description: 接收方回复打招呼；user-service 必须创建或复用正式 1v1 会话并写入 promotedConversationId 后再发布事件
   producer: user-service
   consumers:
-  - chat-service
   - notification-service
   channel: event_store
+  payload_entity: GreetingRequest
   payload_fields:
   - id
-  - requesterSubAccountId
-  - targetSubAccountId
+  - requesterPersonaId
+  - targetPersonaId
   - promotedConversationId
   side_effects:
   - target: chat-service
@@ -34,12 +35,14 @@ events:
 - name: GreetingRequestIgnored
   description: 接收方忽略打招呼
   producer: user-service
-  consumers: []
+  consumers:
+  - notification-service
   channel: event_store
+  payload_entity: GreetingRequest
   payload_fields:
   - id
-  - requesterSubAccountId
-  - targetSubAccountId
+  - requesterPersonaId
+  - targetPersonaId
   - decisionAt
 - name: GreetingRequestCancelled
   description: 发起方撤回打招呼
@@ -47,17 +50,8 @@ events:
   consumers:
   - notification-service
   channel: event_store
+  payload_entity: GreetingRequest
   payload_fields:
   - id
-  - requesterSubAccountId
-  - targetSubAccountId
-- name: GreetingRequestExpired
-  description: 打招呼请求超期（定时任务触发）
-  producer: user-service
-  consumers: []
-  channel: event_store
-  payload_fields:
-  - id
-  - requesterSubAccountId
-  - targetSubAccountId
-  - expireAt
+  - requesterPersonaId
+  - targetPersonaId

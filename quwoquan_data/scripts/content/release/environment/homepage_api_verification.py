@@ -114,8 +114,14 @@ def _verify_case(
     case: HomepageApiCase,
 ) -> dict[str, Any]:
     homepage_id = quote(case.homepage_id, safe="")
-    detail_response = client.get_json(f"homepages/{homepage_id}")
-    introduction_response = client.get_json(f"homepages/{homepage_id}/introduction")
+    detail_response = client.get_json(
+        f"homepages/{homepage_id}",
+        page_id="entity.homepage.detail",
+    )
+    introduction_response = client.get_json(
+        f"homepages/{homepage_id}/introduction",
+        page_id="entity.homepage.introduction",
+    )
     if detail_response.status != HTTPStatus.OK or introduction_response.status != HTTPStatus.OK:
         raise HomepageApiVerificationError(f"homepage API returned non-200 for {case.entity_ref}")
     detail = HomepageDetail.from_payload(detail_response.payload)
@@ -149,15 +155,11 @@ def write_homepage_api_verification(
     case_manifest_path: Path,
     output_path: Path,
     api_base_url: str,
-    insecure_tls: bool,
-    resolve_host: str = "",
 ) -> Path:
     """Call one environment homepage API and write schema-validated evidence."""
     try:
         client = PublicApiClient(
             base_url=api_base_url,
-            insecure_tls=insecure_tls,
-            resolve_host=resolve_host.strip(),
         )
     except PublicApiClientError as exc:
         raise HomepageApiVerificationError(str(exc)) from exc
@@ -186,8 +188,6 @@ def write_homepage_api_verification(
         "entities": entities,
         "issues": [],
     }
-    if resolve_host:
-        payload["apiResolveHost"] = resolve_host
     try:
         assert_valid(
             payload,

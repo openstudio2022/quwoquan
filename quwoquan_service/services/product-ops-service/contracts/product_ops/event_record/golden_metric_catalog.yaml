@@ -71,15 +71,17 @@ metrics:
     operator: greater_than_or_equal
     value: 0.8
   freshness_seconds: 300
-- metric_id: app_jank_session_rate
+- metric_id: app_jank_frame_rate
   business: app_experience
   tier: secondary
   owner: runtime-client-foundation
   source:
     track: product_telemetry
     numerator_event_type: app_frame_jank_outcome
-    denominator_event_type: app_startup
-    aggregation: unique_session_ratio
+    numerator_value_field: jankyFrames
+    denominator_event_type: app_frame_jank_outcome
+    denominator_value_field: sampledFrames
+    aggregation: sum_ratio
   dimensions:
   - pageName
   - appVersion
@@ -87,4 +89,44 @@ metrics:
   target:
     operator: less_than
     value: 0.05
+  freshness_seconds: 300
+- metric_id: video_playback_ready_p95_ms
+  business: app_experience
+  tier: secondary
+  owner: runtime-media
+  source:
+    track: product_telemetry
+    event_type: video_playback_qoe
+    value_field: readyMs
+    aggregation: percentile_p95
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - devicePlatform
+  - playbackMode
+  target:
+    operator: less_than_or_equal
+    value: 2000
+  freshness_seconds: 300
+- metric_id: video_playback_rebuffer_ratio
+  business: app_experience
+  tier: secondary
+  owner: runtime-media
+  source:
+    track: product_telemetry
+    numerator_event_type: video_playback_qoe
+    numerator_value_field: rebufferMs
+    denominator_event_type: video_playback_qoe
+    denominator_value_field: effectivePlaybackMs
+    aggregation: sum_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - devicePlatform
+  - playbackMode
+  target:
+    operator: less_than
+    value: 0.02
   freshness_seconds: 300

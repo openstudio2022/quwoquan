@@ -1,4 +1,6 @@
 kind: append_only_fact
+lifecycle:
+  immutable: true
 description: RecommendationExposureFact 的领域对象契约。
 identity:
   fields:

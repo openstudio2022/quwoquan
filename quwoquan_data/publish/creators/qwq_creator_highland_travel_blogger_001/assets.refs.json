@@ -1,3 +1,12 @@
 {
-  "assets": []
+  "assets": [
+    {
+      "assetId": "creator-avatar-qwq_creator_highland_travel_blogger_001-6901797605c33e3f",
+      "kind": "avatar",
+      "sha256": "sha256:6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830",
+      "objectKey": "media/objects/sha256/69/01/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.webp",
+      "bytes": 281734,
+      "mimeType": "image/webp"
+    }
+  ]
 }

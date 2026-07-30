@@ -10,7 +10,7 @@
     "score",
     "sourceTier",
     "signals",
-    "thresholdsVersion",
+    "policyDigest",
     "decidedAt"
   ],
   "additionalProperties": false,
@@ -152,10 +152,10 @@
       ],
       "description": "decision!=work 时的结构化丢弃原因"
     },
-    "thresholdsVersion": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "判定所用 works_classification 配置版本（可审计可回滚）"
+    "policyDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "判定所用完整 works_classification 配置的不可变内容摘要"
     },
     "decidedAt": {
       "type": "string",

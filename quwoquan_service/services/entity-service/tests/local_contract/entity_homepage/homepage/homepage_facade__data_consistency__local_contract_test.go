@@ -129,6 +129,18 @@ func TestHomepageFacadesApplyOwnerBasicsAndFollowerProjectionOutsideAggregate(t 
 	if err != nil || updated.Subtitle != "真实认领资料" || updated.City != "成都" {
 		t.Fatalf("update owner basics: view=%+v err=%v", updated, err)
 	}
+	rating := 4.8
+	withReview, err := commands.ApplyReviewSummary(
+		ctx,
+		homepageapp.CommandMeta{ActorID: "review-summary", IdempotencyKey: "review-summary-1"},
+		created.ID,
+		&rating,
+		12,
+		[]string{"适合徒步"},
+	)
+	if err != nil || withReview.RatingCount != 12 || withReview.ReviewSummary == nil {
+		t.Fatalf("review summary projection not assembled: view=%+v err=%v", withReview, err)
+	}
 	if err := store.UpsertFollowerState(
 		ctx, created.ID, "viewer-1", true, 7, time.Now().UTC(),
 	); err != nil {
@@ -138,14 +150,14 @@ func TestHomepageFacadesApplyOwnerBasicsAndFollowerProjectionOutsideAggregate(t 
 	if err != nil {
 		t.Fatalf("get homepage with follower view: %v", err)
 	}
-	if view.FollowerCount != 1 || !view.ViewerFollows {
+	if view.ViewerFollow.FollowerCount != 1 || !view.ViewerFollow.ViewerFollowsHomepage {
 		t.Fatalf("follower projection not assembled: %+v", view)
 	}
 	aggregate, found, err := store.Load(ctx, created.ID)
 	if err != nil || !found {
 		t.Fatalf("load aggregate: found=%v err=%v", found, err)
 	}
-	if aggregate.Snapshot().RatingCount != 0 {
-		t.Fatalf("unrelated projection changed aggregate: %+v", aggregate.Snapshot())
+	if aggregate.Version() != updated.Version {
+		t.Fatalf("detail/follower projection changed aggregate version: got=%d want=%d", aggregate.Version(), updated.Version)
 	}
 }

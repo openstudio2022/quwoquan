@@ -2,6 +2,7 @@
   "label": "酒店餐厅探店",
   "labelEn": "Hotel Dining Visit",
   "description": "探访酒店内餐厅",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

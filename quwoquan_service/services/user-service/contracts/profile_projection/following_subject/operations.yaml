@@ -1,91 +1,101 @@
 api_routes:
-- method: GET
-  path: /user/following-subjects
-  operation: ListFollowingSubjects
-  actor: persona
-  application:
-    kind: query
-    facet: FollowingSubjectQueryFacade
-    method: listFollowingSubjects
-    reader: ListFollowingSubjectsReader
-    slice: ListFollowingSubjectsSlice
-  description: 首页关注频道顶部关注对象列表（用户 / 圈子 / 地点和事物主页）
-  query_params:
-  - cursor
-  - limit
-  - subjectType
-  response_entity: FollowingSubjectItemView
-  response_fields:
-  - subjectId
-  - subjectType
-  - displayName
-  - avatarUrl
-  - coverUrl
-  - subtitle
-  - targetRouteId
-  - targetObjectId
-  - followedAt
-  - lastVisitedAt
-  - latestChangedAt
-  - unreadChangeCount
-  - hasUnreadChanges
-  - latestChangeReason
-  client_contract:
-    dart_import: ../user/following_subject_contracts.dart
-    request_type: ListFollowingSubjectsQuery
-    response_type: FollowingSubjectSlice
-    request_encoder: encodeListFollowingSubjectsQuery
-    response_decoder: decodeFollowingSubjectSlice
-  authorization:
-    principal: persona
-    ownership_policy: self
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_following_subject_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
+  - method: GET
+    path: /user/following-subjects
+    operation: ListFollowingSubjects
+    request_bindings:
+      query:
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+        - name: subjectType
+          field: subjectType
+          required: false
+    actor: persona
+    application:
+      kind: query
+      facet: FollowingSubjectQueryFacade
+      method: listFollowingSubjects
+      reader: ListFollowingSubjectsReader
+      slice: ListFollowingSubjectsSlice
+    description: 首页关注频道顶部关注对象列表（用户 / 圈子 / 地点和事物主页）
+    response_entity: FollowingSubjectItemView
+    response_fields:
+      - subjectId
+      - subjectType
+      - displayName
+      - avatarUrl
+      - coverUrl
+      - subtitle
+      - targetRouteId
+      - targetObjectId
+      - followedAt
+      - lastVisitedAt
+      - latestChangedAt
+      - unreadChangeCount
+      - hasUnreadChanges
+      - latestChangeReason
+    client_contract:
+      dart_import: ../user/following_subject_contracts.dart
+      response_type: FollowingSubjectSlice
+      response_decoder: decodeFollowingSubjectSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_following_subject_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ListFollowingSubjectsQuery
+    request_body_kind: none
 consumers:
-- name: app
-  capabilities:
-  - list_following_subjects
-- name: recommendation-engine
-  capabilities:
-  - read_following_subjects
+  - name: app
+    capabilities:
+      - list_following_subjects
+  - name: recommendation-engine
+    capabilities:
+      - read_following_subjects
 contract_test:
   mock_strategy:
     app_side:
       mock_target: user-service API (following subjects)
       data_source: ../test_fixtures/scenarios/user_scenarios.json -> seedSets.following_subject_core
       scenarios:
-      - name: list_three_subject_types
-        route: GET /user/following-subjects
-        assertions:
-        - contains_user_circle_homepage
-        - unread_flags_present
+        - name: list_three_subject_types
+          route: GET /user/following-subjects
+          assertions:
+            - contains_user_circle_homepage
+            - unread_flags_present

@@ -130,6 +130,7 @@ business_rules:
 - 首次发布不接受调用方版本字段；服务端按 publishIntentId/localDraftId 唯一约束、聚合 CAS、永久字段和事务 outbox 保证幂等
 - 发布后设置修改由服务端内部 version CAS 保护；只有确有多写者覆盖写的操作才可显式声明 If-Match
 lifecycle:
+  state_field: status
   states:
   - pending_review
   - published

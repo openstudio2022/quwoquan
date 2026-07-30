@@ -63,21 +63,23 @@ void main() {
     expect(appearance.source, AppearanceSource.subOverride);
     expect(appearance.ownerDefaultThemeMode, ThemeModeSetting.light);
     expect(appearance.ownerDefaultFontSizePreset, FontSizePreset.md);
-    expect(appearance.hasSubAccountOverride, isTrue);
+    expect(appearance.hasPersonaOverride, isTrue);
     expect(appearance.version, 7);
   });
 
   test('UserSettings typed commands encode only their declared fields', () {
-    final notification = encodeUpdateNotificationSettingsCommand(
-      UpdateNotificationSettingsCommand(
-        enablePush: false,
-        enableMarketing: true,
-        quietHoursStart: NullableSettingMutation<QuietHoursTime>.set(
-          QuietHoursTime(hour: 23, minute: 5),
-        ),
-        quietHoursEnd: const NullableSettingMutation<QuietHoursTime>.clear(),
-      ),
-    );
+    final notification =
+        encodeUserUserSettingsUpdateNotificationSettingsGeneratedRequest(
+          UpdateNotificationSettingsCommand(
+            enablePush: false,
+            enableMarketing: true,
+            quietHoursStart: NullableSettingMutation<QuietHoursTime>.set(
+              QuietHoursTime(hour: 23, minute: 5),
+            ),
+            quietHoursEnd:
+                const NullableSettingMutation<QuietHoursTime>.clear(),
+          ),
+        );
     expect(notification.body, <String, Object?>{
       'enablePush': false,
       'enableMarketing': true,
@@ -85,7 +87,7 @@ void main() {
       'quietHoursEnd': '',
     });
 
-    final privacy = encodeUpdatePrivacySettingsCommand(
+    final privacy = encodeUserUserSettingsUpdatePrivacySettingsGeneratedRequest(
       UpdatePrivacySettingsCommand(
         allowStrangerMsg: false,
         profileVisibility: ProfileVisibility.privateProfile,
@@ -100,7 +102,7 @@ void main() {
       'assistantEnabled': false,
     });
 
-    final call = encodeUpdateCallSettingsCommand(
+    final call = encodeUserUserSettingsUpdateCallSettingsGeneratedRequest(
       UpdateCallSettingsCommand(
         defaultIncomingCallRingtoneId:
             NullableSettingMutation<OfficialRingtoneId>.set(
@@ -118,13 +120,14 @@ void main() {
       'enableGroupCallRing': true,
     });
 
-    final appearance = encodeUpdateAppearanceSettingsCommand(
-      const UpdateAppearanceSettingsCommand(
-        themeMode: ThemeModeSetting.dark,
-        fontSizePreset: FontSizePreset.lg,
-        applyScope: AppearanceApplyScope.inheritOwnerDefault,
-      ),
-    );
+    final appearance =
+        encodeUserUserSettingsUpdateAppearanceSettingsGeneratedRequest(
+          const UpdateAppearanceSettingsCommand(
+            themeMode: ThemeModeSetting.dark,
+            fontSizePreset: FontSizePreset.lg,
+            applyScope: AppearanceApplyScope.inheritOwnerDefault,
+          ),
+        );
     expect(appearance.body, <String, Object?>{
       'themeMode': 'dark',
       'fontSizePreset': 'lg',
@@ -295,7 +298,7 @@ Map<String, Object?> _appearanceResponse({
   'source': source,
   'ownerDefaultThemeMode': ownerThemeMode,
   'ownerDefaultFontSizePreset': ownerFontSizePreset,
-  'hasSubAccountOverride': hasOverride,
+  'hasPersonaOverride': hasOverride,
   'version': version,
   'updatedAt': '2026-07-20T00:00:00Z',
 };

@@ -27,12 +27,12 @@ class _JourneyPersonaStore {
   int syncAppliedCount = 0;
   int revision = 1;
 
-  String get activeSubAccountId => items
-      .firstWhere((item) => item['isActive'] == true)['subAccountId']
+  String get activePersonaId => items
+      .firstWhere((item) => item['isActive'] == true)['personaId']
       .toString();
 
-  Map<String, dynamic> persona(String subAccountId) =>
-      items.firstWhere((item) => item['subAccountId'] == subAccountId);
+  Map<String, dynamic> persona(String personaId) =>
+      items.firstWhere((item) => item['personaId'] == personaId);
 }
 
 class _JourneyUserRepository implements PersonaQuery {
@@ -42,11 +42,11 @@ class _JourneyUserRepository implements PersonaQuery {
 
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
-    final active = store.persona(store.activeSubAccountId);
+    final active = store.persona(store.activePersonaId);
     return ActivePersonaContextViewData.fromActivePersonaContextWire(
       ActivePersonaContextWireDto.fromMap(<String, dynamic>{
         'ownerUserId': 'owner_persona',
-        'subAccountId': active['subAccountId'],
+        'personaId': active['personaId'],
         'subjectType': 'persona',
         'displayName': active['displayName'],
         'avatarUrl': active['avatarUrl'],
@@ -63,9 +63,9 @@ class _JourneyUserRepository implements PersonaQuery {
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
+    String personaId,
   ) async {
-    final target = store.persona(subAccountId);
+    final target = store.persona(personaId);
     final isPrimary = target['isPrimary'] == true;
     final isRetired = target['status'] == 'retired';
     final isActive = target['isActive'] == true;
@@ -82,7 +82,7 @@ class _JourneyUserRepository implements PersonaQuery {
         ? 'blocked_active_persona'
         : 'allowed';
     return PersonaLifecycleGuardViewData(
-      subAccountId: subAccountId,
+      personaId: personaId,
       requestedAction: 'retire',
       allowed: reason == 'allowed',
       reason: reason,
@@ -91,7 +91,7 @@ class _JourneyUserRepository implements PersonaQuery {
   }
 
   @override
-  Future<SubAccountProfileViewData> getSubAccountProfile(String subAccountId) =>
+  Future<PersonaProfileViewData> getPersonaProfile(String personaId) =>
       throw UnsupportedError('not used by persona management journey');
 
   @override
@@ -106,8 +106,8 @@ class _JourneyUserRepository implements PersonaQuery {
           )
           .toList(growable: false),
       quota: PersonaManagementQuotaViewData(
-        maxSubAccounts: 5,
-        usedSubAccounts: store.items.length,
+        maxPersonas: 5,
+        usedPersonas: store.items.length,
       ),
       activeContext: await getActivePersonaContext(),
     );
@@ -136,11 +136,9 @@ class _JourneyPersonaCommandWriter
     contracts.CreatePersonaCommand command,
   ) async {
     final created = <String, dynamic>{
-      'subAccountId': 'created_persona',
+      'personaId': 'created_persona',
       'displayName': command.displayName,
       'userHandle': 'qw_created_persona',
-      'phone': '',
-      'email': '',
       'avatarUrl': 'media/avatar/s/mock/user/created_persona/v1/avatar.png',
       'avatarVersion': 1,
       'isolationLevel': command.isolationLevel ?? 'open',
@@ -161,17 +159,13 @@ class _JourneyPersonaCommandWriter
   Future<contracts.PersonaManagementItem> updatePersona(
     contracts.UpdatePersonaCommand command,
   ) async {
-    final target = store.persona(command.subAccountId);
+    final target = store.persona(command.personaId);
     final changedFields = <String>[
       if (command.displayName != null) 'displayName',
-      if (command.phone != null) 'phone',
-      if (command.email != null) 'email',
     ];
     if (command.displayName != null) {
       target['displayName'] = command.displayName;
     }
-    if (command.phone != null) target['phone'] = command.phone;
-    if (command.email != null) target['email'] = command.email;
     if (command.avatarUrl != null) target['avatarUrl'] = command.avatarUrl;
     if (command.isolationLevel != null) {
       target['isolationLevel'] = command.isolationLevel;
@@ -188,15 +182,13 @@ class _JourneyPersonaCommandWriter
     contracts.ApplyPersonaProfileSyncCommand command,
   ) async {
     store.syncAppliedCount++;
-    final source = store.persona(command.subAccountId);
+    final source = store.persona(command.personaId);
     final syncTargetIds = command.syncTargetIds ?? const <String>[];
     final fieldsMask = command.fieldsMask ?? const <String>[];
     final targets = syncTargetIds.isEmpty
-        ? store.items.where(
-            (item) => item['subAccountId'] != command.subAccountId,
-          )
+        ? store.items.where((item) => item['personaId'] != command.personaId)
         : store.items.where(
-            (item) => syncTargetIds.contains(item['subAccountId']),
+            (item) => syncTargetIds.contains(item['personaId']),
           );
     for (final target in targets) {
       for (final field in fieldsMask) {
@@ -226,10 +218,10 @@ class _JourneyPersonaCommandWriter
   Future<contracts.PersonaLifecycleGuard> retirePersona(
     contracts.RetirePersonaCommand command,
   ) async {
-    final target = store.persona(command.subAccountId);
+    final target = store.persona(command.personaId);
     final guard = await _JourneyUserRepository(
       store,
-    ).getPersonaLifecycleGuard(command.subAccountId);
+    ).getPersonaLifecycleGuard(command.personaId);
     if (!guard.allowed) {
       throw personaLifecycleGuardExceptionForReason(guard.reason);
     }
@@ -238,7 +230,7 @@ class _JourneyPersonaCommandWriter
     target['isActive'] = false;
     store.revision++;
     return contracts.PersonaLifecycleGuard(
-      subAccountId: command.subAccountId,
+      personaId: command.personaId,
       requestedAction: 'retire',
       allowed: true,
       reason: 'allowed',
@@ -250,17 +242,17 @@ class _JourneyPersonaCommandWriter
   Future<contracts.ActivePersonaContext> activatePersona(
     contracts.ActivatePersonaCommand command,
   ) async {
-    final target = store.persona(command.subAccountId);
+    final target = store.persona(command.personaId);
     if (target['status'] == 'retired') {
       throw personaLifecycleGuardExceptionForReason('blocked_retired_persona');
     }
     for (final item in store.items) {
-      item['isActive'] = item['subAccountId'] == command.subAccountId;
+      item['isActive'] = item['personaId'] == command.personaId;
     }
     store.revision++;
     return contracts.ActivePersonaContext(
       ownerUserId: 'owner_persona',
-      subAccountId: command.subAccountId,
+      personaId: command.personaId,
       isolationLevel: 'open',
       profileVisibility: 'public',
       contextVersion: store.revision,
@@ -288,12 +280,11 @@ Widget _wrap(_JourneyPersonaStore store) {
 List<Map<String, dynamic>> _seed() {
   return <Map<String, dynamic>>[
     <String, dynamic>{
-      'subAccountId': 'persona_primary',
+      'personaId': 'persona_primary',
       'displayName': '主分身',
       'userHandle': 'main_handle',
-      'phone': '13800000000',
-      'email': 'main@example.com',
-      'avatarUrl': 'media/avatar/s/mock/user/persona/persona_primary/v1/avatar.png',
+      'avatarUrl':
+          'media/avatar/s/mock/user/persona/persona_primary/v1/avatar.png',
       'avatarVersion': 1,
       'isPrimary': true,
       'isActive': true,
@@ -304,12 +295,11 @@ List<Map<String, dynamic>> _seed() {
       'overriddenProfileFields': const <String>[],
     },
     <String, dynamic>{
-      'subAccountId': 'persona_photo',
+      'personaId': 'persona_photo',
       'displayName': '摄影分身',
       'userHandle': 'photo_handle',
-      'phone': '13800000000',
-      'email': 'photo@example.com',
-      'avatarUrl': 'media/avatar/s/mock/user/persona/persona_photo/v1/avatar.png',
+      'avatarUrl':
+          'media/avatar/s/mock/user/persona/persona_photo/v1/avatar.png',
       'avatarVersion': 2,
       'isPrimary': false,
       'isActive': false,
@@ -317,7 +307,7 @@ List<Map<String, dynamic>> _seed() {
       'profileVisibility': 'public',
       'inheritsProfileFromOwner': false,
       'status': 'active',
-      'overriddenProfileFields': const <String>['email'],
+      'overriddenProfileFields': const <String>['displayName'],
     },
   ];
 }
@@ -334,7 +324,7 @@ void main() {
     await tester.pumpWidget(_wrap(store));
     await tester.pumpAndSettle();
 
-    expect(store.activeSubAccountId, 'persona_primary');
+    expect(store.activePersonaId, 'persona_primary');
 
     final primaryStatus = find.byKey(
       const ValueKey<String>('persona-status-persona_primary'),
@@ -369,10 +359,7 @@ void main() {
     await tester.tap(find.text(ProfileText.editProfileSaveAction));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(ProfileText.personaSyncSuggestionTitle),
-      findsOneWidget,
-    );
+    expect(find.text(ProfileText.personaSyncSuggestionTitle), findsOneWidget);
 
     await tester.tap(find.text(ProfileText.personaSyncApplyAll));
     await tester.pumpAndSettle();
@@ -387,7 +374,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(store.activeSubAccountId, 'persona_photo');
+    expect(store.activePersonaId, 'persona_photo');
     expect(
       find.descendant(
         of: primaryStatus,

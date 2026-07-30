@@ -59,6 +59,7 @@ business_rules:
 - CircleGroupCreated 只为 createdByPersonaId 幂等建立 owner active membership
 - active 后才通过 outbox 同步 Chat ConversationMembership，聚合不直写 Chat
 lifecycle:
+  state_field: state
   states:
   - pending
   - active

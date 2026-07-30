@@ -11,10 +11,20 @@ import (
 // personas_outbox 同事务提交，同一 Idempotency-Key 重放返回首次结果。
 func TestPersonaCommandPacketCommitsStateReceiptOutboxAtomically(t *testing.T) {
 	cleanAll(t)
-	createTestProfile(t, "persona-packet-owner", "packet owner")
-	createTestPersonaFull(t, "", "persona-packet-owner", "sa_packet_primary", "主分身", "open", true)
+	ownerID := canonicalOwnerIDForTest(
+		t,
+		"ph",
+		"01j00000000000000000000011",
+	)
+	primaryPersonaID := canonicalPersonaIDForTest(
+		t,
+		ownerID,
+		"01j00000000000000000000012",
+	)
+	createTestProfile(t, ownerID, "packet owner")
+	createTestPersonaFull(t, "", ownerID, primaryPersonaID, "主分身", "open", true)
 
-	headers := authHeaders("persona-packet-owner")
+	headers := authHeaders(ownerID)
 	headers["Idempotency-Key"] = "persona-packet-create-1"
 	first := doRequest(t, http.MethodPost, "/user/personas",
 		`{"displayName":"分身甲","isolationLevel":"open"}`, headers)
@@ -22,9 +32,9 @@ func TestPersonaCommandPacketCommitsStateReceiptOutboxAtomically(t *testing.T) {
 		t.Fatalf("create persona: expected 201, got %d: %s", first.Code, first.Body.String())
 	}
 	firstBody := parseJSON(t, first)
-	subAccountID, _ := firstBody["subAccountId"].(string)
-	if subAccountID == "" {
-		t.Fatalf("create persona result missing subAccountId: %v", firstBody)
+	personaID, _ := firstBody["personaId"].(string)
+	if personaID == "" {
+		t.Fatalf("create persona result missing personaId: %v", firstBody)
 	}
 
 	replay := doRequest(t, http.MethodPost, "/user/personas",
@@ -36,8 +46,9 @@ func TestPersonaCommandPacketCommitsStateReceiptOutboxAtomically(t *testing.T) {
 	ctx := context.Background()
 	var personaCount int
 	if err := pgPool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM personas WHERE user_id=$1 AND sub_account_id <> 'sa_packet_primary'`,
-		"persona-packet-owner",
+		`SELECT COUNT(*) FROM personas WHERE user_id=$1 AND persona_id <> $2`,
+		ownerID,
+		primaryPersonaID,
 	).Scan(&personaCount); err != nil {
 		t.Fatalf("count personas: %v", err)
 	}
@@ -48,13 +59,13 @@ func TestPersonaCommandPacketCommitsStateReceiptOutboxAtomically(t *testing.T) {
 	var receiptCount, outboxCount int
 	if err := pgPool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM personas_command_receipts WHERE aggregate_id=$1`,
-		subAccountID,
+		personaID,
 	).Scan(&receiptCount); err != nil {
 		t.Fatalf("count receipts: %v", err)
 	}
 	if err := pgPool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM personas_outbox WHERE aggregate_id=$1 AND event_type='PersonaCreated'`,
-		subAccountID,
+		personaID,
 	).Scan(&outboxCount); err != nil {
 		t.Fatalf("count outbox: %v", err)
 	}
@@ -71,16 +82,16 @@ func TestPersonaCommandPacketCommitsStateReceiptOutboxAtomically(t *testing.T) {
 	}
 
 	// 命名状态迁移（激活）也走 packet：版本推进 + PersonaActivated 事实。
-	activateHeaders := authHeaders("persona-packet-owner")
+	activateHeaders := authHeaders(ownerID)
 	activateHeaders["Idempotency-Key"] = "persona-packet-activate-1"
-	activated := doRequest(t, http.MethodPost, "/user/personas/"+subAccountID+"/activate",
+	activated := doRequest(t, http.MethodPost, "/user/personas/"+personaID+"/activate",
 		"", activateHeaders)
 	if activated.Code != http.StatusOK {
 		t.Fatalf("activate persona: expected 200, got %d: %s", activated.Code, activated.Body.String())
 	}
 	var activatedVersion int64
 	if err := pgPool.QueryRow(ctx,
-		`SELECT version FROM personas WHERE sub_account_id=$1`, subAccountID,
+		`SELECT version FROM personas WHERE persona_id=$1`, personaID,
 	).Scan(&activatedVersion); err != nil {
 		t.Fatalf("read activated version: %v", err)
 	}
@@ -90,7 +101,7 @@ func TestPersonaCommandPacketCommitsStateReceiptOutboxAtomically(t *testing.T) {
 	var activatedEvents int
 	if err := pgPool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM personas_outbox WHERE aggregate_id=$1 AND event_type='PersonaActivated' AND aggregate_version=2`,
-		subAccountID,
+		personaID,
 	).Scan(&activatedEvents); err != nil {
 		t.Fatalf("count activation events: %v", err)
 	}

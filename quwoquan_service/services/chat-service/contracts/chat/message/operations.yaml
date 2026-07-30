@@ -5,373 +5,390 @@ commercial_defaults:
   gap_id: CHAT_MESSAGE_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 api_routes:
-- method: POST
-  path: /chat/conversations/{conversationId}/messages
-  operation: SendMessage
-  actor: persona
-  application:
-    kind: command
-    facet: MessageCommandFacet
-    method: sendMessage
-    aggregate_owner: Message
-    mutation_target: Message
-    invariant_target: Message
-  commercial:
-    status: ready
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_message_send
-    trace: true
-    attributes:
-    - outcome
-    - message_type
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../chat/message_contracts.dart
-    request_type: ChatSendMessageCommand
-    response_type: ChatSendMessageResult
-    request_encoder: encodeChatSendMessageCommand
-    response_decoder: decodeChatSendMessageResult
-  response_body: ChatSendMessageResult
-  response_body_kind: object
-  description: '发送消息（一次提交：clientMsgId 是唯一幂等身份，Idempotency-Key header 必须等于 body clientMsgId，
+  - method: POST
+    path: /chat/conversations/{conversationId}/messages
+    operation: SendMessage
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+    actor: persona
+    application:
+      kind: command
+      facet: MessageCommandFacet
+      method: sendMessage
+      aggregate_owner: Message
+      mutation_target: Message
+      invariant_target: Message
+    commercial:
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_send
+      trace: true
+      attributes:
+        - outcome
+        - message_type
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      response_type: ChatSendMessageResult
+      response_decoder: decodeChatSendMessageResult
+    response_body: ChatSendMessageResult
+    response_body_kind: object
+    description: '发送消息（一次提交：clientMsgId 是唯一幂等身份，Idempotency-Key header 必须等于 body clientMsgId，
 
-    不一致即拒绝；服务端按 uq_messages_client_message 唯一约束 + 事务内 seq 分配保证重放返回首个
+      不一致即拒绝；服务端按 uq_messages_client_message 唯一约束 + 事务内 seq 分配保证重放返回首个
 
-    messageId + seq + timestamp）。群消息 mentions 由服务端去空、按首次出现顺序去重并限制 50 个；
+      messageId + seq + timestamp）。群消息 mentions 由服务端去空、按首次出现顺序去重并限制 50 个；
 
-    普通目标必须是当前活跃成员，`__all__` 仅 owner/admin 可用，assistant 仅在助手已入群时合法。
+      普通目标必须是当前活跃成员，`__all__` 仅 owner/admin 可用，assistant 仅在助手已入群时合法。
 
-    校验后的 canonical mentions 必须同源写入 Message、MessageSent 与同步/列表投影；
+      校验后的 canonical mentions 必须同源写入 Message、MessageSent 与同步/列表投影；
 
-    非群会话不得提交 mentions。
+      非群会话不得提交 mentions。
 
-    '
-  request_entity: Message
-  writable_fields:
-  - type
-  - content
-  - mediaAssetId
-  - card
-  - replyToMessageId
-  - mentions
-  - clientMsgId
-  - senderDisplayNameSnapshot
-  - senderAvatarUrlSnapshot
-  - personaContextVersion
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.message_invalid
-  - CHAT.USER.message_too_long
-  - CHAT.USER.message_media_invalid
-  - CHAT.USER.message_idempotency_conflict
-  - CHAT.USER.not_mutual
-  - CHAT.USER.blocked
-  - CHAT.SYSTEM.message_media_unavailable
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /internal/chat/conversations/{conversationId}/assistant-grounding-messages
-  operation: ListAssistantGroundingMessages
-  actor: none
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: MessageQueryFacet
-    method: listAssistantGroundingMessages
-    reader: AssistantGroundingMessageReader
-    slice: MessagePageSlice
-  authorization:
-    principal: service
-    scopes:
-    - chat.assistant_grounding.read
-    ownership_policy: trusted_assistant_grounding_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_assistant_grounding_message_list
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.95
-  description: 仅在 creator Persona 与指定 skill 的 assistant 都是当前成员时返回有界会话上下文。
-  query_params:
-  - creatorPersonaId
-  - assistantSkillId
-  - beforeSeq
-  - limit
-  response_entity: Message
-  response_body: ChatMessageClient
-  response_body_kind: page
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.invalid_argument
-  - CHAT.USER.blocked
-  - CHAT.USER.conversation_not_found
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-- method: POST
-  path: /internal/chat/conversations/{conversationId}/assistant-delivery-messages
-  operation: SendAssistantDeliveryMessage
-  actor: none
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: MessageCommandFacet
-    method: sendAssistantDeliveryMessage
-    aggregate_owner: Message
-    mutation_target: Message
-    invariant_target: Message
-  authorization:
-    principal: service
-    scopes:
-    - chat.assistant_delivery_message.send
-    ownership_policy: creator_and_assistant_membership
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_assistant_delivery_message_send
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-    - replayed
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.95
-  description: 以会话内指定 skill 的 assistant 成员发送消息；服务端复核 creator 与 assistant 当前成员资格，clientMsgId 提供稳定幂等。
-  query_params:
-  - creatorPersonaId
-  - assistantSkillId
-  request_entity: Message
-  writable_fields:
-  - type
-  - content
-  - clientMsgId
-  response_body: ChatSendMessageResult
-  response_body_kind: object
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.invalid_argument
-  - CHAT.USER.blocked
-  - CHAT.USER.message_invalid
-  - CHAT.USER.message_too_long
-  - CHAT.USER.message_idempotency_conflict
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: service
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-- method: POST
-  path: /chat/conversations/{conversationId}/messages/{messageId}/recall
-  operation: RecallMessage
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: MessageCommandFacet
-    method: recallMessage
-    aggregate_owner: Message
-    mutation_target: Message
-    invariant_target: Message
-  authorization:
-    principal: persona
-    ownership_policy: message_sender
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_message_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  description: 撤回消息（2 分钟内有效；已撤回消息重复撤回为 no-op 并重放原回执）
-  response_body_kind: ack
-  client_contract:
-    dart_import: ../chat/message_contracts.dart
-    request_type: ChatRecallMessageCommand
-    response_type: ChatCommandAck
-    request_encoder: encodeChatRecallMessageCommand
-    response_decoder: decodeChatCommandAck
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.blocked
-  - CHAT.USER.message_not_found
-  - CHAT.USER.message_recall_forbidden
-  - CHAT.USER.message_recall_expired
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/conversations/{conversationId}/messages
-  operation: ListMessages
-  actor: persona
-  commercial:
-    status: ready
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_message_list
-    trace: true
-    attributes:
-    - conversation_id
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  application:
-    kind: query
-    facet: MessageQueryFacet
-    method: listMessages
-    reader: MessageHistoryReader
-    slice: MessagePageSlice
-  description: 消息列表（支持 afterSeq/beforeSeq 分页，默认按 seq DESC）
-  query_params:
-  - afterSeq
-  - beforeSeq
-  - limit
-  response_entity: Message
-  response_body: ChatMessageClient
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/message_contracts.dart
-    request_type: ChatListMessagesQuery
-    response_type: ChatMessagePageSlice
-    request_encoder: encodeChatListMessagesQuery
-    response_decoder: decodeChatMessagePageSlice
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /chat/conversations/{conversationId}/sync
-  operation: SyncMessages
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: MessageSyncQueryFacet
-    method: syncMessages
-    reader: MessageSyncReader
-    slice: MessageSyncSlice
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_message_sync
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
-  response_body: ChatMessageSyncSlice
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/message_contracts.dart
-    request_type: ChatSyncMessagesQuery
-    response_type: ChatMessageSyncSlice
-    request_encoder: encodeChatSyncMessagesQuery
-    response_decoder: decodeChatMessageSyncSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
+'
+    request_entity: ChatSendMessageCommand
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.message_invalid
+      - CHAT.USER.message_too_long
+      - CHAT.USER.message_media_invalid
+      - CHAT.USER.message_idempotency_conflict
+      - CHAT.USER.not_mutual
+      - CHAT.USER.blocked
+      - CHAT.SYSTEM.message_media_unavailable
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: object
+  - method: GET
+    path: /internal/chat/conversations/{conversationId}/assistant-grounding-messages
+    operation: ListAssistantGroundingMessages
+    request_bindings:
+      path:
+        - {name: conversationId, field: conversationId}
+      query:
+        - {name: creatorPersonaId, field: creatorPersonaId, required: false}
+        - {name: assistantSkillId, field: assistantSkillId, required: false}
+        - {name: beforeSeq, field: beforeSeq, required: false}
+        - {name: limit, field: limit, required: false}
+    actor: none
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: MessageQueryFacet
+      method: listAssistantGroundingMessages
+      reader: AssistantGroundingMessageReader
+      slice: MessagePageSlice
+    authorization:
+      principal: service
+      scopes:
+        - chat.assistant_grounding.read
+      ownership_policy: trusted_assistant_grounding_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_assistant_grounding_message_list
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.95
+    description: 仅在 creator Persona 与指定 skill 的 assistant 都是当前成员时返回有界会话上下文。
+    response_entity: Message
+    response_body: ChatMessageClient
+    response_body_kind: page
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.invalid_argument
+      - CHAT.USER.blocked
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+  - method: POST
+    path: /internal/chat/conversations/{conversationId}/assistant-delivery-messages
+    operation: SendAssistantDeliveryMessage
+    request_bindings:
+      path:
+        - {name: conversationId, field: conversationId}
+      query:
+        - {name: creatorPersonaId, field: creatorPersonaId, required: false}
+        - {name: assistantSkillId, field: assistantSkillId, required: false}
+    actor: none
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: MessageCommandFacet
+      method: sendAssistantDeliveryMessage
+      aggregate_owner: Message
+      mutation_target: Message
+      invariant_target: Message
+    authorization:
+      principal: service
+      scopes:
+        - chat.assistant_delivery_message.send
+      ownership_policy: creator_and_assistant_membership
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_assistant_delivery_message_send
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+        - replayed
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.95
+    description: 以会话内指定 skill 的 assistant 成员发送消息；服务端复核 creator 与 assistant 当前成员资格，clientMsgId 提供稳定幂等。
+    request_entity: ChatSendAssistantDeliveryMessageCommand
+    request_body_kind: object
+    response_body: ChatSendMessageResult
+    response_body_kind: object
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.invalid_argument
+      - CHAT.USER.blocked
+      - CHAT.USER.message_invalid
+      - CHAT.USER.message_too_long
+      - CHAT.USER.message_idempotency_conflict
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: service
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+  - method: POST
+    path: /chat/conversations/{conversationId}/messages/{messageId}/recall
+    operation: RecallMessage
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+        - name: messageId
+          field: messageId
+      injected:
+        - name: Idempotency-Key
+          field: idempotencyKey
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: MessageCommandFacet
+      method: recallMessage
+      aggregate_owner: Message
+      mutation_target: Message
+      invariant_target: Message
+    authorization:
+      principal: persona
+      ownership_policy: message_sender
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: 撤回消息（2 分钟内有效；已撤回消息重复撤回为 no-op 并重放原回执）
+    response_body_kind: ack
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      response_type: ChatCommandAck
+      response_decoder: decodeChatCommandAck
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.blocked
+      - CHAT.USER.message_not_found
+      - CHAT.USER.message_recall_forbidden
+      - CHAT.USER.message_recall_expired
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatRecallMessageCommand
+    request_body_kind: none
+  - method: GET
+    path: /chat/conversations/{conversationId}/messages
+    operation: ListMessages
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      query:
+        - name: limit
+          field: limit
+        - name: afterSeq
+          field: afterSeq
+          required: false
+        - name: beforeSeq
+          field: beforeSeq
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_list
+      trace: true
+      attributes:
+        - conversation_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    application:
+      kind: query
+      facet: MessageQueryFacet
+      method: listMessages
+      reader: MessageHistoryReader
+      slice: MessagePageSlice
+    description: 消息列表（支持 afterSeq/beforeSeq 分页，默认按 seq DESC）
+    response_entity: Message
+    response_body: ChatMessageClient
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      response_type: ChatMessagePageSlice
+      response_decoder: decodeChatMessagePageSlice
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListMessagesQuery
+    request_body_kind: none
+  - method: POST
+    path: /chat/conversations/{conversationId}/sync
+    operation: SyncMessages
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: MessageSyncQueryFacet
+      method: syncMessages
+      reader: MessageSyncReader
+      slice: MessageSyncSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_sync
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
+    response_body: ChatMessageSyncSlice
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      response_type: ChatMessageSyncSlice
+      response_decoder: decodeChatMessageSyncSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatSyncMessagesQuery
+    request_body_kind: object

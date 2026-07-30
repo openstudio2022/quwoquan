@@ -13,35 +13,105 @@
     "fields": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": true
+        "$ref": "#/$defs/field"
       }
     },
     "members": {
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/field" }
+          }
+        }
       }
     },
     "types": {
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "additionalProperties": true
+        "additionalProperties": true,
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/field" }
+          }
+        }
       }
     },
     "enums": {
       "type": "object"
     },
     "value_objects": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/field" }
+          }
+        }
+      }
     },
     "state_machine": {
       "type": "object"
     },
+    "typed_extensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "catalog",
+        "discriminator",
+        "definitions_key",
+        "required_by_event_key",
+        "optional_by_event_key",
+        "wire_encoding",
+        "unknown_field_policy"
+      ],
+      "properties": {
+        "catalog": { "type": "string", "minLength": 1 },
+        "discriminator": { "type": "string", "minLength": 1 },
+        "definitions_key": { "type": "string", "minLength": 1 },
+        "required_by_event_key": { "type": "string", "minLength": 1 },
+        "optional_by_event_key": { "type": "string", "minLength": 1 },
+        "wire_encoding": { "const": "flattened" },
+        "unknown_field_policy": { "const": "reject" }
+      }
+    },
     "unique_constraints": {
       "type": "array"
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "enum_ref": { "type": "string", "minLength": 1 },
+        "max_utf8_bytes": { "type": "integer", "minimum": 1 },
+        "max_items": { "type": "integer", "minimum": 1 },
+        "item_max_utf8_bytes": { "type": "integer", "minimum": 1 },
+        "semantic_type": {
+          "enum": [
+            "instant",
+            "watermark_time",
+            "aggregate_version",
+            "sequence",
+            "watermark_sequence",
+            "release_version",
+            "cursor",
+            "identifier"
+          ]
+        }
+      }
     }
   }
 }

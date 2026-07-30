@@ -1,13 +1,12 @@
 # =============================================================================
 # Service Pipeline — quwoquan_service CI/CD
 # =============================================================================
-# 触发条件：main 合入后的 quwoquan_service/**、quwoquan_ops/** 路径变动 / 手动
+# 触发条件：由 mainline 编排复用 / 手动诊断
 # 流程：Go 构建 + Python (recommendation-service) Docker 镜像 → kustomize/prod 部署清单校验
 # 当前职责：构建服务镜像并校验发布清单；prod-hosted 发布由 prod rollout workflow 负责。
 #
 # 【必须配置的 GitHub Secrets】（部署时）
-#   DOCKER_REGISTRY     — Docker 镜像仓库地址，如 ghcr.io
-#   DOCKER_TOKEN        — 镜像仓库推送凭证
+#   GITHUB_TOKEN        — GHCR packages read/write（由 GitHub 自动注入）
 # =============================================================================
 
 name: 02. Service Pipeline
@@ -16,50 +15,137 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/**'
-      - 'quwoquan_ops/**'
-      - 'quwoquan_service/**'
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact main commit SHA
+        required: true
+        type: string
+      base_sha:
+        description: Exact diff base SHA
+        required: false
+        type: string
+        default: ''
+    outputs:
+      component_evidence_ref:
+        description: Immutable GHCR component-ready ReleaseEvidenceManifest OCI ref
+        value: ${{ jobs.service_pipeline_summary.outputs.component_evidence_ref }}
+      component_artifact_digest:
+        description: Component-ready ReleaseEvidenceManifest artifactDigest
+        value: ${{ jobs.service_pipeline_summary.outputs.component_artifact_digest }}
+      producer_workflow_run_id:
+        description: Workflow run bound by ReleaseEvidenceManifest.source.workflowRunId
+        value: ${{ jobs.service_pipeline_summary.outputs.producer_workflow_run_id }}
+      source_git_sha:
+        description: Exact source Git SHA
+        value: ${{ jobs.service_pipeline_summary.outputs.source_git_sha }}
+      machine_critical_path_seconds:
+        description: Diagnostic GitHub job DAG execution path; never the end-to-end budget clock
+        value: ${{ jobs.service_pipeline_summary.outputs.machine_critical_path_seconds }}
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact main commit SHA; defaults to the dispatch ref SHA
+        required: false
+        default: ''
+      base_sha:
+        description: Exact diff base SHA; defaults to source parent
+        required: false
+        default: ''
 
 env:
-  REGISTRY: ${{ secrets.DOCKER_REGISTRY || 'ghcr.io' }}
+  REGISTRY: ghcr.io
   IMAGE_PREFIX: ${{ github.repository }}
   QWQ_OUTPUT_ROOT: .qwq_output
-  GOCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/build
-  GOMODCACHE: ${{ github.workspace }}/.qwq_output/env/repo/local/ci/cache/go/mod
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
   prepare-release:
-    name: Prepare mainline release coordinates
-    runs-on: ubuntu-latest
+    name: Prepare canonical release transport
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
     permissions:
       contents: read
       actions: read
+      packages: read
     outputs:
-      image_version: ${{ steps.versions.outputs.image_version }}
-      config_version: ${{ steps.versions.outputs.config_version }}
+      image_transport_tag: ${{ steps.coordinates.outputs.image_transport_tag }}
+      source_git_sha: ${{ steps.source.outputs.source_git_sha }}
+      base_sha: ${{ steps.source.outputs.base_sha }}
+      producer_workflow_run_id: ${{ steps.source.outputs.producer_workflow_run_id }}
+      image_matrix: ${{ steps.plan.outputs.image_matrix }}
+      build_count: ${{ steps.plan.outputs.build_count }}
+      reuse_count: ${{ steps.plan.outputs.reuse_count }}
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - name: Generate versions
-        id: versions
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_sha || github.sha }}
+      - id: source
+        name: Resolve exact source and diff range
         env:
-          GITHUB_RUN_NUMBER_VALUE: ${{ github.run_number }}
+          REQUESTED_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}
+          REQUESTED_BASE_SHA: ${{ inputs.base_sha || '' }}
+        run: |
+          SOURCE_SHA="$(git rev-parse "$REQUESTED_SOURCE_SHA")"
+          BASE_SHA="$REQUESTED_BASE_SHA"
+          if [[ -z "$BASE_SHA" ]]; then
+            BASE_SHA="$(git rev-parse "${SOURCE_SHA}^" 2>/dev/null || true)"
+          fi
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ -z "$BASE_SHA" ]] || [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::GATE_BLOCK: Service Pipeline requires exact source/base Git SHAs"
+            exit 2
+          fi
+          echo "source_git_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "producer_workflow_run_id=${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+      - name: Login GHCR for canonical prior evidence discovery
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: prior
+        name: Discover previous canonical evidence for verified reuse
+        env:
+          BASE_SHA: ${{ steps.source.outputs.base_sha }}
+        run: |
+          PRIOR_ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/prior-release-evidence"
+          if python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --source-sha "$BASE_SHA" \
+            --repository "${{ github.repository }}" \
+            --output-dir "$PRIOR_ROOT"; then
+            echo "manifest=$PRIOR_ROOT/manifest.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No sealed prior canonical evidence for $BASE_SHA; rebuilding every image."
+            echo "manifest=" >> "$GITHUB_OUTPUT"
+          fi
+      - id: plan
+        name: Select affected services from diff, feature-tree and ContractGraph
+        env:
+          PRIOR_MANIFEST: ${{ steps.prior.outputs.manifest }}
+        run: |
+          ARGS=(
+            --base-sha "${{ steps.source.outputs.base_sha }}"
+            --head-sha "${{ steps.source.outputs.source_git_sha }}"
+            --github-output "$GITHUB_OUTPUT"
+          )
+          if [[ -n "$PRIOR_MANIFEST" ]]; then
+            ARGS+=(--previous-manifest "$PRIOR_MANIFEST")
+          fi
+          python3 quwoquan_ops/ci/plan_service_release_images.py "${ARGS[@]}"
+      - name: Generate immutable transport coordinate
+        id: coordinates
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_git_sha }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import datetime as dt
           import os
-          stamp = dt.datetime.now(dt.timezone.utc)
-          run_number = os.environ["GITHUB_RUN_NUMBER_VALUE"]
-          print(f"image_version=1.{stamp.strftime('%Y%m%d')}.{run_number}")
-          print(f"config_version=v{stamp.strftime('%Y.%m.%d')}.{run_number}")
+          print(f"image_transport_tag=sha-{os.environ['SOURCE_SHA']}")
           PY
       - id: finish
         if: always()
@@ -69,7 +155,8 @@ jobs:
 
   build-go:
     name: Go 构建与测试
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
     needs: [prepare-release]
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -78,6 +165,8 @@ jobs:
         working-directory: quwoquan_service
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_git_sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -86,16 +175,24 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
 
-      - name: 缓存 Go 模块
+      - name: 配置跨 run Go 缓存
+        run: |
+          cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/go-${RUNNER_ARCH}"
+          mkdir -p "${cache_root}/go-build" "${cache_root}/go-mod"
+          echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"
+          echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"
+
+      - name: Restore Go build/module cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
-            ~/go/pkg/mod
-            ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci/cache/go
-          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
+            ${{ runner.temp }}/quwoquan-service-pipeline/go-${{ runner.arch }}/go-build
+            ${{ runner.temp }}/quwoquan-service-pipeline/go-${{ runner.arch }}/go-mod
+          key: service-go-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_service/go.sum') }}
           restore-keys: |
-            go-mod-${{ runner.os }}-
+            service-go-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Go 构建
         run: make build
@@ -109,143 +206,218 @@ jobs:
 
   build-release-images:
     name: 构建 ${{ matrix.service }} 不可变镜像
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
     needs: [prepare-release]
     permissions:
       contents: read
+      id-token: write
+      attestations: write
       packages: write
     strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - service: recommendation-service
-            image_name: recommendation-service
-            context: .
-            dockerfile: quwoquan_service/services/recommendation-service/build/Dockerfile
-          - service: content-service
-            image_name: content-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/content-service/build/Dockerfile
-          - service: chat-service
-            image_name: chat-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/chat-service/build/Dockerfile
-          - service: user-service
-            image_name: user-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/user-service/build/Dockerfile
-          - service: assistant-service
-            image_name: assistant-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/assistant-service/build/Dockerfile
-          - service: product-ops-service
-            image_name: product-ops-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/product-ops-service/build/Dockerfile
-          - service: platform-ops-service
-            image_name: platform-ops-service
-            context: .
-            dockerfile: quwoquan_service/control-plane/platform-ops/build/Dockerfile
-          - service: tag-service
-            image_name: tag-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/tag-service/build/Dockerfile
-          - service: entity-service
-            image_name: entity-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/entity-service/build/Dockerfile
-          - service: integration-service
-            image_name: integration-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/integration-service/build/Dockerfile
-          - service: notification-service
-            image_name: notification-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/notification-service/build/Dockerfile
-          - service: circle-service
-            image_name: circle-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/circle-service/build/Dockerfile
-          - service: search-service
-            image_name: search-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/search-service/build/Dockerfile
-          - service: realtime-gateway
-            image_name: realtime-gateway
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/realtime-gateway/build/Dockerfile
-          - service: rtc-service
-            image_name: rtc-service
-            context: quwoquan_service
-            dockerfile: quwoquan_service/services/rtc-service/build/Dockerfile
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-release.outputs.image_matrix) }}
     steps:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_git_sha }}
+      - id: base_images
+        name: Resolve governed build images
+        if: ${{ matrix.action == 'build' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          runtime = json.loads(
+              Path("quwoquan_ops/environments/prod/runtime.yaml").read_text(
+                  encoding="utf-8"
+              )
+          )
+          images = runtime["targets"]["prod-hosted"]["buildImages"]
+          print(f"go_base_image={images['goBaseImage']}")
+          print(f"alpine_base_image={images['alpineBaseImage']}")
+          print(f"python_base_image={images['pythonBaseImage']}")
+          PY
+      - name: 设置 QEMU
+        if: ${{ matrix.action == 'build' }}
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd
+          platforms: amd64
+          cache-image: false
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
       - name: 登录镜像仓库
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - id: image
         name: 构建、生成 SBOM/provenance 并推送
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        if: ${{ matrix.action == 'build' }}
+        env:
+          GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}
+          ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}
+          PYTHON_BASE_IMAGE: ${{ steps.base_images.outputs.python_base_image }}
+        run: |
+          docker buildx build \
+            --file "${{ matrix.dockerfile }}" \
+            --platform linux/amd64 \
+            --build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE" \
+            --build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE" \
+            --build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE" \
+            --tag "${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_transport_tag }}" \
+            --cache-from "type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}-buildcache:main" \
+            --cache-to "type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}-buildcache:main,mode=max,oci-mediatypes=true" \
+            --sbom=true \
+            --provenance=mode=max \
+            --push \
+            "${{ matrix.context }}"
+      - name: Reuse verified immutable digest without rebuilding
+        if: ${{ matrix.action == 'reuse' }}
+        run: |
+          SOURCE_REF="${{ matrix.source_ref }}"
+          TARGET_REF="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_transport_tag }}"
+          if [[ ! "$SOURCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::GATE_BLOCK: unchanged service has no verified immutable GHCR digest"
+            exit 2
+          fi
+          docker buildx imagetools inspect "$SOURCE_REF" >/dev/null
+          docker buildx imagetools create --tag "$TARGET_REF" "$SOURCE_REF"
+      - id: exact_image
+        name: Resolve exact image digest
+        run: |
+          SUBJECT_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}"
+          TRANSPORT_REF="$SUBJECT_NAME:${{ needs.prepare-release.outputs.image_transport_tag }}"
+          DIGEST="$(docker buildx imagetools inspect "$TRANSPORT_REF" --format '{{json .Manifest.Digest}}' | python3 -c 'import json,sys; print(json.load(sys.stdin))')"
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::GATE_BLOCK: registry returned no immutable image digest"
+            exit 2
+          fi
+          echo "subject_name=$SUBJECT_NAME" >> "$GITHUB_OUTPUT"
+          echo "subject_digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "exact_ref=$SUBJECT_NAME@$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Extract structured BuildKit SPDX SBOM
+        if: ${{ matrix.action == 'build' }}
+        run: |
+          python3 quwoquan_ops/cli/prod/oci_supply_chain.py extract-sbom \
+            --ref "${{ steps.exact_image.outputs.exact_ref }}" \
+            --output "${{ runner.temp }}/release-image-sbom/${{ matrix.service }}.spdx.json"
+      - name: Sign image provenance with GitHub OIDC
+        if: ${{ matrix.action == 'build' }}
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}:${{ needs.prepare-release.outputs.image_version }}
-          sbom: true
-          provenance: mode=max
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          subject-name: ${{ steps.exact_image.outputs.subject_name }}
+          subject-digest: ${{ steps.exact_image.outputs.subject_digest }}
+          push-to-registry: true
+      - name: Sign image SPDX SBOM with GitHub OIDC
+        if: ${{ matrix.action == 'build' }}
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-name: ${{ steps.exact_image.outputs.subject_name }}
+          subject-digest: ${{ steps.exact_image.outputs.subject_digest }}
+          sbom-path: ${{ runner.temp }}/release-image-sbom/${{ matrix.service }}.spdx.json
+          push-to-registry: true
+      - name: Verify signed provenance, SBOM, signer and issuer
+        env:
+          MATRIX_ACTION: ${{ matrix.action }}
+        run: |
+          ARGS=(
+            verify
+            --ref "${{ steps.exact_image.outputs.exact_ref }}"
+            --repository "${{ github.repository }}"
+            --signer-workflow "${{ github.repository }}/.github/workflows/service_pipeline.yml"
+          )
+          if [[ "$MATRIX_ACTION" == "build" ]]; then
+            ARGS+=(--source-digest "${{ needs.prepare-release.outputs.source_git_sha }}")
+          fi
+          python3 quwoquan_ops/cli/prod/oci_supply_chain.py "${ARGS[@]}"
 
   validate-deploy:
     name: 校验 Kustomize 部署
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs:
       - prepare-release
       - build-go
       - build-release-images
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 10
     permissions:
       contents: read
+      attestations: read
       packages: write
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      image_build_max_seconds: ${{ steps.image_timing.outputs.max_seconds }}
-      release_artifact_ref: ${{ steps.release_bundle_ref.outputs.ref }}
+      component_evidence_ref: ${{ steps.release_bundle_ref.outputs.ref }}
+      component_artifact_digest: ${{ steps.evidence_identity.outputs.artifact_digest }}
+      producer_workflow_run_id: ${{ steps.evidence_identity.outputs.producer_workflow_run_id }}
+      source_git_sha: ${{ steps.evidence_identity.outputs.source_git_sha }}
     steps:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_git_sha }}
+      - name: 设置 QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          image: docker.io/tonistiigi/binfmt@sha256:b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd
+          platforms: amd64
+          cache-image: false
       - name: 设置 Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
-      - name: 登录镜像仓库
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
+      - id: release_registry_login_attempt_1
+        name: Login release registry (attempt 1)
+        continue-on-error: true
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.DOCKER_TOKEN || secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' }}
+        run: sleep 5
+      - id: release_registry_login_attempt_2
+        name: Login release registry (attempt 2)
+        if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' }}
+        continue-on-error: true
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: ${{ steps.release_registry_login_attempt_2.outcome == 'failure' }}
+        run: sleep 5
+      - id: release_registry_login_attempt_3
+        name: Login release registry (attempt 3)
+        if: ${{ steps.release_registry_login_attempt_1.outcome == 'failure' && steps.release_registry_login_attempt_2.outcome == 'failure' }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Generate mainline release inputs
         run: |
           rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline"
           rm -rf "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
           python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
             --output-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
-            --git-sha "${GITHUB_SHA}" \
+            --git-sha "${{ needs.prepare-release.outputs.source_git_sha }}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
             --registry "${{ env.REGISTRY }}" \
-            --image-version "${{ needs.prepare-release.outputs.image_version }}" \
-            --config-version "${{ needs.prepare-release.outputs.config_version }}"
+            --image-transport-tag "${{ needs.prepare-release.outputs.image_transport_tag }}"
       - name: Resolve immutable image descriptors from GHCR
         run: |
           python3 quwoquan_ops/cli/prod/collect_mainline_image_descriptors.py \
@@ -256,26 +428,38 @@ jobs:
           python3 quwoquan_ops/cli/prod/finalize_mainline_release_artifact.py \
             --artifact-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline" \
             --image-descriptors-dir "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/image-descriptors"
-      - id: image_timing
-        name: Record image build critical path
+      - name: Require canonical service component evidence
+        run: |
+          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
+            echo "::error::release evidence manifest is required; local regeneration is forbidden"
+            exit 1
+          }
+      - id: evidence_identity
+        name: Record canonical component candidate
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
           from pathlib import Path
-          root = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/image-descriptors"
-          durations = [
-              int(json.loads(path.read_text(encoding="utf-8"))["buildDurationSeconds"])
-              for path in root.glob("*.json")
-          ]
-          print(f"max_seconds={max(durations)}")
+
+          path = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline/manifest.json"
+          manifest = json.loads(path.read_text(encoding="utf-8"))
+          if manifest.get("schema") != "release-evidence-manifest":
+              raise SystemExit("release evidence schema mismatch")
+          artifact = str(manifest.get("artifactDigest") or "")
+          source = manifest.get("source") or {}
+          if manifest.get("status") != "component-ready" or manifest.get("candidateId") is not None:
+              raise SystemExit("Service Pipeline must stop at component-ready without candidateId")
+          if not artifact.startswith("sha256:"):
+              raise SystemExit("component evidence artifactDigest is missing")
+          if source.get("workflowRunId") != os.environ["GITHUB_RUN_ID"]:
+              raise SystemExit("release evidence workflowRunId mismatch")
+          if source.get("gitSha") != "${{ needs.prepare-release.outputs.source_git_sha }}":
+              raise SystemExit("release evidence source Git SHA mismatch")
+          print(f"artifact_digest={artifact}")
+          print(f"producer_workflow_run_id={source['workflowRunId']}")
+          print(f"source_git_sha={source['gitSha']}")
           PY
-      - name: Require immutable service component manifest
-        run: |
-          test -s "$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/mainline/manifest.json" || {
-            echo "::error::mainline release artifact is required; local regeneration is forbidden"
-            exit 1
-          }
       - name: Unpack service package config evidence
         run: |
           python3 - <<'PY'
@@ -286,11 +470,30 @@ jobs:
 
           root = Path(os.environ["QWQ_OUTPUT_ROOT"]) / "env/repo/local/ci-packages/process/service/mainline"
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-          for rel_path in manifest.get("releaseFiles", {}).values():
-              src = root / rel_path
-              dst = Path(rel_path)
-              dst.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copy2(src, dst)
+          environments = manifest.get("configurationPackages")
+          if not isinstance(environments, dict) or set(environments) != {"alpha", "beta", "gamma", "prod"}:
+              raise SystemExit("component configuration package evidence is not four-environment")
+          for environment, packages in environments.items():
+              if not isinstance(packages, dict) or not packages:
+                  raise SystemExit(f"component configuration package evidence is missing for {environment}")
+              for service, descriptor in packages.items():
+                  if not isinstance(descriptor, dict):
+                      raise SystemExit(f"component configuration descriptor is invalid: {environment}/{service}")
+                  rel_path = descriptor.get("path")
+                  if not isinstance(rel_path, str) or not rel_path.startswith(
+                      f"packages/environments/{environment}/services/{service}/"
+                  ):
+                      raise SystemExit(f"component configuration path escapes its owner: {environment}/{service}")
+                  src = (root / rel_path).resolve()
+                  try:
+                      src.relative_to(root.resolve())
+                  except ValueError as error:
+                      raise SystemExit(f"component configuration source escapes package: {rel_path}") from error
+                  if not src.is_file():
+                      raise SystemExit(f"component configuration source is missing: {rel_path}")
+                  dst = Path(rel_path)
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(src, dst)
           PY
 
       - name: 安装 kustomize
@@ -308,8 +511,9 @@ jobs:
             kustomize build --load-restrictor LoadRestrictionsNone "quwoquan_ops/environments/$env" > /dev/null
             echo "$env autonomous assembly OK"
           done
-      - id: release_bundle
-        name: Publish immutable service component artifact to GHCR
+      - id: release_bundle_attempt_1
+        name: Publish immutable service component artifact (attempt 1)
+        continue-on-error: true
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
@@ -317,17 +521,52 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}
+          sbom: true
+          provenance: mode=max
+      - if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' }}
+        run: sleep 15
+      - id: release_bundle_attempt_2
+        name: Publish immutable service component artifact (attempt 2)
+        if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' }}
+        continue-on-error: true
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}
+          sbom: true
+          provenance: mode=max
+      - if: ${{ steps.release_bundle_attempt_2.outcome == 'failure' }}
+        run: sleep 15
+      - id: release_bundle_attempt_3
+        name: Publish immutable service component artifact (attempt 3)
+        if: ${{ steps.release_bundle_attempt_1.outcome == 'failure' && steps.release_bundle_attempt_2.outcome == 'failure' }}
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/local/ci-packages/process/service/mainline
+          file: quwoquan_ops/cli/prod/release_artifact.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact:${{ needs.prepare-release.outputs.image_transport_tag }}
           sbom: true
           provenance: mode=max
       - id: release_bundle_ref
         name: Record immutable OCI release artifact
         run: |
-          REF="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact@${{ steps.release_bundle.outputs.digest }}"
+          DIGEST="${{ steps.release_bundle_attempt_1.outputs.digest || steps.release_bundle_attempt_2.outputs.digest || steps.release_bundle_attempt_3.outputs.digest }}"
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::release artifact push failed after 3 bounded attempts"
+            exit 2
+          fi
+          REF="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/release-artifact@${DIGEST}"
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
-          echo "release_artifact_ref=$REF"
-          echo "- OCI release artifact: \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "component_evidence_ref=$REF"
+          echo "- OCI release evidence: \`$REF\`" >> "$GITHUB_STEP_SUMMARY"
       - id: finish
         if: always()
         name: Finish timer
@@ -342,11 +581,21 @@ jobs:
       - build-release-images
       - validate-deploy
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
-      critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
+      machine_critical_path_seconds: ${{ steps.timing.outputs.machine_critical_path_seconds }}
+      component_evidence_ref: ${{ needs.validate-deploy.outputs.component_evidence_ref }}
+      component_artifact_digest: ${{ needs.validate-deploy.outputs.component_artifact_digest }}
+      producer_workflow_run_id: ${{ needs.validate-deploy.outputs.producer_workflow_run_id }}
+      source_git_sha: ${{ needs.validate-deploy.outputs.source_git_sha }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.validate-deploy.outputs.source_git_sha }}
       - name: Enforce service pipeline results
         env:
           PREPARE_RESULT: ${{ needs.prepare-release.result }}
@@ -356,34 +605,109 @@ jobs:
         run: |
           test "$PREPARE_RESULT" = "success"
           test "$BUILD_GO_RESULT" = "success"
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            test "$BUILD_IMAGES_RESULT" = "success"
-            test "$VALIDATE_RESULT" = "success"
-          fi
+          test "$BUILD_IMAGES_RESULT" = "success"
+          test "$VALIDATE_RESULT" = "success"
+      - id: official_timing
+        name: Read official queue, setup, matrix and DAG timestamps
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 quwoquan_ops/ci/github_actions_timing.py \
+            --repository "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --phase "prepare_release=Prepare canonical release transport" \
+            --phase "build_go=Go 构建与测试" \
+            --phase "build_release_images=构建 " \
+            --phase "validate_deploy=校验 Kustomize 部署" \
+            --require-count "prepare_release=1" \
+            --require-count "build_go=1" \
+            --require-count "build_release_images=15" \
+            --require-count "validate_deploy=1" \
+            --dag-layer "prepare_release" \
+            --dag-layer "build_go,build_release_images" \
+            --dag-layer "validate_deploy" \
+            --candidate-job "校验 Kustomize 部署" \
+            --critical-start run \
+            --github-output "$GITHUB_OUTPUT"
+      - id: service_budget
+        name: Read canonical Service Pipeline budget
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          gate = json.loads(
+              Path("quwoquan_ops/environments/pr_gate_timing_budgets.json").read_text(
+                  encoding="utf-8"
+              )
+          )["gates"]["02.service_pipeline"]
+          print(f"soft={int(gate['budgetSeconds'])}")
+          print(f"hard={int(gate['hardFailSeconds'])}")
+          PY
       - name: Render service pipeline timing summary
         id: timing
         env:
-          PREPARE_SECONDS: ${{ needs.prepare-release.outputs.duration_seconds }}
-          BUILD_GO_SECONDS: ${{ needs.build-go.outputs.duration_seconds }}
-          BUILD_IMAGES_SECONDS: ${{ needs.validate-deploy.outputs.image_build_max_seconds }}
-          VALIDATE_SECONDS: ${{ needs.validate-deploy.outputs.duration_seconds }}
+          PREPARE_SECONDS: ${{ steps.official_timing.outputs.phase_prepare_release }}
+          BUILD_GO_SECONDS: ${{ steps.official_timing.outputs.phase_build_go }}
+          BUILD_IMAGES_SECONDS: ${{ steps.official_timing.outputs.phase_build_release_images }}
+          VALIDATE_SECONDS: ${{ steps.official_timing.outputs.phase_validate_deploy }}
+          MACHINE_CRITICAL_PATH_SECONDS: ${{ steps.official_timing.outputs.machine_critical_path_seconds }}
+          RUN_CREATED_AT: ${{ steps.official_timing.outputs.run_created_at }}
+          CANDIDATE_READY_AT: ${{ steps.official_timing.outputs.candidate_ready_at }}
+          QUEUE_SECONDS: ${{ steps.official_timing.outputs.queue_seconds }}
+          UPSTREAM_MISSING_EVIDENCE: ${{ steps.official_timing.outputs.missing_evidence }}
+          SETUP_SECONDS: ${{ steps.official_timing.outputs.setup_seconds }}
+          EXECUTION_SECONDS: ${{ steps.official_timing.outputs.execution_seconds }}
+          CALENDAR_SECONDS: ${{ steps.official_timing.outputs.calendar_lead_time_seconds }}
+          SOFT_BUDGET_SECONDS: ${{ steps.service_budget.outputs.soft }}
+          HARD_FAIL_SECONDS: ${{ steps.service_budget.outputs.hard }}
         run: |
-          PREPARE="${PREPARE_SECONDS:-0}"
-          BUILD_GO="${BUILD_GO_SECONDS:-0}"
-          BUILD_IMAGES="${BUILD_IMAGES_SECONDS:-0}"
-          VALIDATE="${VALIDATE_SECONDS:-0}"
-          FANOUT="${BUILD_GO}"
-          if [ "${BUILD_IMAGES}" -gt "${FANOUT}" ]; then FANOUT="${BUILD_IMAGES}"; fi
-          CRITICAL_PATH_SECONDS=$(( PREPARE + FANOUT + VALIDATE ))
+          REQUIRED=(PREPARE_SECONDS BUILD_GO_SECONDS BUILD_IMAGES_SECONDS VALIDATE_SECONDS MACHINE_CRITICAL_PATH_SECONDS RUN_CREATED_AT CANDIDATE_READY_AT CALENDAR_SECONDS)
+          for name in "${REQUIRED[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::GATE_BLOCK: official Service Pipeline timing is missing ${name}"
+              exit 2
+            fi
+          done
+          PREPARE="$PREPARE_SECONDS"
+          BUILD_GO="$BUILD_GO_SECONDS"
+          VALIDATE="$VALIDATE_SECONDS"
+          DURATION_ARGS=(--calendar-lead-time-seconds "$CALENDAR_SECONDS")
+          EVIDENCE_ARGS=()
+          NOTE_ARGS=()
+          if [[ -n "$QUEUE_SECONDS" ]]; then DURATION_ARGS+=(--queue-seconds "$QUEUE_SECONDS"); fi
+          if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
+            EVIDENCE_ARGS+=(--missing-evidence "$UPSTREAM_MISSING_EVIDENCE")
+            NOTE_ARGS+=(--note "GitHub Jobs API omitted created_at for one or more matched jobs; queue duration is absent and no zero or substitute timestamp was used.")
+          fi
+          if [[ -n "$SETUP_SECONDS" ]]; then DURATION_ARGS+=(--setup-seconds "$SETUP_SECONDS"); fi
+          if [[ -n "$EXECUTION_SECONDS" ]]; then DURATION_ARGS+=(--execution-seconds "$EXECUTION_SECONDS"); fi
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 02.service_pipeline \
             --title "02. Service Pipeline" \
-            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
+            --machine-critical-path-seconds "${MACHINE_CRITICAL_PATH_SECONDS}" \
+            --workflow-run-id "${{ needs.validate-deploy.outputs.producer_workflow_run_id }}" \
+            --source-git-sha "${{ needs.validate-deploy.outputs.source_git_sha }}" \
+            --run-created-at "$RUN_CREATED_AT" \
+            --candidate-ready-at "$CANDIDATE_READY_AT" \
+            "${DURATION_ARGS[@]}" \
+            "${EVIDENCE_ARGS[@]}" \
+            "${NOTE_ARGS[@]}" \
             --phase "prepare_release=${PREPARE}" \
             --phase "build_go=${BUILD_GO}" \
-            --phase "build_release_images=${BUILD_IMAGES}" \
+            --phase "build_release_images=${BUILD_IMAGES_SECONDS}" \
             --phase "validate_deploy=${VALIDATE}" \
-            --note "02 负责 mainline release artifact、镜像构建推送与部署清单校验；该耗时必须计入真实 commit-to-prod。" \
+            --critical-path-source github_run_calendar \
+            --note "GitHub Jobs API records the longest 15-service matrix node; unchanged services reuse a sealed digest and changed services use isolated registry BuildKit caches." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/service-pipeline-summary.json" \
             --write-step-summary
-          echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
+          echo "machine_critical_path_seconds=${MACHINE_CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
+          if [[ "$CALENDAR_SECONDS" -gt "$HARD_FAIL_SECONDS" ]]; then
+            echo "::error::Service Pipeline end-to-end time ${CALENDAR_SECONDS}s exceeds hard budget ${HARD_FAIL_SECONDS}s"
+            exit 1
+          elif [[ "$CALENDAR_SECONDS" -gt "$SOFT_BUDGET_SECONDS" ]]; then
+            echo "::warning::Service Pipeline end-to-end time ${CALENDAR_SECONDS}s exceeds soft budget ${SOFT_BUDGET_SECONDS}s"
+          fi
+          if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
+            echo "::error::GATE_BLOCK: Service Pipeline timing is historical_incomplete: ${UPSTREAM_MISSING_EVIDENCE}"
+            exit 2
+          fi

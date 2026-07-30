@@ -1,0 +1,85 @@
+domain: CIRCLE
+aggregate: CirclePostPlacement
+description: 'CirclePostPlacement 对象专属错误码。格式：MODULE.KIND.REASON。'
+errors:
+- code: CIRCLE.USER.placement_not_found
+  kind: USER
+  reason: placement_not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - FeatureCirclePost
+    - PinCirclePost
+    - RemovePostFromCircle
+  http_status: 404
+  recovery_action: refresh
+  dart_const: placementNotFound
+  go_const: ErrPlacementNotFound
+  user_message:
+    zh: 圈内内容放置不存在
+    en: Circle post placement not found
+- code: CIRCLE.USER.placement_already_exists
+  kind: USER
+  reason: placement_already_exists
+  emitted_by:
+  - surface: http
+    operations:
+    - PlacePostInCircle
+  http_status: 409
+  recovery_action: refresh
+  dart_const: placementAlreadyExists
+  go_const: ErrPlacementAlreadyExists
+  user_message:
+    zh: 该内容已放置到目标圈子位置
+    en: The post is already placed at this circle location
+- code: CIRCLE.USER.placement_version_conflict
+  kind: USER
+  reason: placement_version_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - FeatureCirclePost
+    - PinCirclePost
+    - RemovePostFromCircle
+  http_status: 409
+  recovery_action: refresh
+  dart_const: placementVersionConflict
+  go_const: ErrPlacementVersionConflict
+  user_message:
+    zh: 放置状态已更新，请刷新后重试
+    en: Placement changed, refresh and retry
+- code: CIRCLE.USER.placement_idempotency_conflict
+  kind: USER
+  reason: placement_idempotency_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - FeatureCirclePost
+    - PinCirclePost
+    - PlacePostInCircle
+    - RemovePostFromCircle
+  http_status: 409
+  recovery_action: refresh
+  dart_const: placementIdempotencyConflict
+  go_const: ErrPlacementIdempotencyConflict
+  user_message:
+    zh: 重复请求与原操作不一致，请刷新后重试
+    en: Repeated request differs from the original operation
+- code: CIRCLE.SYSTEM.placement_storage_write_failed
+  kind: SYSTEM
+  reason: placement_storage_write_failed
+  emitted_by:
+  - surface: http
+    operations:
+    - FeatureCirclePost
+    - PinCirclePost
+    - PlacePostInCircle
+    - RemovePostFromCircle
+  http_status: 500
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: placementStorageWriteFailed
+  go_const: ErrPlacementStorageWriteFailed
+  user_message:
+    zh: 操作失败，请稍后重试
+    en: Operation failed, please retry

@@ -47,6 +47,7 @@ rm -rf "$out_dir"
 mkdir -p "$out_dir"
 environment_runtime="$out_dir/environment_runtime.yaml"
 PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$target_name" "$environment_runtime" <<'PY'
+import json
 import sys
 from pathlib import Path
 
@@ -65,58 +66,31 @@ if not isinstance(target, dict) or target.get("env") != environment:
         f"runtime target {target_name!r} does not belong to environment {environment!r}"
     )
 
-projected = {
-    "schema": "environment-runtime",
-    "environment": environment,
-}
-projected.update(
+resolved_roles = target["resolvedUrlRoles"]
+tls_profiles = sorted(
     {
-        key: value
-        for key, value in runtime.items()
-        if key not in {"workloads"}
+        str(role.get("tlsProfile") or "")
+        for role in resolved_roles.values()
+        if isinstance(role, dict) and str(role.get("tlsProfile") or "")
     }
 )
-projected["dataReleaseTarget"] = target_name
-projected["target"] = {"name": target_name, **target}
-Path(output).write_text(
-    json.dumps(projected, ensure_ascii=False, indent=2) + "\n",
-    encoding="utf-8",
-)
-PY
-
-target_url_resolution="$out_dir/target-url-resolution.json"
-PYTHONDONTWRITEBYTECODE=1 python3 - "$env_name" "$target_name" "$target_url_resolution" <<'PY'
-import hashlib
-import json
-import sys
-from pathlib import Path
-
-from quwoquan_ops.cli.lib.environment_topology import (
-    get_target,
-    load_environment_topology,
-)
-
-environment, target_name, output = sys.argv[1:]
-manifest = load_environment_topology()
-target = get_target(manifest, target_name)
-if target.get("env") != environment:
-    raise SystemExit(f"target/environment mismatch: {target_name}/{environment}")
-resolved = {
-    "schema": "target-url-resolution",
+projected = {
+    "schema": "environment-runtime-package",
     "environment": environment,
     "target": target_name,
-    "roles": target["resolvedUrlRoles"],
+    "backend": target.get("backend"),
+    "localResourceGroup": target.get("localResourceGroup", ""),
+    "portProfile": target.get("portProfile"),
     "publicBases": target["publicBases"],
+    "transportRequirements": {
+        "publicCaRequired": True,
+        "tlsProfiles": tls_profiles,
+    },
+    "artifactPolicy": runtime.get("artifactPolicy"),
+    "dataRelease": target.get("dataRelease", {}),
 }
-digest_payload = json.dumps(
-    resolved,
-    ensure_ascii=False,
-    sort_keys=True,
-    separators=(",", ":"),
-).encode("utf-8")
-resolved["topologyDigest"] = "sha256:" + hashlib.sha256(digest_payload).hexdigest()
 Path(output).write_text(
-    json.dumps(resolved, ensure_ascii=False, indent=2) + "\n",
+    json.dumps(projected, ensure_ascii=False, indent=2) + "\n",
     encoding="utf-8",
 )
 PY
@@ -130,7 +104,7 @@ from pathlib import Path
 source_path, runtime_path, output_path = map(Path, sys.argv[1:4])
 topology = json.loads(runtime_path.read_text(encoding="utf-8"))
 public_bases = topology.get("publicBases") or {}
-target_name = str((topology.get("target") or {}).get("name") or "").strip()
+target_name = str(topology.get("target") or "").strip()
 api_base = str(public_bases.get("api") or "").rstrip("/")
 runtime_values = {
     "gatewayBaseUrl": api_base,
@@ -176,11 +150,14 @@ from pathlib import Path
 env_name, cfg_path, runtime_path, report_path = sys.argv[1:5]
 text = Path(cfg_path).read_text(encoding="utf-8")
 env_topology = json.loads(Path(runtime_path).read_text(encoding="utf-8"))
-if env_topology.get("schema") != "environment-runtime" or env_topology.get("environment") != env_name:
+if (
+    env_topology.get("schema") != "environment-runtime-package"
+    or env_topology.get("environment") != env_name
+):
     raise SystemExit(f"environment runtime identity mismatch: {runtime_path}")
 public_bases = env_topology.get("publicBases") or {}
 artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("app") or {})
-target_name = str((env_topology.get("target") or {}).get("name") or "").strip()
+target_name = str(env_topology.get("target") or "").strip()
 
 def digest(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
@@ -208,7 +185,7 @@ def scalar(path):
             section = line[:-1]
             continue
         if section == parts[0] and indent == 2 and line.startswith(parts[1] + ":"):
-            return line.split(":", 1)[1].strip().strip('"')
+            return line.split(":", 1)[1].strip().strip("'\"")
     return ""
 
 runtime_env = scalar("runtime.appRuntimeEnv")
@@ -223,9 +200,13 @@ video_cdn = scalar("runtime.mediaVideoCdnBaseUrl")
 upload_base = scalar("runtime.mediaUploadBaseUrl")
 rtc_media = scalar("runtime.rtcMediaConnectionUrl")
 current_user_id = scalar("runtime.currentUserId")
+seed_enabled = scalar("seed.enabled").lower()
+seed_manifest = scalar("seed.manifest")
 if runtime_env != env_name:
     raise SystemExit(f"runtime.appRuntimeEnv mismatch: {runtime_env} != {env_name}")
-if "seed:" in text or "test_fixtures" in text or "seedRefs" in text or "requiresSeedReset" in text:
+if seed_enabled or seed_manifest:
+    raise SystemExit(f"{env_name} app package config must not carry runtime seed")
+if "test_fixtures" in text or "seedRefs" in text or "requiresSeedReset" in text:
     raise SystemExit(f"{env_name} app package config must not reference seed or test fixtures")
 expected_urls = {
     "gatewayBaseUrl": public_bases.get("api", ""),
@@ -291,23 +272,15 @@ report = {
     "uploadBaseUrl": upload_base,
     "rtcMediaConnectionUrl": rtc_media,
     "currentUserId": current_user_id,
-    "runtimeSchemaVersion": env_topology.get("schema"),
     "artifactPolicy": artifact_policy,
     "publicBases": expected_urls,
-    "topologyDigest": json.loads(
-        (Path(report_path).parent / "target-url-resolution.json").read_text(
-            encoding="utf-8"
-        )
-    )["topologyDigest"],
+    "runtimeConfigDigest": digest(Path(cfg_path)),
     "provenance": {
         "gitRevision": revision,
         "files": {
             "defaultAppRuntime": digest(Path(report_path).parent / "default_app_runtime.yaml"),
             "appRuntime": digest(Path(report_path).parent / "app_runtime.yaml"),
             "environmentRuntime": digest(Path(runtime_path)),
-            "targetUrlResolution": digest(
-                Path(report_path).parent / "target-url-resolution.json"
-            ),
         },
     },
 }

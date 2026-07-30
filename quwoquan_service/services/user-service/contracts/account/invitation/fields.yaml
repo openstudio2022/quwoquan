@@ -8,8 +8,8 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
-- name: inviterSubAccountId
-  source: inviterSubAccountId
+- name: inviterPersonaId
+  source: inviterPersonaId
   type: string
   constraints: [NOT_NULL]
   classification: PUBLIC
@@ -128,6 +128,19 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
+types:
+  GenerateInvitationCommand:
+    fields:
+    - name: personaId
+      type: string
+      constraints: [NOT_BLANK]
+    - name: channel
+      type: enum
+      enum_ref: InvitationChannel
+      constraints: [NOT_NULL]
+    - name: inviteePhone
+      type: string
+      constraints: [NULLABLE]
 enums:
   InvitationChannel:
     values: [link, qrcode, contact, sms, direct, social]

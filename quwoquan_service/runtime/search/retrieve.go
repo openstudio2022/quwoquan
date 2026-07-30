@@ -328,9 +328,8 @@ func Retrieve(ctx context.Context, req RetrieveRequest, backend RecallBackend, v
 		provider = backend.Name()
 	}
 	provenance := Provenance{
-		Provider:     provider,
-		IndexVersion: "retrieve-v1",
-		GeneratedAt:  time.Now().UTC(),
+		Provider:    provider,
+		GeneratedAt: time.Now().UTC(),
 	}
 
 	safety := CheckQuerySafety(strings.Join(req.Terms, " "))

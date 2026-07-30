@@ -45,7 +45,7 @@
 ### REQ-002 统一学习事件上报、反馈聚合与运行时上下文注入链路
 
 - 统一学习事件上报、反馈聚合与运行时上下文注入链路。
-- `AppendAssistantLearningFact` 必须是用户反馈、交互结果与服务评分唯一的 append command；`eventId + eventVersion` 定义幂等身份，不保留旧 wire 或双轨上报。
+- `AppendAssistantLearningFact` 必须是用户反馈、交互结果与服务评分唯一的 append command；`eventId` 定义幂等身份，`payloadDigest` 检测同身份冲突，服务端 `appendSequence` 定义唯一追加顺序，不保留旧 wire 或双轨上报。
 - 反馈注入只能读取通过策略校验的数据，不得直接拼接原始未校验字段。
 - `learning-event-ingestion`：统一学习事实追加、落库标准、与统一事件体系桥接
 - 通过 `product-ops-growth/event-ingestion-and-analytics` 共享统一事件字典、schema 治理、实验与分析维度
@@ -73,5 +73,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺 Prod 获批 Provider conformance 与发布回执；三条代码链路已由 `AssistantLearningFact` append sink、definition-versioned projection 和 policy-filtered feedback context 收敛，local/API 合同已直连 Story `spec_ref`，Gamma Remote 已证明真实 append、幂等 receipt 与 durable relay，且不得在生产环境执行破坏性学习事实探针。
+- 影响或价值：尚缺可用 Gamma Remote 与 Prod 获批 Provider conformance、发布回执；三条代码链路已由 `AssistantLearningFact` append sink、canonical-definition projection 和 policy-filtered feedback context 收敛，local/API 合同已直连 Story `spec_ref`，但 gamma-local health gate 当前为 0/28，未取得当前真实 append、幂等 receipt 与 durable relay 回读，且不得在生产环境执行破坏性学习事实探针。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效，并在可用 alpha/beta/gamma/prod 环境中复验。

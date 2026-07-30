@@ -47,7 +47,7 @@ class ToolAssessmentDto {
 
   factory ToolAssessmentDto.fromJson(Map<String, dynamic> json) {
     return ToolAssessmentDto(
-      assessmentType: parseAssessmentType((json['assessmentType'] as String?)?.trim() ?? ""),
+      assessmentType: parseAssessmentTypeStrict((json['assessmentType'] as String?)?.trim() ?? ''),
       userMessage: (json['userMessage'] as String?)?.trim() ?? "",
       shouldContinueLoop: json['shouldContinueLoop'] != false,
       gapFill: json['gapFill'] == true,

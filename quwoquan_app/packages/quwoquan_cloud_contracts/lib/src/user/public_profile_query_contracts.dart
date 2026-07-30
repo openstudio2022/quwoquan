@@ -1,11 +1,13 @@
 import '../operation_request_payload.dart';
+import 'persona_relationship_contracts.dart';
 import 'user_contract_codec.dart';
+part '../generated/requests/user/public_profile_query_contracts.requests.g.dart';
 
 abstract interface class PublicProfileQueryFacet {
-  Future<SubAccountProfileProjection> getMeProfile(GetMeProfileQuery query);
+  Future<PersonaProfileProjection> getMeProfile(GetMeProfileQuery query);
 
-  Future<SubAccountProfileProjection> getSubAccountProfile(
-    GetSubAccountProfileQuery query,
+  Future<PersonaProfileProjection> getPersonaProfile(
+    GetPersonaProfileQuery query,
   );
 
   Future<ProfileQrCardProjection> getProfileQrCard(GetProfileQrCardQuery query);
@@ -19,35 +21,9 @@ abstract interface class PublicProfileQueryFacet {
   );
 }
 
-final class GetSubAccountProfileQuery {
-  const GetSubAccountProfileQuery({required this.subAccountId});
-
-  final String subAccountId;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'subAccountId': subAccountId,
-  };
-}
-
-CloudOperationRequestPayload encodeGetSubAccountProfileQuery(
-  GetSubAccountProfileQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subAccountId': query.subAccountId.trim()},
-  );
-}
-
-final class GetMeProfileQuery {
-  const GetMeProfileQuery();
-}
-
-CloudOperationRequestPayload encodeGetMeProfileQuery(GetMeProfileQuery _) {
-  return const CloudOperationRequestPayload();
-}
-
-final class SubAccountProfileProjection {
-  const SubAccountProfileProjection({
-    required this.subAccountId,
+final class PersonaProfileProjection {
+  const PersonaProfileProjection({
+    required this.personaId,
     required this.ownerUserId,
     required this.userHandle,
     required this.nickname,
@@ -75,7 +51,7 @@ final class SubAccountProfileProjection {
     this.updatedAt,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String ownerUserId;
   final String userHandle;
   final String nickname;
@@ -102,13 +78,10 @@ final class SubAccountProfileProjection {
   final List<String>? overriddenFields;
   final DateTime? updatedAt;
 
-  static SubAccountProfileProjection fromJson(Object? value) {
-    final source = UserContractCodec.object(
-      value,
-      'SubAccountProfileProjection',
-    );
-    return SubAccountProfileProjection(
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+  static PersonaProfileProjection fromJson(Object? value) {
+    final source = UserContractCodec.object(value, 'PersonaProfileProjection');
+    return PersonaProfileProjection(
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       ownerUserId: UserContractCodec.textOr(source, 'ownerUserId', ''),
       userHandle: UserContractCodec.textOr(source, 'userHandle', ''),
       nickname: UserContractCodec.textOr(source, 'nickname', ''),
@@ -169,20 +142,8 @@ final class SubAccountProfileProjection {
   }
 }
 
-SubAccountProfileProjection decodeSubAccountProfileProjection(Object? value) {
-  return SubAccountProfileProjection.fromJson(value);
-}
-
-final class GetProfileQrCardQuery {
-  const GetProfileQrCardQuery();
-
-  Map<String, Object?> toJson() => const <String, Object?>{};
-}
-
-CloudOperationRequestPayload encodeGetProfileQrCardQuery(
-  GetProfileQrCardQuery _,
-) {
-  return const CloudOperationRequestPayload();
+PersonaProfileProjection decodePersonaProfileProjection(Object? value) {
+  return PersonaProfileProjection.fromJson(value);
 }
 
 final class ProfileQrCardProjection {
@@ -190,7 +151,6 @@ final class ProfileQrCardProjection {
     required this.publicProfileUrl,
     required this.qrPayload,
     required this.qrTokenId,
-    required this.styleVersion,
     required this.avatarUrl,
     required this.avatarVersion,
     required this.displayName,
@@ -202,7 +162,6 @@ final class ProfileQrCardProjection {
   final String publicProfileUrl;
   final String qrPayload;
   final String qrTokenId;
-  final String styleVersion;
   final String avatarUrl;
   final String avatarVersion;
   final String displayName;
@@ -220,7 +179,6 @@ final class ProfileQrCardProjection {
       ),
       qrPayload: UserContractCodec.requiredText(source, 'qrPayload'),
       qrTokenId: UserContractCodec.textOr(source, 'qrTokenId', ''),
-      styleVersion: UserContractCodec.textOr(source, 'styleVersion', 'v1'),
       avatarUrl: UserContractCodec.textOr(source, 'avatarUrl', ''),
       avatarVersion: UserContractCodec.textOr(source, 'avatarVersion', ''),
       displayName: UserContractCodec.textOr(source, 'displayName', ''),
@@ -235,39 +193,15 @@ ProfileQrCardProjection decodeProfileQrCardProjection(Object? value) {
   return ProfileQrCardProjection.fromJson(value);
 }
 
-final class ResolveProfileQrTokenQuery {
-  const ResolveProfileQrTokenQuery({required this.qr, this.handle});
-
-  final String qr;
-  final String? handle;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'qr': qr,
-    if (handle != null && handle!.trim().isNotEmpty) 'handle': handle!.trim(),
-  };
-}
-
-CloudOperationRequestPayload encodeResolveProfileQrTokenQuery(
-  ResolveProfileQrTokenQuery query,
-) {
-  final handle = query.handle?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'qr': query.qr.trim(),
-      if (handle.isNotEmpty) 'handle': handle,
-    },
-  );
-}
-
 final class ProfileQrResolveProjection {
   const ProfileQrResolveProjection({
-    required this.subAccountId,
+    required this.personaId,
     required this.userHandle,
     required this.publicProfileUrl,
     required this.scanStatus,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String userHandle;
   final String publicProfileUrl;
   final String scanStatus;
@@ -278,7 +212,7 @@ final class ProfileQrResolveProjection {
       'ProfileQrResolveProjection',
     );
     return ProfileQrResolveProjection(
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       userHandle: UserContractCodec.textOr(source, 'userHandle', ''),
       publicProfileUrl: UserContractCodec.textOr(
         source,
@@ -294,101 +228,20 @@ ProfileQrResolveProjection decodeProfileQrResolveProjection(Object? value) {
   return ProfileQrResolveProjection.fromJson(value);
 }
 
-final class SearchSocialRelationsQuery {
-  const SearchSocialRelationsQuery({
-    required this.query,
-    this.cursor,
-    this.limit = 20,
-  });
-
-  final String query;
-  final String? cursor;
-  final int limit;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'query': query,
-    if (cursor != null && cursor!.trim().isNotEmpty) 'cursor': cursor!.trim(),
-    'limit': limit,
-  };
-}
-
-CloudOperationRequestPayload encodeSearchSocialRelationsQuery(
-  SearchSocialRelationsQuery query,
-) {
-  final cursor = query.cursor?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'query': query.query.trim(),
-      if (cursor.isNotEmpty) 'cursor': cursor,
-      'limit': '${query.limit.clamp(1, 100)}',
-    },
-  );
-}
-
-final class SocialRelationshipCapabilityProjection {
-  const SocialRelationshipCapabilityProjection({
-    required this.relationState,
-    required this.canFollow,
-    required this.canUnfollow,
-    required this.canOpenConversation,
-    required this.canStartVoiceCall,
-    required this.canStartVideoCall,
-  });
-
-  final String relationState;
-  final bool canFollow;
-  final bool canUnfollow;
-  final bool canOpenConversation;
-  final bool canStartVoiceCall;
-  final bool canStartVideoCall;
-
-  static SocialRelationshipCapabilityProjection? fromJson(Object? value) {
-    if (value == null) return null;
-    final source = UserContractCodec.object(
-      value,
-      'SocialRelationshipCapabilityProjection',
-    );
-    return SocialRelationshipCapabilityProjection(
-      relationState: UserContractCodec.textOr(
-        source,
-        'relationState',
-        'not_following',
-      ),
-      canFollow: UserContractCodec.booleanOr(source, 'canFollow', false),
-      canUnfollow: UserContractCodec.booleanOr(source, 'canUnfollow', false),
-      canOpenConversation: UserContractCodec.booleanOr(
-        source,
-        'canOpenConversation',
-        false,
-      ),
-      canStartVoiceCall: UserContractCodec.booleanOr(
-        source,
-        'canStartVoiceCall',
-        false,
-      ),
-      canStartVideoCall: UserContractCodec.booleanOr(
-        source,
-        'canStartVideoCall',
-        false,
-      ),
-    );
-  }
-}
-
 final class SocialRelationSearchItemProjection {
   const SocialRelationSearchItemProjection({
-    required this.subAccountId,
+    required this.personaId,
     required this.username,
     required this.userHandle,
     required this.displayName,
     required this.avatarVersion,
     required this.chatAvailable,
+    required this.relationshipCapability,
     this.avatarUrl,
     this.headline,
-    this.relationshipCapability,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String username;
   final String userHandle;
   final String displayName;
@@ -396,7 +249,7 @@ final class SocialRelationSearchItemProjection {
   final int avatarVersion;
   final String? headline;
   final bool chatAvailable;
-  final SocialRelationshipCapabilityProjection? relationshipCapability;
+  final RelationshipCapabilityResult relationshipCapability;
 
   static SocialRelationSearchItemProjection fromJson(Object? value) {
     final source = UserContractCodec.object(
@@ -404,7 +257,7 @@ final class SocialRelationSearchItemProjection {
       'SocialRelationSearchItemProjection',
     );
     return SocialRelationSearchItemProjection(
-      subAccountId: UserContractCodec.requiredText(source, 'subAccountId'),
+      personaId: UserContractCodec.requiredText(source, 'personaId'),
       username: UserContractCodec.textOr(source, 'username', ''),
       userHandle: UserContractCodec.textOr(source, 'userHandle', ''),
       displayName: UserContractCodec.textOr(source, 'displayName', ''),
@@ -416,7 +269,7 @@ final class SocialRelationSearchItemProjection {
         'chatAvailable',
         false,
       ),
-      relationshipCapability: SocialRelationshipCapabilityProjection.fromJson(
+      relationshipCapability: decodeRelationshipCapabilityResult(
         source['relationshipCapability'],
       ),
     );

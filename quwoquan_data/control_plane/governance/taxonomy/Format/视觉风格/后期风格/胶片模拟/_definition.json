@@ -1,7 +1,15 @@
 {
   "label": "胶片模拟",
   "labelEn": "Film Simulation",
-  "description": "胶片模拟风格的后期处理",
+  "description": "模拟特定胶片的色彩曲线与颗粒",
+  "axisRole": "contentFormat",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
 }

@@ -16,7 +16,7 @@ def _creator_payload(job: QueueJob) -> dict[str, object]:
         "authorId": job.author_id,
         "creatorProfileId": job.creator_profile_id,
         "creatorArchetype": job.creator_archetype,
-        "creatorProfileVersion": job.creator_profile_version,
+        "creatorProfileDigest": job.creator_profile_digest,
     }
 
 

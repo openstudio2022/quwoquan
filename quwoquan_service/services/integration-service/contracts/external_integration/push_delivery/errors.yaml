@@ -4,7 +4,7 @@ errors:
 - code: INTEGRATION.USER.push_delivery_invalid_request
   kind: USER
   reason: invalid_argument
-  http_status: 400
+  emitted_by: [worker]
   recovery_action: surface
   dart_const: pushDeliveryInvalidRequest
   l10n_key: pushDeliveryInvalidRequest
@@ -15,7 +15,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.push_endpoint_resolution_failed
   kind: MIDDLEWARE
   reason: dependency_unavailable
-  http_status: 503
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: pushEndpointResolutionFailed
@@ -27,7 +27,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.push_provider_timeout
   kind: MIDDLEWARE
   reason: timeout
-  http_status: 504
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: pushProviderTimeout
@@ -39,7 +39,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.push_provider_rate_limited
   kind: MIDDLEWARE
   reason: rate_limited
-  http_status: 429
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: pushProviderRateLimited
@@ -51,7 +51,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.push_provider_rejected
   kind: MIDDLEWARE
   reason: upstream_rejected
-  http_status: 502
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: pushProviderRejected
@@ -63,7 +63,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.push_endpoint_permanently_invalid
   kind: MIDDLEWARE
   reason: resource_gone
-  http_status: 410
+  emitted_by: [worker]
   recovery_action: absorb
   dart_const: pushEndpointPermanentlyInvalid
   l10n_key: pushEndpointPermanentlyInvalid
@@ -74,7 +74,7 @@ errors:
 - code: INTEGRATION.SYSTEM.push_provider_credentials_invalid
   kind: SYSTEM
   reason: credentials_invalid
-  http_status: 500
+  emitted_by: [worker]
   recovery_action: escalate
   dart_const: pushProviderCredentialsInvalid
   l10n_key: pushProviderCredentialsInvalid
@@ -85,7 +85,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.push_endpoint_invalidation_failed
   kind: MIDDLEWARE
   reason: dependency_unavailable
-  http_status: 503
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: pushEndpointInvalidationFailed

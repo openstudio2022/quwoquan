@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 
@@ -35,7 +36,6 @@ type RankedResult struct {
 	RelatedTerms     []string
 	TopObjectIDs     []string
 	ExperimentBucket string
-	RankingVersion   string
 }
 
 // RankingDecorator turns a base RetrieveResponse into a commercial, AB-aware
@@ -66,12 +66,17 @@ func NewRankingDecorator(termHeat TermHeatProvider, experiments *Experiments, bo
 // term_heat arm, re-ranks hits by blending the base score with the search-term
 // heat boost. RankPosition is renumbered after any re-rank so the published
 // position always matches the returned order.
-func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveResponse, normalizedQuery, subjectKey string) RankedResult {
-	bucket := d.experiments.Assign(ctx, subjectKey)
+func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveResponse, normalizedQuery, subjectKey string) (RankedResult, error) {
+	if d == nil || d.experiments == nil {
+		return RankedResult{}, errors.New("search ranking experiment policy is unavailable")
+	}
+	bucket, err := d.experiments.Assign(ctx, subjectKey)
+	if err != nil {
+		return RankedResult{}, err
+	}
 	out := RankedResult{
 		Hits:             resp.Hits,
 		ExperimentBucket: bucket,
-		RankingVersion:   RankingVersion,
 	}
 
 	var heats []queryheat.TermHeat
@@ -89,10 +94,10 @@ func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveR
 	out.TopObjectIDs = topObjectIDs(heats)
 
 	if bucket != BucketTermHeat || len(heats) == 0 || len(resp.Hits) == 0 {
-		return out
+		return out, nil
 	}
 	out.Hits = d.applyTermHeatBoost(resp.Hits, heats)
-	return out
+	return out, nil
 }
 
 // applyTermHeatBoost lifts each hit by the heat of related terms it matches,

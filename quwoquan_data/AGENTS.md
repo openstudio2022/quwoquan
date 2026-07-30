@@ -25,6 +25,11 @@
 - 正文只能由 Agent 基于 `writing_pack.json` 和 `prompt.md` 创作并写回，`generator=agent` 是交付面硬门；脚本不得拼正文。
 - 图片、事实、来源权利、实体主页、tagRefs、semantic mentions、人审账本和发布态必须可追溯；不可追溯即不可发布。
 - 内容载体按底稿形态路由：图片集合为主且文字只是标题/配文的是 `image` 图片作品；图文混合编排且源图随正文共同构成底稿的是 `article`；entity homepage 正文只允许 `encyclopedia-primary` 三百科闭集（Wikipedia、百度百科公开词条、今日头条百科）。官网、政府/文旅门户、OTA、Wikivoyage、360、Wikidata、OSM 与百科搜索不得投影为主页底稿或主证据。
+- 信源政策按用途分轨，正文底稿与结构化事实不共用来源闭集：
+  - **正文底稿**（source plan、source unit、writing pack、`primaryEvidenceRef`、`keyFacts`）仍锁在上面的三百科闭集，此项不放宽。
+  - **结构化事实**（`openingHours`、`ticketPriceRange`、`recommendedDurationMinutes`、`bestSeasonTagRefs`、`altitudeMeters`、`officialWebsite`）额外允许官网与政府/文旅门户作为独立证据源。这些字段是可逐条核验的单值事实，官方站点是其第一手发布方，而百科词条在这类字段上最不及时；把它们绑死在百科只会让主页长期缺字段或写入过期值。
+  - 每条结构化事实必须逐字段落 `factSources`（`sourceId`、`sourceClass`、抓取 URL、观测时间、置信度），缺任一项该字段不发布。官方来源与百科冲突时以官方为准并保留冲突记录，不得静默取其一。
+  - 放开范围严格限于 `lanePolicies.homepage.structuredFactsPolicy.fields` 列出的字段；不得借官方来源把官方文案改写进正文、简介或 `keyFacts`。OTA、门户、媒体在两条轨上都仍然禁止。
 - canonical `publish/` 只含通过 review 的自治 creators/entities/posts/media objects，及其引用的 `tags/<tagRef>/_definition.json` consumer snapshot；control-plane taxonomy 与 creator profile 仍是唯一可编辑静态输入，禁止复制整棵 taxonomy 或未引用标签进入 publish；事务写入前后使用内容摘要校验，不维护永久 freeze、迁移索引或兼容状态；
   release 唯一在 `.qwq_output/data/releases/{releaseId}`，环境证据唯一在
   `.qwq_output/env/{env}/runs/data-release/{releaseId}/{runId}`。`ship`/importer

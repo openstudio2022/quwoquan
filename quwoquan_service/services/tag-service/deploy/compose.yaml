@@ -1,7 +1,7 @@
 # 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
 services:
   tag-service-migrate-taxonomy-snapshots:
-    image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:-localhost/quwoquan_service_tag-service:latest}"
+    image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:?fixed tag-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/tag-service/build/Dockerfile
@@ -15,6 +15,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       TAG_MONGO_URI: mongodb://mongodb:27017
       TAG_MONGO_DATABASE: quwoquan_tag
     depends_on:
@@ -26,7 +27,7 @@ services:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
 
   tag-service:
-    image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:-localhost/quwoquan_service_tag-service:latest}"
+    image: "${QWQ_COMPOSE_TAG_SERVICE_IMAGE:?fixed tag-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/tag-service/build/Dockerfile
@@ -39,7 +40,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_TAG_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       TAG_SERVICE_ADDR: ":18092"
       TAG_MONGO_URI: mongodb://mongodb:27017
       TAG_MONGO_DATABASE: quwoquan_tag

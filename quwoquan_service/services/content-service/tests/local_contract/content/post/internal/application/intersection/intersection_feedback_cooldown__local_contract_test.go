@@ -12,8 +12,8 @@ import (
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	contenhttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
 	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )

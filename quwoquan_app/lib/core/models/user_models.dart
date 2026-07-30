@@ -1,9 +1,8 @@
 /// 用户数据模型
 class User {
   final String id;
-  final String? username;
+  final String? userHandle;
   final String? avatarUrl;
-  final String? avatar; // 别名，兼容avatarUrl
   final String? bio;
   final String? displayName;
   final bool? isVerified;
@@ -16,9 +15,8 @@ class User {
   
   const User({
     required this.id,
-    this.username,
+    this.userHandle,
     this.avatarUrl,
-    this.avatar,
     this.bio,
     this.displayName,
     this.isVerified,
@@ -30,13 +28,10 @@ class User {
     this.metadata,
   });
   
-  // Getter for avatar (兼容avatarUrl)
-  String? get avatarUrlOrAvatar => avatarUrl ?? avatar;
-  
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id']?.toString() ?? '',
-      username: json['username']?.toString(),
+      userHandle: json['userHandle']?.toString(),
       avatarUrl: json['avatarUrl']?.toString(),
       bio: json['bio']?.toString(),
       metadata: json['metadata'] as Map<String, dynamic>?,
@@ -46,7 +41,7 @@ class User {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'username': username,
+      'userHandle': userHandle,
       'avatarUrl': avatarUrl,
       'bio': bio,
       'metadata': metadata,

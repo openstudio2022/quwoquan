@@ -26,14 +26,23 @@ const (
 	StatusAborted   Status = "aborted"
 )
 
+type MediaType string
+
+const (
+	MediaTypeImage MediaType = "image"
+	MediaTypeVideo MediaType = "video"
+	MediaTypeAudio MediaType = "audio"
+	MediaTypeFile  MediaType = "file"
+)
+
 // Snapshot is the durable boundary of the MediaUploadSession aggregate.
 type Snapshot struct {
 	ID             string
 	Version        int64
 	OwnerID        string
 	ObjectKey      string
-	MediaType      string
-	ContentType    string
+	MediaType      MediaType
+	MimeType       string
 	FileSize       int64
 	ExpectedSHA256 string
 	AssetID        string
@@ -49,8 +58,8 @@ type CreateParams struct {
 	ID             string
 	OwnerID        string
 	ObjectKey      string
-	MediaType      string
-	ContentType    string
+	MediaType      MediaType
+	MimeType       string
 	FileSize       int64
 	ExpectedSHA256 string
 	ExpiresAt      time.Time
@@ -68,8 +77,8 @@ func Create(params CreateParams) (*Session, error) {
 		Version:        1,
 		OwnerID:        strings.TrimSpace(params.OwnerID),
 		ObjectKey:      strings.TrimSpace(params.ObjectKey),
-		MediaType:      strings.TrimSpace(params.MediaType),
-		ContentType:    strings.TrimSpace(params.ContentType),
+		MediaType:      MediaType(strings.ToLower(strings.TrimSpace(string(params.MediaType)))),
+		MimeType:       strings.TrimSpace(params.MimeType),
 		FileSize:       params.FileSize,
 		ExpectedSHA256: normalizeDigest(params.ExpectedSHA256),
 		Status:         StatusPending,
@@ -92,8 +101,8 @@ func Restore(snapshot Snapshot) (*Session, error) {
 		Version:        snapshot.Version,
 		OwnerID:        strings.TrimSpace(snapshot.OwnerID),
 		ObjectKey:      strings.TrimSpace(snapshot.ObjectKey),
-		MediaType:      strings.TrimSpace(snapshot.MediaType),
-		ContentType:    strings.TrimSpace(snapshot.ContentType),
+		MediaType:      MediaType(strings.ToLower(strings.TrimSpace(string(snapshot.MediaType)))),
+		MimeType:       strings.TrimSpace(snapshot.MimeType),
 		FileSize:       snapshot.FileSize,
 		ExpectedSHA256: normalizeDigest(snapshot.ExpectedSHA256),
 		AssetID:        strings.TrimSpace(snapshot.AssetID),
@@ -174,8 +183,8 @@ func (s *Session) ID() string             { return s.Snapshot().ID }
 func (s *Session) Version() int64         { return s.Snapshot().Version }
 func (s *Session) OwnerID() string        { return s.Snapshot().OwnerID }
 func (s *Session) ObjectKey() string      { return s.Snapshot().ObjectKey }
-func (s *Session) MediaType() string      { return s.Snapshot().MediaType }
-func (s *Session) ContentType() string    { return s.Snapshot().ContentType }
+func (s *Session) MediaType() string      { return string(s.Snapshot().MediaType) }
+func (s *Session) MimeType() string       { return s.Snapshot().MimeType }
 func (s *Session) FileSize() int64        { return s.Snapshot().FileSize }
 func (s *Session) ExpectedSHA256() string { return s.Snapshot().ExpectedSHA256 }
 func (s *Session) AssetID() string        { return s.Snapshot().AssetID }
@@ -188,8 +197,8 @@ func (s *Session) validate() error {
 		s.snapshot.Version < 1 ||
 		s.snapshot.OwnerID == "" ||
 		s.snapshot.ObjectKey == "" ||
-		s.snapshot.MediaType == "" ||
-		s.snapshot.ContentType == "" ||
+		!validMediaType(s.snapshot.MediaType) ||
+		s.snapshot.MimeType == "" ||
 		s.snapshot.FileSize <= 0 ||
 		!sha256DigestPattern.MatchString(s.snapshot.ExpectedSHA256) ||
 		!validStatus(s.snapshot.Status) ||
@@ -229,6 +238,15 @@ func (s *Session) advance(now time.Time) error {
 
 func validStatus(status Status) bool {
 	return status == StatusPending || status == StatusCompleted || status == StatusAborted
+}
+
+func validMediaType(value MediaType) bool {
+	switch value {
+	case MediaTypeImage, MediaTypeVideo, MediaTypeAudio, MediaTypeFile:
+		return true
+	default:
+		return false
+	}
 }
 
 func normalizeDigest(value string) string {

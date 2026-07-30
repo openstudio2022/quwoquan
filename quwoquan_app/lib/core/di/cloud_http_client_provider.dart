@@ -19,6 +19,12 @@ final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
     onUnauthorizedRefresh: (abortTrigger) => ref
         .read(authSessionControllerProvider.notifier)
         .refreshSessionIfNeeded(abortTrigger: abortTrigger),
+    onAuthoritativeSessionFailure: (failure, presentedAccessToken) => ref
+        .read(authSessionControllerProvider.notifier)
+        .handleAuthoritativeSessionFailure(
+          failure,
+          presentedAccessToken: presentedAccessToken,
+        ),
     latencyObserver: latencyDispatcher.record,
     transportFailureClassifier: classifyCloudTransportFailure,
   );

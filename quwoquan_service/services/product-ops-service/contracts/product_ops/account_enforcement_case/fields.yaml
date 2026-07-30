@@ -1,0 +1,262 @@
+description: AccountEnforcementCase 聚合、命令与具名读取结果。
+fields:
+- name: id
+  type: string
+  constraints: [PK, NOT_NULL]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: caseKind
+  type: enum
+  enum_ref: AccountEnforcementCaseKind
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: accountId
+  type: string
+  constraints: [NOT_NULL]
+  classification: PRIVATE
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: mask
+  role: authoritative_state
+  reference: true
+- name: status
+  type: enum
+  enum_ref: AccountEnforcementCaseStatus
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: policyRef
+  type: string
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: mask
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: sourceDecisionId
+  type: string
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: intakeRef
+  type: string
+  constraints: [NULLABLE]
+  classification: PRIVATE
+  log_policy: mask
+  api_exposure: drop
+  ops_exposure: mask
+  role: authoritative_state
+- name: evidenceRefs
+  type: '[]string'
+  constraints: [NOT_NULL]
+  classification: PRIVATE
+  log_policy: drop
+  api_exposure: drop
+  ops_exposure: mask
+  role: authoritative_state
+- name: openedBy
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: drop
+  ops_exposure: mask
+  role: authoritative_state
+- name: version
+  type: int
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: openedAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: updatedAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+types:
+  OpenAccountModerationCaseRequest:
+    description: 由受信运营人员创建账号治理审核 case；action 固定由服务端派生为 suspend。
+    fields:
+    - name: caseId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: write
+    - name: accountId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PRIVATE
+      log_policy: hash
+      api_exposure: drop
+      ops_exposure: write
+    - name: policyRef
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: mask
+      api_exposure: drop
+      ops_exposure: write
+    - name: evidenceRefs
+      type: '[]string'
+      constraints: [NOT_NULL]
+      classification: PRIVATE
+      log_policy: drop
+      api_exposure: drop
+      ops_exposure: write
+  OpenAccountAppealCaseRequest:
+    description: >-
+      由受信运营人员接收既有正式 intake 后创建恢复审核 case；不代表 App 或 suspended
+      用户已经提交申诉。
+    fields:
+    - name: caseId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: write
+    - name: accountId
+      type: string
+      constraints: [NOT_NULL]
+      classification: PRIVATE
+      log_policy: hash
+      api_exposure: drop
+      ops_exposure: write
+    - name: sourceDecisionId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: write
+    - name: intakeRef
+      type: string
+      constraints: [NOT_NULL]
+      classification: PRIVATE
+      log_policy: mask
+      api_exposure: drop
+      ops_exposure: write
+    - name: evidenceRefs
+      type: '[]string'
+      constraints: [NOT_NULL]
+      classification: PRIVATE
+      log_policy: drop
+      api_exposure: drop
+      ops_exposure: write
+  ReviewAccountEnforcementCaseRequest:
+    description: 受信 operator 提交一次 approve 或 reject 的唯一请求实体；caseId 只从 path 绑定，聚合版本由服务端事务锁定和比较。
+    fields:
+    - name: caseId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: write
+    - name: verdict
+      type: enum
+      enum_ref: AccountEnforcementReviewVerdict
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+  AccountEnforcementCaseResult:
+    description: 不返回账号、证据、intake 或审核人身份的治理 case 结果。
+    fields:
+    - name: caseId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: caseKind
+      type: enum
+      enum_ref: AccountEnforcementCaseKind
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: status
+      type: enum
+      enum_ref: AccountEnforcementCaseStatus
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: version
+      type: int
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: approvalCount
+      type: int
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: decisionId
+      type: string
+      constraints: [NULLABLE]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: deliveryStatus
+      type: enum
+      enum_ref: AccountEnforcementDeliveryStatus
+      constraints: [NULLABLE]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: updatedAt
+      type: timestamp
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+enums:
+  AccountEnforcementCaseKind:
+    values: [moderation, appeal]
+  AccountEnforcementCaseStatus:
+    values: [pending_approval, approved, rejected]
+  AccountEnforcementReviewVerdict:
+    values: [approve, reject]
+  AccountEnforcementDeliveryStatus:
+    values: [pending, retrying, delivered, dead_letter]

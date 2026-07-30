@@ -127,15 +127,6 @@ func findRoute(routes []routeDef, operation string) routeDef {
 	return routeDef{}
 }
 
-func findWritableFields(routes []routeDef, operation string) []string {
-	for _, r := range routes {
-		if strings.EqualFold(r.Operation, operation) {
-			return r.WritableFields
-		}
-	}
-	return nil
-}
-
 func paginationLimitDefault(shared *sharedTypes, fallback int) int {
 	pagination, ok := shared.Types["Pagination"]
 	if !ok {

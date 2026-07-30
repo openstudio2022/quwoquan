@@ -1,37 +1,7 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/content/content_reaction_contracts.requests.g.dart';
 
 enum ContentCommentReactionValue { none, like, dislike }
-
-final class LikeContentPostCommand {
-  LikeContentPostCommand({required String postId})
-    : postId = _requiredText(postId, 'postId');
-
-  final String postId;
-}
-
-final class UnlikeContentPostCommand {
-  UnlikeContentPostCommand({required String postId})
-    : postId = _requiredText(postId, 'postId');
-
-  final String postId;
-}
-
-final class ReactToContentCommentCommand {
-  ReactToContentCommentCommand({
-    required String commentId,
-    required this.reaction,
-  }) : commentId = _requiredText(commentId, 'commentId');
-
-  final String commentId;
-  final ContentCommentReactionValue reaction;
-}
-
-final class GetContentPostReactionStateQuery {
-  GetContentPostReactionStateQuery({required String postId})
-    : postId = _requiredText(postId, 'postId');
-
-  final String postId;
-}
 
 final class ContentReactionCommandResult {
   const ContentReactionCommandResult({
@@ -86,31 +56,6 @@ final class ContentPostReactionStateSlice {
   final int version;
   final DateTime? updatedAt;
 }
-
-CloudOperationRequestPayload encodeLikeContentPostCommand(
-  LikeContentPostCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': command.postId},
-);
-
-CloudOperationRequestPayload encodeUnlikeContentPostCommand(
-  UnlikeContentPostCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': command.postId},
-);
-
-CloudOperationRequestPayload encodeReactToContentCommentCommand(
-  ReactToContentCommentCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'commentId': command.commentId},
-  body: <String, Object?>{'reaction': command.reaction.name},
-);
-
-CloudOperationRequestPayload encodeGetContentPostReactionStateQuery(
-  GetContentPostReactionStateQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': query.postId},
-);
 
 ContentReactionCommandResult decodeContentReactionCommandResult(Object? value) {
   final map = _object(value, 'ContentReactionCommandResult');
@@ -197,12 +142,4 @@ DateTime? _optionalTimestamp(Map<String, Object?> map, String key) {
   final parsed = DateTime.tryParse(value);
   if (parsed == null) throw FormatException('$key must be RFC3339');
   return parsed.toUtc();
-}
-
-String _requiredText(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return normalized;
 }

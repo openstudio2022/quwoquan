@@ -245,7 +245,7 @@ func TestModerationDecisionGatesPublicationEligibility(t *testing.T) {
 	if _, err := testModerationFacades.ReviewPostModerationCase(
 		commandmeta.WithIdempotencyKey(context.Background(), "moderation-review-flow"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "operator-flow",
+			PostID: "post-moderation-flow", CaseID: opened.CaseID, ReviewerID: "operator-flow",
 		},
 	); err != nil {
 		t.Fatalf("review case: %v", err)
@@ -257,7 +257,7 @@ func TestModerationDecisionGatesPublicationEligibility(t *testing.T) {
 	decided, err := testModerationFacades.DecidePostModerationCase(
 		decideContext,
 		moderationapp.DecidePostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "operator-flow",
+			PostID: "post-moderation-flow", CaseID: opened.CaseID, ReviewerID: "operator-flow",
 			Decision: moderationmodel.DecisionApprove, DecisionReason: "内容安全",
 		},
 	)
@@ -267,7 +267,7 @@ func TestModerationDecisionGatesPublicationEligibility(t *testing.T) {
 	replayDecide, err := testModerationFacades.DecidePostModerationCase(
 		decideContext,
 		moderationapp.DecidePostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "operator-flow",
+			PostID: "post-moderation-flow", CaseID: opened.CaseID, ReviewerID: "operator-flow",
 			Decision: moderationmodel.DecisionApprove, DecisionReason: "内容安全",
 		},
 	)
@@ -355,7 +355,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	if _, err := testModerationFacades.ReviewPostModerationCase(
 		commandmeta.WithIdempotencyKey(context.Background(), "moderation-lifecycle-review-reject"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: rejectCase.ID, ReviewerID: "moderation-lifecycle-reviewer",
+			PostID: postID, CaseID: rejectCase.ID, ReviewerID: "moderation-lifecycle-reviewer",
 		},
 	); err != nil {
 		t.Fatalf("review rejection case: %v", err)
@@ -363,6 +363,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	if _, err := testModerationFacades.DecidePostModerationCase(
 		commandmeta.WithIdempotencyKey(context.Background(), "moderation-lifecycle-decide-reject"),
 		moderationapp.DecidePostModerationCaseCommand{
+			PostID:         postID,
 			CaseID:         rejectCase.ID,
 			ReviewerID:     "moderation-lifecycle-reviewer",
 			Decision:       moderationmodel.DecisionReject,
@@ -409,7 +410,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	if _, err := testModerationFacades.ReviewPostModerationCase(
 		commandmeta.WithIdempotencyKey(context.Background(), "moderation-lifecycle-review-approve"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: approveCase.ID, ReviewerID: "moderation-lifecycle-reviewer",
+			PostID: postID, CaseID: approveCase.ID, ReviewerID: "moderation-lifecycle-reviewer",
 		},
 	); err != nil {
 		t.Fatalf("review approval case: %v", err)
@@ -417,6 +418,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	if _, err := testModerationFacades.DecidePostModerationCase(
 		commandmeta.WithIdempotencyKey(context.Background(), "moderation-lifecycle-decide-approve"),
 		moderationapp.DecidePostModerationCaseCommand{
+			PostID:         postID,
 			CaseID:         approveCase.ID,
 			ReviewerID:     "moderation-lifecycle-reviewer",
 			Decision:       moderationmodel.DecisionApprove,

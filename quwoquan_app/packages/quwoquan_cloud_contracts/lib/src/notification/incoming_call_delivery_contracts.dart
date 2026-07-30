@@ -1,23 +1,11 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/notification/incoming_call_delivery_contracts.requests.g.dart';
 
 abstract interface class IncomingCallPresentationWriter {
   Future<AckIncomingCallPresentationResultDto> acknowledgePresentation(
     AckIncomingCallPresentationCommand command,
   );
 }
-
-final class AckIncomingCallPresentationCommand {
-  AckIncomingCallPresentationCommand({required String deliveryKey})
-    : deliveryKey = _required(deliveryKey, 'deliveryKey');
-
-  final String deliveryKey;
-}
-
-CloudOperationRequestPayload encodeAckIncomingCallPresentationCommand(
-  AckIncomingCallPresentationCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{'deliveryKey': command.deliveryKey},
-);
 
 final class AckIncomingCallPresentationResultDto {
   const AckIncomingCallPresentationResultDto({
@@ -50,14 +38,6 @@ AckIncomingCallPresentationResultDto decodeAckIncomingCallPresentationResult(
     raced: _requiredBool(response, 'raced'),
     acknowledgedAt: _requiredTimestamp(response, 'acknowledgedAt'),
   );
-}
-
-String _required(String value, String field) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, field, 'must not be empty');
-  }
-  return normalized;
 }
 
 String _requiredField(Map<Object?, Object?> value, String field) {

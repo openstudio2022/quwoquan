@@ -113,7 +113,6 @@ void main() {
             },
           ],
           'requestId': 'search-request-1',
-          'rankingVersion': 'search-current',
           'relatedTerms': <Object?>[],
           'degradeSignals': <Object?>[],
         },
@@ -141,13 +140,73 @@ void main() {
         'query': '西湖',
         'mode': 'result',
         'objectTypes': <String>['article'],
-        'ids': <String>[],
         'limit': 10,
       });
       expect(result.hits.single.objectId, 'post-1');
       expect(result.hits.single.content?.title, '西湖摄影');
     },
   );
+
+  test('generated feed method preserves typed attribution context', () async {
+    final executor = _RecordingExecutor(
+      response: <String, Object?>{
+        'items': <Object?>[
+          <String, Object?>{
+            'postId': 'post-1',
+            'contentType': 'article',
+            'title': '西湖行记',
+          },
+        ],
+        'objectCards': <Object?>[
+          <String, Object?>{'objectId': 'west-lake'},
+        ],
+        'nextCursor': 'cursor-2',
+        'previousCursor': 'cursor-0',
+        'paginationExpiresAt': '2026-07-29T12:00:00Z',
+        'feedRequestId': 'feed-request-1',
+        'policyDigest':
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'hasMore': true,
+        'outcome': 'content',
+      },
+    );
+    final client = GeneratedCloudOperationClient(executor);
+
+    final result = await client.contentPostGetFeed(
+      ContentDiscoveryFeedQuery(
+        channelId: 'travel',
+        feedRequestId: 'feed-request-1',
+        blockedKeywords: const <String>['广告'],
+      ),
+      context: const CloudOperationInvocationContext(
+        surfaceId: 'homeFeed',
+        clientPageId: 'content.feed.list',
+        actor: CloudOperationActorContext(),
+      ),
+    );
+
+    expect(
+      executor.operation?.canonicalOperationId,
+      AppCloudOperationIds.contentPostGetFeed,
+    );
+    expect(executor.queryParameters, <String, String>{
+      'channelId': 'travel',
+      'feedRequestId': 'feed-request-1',
+      'limit': '20',
+    });
+    expect(executor.headers['X-Blocked-Keywords'], '%E5%B9%BF%E5%91%8A');
+    expect(result.items.single.postId, 'post-1');
+    expect(result.objectCards, hasLength(1));
+    expect(result.nextCursor, 'cursor-2');
+    expect(result.previousCursor, 'cursor-0');
+    expect(result.paginationExpiresAt, DateTime.utc(2026, 7, 29, 12));
+    expect(result.feedRequestId, 'feed-request-1');
+    expect(
+      result.policyDigest,
+      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+    expect(result.hasMore, isTrue);
+  });
 
   test('generated footprint method decodes typed private page', () async {
     final executor = _RecordingExecutor(
@@ -250,7 +309,7 @@ void main() {
 
     final result = await client.contentPostListUserPosts(
       const ContentAuthorPostsQuery(
-        subAccountId: 'author-1',
+        personaId: 'author-1',
         identity: 'work',
         type: 'image',
         visibility: 'public',
@@ -267,9 +326,7 @@ void main() {
       executor.operation?.canonicalOperationId,
       AppCloudOperationIds.contentPostListUserPosts,
     );
-    expect(executor.pathParameters, <String, String>{
-      'subAccountId': 'author-1',
-    });
+    expect(executor.pathParameters, <String, String>{'personaId': 'author-1'});
     expect(executor.queryParameters, <String, String>{
       'identity': 'work',
       'type': 'image',
@@ -362,8 +419,8 @@ void main() {
       final result = await client.contentOutboundShareFactCreateOutboundShare(
         CreateContentOutboundShareCommand(
           postId: 'post-1',
-          channel: 'system_share',
-          destinationKind: 'external_app',
+          channel: OutboundShareChannel.systemShare,
+          destinationKind: OutboundShareDestinationKind.externalApp,
           destination: 'wechat',
           referralId: 'referral-1',
           providerReceiptId: 'provider-receipt-1',
@@ -507,6 +564,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
   CloudOperationContract? operation;
   Map<String, String> pathParameters = const <String, String>{};
   Map<String, String> queryParameters = const <String, String>{};
+  Map<String, String> headers = const <String, String>{};
   Object? body;
 
   @override
@@ -520,6 +578,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     final payload = requestEncoder();
     pathParameters = payload.pathParameters;
     queryParameters = payload.queryParameters;
+    headers = payload.headers;
     body = payload.body;
     return responseDecoder(response);
   }

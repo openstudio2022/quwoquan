@@ -13,11 +13,12 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	importerapp "quwoquan_service/services/content-service/internal/content/post/application/importer"
 	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
@@ -49,6 +50,8 @@ type contentHTTPHandlerInput struct {
 	postStore                 *persistence.MongoPostStore
 	postQueryReader           *persistence.MongoPostQueryReader
 	activeSupplyReader        feedapp.ActiveSupplyReader
+	feedCursorCodec           *feedapp.FeedCursorCodec
+	feedRuntimeConfig         feedRuntimeConfig
 	viewerBlockReader         *recinfra.PersonaBlockReader
 	reactionStore             *persistence.MongoContentReactionStore
 	reactionService           *reactionapp.Service
@@ -89,6 +92,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	store := input.postStore
 	postQueryReader := input.postQueryReader
 	activeSupplyReader := input.activeSupplyReader
+	feedCursorCodec := input.feedCursorCodec
 	viewerBlockReader := input.viewerBlockReader
 	reactionStore := input.reactionStore
 	reactionServiceCore := input.reactionService
@@ -135,9 +139,21 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) http.Handler {
 	if activeSupplyReader == nil {
 		log.Fatal("content-service active supply reader is not configured")
 	}
+	if feedCursorCodec == nil {
+		log.Fatal("content-service feed cursor codec is not configured")
+	}
 	feedServiceOpts = append(
 		feedServiceOpts,
 		feedapp.WithActiveSupplyReader(activeSupplyReader),
+		feedapp.WithFeedCursorCodec(feedCursorCodec),
+		feedapp.WithFeedDeliveryPageStore(
+			deliveryredis.NewStore(
+				router.Scene("rec"),
+				deliveryredis.WithQuotaPolicy(
+					input.feedRuntimeConfig.deliveryPageQuotaPolicy(),
+				),
+			),
+		),
 	)
 	if postQueryReader == nil {
 		log.Fatal("content-service Post query reader is not configured")
@@ -320,8 +336,6 @@ func buildOnboardingInterestTaxonomyValidator(
 	}
 	policy := contentgenerated.DefaultOnboardingInterestCatalogPolicy()
 	return behaviorapp.CatalogBackedOnboardingInterestTaxonomy{
-		Version:                  policy.Version,
-		TaxonomyReleaseID:        policy.TaxonomyReleaseID,
 		DimensionRoots:           policy.DimensionRoots,
 		MinSelections:            policy.MinSelectionCount,
 		MaxSelections:            policy.MaxSelectionCount,

@@ -388,7 +388,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
           .where((ref) => ref != tagRef)
           .toList(growable: false);
     });
-    _reportTagFeedback(tagRef: tagRef, action: 'ignore');
+    _reportTagFeedback(tagRef: tagRef, action: TagFeedbackAction.ignore);
   }
 
   void _addInterest(String tagRef) {
@@ -403,11 +403,14 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     setState(() {
       _interestTagRefs = <String>[..._interestTagRefs, tagRef];
     });
-    _reportTagFeedback(tagRef: tagRef, action: 'click');
+    _reportTagFeedback(tagRef: tagRef, action: TagFeedbackAction.click);
   }
 
   /// 标签添加/移除动作产出 TagFeedback 事实（fire-and-forget，不阻断编辑）。
-  void _reportTagFeedback({required String tagRef, required String action}) {
+  void _reportTagFeedback({
+    required String tagRef,
+    required TagFeedbackAction action,
+  }) {
     unawaited(
       ref
           .read(tagFeedbackCommandWriterProvider)

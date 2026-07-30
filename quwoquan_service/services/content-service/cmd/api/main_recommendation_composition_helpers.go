@@ -14,7 +14,12 @@ import (
 // applyRecommendationCandidateGates 只对 main 已显式选择的候选源应用固定门禁。
 func applyRecommendationCandidateGates(
 	rawCandidateSources []rtrec.CandidateSource,
+	accountRestrictions ...recinfra.AccountRestrictionReader,
 ) []rtrec.CandidateSource {
+	var restrictionReader recinfra.AccountRestrictionReader
+	if len(accountRestrictions) > 0 {
+		restrictionReader = accountRestrictions[0]
+	}
 	candidateSources := make([]rtrec.CandidateSource, 0, len(rawCandidateSources))
 	for _, candidateSource := range rawCandidateSources {
 		// 类型判定必须基于原始源：门禁嵌套包装后类型断言会失效。
@@ -23,10 +28,14 @@ func applyRecommendationCandidateGates(
 		if gated == nil {
 			continue
 		}
-		candidateSources = append(
-			candidateSources,
-			recinfra.GateFollowFeedSource(gated, isAuthorRecall),
-		)
+		gated = recinfra.GateFollowFeedSource(gated, isAuthorRecall)
+		if restrictionReader != nil {
+			gated = recinfra.GateAccountRestrictedSource(
+				gated,
+				restrictionReader,
+			)
+		}
+		candidateSources = append(candidateSources, gated)
 	}
 	return candidateSources
 }
@@ -48,14 +57,14 @@ func startRecommendationPolicyHotReload(
 			OnReload: rtrec.RecordPolicyReload,
 		})
 		log.Printf(
-			"content-service rec policy hot-reload enabled path=%s baseline=%s",
+			"content-service rec policy hot-reload enabled path=%s baselineDigest=%s",
 			policyPath,
-			rtrecpolicy.BaselinePolicyVersion,
+			policyStore.EffectiveHash(),
 		)
 	} else {
 		log.Printf(
-			"content-service rec policy using codegen baseline=%s (no live file at %s)",
-			rtrecpolicy.BaselinePolicyVersion,
+			"content-service rec policy using codegen baselineDigest=%s (no live file at %s)",
+			policyStore.EffectiveHash(),
 			policyPath,
 		)
 	}

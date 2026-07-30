@@ -2,6 +2,7 @@
   "label": "公众号作者",
   "labelEn": "WeChat Account Author",
   "description": "主要在公众号平台活跃",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

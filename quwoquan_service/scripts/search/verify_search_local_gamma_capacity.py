@@ -126,7 +126,6 @@ def post_search(query: str = "成都", limit: int = 5) -> dict:
                     for h in hits
                 ],
                 "provider": (payload.get("provenance") or {}).get("provider"),
-                "rankingVersion": payload.get("rankingVersion"),
                 "experimentBucket": payload.get("experimentBucket"),
             }
     except Exception as exc:

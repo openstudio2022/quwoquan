@@ -83,12 +83,11 @@ func (publisher *durablePublisherStub) SetDurableRetention(
 func TestOutboxRelayMarksOnlyConfirmedPublish(t *testing.T) {
 	t.Parallel()
 	store := &relayStoreStub{events: []learningpersistence.PendingOutboxEvent{{
-		ID:             "feedback:1",
+		ID:             "feedback",
 		EventType:      "AssistantLearningFactAppended",
 		AppendSequence: 9,
 		Payload: learningmodel.RedactedPayload{
 			EventID:         "feedback",
-			EventVersion:    1,
 			AppendSequence:  9,
 			FactType:        learningmodel.FactTypeUserFeedback,
 			UserID:          "account-1",
@@ -109,7 +108,7 @@ func TestOutboxRelayMarksOnlyConfirmedPublish(t *testing.T) {
 	if published != 1 || len(publisher.messages) != 1 {
 		t.Fatalf("published/messages = %d/%d, want 1/1", published, len(publisher.messages))
 	}
-	if len(store.marked) != 1 || store.marked[0] != "feedback:1:stream-1" {
+	if len(store.marked) != 1 || store.marked[0] != "feedback:stream-1" {
 		t.Fatalf("marked = %v", store.marked)
 	}
 	if publisher.messages[0].Stream != learningmessaging.LearningFactStream {
@@ -126,7 +125,8 @@ func TestOutboxRelayMarksOnlyConfirmedPublish(t *testing.T) {
 	if fields["eventType"] != "AssistantLearningFactAppended" ||
 		fields["aggregateType"] != "AssistantLearningFact" ||
 		fields["aggregateId"] != "feedback" ||
-		fields["aggregateVersion"] != "1" {
+		fields["aggregateVersion"] != "9" ||
+		fields["appendSequence"] != "9" {
 		t.Fatalf("canonical event fields = %#v", fields)
 	}
 }
@@ -134,7 +134,7 @@ func TestOutboxRelayMarksOnlyConfirmedPublish(t *testing.T) {
 func TestOutboxRelayRetainsPendingEventWhenPublishFails(t *testing.T) {
 	t.Parallel()
 	store := &relayStoreStub{events: []learningpersistence.PendingOutboxEvent{{
-		ID:             "feedback:1",
+		ID:             "feedback",
 		EventType:      "AssistantLearningFactAppended",
 		AppendSequence: 9,
 	}}}
@@ -150,7 +150,7 @@ func TestOutboxRelayRetainsPendingEventWhenPublishFails(t *testing.T) {
 	if published != 0 || len(store.marked) != 0 {
 		t.Fatalf("published/marked = %d/%d, want 0/0", published, len(store.marked))
 	}
-	if len(store.released) != 1 || store.released[0] != "feedback:1" {
+	if len(store.released) != 1 || store.released[0] != "feedback" {
 		t.Fatalf("released = %v, want failed claim released", store.released)
 	}
 }
@@ -158,7 +158,7 @@ func TestOutboxRelayRetainsPendingEventWhenPublishFails(t *testing.T) {
 func TestOutboxRelayRetainsPendingEventWhenRetentionFails(t *testing.T) {
 	t.Parallel()
 	store := &relayStoreStub{events: []learningpersistence.PendingOutboxEvent{{
-		ID:             "feedback:1",
+		ID:             "feedback",
 		EventType:      "AssistantLearningFactAppended",
 		AppendSequence: 9,
 	}}}
@@ -176,7 +176,7 @@ func TestOutboxRelayRetainsPendingEventWhenRetentionFails(t *testing.T) {
 	if published != 0 || len(store.marked) != 0 {
 		t.Fatalf("published/marked = %d/%d, want 0/0", published, len(store.marked))
 	}
-	if len(store.released) != 1 || store.released[0] != "feedback:1" {
+	if len(store.released) != 1 || store.released[0] != "feedback" {
 		t.Fatalf("released = %v, want claim released", store.released)
 	}
 }

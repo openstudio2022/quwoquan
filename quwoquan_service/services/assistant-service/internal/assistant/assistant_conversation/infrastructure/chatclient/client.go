@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"quwoquan_service/generated/serviceclients"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 const responseBodyLimit = 1 << 20
@@ -99,7 +99,7 @@ func (c *Client) ListMessages(
 	assistantSkillID string,
 	beforeSeq int64,
 	limit int,
-) ([]application.ChatGroundingMessage, error) {
+) ([]ports.ChatGroundingMessage, error) {
 	if c == nil || c.http == nil || c.baseURL == "" {
 		return nil, fmt.Errorf("chat grounding client not configured")
 	}
@@ -131,12 +131,12 @@ func (c *Client) ListMessages(
 	); err != nil {
 		return nil, err
 	}
-	out := make([]application.ChatGroundingMessage, 0, len(payload.Items))
+	out := make([]ports.ChatGroundingMessage, 0, len(payload.Items))
 	for _, item := range payload.Items {
-		out = append(out, application.ChatGroundingMessage{
+		out = append(out, ports.ChatGroundingMessage{
 			MessageID:  firstNonEmpty(item.MessageID, item.ID),
 			Seq:        item.Seq,
-			SenderID:   firstNonEmpty(item.SenderID, item.SenderSubAccountID),
+			SenderID:   firstNonEmpty(item.SenderID, item.SenderPersonaID),
 			SenderName: item.SenderDisplayNameSnapshot,
 			Type:       item.Type,
 			Content:    item.Content,
@@ -146,7 +146,10 @@ func (c *Client) ListMessages(
 	return out, nil
 }
 
-func (c *Client) SendMessage(ctx context.Context, req application.ChatGroundingSendMessageRequest) error {
+func (c *Client) SendMessage(
+	ctx context.Context,
+	req ports.ChatGroundingSendMessageRequest,
+) error {
 	if c == nil || c.http == nil || c.baseURL == "" {
 		return fmt.Errorf("chat grounding client not configured")
 	}
@@ -244,7 +247,7 @@ type messageWire struct {
 	MessageID                 string    `json:"messageId"`
 	Seq                       int64     `json:"seq"`
 	SenderID                  string    `json:"senderId"`
-	SenderSubAccountID        string    `json:"senderSubAccountId"`
+	SenderPersonaID           string    `json:"senderPersonaId"`
 	SenderDisplayNameSnapshot string    `json:"senderDisplayNameSnapshot"`
 	Type                      string    `json:"type"`
 	Content                   string    `json:"content"`

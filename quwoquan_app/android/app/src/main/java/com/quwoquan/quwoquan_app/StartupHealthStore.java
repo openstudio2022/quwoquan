@@ -5,6 +5,7 @@ import android.app.ApplicationExitInfo;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.util.Log;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -122,12 +123,15 @@ final class StartupHealthStore {
       return false;
     }
     if (!currentArtifactIdentity().equals(fatalIdentity)) {
-      preferences
-          .edit()
-          .remove(FATAL_BUILD_IDENTITY_KEY)
-          .remove(FATAL_AT_KEY)
-          .remove(FATAL_QUEUED_IDENTITY_KEY)
-          .apply();
+      clearFatalMarker(preferences, "artifact_mismatch");
+      return false;
+    }
+    if (!currentArtifactIdentity().equals(preferences.getString(BUILD_IDENTITY_KEY, ""))) {
+      clearFatalMarker(preferences, "artifact_mismatch");
+      return false;
+    }
+    if (preferences.getBoolean(SAFE_SHELL_KEY, false)) {
+      clearFatalMarker(preferences, "safe_shell_conflict");
       return false;
     }
     return true;
@@ -142,10 +146,16 @@ final class StartupHealthStore {
         .commit();
   }
 
-  static void markCurrentArtifactFatal(Context context) {
-    preferences(context)
+  static boolean markCurrentArtifactFatal(Context context) {
+    SharedPreferences preferences = preferences(context);
+    String identity = currentArtifactIdentity();
+    if (!identity.equals(preferences.getString(BUILD_IDENTITY_KEY, ""))
+        || preferences.getBoolean(SAFE_SHELL_KEY, false)) {
+      return false;
+    }
+    return preferences
         .edit()
-        .putString(FATAL_BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putString(FATAL_BUILD_IDENTITY_KEY, identity)
         .putLong(FATAL_AT_KEY, System.currentTimeMillis())
         .commit();
   }
@@ -263,6 +273,30 @@ final class StartupHealthStore {
         .commit();
   }
 
+  /** Seeds the impossible safe-shell/fatal combination for self-healing coverage. */
+  static void seedSafeShellConflictForInstrumentedTest(Context context) {
+    preferences(context)
+        .edit()
+        .putString(FATAL_BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .putLong(FATAL_AT_KEY, System.currentTimeMillis())
+        .putString(FATAL_QUEUED_IDENTITY_KEY, currentArtifactIdentity())
+        .putBoolean(SAFE_SHELL_KEY, true)
+        .putString(BUILD_IDENTITY_KEY, currentArtifactIdentity())
+        .commit();
+  }
+
+  /** Seeds a marker from a different immutable artifact for stale cleanup coverage. */
+  static void seedArtifactMismatchForInstrumentedTest(Context context) {
+    preferences(context)
+        .edit()
+        .putString(FATAL_BUILD_IDENTITY_KEY, "stale-artifact")
+        .putLong(FATAL_AT_KEY, System.currentTimeMillis())
+        .putString(FATAL_QUEUED_IDENTITY_KEY, "stale-artifact")
+        .putBoolean(SAFE_SHELL_KEY, false)
+        .putString(BUILD_IDENTITY_KEY, "stale-artifact")
+        .commit();
+  }
+
   private static void persistNativeCrashMarker(Context context, Throwable error) {
     try {
       String kind = error == null ? "UnknownNativeError" : error.getClass().getSimpleName();
@@ -281,6 +315,16 @@ final class StartupHealthStore {
     } catch (RuntimeException ignored) {
       // Observability must never replace the platform crash path.
     }
+  }
+
+  private static void clearFatalMarker(SharedPreferences preferences, String reason) {
+    preferences
+        .edit()
+        .remove(FATAL_BUILD_IDENTITY_KEY)
+        .remove(FATAL_AT_KEY)
+        .remove(FATAL_QUEUED_IDENTITY_KEY)
+        .commit();
+    Log.i("QWQStartup", "startup_fatal_marker_stale_cleared reason=" + reason);
   }
 
   private static SharedPreferences preferences(Context context) {

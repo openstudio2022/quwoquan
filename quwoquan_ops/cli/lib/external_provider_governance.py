@@ -15,6 +15,7 @@ from functools import lru_cache
 import json
 from pathlib import Path
 import re
+import subprocess
 from typing import Any
 
 import yaml
@@ -853,7 +854,21 @@ def render_go_bindings(
         "\tbinding, ok := byCapability[capabilityID]",
         "\treturn binding, ok", "}", "",
     ])
-    return "\n".join(lines)
+    source = "\n".join(lines)
+    try:
+        result = subprocess.run(
+            ("gofmt",),
+            input=source,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("gofmt is required to generate canonical Go bindings") from exc
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "unknown gofmt failure"
+        raise ValueError(f"cannot format generated Go bindings: {detail}")
+    return result.stdout
 
 
 def _descriptor_roots(registry: Mapping[str, Any]) -> list[dict[str, str]]:

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -125,6 +127,70 @@ void main() {
         AuthPromptReason.accountSuspended,
       );
       expect(copy.subtitle, contains('限制'));
+    });
+
+    test('canonical suspension 从任意受保护目标即时进入单一说明面并保留新会话续接', () {
+      const suspended = AuthSessionState(
+        status: AuthSessionStatus.guest,
+        promptReason: AuthPromptReason.accountSuspended,
+        installId: 'install-safe',
+      );
+      final redirect = accountSuspensionLoginRedirect(
+        session: suspended,
+        currentLocation: '${AppRoutePaths.chat}?from=notification',
+      );
+      expect(redirect, isNotNull);
+      final uri = Uri.parse(redirect!);
+      expect(uri.path, AppRoutePaths.loginPathTemplate);
+      expect(
+        uri.queryParameters['reason'],
+        AuthPromptReason.accountSuspended.name,
+      );
+      expect(
+        uri.queryParameters['redirect'],
+        '${AppRoutePaths.chat}?from=notification',
+      );
+      expect(
+        uri.queryParameters[loginDismissFallbackQueryParam],
+        AppRoutePaths.home,
+      );
+
+      const restoredNewSession = AuthSessionState(
+        status: AuthSessionStatus.authenticated,
+        accessToken: 'new-access',
+        refreshToken: 'new-refresh',
+        ownerId: 'owner-restored',
+        activePersonaId: 'persona-restored',
+        accountState: 'active',
+        installId: 'install-safe',
+      );
+      expect(
+        accountSuspensionLoginRedirect(
+          session: restoredNewSession,
+          currentLocation: uri.queryParameters['redirect']!,
+        ),
+        isNull,
+      );
+    });
+
+    test('suspended 不与 closed/actionRequired 共享全局受限重定向语义', () {
+      for (final reason in <AuthPromptReason>[
+        AuthPromptReason.accountClosed,
+        AuthPromptReason.actionRequired,
+      ]) {
+        expect(
+          accountSuspensionLoginRedirect(
+            session: AuthSessionState(
+              status: AuthSessionStatus.guest,
+              promptReason: reason,
+              installId: 'install-safe',
+            ),
+            currentLocation: AppRoutePaths.chat,
+          ),
+          isNull,
+          reason: reason.name,
+        );
+      }
     });
 
     test('账号 closed 原因使用注销文案且关闭登录必回安全首页', () {

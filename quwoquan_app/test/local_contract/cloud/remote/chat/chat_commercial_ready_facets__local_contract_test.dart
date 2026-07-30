@@ -62,11 +62,13 @@ void main() {
 
     expect(batch.items.single.id, 'conversation-1');
     expect(home.items.single.summaryIntersections, <String>['共同关注摄影']);
-    expect(contacts.items.single.contactId, 'persona-2');
-    expect(candidates.items.single.candidateSource, 'mutual');
+    expect(contacts.items.single.userId, 'persona-2');
+    expect(contacts.items.single.userHandle, 'xiaoq_public');
+    expect(candidates.items.single.source, 'mutual');
     expect(inbox.items.single.unreadCount, 2);
     expect(groups.items.single.friendMemberCount, 3);
     expect(members.items.single.userId, 'persona-2');
+    expect(members.items.single.userHandle, 'xiaoq_public');
     expect(executor.operationIds, <String>[
       AppCloudOperationIds.chatConversationBatchGetConversations,
       AppCloudOperationIds.chatConversationListContactHome,
@@ -119,22 +121,20 @@ void main() {
     final conversation = await conversationWriter.updateConversationTitle(
       ChatUpdateConversationTitleCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'title-1',
         title: '新的讨论名',
       ),
+      idempotencyKey: 'title-1',
     );
     await membershipWriter.inviteAssistant(
       ChatInviteConversationAssistantCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'assistant-invite-1',
         skillId: 'skill-1',
       ),
+      idempotencyKey: 'assistant-invite-1',
     );
     await membershipWriter.removeAssistant(
-      ChatRemoveConversationAssistantCommand(
-        conversationId: 'conversation-1',
-        idempotencyKey: 'assistant-remove-1',
-      ),
+      ChatRemoveConversationAssistantCommand(conversationId: 'conversation-1'),
+      idempotencyKey: 'assistant-remove-1',
     );
 
     expect(home.items.single.notificationId, 'notification-1');
@@ -182,36 +182,34 @@ void main() {
     await writer.addMembers(
       ChatAddConversationMembersCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'add-1',
         userIds: const <String>['persona-2'],
       ),
+      idempotencyKey: 'add-1',
     );
     await writer.removeMember(
       ChatRemoveConversationMemberCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'remove-1',
         userId: 'persona-2',
       ),
+      idempotencyKey: 'remove-1',
     );
     await writer.leaveConversation(
-      ChatLeaveConversationCommand(
-        conversationId: 'conversation-1',
-        idempotencyKey: 'leave-1',
-      ),
+      ChatLeaveConversationCommand(conversationId: 'conversation-1'),
+      idempotencyKey: 'leave-1',
     );
     await writer.transferOwnership(
       ChatTransferConversationOwnershipCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'transfer-1',
         newOwnerId: 'persona-2',
       ),
+      idempotencyKey: 'transfer-1',
     );
     await writer.updateAdmins(
       ChatUpdateConversationAdminsCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'admins-1',
         adminIds: const <String>['persona-2'],
       ),
+      idempotencyKey: 'admins-1',
     );
 
     expect(page.items.single.displayName, '小趣');
@@ -260,23 +258,23 @@ void main() {
     await mutation.recallMessage(
       ChatRecallMessageCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'recall-1',
         messageId: 'message-1',
       ),
+      idempotencyKey: 'recall-1',
     );
     await userState.markMessageRead(
       ChatMarkConversationMessageReadCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'read-1',
         messageId: 'message-1',
       ),
+      idempotencyKey: 'read-1',
     );
     await userState.updateConversationSettings(
       ChatUpdateConversationSettingsCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'settings-1',
         muted: true,
       ),
+      idempotencyKey: 'settings-1',
     );
 
     expect(messages.items.single.content, '你好');
@@ -420,8 +418,6 @@ const Map<String, Object?> _conversation = <String, Object?>{
   'circleGroupId': '',
   'entityId': '',
   'originType': 'ad_hoc_group',
-  'bindingType': 'none',
-  'lifecyclePolicy': 'persistent',
   'maxSeq': 9,
   'memberCount': 2,
   'membersRosterRevision': 1,
@@ -443,6 +439,7 @@ const Map<String, Object?> _contactHome = <String, Object?>{
   'id': 'persona-2',
   'kind': 'user',
   'objectId': 'persona-2',
+  'userHandle': 'xiaoq_public',
   'title': '小趣',
   'subtitle': '摄影作者',
   'avatarUrl': '',
@@ -453,6 +450,7 @@ const Map<String, Object?> _contactHome = <String, Object?>{
 
 const Map<String, Object?> _contact = <String, Object?>{
   'userId': 'persona-2',
+  'userHandle': 'xiaoq_public',
   'displayName': '小趣',
   'avatarUrl': '',
   'bio': '摄影作者',
@@ -509,8 +507,8 @@ const Map<String, Object?> _selectableGroup = <String, Object?>{
 };
 
 const Map<String, Object?> _selectableMember = <String, Object?>{
-  'contactId': 'persona-2',
   'userId': 'persona-2',
+  'userHandle': 'xiaoq_public',
   'displayName': '小趣',
   'avatarUrl': '',
   'relationState': 'mutual',
@@ -519,6 +517,7 @@ const Map<String, Object?> _selectableMember = <String, Object?>{
 
 const Map<String, Object?> _member = <String, Object?>{
   'userId': 'persona-2',
+  'userHandle': 'xiaoq_public',
   'displayName': '小趣',
   'avatarUrl': '',
   'role': 'member',

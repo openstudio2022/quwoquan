@@ -2,6 +2,7 @@
   "label": "情侣",
   "labelEn": "For Couples",
   "description": "情侣共用商品",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

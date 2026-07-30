@@ -28,10 +28,6 @@ fields:
   type: string
 - name: originType
   type: string
-- name: bindingType
-  type: string
-- name: lifecyclePolicy
-  type: string
 - name: maxSeq
   type: int64
 - name: memberCount
@@ -124,16 +120,6 @@ client_projection:
     dart_type: String
     nullable: false
     source: originType
-    default: ''''''
-  - name: bindingType
-    dart_type: String
-    nullable: false
-    source: bindingType
-    default: ''''''
-  - name: lifecyclePolicy
-    dart_type: String
-    nullable: false
-    source: lifecyclePolicy
     default: ''''''
   - name: maxSeq
     dart_type: int

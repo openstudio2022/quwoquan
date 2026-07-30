@@ -2,6 +2,7 @@
   "label": "下午茶",
   "labelEn": "Afternoon Tea",
   "description": "下午茶与甜品时间",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

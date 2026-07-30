@@ -22,8 +22,9 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	assistantdomain "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	conversationports "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/creationgrounding"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/intersectionclient"
@@ -43,6 +44,10 @@ import (
 	policyrollouthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/adapters/inbound/http"
 	policyrolloutapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/application"
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
+	skillcataloghttp "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/adapters/inbound/http"
+	skillcatalogapplication "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/application"
+	skillcatalogports "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/ports"
+	skillcatalogresource "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/infrastructure/resource"
 )
 
 const (
@@ -72,8 +77,8 @@ func run() error {
 	if err := applyEnvOverrides(&cfg); err != nil {
 		return fmt.Errorf("environment override invalid: %w", err)
 	}
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		return fmt.Errorf("config compatibility failed: %w", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
+		return fmt.Errorf("config identity failed: %w", err)
 	}
 	if err := validateRuntimeDependenciesConfig(cfg); err != nil {
 		return err
@@ -287,7 +292,7 @@ func run() error {
 		"assistant-service.user-delivery-policy",
 		cfg.UserService.TimeoutMs,
 	)
-	deliveryPolicyReader, err := application.NewUserDeliveryPolicyClient(
+	deliveryPolicyReader, err := orchestration.NewUserDeliveryPolicyClient(
 		cfg.UserService.BaseURL,
 		deliveryPolicyAuthorization,
 		deliveryPolicyHTTPClient,
@@ -345,6 +350,7 @@ func run() error {
 	agentLoop, err := buildAgentLoop(
 		appEnv,
 		canonicalSearch,
+		cfg.Model,
 		runtimeconfig.EnvRuntimeConfigProvider{},
 		newObservedEgressClient,
 	)
@@ -372,22 +378,22 @@ func run() error {
 		conversationOwnerReader,
 	)
 	preferenceQueries := preferencefact.NewQueryFacade(deps.preferenceReader)
-	assistantOpts := []application.AssistantServiceOption{
-		application.WithLearningProjectionReader(deps.learningProjection),
-		application.WithNotificationAppMessageCommandWriter(notificationWriter),
-		application.WithSkillSubscriptionStore(deps.subscriptionStore),
-		application.WithAssistantDeliveryPolicyReader(deliveryPolicyReader),
-		application.WithConversationRunStore(deps.conversationRunStore),
-		application.WithPreferenceSnapshotReader(preferenceQueries),
-		application.WithCreationSuggestGrounding(creationGroundingClient),
-		application.WithXiaoquSearchReader(canonicalSearch),
-		application.WithIntersectionInboxReader(intersectionInbox),
-		application.WithIntersectionEvidenceReader(intersectionInbox),
-		application.WithAgentLoop(agentLoop),
+	assistantOpts := []orchestration.AssistantServiceOption{
+		orchestration.WithLearningProjectionReader(deps.learningProjection),
+		orchestration.WithNotificationAppMessageCommandWriter(notificationWriter),
+		orchestration.WithSkillSubscriptionStore(deps.subscriptionStore),
+		orchestration.WithAssistantDeliveryPolicyReader(deliveryPolicyReader),
+		orchestration.WithConversationRunStore(deps.conversationRunStore),
+		orchestration.WithPreferenceSnapshotReader(preferenceQueries),
+		orchestration.WithCreationSuggestGrounding(creationGroundingClient),
+		orchestration.WithXiaoquSearchReader(canonicalSearch),
+		orchestration.WithIntersectionInboxReader(intersectionInbox),
+		orchestration.WithIntersectionEvidenceReader(intersectionInbox),
+		orchestration.WithAgentLoop(agentLoop),
 	}
 	if userProfileBase := strings.TrimSpace(cfg.UserProfile.BaseURL); userProfileBase != "" {
 		interestReader := userprofile.NewClient(searchHTTPClient(cfg.UserProfile.TimeoutMs), userProfileBase)
-		assistantOpts = append(assistantOpts, application.WithProactiveInterestReader(interestReader))
+		assistantOpts = append(assistantOpts, orchestration.WithProactiveInterestReader(interestReader))
 		log.Printf("assistant-service proactive interest profile reader enabled base=%s", userProfileBase)
 	} else {
 		log.Printf("assistant-service proactive interest profile reader disabled (no user_profile.base_url)")
@@ -426,7 +432,7 @@ func run() error {
 	}
 	assistantOpts = append(
 		assistantOpts,
-		application.WithChatGroundingClient(
+		orchestration.WithChatGroundingClient(
 			chatGroundingClient,
 		),
 	)
@@ -448,18 +454,20 @@ func run() error {
 		deps.learningRunOwners,
 		nil,
 	)
+	learningOpsQueries := learningapplication.NewOpsQueryService(
+		deps.learningProjection,
+	)
 	assistantOpts = append(
 		assistantOpts,
-		application.WithLearningFactWriter(
-			application.LearningFactWriterFunc(func(
+		orchestration.WithLearningFactWriter(
+			conversationports.LearningFactWriterFunc(func(
 				ctx context.Context,
-				command application.ServiceScorecardFactCommand,
+				command conversationports.ServiceScorecardFactCommand,
 			) error {
 				_, appendErr := learningFactService.AppendServiceFact(
 					ctx,
 					learningmodel.AppendCommand{
 						EventID:          command.EventID,
-						EventVersion:     1,
 						FactType:         learningmodel.FactTypeServiceScorecard,
 						AssistantTurnID:  command.AssistantTurnID,
 						ReferralSource:   "service",
@@ -477,8 +485,19 @@ func run() error {
 	)
 	assistantOpts = append(
 		assistantOpts,
-		application.WithFrozenPolicyResolver(
-			application.FrozenPolicyResolverFunc(
+		orchestration.WithPolicySkillCandidateResolver(
+			conversationports.PolicySkillCandidateResolverFunc(
+				func(
+					ctx context.Context,
+					policyID string,
+					personaID string,
+				) ([]string, error) {
+					return policyRolloutService.ResolveSkillCandidates(ctx, policyID, personaID)
+				},
+			),
+		),
+		orchestration.WithFrozenPolicyResolver(
+			conversationports.FrozenPolicyResolverFunc(
 				func(
 					ctx context.Context,
 					policyID string,
@@ -500,7 +519,7 @@ func run() error {
 					}
 					return assistantdomain.AssistantFrozenPolicySelection{
 						PolicyID:        resolved.PolicyID,
-						ReleaseVersion:  resolved.ReleaseVersion,
+						ReleaseDigest:   resolved.ReleaseDigest,
 						Cohort:          resolved.Cohort,
 						RolloutRevision: resolved.RolloutRevision,
 						RuleID:          resolved.RuleID,
@@ -526,7 +545,7 @@ func run() error {
 			),
 		),
 	)
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		deps.consentStore,
 		router.Scene("general"),
 		assistantOpts...,
@@ -692,10 +711,34 @@ func run() error {
 			preferenceQueries,
 		),
 	).Routes()
+	skillCatalogQueries := skillcatalogapplication.NewQueryService(
+		skillcatalogresource.NewCatalogSource(),
+		skillcatalogports.ConsentReaderFunc(func(
+			ctx context.Context,
+			accountID string,
+		) (map[string]string, error) {
+			if deps.consentStore == nil {
+				return nil, errors.New("skill consent store is not configured")
+			}
+			consents, err := deps.consentStore.ListActiveConsents(ctx, accountID)
+			if err != nil {
+				return nil, err
+			}
+			scopes := make(map[string]string, len(consents))
+			for _, consent := range consents {
+				scopes[consent.SkillID] = consent.GrantedScope
+			}
+			return scopes, nil
+		}),
+	)
 	serviceMux := http.NewServeMux()
 	policyreleasehttp.NewHandler(policyReleaseService).RegisterRoutes(serviceMux)
 	policyrollouthttp.NewHandler(policyRolloutService).RegisterRoutes(serviceMux)
-	learninghttp.NewHandler(learningFactService).RegisterRoutes(serviceMux)
+	learninghttp.NewHandler(
+		learningFactService,
+		learningOpsQueries,
+	).RegisterRoutes(serviceMux)
+	skillcataloghttp.NewHandler(skillCatalogQueries).RegisterRoutes(serviceMux)
 	serviceMux.Handle("/", baseHandler)
 	baseHandler = serviceMux
 	outerMux := http.NewServeMux()
@@ -712,19 +755,17 @@ func run() error {
 		Src:               "assistant-service",
 	}, ioLogger, processLogger, exceptionLogger)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:      accessVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(corsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      assistantHTTPWriteTimeout(),
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("assistant-service listening on %s env=%s (rate_limit=1000/s)", addr, appEnv)
+	log.Printf("assistant-service listening on %s env=%s", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, assistantShutdownTimeout()); err != nil {
 		return fmt.Errorf("listen failed: %w", err)
 	}

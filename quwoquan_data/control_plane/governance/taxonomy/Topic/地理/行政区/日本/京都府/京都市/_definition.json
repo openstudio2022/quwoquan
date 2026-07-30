@@ -1,0 +1,12 @@
+{
+  "label": "京都市",
+  "labelEn": "Kyoto",
+  "description": "古都中心，寺社与町屋景观",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

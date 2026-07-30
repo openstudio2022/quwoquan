@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 
 class ChatListItemViewModel {
@@ -40,7 +41,10 @@ class ChatListItemViewModel {
   bool get hasMention => mentionUnreadCount > 0;
   bool get isNotification => id.startsWith('notification:');
 
-  factory ChatListItemViewModel.fromDto(ChatInboxDto dto) {
+  factory ChatListItemViewModel.fromDto(
+    ChatInboxDto dto, {
+    MediaEndpointConfig? mediaEndpointConfig,
+  }) {
     final preview = _resolvePreview(
       dto.lastMessageType,
       dto.lastMessagePreview,
@@ -54,7 +58,10 @@ class ChatListItemViewModel {
       timeLabel: dto.lastMessageTime == null
           ? ''
           : ChatTimeFormatter.formatForConversationList(dto.lastMessageTime!),
-      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        dto.avatarUrl,
+        endpointConfig: mediaEndpointConfig,
+      ),
       groupAvatarVersion: dto.groupAvatarVersion,
       previewIcon: preview.icon,
       unreadCount: dto.unreadCount,
@@ -65,7 +72,10 @@ class ChatListItemViewModel {
     );
   }
 
-  factory ChatListItemViewModel.fromMessageHomeDto(MessageHomeRowDto dto) {
+  factory ChatListItemViewModel.fromMessageHomeDto(
+    MessageHomeRowDto dto, {
+    MediaEndpointConfig? mediaEndpointConfig,
+  }) {
     final preview = _resolvePreview('text', dto.summary);
     final id = dto.conversationId.trim().isNotEmpty
         ? dto.conversationId.trim()
@@ -79,7 +89,10 @@ class ChatListItemViewModel {
       timeLabel: dto.lastActiveAt == null
           ? ''
           : ChatTimeFormatter.formatForConversationList(dto.lastActiveAt!),
-      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        dto.avatarUrl,
+        endpointConfig: mediaEndpointConfig,
+      ),
       groupAvatarVersion: dto.groupAvatarVersion,
       previewIcon: preview.icon,
       unreadCount: dto.unreadCount,

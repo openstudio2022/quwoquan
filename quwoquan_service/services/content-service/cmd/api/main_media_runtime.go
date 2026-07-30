@@ -58,40 +58,48 @@ func buildMediaRuntime(
 	if err != nil {
 		log.Fatalf("content-service object storage binding invalid: %v", err)
 	}
-	ossCfg := runtimemedia.OSSConfig{
+	storageConfig := runtimemedia.ObjectStorageConfig{
 		Endpoint:        contentOSSEndpoint(ossBinding.Endpoint, cfg.OSS.UseSSL),
 		Bucket:          getenvOrDefault("CONTENT_OSS_BUCKET", cfg.OSS.Bucket),
 		Region:          getenvOrDefault("CONTENT_OSS_REGION", cfg.OSS.Region),
 		AccessKeyID:     ossBinding.AccessKeyID,
 		AccessKeySecret: ossBinding.AccessKeySecret,
-		CDNDomain:       getenvOrDefault("CONTENT_CDN_DOMAIN", cfg.OSS.CDNDomain),
-		CDNSignKey:      getenvOrDefault("CONTENT_CDN_SIGN_KEY", cfg.OSS.CDNSignKey),
-		PresignTTL:      time.Duration(cfg.OSS.PresignTTLMin) * time.Minute,
-		CDNTTL:          time.Duration(cfg.OSS.CDNTTLMin) * time.Minute,
+		MediaDeliveryBaseURL: getenvOrDefault(
+			"CONTENT_MEDIA_DELIVERY_BASE_URL",
+			cfg.OSS.MediaDeliveryBaseURL,
+		),
+		MediaUploadBaseURL: getenvOrDefault(
+			"CONTENT_MEDIA_UPLOAD_BASE_URL",
+			cfg.OSS.MediaUploadBaseURL,
+		),
+		CDNSignKey: getenvOrDefault("CONTENT_CDN_SIGN_KEY", cfg.OSS.CDNSignKey),
+		PresignTTL: time.Duration(cfg.OSS.PresignTTLMin) * time.Minute,
+		CDNTTL:     time.Duration(cfg.OSS.CDNTTLMin) * time.Minute,
 	}
-	if ossCfg.PresignTTL == 0 {
-		ossCfg.PresignTTL = 15 * time.Minute
+	if storageConfig.PresignTTL == 0 {
+		storageConfig.PresignTTL = 15 * time.Minute
 	}
-	if ossCfg.CDNTTL == 0 {
-		ossCfg.CDNTTL = 60 * time.Minute
+	if storageConfig.CDNTTL == 0 {
+		storageConfig.CDNTTL = 60 * time.Minute
 	}
-	if strings.TrimSpace(ossCfg.Endpoint) == "" || strings.TrimSpace(ossCfg.Bucket) == "" ||
-		strings.TrimSpace(ossCfg.Region) == "" || strings.TrimSpace(ossCfg.AccessKeyID) == "" ||
-		strings.TrimSpace(ossCfg.AccessKeySecret) == "" || strings.TrimSpace(ossCfg.CDNDomain) == "" ||
-		strings.TrimSpace(ossCfg.CDNSignKey) == "" {
-		log.Fatal("content-service OSS endpoint, bucket, region, credentials, CDN domain and signing key are required")
+	if strings.TrimSpace(storageConfig.Endpoint) == "" || strings.TrimSpace(storageConfig.Bucket) == "" ||
+		strings.TrimSpace(storageConfig.Region) == "" || strings.TrimSpace(storageConfig.AccessKeyID) == "" ||
+		strings.TrimSpace(storageConfig.AccessKeySecret) == "" || strings.TrimSpace(storageConfig.MediaDeliveryBaseURL) == "" ||
+		strings.TrimSpace(storageConfig.MediaUploadBaseURL) == "" ||
+		strings.TrimSpace(storageConfig.CDNSignKey) == "" {
+		log.Fatal("content-service OSS endpoint, bucket, region, credentials, media delivery/upload bases and signing key are required")
 	}
-	ossPresigner := runtimemedia.NewS3PresignClient(ossCfg)
+	objectClient := runtimemedia.NewS3PresignClient(storageConfig)
 	log.Printf(
-		"content-service oss adapter=%s presigner=s3 endpoint=%s bucket=%s",
+		"content-service object-storage adapter=%s presigner=s3 endpoint=%s bucket=%s",
 		ossBinding.AdapterID,
-		ossCfg.Endpoint,
-		ossCfg.Bucket,
+		storageConfig.Endpoint,
+		storageConfig.Bucket,
 	)
 
 	mediaObjectGateway, err := mediainfra.NewObjectGateway(mediainfra.ObjectGatewayConfig{
-		Bucket: ossCfg.Bucket, CDNDomain: ossCfg.CDNDomain, CDNSignKey: ossCfg.CDNSignKey, DeliveryTTL: ossCfg.CDNTTL,
-	}, ossPresigner)
+		Bucket: storageConfig.Bucket, MediaDeliveryBaseURL: storageConfig.MediaDeliveryBaseURL, CDNSignKey: storageConfig.CDNSignKey, DeliveryTTL: storageConfig.CDNTTL,
+	}, objectClient)
 	if err != nil {
 		log.Fatalf("content-service media object gateway invalid: %v", err)
 	}
@@ -114,9 +122,10 @@ func buildMediaRuntime(
 	mediaService := mediaapp.BindFacades(mediaServiceCore)
 	mediaUploadSessionGateway, err := uploadsessionstorage.NewGateway(
 		uploadsessionstorage.Config{
-			Bucket: ossCfg.Bucket,
+			Bucket:        storageConfig.Bucket,
+			UploadBaseURL: storageConfig.MediaUploadBaseURL,
 		},
-		ossPresigner,
+		objectClient,
 	)
 	if err != nil {
 		log.Fatalf("content-service media upload session object gateway invalid: %v", err)
@@ -129,11 +138,12 @@ func buildMediaRuntime(
 	// Media processing worker 是 media outbox 的唯一生产消费者。图片与视频发布
 	// 都依赖 processing -> ready/rejected 的确定终态，因此生产组合不提供禁用或内存回退。
 	mediaProcessor, processorErr := mediaprocinfra.NewFFmpegMediaProcessor(
-		ossPresigner,
+		objectClient,
 		mediaprocinfra.Config{
-			Bucket:              ossCfg.Bucket,
+			Bucket:              storageConfig.Bucket,
 			FFmpegPath:          cfg.MediaProcessing.FFmpegPath,
 			FFprobePath:         cfg.MediaProcessing.FFprobePath,
+			EnableHLSCMAF:       cfg.MediaProcessing.HLSCMAFEnabled,
 			WorkDir:             cfg.MediaProcessing.WorkDir,
 			JobTimeout:          time.Duration(cfg.MediaProcessing.JobTimeoutMs) * time.Millisecond,
 			MinWorkDirFreeBytes: cfg.MediaProcessing.MinWorkDirFreeBytes,

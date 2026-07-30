@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
@@ -33,6 +34,9 @@ typedef RealtimeConnectTelemetryRecorder =
       String? failReasonCode,
     });
 
+typedef RealtimeReconnectDelayResolver =
+    Duration Function({required int attempt, required RealtimeConfig config});
+
 /// Remote 实现：WebSocket + LongPoll，行为与 refactor 前 [RealtimeConnectionManager] 一致。
 class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   RemoteRealtimeConnectionDelegate({
@@ -42,10 +46,13 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     required this.authTokenProvider,
     this.onStateChanged,
     this.telemetryRecorder,
+    RealtimeReconnectDelayResolver? reconnectDelayResolver,
     RealtimeConfig? config,
     RemoteRealtimeLongPollFactory? longPollFactory,
     RemoteRealtimeWebSocketFactory? webSocketFactory,
   }) : _config = config ?? RealtimeConfig.fromRuntime(),
+       _reconnectDelayResolver =
+           reconnectDelayResolver ?? _defaultReconnectDelay,
        _longPollFactory = longPollFactory ?? _defaultLongPollFactory,
        _webSocketFactory = webSocketFactory ?? _defaultWebSocketFactory {
     _handler = RealtimeMessageHandler(
@@ -81,6 +88,24 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     );
   }
 
+  static final Random _reconnectRandom = Random.secure();
+
+  static Duration _defaultReconnectDelay({
+    required int attempt,
+    required RealtimeConfig config,
+  }) {
+    final exponent = attempt.clamp(0, 20);
+    final capMilliseconds = (config.reconnectBaseDelayMs * (1 << exponent))
+        .clamp(0, config.reconnectMaxDelayMs);
+    if (capMilliseconds <= 0) {
+      return Duration.zero;
+    }
+    // Full jitter prevents all clients that lost the same edge from reconnecting together.
+    return Duration(
+      milliseconds: _reconnectRandom.nextInt(capMilliseconds + 1),
+    );
+  }
+
   final T Function<T>(ProviderListenable<T> provider) read;
   final String Function() currentUserIdResolver;
   final CloudAuthTokenProvider authTokenProvider;
@@ -89,6 +114,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   final RealtimeConfig _config;
   final RemoteRealtimeLongPollFactory _longPollFactory;
   final RemoteRealtimeWebSocketFactory _webSocketFactory;
+  final RealtimeReconnectDelayResolver _reconnectDelayResolver;
 
   late final RealtimeMessageHandler _handler;
 
@@ -107,7 +133,11 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   @override
   void onAppForeground() {
     if (_state == TransportState.disconnected) {
-      _transitionTo(TransportState.idle);
+      _transitionTo(
+        _activeConversationId == null
+            ? TransportState.idle
+            : TransportState.active,
+      );
     }
   }
 
@@ -150,6 +180,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     switch (target) {
       case TransportState.disconnected:
         _teardownAll();
+        _reconnectAttempt = 0;
         _setState(TransportState.disconnected);
 
       case TransportState.idle:
@@ -159,6 +190,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
       case TransportState.active:
         _teardownLongPoll();
+        _reconnectAttempt = 0;
         unawaited(_connectWebSocket());
         _setState(TransportState.active);
     }
@@ -167,7 +199,6 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   Future<void> _connectWebSocket() async {
     final startedAt = DateTime.now();
     _teardownWebSocket();
-    _reconnectAttempt = 0;
 
     final topics = <String>['inbox'];
     final conversationId = _activeConversationId;
@@ -188,6 +219,11 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     );
     await _ws!.connect(topics: topics);
     final connected = _ws?.isConnected.value ?? false;
+    if (connected) {
+      // A completed authenticated connection, not a reconnect invocation,
+      // starts a new retry budget.
+      _reconnectAttempt = 0;
+    }
     unawaited(
       _recordConnectResult(
         transport: 'websocket',
@@ -213,9 +249,9 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
     }
 
     _reconnectTimer?.cancel();
-    final delay = Duration(
-      milliseconds: (_config.reconnectBaseDelayMs * (1 << _reconnectAttempt))
-          .clamp(0, _config.reconnectMaxDelayMs),
+    final delay = _reconnectDelayResolver(
+      attempt: _reconnectAttempt,
+      config: _config,
     );
     _reconnectAttempt++;
 

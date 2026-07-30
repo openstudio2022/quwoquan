@@ -2,6 +2,7 @@
   "label": "带货直播",
   "labelEn": "Shopping Livestream",
   "description": "电商带货直播",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

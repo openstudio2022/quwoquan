@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/persona_relationship_contracts.requests.g.dart';
 
 /// PersonaRelationship 的关注/拉黑命令与私有列表 typed contracts。
 /// pair/version/direction 等聚合内部状态不得穿透 App ABI。
@@ -24,19 +25,7 @@ abstract interface class RelationshipCapabilityQuery {
   );
 }
 
-final class PersonaRelationshipListQuery {
-  PersonaRelationshipListQuery({
-    required String subAccountId,
-    this.query,
-    this.cursor,
-    this.limit = 20,
-  }) : subAccountId = _required(subAccountId, 'subAccountId');
 
-  final String subAccountId;
-  final String? query;
-  final String? cursor;
-  final int limit;
-}
 
 abstract interface class ProfileRelationshipListQuery {
   Future<ProfileRelationshipSlice> listFollowing(
@@ -48,83 +37,43 @@ abstract interface class ProfileRelationshipListQuery {
   );
 }
 
-final class GetRelationshipCapabilityQuery {
-  GetRelationshipCapabilityQuery({required String targetSubAccountId})
-    : targetSubAccountId = _required(targetSubAccountId, 'targetSubAccountId');
 
-  final String targetSubAccountId;
-}
 
-final class FollowUserCommand {
-  FollowUserCommand({
-    required String targetSubAccountId,
-    this.source,
-    this.clientRequestId,
-  }) : targetSubAccountId = _required(targetSubAccountId, 'targetSubAccountId');
 
-  final String targetSubAccountId;
 
-  /// 关注来源归因（如 authorProfile / search / intersection）。
-  final String? source;
-  final String? clientRequestId;
-}
 
-final class UnfollowUserCommand {
-  UnfollowUserCommand({
-    required String targetSubAccountId,
-    this.clientRequestId,
-  }) : targetSubAccountId = _required(targetSubAccountId, 'targetSubAccountId');
-
-  final String targetSubAccountId;
-  final String? clientRequestId;
-}
 
 final class FollowCommandResult {
   const FollowCommandResult({
-    required this.actorSubAccountId,
-    required this.targetSubAccountId,
+    required this.actorPersonaId,
+    required this.targetPersonaId,
     required this.relationState,
     required this.idempotentReplay,
     required this.updatedAt,
   });
 
-  final String actorSubAccountId;
-  final String targetSubAccountId;
+  final String actorPersonaId;
+  final String targetPersonaId;
   final String relationState;
   final bool idempotentReplay;
   final DateTime updatedAt;
 }
 
-final class BlockUserCommand {
-  BlockUserCommand({required String targetSubAccountId})
-    : targetSubAccountId = _required(targetSubAccountId, 'targetSubAccountId');
 
-  final String targetSubAccountId;
-}
 
-final class UnblockUserCommand {
-  UnblockUserCommand({required String targetSubAccountId})
-    : targetSubAccountId = _required(targetSubAccountId, 'targetSubAccountId');
 
-  final String targetSubAccountId;
-}
 
-final class ListBlockedUsersQuery {
-  const ListBlockedUsersQuery({this.cursor, this.limit = 20});
 
-  final String? cursor;
-  final int limit;
-}
 
 final class BlockCommandResult {
   const BlockCommandResult({
-    required this.targetSubAccountId,
+    required this.targetPersonaId,
     required this.blocked,
     required this.idempotentReplay,
     required this.updatedAt,
   });
 
-  final String targetSubAccountId;
+  final String targetPersonaId;
   final bool blocked;
   final bool idempotentReplay;
   final DateTime updatedAt;
@@ -132,14 +81,14 @@ final class BlockCommandResult {
 
 final class BlockedUserListItem {
   const BlockedUserListItem({
-    required this.targetSubAccountId,
+    required this.targetPersonaId,
     required this.displayName,
     required this.userHandle,
     required this.avatarUrl,
     required this.blockedAt,
   });
 
-  final String targetSubAccountId;
+  final String targetPersonaId;
   final String displayName;
   final String userHandle;
   final String avatarUrl;
@@ -155,8 +104,8 @@ final class BlockedUserSlice {
 
 final class RelationshipCapabilityResult {
   const RelationshipCapabilityResult({
-    required this.viewerSubAccountId,
-    required this.targetSubAccountId,
+    required this.viewerPersonaId,
+    required this.targetPersonaId,
     required this.relationState,
     required this.canFollow,
     required this.canUnfollow,
@@ -173,8 +122,8 @@ final class RelationshipCapabilityResult {
     required this.isBlockedBy,
   });
 
-  final String viewerSubAccountId;
-  final String targetSubAccountId;
+  final String viewerPersonaId;
+  final String targetPersonaId;
   final String relationState;
   final bool canFollow;
   final bool canUnfollow;
@@ -193,7 +142,7 @@ final class RelationshipCapabilityResult {
 
 final class PersonaRelationshipListItem {
   const PersonaRelationshipListItem({
-    required this.subAccountId,
+    required this.personaId,
     required this.username,
     required this.userHandle,
     required this.displayName,
@@ -204,7 +153,7 @@ final class PersonaRelationshipListItem {
     this.relationshipCapability,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String username;
   final String userHandle;
   final String displayName;
@@ -224,13 +173,13 @@ final class PersonaRelationshipPage {
 
 final class ProfileRelationshipPageQuery {
   ProfileRelationshipPageQuery({
-    required String subAccountId,
+    required String personaId,
     this.query,
     this.cursor,
     this.limit = 20,
-  }) : subAccountId = _required(subAccountId, 'subAccountId');
+  }) : personaId = _required(personaId, 'personaId');
 
-  final String subAccountId;
+  final String personaId;
   final String? query;
   final String? cursor;
   final int limit;
@@ -238,7 +187,7 @@ final class ProfileRelationshipPageQuery {
 
 final class ProfileRelationshipListItem {
   const ProfileRelationshipListItem({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.relationState,
     this.username = '',
@@ -249,7 +198,7 @@ final class ProfileRelationshipListItem {
     this.relationshipCapability,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String username;
   final String userHandle;
   final String displayName;
@@ -267,100 +216,30 @@ final class ProfileRelationshipSlice {
   final String? nextCursor;
 }
 
-CloudOperationRequestPayload encodeFollowUserCommand(
-  FollowUserCommand command,
-) {
-  final source = command.source?.trim() ?? '';
-  final clientRequestId = command.clientRequestId?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'targetSubAccountId': command.targetSubAccountId,
-    },
-    body: <String, Object?>{
-      if (source.isNotEmpty) 'source': source,
-      if (clientRequestId.isNotEmpty) 'clientRequestId': clientRequestId,
-    },
-  );
-}
 
-CloudOperationRequestPayload encodeUnfollowUserCommand(
-  UnfollowUserCommand command,
-) {
-  final clientRequestId = command.clientRequestId?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'targetSubAccountId': command.targetSubAccountId,
-    },
-    body: <String, Object?>{
-      if (clientRequestId.isNotEmpty) 'clientRequestId': clientRequestId,
-    },
-  );
-}
+
+
 
 FollowCommandResult decodeFollowCommandResult(Object? response) {
   final root = _object(response, 'FollowCommandResult');
   return FollowCommandResult(
-    actorSubAccountId: _requiredField(root, 'actorSubAccountId'),
-    targetSubAccountId: _requiredField(root, 'targetSubAccountId'),
+    actorPersonaId: _requiredField(root, 'actorPersonaId'),
+    targetPersonaId: _requiredField(root, 'targetPersonaId'),
     relationState: _requiredField(root, 'relationState'),
     idempotentReplay: _requiredBool(root, 'idempotentReplay'),
     updatedAt: _requiredTimestamp(root, 'updatedAt'),
   );
 }
 
-CloudOperationRequestPayload encodeBlockUserCommand(BlockUserCommand command) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'targetSubAccountId': command.targetSubAccountId,
-    },
-  );
-}
 
-CloudOperationRequestPayload encodeUnblockUserCommand(
-  UnblockUserCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'targetSubAccountId': command.targetSubAccountId,
-    },
-  );
-}
 
-CloudOperationRequestPayload encodeListBlockedUsersQuery(
-  ListBlockedUsersQuery query,
-) {
-  final cursor = query.cursor?.trim() ?? '';
-  final limit = query.limit.clamp(1, 100);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (cursor.isNotEmpty) 'cursor': cursor,
-      'limit': '$limit',
-    },
-  );
-}
 
-CloudOperationRequestPayload encodeGetRelationshipCapabilityQuery(
-  GetRelationshipCapabilityQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subAccountId': query.targetSubAccountId},
-  );
-}
 
-CloudOperationRequestPayload encodePersonaRelationshipListQuery(
-  PersonaRelationshipListQuery query,
-) {
-  final text = query.query?.trim() ?? '';
-  final cursor = query.cursor?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subAccountId': query.subAccountId},
-    queryParameters: <String, String>{
-      if (text.isNotEmpty) 'query': text,
-      if (cursor.isNotEmpty) 'cursor': cursor,
-      'limit': '${query.limit.clamp(1, 100)}',
-    },
-  );
-}
+
+
+
+
+
 
 CloudOperationRequestPayload encodeProfileRelationshipPageQuery(
   ProfileRelationshipPageQuery query,
@@ -368,7 +247,7 @@ CloudOperationRequestPayload encodeProfileRelationshipPageQuery(
   final search = query.query?.trim() ?? '';
   final cursor = query.cursor?.trim() ?? '';
   return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subAccountId': query.subAccountId},
+    pathParameters: <String, String>{'personaId': query.personaId},
     queryParameters: <String, String>{
       if (search.isNotEmpty) 'query': search,
       if (cursor.isNotEmpty) 'cursor': cursor,
@@ -380,7 +259,7 @@ CloudOperationRequestPayload encodeProfileRelationshipPageQuery(
 BlockCommandResult decodeBlockCommandResult(Object? response) {
   final root = _object(response, 'BlockCommandResult');
   return BlockCommandResult(
-    targetSubAccountId: _requiredField(root, 'targetSubAccountId'),
+    targetPersonaId: _requiredField(root, 'targetPersonaId'),
     blocked: _requiredBool(root, 'blocked'),
     idempotentReplay: _requiredBool(root, 'idempotentReplay'),
     updatedAt: _requiredTimestamp(root, 'updatedAt'),
@@ -397,7 +276,7 @@ BlockedUserSlice decodeBlockedUserSlice(Object? response) {
       .map((raw) {
         final item = _object(raw, 'BlockedUserListItem');
         return BlockedUserListItem(
-          targetSubAccountId: _requiredField(item, 'targetSubAccountId'),
+          targetPersonaId: _requiredField(item, 'targetPersonaId'),
           displayName: _requiredField(item, 'displayName'),
           userHandle: _requiredField(item, 'userHandle'),
           avatarUrl: _optionalString(item['avatarUrl']),
@@ -417,8 +296,8 @@ RelationshipCapabilityResult decodeRelationshipCapabilityResult(
 ) {
   final root = _object(response, 'RelationshipCapabilityResult');
   return RelationshipCapabilityResult(
-    viewerSubAccountId: _requiredField(root, 'viewerSubAccountId'),
-    targetSubAccountId: _requiredField(root, 'targetSubAccountId'),
+    viewerPersonaId: _requiredField(root, 'viewerPersonaId'),
+    targetPersonaId: _requiredField(root, 'targetPersonaId'),
     relationState: _requiredField(root, 'relationState'),
     canFollow: _requiredBool(root, 'canFollow'),
     canUnfollow: _requiredBool(root, 'canUnfollow'),
@@ -457,7 +336,7 @@ PersonaRelationshipPage decodePersonaRelationshipPage(Object? response) {
           final item = _object(raw, 'PersonaRelationshipListItem');
           final capability = item['relationshipCapability'];
           return PersonaRelationshipListItem(
-            subAccountId: _requiredField(item, 'subAccountId'),
+            personaId: _requiredField(item, 'personaId'),
             username: _optionalString(item['username']),
             userHandle: _optionalString(item['userHandle']),
             displayName: _requiredField(item, 'displayName'),
@@ -492,7 +371,7 @@ ProfileRelationshipSlice decodeProfileRelationshipSlice(Object? response) {
           final item = _object(raw, 'ProfileRelationshipListItem');
           final rawCapability = item['relationshipCapability'];
           return ProfileRelationshipListItem(
-            subAccountId: _requiredField(item, 'subAccountId'),
+            personaId: _requiredField(item, 'personaId'),
             username: _optionalString(item['username']),
             userHandle: _optionalString(item['userHandle']),
             displayName: _requiredField(item, 'displayName'),

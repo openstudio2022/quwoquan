@@ -17,10 +17,13 @@ final class PlayableVideoSource {
     );
   }
 
-  factory PlayableVideoSource.network(Uri uri) {
+  factory PlayableVideoSource.network(Uri uri, {VideoFormat? formatHint}) {
     return PlayableVideoSource._(
       label: 'network',
-      createController: () => AppVideoPlayerControllerFactory.networkUri(uri),
+      createController: () => AppVideoPlayerControllerFactory.networkUri(
+        uri,
+        formatHint: formatHint,
+      ),
     );
   }
 

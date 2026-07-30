@@ -2,7 +2,7 @@ kind: aggregate_root
 description: 面向其他上下文公开的用户身份、资料、可见性和退役生命周期聚合。
 identity:
   fields:
-  - subAccountId
+  - personaId
   version_field: version
   version_source: field
 access:
@@ -46,19 +46,31 @@ relationships:
   reference_fields:
   - backgroundMediaAssetId
   target_object: content.MediaAsset
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: validatedTaxonomyRelease
+  on_delete: retain
+  reference_fields:
+  - taxonomyReleaseId
+  target_object: tag.TagTaxonomyRelease
 capabilities:
 - commandable
 - queryable
 - idempotent_commands
 business_rules:
+- personaId 只使用 `us_<4hex>_<26 lowercase Crockford>`，其 4hex 与所属账号 logicalShard 一致；禁止版本段、别名格式或宽松解析
 - accountId 与 personaId 创建后不可变且 userHandle 全局唯一
 - 公开资料只属于 Persona，UserAccount 不保存可写资料副本
+- 手机号与邮箱只属于 CredentialBinding；Persona 不保存、返回或同步凭证明文
 - 一个 Account 至少保留一个 active Persona，primary 切换必须原子校验
 - retired 为终态且跨上下文只保留 tombstone identity
 - profile sync 只应用明确允许继承且未被 override 的字段
 - avatar/background 只保存 MediaAsset identity，delivery URL 不属于权威状态
 - 每个 command 必须以服务端内部 version CAS 原子提交 state、receipt 与 outbox
 lifecycle:
+  state_field: status
   states:
   - active
   - inactive

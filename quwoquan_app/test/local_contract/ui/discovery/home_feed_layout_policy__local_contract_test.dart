@@ -86,5 +86,32 @@ void main() {
       expect(policy.usesCompactDiscoveryCards, isFalse);
       expect(policy.contentCardPolicy, 'richMultiForm');
     });
+
+    // spotlight 开关由频道配置的 intersectionModulePolicy 决定，不是端上硬编码：
+    // 只有 spotlightSegment 出横滑模块，inlineOnly 只在卡片内联句，none 不出。
+    test('spotlight 开关跟随 intersectionModulePolicy', () {
+      HomeFeedLayoutPolicy policyFor(String modulePolicy) {
+        return HomeFeedLayoutPolicy.fromChannel(
+          HomeChannelConfig(
+            id: 'travel',
+            labelKey: 'home_tab_travel',
+            template: 'single_column_multiform',
+            layoutTemplate: 'singleColumnMultiForm',
+            phoneColumns: 1,
+            supportsFullSpanModules: false,
+            intersectionModulePolicy: modulePolicy,
+            contentCardPolicy: 'richMultiForm',
+            feedQuery: const <String, String>{'channel': 'travel'},
+            moodCopyKey: 'home_mood_travel',
+            order: 3,
+          ),
+          fallbackTemplate: 'single_column_multiform',
+        );
+      }
+
+      expect(policyFor('spotlightSegment').hasIntersectionSpotlight, isTrue);
+      expect(policyFor('inlineOnly').hasIntersectionSpotlight, isFalse);
+      expect(policyFor('none').hasIntersectionSpotlight, isFalse);
+    });
   });
 }

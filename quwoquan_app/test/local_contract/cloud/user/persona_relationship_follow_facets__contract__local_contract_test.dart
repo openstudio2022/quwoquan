@@ -26,11 +26,11 @@ void main() {
     await adapter.follow('persona-2', sourceSurfaceId: 'userProfile');
     await adapter.unfollow('persona-2');
     final following = await adapter.listFollowing(
-      subAccountId: 'persona-1',
+      personaId: 'persona-1',
       limit: 10,
     );
     final followers = await adapter.listFollowers(
-      subAccountId: 'persona-1',
+      personaId: 'persona-1',
       limit: 10,
     );
 
@@ -46,9 +46,9 @@ void main() {
       'source': 'userProfile',
     });
     expect(executor.payloads.first.pathParameters, <String, String>{
-      'targetSubAccountId': 'persona-2',
+      'targetPersonaId': 'persona-2',
     });
-    expect(following.items.single.subAccountId, 'persona-2');
+    expect(following.items.single.personaId, 'persona-2');
     expect(following.nextCursor, 'cursor-2');
     expect(followers.items.single.displayName, '目标分身');
   });
@@ -76,8 +76,8 @@ Object _responseFor(String operationId) {
   if (operationId == AppCloudOperationIds.userPersonaRelationshipFollowUser ||
       operationId == AppCloudOperationIds.userPersonaRelationshipUnfollowUser) {
     return <String, Object?>{
-      'actorSubAccountId': 'persona-1',
-      'targetSubAccountId': 'persona-2',
+      'actorPersonaId': 'persona-1',
+      'targetPersonaId': 'persona-2',
       'relationState': operationId.endsWith('FollowUser')
           ? 'following'
           : 'not_following',
@@ -88,8 +88,7 @@ Object _responseFor(String operationId) {
   return <String, Object?>{
     'items': <Object?>[
       <String, Object?>{
-        'subAccountId': 'persona-2',
-        'username': 'target',
+        'personaId': 'persona-2',
         'userHandle': 'target',
         'displayName': '目标分身',
         'avatarUrl': '',

@@ -280,7 +280,6 @@ func (c *SearchSignalConsumer) processMessage(ctx context.Context, msg rtredis.S
 		"normalizedQuery":  normalizedQuery,
 		"relatedTerms":     relatedTerms,
 		"engagedObjectIds": engagedObjectIDs,
-		"rankingVersion":   msg.Values["rankingVersion"],
 		"experimentBucket": msg.Values["experimentBucket"],
 		"resultCount":      resultCount,
 	}

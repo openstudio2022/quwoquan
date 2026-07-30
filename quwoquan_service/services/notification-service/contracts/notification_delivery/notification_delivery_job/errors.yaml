@@ -1,0 +1,78 @@
+domain: NOTIFICATION
+aggregate: NotificationDeliveryJob
+description: NotificationDeliveryJob 查询、来电展示确认与死信恢复的对象本地稳定错误语义。
+errors:
+- code: NOTIFICATION.USER.delivery_job_unauthorized
+  kind: USER
+  reason: unauthorized
+  http_status: 401
+  emitted_by:
+  - {surface: http, operations: [AckIncomingCallPresentation]}
+  recovery_action: surface
+  dart_const: deliveryJobUnauthorized
+  go_const: ErrDeliveryJobUnauthorized
+  user_message:
+    zh: 请先使用可信角色和设备身份
+    en: Sign in with a trusted persona and device
+- code: NOTIFICATION.USER.delivery_job_invalid_argument
+  kind: USER
+  reason: invalid_argument
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [AckIncomingCallPresentation, GetIncomingCallDeliveryTimeline, ListNotificationDeliveryJobDeadLetters, RecoverNotificationDeliveryJob]}
+  recovery_action: surface
+  dart_const: deliveryJobInvalidArgument
+  go_const: ErrDeliveryJobInvalidArgument
+  user_message:
+    zh: 通知投递作业请求参数有误
+    en: Invalid notification delivery job request
+- code: NOTIFICATION.USER.delivery_job_not_found
+  kind: USER
+  reason: not_found
+  http_status: 404
+  emitted_by:
+  - {surface: http, operations: [AckIncomingCallPresentation, RecoverNotificationDeliveryJob]}
+  recovery_action: refresh
+  dart_const: deliveryJobNotFound
+  go_const: ErrDeliveryJobNotFound
+  user_message:
+    zh: 投递记录不存在或已不在可处理状态
+    en: Notification delivery job was not found in an actionable state
+- code: NOTIFICATION.USER.delivery_job_idempotency_conflict
+  kind: USER
+  reason: idempotency_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [RecoverNotificationDeliveryJob]}
+  recovery_action: refresh
+  dart_const: deliveryJobIdempotencyConflict
+  go_const: ErrDeliveryJobIdempotencyConflict
+  user_message:
+    zh: 恢复请求与既有幂等记录冲突
+    en: Recovery request conflicts with the existing idempotency record
+- code: NOTIFICATION.SYSTEM.delivery_job_storage_read_failed
+  kind: SYSTEM
+  reason: storage_read_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [GetNotificationDeliveryJobMetrics, GetIncomingCallDeliveryTimeline, ListNotificationDeliveryJobDeadLetters]}
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: deliveryJobStorageReadFailed
+  go_const: ErrDeliveryJobStorageReadFailed
+  user_message:
+    zh: 读取通知投递作业失败，请稍后重试
+    en: Failed to read notification delivery jobs
+- code: NOTIFICATION.SYSTEM.delivery_job_storage_write_failed
+  kind: SYSTEM
+  reason: storage_write_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [AckIncomingCallPresentation, RecoverNotificationDeliveryJob]}
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: deliveryJobStorageWriteFailed
+  go_const: ErrDeliveryJobStorageWriteFailed
+  user_message:
+    zh: 更新通知投递作业失败，请稍后重试
+    en: Failed to update notification delivery job

@@ -359,6 +359,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         _videoDurationWindowTimer?.cancel();
       }
       _setMountedState(() {
+        _rememberPostLocalState(postId);
         _videoInnerIndex[postId] = episodeIndex;
         _videoInnerIdentity[postId] = episodeIdentity;
         if (durationStageChanged) {
@@ -432,12 +433,27 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   String _immersiveChannelId() =>
       WorksImmersiveViewerObservability.immersiveChannelId(widget.source);
 
-  String? _effectiveFeedRequestId() {
-    final explicit = widget.feedRequestId?.trim() ?? '';
-    if (explicit.isNotEmpty) {
-      return explicit;
+  ({String? feedRequestId, String? policyDigest}) _feedAttributionForPost(
+    PostBaseDto post,
+  ) {
+    if (_usesExternalFeed) {
+      return (
+        feedRequestId: widget.feedRequestId,
+        policyDigest: widget.policyDigest,
+      );
     }
-    return ref.read(feedSessionProvider.notifier).currentFeedRequestId;
+    final tabId = _isPremiumStreamSource
+        ? 'premium'
+        : _isVideoLikePost(post)
+        ? 'video'
+        : _isArticleLikePost(post) || _isTextOnlyMomentPost(post)
+        ? 'article'
+        : 'photo';
+    final feed = _readFeedState(tabId);
+    return (
+      feedRequestId: feed?.feedRequestId,
+      policyDigest: feed?.policyDigest,
+    );
   }
 
   int _attributedPosition(int viewerIndex) {
@@ -449,16 +465,17 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }
 
   void _trackImpressionForPost(PostBaseDto post, {int? position}) {
-    final feedSession = ref.read(feedSessionProvider.notifier);
+    _articleHydrationAdmission.retainOnly(post.id);
+    _rememberPostLocalState(post.id);
+    final feedAttribution = _feedAttributionForPost(post);
     final viewerPosition = position ?? _currentPage;
     final attributedPosition = _attributedPosition(viewerPosition);
     final attribution = _WorksTrackingAttribution(
       referralSource: widget.referralSource,
-      feedRequestId: _effectiveFeedRequestId(),
+      feedRequestId: feedAttribution.feedRequestId,
       position: attributedPosition,
       channelId: _immersiveChannelId(),
-      rankingVersion: feedSession.currentRankingVersion,
-      reasonVersion: feedSession.currentReasonVersion,
+      policyDigest: feedAttribution.policyDigest,
     );
     _activeTrackedPost = post;
     _activeTrackingAttribution = attribution;
@@ -471,8 +488,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       // 沉浸流逐条曝光携带页序位（B7）：与首页 feed 同口径的 position 归因。
       position: attribution.position,
       channelId: attribution.channelId,
-      rankingVersion: attribution.rankingVersion,
-      reasonVersion: attribution.reasonVersion,
+      policyDigest: attribution.policyDigest,
       recallPath: post.recallPath,
       contentVertical: post.contentVertical,
       supplySource: post.supplySource,
@@ -545,8 +561,24 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
   }) async {
     final raw = _effectiveRawPostById(post.id);
     if (_hasStructuredArticlePayload(raw) ||
-        _hydratingArticleIds.contains(post.id) ||
+        _articleHydrationAdmission.contains(post.id) ||
         (!force && _failedArticleHydrationIds.contains(post.id))) {
+      return;
+    }
+    await _articleHydrationAdmission.schedule(
+      postId: post.id,
+      task: (lease) =>
+          _performArticleDetailHydration(post, force: force, lease: lease),
+    );
+  }
+
+  Future<void> _performArticleDetailHydration(
+    PostBaseDto post, {
+    required bool force,
+    required WorksViewerArticleHydrationLease lease,
+  }) async {
+    final raw = _effectiveRawPostById(post.id);
+    if (lease.isCancelled || _hasStructuredArticlePayload(raw)) {
       return;
     }
     if (force) {
@@ -561,17 +593,27 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         errorCode: recovery.sourceCode,
       );
     }
-    _hydratingArticleIds.add(post.id);
+    _rememberPostLocalState(post.id);
     final startedAt = DateTime.now();
     try {
       final detail = await ref
           .read(workBrowserContentPostDetailReaderProvider)
-          .getPost(postId: post.id);
-      applyConfirmedInteractionPost(ref, detail.post);
-      if (!mounted) {
+          .getPost(postId: post.id, cancellation: lease.cancellation);
+      if (lease.isCancelled ||
+          !mounted ||
+          !_postStateWindow.contains(post.id)) {
+        _articleReaderObservability.trackHydration(
+          postId: post.id,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+          result: 'superseded',
+          trigger: 'get_post',
+          hadStructuredPayload: false,
+        );
         return;
       }
+      applyConfirmedInteractionPost(ref, detail.post);
       _setMountedState(() {
+        _rememberPostLocalState(post.id);
         _hydratedRawPostsById[post.id] = <String, Object?>{
           ...?raw,
           ...Map<String, Object?>.from(detail.mergedArticleWireMap),
@@ -602,14 +644,22 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         );
       }
     } catch (error) {
-      if (mounted) {
+      if (lease.isCancelled) {
+        _articleReaderObservability.trackHydration(
+          postId: post.id,
+          durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+          result: 'superseded',
+          trigger: 'get_post',
+          hadStructuredPayload: false,
+        );
+        return;
+      }
+      if (mounted && _postStateWindow.contains(post.id)) {
         _setMountedState(() {
+          _rememberPostLocalState(post.id);
           _failedArticleHydrationIds.add(post.id);
           _failedArticleHydrationErrorsById[post.id] = error;
         });
-      } else {
-        _failedArticleHydrationIds.add(post.id);
-        _failedArticleHydrationErrorsById[post.id] = error;
       }
       _articleReaderObservability.trackHydration(
         postId: post.id,
@@ -618,7 +668,15 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         trigger: 'get_post',
         hadStructuredPayload: false,
       );
-      final semantic = _articleHydrationErrorSemantic(post);
+      if (!mounted) {
+        return;
+      }
+      final semantic = runtime_error_display.runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      );
       final durationMs = DateTime.now().difference(startedAt).inMilliseconds;
       final recoveryAction = semantic.recoveryAction?.name ?? 'surface';
       final errorCode = semantic.sourceCode ?? 'CONTENT.SYSTEM.internal_error';
@@ -637,8 +695,6 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           errorCode: errorCode,
         );
       }
-    } finally {
-      _hydratingArticleIds.remove(post.id);
     }
   }
 
@@ -694,8 +750,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     PostBaseDto post,
     MediaPageFlipMotionEvent event,
   ) {
-    final feedSession = ref.read(feedSessionProvider.notifier);
-    final explicitFeedRequestId = widget.feedRequestId?.trim() ?? '';
+    final feedAttribution = _feedAttributionForPost(post);
     ref
         .read(contentBehaviorTrackerProvider)
         .trackWorksImagePageflipMotion(
@@ -707,13 +762,10 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           committed: event.committed,
           contentType: post.type,
           referralSource: widget.referralSource,
-          feedRequestId: explicitFeedRequestId.isNotEmpty
-              ? explicitFeedRequestId
-              : feedSession.currentFeedRequestId,
+          feedRequestId: feedAttribution.feedRequestId,
           position: _attributedPosition(_currentPage),
           channelId: _immersiveChannelId(),
-          rankingVersion: feedSession.currentRankingVersion,
-          reasonVersion: feedSession.currentReasonVersion,
+          policyDigest: feedAttribution.policyDigest,
           recallPath: post.recallPath,
           contentVertical: post.contentVertical,
           supplySource: post.supplySource,
@@ -750,8 +802,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       feedRequestId: attribution.feedRequestId,
       position: attribution.position,
       channelId: attribution.channelId,
-      rankingVersion: attribution.rankingVersion,
-      reasonVersion: attribution.reasonVersion,
+      policyDigest: attribution.policyDigest,
       recallPath: post.recallPath,
       contentVertical: post.contentVertical,
       supplySource: post.supplySource,
@@ -765,8 +816,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         feedRequestId: attribution.feedRequestId,
         position: attribution.position,
         channelId: attribution.channelId,
-        rankingVersion: attribution.rankingVersion,
-        reasonVersion: attribution.reasonVersion,
+        policyDigest: attribution.policyDigest,
         recallPath: post.recallPath,
         contentVertical: post.contentVertical,
         supplySource: post.supplySource,

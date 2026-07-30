@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -77,10 +78,19 @@ def main() -> int:
     parser.add_argument("--stack-report", default=str(DEFAULT_STACK_REPORT))
     parser.add_argument("--t3-report", default=str(GAMMA_RUN_ROOT / "t3_report.json"))
     parser.add_argument("--t4-report", default=str(GAMMA_RUN_ROOT / "t4_report.json"))
-    parser.add_argument("--config-version", default="local-gamma-v1")
+    parser.add_argument(
+        "--configuration-digest",
+        default=os.environ.get("LOCAL_GAMMA_CONFIG_VERSION", ""),
+    )
     parser.add_argument("--image-version", default="0.0.1")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", args.configuration_digest) is None:
+        print(
+            "[local-gamma] GATE_BLOCK: --configuration-digest must be the "
+            "canonical sha256 runtime configuration digest"
+        )
+        return 2
     static_issues = static_contract_issues()
     if static_issues:
         for issue in static_issues:
@@ -92,6 +102,7 @@ def main() -> int:
             "status": "passed",
             "dryRun": True,
             "commitSha": git_sha(),
+            "configurationDigest": args.configuration_digest,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma/validation_suites.json",
             "serviceMode": "single-stack",
@@ -124,7 +135,7 @@ def main() -> int:
             "status": overall,
             "dryRun": False,
             "commitSha": git_sha(),
-            "configVersion": args.config_version,
+            "configurationDigest": args.configuration_digest,
             "imageVersion": args.image_version,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma/validation_suites.json",

@@ -1,0 +1,12 @@
+{
+  "label": "新北",
+  "labelEn": "New Taipei",
+  "description": "环台北的山海腹地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

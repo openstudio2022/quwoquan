@@ -1,548 +1,977 @@
 description: 共享主页主档
 fields:
-- name: homepageId
-  source: _id
-  type: ObjectId
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  source: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: Homepage 聚合乐观并发版本；仅供命令处理和 Ops 审计使用，不进入公开响应
-  role: authoritative_state
-- name: title
-  source: title
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: subtitle
-  source: subtitle
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: homepageType
-  source: homepageType
-  type: enum
-  enum_ref: HomepageType
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: canonicalEntityId
-  source: canonicalEntityId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  recommend_feature: true
-  description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键，不进入公开响应
-  role: authoritative_state
-- name: lookupAliases
-  source: lookupAliases
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: 存量 homepageId、canonicalEntityId、sourceEntityRef 与受控旧链接的精确查找别名；禁止运行时模糊扫描
-  role: authoritative_state
-- name: objectPageTemplate
-  source: objectPageTemplate
-  type: string
-  constraints:
-  - NOT_NULL
-  - DEFAULT_STANDARD
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: 对象主页展示模板，如 standard、campus、travel_photo；仅用于服务端投影与运营配置
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: HomepageStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  role: authoritative_state
-- name: sourceType
-  source: sourceType
-  type: enum
-  enum_ref: HomepageSourceType
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: sourceOwner
-  source: sourceOwner
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: 写入主页投影的受控来源所有者；仅用于 release sync 的归属隔离
-  role: authoritative_state
-- name: sourceEntityRef
-  source: sourceEntityRef
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: 来源系统内的稳定实体引用；同 sourceOwner 下唯一定位导入主页
-  role: authoritative_state
-- name: sourceReleaseId
-  source: sourceReleaseId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: 最近一次写入该主页投影的不可变数据发布批次
-  role: authoritative_state
-- name: claimStatus
-  source: claimStatus
-  type: enum
-  enum_ref: HomepageClaimStatus
-  constraints:
-  - NOT_NULL
-  - DEFAULT_UNCLAIMED
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  role: authoritative_state
-- name: categoryTags
-  source: categoryTags
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  tag_ref: true
-  description: 路径制 tagRef 列表（对象类目锚点）；真相源 control_plane/governance/taxonomy（Entity/Topic 分组）
-  role: authoritative_state
-- name: coverUrl
-  source: coverUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: address
-  source: address
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: city
-  source: city
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: location
-  source: location
-  type: GeoPoint
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: ownerUserId
-  source: ownerUserId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: ownerSubAccountId
-  source: ownerSubAccountId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 已认领主页的可私信公开主体 ID，端侧私信复用 user→user direct 会话
-  role: authoritative_state
-  reference: true
-- name: viewerFollowsHomepage
-  source: viewerFollowsHomepage
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前 viewer 是否关注该实体主页；为空 viewer 时恒为 false。真相源为 user.SubjectFollow，本字段由 SubjectFollowStateChanged
-    事件驱动的本地投影提供（最终一致）
-  role: projection
-- name: followerCount
-  source: followerCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 关注该实体主页的人数；实体页统计前台展示为「关注」，不作为数据面板主视觉（禁止使用「关注者」）
-  role: projection
-- name: verified
-  source: verified
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 实体主页是否官方认证（端侧头部认证标识），缺省 false 不展示
-  role: authoritative_state
-- name: establishedYear
-  source: establishedYear
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 成立年份（基础信息行展示），缺省不展示
-  role: authoritative_state
-- name: averageRating
-  source: averageRating
-  type: float64
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: ratingCount
-  source: ratingCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: reviewSummary
-  source: reviewSummary
-  type: HomepageReviewSummaryView
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: contentPreview
-  source: contentPreview
-  type: '[]HomepageContentPreview'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: questionPreview
-  source: questionPreview
-  type: '[]HomepageQuestionPreview'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: relatedGroups
-  source: relatedGroups
-  type: '[]HomepageRelatedGroupSummary'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: relationEdges
-  source: relationEdges
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 对象主页关系边快照，用于交集、推荐和小趣解释
-  role: projection
-- name: assistantContext
-  source: assistantContext
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 小趣对象页上下文快照，由后端投影生成，端侧只读
-  role: projection
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: publishedAt
-  source: publishedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: offlineAt
-  source: offlineAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: homepageId
+    source: _id
+    type: ObjectId
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    source: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: Homepage 聚合乐观并发版本；仅供命令处理和 Ops 审计使用，不进入公开响应
+    role: authoritative_state
+  - name: title
+    source: title
+    type: string
+    max_utf8_bytes: 512
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: subtitle
+    source: subtitle
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: homepageType
+    source: homepageType
+    type: enum
+    enum_ref: HomepageType
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: canonicalEntityId
+    source: canonicalEntityId
+    type: string
+    max_utf8_bytes: 256
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    recommend_feature: true
+    description: 数据工程实体归一 ID；Homepage 与离线实体页的单一对象键，不进入公开响应
+    role: authoritative_state
+  - name: lookupAliases
+    source: lookupAliases
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 存量 homepageId、canonicalEntityId、sourceEntityRef 与受控旧链接的精确查找别名；禁止运行时模糊扫描
+    role: authoritative_state
+  - name: objectPageTemplate
+    source: objectPageTemplate
+    type: string
+    constraints:
+      - NOT_NULL
+      - DEFAULT_STANDARD
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 对象主页展示模板，如 standard、campus、travel_photo；仅用于服务端投影与运营配置
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: HomepageStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    role: authoritative_state
+  - name: sourceType
+    source: sourceType
+    type: enum
+    enum_ref: HomepageSourceType
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: sourceOwner
+    source: sourceOwner
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 写入主页投影的受控来源所有者；仅用于 release sync 的归属隔离
+    role: authoritative_state
+  - name: sourceEntityRef
+    source: sourceEntityRef
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 来源系统内的稳定实体引用；同 sourceOwner 下唯一定位导入主页
+    role: authoritative_state
+  - name: sourceReleaseId
+    source: sourceReleaseId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    description: 最近一次写入该主页投影的不可变数据发布批次
+    role: authoritative_state
+  - name: claimStatus
+    source: claimStatus
+    type: enum
+    enum_ref: HomepageClaimStatus
+    constraints:
+      - NOT_NULL
+      - DEFAULT_UNCLAIMED
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    role: authoritative_state
+  - name: categoryTags
+    source: categoryTags
+    type: '[]string'
+    max_items: 20
+    item_max_utf8_bytes: 256
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    tag_ref: true
+    description: 路径制 tagRef 列表（对象类目锚点）；真相源 control_plane/governance/taxonomy（Entity/Topic 分组）
+    role: authoritative_state
+  - name: coverUrl
+    source: coverUrl
+    type: string
+    max_utf8_bytes: 4096
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: address
+    source: address
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: city
+    source: city
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: location
+    source: location
+    type: GeoPoint
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: ownerUserId
+    source: ownerUserId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: ownerPersonaId
+    source: ownerPersonaId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 已认领主页的可私信公开主体 ID，端侧私信复用 user→user direct 会话
+    role: authoritative_state
+    reference: true
+  - name: verified
+    source: verified
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 实体主页是否官方认证（端侧头部认证标识），缺省 false 不展示
+    role: authoritative_state
+  - name: establishedYear
+    source: establishedYear
+    type: int
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 成立年份（基础信息行展示），缺省不展示
+    role: authoritative_state
+  - name: structuredFacts
+    source: structuredFacts
+    type: HomepageStructuredFactsView
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 机器可读的实体客观事实（营业时间/票价/建议时长/最佳季节/海拔/官网）。每个已填字段必须在 factSources 中有对应溯源条目，否则该字段不得投影；正文底稿仍只允许三百科闭集
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: publishedAt
+    source: publishedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: offlineAt
+    source: offlineAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 types:
+  IntakeHomepageCandidateCommand:
+    fields:
+      - name: title
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: subtitle
+        type: string
+        constraints:
+          - NULLABLE
+      - name: homepageType
+        type: enum
+        enum_ref: HomepageType
+        constraints:
+          - NOT_NULL
+      - name: canonicalEntityId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: objectPageTemplate
+        type: string
+        constraints:
+          - NULLABLE
+      - name: categoryTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+      - name: coverUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: address
+        type: string
+        constraints:
+          - NULLABLE
+      - name: city
+        type: string
+        constraints:
+          - NULLABLE
+      - name: location
+        type: GeoPoint
+        constraints:
+          - NULLABLE
+      - name: introductionMarkdown
+        type: string
+        constraints:
+          - NULLABLE
+      - name: introductionAssets
+        type: '[]HomepageCandidateIntroductionAssetInput'
+        constraints:
+          - NULLABLE
+  HomepageCandidateIntroductionAssetInput:
+    fields:
+      - name: assetId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: url
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: caption
+        type: string
+        constraints:
+          - NULLABLE
+      - name: role
+        type: string
+        constraints:
+          - NULLABLE
   HomepageShellView:
     description: 共享主页阅读壳层视图
     fields:
-    - name: homepage
-      source: homepage
-      type: object
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: reviewSummary
-      source: reviewSummary
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: contentPreview
-      source: contentPreview
-      type: '[]object'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: questionPreview
-      source: questionPreview
-      type: '[]object'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: relatedGroups
-      source: relatedGroups
-      type: '[]object'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: homepage
+        source: homepage
+        type: HomepageDetailView
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: reviewSummary
+        source: reviewSummary
+        type: HomepageReviewSummaryData
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: contentPreview
+        source: contentPreview
+        type: '[]HomepageContentPreview'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: questionPreview
+        source: questionPreview
+        type: '[]HomepageQuestionPreview'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: relatedGroups
+        source: relatedGroups
+        type: '[]HomepageRelatedGroupSummary'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   HomepageReviewSummaryView:
     description: 共享主页评分与口碑摘要
     fields:
-    - name: averageRating
-      source: averageRating
-      type: float64
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: ratingCount
-      source: ratingCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: highlightTags
-      source: highlightTags
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      tag_ref: true
-      description: 路径制 tagRef 列表（对象亮点锚点，从真实 review tagRefs 聚合）；真相源 control_plane/governance/taxonomy
+      - name: averageRating
+        source: averageRating
+        type: float64
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: ratingCount
+        source: ratingCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: highlightTags
+        source: highlightTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        tag_ref: true
+        description: 路径制 tagRef 列表（对象亮点锚点，从真实 review tagRefs 聚合）；真相源 control_plane/governance/taxonomy
+  HomepageStructuredFactsView:
+    description: |
+      实体客观事实的机器可读投影。keyFacts 是 Markdown 拼接，无法被筛选、交集或推荐消费；
+      这里的每个字段都是单值可核验事实，可直接进入筛选与「同季节窗口到访」这类交集。
+      与 keyFacts 的关系是取代而非并行：同一事实不得两处各写一份。
+    fields:
+      - name: openingHours
+        source: openingHours
+        type: '[]HomepageOpeningHoursEntry'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 按适用期与星期声明的营业/开放时段；跨零点用 endMinuteOfDay 大于 1440 表达
+      - name: ticketPriceRange
+        source: ticketPriceRange
+        type: HomepageTicketPriceRange
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 票价区间（分为单位，避免浮点累计误差）；免费实体用 minAmountCents=0 且 free=true
+      - name: recommendedDurationMinutes
+        source: recommendedDurationMinutes
+        type: HomepageDurationRange
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 建议游玩时长区间（分钟）；行程规划与「半日/一日」筛选的唯一来源
+      - name: bestSeasonTagRefs
+        source: bestSeasonTagRefs
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        tag_ref: true
+        description: 最佳季节，引用 Topic/时间/四季 与 Topic/旅行/季节窗口 的 tagRef；不写自由文本，保证可与内容标签求交
+      - name: altitudeMeters
+        source: altitudeMeters
+        type: int
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 海拔（米）。高原实体的体感与风险提示依赖它，靠 keyFacts 文本无法判断
+      - name: officialWebsite
+        source: officialWebsite
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 官方站点 URL，必须为 https 绝对地址
+      - name: factSources
+        source: factSources
+        type: '[]HomepageFactSource'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 逐字段溯源。任何已填字段缺少对应条目即为契约违约，投影必须丢弃该字段而不是无证据展示
+  HomepageOpeningHoursEntry:
+    description: 单条开放时段。同一实体可有多条以表达淡旺季与不同星期。
+    fields:
+      - name: appliesFrom
+        source: appliesFrom
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 适用期起始，MM-DD；为空表示全年适用
+      - name: appliesTo
+        source: appliesTo
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 适用期结束，MM-DD；为空表示全年适用
+      - name: weekdays
+        source: weekdays
+        type: '[]int'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 适用星期，1=周一..7=周日；为空表示每天
+      - name: openMinuteOfDay
+        source: openMinuteOfDay
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 开放起始，自当日零点起的分钟数
+      - name: closeMinuteOfDay
+        source: closeMinuteOfDay
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 开放结束，自当日零点起的分钟数；跨零点场次允许大于 1440
+      - name: closed
+        source: closed
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 该适用期/星期为闭馆；闭馆条目忽略时间字段
+  HomepageTicketPriceRange:
+    description: 票价区间。金额用分，币种显式声明，避免跨境实体的隐式人民币假设。
+    fields:
+      - name: currency
+        source: currency
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: ISO 4217 三字母币种
+      - name: minAmountCents
+        source: minAmountCents
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: maxAmountCents
+        source: maxAmountCents
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: free
+        source: free
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 免费开放。与 minAmountCents=0 同时成立，供端侧直接渲染「免费」而不做金额判断
+  HomepageDurationRange:
+    description: 建议时长区间（分钟）。
+    fields:
+      - name: minMinutes
+        source: minMinutes
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: maxMinutes
+        source: maxMinutes
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  HomepageFactSource:
+    description: |
+      单个结构化事实字段的证据。信源政策按用途分轨：正文底稿锁在三百科闭集，
+      结构化事实额外允许官网与政府/文旅门户，因为这些字段由官方第一手发布且百科最不及时。
+      放开的代价是必须逐字段留证，所以本类型是 structuredFacts 的准入条件而非附属说明。
+    fields:
+      - name: field
+        source: field
+        type: enum
+        enum_ref: HomepageStructuredFactField
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 该证据支撑的 structuredFacts 字段名
+      - name: sourceId
+        source: sourceId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: content_source_registry 的 sourceId
+      - name: sourceClass
+        source: sourceClass
+        type: enum
+        enum_ref: HomepageStructuredFactSourceClass
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 受审计来源类别，必须落在 structuredFactsPolicy.allowedSourceClasses 内
+      - name: sourceUrl
+        source: sourceUrl
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 抓取到该事实的 https 页面地址
+      - name: observedAt
+        source: observedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 观测时间。营业时间与票价会过期，端侧据此决定是否提示「以官方为准」
+      - name: confidence
+        source: confidence
+        type: float64
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 0 到 1 的置信度
+      - name: conflictsWithSourceIds
+        source: conflictsWithSourceIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 与本条冲突的其他 sourceId。冲突必须显式记录，禁止静默取其一
   HomepageRelatedGroupSummaryView:
     description: 共享主页下相关群组摘要
     fields:
-    - name: groups
-      source: groups
-      type: '[]HomepageRelatedGroupSummary'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: groups
+        source: groups
+        type: '[]HomepageRelatedGroupSummary'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   HomepageFollowerProjection:
     description: user.SubjectFollow 事实在 entity 域的可重建关注投影；只服务 viewer 态与 followerCount 聚合
     fields:
-    - name: homepageId
-      source: homepageId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-    - name: personaId
-      source: personaId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-    - name: following
-      source: following
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: sourceVersion
-      source: sourceVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: homepageId
+        source: homepageId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: following
+        source: following
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: sourceVersion
+        source: sourceVersion
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+  HomepageObjectPageBundleQuery:
+    fields:
+      - name: homepageId
+        type: string
+        client_dart_type: String
+      - name: referralSource
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: feedRequestId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: recommendationTraceId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: experimentBucket
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: rolloutCohort
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+  UpdateClaimedHomepageBasicsCommand:
+    fields:
+      - name: homepageId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: title
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: subtitle
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: categoryTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+        client_normalization: trim_drop_empty
+      - name: coverUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: address
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: city
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: location
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: HomepageGeoPointInput?
+        client_wire: toMap
+  HomepageSearchQuery:
+    fields:
+      - name: query
+        type: string
+        client_dart_type: String
+      - name: homepageType
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: city
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: status
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  HomepageByIdQuery:
+    fields:
+      - name: homepageId
+        type: string
+        client_dart_type: String
+  SuggestHomepageCandidateCommand:
+    fields:
+      - name: title
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: homepageType
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: subtitle
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: categoryTags
+        type: '[]string'
+        client_dart_type: List<String>
+        client_default: const <String>[]
+        client_normalization: trim_drop_empty
+        client_omit_empty: true
+      - name: coverUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: address
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: city
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: sourcePlaceId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: location
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: HomepageGeoPointInput?
+        client_wire: toMap

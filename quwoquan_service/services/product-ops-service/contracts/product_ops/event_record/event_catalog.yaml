@@ -109,6 +109,12 @@ extension_fields:
   failureKind:
     type: string
     max_length: 64
+  copyKey:
+    type: string
+    max_length: 128
+  feedbackSurface:
+    type: string
+    max_length: 32
   attemptIndex:
     type: int
     minimum: 0
@@ -203,6 +209,12 @@ extension_fields:
     enum:
     - controller_command_completion
     - native_settled
+    - source_switch_native_settled
+    - source_switch_position_readback_native_unsupported
+    - source_switch_native_settle_timeout
+    - source_switch_settle_unsupported
+    - source_switch_command_failed
+    - source_switch_superseded
   declaredDurationMs:
     type: int
     minimum: 0
@@ -290,7 +302,7 @@ extension_fields:
     minimum: 1
   jankyFrames:
     type: int
-    minimum: 1
+    minimum: 0
   worstFrameMs:
     type: int
     minimum: 0
@@ -556,6 +568,8 @@ events:
   - failReasonCode
   - failureKind
   - recoveryAction
+  - copyKey
+  - feedbackSurface
   - durationMs
   - attemptIndex
   - requestId

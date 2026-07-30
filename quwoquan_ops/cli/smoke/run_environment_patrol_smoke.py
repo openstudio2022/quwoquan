@@ -8,6 +8,7 @@ import atexit
 import base64
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -85,6 +86,49 @@ ACCOUNT_CLOSURE_TARGET = (
     "test/user_acceptance/patrol/settings/"
     "account_closure_journey__user_acceptance_test.dart"
 )
+RUNTIME_RECOVERY_TARGET = (
+    "test/user_acceptance/patrol/environment/"
+    "runtime_recovery_journey__user_acceptance_test.dart"
+)
+RUNTIME_RECOVERY_EVIDENCE_PREFIX = "QWQ_RUNTIME_RECOVERY_EVIDENCE "
+RUNTIME_RECOVERY_EVIDENCE_FIELDS = frozenset(
+    {
+        "authenticatedBefore",
+        "authenticatedAfter",
+        "sameOwner",
+        "samePersona",
+        "homeRestored",
+        "secondFaultNoReentry",
+    }
+)
+ACCOUNT_ENFORCEMENT_TARGETS = {
+    "suspended": (
+        "test/user_acceptance/patrol/user/"
+        "account_enforcement_suspended__user_acceptance_test.dart"
+    ),
+    "restored": (
+        "test/user_acceptance/patrol/user/"
+        "account_enforcement_restored__user_acceptance_test.dart"
+    ),
+}
+ACCOUNT_ENFORCEMENT_EVIDENCE_PREFIX = "QWQ_ACCOUNT_ENFORCEMENT_EVIDENCE "
+ACCOUNT_ENFORCEMENT_CANDIDATE_DIGEST_PATTERN = re.compile(
+    r"^sha256:[0-9a-f]{64}$"
+)
+ACCOUNT_ENFORCEMENT_EXPECTED_EVIDENCE: dict[str, dict[str, Any]] = {
+    "suspended": {
+        "phase": "suspended",
+        "remoteCode": "USER.AUTH.account_suspended",
+        "sessionCredentialsCleared": True,
+        "restrictionSurfaceVisible": True,
+    },
+    "restored": {
+        "phase": "restored",
+        "remoteProfileRead": True,
+        "sessionAuthenticated": True,
+        "safeHomeVisible": True,
+    },
+}
 IOS_SDK_VERSION_PATTERN = re.compile(r"iOS[- ](\d+)(?:[-._](\d+))?")
 IOS_RUNTIME_VERSION_PATTERN = re.compile(r"^\d+\.\d+(?:\.\d+)?$")
 XCODE_IOS_SIMULATOR_SDK_PATTERN = re.compile(
@@ -102,6 +146,11 @@ XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "X
 PATROL_IOS_PRODUCTS_DIR = APP_DIR / "build" / "ios_integ" / "Build" / "Products"
 LOCAL_TARGETS = {"alpha-local", "beta-local", "gamma-local", "prod-sim"}
 LOCAL_ENVIRONMENT_ALIAS_TARGETS = {
+    "alpha": "alpha-local",
+    "beta": "beta-local",
+    "gamma": "gamma-local",
+    "prod": "prod-hosted",
+    "local-alpha": "alpha-local",
     "local-beta": "beta-local",
     "local-gamma": "gamma-local",
     "local-prod-sim": "prod-sim",
@@ -215,7 +264,7 @@ def _uses_public_video_canary_anonymous_session(
         args.test_auth_token,
         args.test_refresh_token,
         _resolved_owner_id(args),
-        _resolved_sub_account_id(args),
+        _resolved_persona_id(args),
     )
     return not any(str(value).strip() for value in supplied)
 
@@ -235,6 +284,40 @@ def _requires_video_playback_canary(args: argparse.Namespace) -> bool:
 def _requires_account_closure(args: argparse.Namespace) -> bool:
     target = str(getattr(args, "target", "") or "").replace("\\", "/")
     return target.endswith(ACCOUNT_CLOSURE_TARGET)
+
+
+def _is_runtime_recovery_target(args: argparse.Namespace) -> bool:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return target.endswith(RUNTIME_RECOVERY_TARGET)
+
+
+def _account_enforcement_phase(args: argparse.Namespace) -> str:
+    target = str(getattr(args, "target", "") or "").replace("\\", "/")
+    return next(
+        (
+            phase
+            for phase, expected_target in ACCOUNT_ENFORCEMENT_TARGETS.items()
+            if target.endswith(expected_target)
+        ),
+        "",
+    )
+
+
+def _is_account_enforcement_target(args: argparse.Namespace) -> bool:
+    return bool(_account_enforcement_phase(args))
+
+
+def _account_enforcement_subject_digest(args: argparse.Namespace) -> str:
+    if not _is_account_enforcement_target(args):
+        return ""
+    owner_id = _resolved_owner_id(args).strip()
+    if not owner_id:
+        return ""
+    return f"sha256:{hashlib.sha256(owner_id.encode('utf-8')).hexdigest()}"
+
+
+def _uses_persisted_device_session(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "persisted_device_session", False))
 
 
 def _validate_account_closure_execution(
@@ -266,6 +349,8 @@ def _uses_runtime_anonymous_session(args: argparse.Namespace) -> bool:
     return (
         args.env_name.strip().lower() in RUNTIME_ANONYMOUS_SESSION_MODES
         and not _uses_public_video_canary_anonymous_session(args)
+        and not _uses_persisted_device_session(args)
+        and not _is_account_enforcement_target(args)
     )
 
 
@@ -359,8 +444,8 @@ def _resolved_owner_id(args: argparse.Namespace) -> str:
     return str(getattr(args, "current_owner_id", "") or "").strip()
 
 
-def _resolved_sub_account_id(args: argparse.Namespace) -> str:
-    return str(getattr(args, "current_sub_account_id", "") or "").strip()
+def _resolved_persona_id(args: argparse.Namespace) -> str:
+    return str(getattr(args, "current_persona_id", "") or "").strip()
 
 
 def _validate_video_playback_canary_work_id(
@@ -453,7 +538,7 @@ def _prepare_android_local_port_reverse(
     args: argparse.Namespace,
     device: dict[str, Any],
 ) -> dict[str, Any]:
-    """让 Android 设备上的 *.localhost TLS authority 回到宿主本地 target。"""
+    """反向映射 canonical HTTPS/WSS authority 使用的本地 target 端口。"""
 
     target_platform = str(device.get("targetPlatform", "")).strip().lower()
     if not (
@@ -691,6 +776,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--runtime-env", default="")
     parser.add_argument("--api-contract-env", default="")
+    parser.add_argument(
+        "--candidate-digest",
+        default=os.environ.get(
+            "QWQ_ACCOUNT_ENFORCEMENT_GAMMA_CANDIDATE_DIGEST", ""
+        ).strip(),
+        help=(
+            "Immutable candidate digest required by the Gamma account-enforcement "
+            "physical-device UAT."
+        ),
+    )
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--product-ops-base-url", default="")
     parser.add_argument("--media-avatar-base-url", default="")
@@ -726,6 +821,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run a login Provider journey without preloading an authenticated session.",
     )
+    parser.add_argument(
+        "--persisted-device-session",
+        action="store_true",
+        help=(
+            "Use the production auth restore path on a pre-provisioned physical "
+            "device; valid only for the runtime-recovery UAT target."
+        ),
+    )
     parser.add_argument("--test-auth-token", default=os.environ.get("TEST_AUTH_TOKEN", "").strip())
     parser.add_argument(
         "--test-refresh-token",
@@ -741,8 +844,8 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("APP_CURRENT_OWNER_ID", "").strip(),
     )
     parser.add_argument(
-        "--current-sub-account-id",
-        default=os.environ.get("APP_CURRENT_SUB_ACCOUNT_ID", "").strip(),
+        "--current-persona-id",
+        default=os.environ.get("APP_CURRENT_PERSONA_ID", "").strip(),
     )
     parser.add_argument("--platform", choices=("android", "ios", "all"), default="all")
     parser.add_argument("--device-id", action="append", default=[])
@@ -804,8 +907,8 @@ def _redact_command(command: list[str]) -> list[str]:
         "--dart-define=APP_CURRENT_OWNER_ID=": (
             "--dart-define=APP_CURRENT_OWNER_ID=<redacted>"
         ),
-        "--dart-define=APP_CURRENT_SUB_ACCOUNT_ID=": (
-            "--dart-define=APP_CURRENT_SUB_ACCOUNT_ID=<redacted>"
+        "--dart-define=APP_CURRENT_PERSONA_ID=": (
+            "--dart-define=APP_CURRENT_PERSONA_ID=<redacted>"
         ),
         "--dart-define=APP_CURRENT_USER_ID=": (
             "--dart-define=APP_CURRENT_USER_ID=<redacted>"
@@ -848,6 +951,103 @@ def summarize_output(output: str, *, max_lines: int = 120) -> str:
     )
 
 
+def _read_runtime_recovery_evidence(path: Path) -> dict[str, bool]:
+    if not path.is_file():
+        return {}
+    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
+        marker = line.find(RUNTIME_RECOVERY_EVIDENCE_PREFIX)
+        if marker < 0:
+            continue
+        encoded = line[marker + len(RUNTIME_RECOVERY_EVIDENCE_PREFIX) :].strip()
+        try:
+            payload = json.loads(encoded)
+        except json.JSONDecodeError:
+            return {}
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != RUNTIME_RECOVERY_EVIDENCE_FIELDS
+            or any(not isinstance(value, bool) for value in payload.values())
+        ):
+            return {}
+        return {str(key): bool(value) for key, value in payload.items()}
+    return {}
+
+
+def _read_account_enforcement_evidence(
+    path: Path,
+    *,
+    phase: str,
+    candidate_digest: str,
+) -> dict[str, Any]:
+    if not path.is_file() or phase not in ACCOUNT_ENFORCEMENT_EXPECTED_EVIDENCE:
+        return {}
+    expected = {
+        **ACCOUNT_ENFORCEMENT_EXPECTED_EVIDENCE[phase],
+        "candidateDigest": candidate_digest,
+    }
+    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
+        marker = line.find(ACCOUNT_ENFORCEMENT_EVIDENCE_PREFIX)
+        if marker < 0:
+            continue
+        encoded = line[
+            marker + len(ACCOUNT_ENFORCEMENT_EVIDENCE_PREFIX) :
+        ].strip()
+        try:
+            payload = json.loads(encoded)
+        except json.JSONDecodeError:
+            return {}
+        if not isinstance(payload, dict) or payload != expected:
+            return {}
+        return payload
+    return {}
+
+
+def _validate_runtime_recovery_device_matrix(
+    args: argparse.Namespace,
+    devices: list[dict[str, Any]],
+) -> None:
+    if not _is_runtime_recovery_target(args) or args.dry_run:
+        return
+    physical_android = any(
+        str(device.get("targetPlatform") or "").lower().startswith("android")
+        and not bool(device.get("emulator"))
+        for device in devices
+    )
+    physical_ios = any(
+        str(device.get("targetPlatform") or "").lower() == "ios"
+        and not bool(device.get("emulator"))
+        for device in devices
+    )
+    if not physical_android or not physical_ios:
+        raise RuntimeError(
+            "GATE_BLOCK: runtime recovery UAT requires one physical Android "
+            "device and one physical iPhone in the same CaseResult matrix"
+        )
+
+
+def _validate_account_enforcement_device_matrix(
+    args: argparse.Namespace,
+    devices: list[dict[str, Any]],
+) -> None:
+    if not _is_account_enforcement_target(args) or args.dry_run:
+        return
+    physical_android = any(
+        str(device.get("targetPlatform") or "").lower().startswith("android")
+        and not bool(device.get("emulator"))
+        for device in devices
+    )
+    physical_ios = any(
+        str(device.get("targetPlatform") or "").lower() == "ios"
+        and not bool(device.get("emulator"))
+        for device in devices
+    )
+    if not physical_android or not physical_ios:
+        raise RuntimeError(
+            "GATE_BLOCK: account-enforcement Gamma UAT requires one physical "
+            "Android device and one physical iPhone in the same CaseResult matrix"
+        )
+
+
 def patrol_test_execution_summary(output: str) -> dict[str, Any]:
     """Prefer XCTest's executed-test record over Patrol's known zero summary."""
 
@@ -884,12 +1084,12 @@ def load_remote_api_evidence(path_value: str) -> dict[str, Any]:
             "remote API evidence report is unreadable or not a search Remote UAT report"
         ) from exc
     if (
-        payload.get("schema") != "search-remote-api-uat-report-v1"
+        payload.get("schema") != "search-remote-api-uat-report"
         or payload.get("status") != "passed"
-        or evidence.get("schema") != "search-remote-api-evidence-v1"
+        or evidence.get("schema") != "search-remote-api-evidence"
         or evidence.get("status") != "passed"
         or not str(evidence.get("searchRequestId") or "").strip()
-        or tag_filter.get("schema") != "search-tag-filter-remote-evidence-v1"
+        or tag_filter.get("schema") != "search-tag-filter-remote-evidence"
         or tag_filter.get("status") != "passed"
         or tag_filter.get("positiveHitCount") != 1
         or tag_filter.get("negativeHitCount") != 0
@@ -1293,12 +1493,36 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
 def _prepare_execution_session(args: argparse.Namespace) -> str:
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     _validate_account_closure_execution(args, runtime_env)
+    if _uses_persisted_device_session(args):
+        if not _is_runtime_recovery_target(args):
+            raise ValueError(
+                "--persisted-device-session is only valid for runtime recovery UAT"
+            )
+        supplied = (
+            args.test_auth_token,
+            args.test_refresh_token,
+            _resolved_owner_id(args),
+            _resolved_persona_id(args),
+        )
+        if any(str(value).strip() for value in supplied):
+            raise ValueError(
+                "persisted-device-session UAT forbids injected auth tokens or actor identities"
+            )
+        if runtime_env not in {"beta", "gamma"}:
+            raise ValueError(
+                "runtime recovery persisted-session UAT only accepts beta or gamma"
+            )
+        return "persisted_device_session"
+    if _is_runtime_recovery_target(args):
+        raise ValueError(
+            "runtime recovery UAT requires --persisted-device-session"
+        )
     if bool(getattr(args, "unauthenticated_auth_entry", False)):
         supplied = (
             args.test_auth_token,
             args.test_refresh_token,
             _resolved_owner_id(args),
-            _resolved_sub_account_id(args),
+            _resolved_persona_id(args),
         )
         if any(str(value).strip() for value in supplied):
             raise ValueError(
@@ -1312,7 +1536,7 @@ def _prepare_execution_session(args: argparse.Namespace) -> str:
             "test_auth_token": args.test_auth_token,
             "test_refresh_token": args.test_refresh_token,
             "current_owner_id": _resolved_owner_id(args),
-            "current_sub_account_id": _resolved_sub_account_id(args),
+            "current_persona_id": _resolved_persona_id(args),
         }
         if any(str(value).strip() for value in supplied.values()):
             raise ValueError(
@@ -1333,8 +1557,8 @@ def _create_patrol_secret_define_file(args: argparse.Namespace) -> Path:
                 "TEST_AUTH_TOKEN": args.test_auth_token.strip(),
                 "TEST_REFRESH_TOKEN": args.test_refresh_token.strip(),
                 "APP_CURRENT_OWNER_ID": _resolved_owner_id(args),
-                "APP_CURRENT_SUB_ACCOUNT_ID": _resolved_sub_account_id(args),
-                "APP_CURRENT_USER_ID": _resolved_sub_account_id(args),
+                "APP_CURRENT_PERSONA_ID": _resolved_persona_id(args),
+                "APP_CURRENT_USER_ID": _resolved_persona_id(args),
             }
             provider_define_keys = tuple(
                 key.strip()
@@ -1435,6 +1659,11 @@ def patrol_command(
         command.append(
             "--dart-define=QWQ_ACCOUNT_CLOSURE_DISPOSABLE_ACK=true"
         )
+    if _is_account_enforcement_target(args):
+        command.append(
+            "--dart-define=QWQ_ACCEPTANCE_CANDIDATE_DIGEST="
+            + str(getattr(args, "candidate_digest", "") or "").strip()
+        )
     if _uses_public_video_canary_anonymous_session(args):
         command.append(
             "--dart-define=QWQ_PATROL_SESSION_MODE="
@@ -1445,6 +1674,8 @@ def patrol_command(
             "--dart-define=QWQ_PATROL_SESSION_MODE="
             f"{_runtime_anonymous_session_mode(args)}"
         )
+    elif _uses_persisted_device_session(args):
+        pass
     else:
         if dart_define_file is None:
             raise ValueError("remote Patrol session requires a private Dart define file")
@@ -1558,14 +1789,15 @@ def _missing_required_args(args: argparse.Namespace) -> list[str]:
     if not (
         bool(getattr(args, "unauthenticated_auth_entry", False)) or
         _uses_runtime_anonymous_session(args) or
-        _uses_public_video_canary_anonymous_session(args)
+        _uses_public_video_canary_anonymous_session(args) or
+        _uses_persisted_device_session(args)
     ):
         required.extend(
             [
                 ("test_auth_token", args.test_auth_token),
                 ("test_refresh_token", args.test_refresh_token),
                 ("current_owner_id", _resolved_owner_id(args)),
-                ("current_sub_account_id", _resolved_sub_account_id(args)),
+                ("current_persona_id", _resolved_persona_id(args)),
             ]
         )
     return [name for name, value in required if not str(value).strip()]
@@ -1626,8 +1858,11 @@ def main() -> int:
             if _requires_account_closure(args)
             else False
         ),
+        "persistedDeviceSession": _uses_persisted_device_session(args),
+        "candidateDigest": str(getattr(args, "candidate_digest", "") or "").strip(),
+        "controlledSubjectDigest": _account_enforcement_subject_digest(args),
         "hasCurrentOwnerIdentity": bool(_resolved_owner_id(args)),
-        "hasCurrentPersonaIdentity": bool(_resolved_sub_account_id(args)),
+        "hasCurrentPersonaIdentity": bool(_resolved_persona_id(args)),
         "sessionSource": "",
         "releaseUatCasesPath": "",
         "remoteApiEvidence": {},
@@ -1638,6 +1873,28 @@ def main() -> int:
         "deviceInventoryPath": "",
         "evidenceRoot": "",
     }
+    if _is_account_enforcement_target(args):
+        account_enforcement_issues = []
+        if args.dry_run:
+            account_enforcement_issues.append(
+                "account-enforcement Gamma UAT forbids dry-run evidence"
+            )
+        if runtime_env != "gamma" or api_contract_env != "gamma":
+            account_enforcement_issues.append(
+                "account-enforcement UAT requires Gamma runtime and Gamma API contract"
+            )
+        if ACCOUNT_ENFORCEMENT_CANDIDATE_DIGEST_PATTERN.fullmatch(
+            report["candidateDigest"]
+        ) is None:
+            account_enforcement_issues.append(
+                "account-enforcement UAT requires a canonical immutable candidate digest"
+            )
+        if account_enforcement_issues:
+            report["status"] = "gate_block"
+            report["failureReason"] = "; ".join(account_enforcement_issues)
+            report["endedAt"] = utc_now()
+            write_report(report_path, report)
+            return 2
     try:
         report["remoteApiEvidence"] = load_remote_api_evidence(
             str(getattr(args, "remote_api_evidence_report", "") or "")
@@ -1659,7 +1916,7 @@ def main() -> int:
             return 2
         report["hasCurrentOwnerIdentity"] = bool(_resolved_owner_id(args))
         report["hasCurrentPersonaIdentity"] = bool(
-            _resolved_sub_account_id(args)
+            _resolved_persona_id(args)
         )
     else:
         report["sessionSource"] = "dry_run"
@@ -1718,6 +1975,16 @@ def main() -> int:
     if not devices:
         report["status"] = "gate_block"
         report["failureReason"] = "no mobile Flutter devices available on self-hosted Mac runner"
+        report["endedAt"] = utc_now()
+        write_report(report_path, report)
+        return 2
+    try:
+        _validate_runtime_recovery_device_matrix(args, devices)
+        _validate_account_enforcement_device_matrix(args, devices)
+    except RuntimeError as exc:
+        report["status"] = "gate_block"
+        report["failureReason"] = str(exc)
+        report["devices"] = devices
         report["endedAt"] = utc_now()
         write_report(report_path, report)
         return 2
@@ -1816,7 +2083,10 @@ def main() -> int:
         secret_define_path: Path | None = None
         if args.dry_run:
             secret_define_path = run_dir / "dry-run-patrol-secrets.json"
-        elif not _uses_runtime_anonymous_session(args):
+        elif not (
+            _uses_runtime_anonymous_session(args)
+            or _uses_persisted_device_session(args)
+        ):
             secret_define_path = _create_patrol_secret_define_file(args)
         command = patrol_command(
             device,
@@ -1879,7 +2149,7 @@ def main() -> int:
                         args.test_auth_token.strip(),
                         args.test_refresh_token.strip(),
                         _resolved_owner_id(args),
-                        _resolved_sub_account_id(args),
+                        _resolved_persona_id(args),
                     ),
                 )
             finally:
@@ -1908,6 +2178,30 @@ def main() -> int:
             if raw_log_path.is_file()
             else ""
         )
+        runtime_recovery_evidence = _read_runtime_recovery_evidence(
+            raw_log_path,
+        )
+        account_enforcement_phase = _account_enforcement_phase(args)
+        account_enforcement_evidence = _read_account_enforcement_evidence(
+            raw_log_path,
+            phase=account_enforcement_phase,
+            candidate_digest=report["candidateDigest"],
+        )
+        if _is_runtime_recovery_target(args) and (
+            set(runtime_recovery_evidence) != RUNTIME_RECOVERY_EVIDENCE_FIELDS
+            or not all(runtime_recovery_evidence.values())
+        ):
+            result["exitCode"] = 1
+            result["outputSummary"] = (
+                str(result.get("outputSummary") or "")
+                + "\nruntime recovery UAT did not emit a complete passed evidence marker"
+            ).strip()
+        if _is_account_enforcement_target(args) and not account_enforcement_evidence:
+            result["exitCode"] = 1
+            result["outputSummary"] = (
+                str(result.get("outputSummary") or "")
+                + "\naccount-enforcement UAT did not emit its exact passed evidence marker"
+            ).strip()
         result["evidence"] = {
             "runDirectory": repo_relative(run_dir),
             "deviceManifestPath": device_manifest_path,
@@ -1922,6 +2216,8 @@ def main() -> int:
             "localTlsTrust": tls_trust,
             "androidPortReverse": android_port_reverse,
             "releaseUatStateReset": release_uat_state_reset,
+            "runtimeRecovery": runtime_recovery_evidence,
+            "accountEnforcement": account_enforcement_evidence,
         }
         report["runs"].append(result)
         report["caseResults"].append(
@@ -1936,6 +2232,8 @@ def main() -> int:
                     "commandPath": command_path,
                     "patrolLogPath": result.get("logPath", ""),
                     "remoteApi": report["remoteApiEvidence"],
+                    "runtimeRecovery": runtime_recovery_evidence,
+                    "accountEnforcement": account_enforcement_evidence,
                 },
             }
         )

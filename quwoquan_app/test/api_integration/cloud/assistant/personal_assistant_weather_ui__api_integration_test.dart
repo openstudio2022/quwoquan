@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/spec.md#sit-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -63,7 +64,7 @@ void main() {
         state.events.any((event) {
           final process = event.payload['process'];
           return process is Map &&
-              process['stage'] == 'skill_selection' &&
+              process['stage'] == 'classifying' &&
               process['skillId'] == 'weather';
         }),
         isTrue,

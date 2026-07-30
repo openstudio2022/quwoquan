@@ -109,9 +109,9 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       );
       await _reloadAfterMutation();
       await _track('create_succeeded', <String, dynamic>{
-        'subAccountId': created.subAccountId,
+        'personaId': created.personaId,
       });
-      return _itemById(created.subAccountId);
+      return _itemById(created.personaId);
     } catch (e) {
       await _track('create_failed', <String, dynamic>{
         'message': runtimeErrorDisplayMessage(e),
@@ -121,18 +121,18 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     }
   }
 
-  Future<void> activatePersona(String subAccountId) async {
+  Future<void> activatePersona(String personaId) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       await _commands.activatePersona(
-        contracts.ActivatePersonaCommand(subAccountId: subAccountId),
+        contracts.ActivatePersonaCommand(personaId: personaId),
       );
       await ref
           .read(authSessionControllerProvider.notifier)
-          .updateActiveSubAccount(subAccountId);
+          .updateActivePersona(personaId);
       await _reloadAfterMutation();
       await _track('activate_succeeded', <String, dynamic>{
-        'subAccountId': subAccountId,
+        'personaId': personaId,
       });
     } catch (e) {
       await _track('activate_failed', <String, dynamic>{
@@ -144,32 +144,24 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   }
 
   Future<PersonaManagementItemViewData?> updatePersona(
-    String subAccountId, {
+    String personaId, {
     String? displayName,
-    String? phone,
-    String? email,
     String? isolationLevel,
     String? purposeHint,
   }) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
-    final changedFields = <String>[
-      if (displayName != null) 'displayName',
-      if (phone != null) 'phone',
-      if (email != null) 'email',
-    ];
+    final changedFields = <String>[if (displayName != null) 'displayName'];
     try {
       final receipt = await _commands.updatePersona(
         contracts.UpdatePersonaCommand(
-          subAccountId: subAccountId,
+          personaId: personaId,
           displayName: displayName,
-          phone: phone,
-          email: email,
           isolationLevel: isolationLevel,
           purposeHint: purposeHint,
         ),
       );
       await _reloadAfterMutation();
-      final updated = _itemById(receipt.subAccountId);
+      final updated = _itemById(receipt.personaId);
       if (updated != null && _syncEnabled && changedFields.isNotEmpty) {
         _setPendingSyncSuggestion(updated, changedFields);
       }
@@ -180,20 +172,20 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     }
   }
 
-  Future<PersonaLifecycleGuardViewData> getLifecycleGuard(String subAccountId) {
-    return _query.getPersonaLifecycleGuard(subAccountId);
+  Future<PersonaLifecycleGuardViewData> getLifecycleGuard(String personaId) {
+    return _query.getPersonaLifecycleGuard(personaId);
   }
 
-  Future<void> retirePersona(String subAccountId) async {
+  Future<void> retirePersona(String personaId) async {
     state = state.copyWith(isMutating: true, rawError: () => null);
     try {
       await _commands.retirePersona(
-        contracts.RetirePersonaCommand(subAccountId: subAccountId),
+        contracts.RetirePersonaCommand(personaId: personaId),
       );
       await _track('retired_count', <String, dynamic>{'retiredCount': 1});
       await _reloadAfterMutation();
       await _track('retire_succeeded', <String, dynamic>{
-        'subAccountId': subAccountId,
+        'personaId': personaId,
       });
     } catch (e) {
       state = state.copyWith(isMutating: false, rawError: () => e);
@@ -209,12 +201,12 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     try {
       final result = await _commands.applyPersonaProfileSync(
         contracts.ApplyPersonaProfileSyncCommand(
-          subAccountId: suggestion.sourcePersonaId,
+          personaId: suggestion.sourcePersonaId,
           fieldsMask: suggestion.fieldKeys,
           applyScope:
               targetPersonaIds == null ||
                   targetPersonaIds.length == suggestion.targetPersonaIds.length
-              ? 'all_sub_accounts'
+              ? 'all_personas'
               : 'selected_subjects',
           syncTargetIds: targetPersonaIds ?? suggestion.targetPersonaIds,
         ),
@@ -240,9 +232,9 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     state = state.copyWith(pendingSyncSuggestion: () => null);
   }
 
-  Future<void> trackQuotaReached(int maxSubAccounts) {
+  Future<void> trackQuotaReached(int maxPersonas) {
     return _track('quota_reached', <String, dynamic>{
-      'maxSubAccounts': maxSubAccounts,
+      'maxPersonas': maxPersonas,
     });
   }
 
@@ -258,9 +250,9 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     );
   }
 
-  PersonaManagementItemViewData? _itemById(String subAccountId) {
+  PersonaManagementItemViewData? _itemById(String personaId) {
     for (final item in state.items) {
-      if (item.subAccountId == subAccountId) {
+      if (item.personaId == personaId) {
         return item;
       }
     }
@@ -273,7 +265,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   ) {
     final targets = <PersonaManagementItemViewData>[];
     for (final item in state.items) {
-      if (item.subAccountId == source.subAccountId) {
+      if (item.personaId == source.personaId) {
         continue;
       }
       if (_hasDivergentField(item, source, changedFields)) {
@@ -285,11 +277,9 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       return;
     }
     final suggestion = PersonaSyncSuggestionViewData(
-      sourcePersonaId: source.subAccountId,
+      sourcePersonaId: source.personaId,
       sourceDisplayName: source.displayName,
-      targetPersonaIds: targets
-          .map((e) => e.subAccountId)
-          .toList(growable: false),
+      targetPersonaIds: targets.map((e) => e.personaId).toList(growable: false),
       targetDisplayNames: targets
           .map((e) => e.displayName)
           .toList(growable: false),
@@ -311,14 +301,6 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       switch (field) {
         case 'displayName':
           if (target.displayName != source.displayName) {
-            return true;
-          }
-        case 'phone':
-          if (target.phone != source.phone) {
-            return true;
-          }
-        case 'email':
-          if (target.email != source.email) {
             return true;
           }
       }

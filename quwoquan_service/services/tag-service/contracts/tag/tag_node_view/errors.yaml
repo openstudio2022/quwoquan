@@ -5,6 +5,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [ResolveTag, ListTagChildren, SharedTags, InvertedObjects, SuggestTags, ValidateTagRefs, SearchTags, RelatedTags, SearchByTags, TagCooccurrence, RelatedObjects, tag.tag_feedback.ReportTagFeedback]
   recovery_action: surface
   dart_const: tagInvalidArgument
   go_const: ErrTagInvalidArgument
@@ -15,6 +18,8 @@ errors:
   kind: USER
   reason: tag_not_found
   http_status: 404
+  emitted_by:
+  - {surface: http, operations: [ResolveTag, ListTagChildren, tag.tag_feedback.ReportTagFeedback]}
   recovery_action: surface
   dart_const: tagNotFound
   go_const: ErrTagNotFound
@@ -25,6 +30,9 @@ errors:
   kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [ResolveTag, ListTagChildren, SharedTags, InvertedObjects, ListDimensions, SuggestTags, ValidateTagRefs, SearchTags, RelatedTags, SearchByTags, TagCooccurrence, RelatedObjects]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: tagStorageReadFailed

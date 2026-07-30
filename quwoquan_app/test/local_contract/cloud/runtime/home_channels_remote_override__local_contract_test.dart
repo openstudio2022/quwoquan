@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-005
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/home_channels_remote_override.dart';
 
@@ -62,7 +64,7 @@ void main() {
       expect(channels, isNull);
     });
 
-    test('跳过缺 id 的非法条目；全非法 → null', () {
+    test('任一缺 id 或非 Map 条目使整份覆盖回退', () {
       final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
         <String, Object?>{
           'content': <String, Object?>{
@@ -73,6 +75,108 @@ void main() {
           },
         },
       );
+      expect(channels, isNull);
+    });
+
+    test('合法与非法条目混合时禁止部分接受', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        <String, Object?>{
+          'content': <String, Object?>{
+            'home_channels': <Object?>[
+              <String, Object?>{
+                'id': 'recommend',
+                'feed_query': <String, Object?>{'channel': 'recommend'},
+                'order': 0,
+              },
+              <String, Object?>{'label_key': 'missing-id', 'order': 1},
+            ],
+          },
+        },
+      );
+
+      expect(channels, isNull);
+    });
+
+    test('存在非法 feed_query 类型或值时整份回退', () {
+      for (final feedQuery in <Object?>[
+        'recommend',
+        <String, Object?>{'channel': 42},
+      ]) {
+        final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
+          <String, Object?>{
+            'content': <String, Object?>{
+              'home_channels': <Object?>[
+                <String, Object?>{
+                  'id': 'recommend',
+                  'feed_query': feedQuery,
+                  'order': 0,
+                },
+              ],
+            },
+          },
+        );
+
+        expect(channels, isNull, reason: 'feed_query=$feedQuery');
+      }
+    });
+
+    test('字段类型不符合 canonical schema 时整份回退', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        <String, Object?>{
+          'content': <String, Object?>{
+            'home_channels': <Object?>[
+              <String, Object?>{
+                'id': 'recommend',
+                'supports_full_span_modules': 'false',
+                'order': '0',
+              },
+            ],
+          },
+        },
+      );
+
+      expect(channels, isNull);
+    });
+
+    test('最多接受 8 个唯一频道；超过上限整份回退端默认', () {
+      expect(HomeChannelsRemoteOverride.maximumChannelCount, 8);
+      final maximumChannels = List<Object?>.generate(
+        HomeChannelsRemoteOverride.maximumChannelCount,
+        (index) => <String, Object?>{'id': 'channel-$index', 'order': index},
+      );
+
+      final accepted = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        <String, Object?>{
+          'content': <String, Object?>{'home_channels': maximumChannels},
+        },
+      );
+      final rejected = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        <String, Object?>{
+          'content': <String, Object?>{
+            'home_channels': <Object?>[
+              ...maximumChannels,
+              <String, Object?>{'id': 'channel-overflow', 'order': 8},
+            ],
+          },
+        },
+      );
+
+      expect(accepted, hasLength(8));
+      expect(rejected, isNull);
+    });
+
+    test('有效频道 id 必须唯一；重复时整份回退端默认', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        <String, Object?>{
+          'content': <String, Object?>{
+            'home_channels': <Object?>[
+              <String, Object?>{'id': 'recommend', 'order': 0},
+              <String, Object?>{'id': ' recommend ', 'order': 1},
+            ],
+          },
+        },
+      );
+
       expect(channels, isNull);
     });
 
@@ -93,6 +197,18 @@ void main() {
           },
         },
       );
+      expect(channels, isNull);
+    });
+
+    test('根级 home_channels 不再作为第二条读取路径', () {
+      final channels = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        <String, Object?>{
+          'home_channels': <Object?>[
+            <String, Object?>{'id': 'retired-root-shape', 'order': 0},
+          ],
+        },
+      );
+
       expect(channels, isNull);
     });
   });

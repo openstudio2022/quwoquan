@@ -129,9 +129,11 @@ def _gen_audience_用户():
     dim("Audience/用户/职业", "职业身份", "Occupation",
         "用户职业与从业方向；我的资料页 V1 只保存二级分类下的叶子职业",
         max_depth=3, path_policy="leaf-only")
-    tag("Audience/用户/职业/产品运营", "产品/运营", "Product & Operations",
+    # 父级路径段刻意用「产品与运营」而非「产品运营」：后者与子职业「产品运营」同名，
+    # 会构成 X/Y/Y 自嵌套（R15），且破坏按路径前缀上溯的层级传播。
+    tag("Audience/用户/职业/产品与运营", "产品与运营", "Product & Operations",
         "产品、运营、增长、内容与商业化相关职业")
-    tags_list("Audience/用户/职业/产品运营", [
+    tags_list("Audience/用户/职业/产品与运营", [
         ("产品经理", "Product Manager", "负责产品规划、体验与迭代"),
         ("产品运营", "Product Operations", "负责产品机制运营与增长闭环"),
         ("内容运营", "Content Operations", "负责内容供给、审核与分发运营"),
@@ -236,7 +238,9 @@ def _gen_audience_用户():
     tag("Audience/用户/兴趣偏好/科技", "科技", "Technology",
         "科技、AI、数码、编程、产品与创业兴趣")
     tags_list("Audience/用户/兴趣偏好/科技", [
-        ("科技", "Technology", "关注科技产业与技术趋势"),
+        # 叶子是「科技趋势」而非「科技」：兴趣偏好是 leaf-only，需要一个可勾选的
+        # 泛科技叶子，但它不能与父级簇同名（R15 自嵌套）。
+        ("科技趋势", "Tech Trends", "关注科技产业与技术趋势"),
         ("AI", "AI", "关注人工智能、模型与智能工具"),
         ("数码", "Gadgets", "喜欢数码产品、设备与体验"),
         ("编程", "Programming", "喜欢编程、开发与技术实践"),
@@ -427,6 +431,16 @@ def _gen_audience_创作者():
         ("YouTube博主", "YouTuber"), ("X博主", "X Creator"),
     ]:
         tag(f"Audience/创作者/平台属性/{platform}", platform, en, f"主要在{platform.replace('创作者', '').replace('博主', '').replace('UP主', '').replace('作者', '')}平台活跃")
+
+    # 垂类身份收纳「创作者是谁」。曾经放在 Topic/旅行/创作者类型 下，但那是内容主题轴，
+    # 描述的是人不是内容，放在 Topic 会让「旅行博主」既像主题又像身份（R13/R14）。
+    dim("Audience/创作者/垂类身份", "垂类身份", "Vertical Identity",
+        "创作者在具体垂类中的身份定位", max_depth=2)
+    tags_list("Audience/创作者/垂类身份", [
+        ("旅行博主", "Travel Blogger", "以旅行内容创作为主的博主"),
+        ("风光摄影师", "Landscape Photographer", "专注自然与城市风光摄影的创作者"),
+        ("自驾达人", "Road Trip Expert", "专注自驾路线与车旅经验的创作者"),
+    ])
 
     dim("Audience/创作者/创作风格", "创作风格", "Creator Style",
         "创作者的内容生产风格", max_depth=2)

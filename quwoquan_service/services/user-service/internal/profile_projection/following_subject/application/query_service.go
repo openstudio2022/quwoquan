@@ -9,9 +9,9 @@ import (
 	usermodel "quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 )
 
-// PersonaDisplayReader 提供 user 主体的展示信息（同域 named reader）。
+// PersonaDisplayReader 提供 persona 主体的展示信息（同域 named reader）。
 type PersonaDisplayReader interface {
-	FindBySubAccountID(ctx context.Context, subAccountID string) (*usermodel.Persona, error)
+	FindByPersonaID(ctx context.Context, personaID string) (*usermodel.Persona, error)
 }
 
 // SubjectDisplay 是跨域主体（homepage/circle）的展示快照。
@@ -49,7 +49,7 @@ type FollowingSubjectItem struct {
 // targetRouteIDBySubjectType 的值域来自 metadata ui_config route ids；与
 // alpha fixture following_subject_core 同源。
 var targetRouteIDBySubjectType = map[string]string{
-	"user":     "user_profile",
+	"persona":  "user_profile",
 	"circle":   "circle_detail",
 	"homepage": "homepage_detail",
 }
@@ -111,8 +111,8 @@ func (s *QueryService) ListFollowingSubjects(
 			LatestChangeReason: row.LatestChangeReason,
 		}
 		switch row.SubjectType {
-		case "user":
-			s.enrichUser(ctx, &item)
+		case "persona":
+			s.enrichPersona(ctx, &item)
 		case "homepage":
 			if display, ok := homepageDisplays[row.SubjectID]; ok {
 				item.DisplayName = display.DisplayName
@@ -129,11 +129,11 @@ func (s *QueryService) ListFollowingSubjects(
 	return items, nil
 }
 
-func (s *QueryService) enrichUser(ctx context.Context, item *FollowingSubjectItem) {
+func (s *QueryService) enrichPersona(ctx context.Context, item *FollowingSubjectItem) {
 	if s.personas == nil {
 		return
 	}
-	persona, err := s.personas.FindBySubAccountID(ctx, item.SubjectID)
+	persona, err := s.personas.FindByPersonaID(ctx, item.SubjectID)
 	if err != nil || persona == nil {
 		return
 	}

@@ -2,6 +2,7 @@
   "label": "火锅",
   "labelEn": "Hotpot",
   "description": "各地火锅文化",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00",
   "aliases": [

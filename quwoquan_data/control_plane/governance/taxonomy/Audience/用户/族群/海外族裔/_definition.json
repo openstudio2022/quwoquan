@@ -2,6 +2,7 @@
   "label": "海外族裔",
   "labelEn": "Overseas Ethnicities",
   "description": "海外族裔背景",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

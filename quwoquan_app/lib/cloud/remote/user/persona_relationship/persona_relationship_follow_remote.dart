@@ -25,12 +25,12 @@ final class RemotePersonaRelationshipFollowAdapter
 
   @override
   Future<void> follow(
-    String targetSubAccountId, {
+    String targetPersonaId, {
     required String sourceSurfaceId,
   }) async {
     await client.userPersonaRelationshipFollowUser(
       FollowUserCommand(
-        targetSubAccountId: targetSubAccountId,
+        targetPersonaId: targetPersonaId,
         source: sourceSurfaceId,
       ),
       context: invocationContext(
@@ -41,9 +41,9 @@ final class RemotePersonaRelationshipFollowAdapter
   }
 
   @override
-  Future<void> unfollow(String targetSubAccountId) async {
+  Future<void> unfollow(String targetPersonaId) async {
     await client.userPersonaRelationshipUnfollowUser(
-      UnfollowUserCommand(targetSubAccountId: targetSubAccountId),
+      UnfollowUserCommand(targetPersonaId: targetPersonaId),
       context: invocationContext(
         UserRequestPageIds.unfollowUser,
         AppCloudOperationIds.userPersonaRelationshipUnfollowUser,
@@ -53,14 +53,14 @@ final class RemotePersonaRelationshipFollowAdapter
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowing({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final page = await client.userPersonaRelationshipListFollowing(
       PersonaRelationshipListQuery(
-        subAccountId: subAccountId,
+        personaId: personaId,
         query: query,
         cursor: cursor,
         limit: limit,
@@ -80,14 +80,14 @@ final class RemotePersonaRelationshipFollowAdapter
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowers({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final page = await client.userPersonaRelationshipListFollowers(
       PersonaRelationshipListQuery(
-        subAccountId: subAccountId,
+        personaId: personaId,
         query: query,
         cursor: cursor,
         limit: limit,

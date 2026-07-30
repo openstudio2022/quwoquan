@@ -41,7 +41,7 @@ type ReleaseReader interface {
 	Get(
 		ctx context.Context,
 		policyID string,
-		releaseVersion string,
+		releaseDigest string,
 	) (releasemodel.Release, bool, error)
 }
 
@@ -72,7 +72,7 @@ type CommandResult struct {
 
 type FrozenSelection struct {
 	PolicyID              string
-	ReleaseVersion        string
+	ReleaseDigest         string
 	Cohort                string
 	RolloutRevision       int
 	RuleID                string
@@ -136,7 +136,7 @@ func (service *Service) Activate(
 		_, exists, readErr := service.releases.Get(
 			ctx,
 			next.PolicyID,
-			assignment.ReleaseVersion,
+			assignment.ReleaseDigest,
 		)
 		if readErr != nil {
 			return CommandResult{}, readErr
@@ -220,6 +220,37 @@ func (service *Service) GetActive(
 	return service.store.Get(ctx, strings.TrimSpace(policyID))
 }
 
+// ResolveSkillCandidates 返回该策略在此人群下真正能服务的技能集合。技能选择必须在这个集合
+// 内进行，否则选出的技能没有对应模板，运行会静默回落到默认模板并丢掉用户意图。
+func (service *Service) ResolveSkillCandidates(
+	ctx context.Context,
+	policyID string,
+	personaID string,
+) ([]string, error) {
+	active, err := service.resolveActiveRelease(ctx, policyID, personaID)
+	if err != nil {
+		return nil, err
+	}
+	release := active.Release
+	seen := map[string]bool{}
+	candidates := []string{}
+	appendCandidate := func(skillID string) {
+		skillID = strings.TrimSpace(skillID)
+		if skillID == "" || seen[skillID] {
+			return
+		}
+		seen[skillID] = true
+		candidates = append(candidates, skillID)
+	}
+	for _, rule := range release.RoutingRules {
+		appendCandidate(rule.SkillID)
+	}
+	for _, template := range release.Templates {
+		appendCandidate(template.SkillID)
+	}
+	return candidates, nil
+}
+
 func (service *Service) ResolveFrozenSelection(
 	ctx context.Context,
 	policyID string,
@@ -227,48 +258,11 @@ func (service *Service) ResolveFrozenSelection(
 	skillID string,
 	domainID string,
 ) (FrozenSelection, error) {
-	policyID = strings.TrimSpace(policyID)
-	personaID = strings.TrimSpace(personaID)
-	if policyID == "" || personaID == "" ||
-		service == nil || service.releases == nil {
-		return FrozenSelection{}, model.ErrInvalidArgument
-	}
-	rollout, found, err := service.GetActive(ctx, policyID)
+	active, err := service.resolveActiveRelease(ctx, policyID, personaID)
 	if err != nil {
 		return FrozenSelection{}, err
 	}
-	if !found {
-		return FrozenSelection{}, model.ErrRolloutNotFound
-	}
-	buckets := make([]runtimeexperiments.BucketDef, 0, len(rollout.BucketDefinitions))
-	for _, bucket := range rollout.BucketDefinitions {
-		buckets = append(buckets, runtimeexperiments.BucketDef{
-			Name:              bucket.Cohort,
-			WeightBasisPoints: bucket.WeightBasisPoints,
-		})
-	}
-	cohort := runtimeexperiments.AssignBucket(policyID, personaID, buckets)
-	releaseVersion := ""
-	for _, assignment := range rollout.Assignments {
-		if assignment.Cohort == cohort {
-			releaseVersion = assignment.ReleaseVersion
-			break
-		}
-	}
-	if releaseVersion == "" {
-		return FrozenSelection{}, fmt.Errorf(
-			"%w: cohort %q has no release mapping",
-			model.ErrInvalidArgument,
-			cohort,
-		)
-	}
-	release, found, err := service.releases.Get(ctx, policyID, releaseVersion)
-	if err != nil {
-		return FrozenSelection{}, err
-	}
-	if !found {
-		return FrozenSelection{}, model.ErrReleaseNotFound
-	}
+	release := active.Release
 	templateID := release.DefaultTemplateID
 	ruleID := "default"
 	skillID = strings.TrimSpace(skillID)
@@ -299,13 +293,84 @@ func (service *Service) ResolveFrozenSelection(
 		)
 	}
 	return FrozenSelection{
-		PolicyID:              policyID,
-		ReleaseVersion:        releaseVersion,
-		Cohort:                cohort,
-		RolloutRevision:       rollout.Revision,
+		PolicyID:              strings.TrimSpace(policyID),
+		ReleaseDigest:         active.ReleaseDigest,
+		Cohort:                active.Cohort,
+		RolloutRevision:       active.RolloutRevision,
 		RuleID:                ruleID,
 		Template:              selected,
 		LearningContextPolicy: release.LearningContextPolicy,
+	}, nil
+}
+
+type activeRelease struct {
+	Release         releasemodel.Release
+	Cohort          string
+	ReleaseDigest   string
+	RolloutRevision int
+}
+
+// resolveActiveRelease 把"人群分桶 -> 发布摘要 -> 发布内容"这一段解析收在一处，保证冻结选择
+// 与技能候选集合读到同一份发布。
+func (service *Service) resolveActiveRelease(
+	ctx context.Context,
+	policyID string,
+	personaID string,
+) (activeRelease, error) {
+	policyID = strings.TrimSpace(policyID)
+	personaID = strings.TrimSpace(personaID)
+	if policyID == "" || personaID == "" ||
+		service == nil || service.releases == nil {
+		return activeRelease{}, model.ErrInvalidArgument
+	}
+	rollout, found, err := service.GetActive(ctx, policyID)
+	if err != nil {
+		return activeRelease{}, err
+	}
+	if !found {
+		return activeRelease{}, model.ErrRolloutNotFound
+	}
+	buckets := make([]runtimeexperiments.BucketDef, 0, len(rollout.BucketDefinitions))
+	for _, bucket := range rollout.BucketDefinitions {
+		buckets = append(buckets, runtimeexperiments.BucketDef{
+			Name:              bucket.Cohort,
+			WeightBasisPoints: bucket.WeightBasisPoints,
+		})
+	}
+	cohort, err := runtimeexperiments.AssignBucket(policyID, personaID, buckets)
+	if err != nil {
+		return activeRelease{}, fmt.Errorf(
+			"%w: invalid rollout bucket policy: %v",
+			model.ErrInvalidArgument,
+			err,
+		)
+	}
+	releaseDigest := ""
+	for _, assignment := range rollout.Assignments {
+		if assignment.Cohort == cohort {
+			releaseDigest = assignment.ReleaseDigest
+			break
+		}
+	}
+	if releaseDigest == "" {
+		return activeRelease{}, fmt.Errorf(
+			"%w: cohort %q has no release mapping",
+			model.ErrInvalidArgument,
+			cohort,
+		)
+	}
+	release, found, err := service.releases.Get(ctx, policyID, releaseDigest)
+	if err != nil {
+		return activeRelease{}, err
+	}
+	if !found {
+		return activeRelease{}, model.ErrReleaseNotFound
+	}
+	return activeRelease{
+		Release:         release,
+		Cohort:          cohort,
+		ReleaseDigest:   releaseDigest,
+		RolloutRevision: rollout.Revision,
 	}, nil
 }
 

@@ -4,9 +4,22 @@ import '../object_scenario_seed_reader.dart';
 
 /// Tag 目录对象级替身：只在 local_contract 中读取 tag-service canonical 场景。
 final class AlphaTagFacet implements TagCatalogQuery {
-  AlphaTagFacet({required String taxonomyReleaseId})
-    : taxonomyReleaseId = _requiredTaxonomyReleaseId(taxonomyReleaseId),
-      _catalog = _loadCatalog();
+  /// 默认发布身份来自 fixture 目录节点自身，与线上「客户端回显 TagChild.releaseId」
+  /// 同构；显式传值只用于构造过期发布的负例。
+  factory AlphaTagFacet({String? taxonomyReleaseId}) {
+    final catalog = _loadCatalog();
+    return AlphaTagFacet._(
+      taxonomyReleaseId: _requiredTaxonomyReleaseId(
+        taxonomyReleaseId ?? catalog.taxonomyReleaseId,
+      ),
+      catalog: catalog,
+    );
+  }
+
+  AlphaTagFacet._({
+    required this.taxonomyReleaseId,
+    required _TagCatalogFixture catalog,
+  }) : _catalog = catalog;
 
   final String taxonomyReleaseId;
   final _TagCatalogFixture _catalog;
@@ -115,7 +128,7 @@ final class AlphaTagFeedbackWriter implements TagFeedbackCommandWriter {
     ReportTagFeedbackCommand command,
   ) async {
     final key =
-        '${command.tagRef}\u0000${command.action}\u0000${command.context ?? ''}';
+        '${command.tagRef}\u0000${command.action.wireValue}\u0000${command.context ?? ''}';
     _byKey.putIfAbsent(key, () => command);
     return const TagFeedbackAck(accepted: true);
   }
@@ -126,11 +139,13 @@ final class _TagCatalogFixture {
     required this.childrenByParent,
     required this.validTagRefs,
     required this.knownTagRefs,
+    required this.taxonomyReleaseId,
   });
 
   final Map<String, List<TagChild>> childrenByParent;
   final Set<String> validTagRefs;
   final Set<String> knownTagRefs;
+  final String taxonomyReleaseId;
 
   factory _TagCatalogFixture.fromJson(Map<String, Object?> json) {
     final rawChildren = _requiredObject(
@@ -158,9 +173,21 @@ final class _TagCatalogFixture {
           return item.trim();
         })
         .toSet();
+    final releaseIds = <String>{
+      for (final children in childrenByParent.values)
+        for (final child in children)
+          if (child.releaseId.trim().isNotEmpty) child.releaseId.trim(),
+    };
+    if (releaseIds.length != 1) {
+      throw FormatException(
+        'tag fixture must expose exactly one taxonomy release; '
+        'found ${releaseIds.length}',
+      );
+    }
     return _TagCatalogFixture(
       childrenByParent: childrenByParent,
       validTagRefs: validTagRefs,
+      taxonomyReleaseId: releaseIds.single,
       knownTagRefs: <String>{
         ...validTagRefs,
         ...childrenByParent.keys,

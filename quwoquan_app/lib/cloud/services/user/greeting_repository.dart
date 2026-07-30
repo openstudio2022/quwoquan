@@ -6,8 +6,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 class GreetingRequestDto {
   const GreetingRequestDto({
     required this.id,
-    required this.requesterSubAccountId,
-    required this.targetSubAccountId,
+    required this.requesterPersonaId,
+    required this.targetPersonaId,
     this.requestMessage,
     required this.status,
     required this.source,
@@ -19,8 +19,8 @@ class GreetingRequestDto {
   });
 
   final String id;
-  final String requesterSubAccountId;
-  final String targetSubAccountId;
+  final String requesterPersonaId;
+  final String targetPersonaId;
   final String? requestMessage;
 
   /// pending / replied / ignored / blocked / cancelled / expired
@@ -43,8 +43,8 @@ class GreetingRequestDto {
   }) {
     return GreetingRequestDto(
       id: id,
-      requesterSubAccountId: requesterSubAccountId,
-      targetSubAccountId: targetSubAccountId,
+      requesterPersonaId: requesterPersonaId,
+      targetPersonaId: targetPersonaId,
       requestMessage: requestMessage,
       status: status ?? this.status,
       source: source,
@@ -60,8 +60,8 @@ class GreetingRequestDto {
   factory GreetingRequestDto.fromMap(Map<String, dynamic> map) {
     return GreetingRequestDto(
       id: (map['id'] as String?) ?? '',
-      requesterSubAccountId: (map['requesterSubAccountId'] as String?) ?? '',
-      targetSubAccountId: (map['targetSubAccountId'] as String?) ?? '',
+      requesterPersonaId: (map['requesterPersonaId'] as String?) ?? '',
+      targetPersonaId: (map['targetPersonaId'] as String?) ?? '',
       requestMessage: map['requestMessage'] as String?,
       status: (map['status'] as String?) ?? 'pending',
       source: (map['source'] as String?) ?? 'profile',
@@ -84,8 +84,8 @@ class GreetingRequestDto {
   factory GreetingRequestDto.fromContract(GreetingRequestRecord record) {
     return GreetingRequestDto(
       id: record.id,
-      requesterSubAccountId: record.requesterSubAccountId,
-      targetSubAccountId: record.targetSubAccountId,
+      requesterPersonaId: record.requesterPersonaId,
+      targetPersonaId: record.targetPersonaId,
       requestMessage: record.requestMessage,
       status: record.status,
       source: record.source,
@@ -109,7 +109,7 @@ class GreetingRequestDto {
 ///   DELETE /user/greeting-request/{requestId}
 abstract class GreetingRepository {
   Future<GreetingRequestDto> sendGreeting({
-    required String targetSubAccountId,
+    required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
   });
@@ -145,13 +145,13 @@ class RemoteGreetingRepository implements GreetingRepository {
 
   @override
   Future<GreetingRequestDto> sendGreeting({
-    required String targetSubAccountId,
+    required String targetPersonaId,
     String? requestMessage,
     String source = 'profile',
   }) async {
     final record = await commandWriter.sendGreeting(
       SendGreetingCommand(
-        targetSubAccountId: targetSubAccountId,
+        targetPersonaId: targetPersonaId,
         requestMessage: requestMessage,
         source: source,
       ),

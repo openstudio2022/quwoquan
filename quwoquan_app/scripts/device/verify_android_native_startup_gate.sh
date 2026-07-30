@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+APP_DIR="${REPO_ROOT}/quwoquan_app"
 DEVICE_ID="${1:-${ANDROID_SERIAL:-}}"
 if [[ -z "${DEVICE_ID}" ]]; then
   echo "GATE_BLOCK: Android device ID is required." >&2
@@ -14,8 +15,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cd "${APP_DIR}"
-python3 scripts/device/build_launcher_handoff.py \
+cd "${REPO_ROOT}"
+python3 quwoquan_app/scripts/device/build_launcher_handoff.py \
   --env alpha \
   --target alpha-local \
   --launch-mode native_startup_instrumentation \
@@ -52,7 +53,7 @@ export ANDROID_SERIAL="${DEVICE_ID}"
 export QWQ_RUN_DEVICE_ID="${DEVICE_ID}"
 export QWQ_APP_BUILD_CONTEXT="package-only"
 
-cd android
+cd "${APP_DIR}/android"
 ./gradlew :app:connectedDebugAndroidTest \
   -Pqwq.nativeStartupInstrumentation=true \
   -Pandroid.testInstrumentationRunnerArguments.class=com.quwoquan.quwoquan_app.StartupGateHandoffInstrumentedTest,com.quwoquan.quwoquan_app.StartupLaunchResourceInstrumentedTest \

@@ -1,0 +1,48 @@
+read_model: HomepageDetailView
+description: Homepage 主档与独立读投影在查询边界组装的详情；任何投影字段不得回写 Homepage 写聚合。
+source_entities:
+- Homepage
+- HomepageReviewSummaryData
+- HomepageContentPreview
+- HomepageQuestionPreview
+- HomepageRelatedGroupSummary
+- ObjectRelationEdge
+- HomepageViewerFollowSlice
+consumers:
+- app
+- assistant
+- recommendation
+fields:
+- {name: homepageId, type: string}
+- {name: title, type: string}
+- {name: subtitle, type: string, nullable: true}
+- {name: homepageType, type: string}
+- {name: status, type: string}
+- {name: claimStatus, type: string}
+- {name: categoryTags, type: '[]string'}
+- {name: coverUrl, type: string, nullable: true}
+- {name: address, type: string, nullable: true}
+- {name: city, type: string, nullable: true}
+- {name: location, type: HomepageGeoPoint, nullable: true}
+- {name: ownerUserId, type: string, nullable: true}
+- {name: ownerPersonaId, type: string, nullable: true}
+- {name: viewerFollow, type: HomepageViewerFollowSlice}
+- {name: verified, type: bool}
+- {name: establishedYear, type: int, nullable: true}
+- {name: averageRating, type: float64, nullable: true}
+- {name: ratingCount, type: int}
+- {name: reviewSummary, type: HomepageReviewSummaryView, nullable: true}
+- {name: contentPreview, type: '[]HomepageContentPreview'}
+- {name: questionPreview, type: '[]HomepageQuestionPreview'}
+- {name: relatedGroups, type: '[]HomepageRelatedGroupSummary'}
+- {name: structuredFacts, type: HomepageStructuredFactsView, nullable: true}
+- {name: relationEdges, type: '[]ObjectRelationEdge'}
+- {name: assistantContext, type: object, nullable: true}
+- {name: introductionMarkdown, type: string, nullable: true}
+- {name: introductionAssets, type: '[]HomepageIntroductionAsset'}
+- {name: primarySource, type: HomepageSource, nullable: true}
+- {name: sourceUrls, type: '[]string'}
+- {name: createdAt, type: timestamp}
+- {name: updatedAt, type: timestamp}
+- {name: publishedAt, type: timestamp, nullable: true}
+- {name: offlineAt, type: timestamp, nullable: true}

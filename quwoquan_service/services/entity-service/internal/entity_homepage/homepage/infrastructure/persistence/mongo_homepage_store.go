@@ -15,15 +15,16 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
-	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 )
 
 const (
 	homepageCollection           = "homepages"
 	homepageReceiptsCollection   = "homepage_command_receipts"
 	homepageOutboxCollection     = "homepage_outbox"
+	homepageDetailsCollection    = "homepage_detail_views"
 	homepageFollowersCollection  = "homepage_follower_projection"
 	homepageCheckpointCollection = "homepage_projection_checkpoints"
 )
@@ -32,6 +33,7 @@ type MongoHomepageStore struct {
 	homepages   *mongo.Collection
 	receipts    *mongo.Collection
 	outbox      *mongo.Collection
+	details     *mongo.Collection
 	followers   *mongo.Collection
 	checkpoints *mongo.Collection
 	supportsTxn bool
@@ -42,6 +44,7 @@ func NewMongoHomepageStore(db *mongo.Database, supportsTransactions bool) *Mongo
 		homepages:   db.Collection(homepageCollection),
 		receipts:    db.Collection(homepageReceiptsCollection),
 		outbox:      db.Collection(homepageOutboxCollection),
+		details:     db.Collection(homepageDetailsCollection),
 		followers:   db.Collection(homepageFollowersCollection),
 		checkpoints: db.Collection(homepageCheckpointCollection),
 		supportsTxn: supportsTransactions,
@@ -51,6 +54,7 @@ func NewMongoHomepageStore(db *mongo.Database, supportsTransactions bool) *Mongo
 var (
 	_ homepageports.AggregateStore            = (*MongoHomepageStore)(nil)
 	_ homepageports.Reader                    = (*MongoHomepageStore)(nil)
+	_ homepageports.DetailProjectionStore     = (*MongoHomepageStore)(nil)
 	_ homepageports.FollowerProjectionStore   = (*MongoHomepageStore)(nil)
 	_ homepageports.OutboxReader              = (*MongoHomepageStore)(nil)
 	_ homepageports.ProjectionCheckpointStore = (*MongoHomepageStore)(nil)
@@ -131,6 +135,12 @@ func (s *MongoHomepageStore) EnsureIndexes(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+	if _, err := s.details.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "updatedAt", Value: -1}},
+		Options: options.Index().SetName("idx_homepage_detail_views_updated"),
+	}); err != nil {
+		return err
+	}
 	if _, err := s.followers.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys:    bson.D{{Key: "homepageId", Value: 1}, {Key: "personaId", Value: 1}},
@@ -170,27 +180,44 @@ type homepageDocument struct {
 	CoverURL             string                            `bson:"coverUrl,omitempty"`
 	Address              string                            `bson:"address,omitempty"`
 	City                 string                            `bson:"city,omitempty"`
-	Location             *homepagemodel.GeoPoint           `bson:"location,omitempty"`
+	Location             *geoJSONPoint                     `bson:"location,omitempty"`
 	OwnerUserID          string                            `bson:"ownerUserId,omitempty"`
-	OwnerSubAccountID    string                            `bson:"ownerSubAccountId,omitempty"`
+	OwnerPersonaID       string                            `bson:"ownerPersonaId,omitempty"`
 	Verified             bool                              `bson:"verified"`
 	EstablishedYear      *int                              `bson:"establishedYear,omitempty"`
-	AverageRating        *float64                          `bson:"averageRating,omitempty"`
-	RatingCount          int                               `bson:"ratingCount"`
-	ReviewSummary        *homepagemodel.ReviewSummary      `bson:"reviewSummary,omitempty"`
-	ContentPreview       []homepagemodel.ContentPreview    `bson:"contentPreview,omitempty"`
-	QuestionPreview      []homepagemodel.QuestionPreview   `bson:"questionPreview,omitempty"`
-	RelatedGroups        []homepagemodel.RelatedGroup      `bson:"relatedGroups,omitempty"`
-	RelationEdges        [][]byte                          `bson:"relationEdges,omitempty"`
-	AssistantContext     []byte                            `bson:"assistantContext,omitempty"`
 	IntroductionMarkdown string                            `bson:"introductionMarkdown,omitempty"`
 	IntroductionAssets   []homepagemodel.IntroductionAsset `bson:"introductionAssets,omitempty"`
+	StructuredFacts      *homepagemodel.StructuredFacts    `bson:"structuredFacts,omitempty"`
 	PrimarySource        *homepagemodel.Source             `bson:"primarySource,omitempty"`
 	SourceURLs           []string                          `bson:"sourceUrls,omitempty"`
 	CreatedAt            time.Time                         `bson:"createdAt"`
 	UpdatedAt            time.Time                         `bson:"updatedAt"`
 	PublishedAt          *time.Time                        `bson:"publishedAt,omitempty"`
 	OfflineAt            *time.Time                        `bson:"offlineAt,omitempty"`
+}
+
+// geoJSONPoint 是 location 的落库形状。idx_homepages_location 是 2dsphere 索引，
+// 只接受 GeoJSON 或有序 legacy 坐标对；若直接落库 domain GeoPoint 的
+// {latitude, longitude} 嵌套文档，Mongo 会把它读成 legacy [x=latitude, y=longitude]，
+// 既交换了轴又会因纬度值超出 ±90 直接拒绝写入。因此存储层负责 GeoJSON 翻译，
+// wire/domain 仍保持 latitude/longitude 命名（contracts fields.yaml 真相源不变）。
+type geoJSONPoint struct {
+	Type        string    `bson:"type"`
+	Coordinates []float64 `bson:"coordinates"`
+}
+
+func geoJSONFromGeoPoint(point *homepagemodel.GeoPoint) *geoJSONPoint {
+	if point == nil {
+		return nil
+	}
+	return &geoJSONPoint{Type: "Point", Coordinates: []float64{point.Longitude, point.Latitude}}
+}
+
+func (p *geoJSONPoint) geoPoint() *homepagemodel.GeoPoint {
+	if p == nil || len(p.Coordinates) != 2 {
+		return nil
+	}
+	return &homepagemodel.GeoPoint{Latitude: p.Coordinates[1], Longitude: p.Coordinates[0]}
 }
 
 func documentFromSnapshot(snapshot homepagemodel.Snapshot) homepageDocument {
@@ -213,21 +240,14 @@ func documentFromSnapshot(snapshot homepagemodel.Snapshot) homepageDocument {
 		CoverURL:             snapshot.CoverURL,
 		Address:              snapshot.Address,
 		City:                 snapshot.City,
-		Location:             snapshot.Location,
+		Location:             geoJSONFromGeoPoint(snapshot.Location),
 		OwnerUserID:          snapshot.OwnerUserID,
-		OwnerSubAccountID:    snapshot.OwnerSubAccountID,
+		OwnerPersonaID:       snapshot.OwnerPersonaID,
 		Verified:             snapshot.Verified,
 		EstablishedYear:      snapshot.EstablishedYear,
-		AverageRating:        snapshot.AverageRating,
-		RatingCount:          snapshot.RatingCount,
-		ReviewSummary:        snapshot.ReviewSummary,
-		ContentPreview:       snapshot.ContentPreview,
-		QuestionPreview:      snapshot.QuestionPreview,
-		RelatedGroups:        snapshot.RelatedGroups,
-		RelationEdges:        rawMessagesToBytes(snapshot.RelationEdges),
-		AssistantContext:     append([]byte(nil), snapshot.AssistantContext...),
 		IntroductionMarkdown: snapshot.IntroductionMarkdown,
 		IntroductionAssets:   snapshot.IntroductionAssets,
+		StructuredFacts:      snapshot.StructuredFacts,
 		PrimarySource:        snapshot.PrimarySource,
 		SourceURLs:           snapshot.SourceURLs,
 		CreatedAt:            snapshot.CreatedAt.UTC(),
@@ -257,21 +277,14 @@ func (d homepageDocument) snapshot() homepagemodel.Snapshot {
 		CoverURL:             d.CoverURL,
 		Address:              d.Address,
 		City:                 d.City,
-		Location:             d.Location,
+		Location:             d.Location.geoPoint(),
 		OwnerUserID:          d.OwnerUserID,
-		OwnerSubAccountID:    d.OwnerSubAccountID,
+		OwnerPersonaID:       d.OwnerPersonaID,
 		Verified:             d.Verified,
 		EstablishedYear:      d.EstablishedYear,
-		AverageRating:        d.AverageRating,
-		RatingCount:          d.RatingCount,
-		ReviewSummary:        d.ReviewSummary,
-		ContentPreview:       d.ContentPreview,
-		QuestionPreview:      d.QuestionPreview,
-		RelatedGroups:        d.RelatedGroups,
-		RelationEdges:        bytesToRawMessages(d.RelationEdges),
-		AssistantContext:     append([]byte(nil), d.AssistantContext...),
 		IntroductionMarkdown: d.IntroductionMarkdown,
 		IntroductionAssets:   d.IntroductionAssets,
+		StructuredFacts:      d.StructuredFacts,
 		PrimarySource:        d.PrimarySource,
 		SourceURLs:           d.SourceURLs,
 		CreatedAt:            d.CreatedAt,
@@ -283,6 +296,77 @@ func (d homepageDocument) snapshot() homepagemodel.Snapshot {
 
 func (d homepageDocument) aggregate() (*homepagemodel.Homepage, error) {
 	return homepagemodel.Restore(d.snapshot())
+}
+
+type homepageDetailDocument struct {
+	ID               string                          `bson:"_id"`
+	AverageRating    *float64                        `bson:"averageRating,omitempty"`
+	RatingCount      int                             `bson:"ratingCount"`
+	ReviewSummary    *homepagemodel.ReviewSummary    `bson:"reviewSummary,omitempty"`
+	ContentPreview   []homepagemodel.ContentPreview  `bson:"contentPreview,omitempty"`
+	QuestionPreview  []homepagemodel.QuestionPreview `bson:"questionPreview,omitempty"`
+	RelatedGroups    []homepagemodel.RelatedGroup    `bson:"relatedGroups,omitempty"`
+	RelationEdges    [][]byte                        `bson:"relationEdges,omitempty"`
+	AssistantContext []byte                          `bson:"assistantContext,omitempty"`
+	UpdatedAt        time.Time                       `bson:"updatedAt"`
+}
+
+func (d homepageDetailDocument) projection() homepageports.DetailProjection {
+	return homepageports.DetailProjection{
+		HomepageID:       d.ID,
+		AverageRating:    d.AverageRating,
+		RatingCount:      d.RatingCount,
+		ReviewSummary:    d.ReviewSummary,
+		ContentPreview:   append([]homepagemodel.ContentPreview{}, d.ContentPreview...),
+		QuestionPreview:  append([]homepagemodel.QuestionPreview{}, d.QuestionPreview...),
+		RelatedGroups:    append([]homepagemodel.RelatedGroup{}, d.RelatedGroups...),
+		RelationEdges:    bytesToRawMessages(d.RelationEdges),
+		AssistantContext: append(json.RawMessage(nil), d.AssistantContext...),
+		UpdatedAt:        d.UpdatedAt,
+	}
+}
+
+func (s *MongoHomepageStore) LoadDetailProjection(
+	ctx context.Context,
+	homepageID string,
+) (homepageports.DetailProjection, bool, error) {
+	var document homepageDetailDocument
+	err := s.details.FindOne(ctx, bson.M{"_id": strings.TrimSpace(homepageID)}).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return homepageports.DetailProjection{}, false, nil
+	}
+	if err != nil {
+		return homepageports.DetailProjection{}, false, err
+	}
+	return document.projection(), true, nil
+}
+
+func (s *MongoHomepageStore) UpsertReviewSummary(
+	ctx context.Context,
+	homepageID string,
+	averageRating *float64,
+	ratingCount int,
+	highlightTags []string,
+	updatedAt time.Time,
+) error {
+	average := cloneFloat64(averageRating)
+	summary := &homepagemodel.ReviewSummary{
+		AverageRating: cloneFloat64(averageRating),
+		RatingCount:   ratingCount,
+		HighlightTags: append([]string(nil), highlightTags...),
+	}
+	_, err := s.details.UpdateOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(homepageID)},
+		bson.M{"$set": bson.M{
+			"averageRating": average,
+			"ratingCount":   ratingCount,
+			"reviewSummary": summary,
+			"updatedAt":     updatedAt.UTC(),
+		}},
+		options.UpdateOne().SetUpsert(true),
+	)
+	return err
 }
 
 type receiptDocument struct {
@@ -914,4 +998,12 @@ func bytesToRawMessages(values [][]byte) []json.RawMessage {
 		result = append(result, append(json.RawMessage(nil), value...))
 	}
 	return result
+}
+
+func cloneFloat64(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	result := *value
+	return &result
 }

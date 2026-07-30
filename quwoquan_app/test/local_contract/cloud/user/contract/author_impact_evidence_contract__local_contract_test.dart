@@ -17,7 +17,7 @@ import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
-const _subAccountId = 'fixture_user_current';
+const _personaId = 'fixture_user_current';
 
 void main() {
   group('ListAuthorImpactEvidence response_body 框架契约（R-ID02）', () {
@@ -57,15 +57,15 @@ void main() {
     test('摘要读取经 generated client 传递 path 参数与默认 limit', () async {
       final repo = repoReturning(<Map<String, Object?>>[
         <String, Object?>{
-          'authorId': _subAccountId,
+          'authorId': _personaId,
           'total': 1,
           'items': <Object?>[],
         },
       ]);
 
-      final summary = await repo.getAuthorImpact(_subAccountId);
+      final summary = await repo.getAuthorImpact(_personaId);
 
-      expect(summary.authorId, _subAccountId);
+      expect(summary.authorId, _personaId);
       expect(
         executor.operations.single.canonicalOperationId,
         AppCloudOperationIds.contentPostGetAuthorImpact,
@@ -74,10 +74,7 @@ void main() {
         executor.operations.single.pathTemplate,
         ContentApiMetadata.getAuthorImpactPathTemplate,
       );
-      expect(
-        executor.requests.single.pathParameters['subAccountId'],
-        _subAccountId,
-      );
+      expect(executor.requests.single.pathParameters['personaId'], _personaId);
       expect(executor.requests.single.queryParameters['limit'], '12');
     });
 
@@ -107,7 +104,7 @@ void main() {
       ]);
 
       final page = await repo.listAuthorImpactEvidence(
-        subAccountId: _subAccountId,
+        personaId: _personaId,
         impactId: 'imp_1',
         limit: 20,
       );
@@ -127,11 +124,12 @@ void main() {
         operation.pathTemplate,
         ContentApiMetadata.listAuthorImpactEvidencePathTemplate,
       );
-      expect(request.pathParameters['subAccountId'], _subAccountId);
+      expect(request.pathParameters['personaId'], _personaId);
       expect(request.queryParameters['impactId'], 'imp_1');
       expect(request.queryParameters['limit'], '20');
-      // 首页无 cursor。
-      expect(request.queryParameters.containsKey('cursor'), isFalse);
+      // Repository 的公开参数以空串表达首页；generated request 只做一次
+      // canonical 编码，不再把它隐式改写为 null/缺省双轨。
+      expect(request.queryParameters['cursor'], '');
     });
 
     test('cursor 翻页：第二页透传 cursor 且解码触底', () async {
@@ -148,7 +146,7 @@ void main() {
       ]);
 
       final page = await repo.listAuthorImpactEvidence(
-        subAccountId: _subAccountId,
+        personaId: _personaId,
         impactId: 'imp_1',
         cursor: '2',
       );
@@ -168,7 +166,7 @@ void main() {
 
     test('未命中作者/impact 返回空页（不编造、不崩溃）', () async {
       final page = await query.listAuthorImpactEvidence(
-        subAccountId: 'no_such_author',
+        personaId: 'no_such_author',
         impactId: 'no_such_impact',
       );
       expect(page, isA<AuthorImpactEvidencePage>());
@@ -178,7 +176,7 @@ void main() {
 
     test('alpha lite 无 authorImpact seed：本人作者亦返回空页（不阻塞、不造假）', () async {
       final page = await query.listAuthorImpactEvidence(
-        subAccountId: _subAccountId,
+        personaId: _personaId,
         impactId: 'imp_anything',
       );
       expect(page.items, isEmpty);

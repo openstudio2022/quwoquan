@@ -11,6 +11,10 @@ errors:
 - code: USER.SETTING.invalid_call_ringtone
   kind: SETTING
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdateCallSettings
   http_status: 400
   recovery_action: surface
   dart_const: invalidCallRingtone
@@ -21,6 +25,10 @@ errors:
 - code: USER.SETTING.invalid_appearance_scope
   kind: SETTING
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdateAppearanceSettings
   http_status: 400
   recovery_action: surface
   dart_const: invalidAppearanceScope
@@ -31,6 +39,13 @@ errors:
 - code: USER.SETTING.settings_version_conflict
   kind: SETTING
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdateAppearanceSettings
+    - UpdateCallSettings
+    - UpdateNotificationSettings
+    - UpdatePrivacySettings
   http_status: 409
   recovery:
     action: retry

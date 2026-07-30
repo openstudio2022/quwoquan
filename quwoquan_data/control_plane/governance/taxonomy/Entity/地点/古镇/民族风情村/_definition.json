@@ -2,6 +2,7 @@
   "label": "民族风情村",
   "labelEn": "Ethnic Village",
   "description": "少数民族特色村寨",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

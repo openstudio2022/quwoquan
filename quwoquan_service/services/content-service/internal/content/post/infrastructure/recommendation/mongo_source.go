@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -28,20 +29,114 @@ func (s *MongoCandidateSource) Recall(ctx context.Context, req rtrec.RecallReque
 	}
 
 	filter := bson.M{}
+	applyReleaseServingEligibility(filter, req.ActiveReleaseID, req.ActiveManifestDigest)
 	if len(req.Tags) > 0 {
 		filter["tagRefs"] = bson.M{"$in": req.Tags}
 	}
 	applyVerticalFilter(filter, req.Vertical)
 
 	opts := options.Find().
-		SetSort(bson.D{{Key: "recScore", Value: -1}, {Key: "publishedAt", Value: -1}}).
+		SetSort(bson.D{
+			{Key: "recScore", Value: -1},
+			{Key: "publishedAt", Value: -1},
+			{Key: "postId", Value: -1},
+		}).
 		SetLimit(int64(limit))
 
-	if req.Cursor != "" {
-		filter["_id"] = bson.M{"$lt": req.Cursor}
+	candidates, err := queryDiscoveryFeed(ctx, s.coll, filter, opts, "mongo_discovery")
+	if err != nil || strings.TrimSpace(req.ActiveReleaseID) == "" {
+		return candidates, err
 	}
 
-	return queryDiscoveryFeed(ctx, s.coll, filter, opts, "mongo_discovery")
+	// The blended query deliberately preserves UGC. Its limit can therefore be
+	// filled by high-scoring UGC before any canonical item is seen. Fetch one
+	// exact release+digest anchor independently, before source quota/pre-rank,
+	// so the engine can reserve a first-page slot without making the whole feed
+	// canonical-only.
+	anchorFilter := bson.M{}
+	applyCanonicalReleaseFilter(
+		anchorFilter,
+		req.ActiveReleaseID,
+		req.ActiveManifestDigest,
+	)
+	applyVerticalFilter(anchorFilter, req.Vertical)
+	anchors, anchorErr := queryDiscoveryFeed(
+		ctx,
+		s.coll,
+		anchorFilter,
+		options.Find().
+			SetSort(bson.D{
+				{Key: "recScore", Value: -1},
+				{Key: "publishedAt", Value: -1},
+				{Key: "postId", Value: -1},
+			}).
+			SetLimit(1),
+		"mongo_discovery",
+	)
+	if anchorErr != nil {
+		return nil, anchorErr
+	}
+	if len(anchors) == 0 || containsCandidateID(candidates, anchors[0].ContentID) {
+		return candidates, nil
+	}
+	return append(candidates, anchors[0]), nil
+}
+
+func applyReleaseServingEligibility(
+	filter bson.M,
+	activeReleaseID string,
+	activeManifestDigest string,
+) {
+	filter["status"] = "published"
+	filter["visibility"] = "public"
+	filter["accountRestricted"] = bson.M{"$ne": true}
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	if activeReleaseID == "" {
+		return
+	}
+	canonical := canonicalReleasePredicate(activeReleaseID, activeManifestDigest)
+	filter["$or"] = bson.A{
+		bson.M{"$and": bson.A{
+			bson.M{"sourceOwner": bson.M{"$ne": "qwq_data"}},
+			bson.M{"supplySource": bson.M{"$ne": "data_engineering"}},
+		}},
+		canonical,
+	}
+}
+
+func applyCanonicalReleaseFilter(
+	filter bson.M,
+	activeReleaseID string,
+	activeManifestDigest string,
+) {
+	for key, value := range canonicalReleasePredicate(activeReleaseID, activeManifestDigest) {
+		filter[key] = value
+	}
+	filter["status"] = "published"
+	filter["visibility"] = "public"
+	filter["accountRestricted"] = bson.M{"$ne": true}
+}
+
+func canonicalReleasePredicate(activeReleaseID, activeManifestDigest string) bson.M {
+	predicate := bson.M{
+		"sourceOwner":     "qwq_data",
+		"releaseId":       strings.TrimSpace(activeReleaseID),
+		"lifecycleStatus": "active",
+	}
+	if activeManifestDigest = strings.TrimSpace(activeManifestDigest); activeManifestDigest != "" {
+		predicate["manifestDigest"] = activeManifestDigest
+	}
+	return predicate
+}
+
+func containsCandidateID(candidates []rtrec.ContentCandidate, contentID string) bool {
+	contentID = strings.TrimSpace(contentID)
+	for _, candidate := range candidates {
+		if strings.TrimSpace(candidate.ContentID) == contentID {
+			return true
+		}
+	}
+	return false
 }
 
 type discoveryFeedDoc struct {
@@ -61,6 +156,10 @@ type discoveryFeedDoc struct {
 	QualityScore                float64   `bson:"qualityScore"`
 	ContentVertical             string    `bson:"contentVertical"`
 	SupplySource                string    `bson:"supplySource"`
+	SourceOwner                 string    `bson:"sourceOwner"`
+	ReleaseID                   string    `bson:"releaseId"`
+	ManifestDigest              string    `bson:"manifestDigest"`
+	LifecycleStatus             string    `bson:"lifecycleStatus"`
 	IntersectionFactStrength    float64   `bson:"intersectionFactStrength"`
 	IntersectionFreshness       float64   `bson:"intersectionFreshness"`
 	AffinityIntersectionScore   float64   `bson:"affinityIntersectionScore"`
@@ -90,6 +189,10 @@ func candidateFromDiscoveryDoc(doc discoveryFeedDoc, recallPath string) rtrec.Co
 		QualityScore:                qualityScore,
 		ContentVertical:             doc.ContentVertical,
 		SupplySource:                doc.SupplySource,
+		SourceOwner:                 doc.SourceOwner,
+		ReleaseID:                   doc.ReleaseID,
+		ManifestDigest:              doc.ManifestDigest,
+		LifecycleStatus:             doc.LifecycleStatus,
 		IntersectionFactStrength:    doc.IntersectionFactStrength,
 		IntersectionFreshness:       doc.IntersectionFreshness,
 		AffinityIntersectionScore:   doc.AffinityIntersectionScore,

@@ -33,7 +33,6 @@ type PostLifecycleCommandFacade interface {
 
 type PostReadFacade interface {
 	GetPostOrTombstone(context.Context, string) (*postmodel.Post, bool, bool)
-	GetHelperRead(context.Context, string) (map[string]any, error)
 }
 
 type ContentUtilityQueryFacade interface {

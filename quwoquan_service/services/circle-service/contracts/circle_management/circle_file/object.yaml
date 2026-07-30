@@ -66,6 +66,7 @@ business_rules:
 - sizeBytes 与 mimeType 只由 MediaAsset named Reader 写入不可变快照，客户端不得提交
 - deleted 为终态；删除 CircleFile 不删除 MediaAsset，只发布引用移除事件
 lifecycle:
+  state_field: status
   states:
   - active
   - deleted

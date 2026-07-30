@@ -191,4 +191,92 @@ void main() {
     expect(confirmed, isNotNull);
     expect(confirmed!.isPublic, isFalse);
   });
+
+  testWidgets('未绑定地点时不展示出行时间入口', (tester) async {
+    await _openSheet(tester);
+
+    expect(find.text(CreationText.visitedAtLabel), findsNothing);
+  });
+
+  testWidgets('绑定地点后可声明出行时间，且不可选未来日期', (tester) async {
+    PublishSettings? confirmed;
+    await tester.pumpWidget(
+      _buildApp(
+        initialSettings: _placeAnchoredSettings,
+        onConfirm: (settings) => confirmed = settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开发布确认'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(CreationText.visitedAtLabel), findsOneWidget);
+    expect(find.text(CreationText.visitedAtUndeclared), findsOneWidget);
+
+    await tester.tap(find.text(CreationText.visitedAtLabel));
+    await tester.pumpAndSettle();
+
+    final picker = tester.widget<CupertinoDatePicker>(
+      find.byKey(const ValueKey<String>('publish-confirm-visited-at-picker')),
+    );
+    final today = DateTime.now();
+    expect(
+      picker.maximumDate,
+      DateTime(today.year, today.month, today.day),
+      reason: '未来日期是出行计划，不是到访事实',
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('publish-confirm-visited-at-confirm')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+
+    expect(confirmed, isNotNull);
+    expect(confirmed!.visitedAt, isNotNull);
+    expect(
+      confirmed!.toPayloadFields()['visitedAt'],
+      isNotNull,
+      reason: '声明后的到访时间必须进入发布 payload',
+    );
+  });
+
+  testWidgets('已声明的出行时间可清除，清除后不进入 payload', (tester) async {
+    PublishSettings? confirmed;
+    await tester.pumpWidget(
+      _buildApp(
+        initialSettings: _placeAnchoredSettings.copyWith(
+          visitedAt: DateTime(2026, 4, 5),
+        ),
+        onConfirm: (settings) => confirmed = settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开发布确认'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2026-04-05'), findsOneWidget);
+
+    await tester.tap(find.text(CreationText.visitedAtLabel));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('publish-confirm-visited-at-clear')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(CreationText.visitedAtUndeclared), findsOneWidget);
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pumpAndSettle();
+
+    expect(confirmed, isNotNull);
+    expect(confirmed!.visitedAt, isNull);
+    expect(confirmed!.toPayloadFields().containsKey('visitedAt'), isFalse);
+  });
 }
+
+/// 已选位置并解析出行政区标签的发布设置，是出行时间入口的前置条件。
+const PublishSettings _placeAnchoredSettings = PublishSettings(
+  locationName: '老君山观景台',
+  geoTagRef: 'Topic/地理/行政区/河南省/洛阳市',
+);

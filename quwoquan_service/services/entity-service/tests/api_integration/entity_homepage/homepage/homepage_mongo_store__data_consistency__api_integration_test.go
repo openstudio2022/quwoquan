@@ -154,7 +154,7 @@ func TestHomepageMongoStoreIdentityCASReceiptOutboxAndProjections(t *testing.T) 
 		t.Fatalf("upsert follower: %v", err)
 	}
 	view, err := queries.Get(ctx, created.ID, "viewer-1", true)
-	if err != nil || view.FollowerCount != 1 || !view.ViewerFollows {
+	if err != nil || view.ViewerFollow.FollowerCount != 1 || !view.ViewerFollow.ViewerFollowsHomepage {
 		t.Fatalf("follower projection view=%+v err=%v", view, err)
 	}
 	events, err := store.ReadAfter(ctx, "", 20)

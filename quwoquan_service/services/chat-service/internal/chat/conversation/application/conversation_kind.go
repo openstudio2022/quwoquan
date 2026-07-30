@@ -12,6 +12,10 @@ const (
 	conversationTypeEncrypted = "encrypted"
 )
 
+// conversationOriginGreetingReply 是 ConversationOriginType 闭集中「打招呼被回复
+// 后升级」的取值（_shared/types.yaml ConversationOriginType）。
+const conversationOriginGreetingReply = "greeting_reply"
+
 func IsGroupConversationType(rawType string) bool {
 	switch strings.TrimSpace(rawType) {
 	case conversationTypeGroup:

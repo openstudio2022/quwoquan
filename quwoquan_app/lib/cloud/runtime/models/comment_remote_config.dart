@@ -64,17 +64,11 @@ class CommentRemoteConfig {
 
   static int? _asInt(Object? value) {
     if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '');
+    return null;
   }
 
   static bool _asBool(Object? value, bool fallback) {
     if (value is bool) return value;
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true') return true;
-      if (normalized == 'false') return false;
-    }
     return fallback;
   }
 

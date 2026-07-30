@@ -14,7 +14,9 @@ class UserRequestPageIds {
     'BlockUser': 'user.block.create',
     'CancelGreetingRequest': 'user.cancel.greeting.request',
     'CheckAccountSecurityAuthority': 'user.check.account.security.authority',
+    'ClaimAccountAppealIntake': 'user.claim.account.appeal.intake',
     'CloseAccount': 'user.close.account',
+    'CompleteFederatedPhoneBinding': 'user.complete.federated.phone.binding',
     'ConfirmProposal': 'user.confirm.proposal',
     'CreateAlipayAuthorizationRequest': 'user.create.alipay.authorization.request',
     'CreatePersona': 'user.personas.create',
@@ -32,19 +34,20 @@ class UserRequestPageIds {
     'GetNotificationSettings': 'user.notification_settings.get',
     'GetPersonaLifecycleGuard': 'user.personas.lifecycle_guard',
     'GetPersonaManagementSummary': 'user.personas.summary',
+    'GetPersonaProfile': 'user.get.sub.account.profile',
     'GetPrivacySettings': 'user.settings.privacy.get',
     'GetProfileEditSnapshot': 'user.profile.edit.snapshot',
     'GetProfileQrCard': 'user.profile.qr.card',
     'GetProfileUpdateProposal': 'user.get.profile.update.proposal',
     'GetRelationship': 'user.relationship',
     'GetRelationshipCapability': 'user.get.relationship.capability',
-    'GetSubAccountProfile': 'user.get.sub.account.profile',
     'GetUserHomepageBundle': 'user.get.user.homepage.bundle',
     'GetUserInterestProfile': 'user.get.user.interest.profile',
     'GetUserProfile': 'user.profile',
     'IgnoreGreetingRequest': 'user.ignore.greeting.request',
     'InitiateContactDiscovery': 'user.initiate.contact.discovery',
     'InvalidateDevicePushEndpoint': 'user.invalidate.device.push.endpoint',
+    'IssueAccountAppealCredential': 'user.issue.account.appeal.credential',
     'ListBlockedUsers': 'user.block.list',
     'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
@@ -80,6 +83,7 @@ class UserRequestPageIds {
     'SearchSocialRelations': 'user.social.search',
     'SendGreetingRequest': 'user.send.greeting.request',
     'SendOtp': 'user.send.otp',
+    'SubmitAccountAppealIntake': 'user.submit.account.appeal.intake',
     'SuspendAccount': 'user.suspend.account',
     'UnbindCredential': 'user.unbind.credential',
     'UnblockUser': 'user.block.delete',
@@ -103,7 +107,9 @@ class UserRequestPageIds {
   static const String blockUser = 'user.block.create';
   static const String cancelGreetingRequest = 'user.cancel.greeting.request';
   static const String checkAccountSecurityAuthority = 'user.check.account.security.authority';
+  static const String claimAccountAppealIntake = 'user.claim.account.appeal.intake';
   static const String closeAccount = 'user.close.account';
+  static const String completeFederatedPhoneBinding = 'user.complete.federated.phone.binding';
   static const String confirmProposal = 'user.confirm.proposal';
   static const String createAlipayAuthorizationRequest = 'user.create.alipay.authorization.request';
   static const String createPersona = 'user.personas.create';
@@ -121,19 +127,20 @@ class UserRequestPageIds {
   static const String getNotificationSettings = 'user.notification_settings.get';
   static const String getPersonaLifecycleGuard = 'user.personas.lifecycle_guard';
   static const String getPersonaManagementSummary = 'user.personas.summary';
+  static const String getPersonaProfile = 'user.get.sub.account.profile';
   static const String getPrivacySettings = 'user.settings.privacy.get';
   static const String getProfileEditSnapshot = 'user.profile.edit.snapshot';
   static const String getProfileQrCard = 'user.profile.qr.card';
   static const String getProfileUpdateProposal = 'user.get.profile.update.proposal';
   static const String getRelationship = 'user.relationship';
   static const String getRelationshipCapability = 'user.get.relationship.capability';
-  static const String getSubAccountProfile = 'user.get.sub.account.profile';
   static const String getUserHomepageBundle = 'user.get.user.homepage.bundle';
   static const String getUserInterestProfile = 'user.get.user.interest.profile';
   static const String getUserProfile = 'user.profile';
   static const String ignoreGreetingRequest = 'user.ignore.greeting.request';
   static const String initiateContactDiscovery = 'user.initiate.contact.discovery';
   static const String invalidateDevicePushEndpoint = 'user.invalidate.device.push.endpoint';
+  static const String issueAccountAppealCredential = 'user.issue.account.appeal.credential';
   static const String listBlockedUsers = 'user.block.list';
   static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';
@@ -169,6 +176,7 @@ class UserRequestPageIds {
   static const String searchSocialRelations = 'user.social.search';
   static const String sendGreetingRequest = 'user.send.greeting.request';
   static const String sendOtp = 'user.send.otp';
+  static const String submitAccountAppealIntake = 'user.submit.account.appeal.intake';
   static const String suspendAccount = 'user.suspend.account';
   static const String unbindCredential = 'user.unbind.credential';
   static const String unblockUser = 'user.block.delete';

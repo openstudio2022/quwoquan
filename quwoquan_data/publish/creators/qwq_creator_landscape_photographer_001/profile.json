@@ -3,7 +3,7 @@
   "creatorId": "qwq_creator_landscape_photographer_001",
   "userId": "builtin_travel_landscape_photographer",
   "authorId": "builtin_travel_landscape_photographer",
-  "subAccountId": "builtin_travel_landscape_photographer",
+  "personaId": "builtin_travel_landscape_photographer",
   "displayName": "林间取景",
   "userHandle": "frame_in_mountains",
   "headline": "关注山地光线、机位和图文画报的风光摄影师",
@@ -19,5 +19,10 @@
     "type": "platform_virtual_creator",
     "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
     "visible": true
+  },
+  "avatarAsset": {
+    "assetId": "creator-avatar-qwq_creator_landscape_photographer_001-8afb0ece7d71ca69",
+    "kind": "avatar",
+    "sha256": "sha256:8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd"
   }
 }

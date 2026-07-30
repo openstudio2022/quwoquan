@@ -360,7 +360,7 @@ def gen_topic_verticals_part2():
         ("辅食营养", "Baby Food", "婴幼儿辅食与营养"),
         ("母婴用品", "Baby Products", "母婴产品评测与推荐"),
         ("幼儿园选择", "Kindergarten Selection", "幼儿园择园攻略与评价"),
-        ("幼小衔接", "Preschool-Primary Transition", "学前到小学的过渡准备与衔接"),
+        # 「幼小衔接」的唯一真相源是 Topic/教育成长/基础教育（学段而非育儿话题，R14）。
         ("学前启蒙", "Early Education", "幼儿早期教育与能力启蒙"),
     ])
 
@@ -559,41 +559,3 @@ def gen_topic_verticals_part2():
         ("特卖折扣", "Sales & Discounts", "特卖活动与折扣攻略"),
         ("好物清单", "Shopping List", "精选好物推荐清单"),
     ])
-
-    # 31. 摄影（题材社区 / 知识方法 / 活动赛事；对标 500px/图虫/Flickr 等平台频道）
-    tag("Topic/摄影", "摄影", "Photography",
-        "摄影创作与摄影文化内容：按题材流派形成的社区频道 + 摄影知识与器材内容")
-    tags_list("Topic/摄影", [
-        ("风光摄影", "Landscape Photography", "以自然风景为主题的摄影创作"),
-        ("人像摄影", "Portrait Photography", "以人物肖像为主题的摄影创作"),
-        ("儿童摄影", "Children Photography", "以儿童与亲子为主题的摄影创作"),
-        ("街头摄影", "Street Photography", "城市街头抓拍与日常记录"),
-        ("纪实摄影", "Documentary Photography", "纪实报道与社会记录摄影"),
-        ("建筑摄影", "Architecture Photography", "建筑与城市景观摄影"),
-        ("野生动物摄影", "Wildlife Photography", "野生动物生态摄影"),
-        ("微距摄影", "Macro Photography", "微观世界的近距离摄影"),
-        ("美食摄影", "Food Photography", "美食与饮品的摄影创作"),
-        ("静物摄影", "Still Life Photography", "静物构成与产品摄影"),
-        ("人文摄影", "Cultural Photography", "民族民俗与人文题材摄影"),
-        ("时尚摄影", "Fashion Photography", "时尚造型与服饰摄影"),
-        ("运动摄影", "Sports Photography", "体育运动与动作抓拍摄影"),
-        ("婚礼摄影", "Wedding Photography", "婚纱婚礼纪实摄影"),
-        ("商业摄影", "Commercial Photography", "商业广告与产品摄影"),
-        ("旅行摄影", "Travel Photography", "旅途见闻与异域风情摄影"),
-        ("水下摄影", "Underwater Photography", "水下世界探索摄影"),
-        ("航拍摄影", "Aerial Photography", "无人机与航空俯瞰摄影"),
-        ("夜景星空", "Night & Astro Photography", "夜景城市与星空银河摄影"),
-        ("抽象摄影", "Abstract Photography", "抽象形式与实验性摄影"),
-        ("艺术摄影", "Fine Art Photography", "观念艺术与纯艺术摄影"),
-        ("新闻摄影", "Photojournalism", "新闻事件与现场报道摄影"),
-        ("花卉摄影", "Botanical Photography", "花卉植物专项摄影"),
-        ("摄影教程", "Photography Tutorial", "拍摄技巧与方法教学"),
-        ("器材评测", "Gear Review", "相机镜头附件评测对比"),
-        ("后期技巧", "Post-processing Tips", "Lightroom/PS/手机修图技巧"),
-        ("摄影赛事", "Photo Contest", "国内外摄影比赛资讯"),
-        ("摄影史", "History of Photography", "摄影历史与经典大师作品"),
-        ("手机摄影", "Mobile Photography", "手机拍摄技巧与后期"),
-    ])
-
-
-

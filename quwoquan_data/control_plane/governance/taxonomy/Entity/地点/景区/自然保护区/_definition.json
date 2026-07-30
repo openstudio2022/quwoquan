@@ -2,6 +2,7 @@
   "label": "自然保护区",
   "labelEn": "Nature Reserve",
   "description": "自然生态保护区",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

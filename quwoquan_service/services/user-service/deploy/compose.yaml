@@ -1,7 +1,7 @@
 # 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
 services:
   user-service:
-    image: "${QWQ_COMPOSE_USER_SERVICE_IMAGE:-localhost/quwoquan_service_user-service:latest}"
+    image: "${QWQ_COMPOSE_USER_SERVICE_IMAGE:?fixed user-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/user-service/build/Dockerfile
@@ -14,7 +14,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_USER_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_USER_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       USER_SERVICE_ADDR: ":18081"
       OTP_CODE_REF_ACTIVE_KEY_VERSION: "${OTP_CODE_REF_ACTIVE_KEY_VERSION:?OTP_CODE_REF_ACTIVE_KEY_VERSION is required}"
       OTP_CODE_REF_KEYS_JSON: "${OTP_CODE_REF_KEYS_JSON:?OTP_CODE_REF_KEYS_JSON is required}"

@@ -205,10 +205,10 @@ func listAccountPersonaIDs(
 	accountID string,
 ) ([]string, error) {
 	rows, err := tx.Query(ctx, `
-SELECT sub_account_id
+SELECT persona_id
 FROM personas
 WHERE user_id=$1
-ORDER BY sub_account_id
+ORDER BY persona_id
 FOR UPDATE`, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("list personas for account close: %w", err)
@@ -254,7 +254,6 @@ SET account_state='closed',
     birth_date=NULL,
     region=NULL,
     region_code=NULL,
-    status='closed',
     profile_version=$3,
     follower_count=0,
     following_count=0,
@@ -262,7 +261,7 @@ SET account_state='closed',
     circle_count=0,
     like_count=0,
     owner_display_name=NULL,
-    sub_account_count=0,
+    persona_count=0,
     updated_at=$2
 WHERE user_id=$1`, accountID, closedAt, accountVersion, authEpoch)
 	if err != nil {

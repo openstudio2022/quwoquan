@@ -50,9 +50,9 @@ func (i *profileSearchBackfillIndexer) Bulk(
 
 func TestUserSearchBackfillReconcilesEveryAccountState(t *testing.T) {
 	lister := profileSearchBackfillLister{profiles: []model.UserProfile{
-		{UserID: "active", AccountState: "active", Status: "active"},
-		{UserID: "closed", AccountState: "closed", Status: "active"},
-		{UserID: "suspended", AccountState: "active", Status: "suspended"},
+		{UserID: "active", AccountState: "active"},
+		{UserID: "closed", AccountState: "closed"},
+		{UserID: "suspended", AccountState: "suspended"},
 	}}
 	indexer := &profileSearchBackfillIndexer{}
 

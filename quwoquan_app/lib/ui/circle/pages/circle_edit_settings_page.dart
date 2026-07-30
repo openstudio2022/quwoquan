@@ -14,6 +14,8 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_edit_submit_payload.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CircleJoinPolicy, CircleVisibility;
 part 'circle_edit_settings_page_state.dart';
 part 'circle_edit_settings_page_state_helpers.dart';
 part 'circle_edit_settings_page_controls.dart';

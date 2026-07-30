@@ -45,7 +45,7 @@ func TestEntityWishlistStateTracksBehaviorProjection(t *testing.T) {
 		)
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", userID)
-		req.Header.Set("X-Client-Sub-Account-Id", userID)
+		req.Header.Set("X-Client-Persona-Id", userID)
 		rec := httptest.NewRecorder()
 		testHandler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusNoContent {
@@ -60,7 +60,7 @@ func TestEntityWishlistStateTracksBehaviorProjection(t *testing.T) {
 			nil,
 		)
 		req.Header.Set("X-Client-User-Id", userID)
-		req.Header.Set("X-Client-Sub-Account-Id", userID)
+		req.Header.Set("X-Client-Persona-Id", userID)
 		rec := httptest.NewRecorder()
 		testHandler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {

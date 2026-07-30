@@ -32,6 +32,15 @@ func NewFixtureHomepageServiceWithOptions(
 	if err != nil {
 		panic(err)
 	}
+	projections, err := application.LoadHomepageFixtureDetailProjections()
+	if err != nil {
+		panic(err)
+	}
+	for _, projection := range projections {
+		if err := store.SeedDetailProjection(projection); err != nil {
+			panic(err)
+		}
+	}
 	options = append([]application.HomepageServiceOption{
 		application.WithClaimFacade(newMemoryClaimFacade()),
 		application.WithStatusReportFacade(newMemoryStatusFacade()),

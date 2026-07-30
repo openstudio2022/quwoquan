@@ -6,8 +6,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	commentports "quwoquan_service/services/content-service/internal/content/comment/domain/ports"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -17,15 +19,20 @@ func TestCommentTombstoneProjectorAppliesPostDeletedOnce(t *testing.T) {
 	writer := &commentTombstoneWriterFixture{affected: 3}
 	projector := commentapp.NewCommentTombstoneProjector(writer)
 	event := postports.OutboxEvent{
-		EventID:   "post-event-1",
-		EventType: "PostDeleted",
-		Payload:   json.RawMessage(`{"postId":"post-1"}`),
+		EventID:          "post-event-1",
+		EventType:        "PostDeleted",
+		AggregateID:      "post-1",
+		AggregateVersion: 4,
+		OccurredAt:       time.Date(2026, 7, 29, 8, 0, 0, 0, time.UTC),
+		Payload:          json.RawMessage(`{"postId":"post-1"}`),
 	}
 
 	if err := projector.Publish(context.Background(), event); err != nil {
 		t.Fatalf("投影 PostDeleted 失败：%v", err)
 	}
-	if writer.calls != 1 || writer.postID != "post-1" {
+	if writer.calls != 1 || writer.command.PostID != "post-1" ||
+		writer.command.SourceEventID != "post-event-1" ||
+		writer.command.SourcePostVersion != 4 || !writer.command.OccurredAt.Equal(event.OccurredAt) {
 		t.Fatalf("tombstone 调用 = %d/%q，期望 1/post-1", writer.calls, writer.postID)
 	}
 
@@ -68,8 +75,9 @@ func TestCommentTombstoneProjectorRejectsInvalidFactAndPropagatesWriterFailure(
 		&commentTombstoneWriterFixture{err: writeErr},
 	)
 	err := projector.Publish(context.Background(), postports.OutboxEvent{
-		EventType: "PostDeleted",
-		Payload:   json.RawMessage(`{"postId":"post-2"}`),
+		EventID: "post-event-2", EventType: "PostDeleted",
+		AggregateID: "post-2", AggregateVersion: 2, OccurredAt: time.Now().UTC(),
+		Payload: json.RawMessage(`{"postId":"post-2"}`),
 	})
 	if !errors.Is(err, writeErr) ||
 		!strings.Contains(err.Error(), "tombstone comments for deleted post") {
@@ -82,13 +90,15 @@ type commentTombstoneWriterFixture struct {
 	err      error
 	calls    int
 	postID   string
+	command  commentports.TombstoneCommentsByPostCommand
 }
 
 func (f *commentTombstoneWriterFixture) TombstoneCommentsByPost(
 	_ context.Context,
-	postID string,
+	command commentports.TombstoneCommentsByPostCommand,
 ) (int64, error) {
 	f.calls++
-	f.postID = postID
+	f.postID = command.PostID
+	f.command = command
 	return f.affected, f.err
 }

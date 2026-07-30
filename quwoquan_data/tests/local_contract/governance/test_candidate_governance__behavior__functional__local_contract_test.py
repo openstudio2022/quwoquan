@@ -34,6 +34,8 @@ def test_candidate_requires_human_review_and_emits_audit_backfill(tmp_path: Path
         mention_ids=["mention_1234567890abcdef12345678"],
     )
     assert candidate["status"] == STATUS_PENDING_REVIEW
+    assert candidate["revision"] == 1
+    assert "version" not in candidate
     assert not repository.backfill_path.exists()
 
     for kwargs in (
@@ -55,6 +57,7 @@ def test_candidate_requires_human_review_and_emits_audit_backfill(tmp_path: Path
         reason="来源与实体类型已核验",
     )
     assert published["status"] == STATUS_PUBLISHED
+    assert published["revision"] == 2
     reviews = _read_ndjson(repository.review_path(candidate["candidateId"]))
     assert reviews[0]["actorType"] == "human"
     assert reviews[0]["fromStatus"] == STATUS_PENDING_REVIEW
@@ -72,10 +75,46 @@ def test_candidate_requires_human_review_and_emits_audit_backfill(tmp_path: Path
         decision_id="review-1",
     )
     assert len(_read_ndjson(repository.backfill_path)) == 1, "replayed decision must be idempotent"
-    assert [row["action"] for row in _read_ndjson(repository.audit_path)] == [
+    audit_rows = _read_ndjson(repository.audit_path)
+    assert [row["action"] for row in audit_rows] == [
         "candidate.intake",
         "candidate.reviewed",
     ]
+    assert [row["candidateRevision"] for row in audit_rows] == [1, 2]
+    assert all("version" not in row for row in audit_rows)
+
+
+def test_candidate_repository_rejects_retired_version_shape(tmp_path: Path) -> None:
+    repository = CandidateRepository(tmp_path / "governance")
+    candidate_id = "candidate_1234567890abcdef12345678"
+    path = repository.candidate_path(candidate_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "quwoquan_data.governance_candidate",
+                "candidateId": candidate_id,
+                "kind": "tag",
+                "naturalKey": "Topic/主题/旧形态",
+                "status": STATUS_PENDING_REVIEW,
+                "payload": {},
+                "sourceRefs": [],
+                "mentionIds": [],
+                "createdAt": "2026-06-13T00:00:00+00:00",
+                "updatedAt": "2026-06-13T00:00:00+00:00",
+                "version": 1,
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    try:
+        repository.get(candidate_id)
+    except ValueError as exc:
+        assert "schema violation" in str(exc)
+        assert "revision" in str(exc) or "version" in str(exc)
+    else:
+        raise AssertionError("retired version-shaped candidate must be rejected")
 
 
 def test_explicit_state_machine_reject_offline_and_restore(tmp_path: Path) -> None:

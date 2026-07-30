@@ -80,6 +80,15 @@
                 "items": {"type": "string", "minLength": 1},
                 "uniqueItems": true
               },
+              "coordinates": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["lat", "lon"],
+                "properties": {
+                  "lat": {"type": "number", "minimum": -90, "maximum": 90},
+                  "lon": {"type": "number", "minimum": -180, "maximum": 180}
+                }
+              },
               "qualifiedHomepageSource": {
                 "type": "object",
                 "required": ["provider", "title", "url"],

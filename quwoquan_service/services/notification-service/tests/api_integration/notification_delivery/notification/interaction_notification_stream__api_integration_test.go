@@ -156,8 +156,8 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 		"eventId":                      "greeting:g-api-1:GreetingRequestSent",
 		"eventName":                    "GreetingRequestSent",
 		"id":                           "g-api-1",
-		"requesterSubAccountId":        "actor-api-1",
-		"targetSubAccountId":           "recipient-api-1",
+		"requesterPersonaId":           "actor-api-1",
+		"targetPersonaId":              "recipient-api-1",
 		"targetAllowsStrangerGreeting": "true",
 		"occurredAt":                   time.Now().UTC().Format(time.RFC3339Nano),
 	}

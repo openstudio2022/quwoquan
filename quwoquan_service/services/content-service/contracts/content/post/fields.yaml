@@ -1,1481 +1,1480 @@
 description: 内容主体（聚合根）
 fields:
-- name: _id
-  source: _id
-  type: ObjectId
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  source: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: Post 乐观并发版本；每次聚合提交原子递增
-  role: authoritative_state
-- name: publishIntentId
-  source: publishIntentId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: write
-  ops_exposure: read
-  description: 本地草稿唯一的一次性发布意图；服务端据此永久识别同一次发布
-  role: authoritative_state
-- name: localDraftId
-  source: localDraftId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: write
-  ops_exposure: read
-  description: 创建该 Post 的端侧本地草稿稳定标识；用于永久阻止同一草稿重复创建
-  role: authoritative_state
-- name: authorId
-  source: authorId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 作者稳定公开主体 ID（subAccountId）
-  role: authoritative_state
-  reference: true
-- name: creatorProfileId
-  source: creatorProfileId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 平台创作者画像 ID；系统作者内容必须存在，不写入标签或实体主树
-  role: authoritative_state
-  reference: true
-- name: creatorArchetype
-  source: creatorArchetype
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 作者类型，如 travel_blogger / landscape_photographer / campus_blogger
-  role: authoritative_state
-- name: creatorProfileVersion
-  source: creatorProfileVersion
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 写入内容时绑定的作者画像版本
-  role: authoritative_state
-- name: creatorDisclosure
-  source: creatorDisclosure
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 用户可见的虚拟创作者披露信息
-  role: owned_value
-- name: sourceAttribution
-  source: sourceAttribution
-  type: SourceAttribution
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: metadata_only
-  api_exposure: read
-  ops_exposure: read
-  description: 外部来源视频的原创者、来源、权利事实与下架策略；平台发布作者不得覆盖该字段
-  role: owned_value
-- name: experienceClaimMode
-  source: experienceClaimMode
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 经验声明模式，默认 editorial_synthesis，禁止伪真实亲历
-  role: authoritative_state
-- name: authorQualitySignals
-  source: authorQualitySignals
-  type: object
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: none
-  ops_exposure: read
-  recommend_feature: true
-  description: 作者质量、疲劳度、风险等级等推荐与调度信号
-  role: projection
-- name: authorDisplayNameSnapshot
-  source: authorDisplayNameSnapshot
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 作者显示名快照，避免分身退役或改名后记录渲染漂移
-  role: authoritative_state
-- name: authorAvatarUrlSnapshot
-  source: authorAvatarUrlSnapshot
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 作者头像快照
-  role: authoritative_state
-- name: personaContextVersion
-  source: personaContextVersion
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 写入时绑定的 subAccount 上下文版本
-  role: authoritative_state
-- name: contentType
-  source: contentType
-  type: enum
-  enum_ref: ContentType
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: authoritative_state
-- name: contentIdentity
-  source: contentIdentity
-  type: enum
-  enum_ref: ContentIdentity
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 内容身份层。moment=点滴，work=作品；记录数据允许为空，读路径按 contentType 推导
-  role: authoritative_state
-- name: title
-  source: title
-  type: string
-  constraints:
-  - NULLABLE
-  - MAX_LENGTH_80
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  search_field: true
-  description: 标题（文章必填，其他可选）
-  role: authoritative_state
-- name: body
-  source: body
-  type: string
-  constraints:
-  - NULLABLE
-  - MAX_LENGTH_5000
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  search_field: true
-  role: authoritative_state
-- name: tagRefs
-  source: tagRefs
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  tag_ref: true
-  description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 tag mention 派生
-  role: projection
-- name: entityRefs
-  source: entityRefs
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 entity mention 派生
-  role: projection
-- name: semanticMentions
-  source: semanticMentions
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  - MAX_ITEMS_30
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: '标题/正文/文章中的语义标注事实：
-
-    [{mentionId,kind,surface,location,rangeStart,rangeEnd,status,candidateId,targetRef}]。
-
-    status 支持 published/pending_review/rejected/offline；只有 published 且 targetRef 合法的项进入活动 entityRefs/tagRefs。
-
-    '
-  role: owned_value
-- name: mediaAssetIds
-  source: mediaAssetIds
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 有序 MediaAsset ID 引用；仅 `SubmitPostPublication` 在完成所有权、就绪态与公开 slice 物化后写入，Post 不内嵌媒体对象。
-  role: authoritative_state
-  reference: true
-- name: mediaUrls
-  source: mediaUrls
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 服务端由已绑定 MediaAsset 投影的 canonical public slice key 序列；App 不得持久化上传响应中的 cdnUrl、签名 URL 或 CAS
-    object key。
-  role: projection
-- name: mediaItems
-  source: mediaItems
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: '服务端由已绑定 MediaAsset 投影的统一媒体序列（Work Browser 真相源）：[{kind:image|video, url, coverUrl?, durationMs?,
-    width?, height?, title?}]。
-
-    视频集（一个作品多段视频）唯一契约表达；禁止端侧按同作者从队列临时拼集合。
-
-    为空时端按 mediaUrls/videoUrl 派生单一序列。
-
-    '
-  role: projection
-- name: coverUrl
-  source: coverUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 服务端从已绑定封面 MediaAsset 或视频首帧投影的 canonical public slice key；禁止 App 写入 cdnUrl、签名 URL 或内部 object
-    key。视频时与 thumbnailUrl 同源，供旧卡片和作品浏览器回退。
-  role: projection
-- name: thumbnailUrl
-  source: thumbnailUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 服务端从已绑定封面 MediaAsset 或视频首帧投影的公开交付引用；默认首帧，手工选帧时覆盖。UI mapper 须转为 typed MediaDeliveryReference。
-  role: projection
-- name: articleMarkdown
-  source: articleMarkdown
-  type: string
-  constraints:
-  - NULLABLE
-  - MAX_LENGTH_20000
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  search_field: true
-  description: QWQ Rich Markdown v1 原文，文章长文唯一持久化真相源
-  role: authoritative_state
-- name: markdownDialect
-  source: markdownDialect
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: Markdown 规范版本，当前为 qwq-rich-md
-  role: authoritative_state
-- name: articleMarkdownDigest
-  source: articleMarkdownDigest
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 规范化 articleMarkdown 的 sha256 digest，用于幂等、缓存与审计
-  role: authoritative_state
-- name: articleAssetManifest
-  source: articleAssetManifest
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 文章素材清单，正文 asset:// 引用必须存在于该 manifest
-  role: owned_value
-- name: articleRenderProfile
-  source: articleRenderProfile
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: '文章渲染画像。Work Browser V1.0 消费字段：
-
-    template/fontPreset、paperThemeMode(system|manual)、paperTexture
-
-    (darkPaper|coolGray|warmBlack|inkGreen|deepBrown)、contentVertical
-
-    (photography|travel|history|tech|nature)。
-
-    旧模板只保留为版心/排版气质输入，不再决定浏览器默认纸张亮度。
-
-    '
-  role: owned_value
-- name: contentVertical
-  source: contentVertical
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  description: 内容垂类：photography/travel/history/tech/nature 等；Work Browser 文章纸张系统适配的唯一垂类输入。
-  role: authoritative_state
-- name: entityMentions
-  source: entityMentions
-  type: '[]object'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 文章行内实体标签列表 [{subjectType,subjectId,homepageId,displayName,rangeStart,rangeEnd}]，由 QWQ Rich
-    Markdown 派生并由实体投影解析 canonical Homepage。
-  role: projection
-- name: articleTemplate
-  source: articleTemplate
-  type: enum
-  enum_ref: ArticleTemplatePreset
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 从 articleRenderProfile.template 派生的文章模板只读快照
-  role: projection
-- name: articleFontPreset
-  source: articleFontPreset
-  type: enum
-  enum_ref: ArticleFontPreset
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 从 articleRenderProfile.fontPreset 派生的文章字体预设只读快照
-  role: projection
-- name: videoUrl
-  source: videoUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 服务端从已绑定视频 MediaAsset 投影的 canonical public slice key；禁止 App 写入 cdnUrl、签名 URL 或内部 CAS/object
-    key。端侧播放器只消费经 MediaDeliveryResolver 校验后的 MediaDeliveryReference。
-  role: projection
-- name: width
-  source: width
-  type: int
-  constraints:
-  - NULLABLE
-  - POSITIVE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 服务端从 ready MediaAsset 投影的权威视频宽度（px）。
-  role: projection
-- name: height
-  source: height
-  type: int
-  constraints:
-  - NULLABLE
-  - POSITIVE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 服务端从 ready MediaAsset 投影的权威视频高度（px）。
-  role: projection
-- name: durationMs
-  source: durationMs
-  type: int
-  constraints:
-  - NULLABLE
-  - POSITIVE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 服务端从 ready MediaAsset verifiedDurationMs 投影的权威视频时长（毫秒）。
-  role: projection
-- name: coverStrategy
-  source: coverStrategy
-  type: enum
-  enum_ref: MediaCoverStrategy
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 视频封面策略。first_frame 表示首帧派生；manual 表示用户手工选帧或手工封面资产
-  role: projection
-- name: coverFrameTimeMs
-  source: coverFrameTimeMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 视频封面帧时间点（毫秒）。默认首帧为 0；用于审计和重新派生封面
-  role: projection
-- name: location
-  source: location
-  type: GeoPoint
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  role: owned_value
-- name: locationName
-  source: locationName
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  search_field: true
-  role: projection
-- name: primaryHomepageId
-  source: primaryHomepageId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 内容绑定的 canonical 共享主页 ID
-  role: authoritative_state
-  reference: true
-- name: primaryHomepageType
-  source: primaryHomepageType
-  type: enum
-  enum_ref: HomepageType
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 绑定主页的类型快照
-  role: projection
-- name: primaryHomepageSnapshot
-  source: primaryHomepageSnapshot
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 绑定主页的轻量快照（标题、副标题、封面）
-  role: owned_value
-- name: status
-  source: status
-  type: enum
-  enum_ref: PostStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  observe_metric: post_status_gauge
-  role: authoritative_state
-- name: visibility
-  source: visibility
-  type: enum
-  enum_ref: Visibility
-  constraints:
-  - NOT_NULL
-  - DEFAULT_PUBLIC
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: assistantUsePolicy
-  source: assistantUsePolicy
-  type: enum
-  enum_ref: AssistantUsePolicy
-  constraints:
-  - NOT_NULL
-  - DEFAULT_INHERIT
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 小趣内容消费策略。inherit=遵循全局授权，exclude=排除当前内容
-  role: authoritative_state
-- name: sourcePostId
-  source: sourcePostId
-  type: ObjectId
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 转发/引用来源 postId
-  role: authoritative_state
-  reference: true
-- name: sourceType
-  source: sourceType
-  type: enum
-  enum_ref: PostSourceType
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: original/repost/quote（记录数据可为空，读取时按 original 处理）
-  role: authoritative_state
-- name: summary
-  source: summary
-  type: string
-  constraints:
-  - NULLABLE
-  - MAX_LENGTH_240
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 文章摘要（模型生成后可人工编辑）
-  role: authoritative_state
-- name: illustrationAssetId
-  source: illustrationAssetId
-  type: ObjectId
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 文章插图媒体 ID（可选，最多 1 张）
-  role: authoritative_state
-  reference: true
-- name: publishLocation
-  source: publishLocation
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read
-  ops_exposure: read
-  description: 发布位置（国家/省/市，来自 IP 归属）
-  role: owned_value
-- name: deviceInfo
-  source: deviceInfo
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read
-  ops_exposure: read
-  description: 发布设备（manufacturer/brand/model/os/appVersion）
-  role: transport_only
-- name: likeCount
-  source: likeCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: projection
-- name: commentCount
-  source: commentCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: projection
-- name: pinnedCommentId
-  source: pinnedCommentId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  description: 唯一置顶 Comment ID；评论本体拥有独立生命周期
-  role: authoritative_state
-  reference: true
-- name: shareCount
-  source: shareCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: projection
-- name: viewCount
-  source: viewCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: projection
-- name: embedding
-  source: embedding
-  type: '[]float32'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: drop
-  api_exposure: drop
-  ops_exposure: drop
-  description: 内容语义向量（1536维）
-  role: projection
-- name: helperReadSummary
-  source: helperReadSummary
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 帮读摘要缓存
-  role: projection
-- name: moderationStatus
-  source: moderationStatus
-  type: enum
-  enum_ref: ModerationStatus
-  constraints:
-  - NOT_NULL
-  - DEFAULT_PENDING
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  role: projection
-- name: contentDigest
-  source: contentDigest
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: none
-  ops_exposure: read
-  description: 当前可审核内容的 canonical SHA-256；PostModerationCase 必须绑定此值与 version
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: publishedAt
-  source: publishedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: authoritative_state
-- name: lastActiveAt
-  source: lastActiveAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 最近活跃时间（发帖 / 评论 / 回复都会刷新）
-  role: projection
-- name: sourceTaskId
-  source: sourceTaskId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 内容溯源——生成此内容的数据工程任务 id（task trace / 效果回流按 sourceTask 归因）
-  role: authoritative_state
-- name: deletedAt
-  source: deletedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-types:
-  ContentAccountClosureDeadLetterRecoveryRequest:
-    description: operator 释放 Content 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
-    fields:
-    - name: sourceStreamId
-      source: sourceStreamId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: write
-  ContentAccountClosureDeadLetterRecoveryAccepted:
-    description: Content 注销清理 source PEL 已受理重新消费。
-    fields:
-    - name: sourceStreamId
-      source: sourceStreamId
-      type: string
-      constraints:
+  - name: _id
+    source: _id
+    type: ObjectId
+    constraints:
       - PK
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: recoveryAccepted
-      source: recoveryAccepted
-      type: bool
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    source: version
+    type: int
+    constraints:
       - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  DeletedPostTombstone:
-    description: 删除内容墓碑记录，用于 URL 访问提示已删除
-    fields:
-    - name: _id
-      source: _id
-      type: ObjectId
-      constraints:
-      - PK
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: postId
-      source: postId
-      type: ObjectId
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: authorId
-      source: authorId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: reason
-      source: reason
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: deletedAt
-      source: deletedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: expireAt
-      source: expireAt
-      type: timestamp
-      constraints:
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Post 乐观并发版本；每次聚合提交原子递增
+    role: authoritative_state
+  - name: publishIntentId
+    source: publishIntentId
+    type: string
+    constraints:
       - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  UserAccountClosedProjectionInbox:
-    description: Content 已幂等应用 UserAccountClosed 的 durable inbox，不保存账号或 persona 原值。
-    fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: eventDigest
-      source: eventDigest
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: accountVersion
-      source: accountVersion
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: mongoAppliedAt
-      source: mongoAppliedAt
-      type: timestamp
-      constraints:
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    description: 本地草稿唯一的一次性发布意图；服务端据此永久识别同一次发布
+    role: authoritative_state
+  - name: localDraftId
+    source: localDraftId
+    type: string
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: completedAt
-      source: completedAt
-      type: timestamp
-      constraints:
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    description: 创建该 Post 的端侧本地草稿稳定标识；用于永久阻止同一草稿重复创建
+    role: authoritative_state
+  - name: authorId
+    source: authorId
+    type: string
+    max_utf8_bytes: 128
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 作者稳定公开主体 ID（personaId）
+    role: authoritative_state
+    reference: true
+  - name: creatorProfileId
+    source: creatorProfileId
+    type: string
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-  UserAccountClosedProjectionFailure:
-    description: Content 账户关闭投影的有限重试状态，仅保存不可逆事件与错误摘要。普通重试由 TTL
-      回收；terminal DLQ marker 保留至显式释放 source PEL。
-    fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 平台创作者画像 ID；系统作者内容必须存在，不写入标签或实体主树
+    role: authoritative_state
+    reference: true
+  - name: creatorArchetype
+    source: creatorArchetype
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 作者类型，如 travel_blogger / landscape_photographer / campus_blogger
+    role: authoritative_state
+  - name: creatorProfileVersion
+    source: creatorProfileVersion
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 写入内容时绑定的作者画像版本
+    role: authoritative_state
+  - name: creatorDisclosure
+    source: creatorDisclosure
+    type: object
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 用户可见的虚拟创作者披露信息
+    role: owned_value
+  - name: sourceAttribution
+    source: sourceAttribution
+    type: SourceAttribution
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: metadata_only
+    api_exposure: read
+    ops_exposure: read
+    description: 外部来源视频的原创者、来源、权利事实与下架策略；平台发布作者不得覆盖该字段
+    role: owned_value
+  - name: experienceClaimMode
+    source: experienceClaimMode
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 经验声明模式，默认 editorial_synthesis，禁止伪真实亲历
+    role: authoritative_state
+  - name: authorQualitySignals
+    source: authorQualitySignals
+    type: object
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+    recommend_feature: true
+    description: 作者质量、疲劳度、风险等级等推荐与调度信号
+    role: projection
+  - name: authorDisplayNameSnapshot
+    source: authorDisplayNameSnapshot
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 作者显示名快照，避免分身退役或改名后记录渲染漂移
+    role: authoritative_state
+  - name: authorAvatarUrlSnapshot
+    source: authorAvatarUrlSnapshot
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 作者头像快照
+    role: authoritative_state
+  - name: personaContextVersion
+    source: personaContextVersion
+    type: int
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 写入时绑定的 persona 上下文版本
+    role: authoritative_state
+  - name: contentType
+    source: contentType
+    type: enum
+    enum_ref: ContentType
+    constraints:
       - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: eventDigest
-      source: eventDigest
-      type: string
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: authoritative_state
+  - name: contentIdentity
+    source: contentIdentity
+    type: enum
+    enum_ref: ContentIdentity
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 内容身份层。moment=点滴，work=作品；线上写入可由所属 command 显式派生，但 canonical immutable release importer 必须收到 manifest 明示值，禁止缺失默认
+    role: authoritative_state
+  - name: title
+    source: title
+    type: string
+    max_utf8_bytes: 320
+    constraints:
+      - NULLABLE
+      - MAX_LENGTH_80
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    search_field: true
+    description: 标题（文章必填，其他可选）
+    role: authoritative_state
+  - name: body
+    source: body
+    type: string
+    constraints:
+      - NULLABLE
+      - MAX_LENGTH_5000
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    search_field: true
+    role: authoritative_state
+  - name: tagRefs
+    source: tagRefs
+    type: '[]string'
+    max_items: 30
+    item_max_utf8_bytes: 256
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    tag_ref: true
+    description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 tag mention 派生
+    role: projection
+  - name: entityRefs
+    source: entityRefs
+    type: '[]string'
+    max_items: 30
+    item_max_utf8_bytes: 256
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 只读活动投影；仅由 semanticMentions 中 status=published 且 targetRef 合法的 entity mention 派生
+    role: projection
+  - name: semanticMentions
+    source: semanticMentions
+    type: '[]object'
+    constraints:
+      - NULLABLE
+      - MAX_ITEMS_30
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: '标题/正文/文章中的语义标注事实：
+
+      [{mentionId,kind,surface,location,rangeStart,rangeEnd,status,candidateId,targetRef}]。
+
+      status 支持 published/pending_review/rejected/offline；只有 published 且 targetRef 合法的项进入活动 entityRefs/tagRefs。
+
+'
+    role: owned_value
+  - name: mediaAssetIds
+    source: mediaAssetIds
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 有序 MediaAsset ID 引用；仅 `SubmitPostPublication` 在完成所有权、就绪态与公开 slice 物化后写入，Post 不内嵌媒体对象。
+    role: authoritative_state
+    reference: true
+  - name: mediaUrls
+    source: mediaUrls
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 服务端由已绑定 MediaAsset 投影的 canonical public slice key 序列；App 不得持久化上传响应中的 cdnUrl、签名 URL 或 CAS object key。
+    role: projection
+  - name: mediaItems
+    source: mediaItems
+    type: '[]object'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: '服务端由已绑定 MediaAsset 投影的统一媒体序列（Work Browser 真相源）：[{kind:image|video, url, coverUrl?, durationMs?, width?, height?, title?}]。
+
+      视频集（一个作品多段视频）唯一契约表达；禁止端侧按同作者从队列临时拼集合。
+
+      为空时端按 mediaUrls/videoUrl 派生单一序列。
+
+'
+    role: projection
+  - name: coverUrl
+    source: coverUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 服务端从已绑定封面 MediaAsset 或视频首帧投影的 canonical public slice key；禁止 App 写入 cdnUrl、签名 URL 或内部 object key。视频时与 thumbnailUrl 同源，供旧卡片和作品浏览器回退。
+    role: projection
+  - name: thumbnailUrl
+    source: thumbnailUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 服务端从已绑定封面 MediaAsset 或视频首帧投影的公开交付引用；默认首帧，手工选帧时覆盖。UI mapper 须转为 typed MediaDeliveryReference。
+    role: projection
+  - name: articleMarkdown
+    source: articleMarkdown
+    type: string
+    constraints:
+      - NULLABLE
+      - MAX_LENGTH_20000
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    search_field: true
+    description: QWQ Rich Markdown 原文，文章长文唯一持久化真相源
+    role: authoritative_state
+  - name: markdownDialect
+    source: markdownDialect
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: Markdown 规范版本，当前为 qwq-rich-md
+    role: authoritative_state
+  - name: articleMarkdownDigest
+    source: articleMarkdownDigest
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 规范化 articleMarkdown 的 sha256 digest，用于幂等、缓存与审计
+    role: authoritative_state
+  - name: articleAssetManifest
+    source: articleAssetManifest
+    type: object
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 文章素材清单，正文 asset:// 引用必须存在于该 manifest
+    role: owned_value
+  - name: articleRenderProfile
+    source: articleRenderProfile
+    type: object
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: '文章渲染画像。Work Browser V1.0 消费字段：
+
+      template/fontPreset、paperThemeMode(system|manual)、paperTexture
+
+      (darkPaper|coolGray|warmBlack|inkGreen|deepBrown)、contentVertical
+
+      (photography|travel|history|tech|nature)。
+
+      旧模板只保留为版心/排版气质输入，不再决定浏览器默认纸张亮度。
+
+'
+    role: owned_value
+  - name: contentVertical
+    source: contentVertical
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    description: 内容垂类：photography/travel/history/tech/nature 等；Work Browser 文章纸张系统适配的唯一垂类输入。
+    role: authoritative_state
+  - name: entityMentions
+    source: entityMentions
+    type: '[]object'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 文章行内实体标签列表 [{subjectType,subjectId,homepageId,displayName,rangeStart,rangeEnd}]，由 QWQ Rich Markdown 派生并由实体投影解析 canonical Homepage。
+    role: projection
+  - name: articleTemplate
+    source: articleTemplate
+    type: enum
+    enum_ref: ArticleTemplatePreset
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 从 articleRenderProfile.template 派生的文章模板只读快照
+    role: projection
+  - name: articleFontPreset
+    source: articleFontPreset
+    type: enum
+    enum_ref: ArticleFontPreset
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 从 articleRenderProfile.fontPreset 派生的文章字体预设只读快照
+    role: projection
+  - name: videoUrl
+    source: videoUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 服务端从已绑定视频 MediaAsset 投影的 canonical public slice key；禁止 App 写入 cdnUrl、签名 URL 或内部 CAS/object key。端侧播放器只消费经 MediaDeliveryResolver 校验后的 MediaDeliveryReference。
+    role: projection
+  - name: width
+    source: width
+    type: int
+    constraints:
+      - NULLABLE
+      - POSITIVE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 服务端从 ready MediaAsset 投影的权威视频宽度（px）。
+    role: projection
+  - name: height
+    source: height
+    type: int
+    constraints:
+      - NULLABLE
+      - POSITIVE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 服务端从 ready MediaAsset 投影的权威视频高度（px）。
+    role: projection
+  - name: durationMs
+    source: durationMs
+    type: int
+    constraints:
+      - NULLABLE
+      - POSITIVE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 服务端从 ready MediaAsset verifiedDurationMs 投影的权威视频时长（毫秒）。
+    role: projection
+  - name: coverStrategy
+    source: coverStrategy
+    type: enum
+    enum_ref: MediaCoverStrategy
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 视频封面策略。first_frame 表示首帧派生；manual 表示用户手工选帧或手工封面资产
+    role: projection
+  - name: coverFrameTimeMs
+    source: coverFrameTimeMs
+    type: int
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 视频封面帧时间点（毫秒）。默认首帧为 0；用于审计和重新派生封面
+    role: projection
+  - name: location
+    source: location
+    type: GeoPoint
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    role: owned_value
+  - name: locationName
+    source: locationName
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    search_field: true
+    role: projection
+  - name: geoTagRef
+    source: geoTagRef
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    tag_ref: true
+    description: 发布定位归属的行政区标签（Topic/地理/行政区/... 路径制 tagRef），由端侧 POI 选点或已披露的拍摄地 GPS 解析得到。与 location/locationName 不同，它是可召回、可交集的 行政区事实，不承载精确坐标；未选位置或解析失败时为空，不臆造。
+    role: owned_value
+  - name: visitedAt
+    source: visitedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    description: 作者声明的实际到访时间（出行时间），与 publishedAt/createdAt 正交：游记可以在 出行数月后发布。与 geoTagRef 组成「带定位发布」这一可证到访事实，供旅游时间维度交集 （同地同期到访）消费。未声明即为空，禁止用 publishedAt/createdAt 顶替，也不得取未来时间 （计划出行不是到访）。
+    role: owned_value
+  - name: primaryHomepageId
+    source: primaryHomepageId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 内容绑定的 canonical 共享主页 ID
+    role: authoritative_state
+    reference: true
+  - name: primaryHomepageType
+    source: primaryHomepageType
+    type: enum
+    enum_ref: HomepageType
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 绑定主页的类型快照
+    role: projection
+  - name: primaryHomepageSnapshot
+    source: primaryHomepageSnapshot
+    type: object
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 绑定主页的轻量快照（标题、副标题、封面）
+    role: owned_value
+  - name: status
+    source: status
+    type: enum
+    enum_ref: PostStatus
+    constraints:
       - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: errorDigest
-      source: errorDigest
-      type: string
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    observe_metric: post_status_gauge
+    role: authoritative_state
+  - name: visibility
+    source: visibility
+    type: enum
+    enum_ref: Visibility
+    constraints:
       - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: attempts
-      source: attempts
-      type: int64
-      constraints:
+      - DEFAULT_PUBLIC
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: assistantUsePolicy
+    source: assistantUsePolicy
+    type: enum
+    enum_ref: AssistantUsePolicy
+    constraints:
+      - NOT_NULL
+      - DEFAULT_INHERIT
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 小趣内容消费策略。inherit=遵循全局授权，exclude=排除当前内容
+    role: authoritative_state
+  - name: sourcePostId
+    source: sourcePostId
+    type: ObjectId
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 转发/引用来源 postId
+    role: authoritative_state
+    reference: true
+  - name: sourceType
+    source: sourceType
+    type: enum
+    enum_ref: PostSourceType
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: original/repost/quote（记录数据可为空，读取时按 original 处理）
+    role: authoritative_state
+  - name: summary
+    source: summary
+    type: string
+    constraints:
+      - NULLABLE
+      - MAX_LENGTH_240
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 文章摘要（模型生成后可人工编辑）
+    role: authoritative_state
+  - name: illustrationAssetId
+    source: illustrationAssetId
+    type: ObjectId
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 文章插图媒体 ID（可选，最多 1 张）
+    role: authoritative_state
+    reference: true
+  - name: publishLocation
+    source: publishLocation
+    type: object
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: read
+    description: 发布位置（国家/省/市，来自 IP 归属）
+    role: owned_value
+  - name: deviceInfo
+    source: deviceInfo
+    type: object
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: read
+    description: 发布设备（manufacturer/brand/model/os/appVersion）
+    role: transport_only
+  - name: likeCount
+    source: likeCount
+    type: int
+    constraints:
       - NOT_NULL
       - DEFAULT_0
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: projection
+  - name: commentCount
+    source: commentCount
+    type: int
+    constraints:
       - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: lastFailedAt
-      source: lastFailedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: expireAt
-      source: expireAt
-      type: timestamp
-      constraints:
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: projection
+  - name: pinnedCommentId
+    source: pinnedCommentId
+    type: string
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: deadLetteredAt
-      source: deadLetteredAt
-      type: timestamp
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    description: 唯一置顶 Comment ID；评论本体拥有独立生命周期
+    role: authoritative_state
+    reference: true
+  - name: shareCount
+    source: shareCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: projection
+  - name: viewCount
+    source: viewCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: projection
+  - name: embedding
+    source: embedding
+    type: '[]float32'
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-  UserAccountClosedSearchWork:
-    description: Content 账户关闭后的外部搜索文档删除工作项；成功后才标记完成并进入 TTL 回收。
-    fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: eventId
-      source: eventId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: canonicalId
-      source: canonicalId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: objectType
-      source: objectType
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: objectId
-      source: objectId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: doneAt
-      source: doneAt
-      type: timestamp
-      constraints:
+    classification: PUBLIC
+    log_policy: drop
+    api_exposure: drop
+    ops_exposure: drop
+    description: 内容语义向量（1536维）
+    role: projection
+  - name: helperReadSummary
+    source: helperReadSummary
+    type: string
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: expireAt
-      source: expireAt
-      type: timestamp
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 帮读摘要缓存
+    role: projection
+  - name: moderationStatus
+    source: moderationStatus
+    type: enum
+    enum_ref: ModerationStatus
+    constraints:
+      - NOT_NULL
+      - DEFAULT_PENDING
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    role: projection
+  - name: contentDigest
+    source: contentDigest
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    description: 当前可审核内容的 canonical SHA-256；PostModerationCase 必须绑定此值与 version
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: publishedAt
+    source: publishedAt
+    type: timestamp
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-  UserAccountClosedMediaArtifactWork:
-    description: Content 账户关闭后媒体对象物理撤销工作；public slice 与私有 object key
-      仅保存在受控 worker 中，完成前阻止 inbox 收敛。
-    fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: eventId
-      source: eventId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: publicSliceKeys
-      source: publicSliceKeys
-      type: string[]
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: publicPrefixes
-      source: publicPrefixes
-      type: string[]
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: privateObjectKeys
-      source: privateObjectKeys
-      type: string[]
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: privatePrefixes
-      source: privatePrefixes
-      type: string[]
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: doneAt
-      source: doneAt
-      type: timestamp
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: authoritative_state
+  - name: lastActiveAt
+    source: lastActiveAt
+    type: timestamp
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: expireAt
-      source: expireAt
-      type: timestamp
-      constraints:
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 最近活跃时间（发帖 / 评论 / 回复都会刷新）
+    role: projection
+  - name: sourceTaskId
+    source: sourceTaskId
+    type: string
+    constraints:
       - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-  ClosedAccountAudit:
-    description: 不含账号原始标识的账户关闭审计摘要，不作为防复活查询源。
-    fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: eventDigest
-      source: eventDigest
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: accountVersion
-      source: accountVersion
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: subjectCount
-      source: subjectCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: closedAt
-      source: closedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: recordedAt
-      source: recordedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-  ClosedAccountSubjectTombstone:
-    description: HMAC-SHA256(subjectId) 永久防复活栅栏，不保存账号或 persona 原值且不设 TTL。
-    fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: eventDigest
-      source: eventDigest
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: accountVersion
-      source: accountVersion
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: closedAt
-      source: closedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: recordedAt
-      source: recordedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 内容溯源——生成此内容的数据工程任务 id（task trace / 效果回流按 sourceTask 归因）
+    role: authoritative_state
+  - name: deletedAt
+    source: deletedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 value_objects:
   SourceAttribution:
     fields:
-    - name: isOriginal
-      type: bool
-      constraints:
-      - NOT_NULL
-    - name: originalCreatorId
-      type: string
-      constraints:
-      - NULLABLE
-    - name: originalCreatorName
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: originalCreatorProfileUrl
-      type: string
-      constraints:
-      - NULLABLE
-    - name: platform
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: sourcePostUrl
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: originalAssetUrl
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: attributionText
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: rightsBasis
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: commercialAuthorizationStatus
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: publicationAdmission
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: authorizationProofUrl
-      type: string
-      constraints:
-      - NULLABLE
-    - name: termsUrl
-      type: string
-      constraints:
-      - NULLABLE
-    - name: riskAcceptanceId
-      type: string
-      constraints:
-      - NULLABLE
-    - name: watermarkStatus
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: audioRightsStatus
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: modelReleaseStatus
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: propertyReleaseStatus
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: collectedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-    - name: takedownPolicy
-      type: string
-      constraints:
-      - NOT_NULL
+      - name: isOriginal
+        type: bool
+        constraints:
+          - NOT_NULL
+      - name: originalCreatorId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: originalCreatorName
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: originalCreatorProfileUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: platform
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: sourcePostUrl
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: originalAssetUrl
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: attributionText
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: rightsBasis
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: commercialAuthorizationStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: publicationAdmission
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: authorizationProofUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: termsUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: riskAcceptanceId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: watermarkStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: audioRightsStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: modelReleaseStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: propertyReleaseStatus
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: collectedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+      - name: takedownPolicy
+        type: string
+        constraints:
+          - NOT_NULL
   SearchIntentProjection:
     description: 用户最近一次搜索查询与真实点击形成的 24 小时短期推荐特征；独立 TTL 物理回收。
     fields:
-    - name: _id
-      source: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: PII
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PII
-      log_policy: deny
-      api_exposure: none
-      ops_exposure: read
-    - name: terms
-      source: terms
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: deny
-      api_exposure: none
-      ops_exposure: read
-    - name: engagedObjectIds
-      source: engagedObjectIds
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: deny
-      api_exposure: none
-      ops_exposure: read
-    - name: termHeat
-      source: termHeat
-      type: float64
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: expiresAt
-      source: expiresAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
+      - name: _id
+        source: _id
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: PII
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PII
+        log_policy: deny
+        api_exposure: none
+        ops_exposure: read
+      - name: terms
+        source: terms
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: deny
+        api_exposure: none
+        ops_exposure: read
+      - name: engagedObjectIds
+        source: engagedObjectIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: deny
+        api_exposure: none
+        ops_exposure: read
+      - name: termHeat
+        source: termHeat
+        type: float64
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+      - name: expiresAt
+        source: expiresAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+enums:
+  ContentFeedOutcome:
+    values: [content, empty]
+  ContentFeedEmptyReason:
+    values: [no_active_release, no_eligible_content, following_empty, continuation_end]
+  FeedRealtimePatchType:
+    values: [new_candidate_hint, negative_feedback_removal, refresh_suggestion]
+  FeedPatchReasonCode:
+    values: [negative_dislike, negative_hide_author, negative_hide_content_type, negative_report, relationship_expanded, new_candidates_available, session_fatigue, feed_staleness]
+  FeedPatchRemovalDimension:
+    values: [post, author, content_type]
+types:
+  ContentDiscoveryFeedQuery:
+    fields:
+      - name: identity
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: type
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: sort
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: subCategory
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: channelId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: sessionId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: feedRequestId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: GeneratedContentPostGetFeedPolicy.defaultItems
+      - name: blockedKeywords
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_wire_name: X-Blocked-Keywords
+        client_wire: uri_csv
+        client_omit_empty: true
+  ContentPostDetailQuery:
+    fields:
+      - name: postId
+        type: string
+        client_dart_type: String
+  ContentAuthorPostsQuery:
+    fields:
+      - name: personaId
+        type: string
+        client_dart_type: String
+      - name: identity
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: type
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: visibility
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  ContentFootprintQuery:
+    fields:
+      - name: type
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  UpdatePostSettingsRequest:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_normalization: trim
+      - name: visibility
+        type: string
+        enum_ref: Visibility
+        constraints:
+          - NULLABLE
+      - name: primaryHomepageId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: primaryHomepageType
+        type: string
+        enum_ref: HomepageType
+        constraints:
+          - NULLABLE
+      - name: primaryHomepageSnapshot
+        type: object
+        constraints:
+          - NULLABLE
+      - name: assistantUsePolicy
+        type: string
+        enum_ref: AssistantUsePolicy
+        constraints:
+          - NULLABLE
+  PromotePostToWorkRequest:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_normalization: trim
+      - name: contentType
+        type: string
+        enum_ref: ContentType
+        constraints:
+          - NULLABLE
+      - name: title
+        type: string
+        constraints:
+          - NULLABLE
+      - name: summary
+        type: string
+        constraints:
+          - NULLABLE
+      - name: semanticMentions
+        type: '[]object'
+        constraints:
+          - NULLABLE
+      - name: coverUrl
+        type: string
+        constraints:
+          - NULLABLE
+      - name: articleMarkdown
+        type: string
+        constraints:
+          - NULLABLE
+      - name: markdownDialect
+        type: string
+        constraints:
+          - NULLABLE
+      - name: articleAssetManifest
+        type: object
+        constraints:
+          - NULLABLE
+      - name: articleRenderProfile
+        type: object
+        constraints:
+          - NULLABLE
+      - name: primaryHomepageId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: primaryHomepageType
+        type: string
+        enum_ref: HomepageType
+        constraints:
+          - NULLABLE
+      - name: primaryHomepageSnapshot
+        type: object
+        constraints:
+          - NULLABLE
+      - name: visibility
+        type: string
+        enum_ref: Visibility
+        constraints:
+          - NULLABLE
+      - name: assistantUsePolicy
+        type: string
+        enum_ref: AssistantUsePolicy
+        constraints:
+          - NULLABLE
+  GenerateArticleSummaryRequest:
+    fields:
+      - name: title
+        type: string
+        constraints:
+          - NULLABLE
+      - name: body
+        type: string
+        constraints:
+          - NULLABLE
+  SubmitContentPostPublicationCommand:
+    fields:
+      - name: publishIntentId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: localDraftId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: contentType
+        type: string
+        enum_ref: ContentType
+        client_dart_type: ContentPostType
+        client_wire: canonicalEnum
+      - name: contentIdentity
+        type: string
+        enum_ref: ContentIdentity
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostIdentity?
+        client_wire: canonicalEnum
+      - name: title
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: body
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: summary
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: semanticMentions
+        type: '[]object'
+        client_dart_type: List<ContentPostStructuredObject>
+        client_parameter_type: Iterable<ContentPostStructuredObject>
+        client_default: const []
+        client_wire: structuredValue
+        client_omit_empty: true
+      - name: mediaAssetIds
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const []
+        client_normalization: trim
+        client_omit_empty: true
+      - name: mediaItems
+        type: '[]object'
+        client_dart_type: List<ContentPostStructuredObject>
+        client_parameter_type: Iterable<ContentPostStructuredObject>
+        client_default: const []
+        client_wire: structuredValue
+        client_omit_empty: true
+      - name: articleMarkdown
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: markdownDialect
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: articleAssetManifest
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostStructuredObject?
+        client_wire: structuredValue
+      - name: articleRenderProfile
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostStructuredObject?
+        client_wire: structuredValue
+      - name: coverStrategy
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: coverFrameTimeMs
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+      - name: illustrationAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: location
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostStructuredObject?
+        client_wire: structuredValue
+      - name: locationName
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: geoTagRef
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: visitedAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        client_dart_type: DateTime?
+      - name: primaryHomepageId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: primaryHomepageType
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: primaryHomepageSnapshot
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostStructuredObject?
+        client_wire: structuredValue
+      - name: visibility
+        type: string
+        enum_ref: Visibility
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostVisibility?
+        client_wire: canonicalEnum
+      - name: assistantUsePolicy
+        type: string
+        enum_ref: AssistantUsePolicy
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostAssistantUsePolicy?
+        client_wire: canonicalEnum
+      - name: sourcePostId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: sourceType
+        type: string
+        enum_ref: PostSourceType
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostSourceType?
+        client_wire: canonicalEnum
+      - name: deviceInfo
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostStructuredObject?
+        client_wire: structuredValue
+      - name: publishLocation
+        type: object
+        constraints:
+          - NULLABLE
+        client_dart_type: ContentPostStructuredObject?
+        client_wire: structuredValue
+      - name: authorDisplayNameSnapshot
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: authorAvatarUrlSnapshot
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: personaContextVersion
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+  GetAuthorImpactQuery:
+    fields:
+      - name: personaId
+        type: string
+        client_dart_type: String
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "12"
+  ListAuthorImpactEvidenceQuery:
+    fields:
+      - name: personaId
+        type: string
+        client_dart_type: String
+      - name: impactId
+        type: string
+        client_dart_type: String
+      - name: evidenceSnapshotId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  EntityWishlistStateQuery:
+    fields:
+      - name: objectId
+        type: string
+        client_dart_type: String
+      - name: objectKind
+        type: string
+        client_dart_type: String

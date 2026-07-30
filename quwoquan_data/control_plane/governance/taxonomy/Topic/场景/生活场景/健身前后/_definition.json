@@ -2,6 +2,7 @@
   "label": "健身前后",
   "labelEn": "Pre-Post Workout Scene",
   "description": "运动健身前后场景",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

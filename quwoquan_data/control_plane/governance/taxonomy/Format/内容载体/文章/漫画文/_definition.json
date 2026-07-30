@@ -2,6 +2,7 @@
   "label": "漫画文",
   "labelEn": "Manga Article",
   "description": "图文混排漫画内容",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

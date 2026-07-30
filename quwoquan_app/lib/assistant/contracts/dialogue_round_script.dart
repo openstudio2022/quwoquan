@@ -18,7 +18,5 @@ class DialogueRoundScript extends DialogueRoundScriptDto {
     super.passCriteriaRound = const <String, dynamic>{},
     super.statePromptExcerpt = '',
     super.stateMachineExcerpt = '',
-    super.routingCatalogVersion = '',
-    super.eventCatalogVersion = '',
   });
 }

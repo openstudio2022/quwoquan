@@ -79,9 +79,9 @@ type fakePersonaOwnerReader struct {
 
 func (reader *fakePersonaOwnerReader) ResolveOwnerAccountID(
 	_ context.Context,
-	subAccountID string,
+	personaID string,
 ) (string, bool, error) {
-	if reader.personaID != subAccountID {
+	if reader.personaID != personaID {
 		return "", false, nil
 	}
 	return reader.accountID, true, nil

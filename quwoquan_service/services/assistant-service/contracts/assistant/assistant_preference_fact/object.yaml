@@ -32,6 +32,15 @@ relationships:
   reference_fields:
   - conversationId
   target_object: assistant.AssistantConversation
+- access: named_reader
+  cardinality: N:1
+  consistency: eventual
+  kind: reference
+  name: sourceConversation
+  on_delete: retain
+  reference_fields:
+  - sourceConversationId
+  target_object: assistant.AssistantConversation
 capabilities:
 - queryable
 - owner_mutable
@@ -40,11 +49,13 @@ vector_enabled: false
 business_rules:
 - actor persona 必须等于 trusted principal，禁止请求体覆盖 userId
 - session scope 必须绑定 owner 的 conversationId，long_term scope 禁止绑定 conversationId
+- conversation_confirmed 的事实型 long_term 记忆必须绑定 owner 的 sourceConversationId
 - 同一 owner、scope、conversationId、kind 仅有一个当前事实，Set 为幂等 upsert
 - revoked 事实不得进入 AssistantRun 上下文
 - 非 owner 对读取、遗忘和恢复统一返回 not_found 防枚举
 - 仅在 revocationDeadline 之前允许将 revoked 事实恢复为 active
 lifecycle:
+  state_field: status
   states:
   - active
   - revoked

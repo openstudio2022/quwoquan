@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	grouperrors "quwoquan_service/services/circle-service/generated/circle_management/circle_group"
+	generated "quwoquan_service/services/circle-service/generated/circle_management/circle_group_membership"
+	membershiperrors "quwoquan_service/services/circle-service/generated/circle_management/circle_membership"
 	model "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/domain/model"
 	ports "quwoquan_service/services/circle-service/internal/circle_management/circle_group_membership/domain/ports"
 )
@@ -66,10 +69,10 @@ func (facade *CommandFacade) Apply(ctx context.Context, circleID, groupID string
 		return CommandResult{}, generated.AppErrorFromGroupMembershipStorageWriteFailed(err.Error())
 	}
 	if !active {
-		return CommandResult{}, generated.AppErrorFromNotMember("active Circle membership is required before joining a group")
+		return CommandResult{}, membershiperrors.AppErrorFromNotMember("active Circle membership is required before joining a group")
 	}
 	if group.JoinPolicy == "invite_only" {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("invite-only CircleGroup does not accept self applications")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("invite-only CircleGroup does not accept self applications")
 	}
 	membershipID := stableMembershipID(group.GroupID, actorID)
 	existing, found, err := facade.store.LoadByIdentity(ctx, group.GroupID, actorID)
@@ -96,7 +99,7 @@ func (facade *CommandFacade) ActivateOwner(ctx context.Context, circleID, groupI
 		return CommandResult{}, err
 	}
 	if actorID != strings.TrimSpace(ownerPersonaID) {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("CircleGroupCreated owner does not match trusted persona")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("CircleGroupCreated owner does not match trusted persona")
 	}
 	group, err := facade.requireGroup(ctx, circleID, groupID)
 	if err != nil {
@@ -149,7 +152,7 @@ func (facade *CommandFacade) decide(ctx context.Context, command TargetCommand, 
 		return CommandResult{}, err
 	}
 	if ownerOnly && role != model.CircleGroupMembershipRoleOwner {
-		return CommandResult{}, generated.AppErrorFromPermissionDenied("only the CircleGroup owner may change roles")
+		return CommandResult{}, circleerrors.AppErrorFromPermissionDenied("only the CircleGroup owner may change roles")
 	}
 	targetPersonaID := strings.TrimSpace(command.TargetPersonaID)
 	target, found, err := facade.store.LoadByIdentity(ctx, group.GroupID, targetPersonaID)
@@ -195,10 +198,10 @@ func (facade *CommandFacade) requireGroup(ctx context.Context, circleID, groupID
 		return ports.GroupPolicySlice{}, generated.AppErrorFromGroupMembershipStorageWriteFailed(err.Error())
 	}
 	if !found {
-		return ports.GroupPolicySlice{}, generated.AppErrorFromGroupNotFound("CircleGroupMembership target group not found")
+		return ports.GroupPolicySlice{}, grouperrors.AppErrorFromGroupNotFound("CircleGroupMembership target group not found")
 	}
 	if group.Status != "active" {
-		return ports.GroupPolicySlice{}, generated.AppErrorFromGroupArchived("CircleGroupMembership target group is archived")
+		return ports.GroupPolicySlice{}, grouperrors.AppErrorFromGroupArchived("CircleGroupMembership target group is archived")
 	}
 	return group, nil
 }
@@ -210,7 +213,7 @@ func (facade *CommandFacade) requireManager(ctx context.Context, groupID, actorI
 	}
 	if !found || membership.State != model.CircleGroupMembershipStateActive ||
 		(membership.Role != model.CircleGroupMembershipRoleOwner && membership.Role != model.CircleGroupMembershipRoleManager) {
-		return "", generated.AppErrorFromPermissionDenied("active CircleGroup owner or manager membership is required")
+		return "", circleerrors.AppErrorFromPermissionDenied("active CircleGroup owner or manager membership is required")
 	}
 	return membership.Role, nil
 }
@@ -253,7 +256,7 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 func trustedCommandContext(ctx context.Context) (operation.Context, string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil || strings.TrimSpace(current.IdempotencyKey) == "" {
-		return operation.Context{}, "", generated.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
+		return operation.Context{}, "", circleerrors.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
 	}
 	return current, strings.TrimSpace(current.Actor.PersonaID), nil
 }
@@ -261,7 +264,7 @@ func trustedCommandContext(ctx context.Context) (operation.Context, string, erro
 func trustedPersona(ctx context.Context) (string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil {
-		return "", generated.AppErrorFromInvalidArgument("trusted persona is required")
+		return "", circleerrors.AppErrorFromInvalidArgument("trusted persona is required")
 	}
 	return strings.TrimSpace(current.Actor.PersonaID), nil
 }
@@ -315,7 +318,7 @@ func mapCommitError(err error) error {
 	case errors.Is(err, model.ErrIdempotencyConflict):
 		return generated.AppErrorFromGroupMembershipIdempotencyConflict(err.Error())
 	case errors.Is(err, model.ErrInvalidChange):
-		return generated.AppErrorFromInvalidArgument(err.Error())
+		return circleerrors.AppErrorFromInvalidArgument(err.Error())
 	default:
 		return generated.AppErrorFromGroupMembershipStorageWriteFailed(err.Error())
 	}
@@ -361,7 +364,7 @@ func (facade *QueryFacade) GetMy(ctx context.Context, circleID, groupID string) 
 	if _, found, err := facade.groups.ReadGroupPolicy(ctx, strings.TrimSpace(circleID), strings.TrimSpace(groupID)); err != nil {
 		return MembershipSlice{}, generated.AppErrorFromGroupMembershipStorageWriteFailed(err.Error())
 	} else if !found {
-		return MembershipSlice{}, generated.AppErrorFromGroupNotFound("CircleGroup not found")
+		return MembershipSlice{}, grouperrors.AppErrorFromGroupNotFound("CircleGroup not found")
 	}
 	membership, found, err := facade.memberships.ReadGroupMembership(ctx, strings.TrimSpace(groupID), actorID)
 	if err != nil {
@@ -383,14 +386,14 @@ func (facade *QueryFacade) List(ctx context.Context, circleID, groupID, state st
 		return MembershipPageResult{}, generated.AppErrorFromGroupMembershipStorageWriteFailed(err.Error())
 	}
 	if !found {
-		return MembershipPageResult{}, generated.AppErrorFromGroupNotFound("CircleGroup not found")
+		return MembershipPageResult{}, grouperrors.AppErrorFromGroupNotFound("CircleGroup not found")
 	}
 	actorMembership, found, err := facade.memberships.ReadGroupMembership(ctx, group.GroupID, actorID)
 	if err != nil {
 		return MembershipPageResult{}, generated.AppErrorFromGroupMembershipStorageWriteFailed(err.Error())
 	}
 	if !found || actorMembership.State != model.CircleGroupMembershipStateActive {
-		return MembershipPageResult{}, generated.AppErrorFromPermissionDenied("active group membership is required to list roster")
+		return MembershipPageResult{}, circleerrors.AppErrorFromPermissionDenied("active group membership is required to list roster")
 	}
 	page, err := facade.memberships.ListGroupMemberships(ctx, group.GroupID, strings.TrimSpace(state), limit, cursor)
 	if err != nil {

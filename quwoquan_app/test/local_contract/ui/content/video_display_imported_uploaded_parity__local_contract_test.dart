@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 
 void main() {
@@ -8,7 +9,7 @@ void main() {
       id: 'imported-video',
       videoUrl: 'media/video/s/imported-video/post/imported-video/v1/clip.mp4',
       thumbnailUrl:
-          'media/image/s/imported-image/post/imported-video/v1/thumb.jpg'
+          'media/video/s/imported-video/post/imported-video/v1/thumb.jpg'
           '?variant=thumb&t=0',
       coverStrategy: 'first_frame',
       coverFrameTimeMs: 0,
@@ -25,10 +26,12 @@ void main() {
     final importedView = ContentSurfaceViewMapper.fromDto(
       postBaseDtoFromMap(imported),
       wire: imported,
+      mediaResolver: _mediaResolver,
     );
     final uploadedView = ContentSurfaceViewMapper.fromDto(
       postBaseDtoFromMap(uploaded),
       wire: uploaded,
+      mediaResolver: _mediaResolver,
     );
 
     expect(importedView.video!.thumbnailUrl, importedView.cover!.url);
@@ -39,6 +42,15 @@ void main() {
     expect(uploadedView.video!.thumbnailUrl, contains('manual-cover.jpg'));
   });
 }
+
+final _mediaResolver = MediaDeliveryResolver(
+  MediaEndpointConfig(
+    avatarBaseUrl: 'https://cdn.example.test/media/avatar',
+    imageBaseUrl: 'https://cdn.example.test/media/image',
+    videoBaseUrl: 'https://cdn.example.test/media/video',
+    attachmentBaseUrl: 'https://cdn.example.test/media/image',
+  ),
+);
 
 Map<String, dynamic> _videoWire({
   required String id,

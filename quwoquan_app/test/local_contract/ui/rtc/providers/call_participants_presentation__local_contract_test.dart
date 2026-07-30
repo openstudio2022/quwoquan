@@ -21,13 +21,13 @@ void main() {
         .syncRoster(const <CallParticipantDto>[
           CallParticipantDto(
             userId: 'user-known',
-            role: 'invitee',
-            status: 'ringing',
+            role: ParticipantRole.invitee,
+            status: ParticipantStatus.ringing,
           ),
           CallParticipantDto(
             userId: 'user-unknown',
-            role: 'invitee',
-            status: 'ringing',
+            role: ParticipantRole.invitee,
+            status: ParticipantStatus.ringing,
           ),
         ], conversationId: 'conversation-1');
 
@@ -62,8 +62,8 @@ void main() {
         const <CallParticipantDto>[
           CallParticipantDto(
             userId: 'caller',
-            role: 'initiator',
-            status: 'ringing',
+            role: ParticipantRole.initiator,
+            status: ParticipantStatus.ringing,
           ),
         ],
         callerFallback: const CallParticipantPresentation(

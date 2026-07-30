@@ -55,11 +55,19 @@ class CdnImageUrlBuilder {
           authority.host.isNotEmpty &&
           candidate.scheme == authority.scheme &&
           candidate.host == authority.host &&
-          candidate.port == authority.port) {
+          candidate.port == authority.port &&
+          _isWithinBasePath(candidate.path, authority.path)) {
         return true;
       }
     }
     return false;
+  }
+
+  static bool _isWithinBasePath(String candidatePath, String basePath) {
+    final normalizedBase = basePath.replaceFirst(RegExp(r'/+$'), '');
+    return normalizedBase.isNotEmpty &&
+        (candidatePath == normalizedBase ||
+            candidatePath.startsWith('$normalizedBase/'));
   }
 
   static String _appendOssProcess(String url, String process) {

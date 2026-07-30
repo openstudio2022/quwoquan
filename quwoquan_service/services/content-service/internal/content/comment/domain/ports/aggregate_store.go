@@ -8,7 +8,9 @@ import (
 	commentmodel "quwoquan_service/services/content-service/internal/content/comment/domain/model"
 )
 
-// OutboxEvent 是与 Comment 聚合版本在同一事务提交的不可变事实。
+// OutboxEvent 是 Comment 对象边界持久化的不可变事实。普通命令使用
+// Comment identity/version；Post 删除驱动的 CommentsTombstoned 批量事实使用
+// 源 PostDeleted identity/version，避免伪造不存在的 Comment 聚合版本。
 type OutboxEvent struct {
 	EventID          string
 	EventType        string
@@ -17,6 +19,13 @@ type OutboxEvent struct {
 	Payload          []byte
 	OccurredAt       time.Time
 	Checkpoint       string
+}
+
+type TombstoneCommentsByPostCommand struct {
+	PostID            string
+	SourceEventID     string
+	SourcePostVersion int64
+	OccurredAt        time.Time
 }
 
 type Commit struct {

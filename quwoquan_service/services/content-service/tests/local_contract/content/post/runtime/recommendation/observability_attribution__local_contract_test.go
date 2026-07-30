@@ -16,8 +16,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		"vertical":           "travel_photography",
 		"supply_source":      "data_engineering",
 		"recall_path":        "collab_i2i",
-		"ranking_version":    "rank-local",
-		"reason_version":     "reason-local",
+		"policy_digest":      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"intersection_class": "none",
 		"experiment_bucket":  "premium",
 	}
@@ -27,7 +26,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		ContentVertical: "travel_photography",
 		SupplySource:    "data_engineering",
 		RecallPath:      "collab_i2i",
-	}}, "travel", "rank-local", "reason-local", "premium")
+	}}, "travel", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "premium")
 	if got := counterValue(t, "recommendation_feed_served_by_attribution_total", servedLabels) - servedBefore; got != 1 {
 		t.Fatalf("served attribution metric delta = %v, want 1", got)
 	}
@@ -39,8 +38,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		"vertical":           "travel_photography",
 		"supply_source":      "data_engineering",
 		"recall_path":        "collab_u2i",
-		"ranking_version":    "rank-local",
-		"reason_version":     "reason-local",
+		"policy_digest":      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"intersection_class": "fact",
 		"experiment_bucket":  "premium",
 	}
@@ -52,8 +50,7 @@ func TestRecommendationObservabilityAttributionLocalContractTest(t *testing.T) {
 		ContentVertical:   "travel_photography",
 		SupplySource:      "data_engineering",
 		RecallPath:        "collab_u2i",
-		RankingVersion:    "rank-local",
-		ReasonVersion:     "reason-local",
+		PolicyDigest:      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		IntersectionClass: "fact",
 		ExperimentBucket:  "premium",
 	})

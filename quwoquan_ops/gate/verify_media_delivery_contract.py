@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import re
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -18,10 +20,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
 from quwoquan_ops.cli.lib.common import load_json_yaml
-from quwoquan_ops.cli.lib.media_delivery_manifest import (
-    build_media_delivery_url,
-    load_media_delivery_manifest,
-)
+from quwoquan_ops.cli.lib.media_delivery_manifest import load_media_delivery_manifest
 
 
 MEDIA_ROOT = (
@@ -32,18 +31,6 @@ MEDIA_ROOT = (
     / "_shared"
     / "test_fixtures"
     / "media"
-)
-CURATED_BUNDLE = (
-    ROOT
-    / "quwoquan_service"
-    / "services"
-    / "content-service"
-    / "environments"
-    / "gamma"
-    / "resources"
-    / "artifacts"
-    / "media"
-    / "gamma_curated_media_bundle.json"
 )
 # CAS object paths may still appear in seed/creator docs as non-public references.
 # Public fixture media fields are validated separately via FIXTURE_MEDIA_FIELD_FORBIDDEN.
@@ -96,6 +83,7 @@ FEED_RELATIVE_MEDIA_FIELDS = frozenset(
 PUBLIC_SLICE_PREFIX_RE = re.compile(
     r"^media/(avatar|image|video|background|attachment)/s/"
 )
+PUBLIC_SLICE_VERSION_SEGMENT_RE = re.compile(r"^v([1-9][0-9]*)$")
 MOCK_SEED_PATH_RE = re.compile(r"media/[^/]+/s/mock/seed/")
 DART_STRING_RE = re.compile(r"""(['"])((?:media/|https?://|//)[^'"]+)\1""")
 TEXT_SUFFIXES = {".dart", ".py", ".sh", ".json", ".yaml", ".yml"}
@@ -141,6 +129,33 @@ def _looks_like_media_ref(value: str) -> bool:
     return "media/" in lowered or "http" in lowered or value.startswith("//")
 
 
+def _public_slice_identity(value: str) -> tuple[str, str, str] | None:
+    parsed = urlsplit(value.strip())
+    path = parsed.path.lstrip("/")
+    if not PUBLIC_SLICE_PREFIX_RE.match(path):
+        return None
+    return path, parsed.query, parsed.fragment
+
+
+def _public_slice_version(path: str) -> int | None:
+    matches = [
+        match
+        for segment in Path(path).parts
+        if (match := PUBLIC_SLICE_VERSION_SEGMENT_RE.fullmatch(segment)) is not None
+    ]
+    if len(matches) != 1:
+        return None
+    return int(matches[0].group(1))
+
+
+@lru_cache(maxsize=None)
+def _fixture_public_slice_sha256(media_root: Path, public_path: str) -> str | None:
+    physical = media_root / public_path
+    if not physical.is_file():
+        return None
+    return f"sha256:{hashlib.sha256(physical.read_bytes()).hexdigest()}"
+
+
 def _has_bare_ip(value: str) -> bool:
     for match in re.finditer(r"(?:https?://)?([^/:\"'\s]+)", value):
         host = match.group(1)
@@ -180,6 +195,23 @@ def _validate_media_field_value(
     elif "mock/seed" in text:
         _add("禁止出现 mock/seed 媒体路径")
 
+    public_identity = _public_slice_identity(text)
+    if public_identity is not None:
+        public_path, query, fragment = public_identity
+        if query:
+            _add("public slice fixture 引用必须 query-free")
+        if fragment:
+            _add("public slice fixture 引用必须 fragment-free")
+        version_segments = [
+            segment
+            for segment in Path(public_path).parts
+            if PUBLIC_SLICE_VERSION_SEGMENT_RE.fullmatch(segment)
+        ]
+        if len(version_segments) != 1:
+            _add("public slice fixture 引用必须恰有一个 /vN/ 路径段")
+        elif version_segments[0] != "v1":
+            _add("public slice fixture 当前唯一 canonical 版本必须是 /v1/")
+
     if text.startswith("media/") and field_key in FEED_RELATIVE_MEDIA_FIELDS:
         in_manifest = text in manifest_keys
         canonical_public = bool(PUBLIC_SLICE_PREFIX_RE.match(text)) and "mock/seed" not in text
@@ -203,9 +235,18 @@ def _walk_json_media_fields(
     seen: set[str],
 ) -> None:
     if isinstance(node, dict):
+        _validate_public_slice_record(
+            node,
+            rel_path=rel_path,
+            issues=issues,
+            seen=seen,
+        )
         for key, value in node.items():
             key_name = str(key)
-            if key_name in MEDIA_FIELD_KEYS:
+            public_slice_value = (
+                isinstance(value, str) and _public_slice_identity(value) is not None
+            )
+            if key_name in MEDIA_FIELD_KEYS or public_slice_value:
                 if isinstance(value, str):
                     _validate_media_field_value(
                         rel_path=rel_path,
@@ -218,7 +259,10 @@ def _walk_json_media_fields(
                     )
                 elif isinstance(value, list):
                     for item in value:
-                        if isinstance(item, str):
+                        if isinstance(item, str) and (
+                            key_name in MEDIA_FIELD_KEYS
+                            or _public_slice_identity(item) is not None
+                        ):
                             _validate_media_field_value(
                                 rel_path=rel_path,
                                 field_key=key_name,
@@ -270,6 +314,68 @@ def _walk_json_media_fields(
                 issues=issues,
                 seen=seen,
             )
+        return
+    if isinstance(node, str) and _public_slice_identity(node) is not None:
+        _validate_media_field_value(
+            rel_path=rel_path,
+            field_key=field_key or "<value>",
+            value=node,
+            manifest_keys=manifest_keys,
+            force_mock_seed_ban=force_mock_seed_ban,
+            issues=issues,
+            seen=seen,
+        )
+
+
+def _validate_public_slice_record(
+    node: dict[object, object],
+    *,
+    rel_path: str,
+    issues: list[str],
+    seen: set[str],
+) -> None:
+    for field_key in ("objectKey", "publicSliceKey"):
+        raw_value = node.get(field_key)
+        if not isinstance(raw_value, str):
+            continue
+        identity = _public_slice_identity(raw_value)
+        if identity is None:
+            # Private CAS objectKey is intentionally outside this public fixture gate.
+            continue
+        public_path, _, _ = identity
+        version = _public_slice_version(public_path)
+        declared_version = node.get("version")
+        if declared_version is not None and version is not None:
+            if isinstance(declared_version, bool) or not isinstance(declared_version, int):
+                issue = (
+                    f"{rel_path} 媒体记录 {field_key}={raw_value!r}: "
+                    "version 必须是与 /vN/ 相同的正整数"
+                )
+                if issue not in seen:
+                    seen.add(issue)
+                    issues.append(issue)
+            elif declared_version != version:
+                issue = (
+                    f"{rel_path} 媒体记录 {field_key}={raw_value!r}: "
+                    f"version={declared_version} 与路径 v{version} 不一致"
+                )
+                if issue not in seen:
+                    seen.add(issue)
+                    issues.append(issue)
+        source_hash = node.get("sourceHash")
+        if not isinstance(source_hash, str) or not source_hash.startswith("sha256:"):
+            continue
+        actual = _fixture_public_slice_sha256(MEDIA_ROOT, public_path)
+        if actual is None:
+            issue = f"{rel_path} 媒体记录 {field_key}={raw_value!r}: fixture 实体文件不存在"
+        else:
+            issue = "" if actual == source_hash.lower() else (
+                f"{rel_path} 媒体记录 {field_key}={raw_value!r}: "
+                f"sourceHash={source_hash} 与实体摘要 {actual} 不一致"
+            )
+        if issue and issue not in seen:
+            seen.add(issue)
+            issues.append(issue)
 
 
 def _validate_dart_media_literals(
@@ -308,7 +414,44 @@ def _validate_dart_media_literals(
 
 def _fixture_media_scan_paths() -> list[Path]:
     # Contract 场景直接保留在 metadata；App 不再生成或编译 fixture bundle。
-    return sorted(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
+    paths = set(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
+    paths.update(
+        (ROOT / "quwoquan_service" / "services").glob(
+            "*/tests/support/contract_fixtures/**/*.json"
+        )
+    )
+    return sorted(paths)
+
+
+def _validate_fixture_public_slice_files(issues: list[str]) -> None:
+    versions_by_logical_key: dict[str, set[str]] = {}
+    for path in sorted(item for item in MEDIA_ROOT.rglob("*") if item.is_file()):
+        key = path.relative_to(MEDIA_ROOT).as_posix()
+        if not PUBLIC_SLICE_PREFIX_RE.match(key):
+            continue
+        if MOCK_SEED_PATH_RE.search(key) or "mock/seed" in key:
+            issues.append(f"{key}: public fixture 实体禁止使用 mock/seed 命名空间")
+        version_segments = [
+            segment
+            for segment in Path(key).parts
+            if PUBLIC_SLICE_VERSION_SEGMENT_RE.fullmatch(segment)
+        ]
+        if len(version_segments) != 1:
+            issues.append(f"{key}: public fixture 实体必须恰有一个 /vN/ 路径段")
+            continue
+        version = version_segments[0]
+        if version != "v1":
+            issues.append(f"{key}: public fixture 当前唯一 canonical 版本必须是 /v1/")
+        parts = list(Path(key).parts)
+        parts.remove(version)
+        logical_key = "/".join(parts)
+        versions_by_logical_key.setdefault(logical_key, set()).add(version)
+    for logical_key, versions in sorted(versions_by_logical_key.items()):
+        if len(versions) > 1:
+            issues.append(
+                f"{logical_key}: public fixture 同一逻辑资产禁止多版本并存: "
+                f"{sorted(versions)}"
+            )
 
 
 def _validate_fixture_media_fields(issues: list[str]) -> None:
@@ -351,8 +494,6 @@ def _validate_fixture_media_fields(issues: list[str]) -> None:
 
 def _validate_topology_urls(issues: list[str]) -> None:
     topology = load_environment_topology()
-    assets = load_media_delivery_manifest()
-    path_query_by_asset: dict[str, tuple[str, str]] = {}
     for env_name in ENVIRONMENTS:
         environment = topology["environments"][env_name]
         public_bases = environment.get("publicBases") or {}
@@ -365,23 +506,6 @@ def _validate_topology_urls(issues: list[str]) -> None:
                 issues.append(f"{env_name}.{key} 不得使用裸 IP authority")
             if env_name == "prod" and "prod" in (parsed.hostname or "").lower():
                 issues.append(f"{env_name}.{key} 生产域名不得包含 prod 标记")
-        for asset in assets:
-            try:
-                url = build_media_delivery_url(public_bases, asset)
-            except ValueError as exc:
-                issues.append(f"{env_name}.{asset['logicalAssetId']}: {exc}")
-                continue
-            parsed = urlsplit(url)
-            identity = str(asset["logicalAssetId"])
-            current = (parsed.path, parsed.query)
-            previous = path_query_by_asset.setdefault(identity, current)
-            if current != previous:
-                issues.append(
-                    f"{identity}: {env_name} path/query 漂移，"
-                    f"expected {previous}, got {current}"
-                )
-
-
 def _validate_playback_canary_topology(issues: list[str]) -> None:
     topology = load_environment_topology()
     targets = topology.get("targets")
@@ -406,31 +530,17 @@ def _validate_playback_canary_topology(issues: list[str]) -> None:
                 )
 
 
-def _validate_manifest_sources(issues: list[str]) -> None:
+def _validate_test_fixture_manifest_sources(issues: list[str]) -> None:
     assets = load_media_delivery_manifest()
-    try:
-        curated = json.loads(CURATED_BUNDLE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        issues.append(f"无法读取 curated media bundle: {exc}")
-        return
-    bundle_by_key = {
-        str(item.get("objectKey") or "").strip(): item
-        for item in curated.get("mediaObjects", [])
-        if isinstance(item, dict)
-    }
     for asset in assets:
         key = str(asset["publicSliceKey"])
         local_path = MEDIA_ROOT / key
         if not local_path.is_file():
-            issues.append(f"{key}: manifest 引用的本地媒体不存在")
-        bundle_item = bundle_by_key.get(key)
-        if bundle_item is None:
-            issues.append(f"{key}: curated bundle 未登记 manifest 资产")
+            issues.append(f"{key}: test fixture manifest 引用的本地媒体不存在")
             continue
-        if str(bundle_item.get("sourceHash") or "").lower() != str(asset["sha256"]).lower():
-            issues.append(f"{key}: curated bundle sha256 与 manifest 不一致")
-        if str(bundle_item.get("mimeType") or "").lower() != str(asset["mimeType"]).lower():
-            issues.append(f"{key}: curated bundle MIME 与 manifest 不一致")
+        digest = hashlib.sha256(local_path.read_bytes()).hexdigest()
+        if str(asset["sha256"]).lower() != f"sha256:{digest}":
+            issues.append(f"{key}: test fixture media sha256 与 manifest 不一致")
 
 
 def _scan_forbidden_paths(issues: list[str]) -> None:
@@ -514,13 +624,12 @@ def _validate_runtime_config_authority_parity(issues: list[str]) -> None:
             issues.append(
                 f"{config_path.relative_to(ROOT)}: appRuntimeEnv 必须为 {env_name}"
             )
-        for runtime_field, (topology_field, define_key) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
+        for runtime_field in APP_RUNTIME_CONFIG_MEDIA_FIELDS:
             actual = str(runtime.get(runtime_field) or "").rstrip("/")
-            expected = str(expected_bases.get(topology_field) or "").rstrip("/")
-            if actual != expected:
+            if actual:
                 issues.append(
-                    f"{config_path.relative_to(ROOT)}: {runtime_field}={actual or '<empty>'} "
-                    f"必须与 topology {env_name}.{topology_field}={expected or '<empty>'} 一致"
+                    f"{config_path.relative_to(ROOT)}: {runtime_field} 必须保持空模板，"
+                    "公开 URL 只能由 topology resolver 投影"
                 )
         try:
             result = subprocess.run(
@@ -551,12 +660,12 @@ def _validate_runtime_config_authority_parity(issues: list[str]) -> None:
         except json.JSONDecodeError as exc:
             issues.append(f"{env_name}: App Dart define 输出不是 JSON: {exc}")
             continue
-        for runtime_field, (_, define_key) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
-            if str(defines.get(define_key) or "").rstrip("/") != str(
-                runtime.get(runtime_field) or ""
-            ).rstrip("/"):
+        for runtime_field, (topology_field, define_key) in APP_RUNTIME_CONFIG_MEDIA_FIELDS.items():
+            expected = str(expected_bases.get(topology_field) or "").rstrip("/")
+            if str(defines.get(define_key) or "").rstrip("/") != expected:
                 issues.append(
-                    f"{env_name}: Dart define {define_key} 未与 {runtime_field} 保持一致"
+                    f"{env_name}: Dart define {define_key} 未与 topology "
+                    f"{topology_field} 保持一致"
                 )
 
     runtime_config_source = (
@@ -725,7 +834,8 @@ def main() -> int:
     issues: list[str] = []
     _validate_topology_urls(issues)
     _validate_playback_canary_topology(issues)
-    _validate_manifest_sources(issues)
+    _validate_fixture_public_slice_files(issues)
+    _validate_test_fixture_manifest_sources(issues)
     _scan_forbidden_paths(issues)
     _validate_fixture_media_fields(issues)
     _validate_consumer_boundary(issues)

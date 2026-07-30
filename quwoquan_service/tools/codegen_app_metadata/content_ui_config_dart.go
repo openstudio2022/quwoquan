@@ -105,15 +105,13 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  });\n")
 	b.WriteString("}\n\n")
 
+	// 不含 taxonomyReleaseId：发布身份来自加载目录时云侧下发的 TagChild.releaseId，
+	// 编译进端会让「发一个新 tag 发布」变成「重发端」。
 	b.WriteString("class OnboardingInterestCatalogConfig {\n")
-	b.WriteString("  final String version;\n")
-	b.WriteString("  final String taxonomyReleaseId;\n")
 	b.WriteString("  final int minSelectionCount;\n")
 	b.WriteString("  final int maxSelectionCount;\n")
 	b.WriteString("  final List<OnboardingInterestDimensionConfig> dimensions;\n\n")
 	b.WriteString("  const OnboardingInterestCatalogConfig({\n")
-	b.WriteString("    required this.version,\n")
-	b.WriteString("    required this.taxonomyReleaseId,\n")
 	b.WriteString("    required this.minSelectionCount,\n")
 	b.WriteString("    required this.maxSelectionCount,\n")
 	b.WriteString("    required this.dimensions,\n")
@@ -249,6 +247,18 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	articlePaperThemeOptions := append([]articlePaperThemeOptionDef(nil), uc.ArticleDarkPaperThemes.ReadingSettingOptions...)
 	articleDarkPaperThemes := append([]articlePaperThemeDef(nil), uc.ArticleDarkPaperThemes.Themes...)
 	sort.Slice(articleDarkPaperThemes, func(i, j int) bool { return articleDarkPaperThemes[i].ID < articleDarkPaperThemes[j].ID })
+	flags := append([]featureFlagDef(nil), uc.FeatureFlags...)
+	sort.Slice(flags, func(i, j int) bool { return flags[i].Flag < flags[j].Flag })
+
+	b.WriteString("abstract final class ContentFeatureFlags {\n")
+	for _, flag := range flags {
+		b.WriteString(fmt.Sprintf(
+			"  static const String %s = %s;\n",
+			toDartValueName(flag.Flag),
+			dartStringLiteral(flag.Flag),
+		))
+	}
+	b.WriteString("}\n\n")
 
 	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
 	b.WriteString("class ContentUIConfig {\n")
@@ -312,8 +322,6 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 
 	catalog := uc.OnboardingInterestCatalog
 	b.WriteString("  static const OnboardingInterestCatalogConfig onboardingInterestCatalog = OnboardingInterestCatalogConfig(\n")
-	b.WriteString(fmt.Sprintf("    version: %s,\n", dartStringLiteral(catalog.Version)))
-	b.WriteString(fmt.Sprintf("    taxonomyReleaseId: %s,\n", dartStringLiteral(catalog.TaxonomyReleaseID)))
 	b.WriteString(fmt.Sprintf("    minSelectionCount: %d,\n", catalog.MinSelectionCount))
 	b.WriteString(fmt.Sprintf("    maxSelectionCount: %d,\n", catalog.MaxSelectionCount))
 	b.WriteString("    dimensions: <OnboardingInterestDimensionConfig>[\n")
@@ -426,9 +434,6 @@ func renderContentUIConfigDart(uc *uiConfigFile) string {
 	b.WriteString("  ];\n\n")
 
 	b.WriteString("  static const Map<String, bool> featureFlags = <String, bool>{\n")
-	flags := make([]featureFlagDef, len(uc.FeatureFlags))
-	copy(flags, uc.FeatureFlags)
-	sort.Slice(flags, func(i, j int) bool { return flags[i].Flag < flags[j].Flag })
 	for _, ff := range flags {
 		b.WriteString(fmt.Sprintf("    '%s': %v,\n", ff.Flag, ff.Default))
 	}

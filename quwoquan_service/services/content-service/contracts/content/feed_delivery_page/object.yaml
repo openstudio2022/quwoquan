@@ -1,0 +1,47 @@
+kind: append_only_fact
+description: >-
+  GET /content/feed 已交付页的短期只追加事实。它只记录页面稳定身份、Post 顺序、
+  对象卡快照与锚点、前页身份及原始出站 cursor；previous cursor 只能读取本事实，
+  不得重新召回、重排、反向查询 live Post 时间线或补入替代内容。
+identity:
+  fields:
+  - deliveryPageId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  queries: named_reader
+  cross_context: public_contract_only
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: runtime
+  kind: reference
+  name: previousDeliveredPage
+  on_delete: retain
+  reference_fields:
+  - previousPageId
+  target_object: content.FeedDeliveryPage
+local_identity_reasons:
+  feedRequestId: immutable feed delivery correlation key scoped to this append-only fact; it is not a business-object identity
+  releaseId: canonical data activation coordinate paired with manifestDigest; the repository has no independently owned DataRelease business object to reference
+capabilities:
+- append_only
+- idempotent_append
+- queryable
+- ttl_bounded
+taggable: false
+vector_enabled: false
+business_rules:
+- 同一 deliveryPageId 只能以完全相同 payload 幂等追加，冲突必须 fail-closed
+- 单页最多 20 个 Post、20 个对象卡，未压缩 JSON 不得超过 65536 bytes
+- 同一 scopeHash 最多保留 400 页（8 个活跃 RankedFeedWindow 各最多 50 层）且每页固定 600 秒 TTL，读取不得滑动续期
+- scopeHash 确定性映射到 256 个固定 quota shard；默认每 shard 最多 512 个 live value / 33554432 payload bytes，因此全族硬上限为 131072 个 live value / 8589934592 payload bytes
+- 分片 key/byte 上限命中只拒绝 contender，禁止淘汰其他 scope；key、payload 与 cursor 均使用无协议版本信封的唯一 canonical schema
+- 所有字符串与数组在 JSON 编码前执行字段级 byte/count 准入；单页总 payload 门不能替代字段门，禁止先物化攻击者可控的无界字符串
+- scopeHash 必须覆盖 actor/session/route/pageSize，记录另行绑定 feedRequestId、release 与 expiry
+- 回放只按 items.postId 原顺序执行当前可见性 hydration；缺失或不可见 Post 只删除，不补替代内容
+- 对象卡只回放已交付快照并按仍可见 Post 重基准 anchor，禁止重新召回对象卡
+lifecycle:
+  states:
+  - recorded
+  immutable: true

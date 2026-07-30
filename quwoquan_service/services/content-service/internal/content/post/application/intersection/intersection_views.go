@@ -12,11 +12,12 @@ type IntersectionReasonView struct {
 	Dimension                 string                               `json:"dimension"`
 	DisplayName               string                               `json:"displayName"`
 	AvatarURL                 string                               `json:"avatarUrl"`
-	PrimaryText               string                               `json:"primaryText"`    // 主交集结论句（蓝色，云侧产出，端只读直出）
-	DisplayBinding            string                               `json:"displayBinding"` // explicit_link | host_implicit | host_plain | hidden
-	SecondaryText             string                               `json:"secondaryText"`  // 副交集辅助说明（灰色；缺省端不展示）
-	WeightTier                string                               `json:"weightTier"`     // light | heavy（内容卡交集轻重等级，云侧离散产出）
-	ObjectKind                string                               `json:"objectKind"`     // person | circle | school | place | enterprise
+	PrimaryText               string                               `json:"primaryText"`                  // 主交集结论句（蓝色，云侧产出，端只读直出）
+	PrimaryTextL10nKey        string                               `json:"primaryTextL10nKey,omitempty"` // registry.statementTemplates[].l10nKey；端按同名槽位回填译文
+	DisplayBinding            string                               `json:"displayBinding"`               // explicit_link | host_implicit | host_plain | hidden
+	SecondaryText             string                               `json:"secondaryText"`                // 副交集辅助说明（灰色；缺省端不展示）
+	WeightTier                string                               `json:"weightTier"`                   // light | heavy（内容卡交集轻重等级，云侧离散产出）
+	ObjectKind                string                               `json:"objectKind"`                   // person | circle | school | place | enterprise
 	Strength                  float64                              `json:"strength"`
 	ConfidenceLabel           string                               `json:"confidenceLabel"`
 	ModelReasonBucket         string                               `json:"modelReasonBucket"`
@@ -60,6 +61,11 @@ type IntersectionReasonView struct {
 	EdgeWeight       float64                 `json:"edgeWeight"`
 	IconKey          string                  `json:"iconKey"`
 	ObjectVisual     *IntersectionVisualView `json:"objectVisual,omitempty"`
+	// 类型视觉（零发版扩展位，对齐 intersection_reason.yaml）：
+	// Tone 是注册表指派的色板 token 名，端持 light/dark 成对调色板；
+	// TypeVisual 是类型图标的远程 alpha 蒙版资源（assetKind=icon），端以 Tone 着色，加载失败退回 IconKey glyph。
+	Tone       string                  `json:"tone"`
+	TypeVisual *IntersectionVisualView `json:"typeVisual,omitempty"`
 }
 
 // IntersectionRepresentativeActorView 是人数句的代表人锚点，必须来自同一证据快照。

@@ -34,7 +34,17 @@ api_routes:
   slo:
     latency_p95_ms: 800
     availability_percent: 99.9
-  query_params: [platform, appVersion, buildNumber]
+  request_bindings:
+    query:
+    - name: platform
+      field: platform
+      required: true
+    - name: appVersion
+      field: appVersion
+      required: true
+    - name: buildNumber
+      field: buildNumber
+      required: true
   description: 按平台读取当前已发布版本；客户端只以 latestBuild 与当前 Build 比较，不从缓存或失败响应推断版本状态。
   security:
     auth_mode: optional

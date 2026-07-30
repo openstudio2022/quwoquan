@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 )
 
 // Facade owns assignment-fact append and read use cases. Experiment is consulted
-// only to resolve the current policy version and deterministic variant.
+// only to resolve the current aggregate revision and deterministic variant.
 type Facade struct {
 	experiments ports.AggregateStore
 	sink        ports.AssignmentSink
@@ -35,15 +34,7 @@ func (f *Facade) Assign(ctx context.Context, experimentID, subjectKey string) (m
 	if err != nil {
 		return model.AssignmentFact{}, false, err
 	}
-	payload, err := json.Marshal(fact)
-	if err != nil {
-		return model.AssignmentFact{}, false, err
-	}
-	return f.sink.Append(ctx, fact, model.Event{
-		ID: fact.ID, Type: "ExperimentAssigned", AggregateID: fact.ID,
-		AggregateType: "ExperimentAssignmentFact", Payload: payload,
-		OccurredAt: f.now().UTC(),
-	})
+	return f.sink.Append(ctx, fact)
 }
 
 func (f *Facade) Get(ctx context.Context, experimentID, subjectKey string) (model.AssignmentFact, error) {
@@ -51,7 +42,7 @@ func (f *Facade) Get(ctx context.Context, experimentID, subjectKey string) (mode
 	if err != nil {
 		return model.AssignmentFact{}, err
 	}
-	return f.reader.Get(ctx, experimentID, fmt.Sprintf("%d", experiment.Version), subjectKey)
+	return f.reader.Get(ctx, experimentID, experiment.Version, subjectKey)
 }
 
 func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experiment, ports.AssignmentStats, error) {
@@ -59,10 +50,10 @@ func (f *Facade) Stats(ctx context.Context, experimentID string) (model.Experime
 	if err != nil {
 		return model.Experiment{}, ports.AssignmentStats{}, err
 	}
-	stats, err := f.reader.Stats(ctx, experimentID, fmt.Sprintf("%d", experiment.Version))
+	stats, err := f.reader.Stats(ctx, experimentID, experiment.Version)
 	return experiment, stats, err
 }
 
 func (f *Facade) StatsFor(ctx context.Context, experiment model.Experiment) (ports.AssignmentStats, error) {
-	return f.reader.Stats(ctx, experiment.ID, fmt.Sprintf("%d", experiment.Version))
+	return f.reader.Stats(ctx, experiment.ID, experiment.Version)
 }

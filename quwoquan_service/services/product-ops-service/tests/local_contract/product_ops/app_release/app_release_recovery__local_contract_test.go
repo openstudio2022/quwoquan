@@ -107,7 +107,7 @@ func TestAndroidExplicitDownloadAndLatestManifestUseVerifiedRelease(t *testing.T
 	}
 
 	manifest := httptest.NewRecorder()
-	mux.ServeHTTP(manifest, httptest.NewRequest(http.MethodGet, "/downloads/android/latest.json", nil))
+	mux.ServeHTTP(manifest, httptest.NewRequest(http.MethodGet, "/download/android/latest.json", nil))
 	var payload map[string]any
 	if err := json.Unmarshal(manifest.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode android manifest: %v", err)

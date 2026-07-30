@@ -3,9 +3,9 @@ package generated
 
 const (
 	RouteListProfileInteractionActivitiesReceivedMethod = "GET"
-	RouteListProfileInteractionActivitiesReceivedPath   = "/content/sub-accounts/{subAccountId}/interactions/received"
+	RouteListProfileInteractionActivitiesReceivedPath   = "/content/personas/{personaId}/interactions/received"
 	RouteListProfileInteractionActivitiesSentMethod     = "GET"
-	RouteListProfileInteractionActivitiesSentPath       = "/content/sub-accounts/{subAccountId}/interactions/sent"
+	RouteListProfileInteractionActivitiesSentPath       = "/content/personas/{personaId}/interactions/sent"
 )
 
 var AllowedContentTypes = map[string]struct{}{}

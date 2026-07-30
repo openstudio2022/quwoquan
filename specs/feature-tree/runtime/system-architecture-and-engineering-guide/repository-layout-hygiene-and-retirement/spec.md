@@ -53,7 +53,7 @@
 - canonical：`.github/workflows/verify-chat-avatar-commercial-matrix.yml`
 - canonical：`quwoquan_ops/gate/verify_entrypoint_script_paths.py`
 - canonical：`quwoquan_ops/gate/verify_markdown_local_links.py`
-- canonical：`quwoquan_ops/gate/verify_alpha_media_fixture_surface.py`
+- canonical：`quwoquan_ops/gate/verify_media_delivery_contract.py`
 
 ## 5. 验收场景
 

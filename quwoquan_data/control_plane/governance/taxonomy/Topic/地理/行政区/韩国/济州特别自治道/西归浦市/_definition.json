@@ -1,0 +1,12 @@
+{
+  "label": "西归浦市",
+  "labelEn": "Seogwipo",
+  "description": "岛南瀑布与海岸景观城市",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

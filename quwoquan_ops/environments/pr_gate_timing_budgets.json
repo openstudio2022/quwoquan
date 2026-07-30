@@ -1,6 +1,7 @@
 {
-  "version": 1,
-  "totalBudgetSeconds": 900,
+  "softBudgetSeconds": 600,
+  "hardFailSeconds": 1800,
+  "promotionCutoffSeconds": 1500,
   "modeScope": {
     "prod-hosted": {
       "supportedModes": [],
@@ -34,18 +35,22 @@
       }
     },
     "02.service_pipeline": {
-      "budgetSeconds": 180,
-      "criticalPath": "prepare_release + max(build_go, build_recommendation_service) + validate_deploy",
+      "budgetSeconds": 120,
+      "hardFailSeconds": 600,
+      "criticalPath": "workflow run created_at -> candidate completed_at, including queue and setup waits",
+      "machinePath": "prepare_release + max(build_go, build_release_images) + validate_deploy",
       "phaseBudgetsSeconds": {
         "prepare_release": 30,
         "build_go": 120,
-        "build_recommendation_service": 120,
+        "build_release_images": 120,
         "validate_deploy": 30
       }
     },
     "03.delivery_gate": {
-      "budgetSeconds": 360,
-      "criticalPath": "topology_regression + max(quwoquan_service, quwoquan_app, ops_portal)",
+      "budgetSeconds": 120,
+      "hardFailSeconds": 600,
+      "criticalPath": "workflow run created_at -> candidate evidence completed_at, including queue and setup waits",
+      "machinePath": "topology_regression + max(quwoquan_service, quwoquan_app, ops_portal)",
       "phaseBudgetsSeconds": {
         "topology_regression": 60,
         "quwoquan_service": 180,
@@ -64,28 +69,32 @@
     },
     "05.app_env_device_matrix_pr": {
       "budgetSeconds": 30,
-      "criticalPath": "summary_only_when_self_hosted_disabled_by_default_on_pr",
+      "criticalPath": "workflow run created_at -> device evidence aggregation completed_at, including queue and setup waits",
+      "machinePath": "summary_only_when_self_hosted_disabled_by_default_on_pr",
       "phaseBudgetsSeconds": {
         "pr_default_skip": 30
       }
     },
     "07.mainline_auto_prod": {
-      "budgetSeconds": 900,
-      "criticalPath": "delivery_gate + alpha_stage + beta_device_matrix + prod_initial_checks + prod_full",
+      "budgetSeconds": 600,
+      "hardFailSeconds": 1800,
+      "promotionCutoffSeconds": 1500,
+      "rollbackBudgetSeconds": 300,
+      "rollbackDrillMaxAgeSeconds": 2592000,
+      "criticalPath": "workflow run created_at -> Prod full verification completed_at, including queue, setup and official approval waits",
+      "machinePath": "source_context + max(service_pipeline, app_pipeline, delivery_gate) + prepare + max(alpha_stage, beta_device_matrix, gamma_local) + preprod_evidence + prod_rollout_transaction",
       "phaseBudgetsSeconds": {
-        "delivery_gate": 240,
+        "source_context": 10,
+        "service_pipeline": 120,
+        "app_pipeline": 120,
+        "delivery_gate": 120,
+        "prepare": 30,
         "alpha_stage": 60,
-        "beta_device_matrix": 180,
-        "prod_initial_checks": 90,
-        "prod_full": 90
-      }
-    },
-    "07.main_commit_to_prod": {
-      "budgetSeconds": 900,
-      "criticalPath": "service_pipeline_02 + mainline_auto_prod_07",
-      "phaseBudgetsSeconds": {
-        "service_pipeline_02": 180,
-        "mainline_auto_prod_07": 720
+        "beta_device_matrix": 60,
+        "gamma_local": 60,
+        "preprod_evidence": 20,
+        "prod_rollout_transaction": 390,
+        "orchestration_queue": 30
       }
     }
   }

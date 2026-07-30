@@ -25,12 +25,12 @@ extension _WorksImmersiveViewerSocialActions on _WorksImmersiveViewerState {
 
   void _onFollow(PostBaseDto post) {
     runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
-      final subjectId = post.subAccountId;
+      final subjectId = post.personaId;
       final wasFollowing = effectiveProfileFollowing(ref, subjectId);
       final nextFollowing = !wasFollowing;
       syncProfileFollowIntent(
         ref,
-        subAccountId: subjectId,
+        personaId: subjectId,
         previousFollowing: wasFollowing,
         isFollowing: nextFollowing,
         sourceSurfaceId: AppUiSurfaces.workBrowser.id,

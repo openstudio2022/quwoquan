@@ -2,6 +2,7 @@
   "label": "景深合成",
   "labelEn": "Focus Stacking",
   "description": "多张不同焦点合成全景深",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

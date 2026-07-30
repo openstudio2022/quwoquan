@@ -2,7 +2,7 @@
   "seedRefs": [
     {
       "name": "following_subject_core",
-      "description": "用户关注对象动态：用户、圈子与实体主页三类对象同源进入对象页网络。",
+      "description": "用户关注对象动态：分身、圈子与实体主页三类对象同源进入对象页网络。",
       "scenarioRefs": [
         "list_three_subject_types",
         "mark_visited_clears_unread"
@@ -12,12 +12,12 @@
   "scenarios": [
     {
       "name": "list_three_subject_types",
-      "viewerSubAccountId": "user_001",
+      "viewerPersonaId": "user_001",
       "response": {
         "items": [
           {
             "subjectId": "user_travel_photographer",
-            "subjectType": "user",
+            "subjectType": "persona",
             "displayName": "旅行摄影师",
             "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
             "coverUrl": "",
@@ -69,7 +69,7 @@
     },
     {
       "name": "mark_visited_clears_unread",
-      "viewerSubAccountId": "user_001",
+      "viewerPersonaId": "user_001",
       "request": {
         "subjectId": "homepage_sight_emeishan",
         "subjectType": "homepage",

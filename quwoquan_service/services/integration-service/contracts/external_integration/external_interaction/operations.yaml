@@ -48,9 +48,7 @@ api_routes:
   error_codes:
   - INTEGRATION.USER.invalid_external_request
   - INTEGRATION.USER.unsupported_operation
-  - INTEGRATION.USER.payload_not_allowed
-  - INTEGRATION.USER.push_delivery_invalid_request
-  - INTEGRATION.SYSTEM.internal_error
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
   privacy:
     request_classification: SECRET
     response_classification: INTERNAL
@@ -90,6 +88,8 @@ api_routes:
     scopes:
     - integration.external_interaction.read
     ownership_policy: caller_service_owns_idempotency_scope
+  commercial:
+    status: ready
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -98,7 +98,7 @@ api_routes:
     idempotency: none
   error_codes:
   - INTEGRATION.USER.invalid_external_request
-  - INTEGRATION.SYSTEM.internal_error
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL
@@ -113,8 +113,10 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   description: 查询外部交互请求当前状态与归一化结果。
-  path_params:
-  - requestId
+  request_bindings:
+    path:
+    - name: requestId
+      field: requestId
   response_entity: ExternalInteractionRequest
   security:
     auth_mode: required
@@ -139,6 +141,8 @@ api_routes:
     permissions:
     - integration.external_interaction.audit
     ownership_policy: operator_delivery_plane
+  commercial:
+    status: ready
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -147,7 +151,7 @@ api_routes:
     idempotency: none
   error_codes:
   - INTEGRATION.USER.invalid_external_request
-  - INTEGRATION.SYSTEM.internal_error
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL
@@ -162,9 +166,11 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   description: 查询 provider attempt ledger，用于审计、SLO 与人工补偿定位。
-  path_params:
-  - requestId
-  response_entity: ExternalInteractionAttempt
+  request_bindings:
+    path:
+    - name: requestId
+      field: requestId
+  response_entity: ExternalInteractionAttemptFact
   security:
     auth_mode: required
     principal: operator
@@ -188,6 +194,8 @@ api_routes:
     permissions:
     - integration.external_interaction.audit
     ownership_policy: operator_delivery_plane
+  commercial:
+    status: ready
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -196,7 +204,7 @@ api_routes:
     idempotency: none
   error_codes:
   - INTEGRATION.USER.invalid_external_request
-  - INTEGRATION.SYSTEM.internal_error
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL
@@ -212,9 +220,12 @@ api_routes:
     latency_p95_ms: 500
     availability_percent: 99.9
   description: 查询指定请求超过重试上限或不可恢复失败的外部交互死信。
-  query_params:
-  - requestId
-  response_entity: ExternalInteractionDeadLetter
+  request_bindings:
+    query:
+    - name: requestId
+      field: requestId
+      required: true
+  response_entity: ExternalInteractionDeadLetterFact
   security:
     auth_mode: required
     principal: operator
@@ -239,6 +250,8 @@ api_routes:
     permissions:
     - integration.external_interaction.recover
     ownership_policy: operator_delivery_plane
+  commercial:
+    status: ready
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -247,8 +260,8 @@ api_routes:
     idempotency: required
   error_codes:
   - INTEGRATION.USER.invalid_external_request
-  - INTEGRATION.SYSTEM.dead_letter_created
-  - INTEGRATION.SYSTEM.internal_error
+  - INTEGRATION.USER.dead_letter_recovery_conflict
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL
@@ -289,6 +302,8 @@ api_routes:
     permissions:
     - integration.external_interaction.audit
     ownership_policy: operator_delivery_plane
+  commercial:
+    status: ready
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -296,7 +311,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - INTEGRATION.SYSTEM.internal_error
+  - INTEGRATION.SYSTEM.external_interaction_internal_error
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL
@@ -322,12 +337,10 @@ consumers:
   capabilities:
   - sms_otp_send_via_submit
   - sms_otp_delivery_callback
-  - one_tap_phone_resolve
 - name: notification-service
   capabilities:
   - push_delivery_send_via_submit
   - push_delivery_callback
-  - webhook_deliver
 - name: platform-ops
   capabilities:
   - provider_attempt_audit

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	useridentity "quwoquan_service/services/user-service/internal/account/user_account/domain/user/identity"
 )
 
 type ShardDirectoryEntry struct {
@@ -16,7 +18,6 @@ type ShardDirectoryEntry struct {
 }
 
 type ShardDirectory struct {
-	RuleVersion          string                `yaml:"rule_version"`
 	SlotCount            int                   `yaml:"slot_count"`
 	HashFn               string                `yaml:"hash_fn"`
 	DefaultPhysicalShard string                `yaml:"default_physical_shard"`
@@ -80,13 +81,10 @@ func (d *ShardDirectory) Validate() error {
 	if d == nil {
 		return fmt.Errorf("shard directory is nil")
 	}
-	if strings.TrimSpace(d.RuleVersion) != identityRuleVersion {
-		return fmt.Errorf("unexpected shard rule version: %s", d.RuleVersion)
-	}
-	if d.SlotCount != identitySlotCount {
+	if d.SlotCount != useridentity.SlotCount {
 		return fmt.Errorf("unexpected slot_count: %d", d.SlotCount)
 	}
-	if strings.TrimSpace(strings.ToLower(d.HashFn)) != identityHashFunction {
+	if strings.TrimSpace(strings.ToLower(d.HashFn)) != useridentity.HashFunction {
 		return fmt.Errorf("unexpected hash_fn: %s", d.HashFn)
 	}
 	if strings.TrimSpace(d.DefaultPhysicalShard) == "" {
@@ -129,28 +127,12 @@ func (d *ShardDirectory) ResolvePhysicalShardByPrefix(routeKey string) string {
 	return physicalShard
 }
 
-func (d *ShardDirectory) ResolvePhysicalShardForOwnerID(ownerID string) string {
-	originCode, entropyBody, ok := parseOwnerIdentity(ownerID)
-	if !ok {
-		return strings.TrimSpace(d.DefaultPhysicalShard)
+func (d *ShardDirectory) ResolvePhysicalShardForOwnerID(ownerID string) (string, error) {
+	parsed, err := useridentity.ParseOwnerID(ownerID)
+	if err != nil {
+		return "", fmt.Errorf("parse owner identity for shard routing: %w", err)
 	}
-	return d.ResolvePhysicalShardByPrefix(buildShardRoutingKey(originCode, entropyBody))
-}
-
-func parseOwnerIdentity(ownerID string) (originCode string, entropyBody string, ok bool) {
-	parts := strings.Split(strings.TrimSpace(ownerID), "_")
-	if len(parts) != 5 || parts[0] != "uo" {
-		return "", "", false
-	}
-	if strings.TrimSpace(parts[1]) != identityRuleVersion {
-		return "", "", false
-	}
-	originCode = strings.TrimSpace(parts[2])
-	entropyBody = strings.TrimSpace(parts[4])
-	if originCode == "" || entropyBody == "" {
-		return "", "", false
-	}
-	return originCode, entropyBody, true
+	return d.ResolvePhysicalShardByPrefix(parsed.RoutingKey()), nil
 }
 
 func normalizeShardPrefix(prefix string) string {

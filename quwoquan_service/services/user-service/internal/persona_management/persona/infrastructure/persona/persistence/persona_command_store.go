@@ -36,7 +36,7 @@ func (s *PersonaCommandPostgresStore) CommitCreate(
 	persona *usermodel.Persona,
 	meta personaports.PersonaCommandMeta,
 ) (personaports.PersonaCommandResult, error) {
-	if persona == nil || strings.TrimSpace(persona.SubAccountID) == "" {
+	if persona == nil || strings.TrimSpace(persona.PersonaID) == "" {
 		return personaports.PersonaCommandResult{},
 			errors.New("persona create requires aggregate identity")
 	}
@@ -44,24 +44,43 @@ func (s *PersonaCommandPostgresStore) CommitCreate(
 		now := time.Now().UTC()
 		persona.CreatedAt = now
 		persona.UpdatedAt = now
+		persona.Version = 1
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO personas (user_id, display_name, user_handle, phone, email, avatar_url, avatar_version, background_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, status, retired_at, sub_account_id, isolation_level, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, created_at, updated_at, version) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, 1)`,
-			persona.UserID, persona.DisplayName, persona.UserHandle, persona.Phone,
-			persona.Email, persona.AvatarURL, persona.AvatarVersion, persona.BackgroundURL,
-			persona.CallerRingtoneID, persona.ThemeModeOverride, persona.FontSizePresetOverride,
-			persona.AppearanceOverrideUpdatedAt, persona.IsPrimary, persona.IsPrivate,
-			persona.IsActive, persona.Status, persona.RetiredAt, persona.SubAccountID,
-			persona.IsolationLevel, persona.PurposeHint, persona.InheritsProfileFromOwner,
+			`INSERT INTO personas (
+persona_id, user_id, display_name, nickname_customized, user_handle,
+bio, identity_tags, taxonomy_release_id, gender, birth_date, region,
+region_tag_ref, avatar_media_asset_id, avatar_url, avatar_version,
+background_media_asset_id, background_url, caller_ringtone_id,
+theme_mode_override, font_size_preset_override, appearance_override_updated_at,
+is_primary, is_private, is_active, isolation_level, purpose_hint, status,
+retired_at, inherits_profile_from_owner, overridden_profile_fields,
+last_profile_sync_at, last_profile_sync_source, last_activated_at, version,
+created_at, updated_at
+) VALUES (
+$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36
+)`,
+			persona.PersonaID, persona.UserID, persona.DisplayName,
+			persona.NicknameCustomized, persona.UserHandle, persona.Bio,
+			persona.IdentityTags, persona.TaxonomyReleaseID, persona.Gender,
+			persona.BirthDate, persona.Region, persona.RegionTagRef,
+			persona.AvatarMediaAssetID, persona.AvatarURL, persona.AvatarVersion,
+			persona.BackgroundMediaAssetID, persona.BackgroundURL,
+			persona.CallerRingtoneID, persona.ThemeModeOverride,
+			persona.FontSizePresetOverride, persona.AppearanceOverrideUpdatedAt,
+			persona.IsPrimary, persona.IsPrivate, persona.IsActive,
+			persona.IsolationLevel, persona.PurposeHint, persona.Status,
+			persona.RetiredAt, persona.InheritsProfileFromOwner,
 			persona.OverriddenProfileFields, persona.LastProfileSyncAt,
-			persona.LastProfileSyncSource, persona.LastActivatedAt,
+			persona.LastProfileSyncSource, persona.LastActivatedAt, persona.Version,
 			persona.CreatedAt, persona.UpdatedAt,
 		); err != nil {
 			return personaports.PersonaCommandResult{}, err
 		}
 		return personaports.PersonaCommandResult{
-				SubAccountID: persona.SubAccountID,
-				Version:      1,
-			}, s.appendPacket(ctx, tx, persona.UserID, persona.SubAccountID, 1,
+				PersonaID: persona.PersonaID,
+				Version:   1,
+			}, s.appendPacket(ctx, tx, persona.UserID, persona.PersonaID, 1,
 				personaports.PersonaCreatedEvent, meta)
 	})
 }
@@ -72,7 +91,7 @@ func (s *PersonaCommandPostgresStore) CommitMutation(
 	eventType string,
 	meta personaports.PersonaCommandMeta,
 ) (personaports.PersonaCommandResult, error) {
-	if persona == nil || strings.TrimSpace(persona.SubAccountID) == "" {
+	if persona == nil || strings.TrimSpace(persona.PersonaID) == "" {
 		return personaports.PersonaCommandResult{},
 			errors.New("persona mutation requires aggregate identity")
 	}
@@ -83,8 +102,8 @@ func (s *PersonaCommandPostgresStore) CommitMutation(
 	return s.commit(ctx, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
 		var currentVersion int64
 		err := tx.QueryRow(ctx,
-			`SELECT version FROM personas WHERE sub_account_id=$1 FOR UPDATE`,
-			persona.SubAccountID,
+			`SELECT version FROM personas WHERE persona_id=$1 FOR UPDATE`,
+			persona.PersonaID,
 		).Scan(&currentVersion)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return personaports.PersonaCommandResult{}, personaports.ErrPersonaVersionConflict
@@ -94,17 +113,34 @@ func (s *PersonaCommandPostgresStore) CommitMutation(
 		}
 		nextVersion := currentVersion + 1
 		persona.UpdatedAt = time.Now().UTC()
+		persona.Version = int(nextVersion)
 		tag, err := tx.Exec(ctx,
-			`UPDATE personas SET user_id=$2, display_name=$3, user_handle=$4, phone=$5, email=$6, avatar_url=$7, avatar_version=$8, background_url=$9, caller_ringtone_id=$10, theme_mode_override=$11, font_size_preset_override=$12, appearance_override_updated_at=$13, is_primary=$14, is_private=$15, is_active=$16, status=$17, retired_at=$18, isolation_level=$19, purpose_hint=$20, inherits_profile_from_owner=$21, overridden_profile_fields=$22, last_profile_sync_at=$23, last_profile_sync_source=$24, last_activated_at=$25, updated_at=$26, version=$27 WHERE sub_account_id = $1 AND version = $28`,
-			persona.SubAccountID, persona.UserID, persona.DisplayName, persona.UserHandle,
-			persona.Phone, persona.Email, persona.AvatarURL, persona.AvatarVersion,
-			persona.BackgroundURL, persona.CallerRingtoneID, persona.ThemeModeOverride,
+			`UPDATE personas SET
+user_id=$2, display_name=$3, nickname_customized=$4, user_handle=$5,
+bio=$6, identity_tags=$7, taxonomy_release_id=$8, gender=$9, birth_date=$10,
+region=$11, region_tag_ref=$12, avatar_media_asset_id=$13, avatar_url=$14,
+avatar_version=$15, background_media_asset_id=$16, background_url=$17,
+caller_ringtone_id=$18, theme_mode_override=$19, font_size_preset_override=$20,
+appearance_override_updated_at=$21, is_primary=$22, is_private=$23,
+is_active=$24, isolation_level=$25, purpose_hint=$26, status=$27,
+retired_at=$28, inherits_profile_from_owner=$29, overridden_profile_fields=$30,
+last_profile_sync_at=$31, last_profile_sync_source=$32, last_activated_at=$33,
+version=$34, created_at=$35, updated_at=$36
+WHERE persona_id=$1 AND version=$37`,
+			persona.PersonaID, persona.UserID, persona.DisplayName,
+			persona.NicknameCustomized, persona.UserHandle, persona.Bio,
+			persona.IdentityTags, persona.TaxonomyReleaseID, persona.Gender,
+			persona.BirthDate, persona.Region, persona.RegionTagRef,
+			persona.AvatarMediaAssetID, persona.AvatarURL, persona.AvatarVersion,
+			persona.BackgroundMediaAssetID, persona.BackgroundURL,
+			persona.CallerRingtoneID, persona.ThemeModeOverride,
 			persona.FontSizePresetOverride, persona.AppearanceOverrideUpdatedAt,
-			persona.IsPrimary, persona.IsPrivate, persona.IsActive, persona.Status,
-			persona.RetiredAt, persona.IsolationLevel, persona.PurposeHint,
-			persona.InheritsProfileFromOwner, persona.OverriddenProfileFields,
-			persona.LastProfileSyncAt, persona.LastProfileSyncSource, persona.LastActivatedAt,
-			persona.UpdatedAt, nextVersion, currentVersion,
+			persona.IsPrimary, persona.IsPrivate, persona.IsActive,
+			persona.IsolationLevel, persona.PurposeHint, persona.Status,
+			persona.RetiredAt, persona.InheritsProfileFromOwner,
+			persona.OverriddenProfileFields, persona.LastProfileSyncAt,
+			persona.LastProfileSyncSource, persona.LastActivatedAt, nextVersion,
+			persona.CreatedAt, persona.UpdatedAt, currentVersion,
 		)
 		if err != nil {
 			return personaports.PersonaCommandResult{}, err
@@ -113,9 +149,9 @@ func (s *PersonaCommandPostgresStore) CommitMutation(
 			return personaports.PersonaCommandResult{}, personaports.ErrPersonaVersionConflict
 		}
 		return personaports.PersonaCommandResult{
-				SubAccountID: persona.SubAccountID,
-				Version:      nextVersion,
-			}, s.appendPacket(ctx, tx, persona.UserID, persona.SubAccountID, nextVersion,
+				PersonaID: persona.PersonaID,
+				Version:   nextVersion,
+			}, s.appendPacket(ctx, tx, persona.UserID, persona.PersonaID, nextVersion,
 				eventType, meta)
 	})
 }
@@ -123,23 +159,23 @@ func (s *PersonaCommandPostgresStore) CommitMutation(
 func (s *PersonaCommandPostgresStore) CommitActivation(
 	ctx context.Context,
 	ownerID string,
-	subAccountID string,
+	personaID string,
 	meta personaports.PersonaCommandMeta,
 ) (personaports.PersonaCommandResult, error) {
 	ownerID = strings.TrimSpace(ownerID)
-	subAccountID = strings.TrimSpace(subAccountID)
-	if ownerID == "" || subAccountID == "" {
+	personaID = strings.TrimSpace(personaID)
+	if ownerID == "" || personaID == "" {
 		return personaports.PersonaCommandResult{},
-			errors.New("persona activation requires owner and sub-account identity")
+			errors.New("persona activation requires owner and persona identity")
 	}
 	return s.commit(ctx, meta, func(tx pgx.Tx) (personaports.PersonaCommandResult, error) {
 		var currentVersion int64
 		err := tx.QueryRow(ctx,
 			`SELECT version FROM personas
-			 WHERE user_id=$1 AND sub_account_id=$2
+			 WHERE user_id=$1 AND persona_id=$2
 			   AND COALESCE(status, 'active') <> 'retired'
 			 FOR UPDATE`,
-			ownerID, subAccountID,
+			ownerID, personaID,
 		).Scan(&currentVersion)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return personaports.PersonaCommandResult{}, personaports.ErrPersonaVersionConflict
@@ -149,8 +185,8 @@ func (s *PersonaCommandPostgresStore) CommitActivation(
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE personas SET is_active = false, updated_at = NOW()
-			 WHERE user_id = $1 AND is_active = true AND sub_account_id <> $2`,
-			ownerID, subAccountID,
+			 WHERE user_id = $1 AND is_active = true AND persona_id <> $2`,
+			ownerID, personaID,
 		); err != nil {
 			return personaports.PersonaCommandResult{}, err
 		}
@@ -158,8 +194,8 @@ func (s *PersonaCommandPostgresStore) CommitActivation(
 		tag, err := tx.Exec(ctx,
 			`UPDATE personas
 			 SET is_active = true, last_activated_at = NOW(), updated_at = NOW(), version = $3
-			 WHERE user_id = $1 AND sub_account_id = $2 AND version = $4`,
-			ownerID, subAccountID, nextVersion, currentVersion,
+			 WHERE user_id = $1 AND persona_id = $2 AND version = $4`,
+			ownerID, personaID, nextVersion, currentVersion,
 		)
 		if err != nil {
 			return personaports.PersonaCommandResult{}, err
@@ -168,9 +204,9 @@ func (s *PersonaCommandPostgresStore) CommitActivation(
 			return personaports.PersonaCommandResult{}, personaports.ErrPersonaVersionConflict
 		}
 		return personaports.PersonaCommandResult{
-				SubAccountID: subAccountID,
-				Version:      nextVersion,
-			}, s.appendPacket(ctx, tx, ownerID, subAccountID, nextVersion,
+				PersonaID: personaID,
+				Version:   nextVersion,
+			}, s.appendPacket(ctx, tx, ownerID, personaID, nextVersion,
 				personaports.PersonaActivatedEvent, meta)
 	})
 }
@@ -245,15 +281,15 @@ func (s *PersonaCommandPostgresStore) appendPacket(
 	ctx context.Context,
 	tx pgx.Tx,
 	ownerID string,
-	subAccountID string,
+	personaID string,
 	version int64,
 	eventType string,
 	meta personaports.PersonaCommandMeta,
 ) error {
 	payload, err := json.Marshal(struct {
-		UserID       string `json:"userId"`
-		SubAccountID string `json:"subAccountId"`
-	}{UserID: ownerID, SubAccountID: subAccountID})
+		UserID    string `json:"userId"`
+		PersonaID string `json:"personaId"`
+	}{UserID: ownerID, PersonaID: personaID})
 	if err != nil {
 		return err
 	}
@@ -262,13 +298,13 @@ INSERT INTO personas_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
 ) VALUES ($1,$2,$3,$4,$5,NOW())`,
 		stablePersonaPacketID("event", meta.IdempotencyKey),
-		subAccountID, version, eventType, payload,
+		personaID, version, eventType, payload,
 	); err != nil {
 		return err
 	}
 	resultJSON, err := json.Marshal(personaports.PersonaCommandResult{
-		SubAccountID: subAccountID,
-		Version:      version,
+		PersonaID: personaID,
+		Version:   version,
 	})
 	if err != nil {
 		return err
@@ -278,7 +314,7 @@ INSERT INTO personas_command_receipts(
   receipt_id, aggregate_id, idempotency_key, command_digest, aggregate_version, result_json
 ) VALUES ($1,$2,$3,$4,$5,$6)`,
 		stablePersonaPacketID("receipt", meta.IdempotencyKey),
-		subAccountID,
+		personaID,
 		meta.IdempotencyKey,
 		meta.CommandDigest,
 		version,

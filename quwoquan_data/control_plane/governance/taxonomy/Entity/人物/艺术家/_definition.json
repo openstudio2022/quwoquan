@@ -2,6 +2,7 @@
   "label": "艺术家",
   "labelEn": "Artist",
   "description": "从事艺术创作的专业人士类型",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

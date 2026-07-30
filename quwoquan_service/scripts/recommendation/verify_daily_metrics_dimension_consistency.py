@@ -53,9 +53,8 @@ BEHAVIOR_SERVICE_GO = (
     / "content-service"
     / "internal"
     / "content"
-    / "post"
+    / "content_behavior_fact"
     / "application"
-    / "behavior"
     / "behavior_service.go"
 )
 

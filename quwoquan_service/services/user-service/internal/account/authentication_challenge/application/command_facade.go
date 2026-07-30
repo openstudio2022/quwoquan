@@ -91,14 +91,15 @@ func (facade *AuthenticationChallengeCommandFacade) CreateChallenge(
 		)
 	}
 	aggregate, err := challengemodel.New(challengemodel.CreateParams{
-		ID:              command.ID,
-		AccountID:       command.AccountID,
-		Purpose:         command.Purpose,
-		Channel:         command.Channel,
-		DestinationHash: command.DestinationHash,
-		SecretRef:       command.SecretRef,
-		ExpiresAt:       command.ExpiresAt,
-		CreatedAt:       facade.now().UTC(),
+		ID:               command.ID,
+		AccountID:        command.AccountID,
+		Purpose:          command.Purpose,
+		Channel:          command.Channel,
+		DestinationHash:  command.DestinationHash,
+		SecretRef:        command.SecretRef,
+		BindingTicketRef: command.BindingTicketRef,
+		ExpiresAt:        command.ExpiresAt,
+		CreatedAt:        facade.now().UTC(),
 	})
 	if err != nil {
 		return ChallengeCommandResult{}, mapChallengeError(err)
@@ -149,6 +150,14 @@ func (facade *AuthenticationChallengeCommandFacade) VerifyChallenge(
 			)
 		}
 		state := aggregate.State()
+		if lookup.expected != nil &&
+			(state.Purpose != lookup.expected.Purpose ||
+				state.Channel != lookup.expected.Channel ||
+				state.DestinationHash != lookup.expected.DestinationHash) {
+			return ChallengeCommandResult{}, generated.AppErrorFromInvalidArgument(
+				"authentication challenge does not match the requested purpose or destination",
+			)
+		}
 		evidence, verifyErr := facade.verifier.VerifyCredential(
 			ctx,
 			challengeports.CredentialVerificationInput{
@@ -236,6 +245,7 @@ func (facade *AuthenticationChallengeCommandFacade) CancelChallenge(
 type verificationLookup struct {
 	challengeID string
 	latest      challengeports.LatestChallengeLookup
+	expected    *challengeports.LatestChallengeLookup
 }
 
 func normalizeVerificationLookup(
@@ -246,13 +256,22 @@ func normalizeVerificationLookup(
 	channel := strings.TrimSpace(command.Channel)
 	destinationHash := strings.TrimSpace(command.DestinationHash)
 	hasLatestLookup := purpose != "" || channel != "" || destinationHash != ""
-	if challengeID != "" && hasLatestLookup {
-		return verificationLookup{}, generated.AppErrorFromInvalidArgument(
-			"challengeId and latest challenge lookup cannot be combined",
-		)
-	}
 	if challengeID != "" {
-		return verificationLookup{challengeID: challengeID}, nil
+		if hasLatestLookup && (purpose == "" || channel == "" || destinationHash == "") {
+			return verificationLookup{}, generated.AppErrorFromInvalidArgument(
+				"challenge constraints require purpose, channel and destinationHash",
+			)
+		}
+		lookup := verificationLookup{challengeID: challengeID}
+		if hasLatestLookup {
+			expected := challengeports.LatestChallengeLookup{
+				Purpose:         purpose,
+				Channel:         channel,
+				DestinationHash: destinationHash,
+			}
+			lookup.expected = &expected
+		}
+		return lookup, nil
 	}
 	if purpose == "" || channel == "" || destinationHash == "" {
 		return verificationLookup{}, generated.AppErrorFromInvalidArgument(
@@ -337,6 +356,7 @@ func creationCommandFingerprint(snapshot challengemodel.Snapshot) string {
 		snapshot.Purpose,
 		snapshot.Channel,
 		snapshot.DestinationHash,
+		snapshot.BindingTicketRef,
 	}, "\x00")))
 	return hex.EncodeToString(sum[:])
 }

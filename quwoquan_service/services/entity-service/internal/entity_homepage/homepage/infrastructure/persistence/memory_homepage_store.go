@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strconv"
@@ -10,10 +11,11 @@ import (
 	"time"
 
 	rtsearch "quwoquan_service/runtime/search"
+	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
+	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
-	"quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
 )
 
 // MemoryHomepageStore 是 alpha/local_contract 显式注入的适配器；production
@@ -21,6 +23,7 @@ import (
 type MemoryHomepageStore struct {
 	mu          sync.RWMutex
 	homepages   map[string]homepagemodel.Snapshot
+	details     map[string]homepageports.DetailProjection
 	receipts    map[string]memoryReceipt
 	outbox      map[string]homepageports.OutboxEvent
 	followers   map[string]map[string]memoryFollower
@@ -45,6 +48,7 @@ type memoryFollower struct {
 func NewMemoryHomepageStore(seeds ...homepagemodel.Snapshot) (*MemoryHomepageStore, error) {
 	store := &MemoryHomepageStore{
 		homepages:   map[string]homepagemodel.Snapshot{},
+		details:     map[string]homepageports.DetailProjection{},
 		receipts:    map[string]memoryReceipt{},
 		outbox:      map[string]homepageports.OutboxEvent{},
 		followers:   map[string]map[string]memoryFollower{},
@@ -167,7 +171,7 @@ func (s *MemoryHomepageStore) Search(
 		index := make(map[string]homepagemodel.Snapshot, len(items))
 		documents := make([]rtsearch.Document, 0, len(items))
 		for _, snapshot := range items {
-			view := application.Homepage(snapshotToView(snapshot))
+			view := application.Homepage(snapshotToView(snapshot, s.details[snapshot.ID]))
 			index[snapshot.ID] = snapshot
 			documents = append(documents, application.ProjectHomepageToSearchDocument(view))
 		}
@@ -194,14 +198,18 @@ func (s *MemoryHomepageStore) Search(
 	return memoryPage(items, query.Cursor, query.Limit), nil
 }
 
-func snapshotToView(snapshot homepagemodel.Snapshot) application.Homepage {
-	return application.Homepage{
+func snapshotToView(
+	snapshot homepagemodel.Snapshot,
+	projection homepageports.DetailProjection,
+) application.Homepage {
+	view := application.Homepage{
 		ID: snapshot.ID, Title: snapshot.Title, Subtitle: snapshot.Subtitle,
 		HomepageType: snapshot.HomepageType, CanonicalEntityID: snapshot.CanonicalEntityID,
 		Status: string(snapshot.Status), CategoryTags: snapshot.CategoryTags,
 		City: snapshot.City, Address: snapshot.Address, Location: snapshot.Location,
-		RatingCount: snapshot.RatingCount, UpdatedAt: snapshot.UpdatedAt,
+		UpdatedAt: snapshot.UpdatedAt,
 	}
+	return application.Homepage(homepageapp.ApplyDetailProjection(homepageapp.View(view), projection))
 }
 
 func (s *MemoryHomepageStore) ListBySourceOwner(
@@ -257,6 +265,55 @@ func (s *MemoryHomepageStore) Count(_ context.Context) (int64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return int64(len(s.homepages)), nil
+}
+
+func (s *MemoryHomepageStore) LoadDetailProjection(
+	_ context.Context,
+	homepageID string,
+) (homepageports.DetailProjection, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	projection, found := s.details[strings.TrimSpace(homepageID)]
+	return cloneDetailProjection(projection), found, nil
+}
+
+func (s *MemoryHomepageStore) UpsertReviewSummary(
+	_ context.Context,
+	homepageID string,
+	averageRating *float64,
+	ratingCount int,
+	highlightTags []string,
+	updatedAt time.Time,
+) error {
+	homepageID = strings.TrimSpace(homepageID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	projection := s.details[homepageID]
+	projection.HomepageID = homepageID
+	projection.AverageRating = cloneFloat64Pointer(averageRating)
+	projection.RatingCount = ratingCount
+	projection.ReviewSummary = &homepagemodel.ReviewSummary{
+		AverageRating: cloneFloat64Pointer(averageRating),
+		RatingCount:   ratingCount,
+		HighlightTags: append([]string(nil), highlightTags...),
+	}
+	projection.UpdatedAt = updatedAt.UTC()
+	s.details[homepageID] = cloneDetailProjection(projection)
+	return nil
+}
+
+// SeedDetailProjection 仅供 alpha/local_contract fixture 装配。生产读投影必须由
+// 对象事实消费者写入，不允许从 Homepage aggregate seed 反向恢复。
+func (s *MemoryHomepageStore) SeedDetailProjection(projection homepageports.DetailProjection) error {
+	homepageID := strings.TrimSpace(projection.HomepageID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, found := s.homepages[homepageID]; !found {
+		return errors.New("homepage detail projection requires existing homepage")
+	}
+	projection.HomepageID = homepageID
+	s.details[homepageID] = cloneDetailProjection(projection)
+	return nil
 }
 
 func memoryPage(items []homepagemodel.Snapshot, cursor string, limit int) homepageports.Page {
@@ -504,4 +561,43 @@ func (s *MemoryHomepageStore) SaveCheckpoint(
 	defer s.mu.Unlock()
 	s.checkpoints[strings.TrimSpace(consumer)] = strings.TrimSpace(checkpoint)
 	return nil
+}
+
+func cloneDetailProjection(value homepageports.DetailProjection) homepageports.DetailProjection {
+	result := value
+	result.AverageRating = cloneFloat64Pointer(value.AverageRating)
+	if value.ReviewSummary != nil {
+		result.ReviewSummary = &homepagemodel.ReviewSummary{
+			AverageRating: cloneFloat64Pointer(value.ReviewSummary.AverageRating),
+			RatingCount:   value.ReviewSummary.RatingCount,
+			HighlightTags: append([]string(nil), value.ReviewSummary.HighlightTags...),
+		}
+	}
+	result.ContentPreview = append([]homepagemodel.ContentPreview{}, value.ContentPreview...)
+	for index := range result.ContentPreview {
+		result.ContentPreview[index].IntersectionReasons = cloneRawMessages(
+			value.ContentPreview[index].IntersectionReasons,
+		)
+	}
+	result.QuestionPreview = append([]homepagemodel.QuestionPreview{}, value.QuestionPreview...)
+	result.RelatedGroups = append([]homepagemodel.RelatedGroup{}, value.RelatedGroups...)
+	result.RelationEdges = cloneRawMessages(value.RelationEdges)
+	result.AssistantContext = append(json.RawMessage(nil), value.AssistantContext...)
+	return result
+}
+
+func cloneRawMessages(values []json.RawMessage) []json.RawMessage {
+	result := make([]json.RawMessage, 0, len(values))
+	for _, value := range values {
+		result = append(result, append(json.RawMessage(nil), value...))
+	}
+	return result
+}
+
+func cloneFloat64Pointer(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	result := *value
+	return &result
 }

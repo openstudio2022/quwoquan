@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_highland_travel_blogger_001
-subAccountId: builtin_highland_travel_blogger
+personaId: builtin_highland_travel_blogger
 authorId: builtin_highland_travel_blogger
 isSystemBuiltin: true
 displayName: 高原慢旅笔记
@@ -26,14 +26,12 @@ publishCadence:
 qualityScore: 0.86
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/旅行
   - Format/内容载体/文章/游记
   - Format/内容角度/叙事/旅行叙事
   - Topic/旅行/旅行主题/文化深度游
   - Topic/旅行/旅行主题/高原秘境
-  - Topic/旅行/住宿/高原住宿
 recommendationTagRefs:
   - Topic/旅行/玩法/摄影旅拍
   - Format/内容角度/体验/亲身体验
@@ -48,8 +46,15 @@ coverageScope:
   label: 高原旅行主题
   topicRefs:
     - Topic/旅行/旅行主题/高原秘境
-    - Topic/旅行/住宿/高原住宿
 carrierAffinity:
   article: 0.55
   image: 0.4
   video: 0.05
+avatarAsset:
+  assetId: creator-avatar-qwq_creator_highland_travel_blogger_001-6901797605c33e3f
+  kind: avatar
+  sha256: sha256:6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830
+  objectKey: media/objects/sha256/69/01/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.webp
+  bytes: 281734
+  mimeType: image/webp
+  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_highland_travel_blogger_001/6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830.json

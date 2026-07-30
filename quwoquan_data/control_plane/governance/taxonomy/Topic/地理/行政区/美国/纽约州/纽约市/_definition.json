@@ -1,0 +1,12 @@
+{
+  "label": "纽约市",
+  "labelEn": "New York City",
+  "description": "全球金融与文化中心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

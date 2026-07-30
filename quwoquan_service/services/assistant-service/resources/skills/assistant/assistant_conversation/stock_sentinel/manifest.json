@@ -1,0 +1,15 @@
+{
+  "skillId": "stock_sentinel",
+  "displayName": "股票哨兵",
+  "description": "跟踪关注股票的重大消息面和行情变化。",
+  "domainId": "finance",
+  "problemClass": "realtime_info",
+  "activation": "proactive",
+  "executionTarget": "cloud",
+  "iconHint": "chart",
+  "toolPolicy": {
+    "allowedTools": ["web_search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

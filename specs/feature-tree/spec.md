@@ -4,11 +4,23 @@
 
 趣我圈是一套以“遇见同趣，绽放热爱”为品牌表达、以“别人帮你刷内容，我们帮你遇到对的人”为产品主轴的端云一体社交应用。它通过内容、对象主页、交集、关系、圈子、会话、搜索和小趣助手，把内容消费转化为可证、安全、可沉淀的同趣连接；AppRoot 统一用户旅程、跨领域场景、全局术语、边界和 UAT。
 
+### 目标受众
+
+第一垂类是旅行摄影，覆盖两类相互供养的人：在旅途中持续产出照片的创作者，以及依赖他人真实影像做出行决策的规划者。创作者需要作品被同好看见，并把一次相遇沉淀为可延续的关系；规划者需要对“这个地方此刻是什么样、谁在相近的时间去过同一个位置”得到可核验的回答。两类人共享同一批照片事实，因此同一份内容既是作品也是决策依据。
+
+### 竞品定位
+
+同类产品各自只覆盖其中一段。出行预订类应用拥有完整地点与行程数据，但不保留照片的拍摄元数据，用户之间的共同经历也没有被表达为社交图谱。摄影社区拥有完整拍摄参数，但没有实体主页网络，作品只按题材聚合而不按现实对象连接。泛内容社区拥有社交关系，但内容不绑定结构化实体，拍摄事实无法参与推荐与解释。
+
+趣我圈的可防御能力是三者的交集：把“现实对象或机位”“拍摄时间窗口”“器材与拍摄参数”组合成同一条可解释事实，再与实体主页网络连接。这三类事实都能从用户本就会产生的照片中直接获得，不额外要求用户操作，也难以凭空伪造；任何单独一段都不构成壁垒，组合后才形成其他产品无法在短期内补齐的资产。
+
 ## 2. 范围与非目标
 
 ### In Scope
 
 - 覆盖用户从进入、发现、创作、互动、关系、消息、助手到持续运营的完整应用体验。
+- 以旅行摄影为第一垂类建立标签纵深：地理、机位、器材、拍摄参数与时间窗口构成可相互交叉筛选的独立轴，使地理不再是唯一具备厚度的维度。
+- 境外目的地覆盖到主流出境目的地的一级行政区与主要城市两层，使境外内容与境内内容获得同等的定位精度。
 
 ### Out of Scope
 
@@ -20,6 +32,7 @@
 ### REQ-001 发现、搜索与对象连接基础旅程
 
 - 用户可从发现流进入内容详情，完成评论互动并跳转到真实作者或对象主页。
+- 首页 Post 流与视频书在首屏、持续滚动、弱网、并发峰值与长会话下均必须在声明预算内进入可用或可恢复终态，且端侧资源、服务端并发与缓存保持有界。
 - 用户可在统一搜索入口检索内容、圈子、会话、主页和地点，失败与空结果均有明确终态。
 - 用户可从对象页理解交集依据并进入受关系、隐私和权限门禁保护的连接动作。
 
@@ -51,7 +64,7 @@
 - 互动保持两层导航且选中转发后可切换收到的/我发起的。
 - received 与 initiated 文案、预览、空态、分页、刷新、滚动恢复和点击优先级符合规格。
 - received 未读与真实 impact 正确，initiated 不显示未读或 impact。
-- 他人主页不请求转发列表，子账号切换不残留旧数据，服务端拒绝越权。
+- 他人主页不请求转发列表，Persona切换不残留旧数据，服务端拒绝越权。
 - 八个 share interaction 观测事件携带完整公共归因参数。
 
 <a id="req-005"></a>
@@ -115,6 +128,15 @@
 - 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
 - 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
 - alpha/beta/gamma/prod 的 App 可见业务对象均绑定 release/import receipt，测试 double 只存在于 local_contract 测试树；四环境 artifact 均禁止 fixture/Mock/Memory/Noop。
+
+<a id="req-011"></a>
+### REQ-011 标签准入必须同时满足可采集、可消费、可反馈、可解释
+
+- 新增或变更标签时必须声明具体写入通道，来源限于拍摄元数据、地点选择、创作者勾选、点评勾选与行为事件；没有任何写入通道的标签不得进入发布物。
+- 新增或变更标签时必须声明在线消费方式，且至少落在召回过滤、排序因子、交集判定与搜索筛选之一；只被存储而不被任何在线路径读取的标签不构成能力。
+- 每个标签必须至少能被一种用户行为带回，使正向与负向反馈都能改变后续分发，不允许只有正向信号的单向通道。
+- 每个标签必须能出现在交集句或推荐理由中；无法向用户解释的标签不得作为对用户可见结论的依据。
+- 标签轴之间必须保持正交，同一现实概念跨轴出现时由标签自身声明同义关系，跨轴关联不依赖路径前缀推测。
 
 ## 4. 用户旅程
 
@@ -325,9 +347,9 @@
 <a id="scn-015"></a>
 #### SCN-015 小趣作为会话成员参与消息
 
-- 场景目标：用户能从主页、联系人、搜索、圈子、组织节点、相关群组和会话内小趣入口，清晰进入 1v1、请求箱、群聊与助手参与的消息路径。
+- 场景目标：用户在群会话中 @小趣，小趣以会话成员身份基于最近消息窗口与会话内被引用对象的标签与交集事实回群回复，并给出可打开的引用边界。
 - 领域交接：chat-conversation → assistant-run-learning
-- 对应验收：`UAT-007`
+- 对应验收：`UAT-007`、`UAT-011`
 
 <a id="scn-016"></a>
 #### SCN-016 会话内音视频通话与离线来电可靠送达
@@ -439,9 +461,9 @@
 <a id="jny-011"></a>
 ### JNY-011 交集行动深化到结伴同行
 
-- 用户目标：用户从内容、实体与位置发现"同趣"的人和场，沿"围观→轻触→对话→同趣→同行→线下→实时"行动阶梯逐级深化，完成结伴同行、线下相聚与实时连接，并安全沉淀为可管理的关系（趣友/密友/联系人标签）。
+- 用户目标：用户从内容、实体与位置发现"同趣"的人和场，沿"围观→轻触→对话→同趣→同行→线下→实时"行动阶梯逐级深化，完成结伴同行、线下相聚与实时连接，并安全沉淀为 `mutual` 互相关注与可管理的会话治理状态。
 - 起点：用户从应用或外部入口发起旅程。
-- 成功终态：用户目标形成可观察且可恢复的业务结果。
+- 成功终态：用户至少完成一级行动阶梯升级，交集依据在会话内可追溯，关系沉淀为 `mutual` 互相关注，会话治理（免打扰、拉黑、退出）可由用户自行管理；不产生任何额外关系等级。
 - 失败恢复：失败进入可解释终态，并提供符合 canonical error/recovery 契约的恢复动作。
 - 参与领域：
   - [object-homepage-network](./object-homepage-network/spec.md)
@@ -453,23 +475,23 @@
 <a id="scn-026"></a>
 #### SCN-026 对象页交集行动深化（同趣围观到破冰升级）
 
-- 场景目标：用户从内容、实体与位置发现"同趣"的人和场，沿"围观→轻触→对话→同趣→同行→线下→实时"行动阶梯逐级深化，完成结伴同行、线下相聚与实时连接，并安全沉淀为可管理的关系（趣友/密友/联系人标签）。
+- 场景目标：用户在对象页从交集卡围观同趣的人，沿"围观→轻触→对话"携带交集依据破冰，并在对方回复后升级为保留破冰依据的正式 1v1 会话。
 - 领域交接：object-homepage-network → recommendation-platform → chat-conversation
-- 对应验收：`UAT-001`
+- 对应验收：`UAT-001`、`UAT-011`
 
 <a id="scn-027"></a>
-#### SCN-027 附近同趣·结伴同行·线下局
+#### SCN-027 结伴同行与线下相聚
 
-- 场景目标：用户从内容、实体与位置发现"同趣"的人和场，沿"围观→轻触→对话→同趣→同行→线下→实时"行动阶梯逐级深化，完成结伴同行、线下相聚与实时连接，并安全沉淀为可管理的关系（趣友/密友/联系人标签）。
+- 场景目标：用户从交集行动阶梯发起或加入 Gathering（结伴同行与线下相聚由同一聚合表达），进入其绑定群会话协调具体安排，并在该会话内发起实时群通话完成"同行→线下→实时"升级。
 - 领域交接：circle-community → recommendation-platform → user-identity-profile-relationship → chat-conversation
-- 对应验收：`UAT-001`
+- 对应验收：`UAT-001`、`UAT-011`
 
-<a id="scn-028"></a>
-#### SCN-028 派生称谓与联系人标签驱动连接
+<a id="scn-029"></a>
+#### SCN-029 可行动对象进入会话
 
-- 场景目标：用户从内容、实体与位置发现"同趣"的人和场，沿"围观→轻触→对话→同趣→同行→线下→实时"行动阶梯逐级深化，完成结伴同行、线下相聚与实时连接，并安全沉淀为可管理的关系（趣友/密友/联系人标签）。
-- 领域交接：user-identity-profile-relationship → chat-conversation → recommendation-platform
-- 对应验收：`UAT-001`
+- 场景目标：用户把内容、主页、圈子或 Gathering 分享进会话后得到可行动 card，card 的行动按云侧登记的行动键与可达性分流，尚不可承接的行动展示为不可执行的规划口径而不伪造成行。
+- 领域交接：object-homepage-network → recommendation-platform → chat-conversation
+- 对应验收：`UAT-011`
 
 <a id="jny-012"></a>
 ### JNY-012 我的主页私有互动历史
@@ -497,6 +519,7 @@
 - GIVEN 用户拥有可见的发现内容、可检索对象和至少一个可解释交集。
 - WHEN 用户从发现流打开详情、执行互动或搜索，并从对象页发起连接动作。
 - THEN 内容、作者/对象主页和搜索结果均来自 canonical projection，导航保持目标身份与 viewer 上下文。
+- AND 首页首屏、翻页与视频准备在声明时限内进入内容或可恢复终态；弱网、并发峰值和持续滚动不出现无限加载、旧请求回写、资源无界增长或不可解释空白。
 - AND 评论、空结果、超时、权限拒绝和失效对象都有明确且可恢复的终态。
 - AND 交集行动遵守关系、隐私与权限门禁，不把概率推荐伪装成事实关系。
 
@@ -534,7 +557,7 @@
 - THEN 互动保持两层导航且选中转发后可切换收到的/我发起的。
 - THEN received 与 initiated 文案、预览、空态、分页、刷新、滚动恢复和点击优先级符合规格。
 - THEN received 未读与真实 impact 正确，initiated 不显示未读或 impact。
-- THEN 他人主页不请求转发列表，子账号切换不残留旧数据，服务端拒绝越权。
+- THEN 他人主页不请求转发列表，Persona切换不残留旧数据，服务端拒绝越权。
 - THEN 八个 share interaction 观测事件携带完整公共归因参数。
 
 <a id="uat-005"></a>
@@ -599,6 +622,33 @@
 - AND 非 Prod 外部 Provider 可绑定 Port 对等 sandbox/local substitute，Prod 完成真实 Provider、实时 SLO、灰度和回滚验证；任何环境 App 均不含 seed/Mock/Memory/Noop 或运行时数据源切换。
 - THEN local_contract、api_integration、user_acceptance 均有真实断言和 CaseResult；禁止路径存在、动态 skip 或 Memory 假集成充当证据。
 
+<a id="uat-010"></a>
+### UAT-010 消息可靠可达与离线可读
+
+- GIVEN 两个真实账号在同一会话中，且接收方设备已登记有效推送端点。
+- WHEN 参与者在冷启动、断网、杀进程、弱网与离线场景下收发消息并翻阅历史。
+- THEN 冷启动或飞行模式打开会话可从本地读到最近历史，来源可区分为离线只读，不以空列表冒充没有消息。
+- THEN 向上连续翻阅历史按游标续接，合并结果按 seq 严格有序且无重复，到达最早一条后给出终止态。
+- THEN 单侧断网期间对端连续发送的消息在恢复连接后被完整补齐，最终序列无缺号、无重复且顺序按 seq。
+- THEN 杀进程后待发队列跨重启恢复，同一 clientMsgId 最多落一条。
+- THEN 离线设备收到由真实 provider 投递的推送，打开后直达该会话且该会话未读收敛；provider 未回执时投递记录保持未确认态。
+- THEN 群会话中单个接收方分发失败不影响其余接收方，网关按连接数与订阅积压扩缩并有对应告警。
+- AND 长会话滚动 jank 比与发送到气泡确认延迟在声明预算内，超出预算时门禁阻断合入。
+
+<a id="uat-011"></a>
+### UAT-011 交集驱动的消息差异化闭环
+
+- GIVEN 两个真实账号具备可证事实，且交集识别所需的上游事实与冷启动供给门均已满足。
+- WHEN 参与者完成从事实生产、交集识别、破冰、会话、小趣答疑、Gathering 到实时通话的完整链路。
+- THEN 带拍摄信息发布后，对方在对象页看到由已登记通用交集 kind 产出的交集句，句子文本与片段均来自云侧且端不拼句。
+- THEN 关闭某一披露分组后，该组派生标签与交集事实在服务端整棵子树撤回且不残留。
+- THEN 从交集卡发起打招呼时携带交集引用，服务端按当前发起方重解析后才写入依据；请求箱与升级后的 1v1 会话头部保留可追溯的破冰依据。
+- THEN 联系首页展示真实交集聚合且最多两个具体点，不出现聚合计数式表述，圈子与群组行不展示裸标识。
+- THEN 群会话 @小趣 后，小趣基于会话内被引用对象的事实回复并给出可打开的引用。
+- THEN 对象分享进会话后产生可行动 card，行动按云侧行动键与可达性分流，尚不可承接的行动展示为不可执行的规划口径。
+- THEN 发起并加入 Gathering 后进入其绑定群会话，可在该会话内发起群通话，关系沉淀为 mutual 互相关注且不产生任何额外关系等级。
+- AND 全链路交集引用与 referralSource 归因可在指标大盘按 vertical 统计；同一批断言在更换 vertical 后无需改动端侧代码。
+
 ## 6. 开放事项
 
 <a id="open-001"></a>
@@ -630,9 +680,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：尚缺 AppRoot 直接 user_acceptance；需要以双账号真实数据证明 received/initiated 分页、未读与 impact、刷新/滚动恢复、子账号切换隔离、他人主页零请求、越权拒绝及八个归因事件。
+- 影响或价值：尚缺 AppRoot 直接 user_acceptance；需要以双账号真实数据证明 received/initiated 分页、未读与 impact、刷新/滚动恢复、Persona切换隔离、他人主页零请求、越权拒绝及八个归因事件。
 - 完成判定：App local_contract 覆盖 Mock/Provider/Widget 和页面六态，Beta、Gamma 以双账号真实 HTTP/存储执行 received 与 initiated 全路径；服务拒绝他人读取且观测 readback 字段完整，CaseResult 直接引用 `UAT-004`。
-- 依赖：[`owner-subaccount-homepage-unification`](./user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md) 与 Content `ProfileInteractionActivityView` 对象证据。
+- 依赖：[`owner-persona-homepage-unification`](./user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md) 与 Content `ProfileInteractionActivityView` 对象证据。
 
 <a id="open-004"></a>
 ### OPEN-004 iOS/Android 边缘滑动返回与退出保护
@@ -675,11 +725,21 @@
 - 依赖：[`assistant-run-learning`](./assistant-run-learning/spec.md)、[`recommendation-platform`](./recommendation-platform/spec.md) 与 14 类 Provider conformance。
 
 <a id="open-008"></a>
-### OPEN-008 当前全部跨对象 Journey 商用准出
+### OPEN-008 消息可靠可达与离线可读
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 12 Journey、28 Scenario、9 UAT 尚未由同一候选版本的三层 CaseResult 和 Alpha/Beta/Gamma/Prod 回执闭合；四环境尚无同一 canonical release 的 tag/creator/entity/post/media activation、真实 public-slice 字节、自然启动和精确 UI readback 证据，任何 fixture/self-seed/skipped-success 都会阻断准出。
-- 完成判定：`UAT-009` 的派生覆盖图对全部验收锚点建立 direct `spec_ref`，同一 release digest 在 Alpha/Beta/Gamma/Prod 具有 import/API/media/rollback receipt；三环境双模拟器与 Android 真机、Prod Android/iPhone 双真机均完成精确对象和媒体读回，required executed 大于零且 skipped 为零。所有 Prod 回执及灰度回滚完成后才删除本 OPEN 并判定 `READY`。
-- 依赖：前七项 AppRoot OPEN、全部最低节点 block OPEN、14 类 Provider 九格、Data publish/release/import/readback 与四环境 `stackctl verify`。
+- 影响或价值：当前消息时间线不落盘、历史分页无调用方、会话事件只做即时广播且不进推送通道，冷启动、离线、断连与杀进程四类场景下消息均不可读或不可达。消息域的差异化体验建立在这条链路之上，链路不成立时任何上层能力都不可商用。
+- 完成判定：双账号真机在冷启动、断网、杀进程、弱网与离线推送矩阵下执行同一批断言，CaseResult 直接引用 `UAT-010`
+- 依赖：[`chat-conversation`](./chat-conversation/spec.md) 的 `message-reliability-foundation`，以及与 `media-infrastructure` 共用的受控推送凭据。
+
+<a id="open-009"></a>
+### OPEN-009 交集驱动的消息差异化闭环
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：当前消息域与交集域之间没有任何接口，拍摄事实不上链，Gathering 聚合不存在，行动阶梯的同行与线下两级无承接对象。差异化在消息层面尚不成立。
+- 完成判定：双账号真机完成从事实生产、交集识别、破冰、会话、小趣答疑、Gathering 到实时通话的闭环，且同一批断言在更换 vertical 后无需改动端侧代码，CaseResult 直接引用 `UAT-011`
+- 依赖：[`chat-conversation`](./chat-conversation/spec.md) 的 `intersection-native-messaging`、[`circle-community`](./circle-community/spec.md) 的 `gathering-coordination` 与 [`discovery-content`](./discovery-content/spec.md) 的拍摄信息披露。

@@ -30,7 +30,8 @@ fields:
   ops_exposure: read
   role: authoritative_state
 - name: status
-  type: string
+  type: enum
+  enum_ref: ExperimentStatus
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -39,7 +40,7 @@ fields:
   ops_exposure: read
   role: authoritative_state
 - name: variants
-  type: array
+  type: '[]Variant'
   constraints:
   - NOT_NULL
   classification: INTERNAL
@@ -48,7 +49,7 @@ fields:
   ops_exposure: read
   role: authoritative_state
 - name: audienceRule
-  type: object
+  type: AudienceRule
   constraints:
   - NOT_NULL
   classification: INTERNAL
@@ -133,8 +134,25 @@ types:
       api_exposure: drop
       ops_exposure: read
   UpdateExperimentRolloutRequest:
-    description: 更新 Experiment 状态和 draft 期变体权重的强类型命令
+    description: 更新 Experiment 状态和 draft 期变体权重的唯一强类型请求实体；experimentId 只从 path 绑定，expectedVersion 只从 If-Match 绑定
     fields:
+    - name: experimentId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
+    - name: expectedVersion
+      type: int
+      constraints:
+      - NOT_NULL
+      - POSITIVE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: write
     - name: status
       type: string
       constraints:
@@ -144,7 +162,7 @@ types:
       api_exposure: drop
       ops_exposure: write
     - name: variants
-      type: array
+      type: '[]Variant'
       constraints:
       - NOT_NULL
       classification: INTERNAL
@@ -152,7 +170,7 @@ types:
       api_exposure: drop
       ops_exposure: write
   UpdateExperimentRolloutResult:
-    description: Experiment rollout 提交后的版本化结果
+    description: Experiment rollout 提交后的聚合修订结果
     fields:
     - name: id
       type: string
@@ -170,8 +188,8 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
-    - name: policyVersion
-      type: string
+    - name: experimentRevision
+      type: int
       constraints:
       - NOT_NULL
       classification: INTERNAL
@@ -179,21 +197,77 @@ types:
       api_exposure: drop
       ops_exposure: read
     - name: variants
-      type: array
+      type: '[]Variant'
       constraints:
       - NOT_NULL
       classification: INTERNAL
       log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+  ExperimentCatalogItem:
+    description: 运营实验目录中的强类型只读条目，与 HTTP handler 输出逐字段一致。
+    fields:
+    - name: id
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: key
+      type: string
+      constraints: [NOT_NULL]
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: status
+      type: enum
+      enum_ref: ExperimentStatus
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: experimentRevision
+      type: int
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+    - name: variants
+      type: '[]Variant'
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: variantStats
+      type: object
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: metadata_only
+      api_exposure: drop
+      ops_exposure: read
+    - name: assignedSubjects
+      type: int
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
       api_exposure: drop
       ops_exposure: read
   ExperimentCatalogSlice:
     description: 运营端实验目录的具名只读 Slice
     fields:
     - name: items
-      type: array
+      type: '[]ExperimentCatalogItem'
       constraints:
       - NOT_NULL
       classification: INTERNAL
       log_policy: metadata_only
       api_exposure: drop
       ops_exposure: read
+enums:
+  ExperimentStatus:
+    values: [draft, scheduled, running, paused, ended]

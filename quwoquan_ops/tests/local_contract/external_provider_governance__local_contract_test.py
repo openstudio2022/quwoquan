@@ -271,6 +271,9 @@ class ExternalProviderGovernanceContractTest(unittest.TestCase):
         self.assertIn('"runtime.message.transport"', assistant_transport)
         self.assertIn('RequiredRedisScenes: []string{', assistant_transport)
         self.assertIn('"general"', assistant_transport)
+        self.assertIn("State                   string", assistant_transport)
+        self.assertIn("EndpointEnvironmentKeys: map[string]string{}", assistant_transport)
+        self.assertIn("if !ok {\n\t\treturn ExternalProviderBinding{}, false\n\t}", assistant_transport)
 
 
 if __name__ == "__main__":

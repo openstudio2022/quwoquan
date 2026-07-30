@@ -2,6 +2,7 @@
   "label": "中国民族",
   "labelEn": "Chinese Ethnic Groups",
   "description": "中国56个民族分类",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

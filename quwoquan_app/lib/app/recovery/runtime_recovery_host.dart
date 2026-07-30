@@ -66,12 +66,23 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
   StartupRecoveryController? _controller;
   int _generation = 0;
   bool _childMounted = true;
+  bool _runtimeReentryConsumed = false;
   Timer? _reentryTimer;
+  late Widget _generationChild;
 
   @override
   void initState() {
     super.initState();
+    _generationChild = _buildGenerationChild();
     RuntimeRecoveryCoordinator.instance._attach(this);
+  }
+
+  Widget _buildGenerationChild() {
+    final generationKey = ValueKey<int>(_generation);
+    return KeyedSubtree(
+      key: generationKey,
+      child: widget.childBuilder(generationKey, _generation > 0),
+    );
   }
 
   @override
@@ -110,8 +121,10 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
     setState(() {
       _childMounted = false;
       _controller = StartupRecoveryController(
-        initialSnapshot: const RecoverySnapshot(
-          phase: RecoveryPhase.runtimeUnavailable,
+        initialSnapshot: RecoverySnapshot(
+          phase: _runtimeReentryConsumed
+              ? RecoveryPhase.runtimeVersionChecking
+              : RecoveryPhase.runtimeUnavailable,
         ),
         onRuntimeReenter: _beginRuntimeReentry,
       );
@@ -120,8 +133,13 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
 
   Future<void> _beginRuntimeReentry() async {
     if (!mounted) throw StateError('runtime recovery host is disposed');
+    if (_runtimeReentryConsumed) {
+      throw StateError('runtime reentry budget is already consumed');
+    }
     setState(() {
+      _runtimeReentryConsumed = true;
       _generation += 1;
+      _generationChild = _buildGenerationChild();
       _childMounted = true;
     });
     _reentryTimer?.cancel();
@@ -159,16 +177,7 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
       fit: StackFit.expand,
       textDirection: TextDirection.ltr,
       children: <Widget>[
-        if (_childMounted)
-          KeyedSubtree(
-            key: ValueKey<int>(_generation),
-            child: widget.childBuilder(
-              ValueKey<int>(_generation),
-              _generation > 0,
-            ),
-          )
-        else
-          const SizedBox.expand(),
+        if (_childMounted) _generationChild else const SizedBox.expand(),
         if (controller != null)
           Positioned.fill(
             child: MaterialApp(

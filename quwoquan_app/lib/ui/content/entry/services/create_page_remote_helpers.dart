@@ -103,15 +103,19 @@ List<String> entityRefsForPayload(CreateEditorState state) {
   return refs.toList(growable: false);
 }
 
-/// 与 [entityRefsForPayload] 对称：合并发布设置里的 tagRefs 与正文 inline tag
-/// mention（剥离 `tag:` 前缀，对齐 front matter `tag_refs` 不带前缀的格式），
+/// 与 [entityRefsForPayload] 对称：合并发布设置里的 tagRefs、EXIF 派生的摄影标签与正文
+/// inline tag mention（剥离 `tag:` 前缀，对齐 front matter `tag_refs` 不带前缀的格式），
 /// 去重后投影为 active tagRefs。只采纳正文里已存在的 `@[label](tag:ref)`，
 /// 不在创作端自造 tag 候选。
+///
+/// EXIF 派生标签不经创作者勾选：它们是照片自带的客观事实，创作者的控制点是披露开关
+/// （关掉某组后 `captureDerivedTagRefs` 自然不含该组），而不是逐条取消打标。
 List<String> tagRefsForPayload(CreateEditorState state) {
   final refs = <String>{
     ...state.settings.tagRefs
         .map((ref) => ref.trim())
         .where((ref) => ref.isNotEmpty),
+    ...state.settings.captureDerivedTagRefs,
   };
   for (final node in state.articleDocument.nodes) {
     for (final span in node.spans) {
@@ -218,8 +222,8 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
   if (tagRefs.isNotEmpty) {
     settings['tagRefs'] = tagRefs;
   }
-  // R-CS06：发布唯一可写 grounding 字段。顶层 tagRefs/entityRefs 是只读投影，会被
-  // wire writable_fields 剥离；entity/tag 内联只有经 semanticMentions 才落服务端 refs。
+  // R-CS06：发布唯一可写 grounding 字段。canonical 请求实体不拥有顶层只读
+  // tagRefs/entityRefs；entity/tag 内联只有经 semanticMentions 才落服务端 refs。
   final semanticMentions = semanticMentionsForPayload(state);
   if (semanticMentions.isNotEmpty) {
     settings['semanticMentions'] = semanticMentions;
@@ -788,6 +792,8 @@ submitContentPostPublicationCommandFromPreparedPayload(
   illustrationAssetId: _optionalPayloadText(payload['illustrationAssetId']),
   location: _optionalStructuredObject(payload['location'], 'location'),
   locationName: _optionalPayloadText(payload['locationName']),
+  geoTagRef: _optionalPayloadText(payload['geoTagRef']),
+  visitedAt: _optionalPayloadTimestamp(payload['visitedAt'], 'visitedAt'),
   primaryHomepageId: _optionalPayloadText(payload['primaryHomepageId']),
   primaryHomepageType: _optionalPayloadText(payload['primaryHomepageType']),
   primaryHomepageSnapshot: _optionalStructuredObject(
@@ -914,6 +920,16 @@ int? _optionalPayloadInt(Object? raw, String field) {
     throw ArgumentError.value(raw, field, 'must be an integer');
   }
   return parsed;
+}
+
+DateTime? _optionalPayloadTimestamp(Object? raw, String field) {
+  if (raw == null) return null;
+  if (raw is DateTime) return raw.toUtc();
+  final parsed = DateTime.tryParse(raw.toString().trim());
+  if (parsed == null) {
+    throw ArgumentError.value(raw, field, 'must be an RFC3339 timestamp');
+  }
+  return parsed.toUtc();
 }
 
 List<ContentPostStructuredObject> _structuredObjectList(

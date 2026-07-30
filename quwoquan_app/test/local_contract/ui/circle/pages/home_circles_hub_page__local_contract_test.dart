@@ -7,9 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -139,8 +142,9 @@ class _AuthenticatedHubSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'circle-hub-test-token',
+    refreshToken: 'circle-hub-test-refresh-token',
     ownerId: 'fixture-user',
-    activeSubAccountId: 'fixture-persona',
+    activePersonaId: 'fixture-persona',
   );
 }
 
@@ -491,15 +495,27 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
     HttpOverrides.global = _FakeHttpOverrides();
+    AuthGate.resetDebounce();
   });
 
-  test('生产装配 Remote-only；显式注入的 Mock 圈子发现流非空', () async {
+  test('生产装配只接受 package runtime；显式注入的 typed double 非空', () async {
     final productionContainer = ProviderContainer();
     addTearDown(productionContainer.dispose);
-    expect(
-      productionContainer.read(circlesListDiscoveryFeedQueryProvider),
-      isNot(isA<CircleDiscoveryFeedQueryTestDouble>()),
-    );
+    if (CloudRuntimeConfig.appRuntimeEnv.trim().isEmpty) {
+      expect(
+        () => productionContainer.read(circlesListDiscoveryFeedQueryProvider),
+        throwsA(
+          predicate<Object>(
+            (error) => error.toString().contains('Unsupported APP_RUNTIME_ENV'),
+          ),
+        ),
+      );
+    } else {
+      expect(
+        productionContainer.read(circlesListDiscoveryFeedQueryProvider),
+        isA<RemoteCircleQueryReader>(),
+      );
+    }
 
     final queryReader = CircleDiscoveryFeedQueryTestDouble(
       (_) => _hubDiscoveryFeedFixture(),
@@ -555,7 +571,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'fixture-persona',
+              personaId: 'fixture-persona',
               ownerUserId: 'fixture-user',
               displayName: '圈子测试用户',
               avatarUrl: '',

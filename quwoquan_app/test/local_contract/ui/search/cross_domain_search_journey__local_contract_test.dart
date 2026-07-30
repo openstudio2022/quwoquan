@@ -577,7 +577,7 @@ class _FlakyXiaoquAssistantRepository extends _FakeAssistantRepository {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     if (failNext) {
@@ -595,7 +595,7 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(

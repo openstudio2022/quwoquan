@@ -36,7 +36,6 @@ class _FlakyBehaviorRepository extends BehaviorRepository {
   @override
   Future<void> submitOnboardingInterest({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
@@ -45,7 +44,6 @@ class _FlakyBehaviorRepository extends BehaviorRepository {
         contentId: '',
         action: BehaviorAction.onboardingInterest,
         clientEventId: clientEventId,
-        catalogVersion: catalogVersion,
         taxonomyReleaseId: taxonomyReleaseId,
         tags: tagRefs,
       ),
@@ -114,6 +112,56 @@ void main() {
       expect(repo.recorded.first.clientEventId, isNotEmpty);
     });
 
+    test('impression 去重按 30 分钟 TTL 与 LRU 容量保持有界', () async {
+      var now = DateTime.utc(2026, 7, 28, 10);
+      final boundedTracker = ContentBehaviorTracker(
+        reporter: repo,
+        maxBatchSize: 20,
+        enablePeriodicFlush: false,
+        impressionDedupCapacity: 2,
+        impressionDedupTtl: const Duration(minutes: 30),
+        now: () => now,
+      );
+      addTearDown(boundedTracker.dispose);
+
+      boundedTracker.trackImpression('post_1');
+      boundedTracker.trackImpression('post_2');
+      boundedTracker.trackImpression('post_3');
+      await boundedTracker.flush();
+      expect(boundedTracker.debugImpressionDedupEntryCount, 2);
+      expect(repo.recorded, hasLength(3));
+
+      // post_1 已被 LRU 淘汰，可以在再次真实曝光时重新计量。
+      boundedTracker.trackImpression('post_1');
+      boundedTracker.trackImpression('post_1');
+      await boundedTracker.flush();
+      expect(repo.recorded, hasLength(4));
+      expect(boundedTracker.debugImpressionDedupEntryCount, 2);
+
+      now = now.add(const Duration(minutes: 31));
+      boundedTracker.trackImpression('post_1');
+      await boundedTracker.flush();
+      expect(repo.recorded, hasLength(5));
+      expect(boundedTracker.debugImpressionDedupEntryCount, 1);
+    });
+
+    test('连续 flush 失败时待发缓冲严格不超过三个 batch', () async {
+      final flaky = _FlakyBehaviorRepository()..shouldThrow = true;
+      final boundedTracker = ContentBehaviorTracker(
+        reporter: flaky,
+        maxBatchSize: 2,
+        enablePeriodicFlush: false,
+      );
+      addTearDown(boundedTracker.dispose);
+
+      for (var i = 0; i < 12; i++) {
+        boundedTracker.trackClick('failed_post_$i');
+        await boundedTracker.flush();
+      }
+
+      expect(boundedTracker.debugPendingEventCount, lessThanOrEqualTo(6));
+    });
+
     test('未达可见阈值只上报 visible，不进入 impressed 去重集合', () async {
       tracker.trackQualifiedImpression(
         'post_1',
@@ -127,28 +175,6 @@ void main() {
       expect(event.state, equals('visible'));
       expect(event.toJson()['state'], equals('visible'));
       expect(event.clientEventId, isNotEmpty);
-    });
-
-    test('onboarding_interest 回流去重后的路径制 tagRefs（N2-4/W11）', () async {
-      tracker.trackOnboardingInterest(<String>[
-        'Topic/旅行',
-        ' Topic/旅行 ',
-        'Topic/摄影',
-        '',
-      ]);
-      await tracker.flush();
-
-      final event = repo.recorded.single;
-      expect(event.action, BehaviorAction.onboardingInterest);
-      expect(event.state, 'interaction');
-      expect(event.contentId, isEmpty, reason: '兴趣先验不绑定具体 post');
-      expect(event.tags, equals(<String>['Topic/旅行', 'Topic/摄影']));
-    });
-
-    test('onboarding_interest 空标签不产生事件', () async {
-      tracker.trackOnboardingInterest(<String>['', '  ']);
-      await tracker.flush();
-      expect(repo.recorded, isEmpty);
     });
 
     test('dwell < 1s 不上报', () async {
@@ -341,8 +367,8 @@ void main() {
         position: 2,
         referralSource: ReferralSource.organicFeed,
         channelId: 'following',
-        rankingVersion: 'rank-v3',
-        reasonVersion: 'reason-v2',
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         recallPath: 'collab_i2i',
         contentVertical: 'travel_photography',
         supplySource: 'data_engineering',
@@ -352,8 +378,12 @@ void main() {
       final event = repo.recorded.single;
       expect(event.state, equals('impressed'));
       expect(event.channelId, equals('following'));
-      expect(event.rankingVersion, equals('rank-v3'));
-      expect(event.reasonVersion, equals('reason-v2'));
+      expect(
+        event.policyDigest,
+        equals(
+          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ),
+      );
       expect(event.recallPath, equals('collab_i2i'));
       expect(event.contentVertical, equals('travel_photography'));
       expect(event.supplySource, equals('data_engineering'));
@@ -367,8 +397,8 @@ void main() {
         position: 5,
         referralSource: ReferralSource.organicFeed,
         channelId: 'video',
-        rankingVersion: 'rank-v9',
-        reasonVersion: 'reason-v9',
+        policyDigest:
+            'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         recallPath: 'collab_u2i',
         contentVertical: 'general',
         supplySource: 'ugc',
@@ -379,8 +409,12 @@ void main() {
       expect(event.action, BehaviorAction.click);
       expect(event.state, equals('click'));
       expect(event.channelId, equals('video'));
-      expect(event.rankingVersion, equals('rank-v9'));
-      expect(event.reasonVersion, equals('reason-v9'));
+      expect(
+        event.policyDigest,
+        equals(
+          'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        ),
+      );
       expect(event.recallPath, equals('collab_u2i'));
       expect(event.contentVertical, equals('general'));
       expect(event.supplySource, equals('ugc'));
@@ -396,8 +430,8 @@ void main() {
         tags: const <String>['relationship/sharedFollowees'],
         feedRequestId: 'feed_req_video_book',
         channelId: 'premium_stream',
-        rankingVersion: 'rank-v-video-book',
-        reasonVersion: 'reason-v-video-book',
+        policyDigest:
+            'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
         intersectionId: 'ix_1',
         intersectionDimension: 'relationship',
         intersectionSourceRef: 'sharedFollowees',
@@ -417,8 +451,12 @@ void main() {
       expect(event.referralSource, equals(ReferralSource.authorProfile));
       expect(event.feedRequestId, equals('feed_req_video_book'));
       expect(event.channelId, equals('premium_stream'));
-      expect(event.rankingVersion, equals('rank-v-video-book'));
-      expect(event.reasonVersion, equals('reason-v-video-book'));
+      expect(
+        event.policyDigest,
+        equals(
+          'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+        ),
+      );
       expect(event.intersectionId, equals('ix_1'));
       expect(event.intersectionDimension, equals('relationship'));
       expect(event.intersectionSourceRef, equals('sharedFollowees'));
@@ -432,7 +470,7 @@ void main() {
 
     // ── 七态漏斗：visible（弱可见）与 impressed（达阈值）状态严格区分，归因字段全透传 ──
     test(
-      '七态漏斗：visible 未达阈值 vs impressed 达阈值，状态区分且 channelId/rankingVersion 透传',
+      '七态漏斗：visible 未达阈值 vs impressed 达阈值，状态区分且 channelId/policyDigest 透传',
       () async {
         tracker.trackQualifiedImpression(
           'post_visible',
@@ -440,7 +478,8 @@ void main() {
           visibleDuration: const Duration(milliseconds: 400),
           feedRequestId: 'frq_07',
           channelId: 'recommend',
-          rankingVersion: 'rank-v7',
+          policyDigest:
+              'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         );
         tracker.trackQualifiedImpression(
           'post_impressed',
@@ -448,7 +487,8 @@ void main() {
           visibleDuration: const Duration(milliseconds: 1500),
           feedRequestId: 'frq_07',
           channelId: 'recommend',
-          rankingVersion: 'rank-v7',
+          policyDigest:
+              'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
         );
         await tracker.flush();
 
@@ -463,7 +503,12 @@ void main() {
         for (final event in <BehaviorEvent>[visible, impressed]) {
           expect(event.feedRequestId, equals('frq_07'));
           expect(event.channelId, equals('recommend'));
-          expect(event.rankingVersion, equals('rank-v7'));
+          expect(
+            event.policyDigest,
+            equals(
+              'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+            ),
+          );
         }
       },
     );
@@ -582,7 +627,8 @@ void main() {
         position: 2,
         referralSource: ReferralSource.entityPage,
         channelId: 'recommend',
-        rankingVersion: 'rank-v-wishlist',
+        policyDigest:
+            'sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
       );
       await tracker.flush();
 

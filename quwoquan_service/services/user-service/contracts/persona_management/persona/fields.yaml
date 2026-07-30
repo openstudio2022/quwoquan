@@ -1,345 +1,814 @@
-description: 用户子账号——应用内真实身份主体；只保留 subAccountId 作为主体 ID
+description: 用户Persona——应用内真实身份主体；只保留 personaId 作为主体 ID
 fields:
-- name: userId
-  source: userId
-  type: string
-  constraints:
-  - FK_user_profiles_CASCADE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: displayName
-  source: displayName
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: userHandle
-  source: userHandle
-  type: string
-  constraints:
-  - NULLABLE
-  - UK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 分身用户号；全局唯一、用户可修改、用于公开标识
-  role: authoritative_state
-- name: phone
-  source: phone
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read_write
-  ops_exposure: mask
-  description: 当前分身绑定手机号；默认继承主分身，可单独改写
-  role: authoritative_state
-- name: email
-  source: email
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read_write
-  ops_exposure: mask
-  description: 当前分身绑定邮箱；默认继承主分身，可单独改写
-  role: authoritative_state
-- name: avatarUrl
-  source: avatarUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: avatarMediaAssetId
-  source: avatarMediaAssetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: MediaAsset identity；delivery URL 仅为可重建投影字段。
-  role: authoritative_state
-  reference: true
-- name: avatarVersion
-  source: avatarVersion
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 子账号头像版本号；用于 persona 头像缓存失效与继承头像对齐
-  role: authoritative_state
-- name: backgroundUrl
-  source: backgroundUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 子账号主页头图 URL；为空时继承 owner 基线
-  role: authoritative_state
-- name: backgroundMediaAssetId
-  source: backgroundMediaAssetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 主页头图 MediaAsset identity。
-  role: authoritative_state
-  reference: true
-- name: bio
-  source: bio
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 子账号简介；为空时继承 owner 基线
-  role: authoritative_state
-- name: callerRingtoneId
-  source: callerRingtoneId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 发起实时通话时对外使用的官方呼叫铃声 ID；为空时回退平台默认铃声
-  role: authoritative_state
-  reference: true
-- name: themeModeOverride
-  source: themeModeOverride
-  type: enum
-  enum_ref: ThemeModeSetting
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 子账号对 owner 默认主题模式的覆盖；为空表示继承 owner 默认值
-  role: authoritative_state
-- name: fontSizePresetOverride
-  source: fontSizePresetOverride
-  type: enum
-  enum_ref: FontSizePreset
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 子账号对 owner 默认字号预设的覆盖；为空表示继承 owner 默认值
-  role: authoritative_state
-- name: appearanceOverrideUpdatedAt
-  source: appearanceOverrideUpdatedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 子账号 appearance override 最后更新时间
-  role: authoritative_state
-- name: isPrimary
-  source: isPrimary
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: isPrivate
-  source: isPrivate
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: isActive
-  source: isActive
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: PersonaStatus
-  constraints:
-  - NOT_NULL
-  default_value: active
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 分身生命周期状态；retired 后不可再作为新动作主体
-  role: authoritative_state
-- name: retiredAt
-  source: retiredAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 分身退役时间；为空表示仍可作为活跃主体
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: subAccountId
-  source: subAccountId
-  type: string
-  constraints:
-  - PK
-  - NOT_NULL
-  - UK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 全局唯一子账号 ID；也是跨域上下文唯一主体 ID
-  role: authoritative_state
-- name: isolationLevel
-  source: isolationLevel
-  type: enum
-  enum_ref: IsolationLevel
-  constraints:
-  - NOT_NULL
-  default_value: open
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 隔离等级：open（公开可发现）/ semi（半隔离）/ strict（不对外暴露）
-  role: authoritative_state
-- name: purposeHint
-  source: purposeHint
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: drop
-  ops_exposure: read
-  description: 用户自定义用途备注（仅主控账号视角可见）
-  role: authoritative_state
-- name: inheritsProfileFromOwner
-  source: inheritsProfileFromOwner
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_TRUE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 是否默认继承 owner 资料基线
-  role: authoritative_state
-- name: overriddenProfileFields
-  source: overriddenProfileFields
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前子账号已覆写的资料字段列表
-  role: authoritative_state
-- name: lastProfileSyncAt
-  source: lastProfileSyncAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 最近一次资料同步时间
-  role: authoritative_state
-- name: lastProfileSyncSource
-  source: lastProfileSyncSource
-  type: enum
-  enum_ref: ProfileSyncSource
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 最近一次资料同步来源
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  source: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: Persona aggregate optimistic concurrency version。
-  role: authoritative_state
+  - name: userId
+    source: userId
+    type: string
+    constraints:
+      - FK_user_profiles_CASCADE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: displayName
+    source: displayName
+    type: string
+    max_utf8_bytes: 256
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: nicknameCustomized
+    source: nicknameCustomized
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 当前 Persona 的展示名是否由用户主动修改
+    role: authoritative_state
+  - name: userHandle
+    source: userHandle
+    type: string
+    constraints:
+      - NULLABLE
+      - UK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 分身用户号；全局唯一、用户可修改、用于公开标识
+    role: authoritative_state
+  - name: avatarUrl
+    source: avatarUrl
+    type: string
+    max_utf8_bytes: 4096
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: avatarMediaAssetId
+    source: avatarMediaAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: MediaAsset identity；delivery URL 仅为可重建投影字段。
+    role: authoritative_state
+    reference: true
+  - name: avatarVersion
+    source: avatarVersion
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: Persona头像版本号；用于 persona 头像缓存失效与继承头像对齐
+    role: authoritative_state
+  - name: backgroundUrl
+    source: backgroundUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: Persona 主页头图 URL；空值表示该 Persona 未配置头图，不从 UserAccount 回退读取
+    role: authoritative_state
+  - name: backgroundMediaAssetId
+    source: backgroundMediaAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 主页头图 MediaAsset identity。
+    role: authoritative_state
+    reference: true
+  - name: bio
+    source: bio
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: Persona 简介；空值是合法权威状态，不从 UserAccount 回退读取
+    role: authoritative_state
+  - name: identityTags
+    source: identityTags
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    tag_ref: true
+    description: 当前 Persona 的身份、职业与声明式兴趣 tagRef 集合
+    role: authoritative_state
+  - name: taxonomyReleaseId
+    source: taxonomyReleaseId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: metadata_only
+    api_exposure: drop
+    ops_exposure: read
+    description: identityTags 最近一次通过校验的 taxonomy immutable release
+    role: authoritative_state
+    reference: true
+  - name: gender
+    source: gender
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: read_write
+    ops_exposure: mask
+    role: authoritative_state
+  - name: birthDate
+    source: birthDate
+    type: date
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: drop
+    api_exposure: read_write
+    ops_exposure: drop
+    role: authoritative_state
+  - name: region
+    source: region
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 由 regionTagRef 校验解析得到的地区展示快照
+    role: authoritative_state
+  - name: regionTagRef
+    source: regionTagRef
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    tag_ref: true
+    description: 当前 Persona 的省市行政区 tagRef
+    role: authoritative_state
+  - name: callerRingtoneId
+    source: callerRingtoneId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 发起实时通话时对外使用的官方呼叫铃声 ID；为空时回退平台默认铃声
+    role: authoritative_state
+    reference: true
+  - name: themeModeOverride
+    source: themeModeOverride
+    type: enum
+    enum_ref: ThemeModeSetting
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: Persona对 owner 默认主题模式的覆盖；为空表示继承 owner 默认值
+    role: authoritative_state
+  - name: fontSizePresetOverride
+    source: fontSizePresetOverride
+    type: enum
+    enum_ref: FontSizePreset
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: Persona对 owner 默认字号预设的覆盖；为空表示继承 owner 默认值
+    role: authoritative_state
+  - name: appearanceOverrideUpdatedAt
+    source: appearanceOverrideUpdatedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Persona appearance override 最后更新时间
+    role: authoritative_state
+  - name: isPrimary
+    source: isPrimary
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: isPrivate
+    source: isPrivate
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: isActive
+    source: isActive
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: PersonaStatus
+    constraints:
+      - NOT_NULL
+    default_value: active
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 分身生命周期状态；retired 后不可再作为新动作主体
+    role: authoritative_state
+  - name: retiredAt
+    source: retiredAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 分身退役时间；为空表示仍可作为活跃主体
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: personaId
+    source: personaId
+    type: string
+    max_utf8_bytes: 128
+    constraints:
+      - PK
+      - NOT_NULL
+      - UK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 全局唯一Persona ID；也是跨域上下文唯一主体 ID
+    role: authoritative_state
+  - name: isolationLevel
+    source: isolationLevel
+    type: enum
+    enum_ref: IsolationLevel
+    constraints:
+      - NOT_NULL
+    default_value: open
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 隔离等级：open（公开可发现）/ semi（半隔离）/ strict（不对外暴露）
+    role: authoritative_state
+  - name: purposeHint
+    source: purposeHint
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: read
+    description: 用户自定义用途备注（仅主控账号视角可见）
+    role: authoritative_state
+  - name: inheritsProfileFromOwner
+    source: inheritsProfileFromOwner
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_TRUE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 历史/显式 Persona 间资料同步偏好；只控制同步命令，不得作为运行时读取 UserAccount 资料的回退开关
+    role: authoritative_state
+  - name: overriddenProfileFields
+    source: overriddenProfileFields
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 当前Persona已覆写的资料字段列表
+    role: authoritative_state
+  - name: lastProfileSyncAt
+    source: lastProfileSyncAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 最近一次资料同步时间
+    role: authoritative_state
+  - name: lastProfileSyncSource
+    source: lastProfileSyncSource
+    type: enum
+    enum_ref: ProfileSyncSource
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 最近一次资料同步来源
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    source: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Persona aggregate optimistic concurrency version。
+    role: authoritative_state
+types:
+  PersonaProfileMutation:
+    description: Persona 公开资料编辑 mutation；显式携带同步范围与同步目标
+    fields:
+      - name: nickname
+        source: nickname
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: avatarAssetId
+        source: avatarAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 头像媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
+      - name: backgroundUrl
+        source: backgroundUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: backgroundAssetId
+        source: backgroundAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 封面媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
+      - name: bio
+        source: bio
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: gender
+        source: gender
+        type: enum
+        enum_ref: Gender
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: birthDate
+        source: birthDate
+        type: date
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: drop
+        api_exposure: read_write
+        ops_exposure: read
+      - name: region
+        source: region
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: regionTagRef
+        source: regionTagRef
+        type: tag_ref
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+        description: 省市两级结构化行政区 tagRef，必须位于 Topic/地理/行政区/中国/ 下，公开展示由 tag-service 派生
+      - name: occupationTagRef
+        source: occupationTagRef
+        type: tag_ref
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户职业标签，V1 单选，必须由 tag-service validateRefs 校验
+      - name: interestTagRefs
+        source: interestTagRefs
+        type: '[]tag_ref'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户兴趣标签，V1 多选，必须由 tag-service validateRefs 校验
+      - name: expectedTaxonomyReleaseId
+        source: expectedTaxonomyReleaseId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 修改职业或兴趣标签时必填；作为 tag taxonomy release 的乐观并发前置条件
+      - name: callerRingtoneId
+        source: callerRingtoneId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: isolationLevel
+        source: isolationLevel
+        type: enum
+        enum_ref: IsolationLevel
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: purposeHint
+        source: purposeHint
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: read
+      - name: profileVisibility
+        source: profileVisibility
+        type: enum
+        enum_ref: ProfileVisibility
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 当前 active Persona 的公开开关；本命令只接受 public/private，friends 属于 UserSettings 受众策略而非 Persona 资料状态
+      - name: applyScope
+        source: applyScope
+        type: enum
+        enum_ref: ProfileSyncApplyScope
+        constraints:
+          - NOT_NULL
+          - DEFAULT_CURRENT_SUBJECT_ONLY
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: syncTargetIds
+        source: syncTargetIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: fieldsMask
+        source: fieldsMask
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+  ApplyPersonaProfileSyncCommand:
+    fields:
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: applyScope
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: syncTargetIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+      - name: fieldsMask
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+  RetirePersonaCommand:
+    fields:
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  UpdateUserProfileCommand:
+    fields:
+      - name: nickname
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: displayName
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: avatarAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: backgroundAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: backgroundUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: bio
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: gender
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: birthDate
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: regionTagRef
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: occupationTagRef
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: interestTagRefs
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+      - name: expectedTaxonomyReleaseId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: identityTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+      - name: profileVisibility
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: applyScope
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: syncTargetIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+      - name: fieldsMask
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+  CreatePersonaCommand:
+    fields:
+      - name: displayName
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: isolationLevel
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: purposeHint
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+  ActivatePersonaCommand:
+    fields:
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  UpdatePersonaCommand:
+    fields:
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: displayName
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: backgroundUrl
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: isolationLevel
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: purposeHint
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: applyScope
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: syncTargetIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?
+      - name: fieldsMask
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        client_dart_type: List<String>?

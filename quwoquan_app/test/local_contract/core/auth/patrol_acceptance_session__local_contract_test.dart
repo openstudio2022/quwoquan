@@ -11,12 +11,12 @@ void main() {
           accessToken: 'access-real',
           refreshToken: 'refresh-real',
           ownerId: 'owner-real',
-          subAccountId: 'persona-real',
+          personaId: 'persona-real',
         );
 
         expect(session.isAuthenticated, isTrue);
         expect(session.ownerId, 'owner-real');
-        expect(session.activeSubAccountId, 'persona-real');
+        expect(session.activePersonaId, 'persona-real');
         expect(session.accessToken, 'access-real');
         expect(session.refreshToken, 'refresh-real');
       },
@@ -30,7 +30,7 @@ void main() {
         expect(session.isAuthenticated, isFalse);
         expect(session.status, AuthSessionStatus.guest);
         expect(session.accessToken, isEmpty);
-        expect(session.activeSubAccountId, isEmpty);
+        expect(session.activePersonaId, isEmpty);
       },
     );
 
@@ -38,7 +38,7 @@ void main() {
       'accessToken',
       'refreshToken',
       'ownerId',
-      'subAccountId',
+      'personaId',
     ]) {
       test('rejects a missing $missing instead of installing a fallback', () {
         expect(
@@ -46,7 +46,7 @@ void main() {
             accessToken: missing == 'accessToken' ? '' : 'access-real',
             refreshToken: missing == 'refreshToken' ? '' : 'refresh-real',
             ownerId: missing == 'ownerId' ? '' : 'owner-real',
-            subAccountId: missing == 'subAccountId' ? '' : 'persona-real',
+            personaId: missing == 'personaId' ? '' : 'persona-real',
           ),
           throwsStateError,
         );

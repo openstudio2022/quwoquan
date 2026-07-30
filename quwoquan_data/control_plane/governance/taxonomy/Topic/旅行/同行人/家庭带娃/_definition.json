@@ -1,0 +1,16 @@
+{
+  "label": "家庭带娃",
+  "labelEn": "Family With Kids",
+  "description": "携未成年子女出行，关注亲子设施与节奏",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Topic/旅行/旅行主题/亲子游"
+  ],
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
+}

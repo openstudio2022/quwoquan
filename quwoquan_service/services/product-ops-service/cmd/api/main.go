@@ -14,8 +14,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	generatedcontrolplane "quwoquan_service/generated/control_plane"
-	operationsecurity "quwoquan_service/generated/operationsecurity"
 	controlplanepersistence "quwoquan_service/internal/platform/controlplane/persistence"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 
@@ -24,12 +22,15 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
-	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	accountenforcementapp "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/application"
+	accountenforcementobservability "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/infrastructure/observability"
+	accountenforcementpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/infrastructure/persistence"
+	accountenforcementuser "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/infrastructure/useraccount"
 	apprelease "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/application"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/logsink"
@@ -40,6 +41,7 @@ import (
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/infrastructure/persistence"
 	recoveryfailure "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/application"
+	visitapplication "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 	visitpersistence "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/infrastructure/persistence"
 )
 
@@ -61,16 +63,18 @@ type metricSnapshot struct {
 }
 
 type productService struct {
-	store            controlplane.StateStore
-	telemetry        *application.TelemetryService
-	runtimeLogs      *application.RuntimeLogService
-	runtimeLogStore  application.RuntimeLogStore
-	growth           *application.GrowthService
-	prometheus       application.PrometheusQuery
-	experimentHTTP   *experimenthttp.Handler
-	publisher        runtimemessaging.EventPublisher
-	appRelease       *apprelease.Service
-	recoveryFailures *recoveryfailure.Service
+	store              controlplane.StateStore
+	telemetry          *application.TelemetryService
+	visits             *visitapplication.Service
+	runtimeLogs        *application.RuntimeLogService
+	runtimeLogStore    application.RuntimeLogStore
+	growth             *application.GrowthService
+	prometheus         application.PrometheusQuery
+	experimentHTTP     *experimenthttp.Handler
+	publisher          runtimemessaging.EventPublisher
+	appRelease         *apprelease.Service
+	recoveryFailures   *recoveryfailure.Service
+	accountEnforcement *accountenforcementapp.Service
 }
 
 func main() {
@@ -91,8 +95,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("product-ops-service log sink binding invalid: %v", err)
 	}
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("product-ops-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion, imageVersion); err != nil {
+		log.Fatalf("product-ops-service config identity failed: %v", err)
 	}
 	if err := validateRequiredRuntimeConfig(cfg, appEnv); err != nil {
 		log.Fatalf("product-ops-service required runtime config invalid: %v", err)
@@ -110,6 +114,22 @@ func main() {
 	)
 	if err != nil {
 		log.Fatalf("product-ops-service account security authority credential init failed: %v", err)
+	}
+	accountEnforcementCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		serviceName,
+		[]string{"user.account.enforcement.write"},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account enforcement credential init failed: %v", err)
+	}
+	accountAppealIntakeCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		serviceName,
+		[]string{"user.account.appeal_intake.claim"},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account appeal intake credential init failed: %v", err)
 	}
 	accountSecurityAuthorityTimeout := time.Duration(
 		cfg.AccountSecurityAuthority.TimeoutMS,
@@ -141,7 +161,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("product-ops-service operator OIDC verifier invalid: %v", err)
 	}
-	if operatorOIDCVerifier == nil && operatorOIDCRequired(appEnv) {
+	if operatorOIDCVerifier == nil &&
+		rtauth.OperatorOIDCRequiredForEnvironment(appEnv) {
 		log.Fatal("product-ops-service operator OIDC issuer/audience/JWKS configuration is required")
 	}
 	var prometheusReader application.PrometheusQuery
@@ -162,6 +183,10 @@ func main() {
 
 	ctx, cancelRuntime := context.WithCancel(context.Background())
 	defer cancelRuntime()
+	instanceID, _ := os.Hostname()
+	if strings.TrimSpace(instanceID) == "" {
+		instanceID = serviceName
+	}
 	postgresConfig, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
 	if err != nil {
 		log.Fatalf("product-ops-service postgres config invalid: %v", err)
@@ -190,6 +215,62 @@ func main() {
 	}
 	if err := experimentStore.EnsureSchema(ctx); err != nil {
 		log.Fatalf("product-ops-service experiment schema initialization failed: %v", err)
+	}
+	accountEnforcementStore, err := accountenforcementpersistence.NewPostgresStore(postgresPool)
+	if err != nil {
+		log.Fatalf("product-ops-service account enforcement store invalid: %v", err)
+	}
+	if err := accountEnforcementStore.EnsureSchema(ctx); err != nil {
+		log.Fatalf("product-ops-service account enforcement schema initialization failed: %v", err)
+	}
+	accountEnforcementMetrics := accountenforcementobservability.Recorder{}
+	accountAppealIntakes, err := accountenforcementuser.NewAppealIntakeHTTPClient(
+		accountenforcementuser.AppealIntakeHTTPClientConfig{
+			BaseURL: cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient: &http.Client{
+				Timeout: time.Duration(cfg.AccountEnforcement.RequestTimeoutMS) * time.Millisecond,
+			},
+			Credentials: accountAppealIntakeCredentials,
+		},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account appeal intake target invalid: %v", err)
+	}
+	accountEnforcementService := accountenforcementapp.NewService(
+		accountEnforcementStore,
+		accountEnforcementMetrics,
+		accountAppealIntakes,
+	)
+	accountEnforcementTarget, err := accountenforcementuser.NewHTTPClient(
+		accountenforcementuser.HTTPClientConfig{
+			BaseURL: cfg.AccountSecurityAuthority.BaseURL,
+			HTTPClient: &http.Client{
+				Timeout: time.Duration(cfg.AccountEnforcement.RequestTimeoutMS) * time.Millisecond,
+			},
+			Credentials: accountEnforcementCredentials,
+		},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account enforcement target invalid: %v", err)
+	}
+	accountEnforcementDispatcher, err := accountenforcementapp.NewDispatcher(
+		accountEnforcementStore,
+		accountEnforcementTarget,
+		accountEnforcementMetrics,
+		accountenforcementapp.DispatcherConfig{
+			Owner:          instanceID,
+			PollInterval:   time.Duration(cfg.AccountEnforcement.PollIntervalMS) * time.Millisecond,
+			LeaseDuration:  time.Duration(cfg.AccountEnforcement.LeaseDurationMS) * time.Millisecond,
+			RequestTimeout: time.Duration(cfg.AccountEnforcement.RequestTimeoutMS) * time.Millisecond,
+			InitialBackoff: time.Duration(cfg.AccountEnforcement.InitialBackoffMS) * time.Millisecond,
+			MaxBackoff:     time.Duration(cfg.AccountEnforcement.MaxBackoffMS) * time.Millisecond,
+			MaxPendingAge:  time.Duration(cfg.AccountEnforcement.MaxPendingAgeMS) * time.Millisecond,
+			MaxAttempts:    cfg.AccountEnforcement.MaxAttempts,
+			BatchSize:      cfg.AccountEnforcement.BatchSize,
+		},
+	)
+	if err != nil {
+		log.Fatalf("product-ops-service account enforcement dispatcher invalid: %v", err)
 	}
 	experimentFacade, err := experimentapp.NewFacade(
 		experimentStore,
@@ -224,6 +305,8 @@ func main() {
 	healthChecker.Register("redis", func(ctx context.Context) error {
 		return router.PingAll(ctx)
 	})
+	healthChecker.Register("account-enforcement-delivery", accountEnforcementDispatcher.CheckReadiness)
+	go accountEnforcementDispatcher.Run(ctx)
 	publisher := messaging.NewRedisEventPublisherWithTransport(messageTransport, serviceName, nil)
 	outboxDispatcher, err := pgoutbox.NewDispatcher(postgresPool, publisher, "product_ops_outbox")
 	if err != nil {
@@ -253,7 +336,7 @@ func main() {
 	if err := mongoVisitStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("product-ops-service visit index initialization failed: %v", err)
 	}
-	var visitStore application.VisitTelemetryStore = mongoVisitStore
+	visitService := visitapplication.NewService(mongoVisitStore)
 	healthChecker.Register("mongodb", func(ctx context.Context) error {
 		return mongoClient.Ping(ctx, nil)
 	})
@@ -285,7 +368,6 @@ func main() {
 		eventStore = localStore
 		rtcMediaQoeReader = localStore
 		runtimeLogStore = localStore
-		visitStore = localStore
 		batchLedger = localStore
 		healthChecker.Register("telemetry-postgres-local", func(ctx context.Context) error {
 			return postgresPool.Ping(ctx)
@@ -396,15 +478,16 @@ func main() {
 	service := newProductServiceWithRuntimeLogs(
 		store,
 		application.NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
-			visitStore,
 			instrumentEventLogStore(eventStore),
 			batchLedger,
 			instrumentRtcMediaQoeSummaryReader(rtcMediaQoeReader),
 		),
+		visitService,
 		application.NewRuntimeLogService(runtimeLogStore, batchLedger),
 		experimentFacade,
 		publisher,
 	)
+	service.accountEnforcement = accountEnforcementService
 	service.recoveryFailures = recoveryfailure.NewService(service.runtimeLogs)
 	appReleaseService, appReleaseErr := buildAppReleaseService(cfg)
 	if appReleaseErr != nil {
@@ -452,15 +535,9 @@ func main() {
 	})
 	outerMux.Handle(
 		"/",
-		rtauth.RequireGeneratedOperationAuthorization(
-			append(
-				operationsecurity.ForDomain("ops"),
-				generatedcontrolplane.ProductOperationSecurityDescriptors...,
-			),
-		)(mux),
+		requireProductOpsGeneratedOperationAuthorization(mux),
 	)
 
-	instanceID, _ := os.Hostname()
 	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
@@ -509,9 +586,9 @@ func main() {
 	hotConfigStore := controlplane.NewHotConfigStore()
 	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore)
 
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(
-		withProductOpsInternalRuntimeLogIngestBypass(internalRuntimeLogIngest, corsHandler),
+	servedHandler := withProductOpsInternalRuntimeLogIngestBypass(
+		internalRuntimeLogIngest,
+		corsHandler,
 	)
 	server := &http.Server{
 		Addr: addr,
@@ -520,12 +597,12 @@ func main() {
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			OperatorOIDCVerifier:     operatorOIDCVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(servedHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("product-ops-service listening on %s (rate_limit=1000/s)", addr)
+	log.Printf("product-ops-service listening on %s", addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("product-ops-service: %v", err)
 	}
@@ -547,15 +624,17 @@ func withProductOpsInternalRuntimeLogIngestBypass(
 func newProductService(
 	store controlplane.StateStore,
 	telemetry *application.TelemetryService,
+	visits *visitapplication.Service,
 	experiments *experimentapp.Facade,
 	publishers ...runtimemessaging.EventPublisher,
 ) *productService {
-	return newProductServiceWithRuntimeLogs(store, telemetry, nil, experiments, publishers...)
+	return newProductServiceWithRuntimeLogs(store, telemetry, visits, nil, experiments, publishers...)
 }
 
 func newProductServiceWithRuntimeLogs(
 	store controlplane.StateStore,
 	telemetry *application.TelemetryService,
+	visits *visitapplication.Service,
 	runtimeLogs *application.RuntimeLogService,
 	experiments *experimentapp.Facade,
 	publishers ...runtimemessaging.EventPublisher,
@@ -564,15 +643,15 @@ func newProductServiceWithRuntimeLogs(
 	if len(publishers) > 0 {
 		publisher = publishers[0]
 	}
-	if store == nil || telemetry == nil || experiments == nil {
-		panic("product service requires control-plane store, telemetry and experiment facade")
+	if store == nil || telemetry == nil || visits == nil || experiments == nil {
+		panic("product service requires control-plane store, telemetry, visits and experiment facade")
 	}
 	experimentHandler, err := experimenthttp.NewHandler(experiments)
 	if err != nil {
 		panic(err)
 	}
 	return &productService{
-		store: store, telemetry: telemetry, runtimeLogs: runtimeLogs,
+		store: store, telemetry: telemetry, visits: visits, runtimeLogs: runtimeLogs,
 		experimentHTTP: experimentHandler, publisher: publisher,
 	}
 }
@@ -826,6 +905,7 @@ func writeRuntimeError(
 ) {
 	reason := "internal_error"
 	kind := rterr.KindSystem
+	module := rterr.ModuleOps
 	switch status {
 	case http.StatusBadRequest, http.StatusMethodNotAllowed:
 		reason = "invalid_argument"
@@ -833,9 +913,11 @@ func writeRuntimeError(
 	case http.StatusUnauthorized:
 		reason = "unauthorized"
 		kind = rterr.KindUser
+		module = rterr.ModuleGateway
 	case http.StatusForbidden:
 		reason = "forbidden"
 		kind = rterr.KindUser
+		module = rterr.ModuleGateway
 	case http.StatusNotFound:
 		reason = "route_not_found"
 		kind = rterr.KindUser
@@ -844,7 +926,7 @@ func writeRuntimeError(
 		kind = rterr.KindUser
 	}
 	appError := rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleOps, kind, reason),
+		rterr.NewCode(module, kind, reason),
 		userMessage,
 		debugMessage,
 	)

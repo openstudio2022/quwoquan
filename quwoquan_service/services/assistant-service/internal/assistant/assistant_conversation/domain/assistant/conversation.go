@@ -73,6 +73,18 @@ type AssistantConversationContextTurn struct {
 	DomainID string `json:"domainId,omitempty"`
 }
 
+type AssistantConversationContextSummary struct {
+	SummaryID      string            `json:"summaryId"`
+	Text           string            `json:"text"`
+	FromTurnID     string            `json:"fromTurnId"`
+	ToTurnID       string            `json:"toTurnId"`
+	TurnCount      int               `json:"turnCount"`
+	CurrentGoal    string            `json:"currentGoal,omitempty"`
+	ConfirmedFacts []string          `json:"confirmedFacts,omitempty"`
+	PendingItems   []string          `json:"pendingItems,omitempty"`
+	ConfirmedSlots map[string]string `json:"confirmedSlots,omitempty"`
+}
+
 // AssistantIntersectionEvidenceRef 是客户端可以提交的最小交集引用。它不包含
 // 可被篡改的标题、结论、标签或 URL；application 必须以当前 actor 回查后才使用。
 type AssistantIntersectionEvidenceRef struct {
@@ -138,9 +150,11 @@ type AssistantRunVisibleReference struct {
 // AssistantRunVisibleProcess deliberately excludes model reasoning, retrieval
 // queries, tool input and provider diagnostics.
 type AssistantRunVisibleProcess struct {
-	ProcessID              string                         `json:"processId" bson:"processId"`
-	Scope                  string                         `json:"scope" bson:"scope"`
+	ProcessID string `json:"processId" bson:"processId"`
+	Scope     string `json:"scope" bson:"scope"`
+	// Stage 取值域是 PlannerPhaseId；ActionCode 取值域是 PlannerActionCode。
 	Stage                  string                         `json:"stage" bson:"stage"`
+	ActionCode             string                         `json:"actionCode" bson:"actionCode,omitempty"`
 	Status                 string                         `json:"status" bson:"status"`
 	Order                  int                            `json:"order" bson:"order"`
 	Summary                string                         `json:"summary" bson:"summary,omitempty"`
@@ -162,9 +176,9 @@ type AssistantRunTerminalFailure struct {
 }
 
 type AssistantSelectedPolicyRef struct {
-	PolicyID string `json:"policyId" bson:"policyId"`
-	Version  string `json:"version" bson:"version"`
-	Cohort   string `json:"cohort" bson:"cohort"`
+	PolicyID      string `json:"policyId" bson:"policyId"`
+	ReleaseDigest string `json:"releaseDigest" bson:"releaseDigest"`
+	Cohort        string `json:"cohort" bson:"cohort"`
 }
 
 type AssistantFrozenPolicyTemplate struct {
@@ -202,7 +216,7 @@ type AssistantFeedbackContextSnapshot struct {
 	Decision                 string                           `json:"-" bson:"decision"`
 	ConsentID                string                           `json:"-" bson:"consentId,omitempty"`
 	ConsentGrantedAt         time.Time                        `json:"-" bson:"consentGrantedAt,omitempty"`
-	DefinitionVersion        string                           `json:"-" bson:"definitionVersion,omitempty"`
+	DefinitionDigest         string                           `json:"-" bson:"definitionDigest,omitempty"`
 	SourceWatermarkSequence  int64                            `json:"-" bson:"sourceWatermarkSequence,omitempty"`
 	WindowDays               int                              `json:"-" bson:"windowDays,omitempty"`
 	FeedbackSampleCount      int64                            `json:"-" bson:"feedbackSampleCount,omitempty"`
@@ -216,7 +230,7 @@ type AssistantFeedbackContextSnapshot struct {
 
 type AssistantFrozenPolicySelection struct {
 	PolicyID              string                               `json:"-" bson:"policyId"`
-	ReleaseVersion        string                               `json:"-" bson:"releaseVersion"`
+	ReleaseDigest         string                               `json:"-" bson:"releaseDigest"`
 	Cohort                string                               `json:"-" bson:"cohort"`
 	RolloutRevision       int                                  `json:"-" bson:"rolloutRevision"`
 	RuleID                string                               `json:"-" bson:"ruleId"`
@@ -226,14 +240,14 @@ type AssistantFrozenPolicySelection struct {
 
 func (selection AssistantFrozenPolicySelection) PublicRef() *AssistantSelectedPolicyRef {
 	if strings.TrimSpace(selection.PolicyID) == "" ||
-		strings.TrimSpace(selection.ReleaseVersion) == "" ||
+		strings.TrimSpace(selection.ReleaseDigest) == "" ||
 		strings.TrimSpace(selection.Cohort) == "" {
 		return nil
 	}
 	return &AssistantSelectedPolicyRef{
-		PolicyID: strings.TrimSpace(selection.PolicyID),
-		Version:  strings.TrimSpace(selection.ReleaseVersion),
-		Cohort:   strings.TrimSpace(selection.Cohort),
+		PolicyID:      strings.TrimSpace(selection.PolicyID),
+		ReleaseDigest: strings.TrimSpace(selection.ReleaseDigest),
+		Cohort:        strings.TrimSpace(selection.Cohort),
 	}
 }
 
@@ -247,29 +261,30 @@ type AssistantRunTerminalSnapshot struct {
 }
 
 type AssistantTurn struct {
-	TurnID                  string                             `json:"turnId" bson:"_id"`
-	ConversationID          string                             `json:"conversationId" bson:"conversationId"`
-	UserID                  string                             `json:"userId" bson:"userId"`
-	TurnType                string                             `json:"turnType" bson:"turnType"`
-	Status                  string                             `json:"status" bson:"status"`
-	SkillID                 string                             `json:"skillId,omitempty" bson:"skillId,omitempty"`
-	DomainID                string                             `json:"domainId,omitempty" bson:"domainId,omitempty"`
-	Input                   AssistantTurnInput                 `json:"input" bson:"input"`
-	ContextTurns            []AssistantConversationContextTurn `json:"contextTurns,omitempty" bson:"-"`
-	PageContext             *AssistantContextSnapshot          `json:"pageContext,omitempty" bson:"pageContext,omitempty"`
-	IntersectionEvidence    []AuthorizedIntersectionEvidence   `json:"intersectionEvidence,omitempty" bson:"intersectionEvidence,omitempty"`
-	SessionPreferenceFacts  []preferencemodel.Snapshot         `json:"sessionPreferenceFacts,omitempty" bson:"sessionPreferenceFacts,omitempty"`
-	LongTermPreferenceFacts []preferencemodel.Snapshot         `json:"longTermPreferenceFacts,omitempty" bson:"longTermPreferenceFacts,omitempty"`
-	Trigger                 AssistantTurnTrigger               `json:"trigger" bson:"trigger"`
-	StreamState             AssistantTurnStreamState           `json:"streamState" bson:"streamState"`
-	TerminalSnapshot        *AssistantRunTerminalSnapshot      `json:"terminalSnapshot,omitempty" bson:"terminalSnapshot,omitempty"`
-	ClientRequestID         string                             `json:"clientRequestId,omitempty" bson:"clientRequestId,omitempty"`
-	RequestContext          AssistantRunRequestContext         `json:"-" bson:"requestContext,omitempty"`
-	FrozenPolicySelection   AssistantFrozenPolicySelection     `json:"-" bson:"frozenPolicySelection"`
-	FeedbackContextSnapshot AssistantFeedbackContextSnapshot   `json:"-" bson:"feedbackContextSnapshot"`
-	TraceID                 string                             `json:"traceId" bson:"traceId"`
-	CreatedAt               time.Time                          `json:"createdAt" bson:"createdAt"`
-	CompletedAt             *time.Time                         `json:"completedAt,omitempty" bson:"completedAt,omitempty"`
+	TurnID                  string                               `json:"turnId" bson:"_id"`
+	ConversationID          string                               `json:"conversationId" bson:"conversationId"`
+	UserID                  string                               `json:"userId" bson:"userId"`
+	TurnType                string                               `json:"turnType" bson:"turnType"`
+	Status                  string                               `json:"status" bson:"status"`
+	SkillID                 string                               `json:"skillId,omitempty" bson:"skillId,omitempty"`
+	DomainID                string                               `json:"domainId,omitempty" bson:"domainId,omitempty"`
+	Input                   AssistantTurnInput                   `json:"input" bson:"input"`
+	ContextTurns            []AssistantConversationContextTurn   `json:"contextTurns,omitempty" bson:"-"`
+	ContextSummary          *AssistantConversationContextSummary `json:"-" bson:"-"`
+	PageContext             *AssistantContextSnapshot            `json:"pageContext,omitempty" bson:"pageContext,omitempty"`
+	IntersectionEvidence    []AuthorizedIntersectionEvidence     `json:"intersectionEvidence,omitempty" bson:"intersectionEvidence,omitempty"`
+	SessionPreferenceFacts  []preferencemodel.Snapshot           `json:"sessionPreferenceFacts,omitempty" bson:"sessionPreferenceFacts,omitempty"`
+	LongTermPreferenceFacts []preferencemodel.Snapshot           `json:"longTermPreferenceFacts,omitempty" bson:"longTermPreferenceFacts,omitempty"`
+	Trigger                 AssistantTurnTrigger                 `json:"trigger" bson:"trigger"`
+	StreamState             AssistantTurnStreamState             `json:"streamState" bson:"streamState"`
+	TerminalSnapshot        *AssistantRunTerminalSnapshot        `json:"terminalSnapshot,omitempty" bson:"terminalSnapshot,omitempty"`
+	ClientRequestID         string                               `json:"clientRequestId,omitempty" bson:"clientRequestId,omitempty"`
+	RequestContext          AssistantRunRequestContext           `json:"-" bson:"requestContext,omitempty"`
+	FrozenPolicySelection   AssistantFrozenPolicySelection       `json:"-" bson:"frozenPolicySelection"`
+	FeedbackContextSnapshot AssistantFeedbackContextSnapshot     `json:"-" bson:"feedbackContextSnapshot"`
+	TraceID                 string                               `json:"traceId" bson:"traceId"`
+	CreatedAt               time.Time                            `json:"createdAt" bson:"createdAt"`
+	CompletedAt             *time.Time                           `json:"completedAt,omitempty" bson:"completedAt,omitempty"`
 }
 
 type CreateTurnInput struct {

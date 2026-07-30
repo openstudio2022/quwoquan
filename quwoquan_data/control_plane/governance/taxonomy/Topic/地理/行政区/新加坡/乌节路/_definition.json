@@ -1,0 +1,12 @@
+{
+  "label": "乌节路",
+  "labelEn": "Orchard",
+  "description": "核心商业与购物走廊",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -27,14 +27,14 @@ configs:
   rollout: progressive
   risk_level: high
   ui_editable: false
-- key: sys.gateway.rate_limit.per_user_rps
-  type: int
+- key: sys.intersection_text
+  key_namespace: true
+  type: string
   owner: platform-ops
-  default: 30
-  scope: service
+  scope: environment
   reload: hot
   rollout: progressive
-  risk_level: high
+  risk_level: medium
   ui_editable: false
 - key: sys.orchestrator.downstream.timeout_ms
   type: int

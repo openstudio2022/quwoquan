@@ -1,0 +1,12 @@
+{
+  "label": "麦哲伦大区",
+  "labelEn": "Magallanes",
+  "description": "巴塔哥尼亚南端",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

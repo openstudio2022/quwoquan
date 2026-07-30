@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	reactionerrors "quwoquan_service/services/content-service/generated/content/content_reaction"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
@@ -98,6 +99,37 @@ func TestContentReaction_ReaderReturnsSliceWithoutAggregateLeak(t *testing.T) {
 			t.Fatalf("reader slice must not leak %s", forbidden)
 		}
 	}
+}
+
+func TestContentReaction_MissingTargetUsesObjectOwnedErrorCode(t *testing.T) {
+	t.Parallel()
+
+	store := testsupport.NewReactionStore()
+	service := reactionapp.NewService(reactionapp.BindDataPorts(store, missingReactionTarget{}))
+	actor := mustReactionActor(t, reactiondomain.ActorDimensionPersona, "persona-1")
+
+	_, err := service.LikePost(
+		commandmeta.WithIdempotencyKey(context.Background(), "reaction-target-missing"),
+		reactionapp.LikePostCommand{PostID: "missing-post", Actor: actor},
+	)
+	if err == nil || !strings.Contains(
+		err.Error(),
+		reactionerrors.ErrContentReactionTargetNotFound.Error(),
+	) {
+		t.Fatalf("missing target must use ContentReaction-owned error, got %v", err)
+	}
+	if store.AggregateCount() != 0 || len(store.OutboxFacts()) != 0 {
+		t.Fatalf("missing target must not mutate aggregate or outbox")
+	}
+}
+
+type missingReactionTarget struct{}
+
+func (missingReactionTarget) FindReactionTarget(
+	context.Context,
+	reactiondomain.Target,
+) (reactionapp.ReactionTargetSlice, error) {
+	return reactionapp.ReactionTargetSlice{}, nil
 }
 
 func TestContentReaction_CommentThreeStateUsesOneAggregateAndExactCounts(t *testing.T) {

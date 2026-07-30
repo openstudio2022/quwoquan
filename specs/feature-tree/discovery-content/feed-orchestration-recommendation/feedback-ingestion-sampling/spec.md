@@ -20,7 +20,7 @@
 - 将历史双出口收敛为统一 BehaviorReporter 网络通道。
 - 可见性阈值、端侧聚合采样、分级上报。
 - clientEventId 幂等与 feedRequestId 归因闭环。
-- 全事件携带 referralSource/position/channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource 归因字段（common_fields + P0+ attribution），served/impressed 双轨记账（阶段五）。
+- 全事件携带 referralSource/position/channelId/policyDigest/recallPath/contentVertical/supplySource 归因字段（common_fields + P0+ attribution），served/impressed 双轨记账（阶段五）。
 - P0 不实现离线训练样本生成、长期本地持久队列或平台级事件总线。
 
 ### Out of Scope

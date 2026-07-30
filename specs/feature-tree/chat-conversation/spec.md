@@ -83,15 +83,15 @@
   - 交付给下游的结果：创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态，形成该场景中本领域负责的终态。
   - 不负责：不决定账号关系、圈子成员资格、助手推理或媒体传输事实。
 - [`JNY-011 / SCN-027`](../spec.md#scn-027)
-  - 本领域负责：在“附近同趣·结伴同行·线下局”中，创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态。
+  - 本领域负责：在“结伴同行与线下相聚”中，创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态。
   - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
   - 交付给下游的结果：创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态，形成该场景中本领域负责的终态。
   - 不负责：不决定账号关系、圈子成员资格、助手推理或媒体传输事实。
-- [`JNY-011 / SCN-028`](../spec.md#scn-028)
-  - 本领域负责：在“派生称谓与联系人标签驱动连接”中，创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态。
-  - 进入条件：`user-identity-profile-relationship` 已交付其公开结果。
-  - 交付给下游的结果：创建或复用 Conversation，维护 Membership、Message、Receipt 与通话信令，并交付可恢复会话终态，供 `recommendation-platform` 继续处理。
-  - 不负责：不决定账号关系、圈子成员资格、助手推理或媒体传输事实。
+- [`JNY-011 / SCN-029`](../spec.md#scn-029)
+  - 本领域负责：在“可行动对象进入会话”中，把分享进会话的对象渲染为可行动 card，并按云侧行动键与可达性分流。
+  - 进入条件：`recommendation-platform` 已交付该对象的行动提示。
+  - 交付给下游的结果：可直接执行的行动，或明确不可执行的规划口径，形成该场景中本领域负责的终态。
+  - 不负责：不定义行动键闭集，也不判定目标可达性。
 
 ## 4. 业务能力
 
@@ -99,7 +99,9 @@
 - [`commercial-message-system`](./commercial-message-system/spec.md)：以商用发布为目标，验证消息页、联系页、群主页、交集、通知和真实云端数据的一致性。
 - [`contact-and-session-governance`](./contact-and-session-governance/spec.md)：以“关注”为唯一关系概念，验证关注状态、拉黑门禁、打招呼请求箱、正式私信与 1v1 RTC 的端云一致性。
 - [`group-creation-member-management`](./group-creation-member-management/spec.md)：私建群创建、后续成员增删、角色治理与群设置在同一 Conversation/ConversationMembership 聚合边界内形成可商用闭环。
+- [`intersection-native-messaging`](./intersection-native-messaging/spec.md)：让会话成为交集转化为行动的承接主干，用户知道「为什么是这个人」并能就近完成下一步行动，而消息域不需要知道任何垂类。
 - [`list-detail-message-delivery`](./list-detail-message-delivery/spec.md)：保证消息从发送、确认、重试到列表与详情展示的一致性
+- [`message-reliability-foundation`](./message-reliability-foundation/spec.md)：让消息在冷启动、离线、断连、杀进程与弱网下仍可读、可达、不丢、不重、不乱序，并让会话运行时受声明预算约束。
 - [`realtime-call`](./realtime-call/spec.md)：让用户在满足关系与成员权限时发起、接听、拒绝、取消和结束 1v1 或不超过 32 人的实时音视频通话，并通过同一 `CallSession/CallParticipant` 状态机、realtime-gateway 信令、LiveKit 媒体和会话记录获得可恢复结果。
 
 ## 5. 领域要求

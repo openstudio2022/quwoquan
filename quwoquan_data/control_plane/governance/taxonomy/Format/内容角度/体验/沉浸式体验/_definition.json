@@ -2,6 +2,7 @@
   "label": "沉浸式体验",
   "labelEn": "Immersive Experience",
   "description": "深度沉浸式体验",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -200,7 +200,7 @@ void main() {
 
 Future<ActivePersonaContextViewData> _personaContext() async {
   return const ActivePersonaContextViewData(
-    subAccountId: 'persona-1',
+    personaId: 'persona-1',
     ownerUserId: 'owner-1',
     subjectType: 'persona',
     displayName: '测试用户',
@@ -316,7 +316,11 @@ final class _LocalReader implements LocalChatSearchReader {
   }) async {
     calls.add('contacts');
     return const <LocalChatSearchContactRecord>[
-      LocalChatSearchContactRecord(contactId: 'contact-1', displayName: '摄影好友'),
+      LocalChatSearchContactRecord(
+        contactId: 'contact-1',
+        userHandle: 'photo_friend',
+        displayName: '摄影好友',
+      ),
     ];
   }
 

@@ -1,4 +1,3 @@
-version: 1
 policy:
   name: config-release-slo-gate
 

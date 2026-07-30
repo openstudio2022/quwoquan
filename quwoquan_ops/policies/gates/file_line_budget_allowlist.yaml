@@ -17,10 +17,10 @@ allow:
 - path: quwoquan_app/lib/application/content/media/content_media_upload_coordinator.dart
   max_lines: 1109
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/conversation_service.go
+- path: quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration/conversation_service.go
   max_lines: 1089
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
-- path: quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/skill_subscription_service.go
+- path: quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration/skill_subscription_service.go
   max_lines: 1073
   reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
 - path: quwoquan_service/services/chat-service/internal/chat/conversation/application/member_service.go

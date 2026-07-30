@@ -1,4 +1,4 @@
-/// user_acceptance Patrol：alpha 首页两张视频卡的原生自动播放验收。
+/// user_acceptance Patrol：当前不可变发布物首页视频卡的原生自动播放验收。
 library;
 
 import 'package:flutter/widgets.dart';
@@ -7,10 +7,10 @@ import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
-const _homeVideoPostIds = <String>[
-  'alpha_video_portrait_playable',
-  'alpha_video_landscape_playable',
-];
+const _releaseId = String.fromEnvironment('DATA_RELEASE_ID');
+const _homeVideoPostId = String.fromEnvironment(
+  'VIDEO_PLAYBACK_CANARY_WORK_ID',
+);
 const _feedKey = ValueKey<String>('home-feed-recommend');
 const _readyKey = ValueKey<String>('video-player-ready');
 const _errorKey = ValueKey<String>('video-player-error');
@@ -25,20 +25,43 @@ void main() {
       printLogs: true,
     ),
     ($) async {
+      _expectReleaseEnvelope();
       await launchPatrolAppOnce($);
       await patrolGoTo($, AppRoutePaths.home);
 
-      for (final postId in _homeVideoPostIds) {
-        final reachedReady = await _focusVideoCardAndWaitForReady($, postId);
-        expect(reachedReady, isTrue, reason: '首页视频 $postId 应在稳定可见后完成原生播放器初始化');
-        expect(
-          find.byKey(_errorKey).evaluate(),
-          isEmpty,
-          reason: '首页视频 $postId 不得进入显式播放错误态',
-        );
-      }
+      final reachedReady = await _focusVideoCardAndWaitForReady(
+        $,
+        _homeVideoPostId,
+      );
+      expect(
+        reachedReady,
+        isTrue,
+        reason:
+            '发布物 $_releaseId 的首页视频 $_homeVideoPostId '
+            '应在稳定可见后完成原生播放器初始化',
+      );
+      expect(
+        find.byKey(_errorKey).evaluate(),
+        isEmpty,
+        reason: '首页视频 $_homeVideoPostId 不得进入显式播放错误态',
+      );
     },
   );
+}
+
+void _expectReleaseEnvelope() {
+  final required = <String, String>{
+    'DATA_RELEASE_ID': _releaseId,
+    'VIDEO_PLAYBACK_CANARY_WORK_ID': _homeVideoPostId,
+  };
+  for (final entry in required.entries) {
+    expect(
+      entry.value.trim(),
+      isNotEmpty,
+      reason:
+          '${entry.key} must bind home video playback to one immutable release',
+    );
+  }
 }
 
 Future<bool> _focusVideoCardAndWaitForReady(

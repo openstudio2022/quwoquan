@@ -1,15 +1,62 @@
 package model
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"sort"
 	"strings"
 	"time"
 )
 
-// LearningProjectionDefinitionVersion changes only when the durable projection
-// semantics change. v2 scopes the read model to account + persona, so an
-// existing v1 generation must be rebuilt before it can serve model context.
-const LearningProjectionDefinitionVersion = "assistant_learning_projection_v2"
+// LearningProjectionDefinitionDigest is the SHA-256 identity of the sole
+// canonical learning projection contract. A stored mismatch is never read as
+// compatible state; the projector must rebuild from canonical facts.
+const LearningProjectionDefinitionDigest = "7b6dde6a357e734f5ee9fd8b8df6ae0a33b42ed035ca9eb2158718396c5340dd"
+
+const learningProjectionGenerationPrefix = "rebuild:"
+
+// NewLearningProjectionGenerationID returns an opaque identity for exactly one
+// rebuild execution. It does not encode a model or contract definition.
+func NewLearningProjectionGenerationID() (string, error) {
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", err
+	}
+	return learningProjectionGenerationPrefix + hex.EncodeToString(random), nil
+}
+
+func IsLearningProjectionGenerationID(value string) bool {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(value, learningProjectionGenerationPrefix) {
+		return false
+	}
+	encoded := strings.TrimPrefix(value, learningProjectionGenerationPrefix)
+	decoded, err := hex.DecodeString(encoded)
+	return err == nil && len(decoded) == 16 && encoded == strings.ToLower(encoded)
+}
+
+// AssistantLearningOpsSummaryView is the object-owned operator projection
+// returned by GetLearningOpsSummary. It intentionally exposes only redacted
+// aggregate counters and scores; raw feedback/query/answer text never crosses
+// the operations boundary.
+type AssistantLearningOpsSummaryView struct {
+	UserID                string             `json:"userId"`
+	TotalFeedbackCount    int64              `json:"totalFeedbackCount"`
+	PositiveFeedbackCount int64              `json:"positiveFeedbackCount"`
+	NegativeFeedbackCount int64              `json:"negativeFeedbackCount"`
+	TextFeedbackCount     int64              `json:"textFeedbackCount"`
+	HighPriorityCount     int64              `json:"highPriorityCount"`
+	MediumPriorityCount   int64              `json:"mediumPriorityCount"`
+	LastFeedbackType      string             `json:"lastFeedbackType,omitempty"`
+	LastFeedbackScore     float64            `json:"lastFeedbackScore,omitempty"`
+	LastFeedbackAt        string             `json:"lastFeedbackAt,omitempty"`
+	LastMetricID          string             `json:"lastMetricId,omitempty"`
+	LastMetricScore       float64            `json:"lastMetricScore,omitempty"`
+	TopReasonCodes        []string           `json:"topReasonCodes,omitempty"`
+	MetricAverages        map[string]float64 `json:"metricAverages,omitempty"`
+	LatestMetricScores    map[string]float64 `json:"latestMetricScores,omitempty"`
+	UpdatedAt             string             `json:"updatedAt,omitempty"`
+}
 
 type LearningProjectionBucket struct {
 	FeedbackCount         int64              `bson:"feedbackCount" json:"feedbackCount"`
@@ -28,7 +75,7 @@ type LearningProjection struct {
 	StorageID             string                              `bson:"_id" json:"-"`
 	UserID                string                              `bson:"userId" json:"userId"`
 	PersonaID             string                              `bson:"personaId" json:"personaId"`
-	DefinitionVersion     string                              `bson:"definitionVersion" json:"definitionVersion"`
+	DefinitionDigest      string                              `bson:"definitionDigest" json:"definitionDigest"`
 	GenerationID          string                              `bson:"generationId" json:"generationId"`
 	Revision              int64                               `bson:"revision" json:"revision"`
 	WatermarkSequence     int64                               `bson:"watermarkSequence" json:"watermarkSequence"`
@@ -53,13 +100,17 @@ type LearningProjection struct {
 	UpdatedAt             time.Time                           `bson:"updatedAt" json:"updatedAt"`
 }
 
-func NewLearningProjection(fact Fact) LearningProjection {
+func NewLearningProjection(
+	generationID string,
+	fact Fact,
+) LearningProjection {
+	generationID = strings.TrimSpace(generationID)
 	return LearningProjection{
-		StorageID:          ProjectionStorageID(LearningProjectionDefinitionVersion, fact.UserID, fact.PersonaID),
+		StorageID:          ProjectionStorageID(generationID, fact.UserID, fact.PersonaID),
 		UserID:             fact.UserID,
 		PersonaID:          fact.PersonaID,
-		DefinitionVersion:  LearningProjectionDefinitionVersion,
-		GenerationID:       LearningProjectionDefinitionVersion,
+		DefinitionDigest:   LearningProjectionDefinitionDigest,
+		GenerationID:       generationID,
 		MetricSampleCounts: map[string]int64{},
 		MetricScoreSums:    map[string]float64{},
 		LatestMetricScores: map[string]float64{},
@@ -90,7 +141,7 @@ func NewLearningProjectionAggregate(
 	return LearningProjection{
 		StorageID:          generationID + ":" + userID + ":account_aggregate",
 		UserID:             userID,
-		DefinitionVersion:  LearningProjectionDefinitionVersion,
+		DefinitionDigest:   LearningProjectionDefinitionDigest,
 		GenerationID:       generationID,
 		MetricSampleCounts: map[string]int64{},
 		MetricScoreSums:    map[string]float64{},
@@ -172,12 +223,14 @@ func mergeFloat64Map(target map[string]float64, source map[string]float64) {
 func ApplyLearningFact(
 	projection LearningProjection,
 	fact Fact,
+	generationID string,
 ) LearningProjection {
 	if projection.UserID == "" {
-		projection = NewLearningProjection(fact)
+		projection = NewLearningProjection(generationID, fact)
 	}
 	ensureProjectionMaps(&projection)
-	projection.DefinitionVersion = LearningProjectionDefinitionVersion
+	projection.DefinitionDigest = LearningProjectionDefinitionDigest
+	projection.GenerationID = strings.TrimSpace(generationID)
 	projection.PersonaID = fact.PersonaID
 	projection.Revision++
 	projection.WatermarkSequence = fact.AppendSequence

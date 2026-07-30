@@ -13,8 +13,7 @@ ContentRuntimeConfigState buildProductionContentRuntimeConfigDefaults() {
     ],
     clientStateSync: ClientStateSyncConfig.defaults(),
     comment: CommentRemoteConfig.fallback,
-    configHash: AppRemoteConfigSnapshot.fallbackPackageVersion,
-    packageVersion: AppRemoteConfigSnapshot.fallbackPackageVersion,
+    configHash: null,
     source: AppRemoteConfigSource.defaults,
   );
 }
@@ -36,7 +35,6 @@ ContentRuntimeConfigState buildAlphaContentRuntimeConfigDefaults() {
     clientStateSync: production.clientStateSync,
     comment: production.comment,
     configHash: production.configHash,
-    packageVersion: production.packageVersion,
     source: production.source,
     homeChannels: production.homeChannels,
     intersectionDisplay: production.intersectionDisplay,

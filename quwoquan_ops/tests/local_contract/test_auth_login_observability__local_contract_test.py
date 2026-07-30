@@ -11,6 +11,36 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class AuthLoginObservabilityContractTest(unittest.TestCase):
+    def test_product_ops_projects_only_bounded_login_metric_dimensions(self) -> None:
+        path = (
+            ROOT
+            / "quwoquan_service/services/product-ops-service/cmd/api/telemetry_metrics.go"
+        )
+        source = path.read_text(encoding="utf-8")
+        for metric in (
+            "ops_login_funnel_events_total",
+            "ops_login_operation_events_total",
+            "ops_login_operation_duration_seconds",
+            "ops_login_state_dwell_seconds",
+        ):
+            self.assertIn(metric, source)
+        for sanitizer in (
+            "boundedLoginAction",
+            "boundedLoginResult",
+            "boundedLoginStep",
+            "boundedLoginProvider",
+            "boundedLoginOperation",
+            "boundedLoginFailureKind",
+        ):
+            self.assertIn(sanitizer, source)
+        for forbidden_label in (
+            '[]string{"flowId"',
+            '[]string{"requestId"',
+            '[]string{"traceId"',
+            '[]string{"copyKey"',
+        ):
+            self.assertNotIn(forbidden_label, source)
+
     def test_dashboard_uses_http_metrics_and_sls_owns_login_funnel(self) -> None:
         path = (
             ROOT
@@ -27,18 +57,74 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         self.assertIn("http_server_requests_total", expressions)
         self.assertIn("http_server_duration_seconds_bucket", expressions)
         self.assertIn("http_server_error_codes_total", expressions)
+        self.assertIn("ops_login_funnel_events_total", expressions)
+        self.assertIn("ops_login_operation_events_total", expressions)
+        self.assertIn("ops_login_state_dwell_seconds_bucket", expressions)
 
         sls_path = (
             ROOT
             / "quwoquan_ops/environments/cloud-providers/aliyun/sls/product_telemetry.yaml"
         )
         sls = yaml.safe_load(sls_path.read_text(encoding="utf-8"))["spec"]
+        storage_path = (
+            ROOT
+            / "quwoquan_service/services/product-ops-service/contracts/product_ops/"
+            "event_record/storage.yaml"
+        )
+        storage = yaml.safe_load(storage_path.read_text(encoding="utf-8"))
         jobs = {item["name"]: item for item in sls["scheduledSql"]["jobs"]}
         dimensions_sql = jobs[
             "app-product-telemetry-event-dimensions-hourly"
         ]["sql"]
         for dimension in ("journey", "action", "result"):
             self.assertIn(dimension, dimensions_sql)
+
+        logstores = {item["name"]: item for item in sls["logstores"]}
+        self.assertEqual(
+            logstores["app-product-telemetry-raw"]["retentionDays"],
+            storage["logstores"]["raw"]["ttl_days"],
+        )
+        self.assertEqual(
+            logstores["app-product-telemetry-hourly"]["retentionDays"],
+            storage["logstores"]["aggregate"]["ttl_days"],
+        )
+        indexed_fields = set(
+            logstores["app-product-telemetry-raw"]["indexes"]["fields"]
+        )
+        for field in (
+            "flowId",
+            "step",
+            "failureKind",
+            "copyKey",
+            "feedbackSurface",
+            "requestId",
+            "traceId",
+        ):
+            self.assertIn(field, indexed_fields)
+
+        login_sql = jobs["app-product-telemetry-login-lifecycle-hourly"]["sql"]
+        for dimension in (
+            "eventType",
+            "action",
+            "operationId",
+            "step",
+            "provider",
+            "failureKind",
+            "recoveryAction",
+            "copyKey",
+            "feedbackSurface",
+        ):
+            self.assertIn(dimension, login_sql)
+        for sensitive in (
+            "phone",
+            "otpCode",
+            "bindingTicket",
+            "providerTicket",
+            "token",
+            "requestId",
+            "traceId",
+        ):
+            self.assertNotIn(sensitive, login_sql)
 
     def test_alerts_enforce_two_windows_and_contract_thresholds(self) -> None:
         path = (
@@ -62,7 +148,24 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
         self.assertEqual(login["for"], "10m")
         self.assertIn("> 1.5", login["expr"])
 
-    def test_control_plane_declares_sampling_and_retention_keys(self) -> None:
+        stalled = rules["LoginClientStateStalled"]
+        self.assertEqual(stalled["for"], "1m")
+        self.assertIn('result="stalled"', stalled["expr"])
+        self.assertIn("ops_login_funnel_events_total", stalled["expr"])
+
+        duplicate = rules["LoginTerminalDuplicateSuppressed"]
+        self.assertIn('result="duplicate_suppressed"', duplicate["expr"])
+
+        operation_failure = rules["LoginClientOperationFailureRateHigh"]
+        self.assertIn("ops_login_operation_events_total", operation_failure["expr"])
+        self.assertIn("> 0.05", operation_failure["expr"])
+
+        binding = rules["LoginPhoneBindingAbandonmentHigh"]
+        self.assertIn('action="login_phone_binding"', binding["expr"])
+        self.assertIn('result="cancelled"', binding["expr"])
+        self.assertIn('result="required"', binding["expr"])
+
+    def test_user_control_plane_owns_sampling_but_not_logstore_retention(self) -> None:
         path = (
             ROOT
             / "quwoquan_service/services/user-service/config/schema.yaml"
@@ -74,19 +177,14 @@ class AuthLoginObservabilityContractTest(unittest.TestCase):
             0.1,
         )
         self.assertEqual(
-            values["sys.user.auth.raw_event_retention_days"]["default"],
-            30,
-        )
-        self.assertEqual(
-            values["sys.user.auth.aggregate_metric_retention_days"]["default"],
-            180,
+            values["sys.user.auth.success_detail_sample_ratio"]["rollout"],
+            "progressive",
         )
         for key in (
-            "sys.user.auth.success_detail_sample_ratio",
             "sys.user.auth.raw_event_retention_days",
             "sys.user.auth.aggregate_metric_retention_days",
         ):
-            self.assertEqual(values[key]["rollout"], "progressive")
+            self.assertNotIn(key, values)
 
 
 if __name__ == "__main__":

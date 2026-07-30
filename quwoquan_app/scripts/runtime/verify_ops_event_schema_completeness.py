@@ -21,6 +21,7 @@ EVENT_CATALOG = PRODUCT_OPS_CONTRACT / "event_catalog.yaml"
 GOLDEN_METRIC_CATALOG = (
     PRODUCT_OPS_CONTRACT / "golden_metric_catalog.yaml"
 )
+EVENT_STORAGE = PRODUCT_OPS_CONTRACT / "storage.yaml"
 APP_PAGES = METADATA / "_shared/app_pages.yaml"
 SLS_RESOURCES = (
     REPO_ROOT
@@ -49,12 +50,12 @@ FORBIDDEN_LEGACY_FIELDS = {
     "metrics",
     "userIdHash",
 }
-EXPECTED_LOGSTORES = {
-    "app-product-telemetry-raw": 3,
-    "app-startup-diagnostic-raw": 3,
-    "runtime-diagnostics-raw": 3,
-    "app-product-telemetry-hourly": 90,
-}
+EVENT_STORAGE_LOGSTORE_ROLES = (
+    "raw",
+    "startup_diagnostic",
+    "runtime_diagnostic",
+    "aggregate",
+)
 REQUIRED_EXPERIENCE_EVENTS = {
     "app_anr_outcome": {
         "required_extensions": {"detectionSource", "result"},
@@ -86,7 +87,7 @@ REQUIRED_EXPERIENCE_EVENTS = {
 }
 REQUIRED_APP_EXPERIENCE_METRIC_IDS = {
     "app_anr_rate",
-    "app_jank_session_rate",
+    "app_jank_frame_rate",
     "page_first_usable_p95_ms",
     "page_error_recovery_rate",
 }
@@ -97,6 +98,7 @@ ALLOWED_GOLDEN_AGGREGATIONS = {
     "percentile_p95",
     "percentile_p99",
     "sum",
+    "sum_ratio",
     "count",
 }
 ALLOWED_TARGET_OPERATORS = {
@@ -126,6 +128,33 @@ def mapping_keys(value: object) -> set[str]:
     if isinstance(value, list):
         return {nested for child in value for nested in mapping_keys(child)}
     return set()
+
+
+def event_storage_logstore_retentions() -> dict[str, int]:
+    """读取 EventRecord 对象拥有的物理保留合同，禁止在 App gate 复制 TTL。"""
+    storage = load_yaml(EVENT_STORAGE)
+    logstores = storage.get("logstores")
+    if not isinstance(logstores, dict):
+        raise ValueError("EventRecord storage.logstores must be a mapping")
+    expected: dict[str, int] = {}
+    for role in EVENT_STORAGE_LOGSTORE_ROLES:
+        row = logstores.get(role)
+        if not isinstance(row, dict):
+            raise ValueError(f"EventRecord storage.logstores.{role} is required")
+        name = row.get("default_name")
+        ttl_days = row.get("ttl_days")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(
+                f"EventRecord storage.logstores.{role}.default_name is required"
+            )
+        if not isinstance(ttl_days, int) or ttl_days <= 0:
+            raise ValueError(
+                f"EventRecord storage.logstores.{role}.ttl_days must be positive"
+            )
+        if name in expected:
+            raise ValueError(f"EventRecord logstore name must be unique: {name}")
+        expected[name] = ttl_days
+    return expected
 
 
 def verify_catalog(errors: list[str]) -> None:
@@ -274,6 +303,13 @@ def verify_golden_metrics(errors: list[str]) -> None:
             errors.append(
                 f"{metric_id} ratio source needs numerator and denominator events"
             )
+        if aggregation == "sum_ratio" and (
+            not source.get("numerator_value_field")
+            or not source.get("denominator_value_field")
+        ):
+            errors.append(
+                f"{metric_id} sum_ratio needs numerator and denominator value fields"
+            )
         referenced_events = {
             str(value)
             for key, value in source.items()
@@ -295,6 +331,31 @@ def verify_golden_metrics(errors: list[str]) -> None:
                     f"{metric_id} value_field {value_field} is not emitted by "
                     f"{source.get('event_type')}"
                 )
+        for prefix in ("numerator", "denominator"):
+            ratio_value_field = source.get(f"{prefix}_value_field")
+            if ratio_value_field is None:
+                continue
+            if aggregation != "sum_ratio":
+                errors.append(
+                    f"{metric_id} {prefix}_value_field requires sum_ratio"
+                )
+            if ratio_value_field not in allowed_fields:
+                errors.append(
+                    f"{metric_id} references unknown {prefix}_value_field "
+                    f"{ratio_value_field}"
+                )
+                continue
+            event_type = str(source.get(f"{prefix}_event_type", ""))
+            event = events.get(event_type)
+            if isinstance(event, dict):
+                event_fields = set(event.get("required_extensions", [])) | set(
+                    event.get("optional_extensions", [])
+                )
+                if ratio_value_field not in event_fields:
+                    errors.append(
+                        f"{metric_id} {prefix}_value_field {ratio_value_field} "
+                        f"is not emitted by {event_type}"
+                    )
         for prefix in ("numerator", "denominator"):
             result_filter = source.get(f"{prefix}_result")
             event_type = str(source.get(f"{prefix}_event_type", ""))
@@ -505,6 +566,7 @@ def verify_app_single_egress(errors: list[str]) -> None:
 
 
 def verify_sls_cutover(errors: list[str]) -> None:
+    expected_logstores = event_storage_logstore_retentions()
     resource = load_yaml(SLS_RESOURCES)
     spec = resource.get("spec", {})
     rows = spec.get("logstores", [])
@@ -513,8 +575,11 @@ def verify_sls_cutover(errors: list[str]) -> None:
         for row in rows
         if isinstance(row, dict)
     }
-    if actual != EXPECTED_LOGSTORES:
-        errors.append(f"SLS logstore retention must be {EXPECTED_LOGSTORES}, got {actual}")
+    if actual != expected_logstores:
+        errors.append(
+            "SLS logstore retention must match EventRecord storage contract "
+            f"{expected_logstores}, got {actual}"
+        )
     credentials = spec.get("credentials", {})
     if credentials.get("source") != "deploymentSecret" or not credentials.get(
         "forbiddenInConfig"
@@ -590,7 +655,10 @@ def main() -> int:
     print("  - strict 9-field catalog and generated page source")
     print("  - ANR/first-usable/error outcome and golden metric coverage")
     print("  - encrypted actor outbox and no AppLog auto-upload")
-    print("  - SLS 3/3/90 retention, HLL late merge and Exactly-Once jobs")
+    print(
+        "  - SLS retention matches EventRecord storage, HLL late merge and "
+        "Exactly-Once jobs"
+    )
     return 0
 
 

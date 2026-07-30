@@ -656,7 +656,7 @@ func (v *validator) validateObjectAt(dirName, dir, rootName, objectKind string) 
 		v.validateEnumRefs(dir, dirName, fieldsEntities)
 	}
 	if v.hasMetadataFile(filepath.Join(dir, "operations.yaml")) {
-		v.validateServiceEntities(dir, dirName, fieldsEntities)
+		v.validateServiceEntities(dir, dirName, rootName, fieldsEntities)
 	}
 }
 
@@ -824,41 +824,93 @@ func (v *validator) validateStorageEntities(dir, dirName string, fieldsEntities 
 var responseBodyKinds = map[string]bool{"object": true, "page": true, "ack": true}
 var requestBodyKinds = map[string]bool{"object": true, "none": true}
 
-func (v *validator) validateServiceEntities(dir, dirName string, fieldsEntities map[string]bool) {
+type requestInvocationField struct {
+	Name string `yaml:"name"`
+}
+
+type requestInvocationEntity struct {
+	Fields []requestInvocationField `yaml:"fields"`
+}
+
+type requestInvocationFieldsDocument struct {
+	Entity       string                             `yaml:"entity"`
+	Fields       []requestInvocationField           `yaml:"fields"`
+	Entities     map[string]requestInvocationEntity `yaml:"entities"`
+	Types        map[string]requestInvocationEntity `yaml:"types"`
+	ValueObjects map[string]requestInvocationEntity `yaml:"value_objects"`
+	Members      map[string]requestInvocationEntity `yaml:"members"`
+}
+
+type requestInvocationBinding struct {
+	Name  string `yaml:"name"`
+	Field string `yaml:"field"`
+}
+
+type requestInvocationBindings struct {
+	Path     []requestInvocationBinding `yaml:"path"`
+	Query    []requestInvocationBinding `yaml:"query"`
+	Header   []requestInvocationBinding `yaml:"header"`
+	Injected []requestInvocationBinding `yaml:"injected"`
+}
+
+type serviceOperationEntityDocument struct {
+	Operation        string                    `yaml:"operation"`
+	ResponseEntity   string                    `yaml:"response_entity"`
+	RequestEntity    string                    `yaml:"request_entity"`
+	RequestBodyKind  string                    `yaml:"request_body_kind"`
+	RequestBindings  requestInvocationBindings `yaml:"request_bindings"`
+	ResponseBody     string                    `yaml:"response_body"`
+	ResponseBodyKind string                    `yaml:"response_body_kind"`
+}
+
+func (v *validator) validateServiceEntities(
+	dir,
+	dirName,
+	rootName string,
+	fieldsEntities map[string]bool,
+) {
 	data, ok := v.readYAMLFile(filepath.Join(dir, "operations.yaml"))
 	if !ok {
 		return
 	}
 	// operations.yaml 使用顶层扁平 api_routes；这里只校验对象内可反向定位的响应契约。
 	var parsed struct {
-		APIRoutes []struct {
-			Operation        string `yaml:"operation"`
-			ResponseEntity   string `yaml:"response_entity"`
-			RequestEntity    string `yaml:"request_entity"`
-			RequestBodyKind  string `yaml:"request_body_kind"`
-			ResponseBody     string `yaml:"response_body"`
-			ResponseBodyKind string `yaml:"response_body_kind"`
-		} `yaml:"api_routes"`
+		APIRoutes []serviceOperationEntityDocument `yaml:"api_routes"`
 	}
 	if err := yaml.Unmarshal(data, &parsed); err != nil {
 		return
+	}
+	var requestFields requestInvocationFieldsDocument
+	fieldsData, fieldsOK := v.readYAMLFile(filepath.Join(dir, "fields.yaml"))
+	if fieldsOK {
+		if err := yaml.Unmarshal(fieldsData, &requestFields); err != nil {
+			v.errorf("%s/fields.yaml: parse error: %v", dirName, err)
+			fieldsOK = false
+		}
 	}
 
 	for _, op := range parsed.APIRoutes {
 		opName := strings.TrimSpace(op.Operation)
 		requestKind := strings.TrimSpace(op.RequestBodyKind)
-		requestEntity := strings.TrimSpace(op.RequestEntity)
 		if requestKind != "" && !requestBodyKinds[requestKind] {
 			v.errorf("%s/operations.yaml: operation %q has invalid request_body_kind %q (allowed: object|none)",
 				dirName, opName, requestKind)
-		}
-		if requestKind == "none" && requestEntity != "" {
-			v.errorf("%s/operations.yaml: operation %q request_body_kind=none must not declare request_entity %q",
-				dirName, opName, requestEntity)
-		}
-		if requestKind == "object" && requestEntity == "" {
-			v.errorf("%s/operations.yaml: operation %q request_body_kind=object requires request_entity",
-				dirName, opName)
+		} else if requestKind != "" {
+			if !fieldsOK {
+				v.errorf(
+					"%s/operations.yaml: operation %q cannot validate request_entity without fields.yaml",
+					dirName,
+					opName,
+				)
+			} else {
+				for _, issue := range validateInvocationRequestShape(
+					op,
+					rootName,
+					requestFields,
+				) {
+					v.errorf("%s/operations.yaml: %s", dirName, issue)
+				}
+			}
 		}
 		// response_entity 既可指向 fields.yaml entity，也可指向 projection read_model（如各类 *View/*Summary）。
 		if op.ResponseEntity != "" && !fieldsEntities[op.ResponseEntity] && !v.fieldEntities[op.ResponseEntity] && !v.projectionReadModels[op.ResponseEntity] {
@@ -900,6 +952,156 @@ func (v *validator) validateServiceEntities(dir, dirName string, fieldsEntities 
 				dirName, opName, body)
 		}
 	}
+}
+
+func validateInvocationRequestShape(
+	operation serviceOperationEntityDocument,
+	rootName string,
+	fields requestInvocationFieldsDocument,
+) []string {
+	operationName := strings.TrimSpace(operation.Operation)
+	requestEntity := strings.TrimSpace(operation.RequestEntity)
+	requestKind := strings.TrimSpace(operation.RequestBodyKind)
+	if requestEntity == "" {
+		return []string{fmt.Sprintf(
+			"operation %q request_body_kind=%s requires request_entity",
+			operationName,
+			requestKind,
+		)}
+	}
+	entity, err := findInvocationRequestEntity(fields, rootName, requestEntity)
+	if err != nil {
+		return []string{fmt.Sprintf("operation %q: %v", operationName, err)}
+	}
+
+	var issues []string
+	entityFields := make(map[string]struct{}, len(entity.Fields))
+	for _, field := range entity.Fields {
+		name := strings.TrimSpace(field.Name)
+		if name == "" {
+			issues = append(issues, fmt.Sprintf(
+				"operation %q request_entity %q has an empty field",
+				operationName,
+				requestEntity,
+			))
+			continue
+		}
+		if _, exists := entityFields[name]; exists {
+			issues = append(issues, fmt.Sprintf(
+				"operation %q request_entity %q repeats field %q",
+				operationName,
+				requestEntity,
+				name,
+			))
+			continue
+		}
+		entityFields[name] = struct{}{}
+	}
+
+	boundFields := make(map[string]string)
+	for _, group := range []struct {
+		name   string
+		values []requestInvocationBinding
+	}{
+		{name: "path", values: operation.RequestBindings.Path},
+		{name: "query", values: operation.RequestBindings.Query},
+		{name: "header", values: operation.RequestBindings.Header},
+		{name: "injected", values: operation.RequestBindings.Injected},
+	} {
+		for _, binding := range group.values {
+			field := strings.TrimSpace(binding.Field)
+			if field == "" {
+				issues = append(issues, fmt.Sprintf(
+					"operation %q request_bindings.%s has an empty field",
+					operationName,
+					group.name,
+				))
+				continue
+			}
+			if _, exists := entityFields[field]; !exists {
+				issues = append(issues, fmt.Sprintf(
+					"operation %q request_bindings.%s field %q is absent from request_entity %q",
+					operationName,
+					group.name,
+					field,
+					requestEntity,
+				))
+			}
+			if previous, exists := boundFields[field]; exists {
+				issues = append(issues, fmt.Sprintf(
+					"operation %q request field %q is bound to both %s and %s",
+					operationName,
+					field,
+					previous,
+					group.name,
+				))
+				continue
+			}
+			boundFields[field] = group.name
+		}
+	}
+
+	var unboundFields []string
+	for field := range entityFields {
+		if _, bound := boundFields[field]; !bound {
+			unboundFields = append(unboundFields, field)
+		}
+	}
+	sort.Strings(unboundFields)
+	switch requestKind {
+	case "none":
+		if len(unboundFields) > 0 {
+			issues = append(issues, fmt.Sprintf(
+				"operation %q request_body_kind=none leaves request_entity %q fields without canonical non-body bindings: %s",
+				operationName,
+				requestEntity,
+				strings.Join(unboundFields, ", "),
+			))
+		}
+	case "object":
+		if len(unboundFields) == 0 {
+			issues = append(issues, fmt.Sprintf(
+				"operation %q request_body_kind=object has no body fields after canonical non-body bindings",
+				operationName,
+			))
+		}
+	}
+	return issues
+}
+
+func findInvocationRequestEntity(
+	fields requestInvocationFieldsDocument,
+	rootName,
+	requestEntity string,
+) (requestInvocationEntity, error) {
+	var matches []requestInvocationEntity
+	for _, catalog := range []map[string]requestInvocationEntity{
+		fields.Entities,
+		fields.Types,
+		fields.ValueObjects,
+		fields.Members,
+	} {
+		if entity, exists := catalog[requestEntity]; exists {
+			matches = append(matches, entity)
+		}
+	}
+	if strings.TrimSpace(fields.Entity) == requestEntity ||
+		(strings.TrimSpace(fields.Entity) == "" && strings.TrimSpace(rootName) == requestEntity) {
+		matches = append(matches, requestInvocationEntity{Fields: fields.Fields})
+	}
+	if len(matches) == 0 {
+		return requestInvocationEntity{}, fmt.Errorf(
+			"request_entity %q is absent from fields.yaml",
+			requestEntity,
+		)
+	}
+	if len(matches) > 1 {
+		return requestInvocationEntity{}, fmt.Errorf(
+			"request_entity %q is declared more than once in fields.yaml",
+			requestEntity,
+		)
+	}
+	return matches[0], nil
 }
 
 func fileExists(path string) bool {

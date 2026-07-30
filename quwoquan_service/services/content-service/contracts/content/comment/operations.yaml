@@ -5,661 +5,706 @@ commercial_defaults:
   target_story: app-cloud-business-object-commercial-closure
 description: Comment 独立聚合操作包。路由、认证、错误语义和 App transport 均由本契约与生成路由同源。
 api_routes:
-- method: POST
-  path: /content/posts/{postId}/comments
-  operation: CreateComment
-  actor: persona
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: createComment
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: persona
-    ownership_policy: author_self
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.invalid_argument
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_parent_invalid
-  - CONTENT.USER.comment_too_long
-  - CONTENT.USER.comment_attachment_limit_exceeded
-  - CONTENT.USER.comment_attachment_not_ready
-  - CONTENT.USER.comment_rate_limited
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.USER.version_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: PUBLIC
-    log_policy: redacted
-  telemetry:
-    metric: content_comment_create
-    trace: true
-    attributes:
-    - post_id
-    - reply
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 发表评论或回复；replyToCommentId 可选，服务端规范化 parentCommentId。
-  request_entity: Comment
-  writable_fields:
-  - content
-  - replyToCommentId
-  - attachmentMediaIds
-  - mentions
-  - authorDisplayNameSnapshot
-  - authorAvatarUrlSnapshot
-  - personaContextVersion
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: CreateContentCommentCommand
-    response_type: ContentCommentCommandResult
-    request_encoder: encodeCreateContentCommentCommand
-    response_decoder: decodeContentCommentCommandResult
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: DELETE
-  path: /content/posts/{postId}/comments/{commentId}
-  operation: DeleteComment
-  actor: persona
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: deleteComment
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: persona
-    ownership_policy: comment_author
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_forbidden_delete
-  - CONTENT.USER.version_conflict
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_delete
-    trace: true
-    attributes:
-    - post_id
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 评论作者软删自己的评论；写入 CommentDeleted outbox 事实。
-  request_fields: []
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: DeleteContentCommentCommand
-    response_type: ContentCommentCommandResult
-    request_encoder: encodeDeleteContentCommentCommand
-    response_decoder: decodeContentCommentCommandResult
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /content/posts/{postId}/comments/{commentId}/pin
-  operation: PinComment
-  actor: persona
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: pinComment
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: persona
-    ownership_policy: referenced_post_author
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_pin_forbidden
-  - CONTENT.USER.comment_pin_invalid_target
-  - CONTENT.USER.version_conflict
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_pin
-    trace: true
-    attributes:
-    - post_id
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 被引用 Post 作者置顶一级评论；不直接修改 Post 聚合。
-  request_fields: []
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: ChangeContentCommentPinCommand
-    response_type: ContentCommentCommandResult
-    request_encoder: encodeChangeContentCommentPinCommand
-    response_decoder: decodeContentCommentCommandResult
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: DELETE
-  path: /content/posts/{postId}/comments/{commentId}/pin
-  operation: UnpinComment
-  actor: persona
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: unpinComment
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: persona
-    ownership_policy: referenced_post_author
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_pin_forbidden
-  - CONTENT.USER.comment_pin_invalid_target
-  - CONTENT.USER.version_conflict
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_unpin
-    trace: true
-    attributes:
-    - post_id
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 被引用 Post 作者取消置顶一级评论。
-  request_fields: []
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: ChangeContentCommentPinCommand
-    response_type: ContentCommentCommandResult
-    request_encoder: encodeChangeContentCommentPinCommand
-    response_decoder: decodeContentCommentCommandResult
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /content/comments/{commentId}/media:bind
-  operation: BindMediaAssetsToComment
-  actor: persona
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: bindAttachments
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: persona
-    ownership_policy: comment_author
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_forbidden_delete
-  - CONTENT.USER.comment_attachment_limit_exceeded
-  - CONTENT.USER.comment_attachment_not_ready
-  - CONTENT.USER.version_conflict
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_attachments_bind
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 绑定已验证的 comment_attachment MediaAsset 引用。
-  request_fields:
-  - attachmentMediaIds
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: BindContentCommentAttachmentsCommand
-    response_type: ContentCommentCommandResult
-    request_encoder: encodeBindContentCommentAttachmentsCommand
-    response_decoder: decodeContentCommentCommandResult
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /content/posts/{postId}/comments
-  operation: ListComments
-  actor: none
-  application:
-    kind: query
-    facet: CommentQueryFacet
-    method: listComments
-    reader: CommentPageReader
-    slice: CommentPageSlice
-  authorization:
-    principal: public
-    ownership_policy: post_visibility
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_sort_invalid
-  - CONTENT.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_page_list
-    trace: true
-    attributes:
-    - post_id
-    - sort
-    - outcome
-  slo:
-    latency_p95_ms: 400
-    availability_percent: 99.9
-  query_params:
-  - cursor
-  - limit
-  - sort
-  response_entity: CommentPageSlice
-  response_body: CommentPageSlice
-  response_body_kind: page
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: ListContentCommentsQuery
-    response_type: ContentCommentPageSlice
-    request_encoder: encodeListContentCommentsQuery
-    response_decoder: decodeContentCommentPageSlice
-  description: '一级评论 named page reader；仅 BSON projection，不返回 Comment aggregate。
+  - method: POST
+    path: /content/posts/{postId}/comments
+    operation: CreateComment
+    actor: persona
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: createComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: persona
+      ownership_policy: author_self
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.USER.post_not_found
+      - CONTENT.USER.comment_parent_invalid
+      - CONTENT.USER.comment_too_long
+      - CONTENT.USER.comment_attachment_limit_exceeded
+      - CONTENT.USER.comment_attachment_not_ready
+      - CONTENT.USER.comment_rate_limited
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.USER.version_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: redacted
+    telemetry:
+      metric: content_comment_create
+      trace: true
+      attributes:
+        - post_id
+        - reply
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 发表评论或回复；replyToCommentId 可选，服务端规范化 parentCommentId。
+    request_entity: CreateContentCommentCommand
+    request_body_kind: object
+    request_bindings:
+      path:
+        - name: postId
+          field: postId
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentCommandResult
+      response_decoder: decodeContentCommentCommandResult
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+  - method: DELETE
+    path: /content/posts/{postId}/comments/{commentId}
+    operation: DeleteComment
+    actor: persona
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: deleteComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: persona
+      ownership_policy: comment_author
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_forbidden_delete
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_delete
+      trace: true
+      attributes:
+        - post_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 评论作者软删自己的评论；写入 CommentDeleted outbox 事实。
+    request_bindings:
+      path:
+        - name: postId
+          field: postId
+        - name: commentId
+          field: commentId
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentCommandResult
+      response_decoder: decodeContentCommentCommandResult
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: DeleteContentCommentCommand
+    request_body_kind: none
+  - method: POST
+    path: /content/posts/{postId}/comments/{commentId}/pin
+    operation: PinComment
+    actor: persona
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: pinComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: persona
+      ownership_policy: referenced_post_author
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_pin_forbidden
+      - CONTENT.USER.comment_pin_invalid_target
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_pin
+      trace: true
+      attributes:
+        - post_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 被引用 Post 作者置顶一级评论；不直接修改 Post 聚合。
+    request_bindings:
+      path:
+        - name: postId
+          field: postId
+        - name: commentId
+          field: commentId
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentCommandResult
+      response_decoder: decodeContentCommentCommandResult
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChangeContentCommentPinCommand
+    request_body_kind: none
+  - method: DELETE
+    path: /content/posts/{postId}/comments/{commentId}/pin
+    operation: UnpinComment
+    actor: persona
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: unpinComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: persona
+      ownership_policy: referenced_post_author
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_pin_forbidden
+      - CONTENT.USER.comment_pin_invalid_target
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_unpin
+      trace: true
+      attributes:
+        - post_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 被引用 Post 作者取消置顶一级评论。
+    request_bindings:
+      path:
+        - name: postId
+          field: postId
+        - name: commentId
+          field: commentId
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentCommandResult
+      response_decoder: decodeContentCommentCommandResult
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChangeContentCommentPinCommand
+    request_body_kind: none
+  - method: POST
+    path: /content/comments/{commentId}/media:bind
+    operation: BindMediaAssetsToComment
+    actor: persona
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: bindAttachments
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: persona
+      ownership_policy: comment_author
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_forbidden_delete
+      - CONTENT.USER.comment_attachment_limit_exceeded
+      - CONTENT.USER.comment_attachment_not_ready
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_attachments_bind
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 绑定已验证的 comment_attachment MediaAsset 引用。
+    request_entity: BindContentCommentAttachmentsCommand
+    request_body_kind: object
+    request_bindings:
+      path:
+        - name: commentId
+          field: commentId
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentCommandResult
+      response_decoder: decodeContentCommentCommandResult
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+  - method: GET
+    path: /content/posts/{postId}/comments
+    operation: ListComments
+    actor: none
+    application:
+      kind: query
+      facet: CommentQueryFacet
+      method: listComments
+      reader: CommentPageReader
+      slice: CommentPageSlice
+    authorization:
+      principal: public
+      ownership_policy: post_visibility
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.comment_sort_invalid
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_page_list
+      trace: true
+      attributes:
+        - post_id
+        - sort
+        - outcome
+    slo:
+      latency_p95_ms: 400
+      availability_percent: 99.9
+    request_bindings:
+      path:
+        - name: postId
+          field: postId
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+        - name: sort
+          field: sort
+    response_entity: CommentPageSlice
+    response_body: CommentPageSlice
+    response_body_kind: page
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentPageSlice
+      response_decoder: decodeContentCommentPageSlice
+    description: '一级评论 named page reader；仅 BSON projection，不返回 Comment aggregate。
 
-    sort=hot（默认，hotScore 投影分驱动）或 latest；置顶段永远在前；仅返回 active。
+      sort=hot（默认，hotScore 投影分驱动）或 latest；置顶段永远在前；仅返回 active。
 
-    投影组合 authorIpLocation 快照、authorLiked（Post 作者赞过事实）与
+      投影组合 authorIpLocation 快照、authorLiked（Post 作者赞过事实）与
 
-    viewerRelation（viewer→评论作者关注/互关事实，来自 persona_follow_projection）。
+      viewerRelation（viewer→评论作者关注/互关事实，来自 persona_follow_projection）。
 
-    '
-  security:
-    auth_mode: optional
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
-- method: GET
-  path: /content/posts/{postId}/comments/{commentId}/replies
-  operation: ListCommentReplies
-  actor: none
-  application:
-    kind: query
-    facet: CommentQueryFacet
-    method: listReplies
-    reader: ReplyPageReader
-    slice: ReplyPageSlice
-  authorization:
-    principal: public
-    ownership_policy: post_visibility
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - CONTENT.USER.comment_not_found
-  - CONTENT.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_reply_page_list
-    trace: true
-    attributes:
-    - post_id
-    - outcome
-  slo:
-    latency_p95_ms: 400
-    availability_percent: 99.9
-  query_params:
-  - cursor
-  - limit
-  response_entity: ReplyPageSlice
-  response_body: ReplyPageSlice
-  response_body_kind: page
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: ListContentCommentRepliesQuery
-    response_type: ContentCommentReplyPageSlice
-    request_encoder: encodeListContentCommentRepliesQuery
-    response_decoder: decodeContentCommentReplyPageSlice
-  description: 二级回复 named page reader；仅 BSON projection，不返回 Comment aggregate。
-  security:
-    auth_mode: optional
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: allow
-    visibility: public
-- method: GET
-  path: /content/users/me/comments
-  operation: ListCommentsByAuthor
-  actor: persona
-  application:
-    kind: query
-    facet: CommentQueryFacet
-    method: listByAuthor
-    reader: AuthorCommentPageReader
-    slice: AuthorCommentPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: self
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: PII
-    response_classification: PII
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_author_page_list
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 400
-    availability_percent: 99.9
-  query_params:
-  - cursor
-  - limit
-  response_entity: AuthorCommentPageSlice
-  response_body: AuthorCommentPageSlice
-  response_body_kind: page
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: ContentCommentPageQuery
-    response_type: ContentAuthorCommentPageSlice
-    request_encoder: encodeContentCommentPageQuery
-    response_decoder: decodeContentAuthorCommentPageSlice
-  description: 当前 persona 发出的评论 named page reader。
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /content/users/me/received-comments
-  operation: ListCommentsForPostAuthor
-  actor: persona
-  application:
-    kind: query
-    facet: CommentQueryFacet
-    method: listReceivedByPostAuthor
-    reader: ReceivedCommentPageReader
-    slice: ReceivedCommentPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: referenced_post_author
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: PII
-    response_classification: PII
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_received_page_list
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 400
-    availability_percent: 99.9
-  query_params:
-  - cursor
-  - limit
-  response_entity: ReceivedCommentPageSlice
-  response_body: ReceivedCommentPageSlice
-  response_body_kind: page
-  client_contract:
-    dart_import: ../content/comment_contracts.dart
-    request_type: ContentCommentPageQuery
-    response_type: ContentReceivedCommentPageSlice
-    request_encoder: encodeContentCommentPageQuery
-    response_decoder: decodeContentReceivedCommentPageSlice
-  description: 当前 persona 作为被引用 Post 作者收到的评论 named page reader。
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /internal/content/comments/{commentId}:hide
-  operation: HideComment
-  actor: account
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: hideComment
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: operator
-    scopes:
-    - ops.case.write
-    permissions:
-    - content.moderation.decide
-    ownership_policy: moderation_queue
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_moderation_forbidden
-  - CONTENT.USER.comment_status_transition_invalid
-  - CONTENT.USER.version_conflict
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_hide
-    trace: true
-    attributes:
-    - post_id
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: operator 治理隐藏评论（active → hidden）；写入 CommentModerated 审计事实。举报处置（ResolveReport）与运营后台经此命令执行。
-  request_fields:
-  - reason
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-- method: POST
-  path: /internal/content/comments/{commentId}:restore
-  operation: RestoreComment
-  actor: account
-  application:
-    kind: command
-    facet: CommentCommandFacet
-    method: restoreComment
-    aggregate_owner: Comment
-    mutation_target: Comment
-    invariant_target: Comment
-  authorization:
-    principal: operator
-    scopes:
-    - ops.case.write
-    permissions:
-    - content.moderation.decide
-    ownership_policy: moderation_queue
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 5000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CONTENT.USER.unauthorized
-  - CONTENT.USER.comment_not_found
-  - CONTENT.USER.comment_moderation_forbidden
-  - CONTENT.USER.comment_status_transition_invalid
-  - CONTENT.USER.version_conflict
-  - CONTENT.USER.idempotency_conflict
-  - CONTENT.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: content_comment_restore
-    trace: true
-    attributes:
-    - post_id
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: operator 恢复治理隐藏的评论（hidden → active）；写入 CommentModerated 审计事实。deleted/tombstoned 为终态不可恢复。
-  request_fields:
-  - reason
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
+'
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_entity: ListContentCommentsQuery
+    request_body_kind: none
+  - method: GET
+    path: /content/posts/{postId}/comments/{commentId}/replies
+    operation: ListCommentReplies
+    actor: none
+    application:
+      kind: query
+      facet: CommentQueryFacet
+      method: listReplies
+      reader: ReplyPageReader
+      slice: ReplyPageSlice
+    authorization:
+      principal: public
+      ownership_policy: post_visibility
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_reply_page_list
+      trace: true
+      attributes:
+        - post_id
+        - outcome
+    slo:
+      latency_p95_ms: 400
+      availability_percent: 99.9
+    request_bindings:
+      path:
+        - name: postId
+          field: postId
+        - name: commentId
+          field: commentId
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    response_entity: ReplyPageSlice
+    response_body: ReplyPageSlice
+    response_body_kind: page
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentCommentReplyPageSlice
+      response_decoder: decodeContentCommentReplyPageSlice
+    description: 二级回复 named page reader；仅 BSON projection，不返回 Comment aggregate。
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_entity: ListContentCommentRepliesQuery
+    request_body_kind: none
+  - method: GET
+    path: /content/users/me/comments
+    operation: ListCommentsByAuthor
+    actor: persona
+    application:
+      kind: query
+      facet: CommentQueryFacet
+      method: listByAuthor
+      reader: AuthorCommentPageReader
+      slice: AuthorCommentPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_author_page_list
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 400
+      availability_percent: 99.9
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    response_entity: AuthorCommentPageSlice
+    response_body: AuthorCommentPageSlice
+    response_body_kind: page
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentAuthorCommentPageSlice
+      response_decoder: decodeContentAuthorCommentPageSlice
+    description: 当前 persona 发出的评论 named page reader。
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ContentCommentPageQuery
+    request_body_kind: none
+  - method: GET
+    path: /content/users/me/received-comments
+    operation: ListCommentsForPostAuthor
+    actor: persona
+    application:
+      kind: query
+      facet: CommentQueryFacet
+      method: listReceivedByPostAuthor
+      reader: ReceivedCommentPageReader
+      slice: ReceivedCommentPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: referenced_post_author
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_received_page_list
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 400
+      availability_percent: 99.9
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    response_entity: ReceivedCommentPageSlice
+    response_body: ReceivedCommentPageSlice
+    response_body_kind: page
+    client_contract:
+      dart_import: ../content/comment_contracts.dart
+      response_type: ContentReceivedCommentPageSlice
+      response_decoder: decodeContentReceivedCommentPageSlice
+    description: 当前 persona 作为被引用 Post 作者收到的评论 named page reader。
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ContentCommentPageQuery
+    request_body_kind: none
+  - method: POST
+    path: /internal/content/comments/{commentId}:hide
+    operation: HideComment
+    actor: account
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: hideComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: operator
+      scopes:
+        - ops.case.write
+      permissions:
+        - content.moderation.decide
+      ownership_policy: moderation_queue
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_moderation_forbidden
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_hide
+      trace: true
+      attributes:
+        - post_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: operator 治理隐藏评论（active → hidden）；写入 CommentModerated 审计事实。举报处置（ResolveReport）与运营后台经此命令执行。
+    request_entity: ModerateContentCommentCommand
+    request_body_kind: object
+    request_bindings:
+      path:
+        - {name: commentId, field: commentId, required: true}
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+  - method: POST
+    path: /internal/content/comments/{commentId}:restore
+    operation: RestoreComment
+    actor: account
+    application:
+      kind: command
+      facet: CommentCommandFacet
+      method: restoreComment
+      aggregate_owner: Comment
+      mutation_target: Comment
+      invariant_target: Comment
+    authorization:
+      principal: operator
+      scopes:
+        - ops.case.write
+      permissions:
+        - content.moderation.decide
+      ownership_policy: moderation_queue
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 5000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.comment_not_found
+      - CONTENT.USER.comment_moderation_forbidden
+      - CONTENT.USER.comment_status_transition_invalid
+      - CONTENT.USER.version_conflict
+      - CONTENT.USER.idempotency_conflict
+      - CONTENT.SYSTEM.storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_comment_restore
+      trace: true
+      attributes:
+        - post_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: operator 恢复治理隐藏的评论（hidden → active）；写入 CommentModerated 审计事实。deleted/tombstoned 为终态不可恢复。
+    request_entity: ModerateContentCommentCommand
+    request_body_kind: object
+    request_bindings:
+      path:
+        - {name: commentId, field: commentId, required: true}
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 consumers:
-- name: app
-  capabilities:
-  - create_comment
-  - delete_comment
-  - pin_comment
-  - unpin_comment
-  - list_comments
-  - list_comment_replies
-  - list_authored_comments
-  - list_received_comments
-- name: platform-ops
-  capabilities:
-  - hide_comment
-  - restore_comment
+  - name: app
+    capabilities:
+      - create_comment
+      - delete_comment
+      - pin_comment
+      - unpin_comment
+      - list_comments
+      - list_comment_replies
+      - list_authored_comments
+      - list_received_comments
+  - name: platform-ops
+    capabilities:
+      - hide_comment
+      - restore_comment

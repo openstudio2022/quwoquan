@@ -1,0 +1,9 @@
+{
+  "label": "垂类身份",
+  "labelEn": "Vertical Identity",
+  "description": "创作者在具体垂类中的身份定位",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

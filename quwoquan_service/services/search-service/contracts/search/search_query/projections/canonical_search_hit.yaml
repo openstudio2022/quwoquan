@@ -1,0 +1,57 @@
+read_model: CanonicalSearchHit
+description: >-
+  search-service 拥有的统一搜索命中。公共排序、证据、地理与交集字段直接来自
+  canonical retrieve；content.post 使用独立 content typed slice，其他对象只使用
+  CanonicalSearchPayload。App、助手与推荐不得维护第二套命中字段表。
+source_entities:
+- SearchIndexView
+consumers:
+- app
+- assistant-service
+- recommendation-engine
+fields:
+- name: target
+  type: string
+- name: objectType
+  type: string
+- name: objectId
+  type: string
+- name: title
+  type: string
+- name: snippet
+  type: string
+  nullable: true
+- name: score
+  type: float64
+- name: matchedTerms
+  type: '[]string'
+- name: matchedTags
+  type: '[]string'
+- name: evidence
+  type: '[]CanonicalSearchEvidence'
+- name: geo
+  type: CanonicalSearchGeoPoint
+  nullable: true
+- name: distanceKm
+  type: float64
+  nullable: true
+- name: placeName
+  type: string
+  nullable: true
+- name: connectionState
+  type: string
+  nullable: true
+- name: intersectionReason
+  type: CanonicalSearchIntersectionReason
+  nullable: true
+- name: rankReasons
+  type: '[]CanonicalSearchRankReason'
+- name: rankPosition
+  type: int
+  nullable: true
+- name: content
+  type: CanonicalSearchContentHit
+  nullable: true
+- name: payload
+  type: CanonicalSearchPayload
+  nullable: true

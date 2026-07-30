@@ -9,7 +9,6 @@ import (
 )
 
 type PolicyCatalog struct {
-	Version    int                        `yaml:"version"`
 	Policies   map[string]RetentionPolicy `yaml:"policies"`
 	RateLimits map[string]RateLimitPolicy `yaml:"rateLimits"`
 }
@@ -103,9 +102,6 @@ func LoadPolicyCatalog(path string) (PolicyCatalog, error) {
 }
 
 func (p PolicyCatalog) Validate() error {
-	if p.Version <= 0 {
-		return fmt.Errorf("policy catalog version is required")
-	}
 	if len(p.Policies) == 0 {
 		return fmt.Errorf("retention policies are required")
 	}

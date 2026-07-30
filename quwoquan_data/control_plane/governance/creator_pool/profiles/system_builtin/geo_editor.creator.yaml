@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_geo_editor_001
-subAccountId: builtin_travel_geo_editor
+personaId: builtin_travel_geo_editor
 authorId: builtin_travel_geo_editor
 isSystemBuiltin: true
 displayName: 地理编辑南川
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.9
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Format/内容角度/资讯/深度报道
   - Format/内容角度/科普/知识科普
@@ -47,3 +46,11 @@ carrierAffinity:
   article: 0.85
   image: 0.15
   video: 0.0
+avatarAsset:
+  assetId: creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120
+  kind: avatar
+  sha256: sha256:3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93
+  objectKey: media/objects/sha256/3d/c3/3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93.webp
+  bytes: 430336
+  mimeType: image/webp
+  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_geo_editor_001/3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93.json

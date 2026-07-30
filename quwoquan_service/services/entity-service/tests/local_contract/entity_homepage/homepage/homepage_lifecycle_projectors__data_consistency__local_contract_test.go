@@ -86,11 +86,11 @@ func TestClaimAndStatusOutboxProjectorsConvergeHomepage(t *testing.T) {
 		t.Fatalf("get claimed homepage: %v", err)
 	}
 	if homepage.ClaimStatus != "claimed" ||
-		homepage.OwnerSubAccountID != "persona-owner" {
+		homepage.OwnerPersonaID != "persona-owner" {
 		t.Fatalf(
 			"claim projection mismatch: status=%s owner=%s",
 			homepage.ClaimStatus,
-			homepage.OwnerSubAccountID,
+			homepage.OwnerPersonaID,
 		)
 	}
 	if replayed, err := claimProjector.RunOnce(ctx, 10); err != nil || replayed != 0 {

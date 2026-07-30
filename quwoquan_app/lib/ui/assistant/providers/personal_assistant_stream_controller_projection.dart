@@ -106,7 +106,7 @@ PersonalAssistantProcessSummary _projectProcessSummary(
           retrievalDesignNarrative = processSummary;
         }
         break;
-      case 'evidence_review':
+      case 'assessing':
         searchCount = process.searchedDocumentCount > 0
             ? process.searchedDocumentCount
             : searchCount;
@@ -132,7 +132,7 @@ PersonalAssistantProcessSummary _projectProcessSummary(
               .toList(growable: false);
         }
         break;
-      case 'answer_generation':
+      case 'answering':
         finalAnswerSummary = AssistantText.assistantProcessFinalAnswerNarrative;
         finalAnswerReady = finalAnswerReady || process.status == 'completed';
         break;
@@ -160,11 +160,14 @@ PersonalAssistantProcessSummary _projectProcessSummary(
 
 String _processLineForProcess(AssistantRunVisibleProcess process) {
   final stage = switch (process.stage) {
-    'skill_selection' => AssistantText.assistantProcessStageUnderstand,
+    'classifying' => AssistantText.assistantProcessStageUnderstand,
     'planning' => AssistantText.assistantProcessStageRetrievalDesign,
-    'tool_execution' => AssistantText.assistantProcessSearching,
-    'evidence_review' => AssistantText.assistantProcessStageRetrievalProcessing,
-    'answer_generation' => AssistantText.assistantProcessStageAnswer,
+    'searching' ||
+    'executing' ||
+    'dispatching' => AssistantText.assistantProcessSearching,
+    'assessing' ||
+    'merging' => AssistantText.assistantProcessStageRetrievalProcessing,
+    'answering' || 'clarifying' => AssistantText.assistantProcessStageAnswer,
     _ => '',
   };
   if (stage.isEmpty) {
@@ -270,11 +273,12 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
   PersonalAssistantProcessSummary processSummary =
       const PersonalAssistantProcessSummary(),
 }) {
-  final projection = _personalAssistantRunArtifacts(
-    text: text,
+  final projection = _personalAssistantTurnProjection(
     processSummary: processSummary,
   );
-  final runArtifacts = projection.toRunArtifactsJson(eventType: eventType);
+  final runArtifacts = projection.toRuntimeDiagnosticsJson(
+    eventType: eventType,
+  );
   final persisted = PersistedAssistantTimelinePayload.empty()
       .copyWithMerged(<String, Object?>{
         assistantDisplayMarkdownField: text,
@@ -283,7 +287,6 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
         assistantProcessTimelineField: projection.processTimeline
             .map((frame) => frame.toJson())
             .toList(growable: false),
-        assistantUiProcessTimelineField: projection.journey.toJson(),
         assistantUnderstandingSnapshotField: projection.understandingSnapshot
             .toJson(),
         assistantRetrievalProcessingField: projection.retrievalProcessing
@@ -300,7 +303,6 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
     timestamp: _personalAssistantTimestamp(),
     isRead: true,
     streaming: streaming,
-    streamFinalAnswer: streaming ? text : '',
     anchor: AssistantAnswerAnchor(
       runId: turnId,
       traceId: traceId,
@@ -317,8 +319,7 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
   );
 }
 
-_PersonalAssistantRunArtifactsProjection _personalAssistantRunArtifacts({
-  required String text,
+_PersonalAssistantTurnProjection _personalAssistantTurnProjection({
   required PersonalAssistantProcessSummary processSummary,
 }) {
   final processTimeline = _personalAssistantProcessTimeline(processSummary);
@@ -329,9 +330,7 @@ _PersonalAssistantRunArtifactsProjection _personalAssistantRunArtifacts({
   final retrievalProcessing = _personalAssistantRetrievalProcessing(
     processSummary,
   );
-  return _PersonalAssistantRunArtifactsProjection(
-    displayMarkdown: text,
-    displayPlainText: text,
+  return _PersonalAssistantTurnProjection(
     journey: journey,
     processTimeline: processTimeline,
     understandingSnapshot: understandingSnapshot,
@@ -342,10 +341,8 @@ _PersonalAssistantRunArtifactsProjection _personalAssistantRunArtifacts({
   );
 }
 
-class _PersonalAssistantRunArtifactsProjection {
-  const _PersonalAssistantRunArtifactsProjection({
-    required this.displayMarkdown,
-    required this.displayPlainText,
+class _PersonalAssistantTurnProjection {
+  const _PersonalAssistantTurnProjection({
     required this.journey,
     required this.processTimeline,
     required this.understandingSnapshot,
@@ -355,8 +352,6 @@ class _PersonalAssistantRunArtifactsProjection {
     required this.acceptedCount,
   });
 
-  final String displayMarkdown;
-  final String displayPlainText;
   final AssistantJourney journey;
   final List<ProcessTimelineFrame> processTimeline;
   final RunArtifactsUnderstandingSnapshot understandingSnapshot;
@@ -365,16 +360,8 @@ class _PersonalAssistantRunArtifactsProjection {
   final int searchCount;
   final int acceptedCount;
 
-  Map<String, Object?> toRunArtifactsJson({String eventType = ''}) {
+  Map<String, Object?> toRuntimeDiagnosticsJson({String eventType = ''}) {
     return <String, Object?>{
-      assistantDisplayMarkdownField: displayMarkdown,
-      assistantDisplayPlainTextField: displayPlainText,
-      assistantJourneyField: journey.toJson(),
-      assistantProcessTimelineField: processTimeline
-          .map((frame) => frame.toJson())
-          .toList(growable: false),
-      assistantUnderstandingSnapshotField: understandingSnapshot.toJson(),
-      assistantRetrievalProcessingField: retrievalProcessing.toJson(),
       'diagnostics': <String, Object?>{
         if (eventType.isNotEmpty) 'lastEventType': eventType,
         'processedCount': processedCount,

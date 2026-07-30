@@ -1,0 +1,10 @@
+{
+  "label": "预算档次",
+  "labelEn": "Budget Tier",
+  "description": "单人单日综合花费档次，用于按预算筛选行程与内容",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00",
+  "expectedSize": 5
+}

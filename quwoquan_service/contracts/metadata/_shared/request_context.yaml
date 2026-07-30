@@ -148,7 +148,7 @@ domain_operation_page_ids:
     GetRelationship: user.relationship
     GetRelationshipCapability: user.get.relationship.capability
     GetPersonaLifecycleGuard: user.personas.lifecycle_guard
-    GetSubAccountProfile: user.get.sub.account.profile
+    GetPersonaProfile: user.get.sub.account.profile
     GetUserProfile: user.profile
     ListBlockedUsers: user.block.list
     ListFollowers: user.followers

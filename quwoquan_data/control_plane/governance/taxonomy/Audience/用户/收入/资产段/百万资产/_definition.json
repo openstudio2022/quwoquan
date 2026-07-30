@@ -2,6 +2,7 @@
   "label": "百万资产",
   "labelEn": "Millionaire",
   "description": "资产百万以上",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

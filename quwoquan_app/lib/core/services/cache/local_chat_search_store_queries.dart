@@ -32,8 +32,9 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
       final circleId = conversation.circleId.trim();
       final circleGroupId = conversation.circleGroupId?.trim() ?? '';
       final settingsUpdatedAtRaw = conversation.settingsTimestamp.trim();
-      final settingsUpdatedAt =
-          settingsUpdatedAtRaw.isNotEmpty ? settingsUpdatedAtRaw : now;
+      final settingsUpdatedAt = settingsUpdatedAtRaw.isNotEmpty
+          ? settingsUpdatedAtRaw
+          : now;
       final payload = conversation
           .copyWith(
             title: title,
@@ -221,12 +222,12 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
     await batch.commit(noResult: true);
   }
 
-  Future<void> _onCreate(Database database, int version) async {
+  Future<void> _onCreate(Database database, int _) async {
     await database.execute('''
       CREATE TABLE search_namespaces (
         namespace_key TEXT PRIMARY KEY,
         owner_user_id TEXT NOT NULL,
-        sub_account_id TEXT NOT NULL,
+        persona_id TEXT NOT NULL,
         subject_type TEXT NOT NULL,
         persona_context_version TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -238,7 +239,6 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
         contact_id TEXT NOT NULL,
         display_name TEXT NOT NULL,
         nickname TEXT NOT NULL,
-        username TEXT NOT NULL,
         subtitle TEXT NOT NULL,
         headline TEXT NOT NULL,
         remark TEXT NOT NULL,

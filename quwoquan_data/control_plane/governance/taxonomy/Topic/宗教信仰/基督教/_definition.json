@@ -2,6 +2,7 @@
   "label": "基督教",
   "labelEn": "Christianity",
   "description": "基督教文化与教堂",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -127,19 +127,30 @@ func (sc *SessionCache) RecordNegative(ctx context.Context, userID, contentID st
 	return nil
 }
 
-// NegativeContentIDs forwards to the inner reader when it tracks explicit
-// negative feedback (e.g. *HotPath), so feed paths that bypass recall
-// (content-service repository fallback) honor dislike/not_interested through
-// the same rec:negative:{userId} source of truth as the recall-side
-// ExposureFilter. Without this forwarding, Engine.LoadFeedbackExclusions sees
-// *SessionCache (not a NegativeFeedbackReader) and the fallback path leaks
-// disliked content. When the inner reader does not track negatives, returns
-// nothing and recall-side filtering stays the enforcement point.
-func (sc *SessionCache) NegativeContentIDs(ctx context.Context, userID string) ([]string, error) {
-	if r, ok := sc.inner.(NegativeFeedbackReader); ok {
-		return r.NegativeContentIDs(ctx, userID)
+// LoadHardExclusions deliberately bypasses the soft session cache: negative
+// and hide facts must be current for each request and any source error must be
+// visible to the fail-closed feed boundary.
+func (sc *SessionCache) LoadHardExclusions(
+	ctx context.Context,
+	userID string,
+) (FeedbackExclusions, error) {
+	if reader, ok := sc.inner.(HardExclusionReader); ok {
+		return reader.LoadHardExclusions(ctx, userID)
 	}
-	return nil, nil
+	return emptyFeedbackExclusions(), fmt.Errorf("hard exclusion reader is unavailable")
+}
+
+// RankedFeedWindowStore forwards to the underlying HotPath provider. The L1
+// session cache never stores ranked windows because their 600-second lifetime
+// and immutable ordering must remain shared across service instances.
+func (sc *SessionCache) RankedFeedWindowStore() RankedFeedWindowStore {
+	if sc == nil {
+		return nil
+	}
+	if provider, ok := sc.inner.(RankedFeedWindowStoreProvider); ok {
+		return provider.RankedFeedWindowStore()
+	}
+	return nil
 }
 
 func (sc *SessionCache) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {

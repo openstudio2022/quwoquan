@@ -1,4 +1,3 @@
-version: 1
 # 季节（条件修饰维）唯一真相源。模板保持季节无关，brief 阶段按 season 注入。
 # tagRefs 仅挂经 tag_exists 校验通过的已存在标签；旺季/淡季无对应标签时留空。
 seasons:

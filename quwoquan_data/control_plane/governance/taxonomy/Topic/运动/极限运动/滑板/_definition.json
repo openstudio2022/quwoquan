@@ -2,6 +2,7 @@
   "label": "滑板",
   "labelEn": "Skateboarding",
   "description": "滑板街头与碗池",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

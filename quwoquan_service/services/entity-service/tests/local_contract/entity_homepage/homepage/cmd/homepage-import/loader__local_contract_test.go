@@ -132,7 +132,7 @@ func TestLoadHomepageProjectionsMapsPageAndAssets(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
 
-	inputs, issues, err := loadHomepageProjections(t, root, nil, "http://media.local:9080")
+	inputs, issues, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestLoadHomepageProjectionsMapsPageAndAssets(t *testing.T) {
 		t.Fatalf("expected 1 asset, got %d", len(got.IntroductionAssets))
 	}
 	asset := got.IntroductionAssets[0]
-	if !strings.HasPrefix(asset.URL, "http://media.local:9080/media/image/s/asset/") ||
+	if !strings.HasPrefix(asset.URL, "https://media.example.com/media/image/s/asset/") ||
 		strings.Contains(asset.URL, "objects/sha256") {
 		t.Fatalf("asset URL must use the canonical public slice, got %q", asset.URL)
 	}
@@ -180,7 +180,7 @@ func TestLoadHomepageProjectionsRejectsUnsafePublicSourceURL(t *testing.T) {
 			`{"sourceKind":"wikipedia","sourceUrl":"http://127.0.0.1/source","policyRevision":"encyclopedia-primary"},`+
 			`"sourceUrls":["http://127.0.0.1/source"]}`)
 	writeFile(t, filepath.Join(dir, "page.md"), "# 危险来源\n")
-	inputs, issues, err := loadHomepageProjections(t, root, nil, "http://media.local:9080")
+	inputs, issues, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestLoadHomepageProjectionsMapsPilotScopePlaceTypes(t *testing.T) {
 		writeSemanticHomepagePackage(t, dir, "样例"+etype, true)
 	}
 
-	inputs, issues, err := loadHomepageProjections(t, root, nil, "http://media.local:9080")
+	inputs, issues, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestLoadHomepageProjectionsRequiresEnvironmentMediaBase(t *testing.T) {
 func TestLoadHomepageProjectionsReportsUnmaterializedAssets(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", false)
-	_, _, err := loadHomepageProjections(t, root, nil, "http://media.local:9080")
+	_, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err == nil || !strings.Contains(err.Error(), "absent from release media authority") {
 		t.Fatalf("unmaterialized asset must fail closed, err=%v", err)
 	}
@@ -368,7 +368,7 @@ func TestLoadHomepageProjectionsRejectsSemanticRoleDrift(t *testing.T) {
 	}
 	mutated := strings.Replace(string(raw), `"role":"cover"`, `"role":"detail"`, 1)
 	writeFile(t, manifestPath, mutated)
-	_, _, err = loadHomepageProjections(t, root, nil, "http://media.local:9080")
+	_, _, err = loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err == nil || !strings.Contains(err.Error(), "unsupported role") {
 		t.Fatalf("semantic role drift must fail closed, err=%v", err)
 	}
@@ -379,7 +379,7 @@ func TestLoadHomepageProjectionsRejectsCoverManifestMismatch(t *testing.T) {
 	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
 	pagePath := filepath.Join(root, "entities", "地点", "景区", "九寨沟", "page.md")
 	writeFile(t, pagePath, "---\ncoverImage: asset://other_cover\n---\n\n# 九寨沟\n")
-	_, _, err := loadHomepageProjections(t, root, nil, "http://media.local:9080")
+	_, _, err := loadHomepageProjections(t, root, nil, "https://media.example.com")
 	if err == nil || !strings.Contains(err.Error(), "does not match semantic cover asset") {
 		t.Fatalf("cover mismatch must fail closed, err=%v", err)
 	}
@@ -389,7 +389,7 @@ func TestLoadHomepageProjectionsHonorsSampleBundleFilter(t *testing.T) {
 	root := t.TempDir()
 	seedPublishEntity(t, root, "地点/景区/九寨沟", true)
 	seedPublishEntity(t, root, "地点/景区/黄龙", true)
-	inputs, _, err := loadHomepageProjections(t, root, map[string]bool{"地点/景区/黄龙": true}, "http://media.local:9080")
+	inputs, _, err := loadHomepageProjections(t, root, map[string]bool{"地点/景区/黄龙": true}, "https://media.example.com")
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}

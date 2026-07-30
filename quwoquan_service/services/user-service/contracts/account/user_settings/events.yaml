@@ -1,9 +1,9 @@
 events:
 - name: UserSettingsChanged
   producer: user-service
-  consumers:
-  - settings-audit
-  channel: transactional_outbox
-  payload_entity: UserSetting
+  consumers: []
+  channel: transactional_audit
+  no_consumer_reason: The same PostgreSQL transaction stores the audit fact; no relay or independent settings-audit consumer is assembled.
+  payload_entity: UserSettings
   payload_fields:
   - userId

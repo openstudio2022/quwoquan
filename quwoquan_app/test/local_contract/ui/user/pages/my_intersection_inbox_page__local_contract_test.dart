@@ -232,8 +232,17 @@ void main() {
       findsNothing,
     );
     expect(find.text(DiscoveryFeedText.intersectionFilterAll), findsOneWidget);
+    // 筛选轴 = 交集五维：identity/content 也必须有胶囊，否则这两维通过筛选不可达。
     expect(
-      find.text(DiscoveryFeedText.intersectionFilterPeople),
+      find.text(DiscoveryFeedText.intersectionDimensionRelationship),
+      findsOneWidget,
+    );
+    expect(
+      find.text(DiscoveryFeedText.intersectionDimensionIdentity),
+      findsOneWidget,
+    );
+    expect(
+      find.text(DiscoveryFeedText.intersectionDimensionContent),
       findsOneWidget,
     );
     expect(find.text('今天 1条'), findsOneWidget);
@@ -336,7 +345,48 @@ void main() {
     expect(repo.requestedDimension, 'relationship');
     expect(repo.requestedSourceRef, 'circle');
     expect(find.text('你和阿岚等4位用户都在「城市漫游圈」'), findsOneWidget);
-    expect(find.text('你和小航等2位校友都去过「西湖」'), findsNothing);
+    expect(find.text('你和小航等2位校友都看过「西湖」'), findsNothing);
+  });
+
+  testWidgets('筛选胶囊走云侧 dimension 轴：identity 维度可达且 filter 恒为 fact', (
+    tester,
+  ) async {
+    final repo = _DimensionAxisIntersectionRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [intersectionRepositoryProvider.overrideWithValue(repo)],
+        child: CupertinoApp.router(
+          routerConfig: _router(page: const MyIntersectionInboxPage()),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // 「全部」：不带维度，filter 用云侧闭集里的 fact。
+    expect(repo.requestedDimension, '');
+    expect(repo.requestedFilter, 'fact');
+    expect(find.text('你和林清越都关注「黄金投资圈」'), findsOneWidget);
+    expect(find.text('你和陆衡都是摄影师'), findsOneWidget);
+
+    await tester.tap(
+      find.text(DiscoveryFeedText.intersectionDimensionIdentity),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // 维度收窄发生在云侧：dimension=identity、filter 仍是 fact（不是把胶囊 id 当 filter 传）。
+    expect(repo.requestedDimension, 'identity');
+    expect(repo.requestedFilter, 'fact');
+    expect(find.text('你和陆衡都是摄影师'), findsOneWidget);
+    expect(find.text('你和林清越都关注「黄金投资圈」'), findsNothing);
+
+    await tester.tap(find.text(DiscoveryFeedText.intersectionDimensionContent));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(repo.requestedDimension, 'content');
+    expect(find.text('你和沈迟都收藏了「西湖夜航」'), findsOneWidget);
   });
 
   testWidgets('我的交集页从加载态进入空态，并通过 typed writer 推进已读水位', (tester) async {
@@ -441,7 +491,7 @@ void main() {
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
           authorImpactProvider.overrideWith((ref, request) async {
             return AuthorImpactSummary(
-              authorId: request.subAccountId,
+              authorId: request.personaId,
               total: 1,
               items: <AuthorImpactItem>[
                 _authorImpactFixture(primaryText: '8人因为你的记录收藏了路线'),
@@ -469,7 +519,10 @@ void main() {
     expect(find.text(DiscoveryFeedText.impactFilterHomepage), findsOneWidget);
     expect(find.text('内容'), findsNothing);
     expect(find.text('8人因为你的记录收藏了路线'), findsOneWidget);
-    expect(find.text(DiscoveryFeedText.intersectionFilterPeople), findsNothing);
+    expect(
+      find.text(DiscoveryFeedText.intersectionDimensionRelationship),
+      findsNothing,
+    );
   });
 
   testWidgets('我的交集页加载失败时展示统一页态，重试后恢复并清零红点', (tester) async {
@@ -511,8 +564,8 @@ GoRouter _router({Widget page = const MyIntersectionInboxPage()}) {
             MyIntersectionInboxPage.fromQuery(state.uri.queryParameters),
       ),
       GoRoute(
-        path: '/user/:username',
-        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+        path: '/user/:userHandle',
+        builder: (_, state) => Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -525,7 +578,7 @@ class _AuthenticatedSession extends AuthSessionController {
       status: AuthSessionStatus.authenticated,
       accessToken: 'test-token',
       ownerId: 'test-user',
-      activeSubAccountId: 'test-sub-account',
+      activePersonaId: 'test-persona',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',
@@ -580,6 +633,69 @@ class _RecordingIntersectionRepository
   }) async => const <IntersectionReason>[];
 }
 
+/// 只按 dimension 收窄的 typed double：验证端把维度筛选交给云侧同一条谓词，
+/// 而不是把胶囊 id 塞进 filter 后在端上二次过滤。
+class _DimensionAxisIntersectionRepository implements IntersectionRepository {
+  String? requestedDimension;
+  String? requestedFilter;
+
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async =>
+      IntersectionInboxSummary(totalCount: 3, totalNewCount: 1);
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) async {
+    requestedDimension = dimension ?? '';
+    requestedFilter = filter ?? '';
+    final all = <IntersectionReason>[
+      _displayableInboxReason(
+        dimension: 'relationship',
+        intersectionId: 'ix_axis_rel',
+        objectKind: 'person',
+        displayName: '林清越',
+        primaryText: '你和林清越都关注「黄金投资圈」',
+        actionTargetId: 'u_lin',
+        source: 'sharedEntityAttention',
+      ),
+      _displayableInboxReason(
+        dimension: 'identity',
+        intersectionId: 'ix_axis_identity',
+        objectKind: 'person',
+        displayName: '陆衡',
+        primaryText: '你和陆衡都是摄影师',
+        actionTargetId: 'u_lu',
+        source: 'sameIndustry',
+      ),
+      _displayableInboxReason(
+        dimension: 'content',
+        intersectionId: 'ix_axis_content',
+        objectKind: 'person',
+        displayName: '沈迟',
+        primaryText: '你和沈迟都收藏了「西湖夜航」',
+        actionTargetId: 'u_shen',
+        source: 'coLiked',
+      ),
+    ];
+    final want = (dimension ?? '').trim();
+    if (want.isEmpty) return all;
+    return all.where((item) => item.dimension == want).toList();
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
+}
+
 class _SourceRefIntersectionRepository implements IntersectionRepository {
   String? requestedDimension;
   String? requestedSourceRef;
@@ -616,7 +732,7 @@ class _SourceRefIntersectionRepository implements IntersectionRepository {
         intersectionId: 'ix_place',
         objectKind: 'place',
         source: 'place',
-        primaryText: '你和小航等2位校友都去过「西湖」',
+        primaryText: '你和小航等2位校友都看过「西湖」',
         actionTargetId: 'homepage_sight_west_lake',
         representativeName: '小航',
         representativeId: 'u_xiaohang',
@@ -677,7 +793,7 @@ class _FiveYearIntersectionRepository implements IntersectionRepository {
         intersectionId: 'ix_year_minus4',
         objectKind: 'place',
         displayName: '西湖',
-        primaryText: '你和5人都去过西湖',
+        primaryText: '你和5人都看过西湖',
         actionTargetId: 'homepage_sight_west_lake',
         source: 'place',
         timeBucket: 'year:${year - 4}',

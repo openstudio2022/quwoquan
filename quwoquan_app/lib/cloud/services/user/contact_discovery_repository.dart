@@ -1,6 +1,4 @@
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/relationship/contact_discovery_record_match_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -8,7 +6,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 class ContactDiscoveryMatchView {
   const ContactDiscoveryMatchView({
     required this.hashedPhone,
-    required this.subAccountId,
+    required this.personaId,
     required this.userHandle,
     required this.displayName,
     required this.avatarUrl,
@@ -17,40 +15,12 @@ class ContactDiscoveryMatchView {
     required this.relationshipCapability,
   });
 
-  factory ContactDiscoveryMatchView.fromDto(ContactDiscoveryMatchWireDto dto) {
-    final capability = dto.relationshipCapability;
-    return ContactDiscoveryMatchView(
-      hashedPhone: dto.hashedPhone,
-      subAccountId: dto.subAccountId,
-      userHandle: dto.userHandle,
-      displayName: dto.displayName,
-      avatarUrl: dto.avatarUrl,
-      avatarVersion: dto.avatarVersion,
-      region: dto.region,
-      relationshipCapability: capability == null
-          ? RelationshipCapabilityDto(
-              viewerSubAccountId: '',
-              targetSubAccountId: dto.subAccountId,
-            )
-          : RelationshipCapabilityDto(
-              viewerSubAccountId: '',
-              targetSubAccountId: dto.subAccountId,
-              relationState: capability.relationState,
-              canFollow: capability.canFollow,
-              canUnfollow: capability.canUnfollow,
-              canOpenConversation: capability.canOpenConversation,
-              canStartVoiceCall: capability.canStartVoiceCall,
-              canStartVideoCall: capability.canStartVideoCall,
-            ),
-    );
-  }
-
   factory ContactDiscoveryMatchView.fromContract(
     ContactDiscoveryMatchResult result,
   ) {
     return ContactDiscoveryMatchView(
       hashedPhone: result.hashedPhone,
-      subAccountId: result.subAccountId,
+      personaId: result.personaId,
       userHandle: result.userHandle,
       displayName: result.displayName,
       avatarUrl: result.avatarUrl,
@@ -63,7 +33,7 @@ class ContactDiscoveryMatchView {
   }
 
   final String hashedPhone;
-  final String subAccountId;
+  final String personaId;
   final String userHandle;
   final String displayName;
   final String? avatarUrl;
@@ -76,51 +46,30 @@ class ContactDiscoveryMatchView {
 ///
 /// `matches` 是富化投影（[ContactDiscoveryMatchWireDto]）：回显发起者自己上传的
 /// `hashedPhone`（用于把命中映射回本机联系人姓名）+ 精简 profile + viewer 维度的
-/// `relationshipCapability`（驱动「添加 / 已添加」按钮）。`matchedSubAccountIds` 是
+/// `relationshipCapability`（驱动「添加 / 已添加」按钮）。`matchedPersonaIds` 是
 /// 隐私基线（即使富化失败也保证返回）。对方手机号原文端云均不出现。
 class ContactDiscoveryResultView {
   const ContactDiscoveryResultView({
     required this.id,
     required this.status,
-    required this.matchedSubAccountIds,
+    required this.matchedPersonaIds,
     required this.matchCount,
     required this.matches,
   });
 
   final String id;
   final String status;
-  final List<String> matchedSubAccountIds;
+  final List<String> matchedPersonaIds;
   final int matchCount;
   final List<ContactDiscoveryMatchView> matches;
 
   static const ContactDiscoveryResultView empty = ContactDiscoveryResultView(
     id: '',
     status: 'completed',
-    matchedSubAccountIds: <String>[],
+    matchedPersonaIds: <String>[],
     matchCount: 0,
     matches: <ContactDiscoveryMatchView>[],
   );
-
-  factory ContactDiscoveryResultView.fromMap(Map<String, dynamic> m) {
-    final rawMatchedIds = m['matchedSubAccountIds'];
-    final matchedIds = rawMatchedIds is List
-        ? rawMatchedIds
-              .map((e) => e.toString())
-              .where((e) => e.isNotEmpty)
-              .toList(growable: false)
-        : const <String>[];
-    final matches = CloudResponseDecoder.mapList(m, 'matches')
-        .map(ContactDiscoveryMatchWireDto.fromMap)
-        .map(ContactDiscoveryMatchView.fromDto)
-        .toList(growable: false);
-    return ContactDiscoveryResultView(
-      id: m['id']?.toString() ?? '',
-      status: m['status']?.toString() ?? 'completed',
-      matchedSubAccountIds: matchedIds,
-      matchCount: (m['matchCount'] as num?)?.toInt() ?? matches.length,
-      matches: matches,
-    );
-  }
 
   factory ContactDiscoveryResultView.fromContract(
     ContactDiscoveryResult result,
@@ -128,7 +77,7 @@ class ContactDiscoveryResultView {
     return ContactDiscoveryResultView(
       id: result.id,
       status: result.status,
-      matchedSubAccountIds: result.matchedSubAccountIds,
+      matchedPersonaIds: result.matchedPersonaIds,
       matchCount: result.matchCount,
       matches: result.matches
           .map(ContactDiscoveryMatchView.fromContract)
@@ -173,7 +122,7 @@ class RemoteContactDiscoveryRepository implements ContactDiscoveryRepository {
   Future<ContactDiscoveryResultView?> getLatest() async {
     try {
       final result = await query.getLatestContactDiscovery(
-        const GetLatestContactDiscoveryQuery(),
+        GetLatestContactDiscoveryQuery(),
       );
       if (result.id.isEmpty) {
         return null;

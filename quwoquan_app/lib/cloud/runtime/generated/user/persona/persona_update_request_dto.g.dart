@@ -3,8 +3,6 @@
 
 class PersonaUpdateRequestDto {
   final String? displayName;
-  final String? phone;
-  final String? email;
   final String? avatarUrl;
   final String? isolationLevel;
   final String? purposeHint;
@@ -14,8 +12,6 @@ class PersonaUpdateRequestDto {
 
   PersonaUpdateRequestDto({
     this.displayName,
-    this.phone,
-    this.email,
     this.avatarUrl,
     this.isolationLevel,
     this.purposeHint,
@@ -27,8 +23,6 @@ class PersonaUpdateRequestDto {
   factory PersonaUpdateRequestDto.fromMap(Map<String, dynamic> m) {
     return PersonaUpdateRequestDto(
       displayName: m['displayName']?.toString() ?? null,
-      phone: m['phone']?.toString() ?? null,
-      email: m['email']?.toString() ?? null,
       avatarUrl: m['avatarUrl']?.toString() ?? null,
       isolationLevel: m['isolationLevel']?.toString() ?? null,
       purposeHint: m['purposeHint']?.toString() ?? null,
@@ -41,8 +35,6 @@ class PersonaUpdateRequestDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'displayName': displayName,
-      'phone': phone,
-      'email': email,
       'avatarUrl': avatarUrl,
       'isolationLevel': isolationLevel,
       'purposeHint': purposeHint,
@@ -54,8 +46,6 @@ class PersonaUpdateRequestDto {
 
   PersonaUpdateRequestDto copyWith({
     String? displayName,
-    String? phone,
-    String? email,
     String? avatarUrl,
     String? isolationLevel,
     String? purposeHint,
@@ -65,8 +55,6 @@ class PersonaUpdateRequestDto {
   }) {
     return PersonaUpdateRequestDto(
       displayName: displayName ?? this.displayName,
-      phone: phone ?? this.phone,
-      email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       purposeHint: purposeHint ?? this.purposeHint,

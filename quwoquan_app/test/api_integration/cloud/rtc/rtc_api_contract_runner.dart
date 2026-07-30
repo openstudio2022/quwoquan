@@ -46,6 +46,7 @@ const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 late _GammaRtcActor _caller;
 late _GammaRtcActor _callee;
 late _GammaRtcActor _intruder;
+final _createdActors = <_GammaRtcActor>[];
 
 void main() {
   setUpAll(() async {
@@ -63,16 +64,19 @@ void main() {
       runId: runId,
       gatewayBaseUri: Uri.parse(_apiBase),
     );
+    _createdActors.add(_caller);
     _callee = await _GammaRtcActor.signIn(
       label: 'callee',
       runId: runId,
       gatewayBaseUri: Uri.parse(_apiBase),
     );
+    _createdActors.add(_callee);
     _intruder = await _GammaRtcActor.signIn(
       label: 'intruder',
       runId: runId,
       gatewayBaseUri: Uri.parse(_apiBase),
     );
+    _createdActors.add(_intruder);
 
     await _caller.follow(_callee.personaId);
     await _callee.follow(_caller.personaId);
@@ -87,9 +91,9 @@ void main() {
   });
 
   tearDownAll(() async {
-    await _caller.close();
-    await _callee.close();
-    await _intruder.close();
+    for (final actor in _createdActors.reversed) {
+      await actor.close();
+    }
   });
 
   test(
@@ -97,15 +101,15 @@ void main() {
     () async {
       final initiated = await _caller.lifecycle.initiateCall(
         RtcInitiateCallCommand(
-          callType: 'video',
+          callType: CallType.video,
           inviteeIds: <String>[_callee.personaId],
           maxParticipants: 2,
         ),
       );
       final callId = initiated.session.callId;
       expect(callId, isNotEmpty);
-      expect(initiated.session.callType, 'video');
-      expect(initiated.session.status, 'ringing');
+      expect(initiated.session.callType, CallType.video);
+      expect(initiated.session.status, CallStatus.ringing);
       expect(initiated.session.initiatorId, _caller.personaId);
       expect(initiated.mediaAccess.accessToken, isNotEmpty);
 
@@ -132,7 +136,7 @@ void main() {
         RtcCallIdCommand(callId: callId),
       );
       expect(answered.session.callId, callId);
-      expect(answered.session.status, 'connecting');
+      expect(answered.session.status, CallStatus.connecting);
       expect(answered.mediaAccess.accessToken, isNotEmpty);
 
       final callerJoin = await _caller.participants.joinCall(
@@ -152,7 +156,7 @@ void main() {
       final connected = await _callee.participants.reportMediaConnected(
         RtcCallIdCommand(callId: callId),
       );
-      expect(connected.status, 'in_call');
+      expect(connected.status, CallStatus.inCall);
       expect(connected.startedAt, isNotNull);
 
       final muted = await _caller.media.toggleMute(
@@ -179,14 +183,14 @@ void main() {
       final ended = await _caller.lifecycle.hangupCall(
         RtcCallIdCommand(callId: callId),
       );
-      expect(ended.status, 'ended');
-      expect(ended.endReason, 'normal');
+      expect(ended.status, CallStatus.ended);
+      expect(ended.endReason, EndReason.normal);
 
       final readback = await _callee.query.getCall(
         RtcGetCallQuery(callId: callId),
       );
-      expect(readback.status, 'ended');
-      expect(readback.endReason, 'normal');
+      expect(readback.status, CallStatus.ended);
+      expect(readback.endReason, EndReason.normal);
       expect(
         _caller.telemetry.events.every((event) => event.succeeded),
         isTrue,
@@ -299,7 +303,7 @@ final class _GammaRtcActor {
 
   String get accountId => _requireSession().ownerId;
 
-  String get personaId => _requireSession().activeSub!.subAccountId;
+  String get personaId => _requireSession().activePersona!.personaId;
 
   static Future<_GammaRtcActor> signIn({
     required String label,
@@ -320,9 +324,9 @@ final class _GammaRtcActor {
         appVersion: 'api-integration',
       ),
     );
-    if (session.activeSub == null) {
+    if (session.activePersona == null) {
       actor._httpClient.close();
-      throw StateError('anonymous login omitted activeSub for $label');
+      throw StateError('anonymous login omitted activePersona for $label');
     }
     actor._session = session;
     actor._tokenProvider.accessToken = session.accessToken;
@@ -337,7 +341,7 @@ final class _GammaRtcActor {
   Future<RelationshipCapabilityResult> getRelationshipCapability(
     String targetPersonaId,
   ) => relationshipCapability.getRelationshipCapability(
-    GetRelationshipCapabilityQuery(targetSubAccountId: targetPersonaId),
+    GetRelationshipCapabilityQuery(targetPersonaId: targetPersonaId),
   );
 
   Future<void> close() async {
@@ -408,7 +412,7 @@ final class _GammaRtcActor {
         : null,
     actor: CloudOperationActorContext(
       accountId: _session?.ownerId,
-      personaId: _session?.activeSub?.subAccountId,
+      personaId: _session?.activePersona?.personaId,
       deviceActorId: _deviceActorId,
     ),
   );
@@ -441,7 +445,7 @@ final class _GammaRtcActor {
 
   AuthSessionGrant _requireSession() {
     final session = _session;
-    if (session == null || session.activeSub == null) {
+    if (session == null || session.activePersona == null) {
       throw StateError('Gamma RTC actor $label is not signed in');
     }
     return session;

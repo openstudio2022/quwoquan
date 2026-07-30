@@ -61,7 +61,7 @@ func TestContactDiscovery_InitiateAndGetLatest(t *testing.T) {
 	}
 }
 
-func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
+func TestContactDiscovery_MatchesOnlyOpenPersonas(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	// 注册三个用户：open、semi、strict 隔离级别（credential_key 存明文手机号）
@@ -87,7 +87,7 @@ func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
 	}
 	result := parseJSON(t, rec)
 
-	matched, _ := result["matchedSubAccountIds"].([]any)
+	matched, _ := result["matchedPersonaIds"].([]any)
 	matchedSet := make(map[string]bool)
 	for _, m := range matched {
 		if s, ok := m.(string); ok {
@@ -95,13 +95,13 @@ func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
 		}
 	}
 
-	// open 子账号必须匹配到
+	// open Persona必须匹配到
 	if !matchedSet["sa_open"] {
-		t.Errorf("open isolation sub-account should appear in matches; got %v", matched)
+		t.Errorf("open isolation persona should appear in matches; got %v", matched)
 	}
-	// strict 子账号绝不能出现
+	// strict Persona绝不能出现
 	if matchedSet["sa_strict"] {
-		t.Error("strict isolation sub-account must NOT appear in contact discovery matches")
+		t.Error("strict isolation persona must NOT appear in contact discovery matches")
 	}
 
 	// matches[] 富化投影：回显发起者自己上传的 hashedPhone + 关系能力位
@@ -112,7 +112,7 @@ func TestContactDiscovery_MatchesOnlyOpenSubAccounts(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if item["subAccountId"] == "sa_open" {
+		if item["personaId"] == "sa_open" {
 			openMatch = item
 		}
 	}
@@ -173,17 +173,17 @@ func TestContactDiscovery_NeverExposesOwnerAccountId(t *testing.T) {
 	}
 	result := parseJSON(t, rec)
 
-	// 只有 subAccountId 应该暴露，绝不是 ownerId/userId
+	// 只有 personaId 应该暴露，绝不是 ownerId/userId
 	if _, ok := result["ownerAccountId"]; ok {
 		t.Error("ownerAccountId must NOT appear in contact discovery response")
 	}
-	matched, _ := result["matchedSubAccountIds"].([]any)
+	matched, _ := result["matchedPersonaIds"].([]any)
 	if len(matched) == 0 {
-		t.Error("expected hidden_owner's open sub-account to be discovered")
+		t.Error("expected hidden_owner's open persona to be discovered")
 	}
 	for _, m := range matched {
 		if s, ok := m.(string); ok && s == "hidden_owner" {
-			t.Error("owner ID (hidden_owner) must NOT be in matchedSubAccountIds")
+			t.Error("owner ID (hidden_owner) must NOT be in matchedPersonaIds")
 		}
 	}
 }

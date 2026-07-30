@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	application "quwoquan_service/services/tag-service/internal/tag/tag_node_view/application"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 )
 
@@ -25,14 +26,14 @@ func (r migratedTagNodeReader) FindByReleaseAndTagRef(_ context.Context, release
 func (r migratedTagNodeReader) ListChildrenInRelease(_ context.Context, releaseID, parentTagRef string, _ int64) ([]model.TagNode, error) {
 	out := make([]model.TagNode, 0)
 	for _, node := range r.nodes {
-		if node.ReleaseID == releaseID && node.ParentTagRef == parentTagRef && node.LifecycleStatus == "active" {
+		if node.ReleaseID == releaseID && node.ParentTagRef == parentTagRef && lifecycle.IsUsable(node.LifecycleStatus) {
 			out = append(out, *node)
 		}
 	}
 	return out, nil
 }
 
-func (r migratedTagNodeReader) CountActiveChildrenInRelease(ctx context.Context, releaseID, parentTagRef string) (int64, error) {
+func (r migratedTagNodeReader) CountUsableChildrenInRelease(ctx context.Context, releaseID, parentTagRef string) (int64, error) {
 	children, err := r.ListChildrenInRelease(ctx, releaseID, parentTagRef, 1)
 	return int64(len(children)), err
 }
@@ -44,7 +45,7 @@ func (r migratedTagNodeReader) ListDimensionsInRelease(
 	out := make([]model.TagNode, 0)
 	for _, node := range r.nodes {
 		if node.ReleaseID == releaseID &&
-			node.LifecycleStatus == "active" &&
+			lifecycle.IsUsable(node.LifecycleStatus) &&
 			node.NodeKind == "dimension" {
 			out = append(out, *node)
 		}
@@ -55,22 +56,22 @@ func (r migratedTagNodeReader) ListDimensionsInRelease(
 func (r migratedTagNodeReader) ListAllInRelease(_ context.Context, releaseID string) ([]model.TagNode, error) {
 	out := make([]model.TagNode, 0, len(r.nodes))
 	for _, node := range r.nodes {
-		if node.ReleaseID == releaseID && node.LifecycleStatus == "active" {
+		if node.ReleaseID == releaseID && lifecycle.IsUsable(node.LifecycleStatus) {
 			out = append(out, *node)
 		}
 	}
 	return out, nil
 }
 
-func (r migratedTagNodeReader) IsActiveLeaf(ctx context.Context, releaseID, tagRef string) (bool, error) {
+func (r migratedTagNodeReader) IsUsableLeaf(ctx context.Context, releaseID, tagRef string) (bool, error) {
 	if r.leafQueries != nil {
 		r.leafQueries[tagRef]++
 	}
 	node, err := r.FindByReleaseAndTagRef(ctx, releaseID, tagRef)
-	if err != nil || node == nil || node.LifecycleStatus != "active" {
+	if err != nil || node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 		return false, err
 	}
-	count, err := r.CountActiveChildrenInRelease(ctx, releaseID, tagRef)
+	count, err := r.CountUsableChildrenInRelease(ctx, releaseID, tagRef)
 	return count == 0, err
 }
 

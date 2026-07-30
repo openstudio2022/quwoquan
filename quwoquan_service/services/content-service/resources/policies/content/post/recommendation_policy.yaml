@@ -41,7 +41,7 @@ experiments:
     weightPct: 10
   eligibleSegments: []
   enabled: true
-  id: rec_model_version
+  id: rec_model_channel
 exposureGovernance:
   collaborativeRecall:
     enabled: true
@@ -67,7 +67,6 @@ exposureGovernance:
     impressedTtlHours: 168
     negativeTtlHours: 168
     servedTtlHours: 48
-    smembersFallbackAllowed: false
   reporting:
     behaviorBatchMaxSize: 50
     behaviorFlushIntervalMs: 5000
@@ -136,9 +135,9 @@ intersection:
     secondarySpreadEnabled: false
 objectCards:
   # 首页混合对象卡（S0 插卡模式，B4）：实体主页卡由独立召回器产出，按 everyN
-  # 间隔混排进内容流。S0 默认关闭（alpha/gamma 灰度开启验证后再放量）；
-  # user_card/circle_card 为 S1 触发开启（需社交图密度达标）。
-  enabled: false
+  # 间隔混排进内容流。所有环境消费本文件这一份当前策略；发布与回滚身份由
+  # immutable release/content digest 承担，不复制环境特制策略。
+  enabled: true
   everyN: 8
   maxCards: 3
   allowedKinds:
@@ -157,7 +156,6 @@ recallFusion:
 opsIntervention:
   enabled: false
   interventions: []
-policyVersion: v1
 scenarioRouting:
   circle: engagement_heavy
   homepage: premium

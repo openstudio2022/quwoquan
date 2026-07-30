@@ -16,7 +16,7 @@ final class SecureAppTelemetryGuestKeyStore
   const SecureAppTelemetryGuestKeyStore()
     : _storage = const FlutterSecureStorage();
 
-  static const _key = 'qwq.telemetry.guest_key.v1';
+  static const _key = 'qwq.telemetry.guest_key';
   final FlutterSecureStorage _storage;
 
   @override

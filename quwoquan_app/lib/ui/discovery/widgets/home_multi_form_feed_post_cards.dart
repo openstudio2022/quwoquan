@@ -12,10 +12,6 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
     required this.wideLayout,
     required this.item,
     required this.isDark,
-    required this.isLiked,
-    required this.likeCount,
-    required this.shareCount,
-    required this.commentCount,
     required this.inlineImageCarousel,
     required this.videoScrollSignal,
     required this.isFocused,
@@ -32,10 +28,6 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
   final bool wideLayout;
   final PostBaseDto item;
   final bool isDark;
-  final bool isLiked;
-  final int likeCount;
-  final int shareCount;
-  final int commentCount;
   final bool inlineImageCarousel;
   final ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal;
   final bool isFocused;
@@ -75,11 +67,53 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
   @override
   Widget build(BuildContext context) {
-    ref.watch(userRelationshipStateProvider);
-    ref.watch(discoveryStateProvider);
+    final item = widget.item;
+    final profileSubjectId = item.personaId.trim().isNotEmpty
+        ? item.personaId
+        : item.authorId;
+    final postInteraction = ref.watch(
+      postInteractionStateProvider.select(
+        (state) => (
+          hasLikeState: state.hasLikeStateFor(item.id),
+          isLiked: state.isLiked(item.id),
+          likeCount: state.likeCounts[item.id],
+          shareCount: state.confirmedShareCounts[item.id],
+          commentCount: state.commentCountFor(
+            item.id,
+            fallback: item.commentCount,
+          ),
+        ),
+      ),
+    );
+    final discoveryInteraction = ref.watch(
+      discoveryStateProvider.select(
+        (state) => (
+          isLiked: state.likedPosts.contains(item.id),
+          likeCount: state.getPostLikesCount(item.id),
+          shareCount: state.getPostSharesCount(item.id),
+        ),
+      ),
+    );
+    final isFollowing = ref.watch(
+      userRelationshipStateProvider.select(
+        (state) => state.isFollowing(profileSubjectId),
+      ),
+    );
+    final isLiked = postInteraction.hasLikeState
+        ? postInteraction.isLiked
+        : discoveryInteraction.isLiked;
+    final likeCount =
+        postInteraction.likeCount ??
+        (discoveryInteraction.likeCount > 0
+            ? discoveryInteraction.likeCount
+            : item.likeCount);
+    final shareCount =
+        postInteraction.shareCount ??
+        (discoveryInteraction.shareCount > 0
+            ? discoveryInteraction.shareCount
+            : item.shareCount);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final item = widget.item;
         final isDark = widget.isDark;
         final cardWidth =
             constraints.hasBoundedWidth && constraints.maxWidth > 0
@@ -112,11 +146,9 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
           objectKind: 'content',
           routeId: 'workBrowser',
         );
-        final profileSubjectId = item.subAccountId.trim().isNotEmpty
-            ? item.subAccountId
-            : item.authorId;
         final hasPlayableVideo = resolveContentVideoUrlCandidates(
           item.mediaVideoUrl,
+          endpointConfig: ref.watch(mediaEndpointConfigProvider),
         ).isNotEmpty;
 
         return DecoratedBox(
@@ -184,10 +216,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                     ),
                     const SizedBox(width: AppSpacing.intraGroupMd),
                     _FollowPillButton(
-                      isFollowing: effectiveProfileFollowing(
-                        ref,
-                        profileSubjectId,
-                      ),
+                      isFollowing: isFollowing,
                       onPressed: () {
                         runWhenLoggedIn(
                           ref,
@@ -201,7 +230,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                             final nextFollowing = !wasFollowing;
                             syncProfileFollowIntent(
                               ref,
-                              subAccountId: profileSubjectId,
+                              personaId: profileSubjectId,
                               previousFollowing: wasFollowing,
                               isFollowing: nextFollowing,
                               sourceSurfaceId: AppUiSurfaces.homeFeed.id,
@@ -302,10 +331,10 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   moreButtonKey: widget.moreButtonKey,
                   item: item,
                   isDark: isDark,
-                  isLiked: widget.isLiked,
-                  likeCount: widget.likeCount,
-                  shareCount: widget.shareCount,
-                  commentCount: widget.commentCount,
+                  isLiked: isLiked,
+                  likeCount: likeCount,
+                  shareCount: shareCount,
+                  commentCount: postInteraction.commentCount,
                   likeCtrl: _likeCtrl,
                   onLike: () {
                     HapticFeedback.lightImpact();
@@ -598,7 +627,7 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
 
   static bool _showCompanionBadge(IntersectionReason? reason) {
     // 「有人同行」徽标只由云侧下发的约伴同行类 actionHint 驱动，判定真相源为 codegen
-    // actionKeyMeta.dispatch==companion（start_companion / join_trip / join_meetup / meet_nearby，M0.7）；
+    // actionKeyMeta.dispatch==gathering（start_gathering / join_gathering / meet_nearby，M0.7）；
     // 话题房 / 语音房 / 心动（dispatch==connect）与私信（dispatch==message）不再误标为同行。
     // 端只读 actionKey → dispatch，绝不按标题/正文地名字符串猜测约伴意图
     // （守元数据驱动 R06 + §24.10 诚实红线，不伪造行动信号）。
@@ -606,7 +635,7 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
       return false;
     }
     for (final hint in reason.actionHints) {
-      if (IntersectionActionKeys.isCompanionAction(hint.actionKey)) {
+      if (IntersectionActionKeys.isGatheringAction(hint.actionKey)) {
         return true;
       }
     }

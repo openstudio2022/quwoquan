@@ -1,0 +1,46 @@
+{
+  "assetId": "creator-avatar-qwq_creator_self_drive_guide_001-39ee12d63d3640eb",
+  "commercialRights": {
+    "asset": {
+      "bytes": 238874,
+      "height": 1280,
+      "mimeType": "image/webp",
+      "ref": "cas/39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6.webp",
+      "sha256": "sha256:39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6",
+      "width": 1280
+    },
+    "assetId": "creator-avatar-qwq_creator_self_drive_guide_001-39ee12d63d3640eb",
+    "attribution": "MasaneMiyaPA / CC BY-SA 4.0",
+    "author": "MasaneMiyaPA",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:20250429%E4%BB%8E%E8%8C%85%E5%AE%B6%E5%9F%A0%E4%B8%8A%E7%A9%BA%E9%B8%9F%E7%9E%B0%E8%A5%BF%E6%B9%96.jpg",
+    "canonicalFilePage": "https://commons.wikimedia.org/wiki/File:20250429%E4%BB%8E%E8%8C%85%E5%AE%B6%E5%9F%A0%E4%B8%8A%E7%A9%BA%E9%B8%9F%E7%9E%B0%E8%A5%BF%E6%B9%96.jpg",
+    "caption": "从茅家埠上空鸟瞰西湖",
+    "captionSource": "entities/地点/景区/杭州西湖/rights_snapshots/8029617a3367f09a1dd1.json",
+    "fetchedAt": "2026-07-28T01:41:54Z",
+    "licenseName": "CC BY-SA 4.0",
+    "licenseShortName": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+    "modelReleaseStatus": "not_required",
+    "modifications": "deterministic center-square crop [320, 0, 1600, 1280] from 1920x1280; RGB; LANCZOS 1280x1280; WebP quality=85 method=4; derivative_policy_version=1",
+    "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/c/c6/20250429%E4%BB%8E%E8%8C%85%E5%AE%B6%E5%9F%A0%E4%B8%8A%E7%A9%BA%E9%B8%9F%E7%9E%B0%E8%A5%BF%E6%B9%96.jpg",
+    "pageRevision": "93458353",
+    "rightsAuditIssues": [],
+    "rightsAuditStatus": "verified",
+    "snapshot": {
+      "bytes": 3610,
+      "ref": "entities/地点/景区/杭州西湖/rights_snapshots/8029617a3367f09a1dd1.json",
+      "sha256": "sha256:aecc4d08356931df0473e5995f397190cf44ef16b062ab1b6cbf31aa613e10a2"
+    },
+    "snapshotUrl": "https://commons.wikimedia.org/wiki/File:20250429%E4%BB%8E%E8%8C%85%E5%AE%B6%E5%9F%A0%E4%B8%8A%E7%A9%BA%E9%B8%9F%E7%9E%B0%E8%A5%BF%E6%B9%96.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:20250429%E4%BB%8E%E8%8C%85%E5%AE%B6%E5%9F%A0%E4%B8%8A%E7%A9%BA%E9%B8%9F%E7%9E%B0%E8%A5%BF%E6%B9%96.jpg",
+    "sourceKind": "creator_avatar_derivative",
+    "sourceUseMode": "licensed_adaptation",
+    "usageScope": "app_publish"
+  },
+  "depictsIdentifiablePerson": false,
+  "manifestAsset": {
+    "assetId": "creator-avatar-qwq_creator_self_drive_guide_001-39ee12d63d3640eb",
+    "sha256": "sha256:39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6"
+  },
+  "schema": "quwoquan_data.creator_avatar_rights_snapshot"
+}

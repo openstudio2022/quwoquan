@@ -1,0 +1,173 @@
+domain: CIRCLE
+aggregate: CircleMembership
+description: 'CircleMembership 对象专属错误码。格式：MODULE.KIND.REASON。'
+errors:
+- code: CIRCLE.USER.join_approval_required
+  kind: USER
+  reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - JoinCircle
+  http_status: 403
+  recovery_action: surface
+  dart_const: joinApprovalRequired
+  go_const: ErrJoinApprovalRequired
+  user_message:
+    zh: 该圈子需要审批才能加入
+    en: This circle requires approval to join
+- code: CIRCLE.USER.membership_already_active
+  kind: USER
+  reason: membership_already_active
+  emitted_by:
+  - surface: http
+    operations:
+    - JoinCircle
+  http_status: 409
+  recovery_action: refresh
+  dart_const: membershipAlreadyActive
+  go_const: ErrMembershipAlreadyActive
+  user_message:
+    zh: 已经加入该圈子
+    en: Already joined this circle
+- code: CIRCLE.USER.membership_not_found
+  kind: USER
+  reason: membership_not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - ApproveCircleMember
+    - GetMyCircleMembership
+    - LeaveCircle
+    - RejectCircleMember
+    - UpdateCircleMembershipRole
+  http_status: 404
+  recovery_action: refresh
+  dart_const: membershipNotFound
+  go_const: ErrMembershipNotFound
+  user_message:
+    zh: 成员关系不存在
+    en: Circle membership not found
+- code: CIRCLE.USER.membership_owner_cannot_leave
+  kind: USER
+  reason: membership_owner_cannot_leave
+  emitted_by:
+  - surface: http
+    operations:
+    - LeaveCircle
+  http_status: 409
+  recovery_action: surface
+  dart_const: membershipOwnerCannotLeave
+  go_const: ErrMembershipOwnerCannotLeave
+  user_message:
+    zh: 圈主不能直接退出圈子
+    en: Circle owner cannot leave directly
+- code: CIRCLE.USER.membership_role_invalid
+  kind: USER
+  reason: membership_role_invalid
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdateCircleMembershipRole
+  http_status: 400
+  recovery_action: surface
+  dart_const: membershipRoleInvalid
+  go_const: ErrMembershipRoleInvalid
+  user_message:
+    zh: 成员角色无效
+    en: Invalid circle membership role
+- code: CIRCLE.USER.membership_state_conflict
+  kind: USER
+  reason: membership_state_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ApproveCircleMember
+    - RejectCircleMember
+  http_status: 409
+  recovery_action: refresh
+  dart_const: membershipStateConflict
+  go_const: ErrMembershipStateConflict
+  user_message:
+    zh: 成员申请状态已变化，请刷新后重试
+    en: Circle membership state changed, refresh and retry
+- code: CIRCLE.USER.membership_version_conflict
+  kind: USER
+  reason: membership_version_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ApproveCircleMember
+    - LeaveCircle
+    - RejectCircleMember
+    - UpdateCircleMembershipRole
+  http_status: 409
+  recovery_action: refresh
+  dart_const: membershipVersionConflict
+  go_const: ErrMembershipVersionConflict
+  user_message:
+    zh: 成员状态已更新，请刷新后重试
+    en: Membership changed, refresh and retry
+- code: CIRCLE.USER.membership_idempotency_conflict
+  kind: USER
+  reason: membership_idempotency_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ApproveCircleMember
+    - JoinCircle
+    - LeaveCircle
+    - RejectCircleMember
+    - UpdateCircleMembershipRole
+  http_status: 409
+  recovery_action: refresh
+  dart_const: membershipIdempotencyConflict
+  go_const: ErrMembershipIdempotencyConflict
+  user_message:
+    zh: 重复请求与原命令不一致
+    en: Idempotency key was reused for another membership command
+- code: CIRCLE.SYSTEM.membership_storage_write_failed
+  kind: SYSTEM
+  reason: membership_storage_write_failed
+  emitted_by:
+  - surface: http
+    operations:
+    - ApproveCircleMember
+    - GetMyCircleMembership
+    - JoinCircle
+    - LeaveCircle
+    - ListCircleMemberships
+    - ListPendingCircleMemberships
+    - ListPersonaCircles
+    - RejectCircleMember
+    - UpdateCircleMembershipRole
+  http_status: 500
+  recovery_action: retry
+  dart_const: membershipStorageWriteFailed
+  go_const: ErrMembershipStorageWriteFailed
+  user_message:
+    zh: 成员操作失败，请稍后重试
+    en: Membership operation failed, retry later
+- code: CIRCLE.USER.not_member
+  kind: USER
+  reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - circle.circle_file.CreateCircleFile
+    - circle.circle_file.DeleteCircleFile
+    - circle.circle_file.GetCircleFile
+    - circle.circle_file.ListCircleFiles
+    - circle.circle_file.UpdateCircleFile
+    - circle.circle_group.CreateCircleGroup
+    - circle.circle_group.GetCircleGroup
+    - circle.circle_group.ListCircleGroups
+    - circle.circle_group.SearchCircleGroups
+    - circle.circle_group_membership.ApplyJoinCircleGroup
+  http_status: 403
+  recovery_action: surface
+  dart_const: notMember
+  go_const: ErrNotMember
+  user_message:
+    zh: 您不是该圈子成员
+    en: You are not a member of this circle

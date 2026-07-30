@@ -1,3 +1,0 @@
-artifactRef: service-resource://static/media/media_delivery_manifest.json
-digest: sha256:bf929ccf2d34a0f79e0325a60d47ccc097264083c097606ab55de1dc4f201810
-target: media/media_delivery_manifest.json

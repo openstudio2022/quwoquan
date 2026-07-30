@@ -1,7 +1,8 @@
 {
   "label": "话题",
-  "labelEn": "Topic",
-  "description": "稳定议题语义",
+  "labelEn": "Topic Thread",
+  "description": "围绕某个议题持续讨论、参与互动和表达观点的话题主题",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

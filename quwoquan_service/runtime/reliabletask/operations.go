@@ -36,6 +36,24 @@ type DLQRecoveryStore interface {
 	RecoverDeadNotification(ctx context.Context, notificationID string, now time.Time) error
 }
 
+// TaskRecoveryReceipt is the durable replay fact for one dead-task recovery
+// command. A stable idempotency key may bind to exactly one task.
+type TaskRecoveryReceipt struct {
+	IdempotencyKey string    `bson:"_id" json:"idempotencyKey"`
+	TaskID         string    `bson:"taskId" json:"taskId"`
+	RecoveredAt    time.Time `bson:"recoveredAt" json:"recoveredAt"`
+	ExpiresAt      time.Time `bson:"expiresAt" json:"expiresAt"`
+}
+
+type IdempotentDLQRecoveryStore interface {
+	RecoverDeadTaskIdempotently(
+		ctx context.Context,
+		taskID string,
+		idempotencyKey string,
+		now time.Time,
+	) (TaskRecoveryReceipt, bool, error)
+}
+
 type RetentionCleanupStore interface {
 	CleanupReliableTaskRetention(ctx context.Context, policy RetentionPolicy, now time.Time) (RetentionCleanupResult, error)
 }

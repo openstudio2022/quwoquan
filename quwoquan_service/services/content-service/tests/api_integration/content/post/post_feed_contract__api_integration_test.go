@@ -16,6 +16,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	rtrec "quwoquan_service/runtime/recommendation"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
@@ -31,6 +32,27 @@ func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 	createdID, _ := created["postId"].(string)
 	if createdID == "" {
 		t.Fatalf("created post is missing id: %+v", created)
+	}
+	const (
+		mediaAssetID  = "mas_feed_hls_0001"
+		mediaVersion  = int64(7)
+		descriptorVer = int64(1)
+		hlsMaster     = "media/video/m/asset/mas_feed_hls_0001/v7/hls/master.m3u8"
+	)
+	if _, err := mongoDB.Collection("posts").UpdateOne(
+		context.Background(),
+		bson.M{"_id": createdID},
+		bson.M{"$set": bson.M{"mediaItems": bson.A{bson.M{
+			"kind":                          "video",
+			"mediaAssetId":                  mediaAssetID,
+			"mediaAssetVersion":             mediaVersion,
+			"hlsCmafMasterManifestUrl":      hlsMaster,
+			"hlsCmafDescriptorVersion":      descriptorVer,
+			"previewTrackManifestUrl":       "must-not-be-hydrated",
+			"presentationOnlyInternalField": "must-not-be-hydrated",
+		}}}},
+	); err != nil {
+		t.Fatalf("seed adaptive delivery fields: %v", err)
 	}
 
 	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
@@ -51,6 +73,19 @@ func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 	if item.Width != 1280 || item.Height != 720 {
 		t.Fatalf("expected normalized 1280x720 dimensions, got %dx%d", item.Width, item.Height)
 	}
+	if len(item.MediaItems) != 1 {
+		t.Fatalf("expected one minimal media binding, got %+v", item.MediaItems)
+	}
+	media := item.MediaItems[0]
+	if media.Kind != "video" || media.MediaAssetID != mediaAssetID ||
+		media.MediaAssetVersion != mediaVersion ||
+		media.HLSCMAFMasterManifestURL != hlsMaster ||
+		media.HLSCMAFDescriptorVersion != descriptorVer {
+		t.Fatalf("adaptive delivery projection drifted: %+v", media)
+	}
+	if media.PreviewTrackManifestURL != "" || media.URL != "" || media.CoverURL != "" {
+		t.Fatalf("feed hydration must not widen the mediaItems projection: %+v", media)
+	}
 }
 
 // TestMongoPostFeedReaderBatchFindByIDs 守护 N3-1 批量 $in 读接口：与单条读
@@ -68,11 +103,11 @@ func TestMongoPostFeedReaderBatchFindByIDs(t *testing.T) {
 	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
 	batch, err := reader.FindPublishedFeedPosts(
 		context.Background(),
-		[]postports.PostID{
+		postports.NewPostFeedHydrationRequest([]postports.PostID{
 			postports.NewPostID(createdID),
 			postports.NewPostID(createdID), // 重复 id 必须去重
 			postports.NewPostID("post_missing_batch_read"),
-		},
+		}, ""),
 	)
 	if err != nil {
 		t.Fatalf("batch find published feed posts: %v", err)
@@ -88,12 +123,219 @@ func TestMongoPostFeedReaderBatchFindByIDs(t *testing.T) {
 		t.Fatalf("expected post %q, got %q", createdID, slice.PostID)
 	}
 
-	empty, err := reader.FindPublishedFeedPosts(context.Background(), nil)
+	empty, err := reader.FindPublishedFeedPosts(
+		context.Background(),
+		postports.NewPostFeedHydrationRequest(nil, ""),
+	)
 	if err != nil {
 		t.Fatalf("batch find with empty ids: %v", err)
 	}
 	if len(empty) != 0 {
 		t.Fatalf("expected empty map for empty input, got %+v", empty)
+	}
+}
+
+func TestMongoPostFeedReaderBindsCanonicalHydrationAndVideoQueryToActiveRelease(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	ctx := context.Background()
+	now := time.Now().UTC()
+	const activeReleaseID = "rel_feed_reader_active"
+	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const currentID = "feed_release_current_video"
+	const staleID = "feed_release_stale_video"
+	const wrongDigestID = "feed_release_wrong_digest_video"
+	const ugcID = "feed_release_ugc_video"
+	base := bson.M{
+		"contentType": "video", "contentIdentity": "work", "authorId": "release_reader_author",
+		"status": "published", "visibility": "public", "moderationStatus": "approved",
+		"videoUrl": "https://media.example.test/release-reader.mp4", "durationMs": int64(5000),
+		"createdAt": now, "publishedAt": now,
+	}
+	current := cloneBSONDocument(base)
+	current["_id"] = currentID
+	current["sourceOwner"] = "qwq_data"
+	current["releaseId"] = activeReleaseID
+	current["manifestDigest"] = manifestDigest
+	current["lifecycleStatus"] = "active"
+	stale := cloneBSONDocument(base)
+	stale["_id"] = staleID
+	stale["sourceOwner"] = "qwq_data"
+	stale["releaseId"] = "rel_feed_reader_stale"
+	stale["manifestDigest"] = manifestDigest
+	stale["lifecycleStatus"] = "active"
+	wrongDigest := cloneBSONDocument(base)
+	wrongDigest["_id"] = wrongDigestID
+	wrongDigest["sourceOwner"] = "qwq_data"
+	wrongDigest["releaseId"] = activeReleaseID
+	wrongDigest["manifestDigest"] = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	wrongDigest["lifecycleStatus"] = "active"
+	ugc := cloneBSONDocument(base)
+	ugc["_id"] = ugcID
+	if _, err := mongoDB.Collection("posts").InsertMany(ctx, []any{current, stale, wrongDigest, ugc}); err != nil {
+		t.Fatalf("seed release-bound feed posts: %v", err)
+	}
+
+	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	hydrated, err := reader.FindPublishedFeedPosts(
+		ctx,
+		postports.NewPostFeedHydrationRequest([]postports.PostID{
+			currentID, staleID, wrongDigestID, ugcID,
+		}, activeReleaseID, manifestDigest),
+	)
+	if err != nil {
+		t.Fatalf("release-bound hydration: %v", err)
+	}
+	if _, ok := hydrated[currentID]; !ok {
+		t.Fatalf("current canonical post missing: %+v", hydrated)
+	}
+	if _, ok := hydrated[staleID]; ok {
+		t.Fatalf("stale canonical post must be excluded: %+v", hydrated)
+	}
+	if _, ok := hydrated[wrongDigestID]; ok {
+		t.Fatalf("wrong-digest canonical post must be excluded: %+v", hydrated)
+	}
+	if _, ok := hydrated[ugcID]; !ok {
+		t.Fatalf("normal mixed hydration must preserve UGC: %+v", hydrated)
+	}
+	if currentSlice := hydrated[currentID]; currentSlice.SourceOwner != "qwq_data" ||
+		currentSlice.ReleaseID != activeReleaseID || currentSlice.ManifestDigest != manifestDigest ||
+		currentSlice.LifecycleStatus != "active" {
+		t.Fatalf("canonical release fields not projected: %+v", currentSlice)
+	}
+
+	videoPage, err := reader.ListPublishedFeedPosts(
+		ctx,
+		postports.NewPostFeedReadRequest(
+			"work", "video", "", 20, activeReleaseID, manifestDigest,
+		),
+	)
+	if err != nil {
+		t.Fatalf("active release video page: %v", err)
+	}
+	if len(videoPage.Items) != 1 || videoPage.Items[0].PostID != currentID ||
+		videoPage.Items[0].DurationMS != 5000 {
+		t.Fatalf("video first page must contain only playable active release item: %+v", videoPage.Items)
+	}
+}
+
+func cloneBSONDocument(source bson.M) bson.M {
+	cloned := make(bson.M, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func TestMongoDiscoveryRecallBlendsUGCWithExactCanonicalAnchor(t *testing.T) {
+	ctx := context.Background()
+	collection := mongoDB.Collection("rm_discovery_feed")
+	const activeReleaseID = "rel_blended_recall_active"
+	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	ids := []string{
+		"blend_ugc_high_1",
+		"blend_ugc_high_2",
+		"blend_canonical_current",
+		"blend_canonical_stale",
+		"blend_canonical_wrong_digest",
+		"blend_malformed_data_owner",
+		"blend_deleted",
+		"blend_private",
+	}
+	t.Cleanup(func() {
+		_, _ = collection.DeleteMany(context.Background(), bson.M{"postId": bson.M{"$in": ids}})
+	})
+	_, _ = collection.DeleteMany(ctx, bson.M{"postId": bson.M{"$in": ids}})
+	now := time.Now().UTC()
+	base := bson.M{
+		"contentType": "image", "contentIdentity": "work",
+		"authorId": "blend_author", "status": "published", "visibility": "public",
+		"publishedAt": now, "contentVertical": "blend_contract",
+	}
+	documents := make([]any, 0, len(ids))
+	for index, id := range ids[:2] {
+		doc := cloneBSONDocument(base)
+		doc["postId"] = id
+		doc["sourceOwner"] = "user_service"
+		doc["supplySource"] = "user_generated"
+		doc["recScore"] = float64(100 - index)
+		documents = append(documents, doc)
+	}
+	current := cloneBSONDocument(base)
+	current["postId"] = ids[2]
+	current["sourceOwner"] = "qwq_data"
+	current["supplySource"] = "data_engineering"
+	current["releaseId"] = activeReleaseID
+	current["manifestDigest"] = manifestDigest
+	current["lifecycleStatus"] = "active"
+	current["recScore"] = 0.01
+	documents = append(documents, current)
+	stale := cloneBSONDocument(current)
+	stale["postId"] = ids[3]
+	stale["releaseId"] = "rel_blended_recall_stale"
+	stale["recScore"] = 1000.0
+	documents = append(documents, stale)
+	wrongDigest := cloneBSONDocument(current)
+	wrongDigest["postId"] = ids[4]
+	wrongDigest["manifestDigest"] = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	wrongDigest["recScore"] = 999.0
+	documents = append(documents, wrongDigest)
+	malformed := cloneBSONDocument(base)
+	malformed["postId"] = ids[5]
+	malformed["supplySource"] = "data_engineering"
+	malformed["recScore"] = 998.0
+	documents = append(documents, malformed)
+	deleted := cloneBSONDocument(base)
+	deleted["postId"] = ids[6]
+	deleted["sourceOwner"] = "user_service"
+	deleted["supplySource"] = "user_generated"
+	deleted["status"] = "deleted"
+	deleted["recScore"] = 1001.0
+	documents = append(documents, deleted)
+	private := cloneBSONDocument(base)
+	private["postId"] = ids[7]
+	private["sourceOwner"] = "user_service"
+	private["supplySource"] = "user_generated"
+	private["visibility"] = "private"
+	private["recScore"] = 1002.0
+	documents = append(documents, private)
+	if _, err := collection.InsertMany(ctx, documents); err != nil {
+		t.Fatalf("seed blended discovery recall: %v", err)
+	}
+
+	source := recinfra.NewMongoCandidateSource(mongoDB)
+	candidates, err := source.Recall(ctx, rtrec.RecallRequest{
+		FeedType: rtrec.FeedDiscovery, Surface: "home", Vertical: "blend_contract", Limit: 2,
+		ActiveReleaseID: activeReleaseID, ActiveManifestDigest: manifestDigest,
+	})
+	if err != nil {
+		t.Fatalf("blended discovery recall: %v", err)
+	}
+	seen := make(map[string]bool, len(candidates))
+	for _, candidate := range candidates {
+		seen[candidate.ContentID] = true
+	}
+	if !seen[ids[0]] || !seen[ids[1]] || !seen[ids[2]] {
+		t.Fatalf("UGC and exact canonical anchor must coexist: %+v", candidates)
+	}
+	if seen[ids[3]] || seen[ids[4]] || seen[ids[5]] {
+		t.Fatalf("stale/wrong-digest/malformed canonical supply leaked: %+v", candidates)
+	}
+
+	withoutActiveRelease, err := source.Recall(ctx, rtrec.RecallRequest{
+		FeedType: rtrec.FeedDiscovery, Surface: "home", Vertical: "blend_contract", Limit: 20,
+	})
+	if err != nil {
+		t.Fatalf("discovery recall without active release: %v", err)
+	}
+	seenWithoutActive := make(map[string]bool, len(withoutActiveRelease))
+	for _, candidate := range withoutActiveRelease {
+		seenWithoutActive[candidate.ContentID] = true
+	}
+	if !seenWithoutActive[ids[0]] || !seenWithoutActive[ids[1]] {
+		t.Fatalf("published public UGC must remain eligible without active release: %+v", withoutActiveRelease)
+	}
+	if seenWithoutActive[ids[6]] || seenWithoutActive[ids[7]] {
+		t.Fatalf("deleted/private content leaked without active release: %+v", withoutActiveRelease)
 	}
 }
 
@@ -410,6 +652,8 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 	}
 
 	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=4", nil)
+	req1.Header.Set("X-Client-User-Id", "user_rec_cursor")
+	req1.Header.Set("X-Client-Session-Id", "session_rec_cursor")
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 	if rec1.Code != http.StatusOK {
@@ -443,6 +687,8 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 		"/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
+	req2.Header.Set("X-Client-User-Id", "user_rec_cursor")
+	req2.Header.Set("X-Client-Session-Id", "session_rec_cursor")
 	rec2 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
@@ -600,7 +846,7 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=5&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2.Header.Set("X-Client-User-Id", "user_hide_01")
@@ -660,7 +906,7 @@ func TestGetFeedFutureWindowFiltersHiddenAuthorAndContentType(t *testing.T) {
 
 	reqAfter := httptest.NewRequest(
 		http.MethodGet,
-		"/content/feed?sort=recommend&limit=8&cursor="+url.QueryEscape(page1.NextCursor),
+		"/content/feed?sort=recommend&limit=5&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	reqAfter.Header.Set("X-Client-User-Id", "user_hide_01")
@@ -701,15 +947,16 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	}
 
 	type feedEnvelope struct {
-		Items          []map[string]any `json:"items"`
-		NextCursor     string           `json:"nextCursor"`
-		FeedRequestID  string           `json:"feedRequestId"`
-		RankingVersion string           `json:"rankingVersion"`
-		ReasonVersion  string           `json:"reasonVersion"`
+		Items         []map[string]any `json:"items"`
+		NextCursor    string           `json:"nextCursor"`
+		FeedRequestID string           `json:"feedRequestId"`
+		PolicyDigest  string           `json:"policyDigest"`
 	}
 
-	// First load: no echoed id — server must mint a fresh frq_ id and attach versions.
+	// First load: no echoed id — server must mint a fresh frq_ id and attach the policy digest.
 	req1 := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=5", nil)
+	req1.Header.Set("X-Client-User-Id", "user_feed_request_id")
+	req1.Header.Set("X-Client-Session-Id", "session_feed_request_id")
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 	if rec1.Code != http.StatusOK {
@@ -722,9 +969,8 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 	if !strings.HasPrefix(page1.FeedRequestID, "frq_") {
 		t.Fatalf("feedRequestId must be server-issued with frq_ prefix, got %q", page1.FeedRequestID)
 	}
-	if page1.RankingVersion == "" || page1.ReasonVersion == "" {
-		t.Fatalf("feed envelope must carry rankingVersion + reasonVersion, got ranking=%q reason=%q",
-			page1.RankingVersion, page1.ReasonVersion)
+	if !strings.HasPrefix(page1.PolicyDigest, "sha256:") {
+		t.Fatalf("feed envelope must carry canonical policyDigest, got %q", page1.PolicyDigest)
 	}
 
 	// Next page: echo the feedRequestId — server must keep the same attribution id.
@@ -733,6 +979,8 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 		nextURL += "&cursor=" + url.QueryEscape(page1.NextCursor)
 	}
 	req2 := httptest.NewRequest(http.MethodGet, nextURL, nil)
+	req2.Header.Set("X-Client-User-Id", "user_feed_request_id")
+	req2.Header.Set("X-Client-Session-Id", "session_feed_request_id")
 	rec2 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec2, req2)
 	if rec2.Code != http.StatusOK {
@@ -820,8 +1068,8 @@ func TestGetFeedFiltersBlockedUser(t *testing.T) {
 		t.Fatalf("project feed block event: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=100", nil)
-	req.Header.Set("X-Client-Sub-Account-Id", viewerID)
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=20", nil)
+	req.Header.Set("X-Client-Persona-Id", viewerID)
 	// 伪造客户端列表不得隐藏本应可见的作者。
 	req.Header.Set("X-Blocked-User-Ids", visibleAuthorID)
 	rec := httptest.NewRecorder()
@@ -856,8 +1104,13 @@ func TestGetFeedFiltersBlockedUser(t *testing.T) {
 // TestGetFeedFiltersBlockedKeyword verifies recall-post filtering can exclude
 // content whose title/body/tags hit blocked keywords.
 func TestGetFeedFiltersBlockedKeyword(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	blocked := submitPublishedPost(t, `{"contentType":"image","title":"winter field","body":"blocked"}`)
+	visible := submitPublishedPost(t, `{"contentType":"image","title":"summer field","body":"visible"}`)
 	req := httptest.NewRequest(http.MethodGet, "/content/feed?limit=10", nil)
 	req.Header.Set("X-Blocked-Keywords", "winter")
+	req.Header.Set("X-Client-User-Id", "user_blocked_keyword")
+	req.Header.Set("X-Client-Session-Id", "session_blocked_keyword")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -870,9 +1123,16 @@ func TestGetFeedFiltersBlockedKeyword(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
+	visibleFound := false
 	for _, item := range page.Items {
-		if item["postId"] == "post_photo_001" {
-			t.Fatalf("keyword-hit post should be filtered, got post_photo_001")
+		if item["postId"] == blocked["postId"] {
+			t.Fatalf("keyword-hit post should be filtered, got %v", blocked["postId"])
 		}
+		if item["postId"] == visible["postId"] {
+			visibleFound = true
+		}
+	}
+	if !visibleFound {
+		t.Fatalf("non-matching post must remain visible, got %#v", page.Items)
 	}
 }

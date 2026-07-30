@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan realtime API
-    version: v1
+    version: canonical
 paths:
     /config/realtime:
         get:
@@ -138,6 +138,12 @@ paths:
                 method: longPoll
                 reader: ConnectionEventReader
                 slice: ConnectionEventBatchSlice
+            parameters:
+                - name: timeout
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -190,6 +196,12 @@ paths:
                 facet: ConnectionSessionFacet
                 method: openWebSocket
                 sessionOwner: Connection
+            parameters:
+                - name: ticket
+                  in: query
+                  required: true
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK

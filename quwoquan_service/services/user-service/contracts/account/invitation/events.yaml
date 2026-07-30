@@ -1,34 +1,3 @@
 role: authoritative
-events:
-- name: InvitationGenerated
-  description: 邀请已生成或幂等复用
-  producer: user-service
-  consumers: []
-  channel: event_store
-  payload_fields: [id, inviterSubAccountId, channel, linkCode, expireAt, generatedAt]
-- name: InvitationDelivered
-  description: 邀请链接首次被读取
-  producer: user-service
-  consumers: [recommendation-service]
-  channel: event_store
-  payload_fields: [id, inviterSubAccountId, channel, deliveredAt]
-- name: InvitationAccepted
-  description: 已认证账号接受邀请并形成邀请归因事实
-  producer: user-service
-  consumers: [notification-service, recommendation-service]
-  channel: event_store
-  payload_fields: [id, inviterSubAccountId, channel, acceptedAt]
-  recommend_impact: invite_attribution_signal
-- name: InvitationActivated
-  description: 被邀请账号完成首次有效使用
-  producer: user-service
-  consumers: [notification-service, recommendation-service]
-  channel: event_store
-  payload_fields: [id, inviterSubAccountId, channel, convertedAt]
-  recommend_impact: growth_conversion_signal
-- name: InvitationExpired
-  description: 邀请超过七天有效期
-  producer: user-service
-  consumers: []
-  channel: event_store
-  payload_fields: [id, inviterSubAccountId, expireAt]
+events: []
+description: Invitation 当前仅由 PostgreSQL aggregate store 同步提交状态；仓内没有 invitation outbox/publisher，禁止声明虚假 producer-consumer 链。

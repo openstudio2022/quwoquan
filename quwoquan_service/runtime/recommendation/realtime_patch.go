@@ -74,8 +74,7 @@ type FeedRealtimePatch struct {
 	RemovalDimension        FeedPatchRemovalDimension `json:"removalDimension,omitempty"`
 	RemovalDimensionValue   string                    `json:"removalDimensionValue,omitempty"`
 	AffectedCount           int                       `json:"affectedCount"`
-	RankingVersion          string                    `json:"rankingVersion,omitempty"`
-	ReasonVersion           string                    `json:"reasonVersion,omitempty"`
+	PolicyDigest            string                    `json:"policyDigest,omitempty"`
 	SafeToApplyWhileViewing bool                      `json:"safeToApplyWhileViewing"`
 	EmittedAt               string                    `json:"emittedAt"`
 }
@@ -155,7 +154,7 @@ type NegativeFeedbackRemoval struct {
 	UserID                string
 	FeedRequestID         string
 	ChannelID             string
-	RankingVersion        string
+	PolicyDigest          string
 	TargetPostIDs         []string
 	ReasonCode            FeedPatchReasonCode
 	RemovalDimension      FeedPatchRemovalDimension
@@ -164,22 +163,22 @@ type NegativeFeedbackRemoval struct {
 
 // NewCandidateHint 描述一次新候选提示 patch 的输入。
 type NewCandidateHint struct {
-	UserID         string
-	FeedRequestID  string
-	ChannelID      string
-	RankingVersion string
-	ReasonCode     FeedPatchReasonCode
-	AffectedCount  int
+	UserID        string
+	FeedRequestID string
+	ChannelID     string
+	PolicyDigest  string
+	ReasonCode    FeedPatchReasonCode
+	AffectedCount int
 }
 
 // RefreshSuggestion 描述一次刷新建议 patch 的输入。
 type RefreshSuggestion struct {
-	UserID         string
-	FeedRequestID  string
-	ChannelID      string
-	RankingVersion string
-	ReasonCode     FeedPatchReasonCode
-	AffectedCount  int
+	UserID        string
+	FeedRequestID string
+	ChannelID     string
+	PolicyDigest  string
+	ReasonCode    FeedPatchReasonCode
+	AffectedCount int
 }
 
 // EmitNegativeFeedbackRemoval 发射 negative_feedback_removal patch。
@@ -202,7 +201,7 @@ func (e *FeedPatchEmitter) EmitNegativeFeedbackRemoval(ctx context.Context, in N
 		UserID:                  userID,
 		FeedRequestID:           strings.TrimSpace(in.FeedRequestID),
 		ChannelID:               strings.TrimSpace(in.ChannelID),
-		RankingVersion:          strings.TrimSpace(in.RankingVersion),
+		PolicyDigest:            strings.TrimSpace(in.PolicyDigest),
 		TargetPostIDs:           targets,
 		ReasonCode:              in.ReasonCode,
 		RemovalDimension:        in.RemovalDimension,
@@ -231,7 +230,7 @@ func (e *FeedPatchEmitter) EmitNewCandidateHint(ctx context.Context, in NewCandi
 		UserID:                  userID,
 		FeedRequestID:           strings.TrimSpace(in.FeedRequestID),
 		ChannelID:               strings.TrimSpace(in.ChannelID),
-		RankingVersion:          strings.TrimSpace(in.RankingVersion),
+		PolicyDigest:            strings.TrimSpace(in.PolicyDigest),
 		TargetPostIDs:           []string{},
 		ReasonCode:              in.ReasonCode,
 		AffectedCount:           affected,
@@ -254,7 +253,7 @@ func (e *FeedPatchEmitter) EmitRefreshSuggestion(ctx context.Context, in Refresh
 		UserID:                  userID,
 		FeedRequestID:           strings.TrimSpace(in.FeedRequestID),
 		ChannelID:               strings.TrimSpace(in.ChannelID),
-		RankingVersion:          strings.TrimSpace(in.RankingVersion),
+		PolicyDigest:            strings.TrimSpace(in.PolicyDigest),
 		TargetPostIDs:           []string{},
 		ReasonCode:              in.ReasonCode,
 		AffectedCount:           in.AffectedCount,
@@ -286,7 +285,7 @@ func (e *FeedPatchEmitter) EmitForBehaviorBatch(ctx context.Context, signals []B
 				UserID:                signal.UserID,
 				FeedRequestID:         signal.FeedRequestID,
 				ChannelID:             signal.ChannelID,
-				RankingVersion:        signal.RankingVersion,
+				PolicyDigest:          signal.PolicyDigest,
 				TargetPostIDs:         []string{signal.ContentID},
 				ReasonCode:            reason,
 				RemovalDimension:      dimension,
@@ -296,23 +295,23 @@ func (e *FeedPatchEmitter) EmitForBehaviorBatch(ctx context.Context, signals []B
 		}
 		if reason, ok := relationshipHintReason(signal); ok {
 			_ = e.EmitNewCandidateHint(ctx, NewCandidateHint{
-				UserID:         signal.UserID,
-				FeedRequestID:  signal.FeedRequestID,
-				ChannelID:      signal.ChannelID,
-				RankingVersion: signal.RankingVersion,
-				ReasonCode:     reason,
-				AffectedCount:  1,
+				UserID:        signal.UserID,
+				FeedRequestID: signal.FeedRequestID,
+				ChannelID:     signal.ChannelID,
+				PolicyDigest:  signal.PolicyDigest,
+				ReasonCode:    reason,
+				AffectedCount: 1,
 			})
 		}
 	}
 	if negativeCount >= sessionFatigueNegativeThreshold && strings.TrimSpace(fatigueAnchor.UserID) != "" {
 		_ = e.EmitRefreshSuggestion(ctx, RefreshSuggestion{
-			UserID:         fatigueAnchor.UserID,
-			FeedRequestID:  fatigueAnchor.FeedRequestID,
-			ChannelID:      fatigueAnchor.ChannelID,
-			RankingVersion: fatigueAnchor.RankingVersion,
-			ReasonCode:     FeedPatchReasonSessionFatigue,
-			AffectedCount:  negativeCount,
+			UserID:        fatigueAnchor.UserID,
+			FeedRequestID: fatigueAnchor.FeedRequestID,
+			ChannelID:     fatigueAnchor.ChannelID,
+			PolicyDigest:  fatigueAnchor.PolicyDigest,
+			ReasonCode:    FeedPatchReasonSessionFatigue,
+			AffectedCount: negativeCount,
 		})
 	}
 }

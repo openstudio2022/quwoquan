@@ -75,6 +75,7 @@ func (h *ContentHandler) handleReviewPostModerationCase(w http.ResponseWriter, r
 	result, err := h.moderationService.ReviewPostModerationCase(
 		r.Context(),
 		moderationapp.ReviewPostModerationCaseCommand{
+			PostID:     strings.TrimSpace(r.PathValue("postId")),
 			CaseID:     body.CaseID,
 			ReviewerID: reviewerID,
 		},
@@ -113,6 +114,7 @@ func (h *ContentHandler) handleDecidePostModeration(w http.ResponseWriter, r *ht
 	result, err := h.moderationService.DecidePostModerationCase(
 		r.Context(),
 		moderationapp.DecidePostModerationCaseCommand{
+			PostID:         strings.TrimSpace(r.PathValue("postId")),
 			CaseID:         body.CaseID,
 			ReviewerID:     reviewerID,
 			Decision:       moderationmodel.Decision(strings.TrimSpace(body.Decision)),
@@ -146,7 +148,10 @@ func (h *ContentHandler) handleSupersedePostModerationCase(w http.ResponseWriter
 	}
 	result, err := h.moderationService.SupersedePostModerationCase(
 		r.Context(),
-		moderationapp.SupersedePostModerationCaseCommand{CaseID: body.CaseID},
+		moderationapp.SupersedePostModerationCaseCommand{
+			PostID: strings.TrimSpace(r.PathValue("postId")),
+			CaseID: body.CaseID,
+		},
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

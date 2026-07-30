@@ -326,35 +326,37 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
     _sampledFrames = 0;
     _jankyFrames = 0;
     _worstFrameMs = 0;
-    if (janky == 0) return;
-    final severity = worst >= severeFrameThreshold.inMilliseconds
-        ? RuntimeLogSeverity.error
-        : RuntimeLogSeverity.warn;
     final observedAt = _now();
-    unawaited(
-      _logger.event(
-        signal: 'app.performance.frame',
-        event: 'frame_jank',
-        result: severity == RuntimeLogSeverity.error ? 'severe' : 'degraded',
-        message: 'frame timing threshold exceeded',
-        severity: severity,
-        correlation: _correlation(operationId: 'app.runtime.frame_timing'),
-        attributes: <String, String>{
-          'sampledFrames': '$sampled',
-          'jankyFrames': '$janky',
-          'worstFrameMs': '$worst',
-          'jankThresholdMs': '${jankThreshold.inMilliseconds}',
-        },
-        occurredAt: observedAt,
-      ),
-    );
+    final isSevere = worst >= severeFrameThreshold.inMilliseconds;
+    final result = janky == 0 ? 'ok' : (isSevere ? 'severe' : 'degraded');
+    if (janky > 0) {
+      unawaited(
+        _logger.event(
+          signal: 'app.performance.frame',
+          event: 'frame_jank',
+          result: result,
+          message: 'frame timing threshold exceeded',
+          severity: isSevere
+              ? RuntimeLogSeverity.error
+              : RuntimeLogSeverity.warn,
+          correlation: _correlation(operationId: 'app.runtime.frame_timing'),
+          attributes: <String, String>{
+            'sampledFrames': '$sampled',
+            'jankyFrames': '$janky',
+            'worstFrameMs': '$worst',
+            'jankThresholdMs': '${jankThreshold.inMilliseconds}',
+          },
+          occurredAt: observedAt,
+        ),
+      );
+    }
     unawaited(
       _pageExperienceTracker.recordFrameJankOutcome(
         sampledFrames: sampled,
         jankyFrames: janky,
         worstFrameMs: worst,
         jankThresholdMs: jankThreshold.inMilliseconds,
-        result: severity == RuntimeLogSeverity.error ? 'severe' : 'degraded',
+        result: result,
         occurredAt: observedAt,
       ),
     );

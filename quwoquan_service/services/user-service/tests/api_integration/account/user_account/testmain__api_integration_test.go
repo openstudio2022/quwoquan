@@ -28,6 +28,7 @@ import (
 	accountsessionpersistence "quwoquan_service/services/user-service/internal/account/account_session/infrastructure/persistence"
 	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
 	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
+	credentialhttp "quwoquan_service/services/user-service/internal/account/credential_binding/adapters/inbound/http"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
 	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
 	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
@@ -41,6 +42,7 @@ import (
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
 	useraccountcache "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/integration"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/projection"
@@ -75,6 +77,7 @@ import (
 
 var (
 	testHandler                   http.Handler
+	testAccountEnforcementHandler http.Handler
 	pgPool                        *pgxpool.Pool
 	mongoDB                       *mongo.Database
 	integrationRedis              *testinfra.RealRedis
@@ -86,7 +89,7 @@ var (
 	externalProviderRuntime       *externalProviderContractRuntime
 	externalInteractionRuntime    *externalInteractionContractRuntime
 	chatContractRuntime           *chatServiceContractRuntime
-	conversationGateway           greetingapp.ConversationGateway
+	conversationGateway           *integration.ChatServiceClient
 	relationshipCounterProjector  *relationshipprojection.CounterProjector
 	relationshipCounterReconciler *relationshipprojection.CounterReconciler
 	relationshipRelayCancel       context.CancelFunc
@@ -410,9 +413,19 @@ func rebuildTestHandler(ctx context.Context) error {
 		return err
 	}
 
-	profileService := application.NewProfileService(
+	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
+	personaProfileProjector, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	if err != nil {
+		return err
+	}
+	profileService, err := application.NewProfileService(
 		profileStore,
 		personaStore,
+		personaCommandStore,
+		personaProfileProjector,
 		profileCache,
 		userEventPublisher,
 		userSyncService,
@@ -422,6 +435,9 @@ func rebuildTestHandler(ctx context.Context) error {
 		),
 		application.WithProfilePublicBaseURL("https://quwoquan.com"),
 	)
+	if err != nil {
+		return err
+	}
 	searchService := application.NewSearchService(profileStore, personaStore)
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
 		relationshipStore,
@@ -517,8 +533,15 @@ func rebuildTestHandler(ctx context.Context) error {
 		shardDirectory,
 		application.WithAccountSessionCommands(accountSessionCommands),
 		application.WithCredentialCommands(credentialCommands),
+		application.WithPersonaCommandPipeline(
+			personaCommandStore,
+			personaProfileProjector,
+		),
 		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
+		application.WithFederatedPhoneBindingTickets(
+			credentialStore,
+		),
 		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
 		application.WithAuthenticationChallenges(authenticationChallenges),
 		application.WithOTPCodeSealer(testOTPCodeSealer),
@@ -530,13 +553,10 @@ func rebuildTestHandler(ctx context.Context) error {
 			"carrier_token_existing": "+8618013813902",
 		}),
 	)
-	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
-	if err != nil {
-		return err
-	}
-	subAccountService := application.NewSubAccountService(
+	personaService := application.NewPersonaService(
 		personaStore,
 		personaCommandStore,
+		personaProfileProjector,
 		profileStore,
 		profileCache,
 		application.WithCreatorRuntimeProfiles(
@@ -613,7 +633,7 @@ func rebuildTestHandler(ctx context.Context) error {
 		userSettingsCommands, userSettingsQueries,
 		authService, credentialQueries,
 		deviceRegistrationCommands, deviceRegistrationQueries,
-		subAccountService,
+		personaService,
 		interestProfileService,
 		subjectFollowService,
 		followedSubjectVisitService,
@@ -658,8 +678,14 @@ func rebuildTestHandler(ctx context.Context) error {
 			nil,
 		),
 	)
+	federatedPhoneBindingHandler, err :=
+		credentialhttp.NewFederatedPhoneBindingHandler(authService)
+	if err != nil {
+		return err
+	}
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)
 	profileProposalHandler.RegisterRoutes(serviceMux)
 	invitationHandler.RegisterRoutes(serviceMux)
 	greetingHandler.RegisterRoutes(serviceMux)
@@ -670,6 +696,25 @@ func rebuildTestHandler(ctx context.Context) error {
 	testHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
 		AccessTokenVerifier: testAccessVerifier,
 	})(authorized)
+	// SuspendAccount/RestoreAccount remain commercially blocked until the
+	// Product Ops approval producer and cross-domain closure are complete. This
+	// API-integration-only composition changes only those two descriptor copies
+	// to exercise the already-implemented User transport trust boundary. It is
+	// never reachable from an environment service composition.
+	enforcementDescriptors := operationsecurity.ForDomain("user")
+	for index := range enforcementDescriptors {
+		switch enforcementDescriptors[index].CanonicalOperationID {
+		case "user.user_account.SuspendAccount",
+			"user.user_account.RestoreAccount":
+			enforcementDescriptors[index].CommercialStatus = "ready"
+		}
+	}
+	enforcementAuthorized := rtauth.EnforceGeneratedOperationAuthorization(
+		enforcementDescriptors,
+	)(userHandler.WrapAccountSecurity(serviceMux))
+	testAccountEnforcementHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
+		AccessTokenVerifier: testAccessVerifier,
+	})(enforcementAuthorized)
 	return nil
 }
 

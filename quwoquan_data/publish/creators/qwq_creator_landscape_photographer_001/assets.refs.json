@@ -1,3 +1,12 @@
 {
-  "assets": []
+  "assets": [
+    {
+      "assetId": "creator-avatar-qwq_creator_landscape_photographer_001-8afb0ece7d71ca69",
+      "kind": "avatar",
+      "sha256": "sha256:8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd",
+      "objectKey": "media/objects/sha256/8a/fb/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.webp",
+      "bytes": 428956,
+      "mimeType": "image/webp"
+    }
+  ]
 }

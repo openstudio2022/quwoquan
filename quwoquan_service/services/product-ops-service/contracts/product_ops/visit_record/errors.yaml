@@ -1,0 +1,54 @@
+domain: OPS
+aggregate: VisitRecord
+description: VisitRecord 命令与统计 Reader 的对象本地稳定错误语义。
+errors:
+- code: OPS.USER.visit_invalid_argument
+  kind: USER
+  reason: visit_invalid_argument
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [RecordVisit, GetVisitStats]}
+  recovery_action: surface
+  dart_const: visitInvalidArgument
+  go_const: ErrVisitInvalidArgument
+  user_message:
+    zh: 访问记录请求参数无效
+    en: Invalid visit record request
+- code: OPS.SYSTEM.visit_storage_read_failed
+  kind: SYSTEM
+  reason: visit_storage_read_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [GetVisitStats]}
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: visitStorageReadFailed
+  go_const: ErrVisitStorageReadFailed
+  user_message:
+    zh: 访问统计读取失败，请稍后重试
+    en: Visit statistics could not be read; retry shortly
+- code: OPS.USER.visit_idempotency_conflict
+  kind: USER
+  reason: visit_idempotency_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [RecordVisit]}
+  recovery_action: surface
+  dart_const: visitIdempotencyConflict
+  go_const: ErrVisitIdempotencyConflict
+  user_message:
+    zh: 该访问请求标识已用于其他目标
+    en: This visit request key was already used for another target
+- code: OPS.SYSTEM.visit_storage_write_failed
+  kind: SYSTEM
+  reason: visit_storage_write_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [RecordVisit]}
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: visitStorageWriteFailed
+  go_const: ErrVisitStorageWriteFailed
+  user_message:
+    zh: 访问记录写入失败，请稍后重试
+    en: The visit record could not be stored; retry shortly

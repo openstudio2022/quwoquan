@@ -142,7 +142,7 @@ final class RtcCallEntryIntent {
             RtcCallEntryUnavailableReason.notMutual,
           );
         }
-        final capabilityTargetId = capability.targetSubAccountId.trim();
+        final capabilityTargetId = capability.targetPersonaId.trim();
         if (capabilityTargetId.isNotEmpty && capabilityTargetId != targetId) {
           return const RtcCallEntryAvailability.unavailable(
             RtcCallEntryUnavailableReason.capabilityDenied,
@@ -231,7 +231,7 @@ final class RtcCallEntryCoordinator {
     }
     return lifecycleWriter.initiateCall(
       RtcInitiateCallCommand(
-        callType: intent.mediaType.wireValue,
+        callType: CallType.fromString(intent.mediaType.wireValue),
         inviteeIds: inviteeIds,
         conversationId: _nonEmpty(intent.conversationId),
         circleId: _nonEmpty(intent.circleId),

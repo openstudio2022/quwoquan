@@ -271,7 +271,7 @@ func completeSharedCASMediaForCleanup(
 		t,
 		"POST",
 		"/content/media/uploads:init",
-		`{"mediaType":"image","contentType":"image/jpeg","fileSize":128,"expectedSha256":"sha256:`+digest+`"}`,
+		`{"mediaType":"image","mimeType":"image/jpeg","fileSize":128,"expectedSha256":"sha256:`+digest+`"}`,
 		owner,
 		keyPrefix+"-init",
 	)
@@ -335,7 +335,7 @@ func (p *apiIntegrationVideoProcessor) Process(
 	return mediaprocessing.ProcessOutcome{
 		Descriptor: mediamodel.MediaProcessingDescriptor{
 			Video: mediamodel.VideoProcessingDescriptor{
-				ProcessorProfile:             "content_processing_progressive_mp4_v1",
+				ProcessorProfile:             "content_processing_progressive_mp4",
 				VerifiedDurationMs:           30_000,
 				VideoWidth:                   720,
 				VideoHeight:                  1280,

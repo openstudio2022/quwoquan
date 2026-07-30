@@ -1,0 +1,138 @@
+read_model: PersonaProfileWire
+description: 'GET /me/profile 与分身档案 GET 响应体 wire，与 App PersonaProfileViewData 字段对齐。
+
+  解码后由 PersonaProfileViewData.fromPersonaProfileWire 做展示名回退（nickname / subjectId）。
+
+  '
+source_entities:
+- UserProfile
+consumers:
+- app
+client_projection:
+  dart_class: PersonaProfileWireDto
+  base_class: ''
+  output_path: cloud/runtime/generated/user/persona_profile_wire_dto.g.dart
+  fields:
+  - name: personaId
+    dart_type: String
+    nullable: false
+    source: personaId
+    default: ''''''
+  - name: ownerUserId
+    dart_type: String
+    nullable: false
+    source: ownerUserId
+    default: ''''''
+  - name: userHandle
+    dart_type: String
+    nullable: false
+    source: userHandle
+    default: ''''''
+  - name: nickname
+    dart_type: String
+    nullable: false
+    source: nickname
+    default: ''''''
+  - name: displayName
+    dart_type: String
+    nullable: false
+    source: displayName
+    default: ''''''
+  - name: subjectType
+    dart_type: String
+    nullable: false
+    source: subjectType
+    default: ''''''
+  - name: nicknameCustomized
+    dart_type: bool
+    nullable: false
+    source: nicknameCustomized
+    default: 'false'
+  - name: avatarUrl
+    dart_type: String
+    nullable: false
+    source: avatarUrl
+    default: ''''''
+  - name: avatarVersion
+    dart_type: int
+    nullable: false
+    source: avatarVersion
+    default: '0'
+  - name: backgroundUrl
+    dart_type: String
+    nullable: false
+    source: backgroundUrl
+    default: ''''''
+  - name: bio
+    dart_type: String
+    nullable: false
+    source: bio
+    default: ''''''
+  - name: identityTags
+    dart_type: List<String>
+    nullable: false
+    source: identityTags
+  - name: verified
+    dart_type: bool
+    nullable: false
+    source: verified
+    default: 'false'
+  - name: followerCount
+    dart_type: int
+    nullable: false
+    source: followerCount
+    default: '0'
+  - name: followingCount
+    dart_type: int
+    nullable: false
+    source: followingCount
+    default: '0'
+  - name: postCount
+    dart_type: int
+    nullable: false
+    source: postCount
+    default: '0'
+  - name: circleCount
+    dart_type: int
+    nullable: false
+    source: circleCount
+    default: '0'
+  - name: likeCount
+    dart_type: int
+    nullable: false
+    source: likeCount
+    default: '0'
+  - name: profileCompleteness
+    dart_type: int
+    nullable: false
+    source: profileCompleteness
+    default: '100'
+  - name: profileCompletenessMissingItems
+    dart_type: List<String>
+    nullable: false
+    source: profileCompletenessMissingItems
+  - name: profileVisibility
+    dart_type: String
+    nullable: false
+    source: profileVisibility
+    default: '''public'''
+  - name: isolationLevel
+    dart_type: String
+    nullable: false
+    source: isolationLevel
+    default: '''open'''
+  - name: inheritsFromOwner
+    dart_type: bool
+    nullable: false
+    source: inheritsFromOwner
+    default: 'false'
+  - name: overriddenFields
+    dart_type: List<String>
+    nullable: true
+    source: overriddenFields
+    default: 'null'
+  - name: updatedAt
+    dart_type: DateTime
+    nullable: true
+    source: updatedAt
+    default: 'null'

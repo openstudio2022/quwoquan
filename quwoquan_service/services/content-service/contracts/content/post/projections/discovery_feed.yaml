@@ -100,6 +100,30 @@ client_projection:
     name: videoUrl
     nullable: true
     source: videoUrl
+  - dart_type: String
+    default: 'null'
+    description: ready MediaAsset 业务 ID；首页 progressive 与 HLS/CMAF 的版本绑定锚点
+    name: mediaAssetId
+    nullable: true
+    source: mediaAssetId
+  - dart_type: int
+    default: 'null'
+    description: ready MediaAsset 版本；必须同时约束 progressive 与 adaptive 候选
+    name: mediaAssetVersion
+    nullable: true
+    source: mediaAssetVersion
+  - dart_type: String
+    default: 'null'
+    description: HLS/CMAF master manifest URL；端侧 capability 与 feature flag 未同时开启时忽略
+    name: hlsCmafMasterManifestUrl
+    nullable: true
+    source: hlsCmafMasterManifestUrl
+  - dart_type: int
+    default: 'null'
+    description: HLS/CMAF descriptor 版本；非法或缺失时继续使用 progressive videoUrl
+    name: hlsCmafDescriptorVersion
+    nullable: true
+    source: hlsCmafDescriptorVersion
   - dart_type: List<String>
     default: <String>[]
     description: 图片帖子的图片列表
@@ -274,9 +298,21 @@ description: '发现流 ReadModel。聚合 Post + 用户行为 + 推荐特征，
   供 App 信息流消费。由 Projector 从 Post 和行为事件投影构建。
 
   '
+read_contract:
+  limit:
+    minimum: 1
+    maximum: 20
+    default: 20
+  pagination:
+    strategy: sealed_continuation
+    cursor: opaque_aes_gcm
+    ttl_seconds: 600
+    max_continuation_depth: 50
+    invalid_cursor: fail_closed_invalid_argument
 fields:
 - name: postId
   type: ObjectId
+  max_utf8_bytes: 256
 - name: contentType
   type: enum
 - description: 内容身份层。moment/work，用于跨面统一过滤
@@ -317,6 +353,18 @@ fields:
 - description: 视频播放 URL；非视频内容为空
   name: videoUrl
   type: string
+- description: ready MediaAsset 业务 ID；绑定首页 progressive 与 HLS/CMAF 候选
+  name: mediaAssetId
+  type: string
+- description: ready MediaAsset 版本；与 mediaAssetId 共同约束播放候选
+  name: mediaAssetVersion
+  type: int
+- description: HLS/CMAF master manifest URL；始终保留同资产同版本 progressive videoUrl 回退
+  name: hlsCmafMasterManifestUrl
+  type: string
+- description: HLS/CMAF descriptor 版本；缺失时 adaptive 未就绪
+  name: hlsCmafDescriptorVersion
+  type: int
 - description: 视频封面策略 first_frame/manual；非视频内容为空
   name: coverStrategy
   type: enum
@@ -364,6 +412,24 @@ fields:
 - description: 内容供给来源 user_generated/data_engineering/product_ops 等，用于 UGC 与数据工程内容效果分桶
   name: supplySource
   type: string
+- description: canonical 第一方供给 owner；环境发布内容固定为 qwq_data
+  name: sourceOwner
+  type: string
+- description: immutable Data release 身份；推荐首刷必须与 ActiveSupply snapshot 一致
+  name: releaseId
+  type: string
+- description: immutable release payload digest；用于供给 readback 与 hydration 一致性
+  name: manifestDigest
+  type: string
+- description: release 投影生命周期；只有 active 可进入首刷召回
+  name: lifecycleStatus
+  type: enum
+- description: 内容发布状态；推荐召回只消费 published
+  name: status
+  type: enum
+- description: 内容可见性；公开发现流只消费 public
+  name: visibility
+  type: enum
 - description: 作者显示名（反范式）
   name: authorDisplayName
   type: string
@@ -390,17 +456,61 @@ fields:
   type: object
 indexes:
 - keys:
+    postId: 1
+  name: uq_df_post_id
+  unique: true
+- keys:
+    status: 1
+    visibility: 1
+    recScore: -1
     publishedAt: -1
-    recScore: -1
-  name: idx_df_rec_score
+    postId: -1
+  name: idx_df_recommend_recency
 - keys:
+    status: 1
+    visibility: 1
+    contentVertical: 1
+    recScore: -1
+    publishedAt: -1
+    postId: -1
+  name: idx_df_recommend_vertical_recency
+- keys:
+    status: 1
+    visibility: 1
+    sourceOwner: 1
+    releaseId: 1
+    manifestDigest: 1
+    lifecycleStatus: 1
+    recScore: -1
+    publishedAt: -1
+    postId: -1
+  name: idx_df_active_release_recency
+- keys:
+    status: 1
+    visibility: 1
+    sourceOwner: 1
+    releaseId: 1
+    manifestDigest: 1
+    lifecycleStatus: 1
+    contentVertical: 1
+    recScore: -1
+    publishedAt: -1
+    postId: -1
+  name: idx_df_active_release_vertical_recency
+- keys:
+    status: 1
+    visibility: 1
     contentType: 1
-    recScore: -1
-  name: idx_df_type
+    publishedAt: -1
+    postId: -1
+  name: idx_df_type_recency
 - keys:
+    status: 1
+    visibility: 1
     authorId: 1
     publishedAt: -1
-  name: idx_df_author
+    postId: -1
+  name: idx_df_author_recency
 read_model: DiscoveryFeed
 source_entities:
 - Post

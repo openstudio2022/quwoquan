@@ -46,10 +46,11 @@ func decodeNotificationUserAccountClosed(
 		return application.UserAccountClosedEvent{},
 			errors.New("UserAccountClosed stream identity is invalid")
 	}
-	if _, err := time.Parse(
+	occurredAt, err := time.Parse(
 		time.RFC3339Nano,
 		strings.TrimSpace(values["occurredAt"]),
-	); err != nil {
+	)
+	if err != nil {
 		return application.UserAccountClosedEvent{},
 			errors.New("UserAccountClosed occurredAt is invalid")
 	}
@@ -93,11 +94,13 @@ func decodeNotificationUserAccountClosed(
 			errors.New("UserAccountClosed updatedAt is invalid")
 	}
 	event := application.UserAccountClosedEvent{
-		EventID:      eventID,
-		UserID:       payload.UserID,
-		PersonaIDs:   normalizeUserAccountClosedPersonaIDs(payload.PersonaIDs),
-		AccountState: payload.AccountState,
-		UpdatedAt:    updatedAt.UTC(),
+		EventID:        eventID,
+		AccountVersion: accountVersion,
+		UserID:         payload.UserID,
+		PersonaIDs:     normalizeUserAccountClosedPersonaIDs(payload.PersonaIDs),
+		AccountState:   payload.AccountState,
+		UpdatedAt:      updatedAt.UTC(),
+		OccurredAt:     occurredAt.UTC(),
 	}
 	if err := event.Validate(); err != nil {
 		return application.UserAccountClosedEvent{}, err

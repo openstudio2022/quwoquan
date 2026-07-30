@@ -17,7 +17,7 @@ var (
 // AppErrorFromCredentialConflict returns *AppError for USER.AUTH.credential_conflict (user_message from errors.yaml).
 func AppErrorFromCredentialConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrCredentialConflict.Error()))
-	return rerrors.NewAppError(code, "该账号已被其他用户绑定", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+	return rerrors.NewAppError(code, "这个手机号已绑定其他账号", debugMessage).WithMetadata("conflict", 409).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromLastCredential returns *AppError for USER.AUTH.last_credential (user_message from errors.yaml).

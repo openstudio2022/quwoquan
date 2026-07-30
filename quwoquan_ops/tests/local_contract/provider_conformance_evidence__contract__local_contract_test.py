@@ -11,6 +11,7 @@ from unittest import mock
 
 from quwoquan_ops.ci.provider_conformance import b10_prod_remote_uat
 from quwoquan_ops.ci.provider_conformance import run_b10_prod_remote_patrol_uat
+from quwoquan_ops.ci.render_provider_conformance_source import render as render_source
 from quwoquan_ops.cli.lib import external_provider_governance as governance
 from quwoquan_ops.cli.lib import provider_conformance
 
@@ -36,7 +37,8 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             schema["properties"]["testLayer"]["enum"],
             ["local_contract", "api_integration", "user_acceptance"],
         )
-        self.assertEqual(schema["properties"]["version"]["const"], 4)
+        self.assertNotIn("version", schema["required"])
+        self.assertNotIn("version", schema["properties"])
         for required in (
             "adapterId",
             "capabilityId",
@@ -80,7 +82,6 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
     def test_empty_evidence_cannot_satisfy_release_readiness(self) -> None:
         report = {
             "schema": "provider-conformance-readiness",
-            "version": 1,
             "evidenceCount": 0,
             "readiness": {},
             "issues": [],
@@ -90,6 +91,19 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 report, environment=environment
             )
             self.assertTrue(any("zero Provider Conformance evidence" in issue for issue in issues))
+
+    def test_online_readiness_projection_rejects_historical_version_field(self) -> None:
+        report = {
+            "schema": "provider-conformance-readiness",
+            "version": 1,
+            "evidenceCount": 1,
+            "executableSourceCount": 1,
+            "sourceCoverageIssues": [],
+            "readiness": {},
+            "issues": [],
+        }
+        with self.assertRaisesRegex(ValueError, "fields are not canonical"):
+            render_source(report, validation_issues=[], environment="prod")
 
     def test_only_prod_remote_receipts_require_release_readiness(self) -> None:
         self.assertEqual(
@@ -172,16 +186,22 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             {
                 "platform": "ios",
                 "deviceHash": b10_prod_remote_uat._device_hash("ios-device"),
-                "appVersion": "1.0",
+                "applicationDigest": "sha256:" + "1" * 64,
                 "caseDirection": "ios_to_android",
             },
             {
                 "platform": "android",
                 "deviceHash": b10_prod_remote_uat._device_hash("android-device"),
-                "appVersion": "1.0",
+                "applicationDigest": "sha256:" + "2" * 64,
                 "caseDirection": "ios_to_android",
             },
         ]
+        environment.update(
+            {
+                "QWQ_B10_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
+                "QWQ_B10_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
+            }
+        )
         with mock.patch.dict(os.environ, environment, clear=True):
             with self.assertRaisesRegex(ValueError, "both iOS-to-Android"):
                 b10_prod_remote_uat._validate_device_evidence(evidence)
@@ -192,13 +212,13 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             {
                 "platform": "ios",
                 "deviceHash": b10_prod_remote_uat._device_hash(device_id),
-                "appVersion": "1.0",
+                "applicationDigest": "sha256:" + "1" * 64,
                 "caseDirection": "ios_to_android",
             },
             {
                 "platform": "android",
                 "deviceHash": b10_prod_remote_uat._device_hash(device_id),
-                "appVersion": "1.0",
+                "applicationDigest": "sha256:" + "2" * 64,
                 "caseDirection": "android_to_ios",
             },
         ]
@@ -207,6 +227,8 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             {
                 "QWQ_B10_IOS_DEVICE_ID": device_id,
                 "QWQ_B10_ANDROID_DEVICE_ID": device_id,
+                "QWQ_B10_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
+                "QWQ_B10_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
             },
             clear=True,
         ):
@@ -220,7 +242,6 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
         call_digest = run_b10_prod_remote_patrol_uat._sha256(call_id.encode("utf-8"))
         payload = {
             "schema": "b10-prod-operator-readback",
-            "version": 1,
             "imageDigest": digest,
             "configDigest": digest,
             "contractGraphDigest": digest,
@@ -417,7 +438,6 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             call_digests = ["sha256:" + "d" * 64, "sha256:" + "e" * 64]
             readback = {
                 "schema": b10_prod_remote_uat.READBACK_SCHEMA,
-                "version": b10_prod_remote_uat.READBACK_VERSION,
                 "status": "passed",
                 "capabilityId": "rtc.room.transport",
                 "adapterId": "infra.livekit_sfu",
@@ -429,13 +449,13 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                     {
                         "platform": "ios",
                         "deviceHash": ios_hash,
-                        "appVersion": "1.0",
+                        "applicationDigest": "sha256:" + "1" * 64,
                         "caseDirection": "ios_to_android",
                     },
                     {
                         "platform": "android",
                         "deviceHash": android_hash,
-                        "appVersion": "1.0",
+                        "applicationDigest": "sha256:" + "2" * 64,
                         "caseDirection": "android_to_ios",
                     },
                 ],
@@ -539,6 +559,8 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 "QWQ_PROVIDER_CONFORMANCE_CONTRACT_REF": "quwoquan_service/services/rtc-service/contracts/rtc/call_session/operations.yaml",
                 "QWQ_B10_IOS_DEVICE_ID": "ios-device",
                 "QWQ_B10_ANDROID_DEVICE_ID": "android-device",
+                "QWQ_B10_IOS_APPLICATION_DIGEST": "sha256:" + "1" * 64,
+                "QWQ_B10_ANDROID_APPLICATION_DIGEST": "sha256:" + "2" * 64,
             }
             with (
                 mock.patch.dict(os.environ, environment, clear=True),
@@ -585,6 +607,22 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             )
             self.assertEqual(case_issues, [])
             self.assertIsNotNone(loaded)
+            case_result["version"] = 1
+            result_path.write_text(json.dumps(case_result), encoding="utf-8")
+            _, case_issues = provider_conformance.load_case_results(
+                result_path,
+                source=sources[
+                    (
+                        "rtc.room.transport",
+                        "infra.livekit_sfu",
+                        "user_acceptance",
+                    )
+                ],
+                environment="prod",
+                config_digest="sha256:" + "b" * 64,
+            )
+            self.assertTrue(any("unknown fields" in issue for issue in case_issues))
+            case_result.pop("version")
             case_result["nativeReadback"]["artifactDigest"] = "sha256:" + "d" * 64
             result_path.write_text(json.dumps(case_result), encoding="utf-8")
             _, case_issues = provider_conformance.load_case_results(

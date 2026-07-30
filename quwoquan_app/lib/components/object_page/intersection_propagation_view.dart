@@ -6,7 +6,7 @@ import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
-/// 传播视图件（架构基线 v2 §21.4 · 我打动的人 / 圈子打动的人 横切复用）。
+/// 传播视图件（canonical 交集设计 · 我打动的人 / 圈子打动的人 横切复用）。
 ///
 /// 只读消费云侧 [IntersectionPropagationPath]，把「沿边的下游影响」表达为一行：
 /// 路径类型图标（按 `pathKind`）+ 云侧结论句 `summaryText`（如「8人通过你建立了新连接」）

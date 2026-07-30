@@ -9,12 +9,9 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	ErrDecisionParseFailed             = errors.New("ASSISTANT.SYSTEM.decision_parse_failed")
 	ErrFinanceProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.finance_provider_unavailable")
 	ErrIntersectionEvidenceNotFound    = errors.New("ASSISTANT.USER.intersection_evidence_not_found")
 	ErrIntersectionEvidenceUnavailable = errors.New("ASSISTANT.MIDDLEWARE.intersection_evidence_unavailable")
-	ErrInvalidActionPayload            = errors.New("ASSISTANT.USER.invalid_action_payload")
-	ErrMarkdownBlockParseFailed        = errors.New("ASSISTANT.SYSTEM.markdown_block_parse_failed")
 	ErrModelProviderUnavailable        = errors.New("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
 	ErrPageContextUnavailable          = errors.New("ASSISTANT.SYSTEM.page_context_unavailable")
 	ErrPublicSearchProviderUnavailable = errors.New("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
@@ -25,23 +22,14 @@ var (
 	ErrRunStorageUnavailable           = errors.New("ASSISTANT.SYSTEM.run_storage_unavailable")
 	ErrSkillConsentRequired            = errors.New("ASSISTANT.USER.skill_consent_required")
 	ErrStreamUnavailable               = errors.New("ASSISTANT.SYSTEM.stream_unavailable")
-	ErrSubagentContractInvalid         = errors.New("ASSISTANT.SYSTEM.subagent_contract_invalid")
-	ErrSubagentTimeout                 = errors.New("ASSISTANT.SYSTEM.subagent_timeout")
-	ErrToolObservationInvalid          = errors.New("ASSISTANT.SYSTEM.tool_observation_invalid")
 	ErrUpstreamTimeout                 = errors.New("ASSISTANT.MIDDLEWARE.upstream_timeout")
 	ErrWeatherProviderUnavailable      = errors.New("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
 )
 
-// AppErrorFromDecisionParseFailed returns *AppError for ASSISTANT.SYSTEM.decision_parse_failed (user_message from errors.yaml).
-func AppErrorFromDecisionParseFailed(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.decision_parse_failed")
-	return rterr.NewAppError(code, "回复结构解析失败，已回退为文本输出", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 1)
-}
-
 // AppErrorFromFinanceProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.finance_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromFinanceProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.finance_provider_unavailable")
-	return rterr.NewAppError(code, "金融行情数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "金融行情数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
 }
 
 // AppErrorFromIntersectionEvidenceNotFound returns *AppError for ASSISTANT.USER.intersection_evidence_not_found (user_message from errors.yaml).
@@ -56,22 +44,10 @@ func AppErrorFromIntersectionEvidenceUnavailable(debugMessage string) *rterr.App
 	return rterr.NewAppError(code, "交集证据暂时无法核验，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
-// AppErrorFromInvalidActionPayload returns *AppError for ASSISTANT.USER.invalid_action_payload (user_message from errors.yaml).
-func AppErrorFromInvalidActionPayload(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.USER.invalid_action_payload")
-	return rterr.NewAppError(code, "建议动作数据格式有误，请重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromMarkdownBlockParseFailed returns *AppError for ASSISTANT.SYSTEM.markdown_block_parse_failed (user_message from errors.yaml).
-func AppErrorFromMarkdownBlockParseFailed(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.markdown_block_parse_failed")
-	return rterr.NewAppError(code, "格式化卡片渲染失败，已回退为文本展示", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 1)
-}
-
 // AppErrorFromModelProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.model_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromModelProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.model_provider_unavailable")
-	return rterr.NewAppError(code, "助手模型服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "助手模型服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
 }
 
 // AppErrorFromPageContextUnavailable returns *AppError for ASSISTANT.SYSTEM.page_context_unavailable (user_message from errors.yaml).
@@ -83,7 +59,7 @@ func AppErrorFromPageContextUnavailable(debugMessage string) *rterr.AppError {
 // AppErrorFromPublicSearchProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.public_search_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromPublicSearchProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.public_search_provider_unavailable")
-	return rterr.NewAppError(code, "公开信息检索暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "公开信息检索暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
 }
 
 // AppErrorFromRunIdempotencyConflict returns *AppError for ASSISTANT.USER.run_idempotency_conflict (user_message from errors.yaml).
@@ -125,25 +101,7 @@ func AppErrorFromSkillConsentRequired(debugMessage string) *rterr.AppError {
 // AppErrorFromStreamUnavailable returns *AppError for ASSISTANT.SYSTEM.stream_unavailable (user_message from errors.yaml).
 func AppErrorFromStreamUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.stream_unavailable")
-	return rterr.NewAppError(code, "流式服务暂不可用，已切换为普通回复", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
-}
-
-// AppErrorFromSubagentContractInvalid returns *AppError for ASSISTANT.SYSTEM.subagent_contract_invalid (user_message from errors.yaml).
-func AppErrorFromSubagentContractInvalid(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.subagent_contract_invalid")
-	return rterr.NewAppError(code, "子任务结果格式异常，已忽略并继续主流程", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
-}
-
-// AppErrorFromSubagentTimeout returns *AppError for ASSISTANT.SYSTEM.subagent_timeout (user_message from errors.yaml).
-func AppErrorFromSubagentTimeout(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.subagent_timeout")
-	return rterr.NewAppError(code, "子任务执行超时，已返回当前可用结果", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 3)
-}
-
-// AppErrorFromToolObservationInvalid returns *AppError for ASSISTANT.SYSTEM.tool_observation_invalid (user_message from errors.yaml).
-func AppErrorFromToolObservationInvalid(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.tool_observation_invalid")
-	return rterr.NewAppError(code, "工具结果解析失败，已切换到安全回退路径", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 1)
+	return rterr.NewAppError(code, "流式服务暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
 }
 
 // AppErrorFromUpstreamTimeout returns *AppError for ASSISTANT.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
@@ -155,5 +113,5 @@ func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
 // AppErrorFromWeatherProviderUnavailable returns *AppError for ASSISTANT.MIDDLEWARE.weather_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromWeatherProviderUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.weather_provider_unavailable")
-	return rterr.NewAppError(code, "天气数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 503).WithRecovery("retry", 3)
+	return rterr.NewAppError(code, "天气数据暂不可用，请稍后重试", debugMessage).WithMetadata("unavailable", 0).WithRecovery("retry", 3)
 }

@@ -15,7 +15,15 @@ access:
   commands: none
   cross_context: public_contract_only
   queries: external_port
-relationships: []
+relationships:
+- name: endpoint
+  target_object: user.DeviceRegistration
+  reference_fields: [endpointRef]
+  kind: reference
+  cardinality: N:1
+  consistency: runtime
+  access: external_port
+  on_delete: detach
 capabilities:
 - reliable_async
 - auditable

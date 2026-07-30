@@ -12,6 +12,9 @@ errors:
   kind: USER
   reason: comment_not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [DeleteComment, PinComment, UnpinComment, BindMediaAssetsToComment, HideComment, RestoreComment]
   recovery_action: surface
   dart_const: commentNotFound
   go_const: ErrCommentNotFound
@@ -22,6 +25,9 @@ errors:
   kind: USER
   reason: comment_forbidden_delete
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [DeleteComment, BindMediaAssetsToComment]
   recovery_action: surface
   dart_const: commentForbiddenDelete
   go_const: ErrCommentForbiddenDelete
@@ -32,6 +38,9 @@ errors:
   kind: USER
   reason: comment_pin_forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [PinComment, UnpinComment]
   recovery_action: surface
   dart_const: commentPinForbidden
   go_const: ErrCommentPinForbidden
@@ -42,6 +51,9 @@ errors:
   kind: USER
   reason: comment_pin_invalid_target
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [PinComment, UnpinComment]
   recovery_action: surface
   dart_const: commentPinInvalidTarget
   go_const: ErrCommentPinInvalidTarget
@@ -52,6 +64,9 @@ errors:
   kind: USER
   reason: comment_parent_invalid
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CreateComment]
   recovery_action: refresh
   dart_const: commentParentInvalid
   go_const: ErrCommentParentInvalid
@@ -62,6 +77,9 @@ errors:
   kind: USER
   reason: comment_too_long
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateComment]
   recovery_action: surface
   dart_const: commentTooLong
   go_const: ErrCommentTooLong
@@ -72,6 +90,9 @@ errors:
   kind: USER
   reason: comment_rate_limited
   http_status: 429
+  emitted_by:
+  - surface: http
+    operations: [CreateComment]
   recovery_action: retry
   recovery_after_seconds: 60
   dart_const: commentRateLimited
@@ -83,6 +104,9 @@ errors:
   kind: USER
   reason: comment_attachment_limit_exceeded
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateComment, BindMediaAssetsToComment]
   recovery_action: surface
   dart_const: commentAttachmentLimitExceeded
   go_const: ErrCommentAttachmentLimitExceeded
@@ -93,6 +117,9 @@ errors:
   kind: USER
   reason: comment_attachment_not_ready
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateComment, BindMediaAssetsToComment]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: commentAttachmentNotReady
@@ -104,6 +131,9 @@ errors:
   kind: USER
   reason: comment_moderation_forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [HideComment, RestoreComment]
   recovery_action: surface
   dart_const: commentModerationForbidden
   go_const: ErrCommentModerationForbidden
@@ -114,6 +144,9 @@ errors:
   kind: USER
   reason: comment_status_transition_invalid
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [DeleteComment, PinComment, UnpinComment, BindMediaAssetsToComment, HideComment, RestoreComment]
   recovery_action: refresh
   dart_const: commentStatusTransitionInvalid
   go_const: ErrCommentStatusTransitionInvalid
@@ -124,6 +157,9 @@ errors:
   kind: USER
   reason: comment_sort_invalid
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [ListComments]
   recovery_action: surface
   dart_const: commentSortInvalid
   go_const: ErrCommentSortInvalid

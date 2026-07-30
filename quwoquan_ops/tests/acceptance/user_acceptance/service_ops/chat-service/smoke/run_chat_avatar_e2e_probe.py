@@ -7,7 +7,6 @@ import argparse
 import datetime as dt
 import json
 import os
-import ssl
 import subprocess
 import sys
 import time
@@ -15,6 +14,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 
 def _find_repo_root() -> Path:
@@ -22,20 +22,22 @@ def _find_repo_root() -> Path:
         if (candidate / "quwoquan_app").is_dir() and (candidate / "quwoquan_service").is_dir():
             return candidate
     raise RuntimeError("cannot locate quwoquan repo root")
-from typing import Any
 
 
 REPO_ROOT = _find_repo_root()
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    ENVIRONMENT_CANONICAL_TARGET,
+    get_target,
+    load_environment_topology,
+)
+
 SCENARIO = "chat.group_avatar.sync_display_e2e"
 REPORT_SCHEMA = "chat-avatar-e2e-probe-report"
 CONTRACT_PLACEHOLDER_TOKENS = ("契", "contract", "default-contract")
 CANONICAL_ENVIRONMENTS = {"alpha", "beta", "gamma", "prod"}
-ENVIRONMENT_TARGETS = {
-    "alpha": "alpha-local",
-    "beta": "beta-local",
-    "gamma": "gamma-local",
-    "prod": "prod-hosted",
-}
 
 
 def utc_now() -> str:
@@ -44,21 +46,19 @@ def utc_now() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--env", default=os.environ.get("API_CONTRACT_ENV", "beta"))
+    parser.add_argument(
+        "--env",
+        choices=("alpha", "beta", "gamma", "prod"),
+        required=True,
+    )
     parser.add_argument("--runtime-kind", default="")
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("CHAT_AVATAR_GATEWAY_BASE_URL")
-        or os.environ.get("GAMMA_BASE_URL")
-        or os.environ.get("PROD_GATEWAY_BASE_URL")
-        or "http://127.0.0.1:18080",
+        required=True,
     )
     parser.add_argument(
         "--media-avatar-base-url",
-        default=os.environ.get("CHAT_AVATAR_MEDIA_BASE_URL")
-        or os.environ.get("MEDIA_AVATAR_CDN_BASE_URL")
-        or os.environ.get("PROD_MEDIA_BASE_URL")
-        or "",
+        default="",
     )
     parser.add_argument(
         "--test-auth-token",
@@ -86,9 +86,26 @@ def parse_args() -> argparse.Namespace:
 
 
 def runtime_kind(env_name: str, explicit: str) -> str:
-    if explicit:
-        return explicit
-    return ENVIRONMENT_TARGETS[env_name]
+    canonical = ENVIRONMENT_CANONICAL_TARGET[env_name]
+    if explicit and explicit != canonical:
+        raise ValueError("--runtime-kind must equal canonical topology target")
+    return canonical
+
+
+def validate_topology_endpoints(args: argparse.Namespace) -> None:
+    env_name = normalize_env(args.env)
+    target = get_target(
+        load_environment_topology(),
+        ENVIRONMENT_CANONICAL_TARGET[env_name],
+    )
+    public_bases = target["publicBases"]
+    if args.base_url.rstrip("/") != str(public_bases["api"]).rstrip("/"):
+        raise ValueError("--base-url must equal canonical topology projection")
+    media_avatar = args.media_avatar_base_url.strip().rstrip("/")
+    if media_avatar and media_avatar != str(public_bases["mediaAvatar"]).rstrip("/"):
+        raise ValueError(
+            "--media-avatar-base-url must equal canonical topology projection"
+        )
 
 
 def default_members(args: argparse.Namespace) -> list[str]:
@@ -198,8 +215,7 @@ def request_json(
         data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    ctx = ssl._create_unverified_context()
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read()
         content_type = str(resp.headers.get("Content-Type", "")).lower()
         if raw and "json" not in content_type:
@@ -229,8 +245,7 @@ def request_ok(args: argparse.Namespace, url: str, timeout: int = 8) -> bool:
         headers["Authorization"] = "Bearer " + args.test_auth_token
         headers["X-Test-Auth-Token"] = args.test_auth_token
     req = urllib.request.Request(url, headers=headers, method="GET")
-    ctx = ssl._create_unverified_context()
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         return 200 <= int(resp.status) < 300
 
 
@@ -691,6 +706,11 @@ def write_report(report: dict[str, Any], path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
+    try:
+        validate_topology_endpoints(args)
+    except ValueError as exc:
+        print(f"GATE_BLOCK: {exc}", file=sys.stderr)
+        return 2
     members = default_members(args)
     report = report_template(args, members)
     report_path = Path(args.report)

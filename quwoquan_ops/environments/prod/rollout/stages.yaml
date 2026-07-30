@@ -1,5 +1,5 @@
 # prod 灰度阶段配置（可扩展）
-# 供 deploy-prod-auto / deploy-prod-gray workflow 与 platform-ops-service 读取。
+# 供唯一的 deploy-prod-auto transaction 与 platform-ops-service 读取。
 #
 # 单一真相源边界（防止第二套数）：
 # - 本文件只声明 stage 名称、step、独立执行目标与 rollback_on_slo_gate；

@@ -88,12 +88,9 @@ type config struct {
 	Ranking struct {
 		TermHeatBoost float64 `yaml:"termHeatBoost"`
 		Experiment    struct {
-			Enabled       bool   `yaml:"enabled"`
-			PolicyVersion string `yaml:"policyVersion"`
-			Buckets       []struct {
-				Name      string `yaml:"name"`
-				WeightPct int    `yaml:"weightPct"`
-			} `yaml:"buckets"`
+			Enabled           bool `yaml:"enabled"`
+			ControlWeightPct  int  `yaml:"controlWeightPct"`
+			TermHeatWeightPct int  `yaml:"termHeatWeightPct"`
 		} `yaml:"experiment"`
 	} `yaml:"ranking"`
 
@@ -204,6 +201,7 @@ func main() {
 	var queryLogSink application.QueryLogSink
 	var recentFacade *recentsearch.Facade
 	var accountClosureConsumer *mqadapter.UserAccountClosedConsumer
+	var accountRestrictionProjection *accountclosureinfra.MongoAccountRestrictionProjection
 	var feedbackSignalRelay *feedbackstore.SignalRelay
 	if strings.TrimSpace(cfg.Mongo.URI) == "" {
 		log.Fatalf("%s mongo.uri is required", serviceName)
@@ -277,6 +275,22 @@ func main() {
 				err,
 			)
 		}
+		accountRestrictionProjection, err =
+			accountclosureinfra.NewMongoAccountRestrictionProjection(db)
+		if err != nil {
+			log.Fatalf(
+				"%s user account restriction projection init failed: %v",
+				serviceName,
+				err,
+			)
+		}
+		if err := accountRestrictionProjection.EnsureIndexes(ctx); err != nil {
+			log.Fatalf(
+				"%s user account restriction projection indexes failed: %v",
+				serviceName,
+				err,
+			)
+		}
 		accountClosureConsumer, err = mqadapter.NewUserAccountClosedConsumer(
 			messageTransport,
 			accountClosureProjection,
@@ -292,6 +306,9 @@ func main() {
 				err,
 			)
 		}
+		accountClosureConsumer.WithUserAccountRestrictionProjection(
+			accountRestrictionProjection,
+		)
 		if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
 			log.Fatalf(
 				"%s UserAccountClosed consumer group init failed: %v",
@@ -303,12 +320,28 @@ func main() {
 		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	}
 
-	searchSvc := application.NewSearchService(built.Backend,
+	accountRestrictedBackend, err := application.NewAccountRestrictionBackend(
+		built.Backend,
+		accountRestrictionProjection,
+	)
+	if err != nil {
+		log.Fatalf("%s account restriction backend init failed: %v", serviceName, err)
+	}
+	searchSvc := application.NewSearchService(accountRestrictedBackend,
 		application.WithQueryLogSink(queryLogSink),
 		application.WithSearchSignalPublisher(searchSignalPublisher),
 		application.WithLogger(logger))
 	feedbackSvc := feedbackapplication.NewService(feedbackSink)
-	decorator := application.NewRankingDecorator(termHeat, application.NewExperiments(experimentConfig(cfg)), cfg.Ranking.TermHeatBoost, logger)
+	experiments, err := application.NewExperiments(experimentConfig(cfg))
+	if err != nil {
+		log.Fatalf("%s ranking experiment init failed: %v", serviceName, err)
+	}
+	decorator := application.NewRankingDecorator(
+		termHeat,
+		experiments,
+		cfg.Ranking.TermHeatBoost,
+		logger,
+	)
 	contentBaseURL := strings.TrimSpace(cfg.ContentService.BaseURL)
 	if override, ok := configProvider.GetString("CONTENT_SERVICE_BASE_URL"); ok {
 		contentBaseURL = override
@@ -443,7 +476,6 @@ func main() {
 		ServiceInstanceID: hostname(),
 	}
 	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
-	rateLimited := rtgov.RateLimitMiddleware(rtgov.NewRateLimiter(1000))(withObs)
 
 	server := &http.Server{
 		Addr: cfg.Service.HTTP.Addr,
@@ -451,7 +483,7 @@ func main() {
 			AccessTokenVerifier:      accessVerifier,
 			DeviceTicketVerifier:     deviceVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(withObs),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -646,14 +678,19 @@ func toSceneConfig(cfg redisSceneCfg) rtredis.SceneConfig {
 
 // experimentConfig maps the service config AB block into the application config.
 func experimentConfig(cfg config) application.ExperimentConfig {
-	out := application.ExperimentConfig{
-		Enabled:       cfg.Ranking.Experiment.Enabled,
-		PolicyVersion: cfg.Ranking.Experiment.PolicyVersion,
+	return application.ExperimentConfig{
+		Enabled: cfg.Ranking.Experiment.Enabled,
+		Buckets: []application.ExperimentBucket{
+			{
+				Name:      application.BucketControl,
+				WeightPct: cfg.Ranking.Experiment.ControlWeightPct,
+			},
+			{
+				Name:      application.BucketTermHeat,
+				WeightPct: cfg.Ranking.Experiment.TermHeatWeightPct,
+			},
+		},
 	}
-	for _, b := range cfg.Ranking.Experiment.Buckets {
-		out.Buckets = append(out.Buckets, application.ExperimentBucket{Name: b.Name, WeightPct: b.WeightPct})
-	}
-	return out
 }
 
 // startHeatRebuildLoop rebuilds the search-term heat read model on a ticker and

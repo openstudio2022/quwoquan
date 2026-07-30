@@ -1,5 +1,7 @@
 kind: append_only_fact
 description: RecommendationSignalFact 的领域对象契约。
+lifecycle:
+  immutable: true
 identity:
   fields:
   - signalId

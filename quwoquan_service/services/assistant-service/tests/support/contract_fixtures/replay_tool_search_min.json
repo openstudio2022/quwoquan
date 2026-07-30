@@ -15,8 +15,8 @@
       "stage": "reasoning",
       "text": "Need fresh search evidence before answering.",
       "structuredDelta": {
-        "nextAction": "call_tool",
-        "toolName": "mock_search"
+        "nextAction": "tool_call",
+        "toolName": "web_search"
       },
       "finishReason": "tool_use"
     },
@@ -40,7 +40,7 @@
   ],
   "fakeToolScript": [
     {
-      "toolName": "mock_search",
+      "toolName": "web_search",
       "input": {
         "query": "latest AI chip news"
       },
@@ -61,6 +61,14 @@
       "eventType": "completed"
     }
   ],
+  "expectations": {
+    "selectedSkillId": "news_briefing",
+    "selectedDomainId": "news",
+    "expectedToolNames": ["web_search"],
+    "expectedClarificationSlotIds": [],
+    "expectedReferenceUrls": [],
+    "finalAnswerMode": "full"
+  },
   "expectedRunResponse": {
     "conversationId": "acv_replay_tool",
     "turnId": "atn_replay_tool",

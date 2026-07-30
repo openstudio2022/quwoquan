@@ -16,6 +16,7 @@
     "targetNames",
     "sourceProviders",
     "retryOf",
+    "gitBranch",
     "gitCommitSha",
     "sourceDigest",
     "entityCatalogDigest",
@@ -48,6 +49,7 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "retryOf": { "type": ["string", "null"] },
+    "gitBranch": { "type": "string", "minLength": 1 },
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "sourceDigest": {
       "type": "object",

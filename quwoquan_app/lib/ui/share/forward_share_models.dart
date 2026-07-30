@@ -7,10 +7,20 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 enum AppForwardSubjectKind {
   profileQr,
-  post,
+  contentPost,
   userProfile,
   entityProfile,
   circle,
+}
+
+extension AppForwardSubjectKindWire on AppForwardSubjectKind {
+  String get wire => switch (this) {
+    AppForwardSubjectKind.profileQr => 'profile_qr',
+    AppForwardSubjectKind.contentPost => 'content_post',
+    AppForwardSubjectKind.userProfile => 'user_profile',
+    AppForwardSubjectKind.entityProfile => 'entity_profile',
+    AppForwardSubjectKind.circle => 'circle',
+  };
 }
 
 enum AppForwardRecipientKind { conversation, user, group }
@@ -52,7 +62,7 @@ class AppForwardPayload {
 
   ChatMessageCardCommand toMessageCardCommand({String message = ''}) {
     return ChatMessageCardCommand(
-      kind: kind.name,
+      kind: kind.wire,
       title: title,
       subtitle: subtitle,
       thumbnailUrl: thumbnailUrl,

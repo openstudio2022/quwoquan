@@ -86,6 +86,12 @@ def _seed_source(
         f"{entity}在秋季以彩林景观受到关注，夏季则适合避暑和观水。"
         f"{entity}周边交通以成都方向进入为主，游客通常需要预留较完整的一天。"
         f"{entity}因自然景观集中，适合实体主页介绍位置、景观类型、季节和交通条件。"
+        f"{entity}的核心游览区通常由步道、观景平台和水体景观串联，路线安排需要结合海拔变化。"
+        f"{entity}雨季道路与步道湿滑，冬季低温和积雪会影响通行，出行前应核对开放信息。"
+        f"{entity}周边住宿和补给点分布并不均匀，自驾与公共交通游客需要提前规划返程时间。"
+        f"{entity}的生态环境较为敏感，游览时应遵守保护要求，不离开开放线路并带走随身垃圾。"
+        f"{entity}主要观景点在不同时段的光照和能见度差异明显，清晨与傍晚的游览条件并不相同。"
+        f"{entity}节假日客流集中时停车和接驳等待时间会增加，错峰进入有助于保持完整游览体验。"
     )
     identities = {
         "维基百科": ("wikipedia", "wikipedia_api", f"https://zh.wikipedia.org/wiki/{entity}"),
@@ -287,6 +293,7 @@ def _seed_v3_creator_only_release(*, broken_profile_ref: bool = False) -> None:
         {
             "schema": "quwoquan_data.release",
             "releaseId": RELEASE,
+            "sourceOwner": "qwq_data",
             "canonicalMerkle": canonical_merkle,
         },
     )
@@ -377,7 +384,7 @@ def test_runtime_integrity_allows_same_asset_contract_before_release():
     assert "base draft ledger does not map" in text
 
 
-def test_runtime_integrity_records_unverified_travel_rights_without_blocking():
+def test_runtime_integrity_blocks_unverified_travel_rights_without_proof():
     _reset()
     base = _seed_source("测试实体甲", "01.base", kind="维基百科")
     _seed_execution_post(
@@ -405,7 +412,8 @@ def test_runtime_integrity_records_unverified_travel_rights_without_blocking():
     report = scan_runtime_batch_integrity(TASK)
     text = "\n".join(report["issues"])
 
-    assert "missing required rights proof" not in text
+    assert not report["passed"]
+    assert "missing required rights proof" in text
     assert "missing rights audit status" not in text
 
 

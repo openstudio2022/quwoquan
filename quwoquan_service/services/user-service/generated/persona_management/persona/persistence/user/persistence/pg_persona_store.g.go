@@ -27,11 +27,11 @@ func NewPGPersonaStoreBase(pool *pgxpool.Pool) *PGPersonaStoreBase {
 	return &PGPersonaStoreBase{pool: pool}
 }
 
-const PersonaCols = `sub_account_id, user_id, display_name, user_handle, phone, email, bio, avatar_media_asset_id, avatar_url, avatar_version, background_media_asset_id, background_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, isolation_level, purpose_hint, status, retired_at, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, version, created_at, updated_at`
+const PersonaCols = `persona_id, user_id, display_name, nickname_customized, user_handle, bio, identity_tags, taxonomy_release_id, gender, birth_date, region, region_tag_ref, avatar_media_asset_id, avatar_url, avatar_version, background_media_asset_id, background_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, isolation_level, purpose_hint, status, retired_at, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, version, created_at, updated_at`
 
 func ScanPersona(row pgx.Row) (*model.Persona, error) {
 	e := &model.Persona{}
-	err := row.Scan(&e.SubAccountID, &e.UserID, &e.DisplayName, &e.UserHandle, &e.Phone, &e.Email, &e.Bio, &e.AvatarMediaAssetID, &e.AvatarURL, &e.AvatarVersion, &e.BackgroundMediaAssetID, &e.BackgroundURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.IsolationLevel, &e.PurposeHint, &e.Status, &e.RetiredAt, &e.InheritsProfileFromOwner, &e.OverriddenProfileFields, &e.LastProfileSyncAt, &e.LastProfileSyncSource, &e.LastActivatedAt, &e.Version, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.PersonaID, &e.UserID, &e.DisplayName, &e.NicknameCustomized, &e.UserHandle, &e.Bio, &e.IdentityTags, &e.TaxonomyReleaseID, &e.Gender, &e.BirthDate, &e.Region, &e.RegionTagRef, &e.AvatarMediaAssetID, &e.AvatarURL, &e.AvatarVersion, &e.BackgroundMediaAssetID, &e.BackgroundURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.IsolationLevel, &e.PurposeHint, &e.Status, &e.RetiredAt, &e.InheritsProfileFromOwner, &e.OverriddenProfileFields, &e.LastProfileSyncAt, &e.LastProfileSyncSource, &e.LastActivatedAt, &e.Version, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -43,7 +43,7 @@ func ScanPersona(row pgx.Row) (*model.Persona, error) {
 
 // FindByID retrieves a Persona by primary key.
 func (s *PGPersonaStoreBase) FindByID(ctx context.Context, id string) (*model.Persona, error) {
-	row := s.pool.QueryRow(ctx, `SELECT `+PersonaCols+` FROM personas WHERE sub_account_id = $1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT `+PersonaCols+` FROM personas WHERE persona_id = $1`, id)
 	return ScanPersona(row)
 }
 
@@ -53,8 +53,8 @@ func (s *PGPersonaStoreBase) Create(ctx context.Context, e *model.Persona) error
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO personas (sub_account_id, user_id, display_name, user_handle, phone, email, bio, avatar_media_asset_id, avatar_url, avatar_version, background_media_asset_id, background_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, isolation_level, purpose_hint, status, retired_at, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, version, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)`,
-		e.SubAccountID, e.UserID, e.DisplayName, e.UserHandle, e.Phone, e.Email, e.Bio, e.AvatarMediaAssetID, e.AvatarURL, e.AvatarVersion, e.BackgroundMediaAssetID, e.BackgroundURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.IsolationLevel, e.PurposeHint, e.Status, e.RetiredAt, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.Version, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO personas (persona_id, user_id, display_name, nickname_customized, user_handle, bio, identity_tags, taxonomy_release_id, gender, birth_date, region, region_tag_ref, avatar_media_asset_id, avatar_url, avatar_version, background_media_asset_id, background_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, isolation_level, purpose_hint, status, retired_at, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, version, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)`,
+		e.PersonaID, e.UserID, e.DisplayName, e.NicknameCustomized, e.UserHandle, e.Bio, e.IdentityTags, e.TaxonomyReleaseID, e.Gender, e.BirthDate, e.Region, e.RegionTagRef, e.AvatarMediaAssetID, e.AvatarURL, e.AvatarVersion, e.BackgroundMediaAssetID, e.BackgroundURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.IsolationLevel, e.PurposeHint, e.Status, e.RetiredAt, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.Version, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -62,19 +62,19 @@ func (s *PGPersonaStoreBase) Create(ctx context.Context, e *model.Persona) error
 func (s *PGPersonaStoreBase) Update(ctx context.Context, e *model.Persona) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE personas SET user_id=$2, display_name=$3, user_handle=$4, phone=$5, email=$6, bio=$7, avatar_media_asset_id=$8, avatar_url=$9, avatar_version=$10, background_media_asset_id=$11, background_url=$12, caller_ringtone_id=$13, theme_mode_override=$14, font_size_preset_override=$15, appearance_override_updated_at=$16, is_primary=$17, is_private=$18, is_active=$19, isolation_level=$20, purpose_hint=$21, status=$22, retired_at=$23, inherits_profile_from_owner=$24, overridden_profile_fields=$25, last_profile_sync_at=$26, last_profile_sync_source=$27, last_activated_at=$28, version=$29, created_at=$30, updated_at=$31 WHERE sub_account_id = $1`,
-		e.SubAccountID, e.UserID, e.DisplayName, e.UserHandle, e.Phone, e.Email, e.Bio, e.AvatarMediaAssetID, e.AvatarURL, e.AvatarVersion, e.BackgroundMediaAssetID, e.BackgroundURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.IsolationLevel, e.PurposeHint, e.Status, e.RetiredAt, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.Version, e.CreatedAt, e.UpdatedAt)
+		`UPDATE personas SET user_id=$2, display_name=$3, nickname_customized=$4, user_handle=$5, bio=$6, identity_tags=$7, taxonomy_release_id=$8, gender=$9, birth_date=$10, region=$11, region_tag_ref=$12, avatar_media_asset_id=$13, avatar_url=$14, avatar_version=$15, background_media_asset_id=$16, background_url=$17, caller_ringtone_id=$18, theme_mode_override=$19, font_size_preset_override=$20, appearance_override_updated_at=$21, is_primary=$22, is_private=$23, is_active=$24, isolation_level=$25, purpose_hint=$26, status=$27, retired_at=$28, inherits_profile_from_owner=$29, overridden_profile_fields=$30, last_profile_sync_at=$31, last_profile_sync_source=$32, last_activated_at=$33, version=$34, created_at=$35, updated_at=$36 WHERE persona_id = $1`,
+		e.PersonaID, e.UserID, e.DisplayName, e.NicknameCustomized, e.UserHandle, e.Bio, e.IdentityTags, e.TaxonomyReleaseID, e.Gender, e.BirthDate, e.Region, e.RegionTagRef, e.AvatarMediaAssetID, e.AvatarURL, e.AvatarVersion, e.BackgroundMediaAssetID, e.BackgroundURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.IsolationLevel, e.PurposeHint, e.Status, e.RetiredAt, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.Version, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("Persona not found: %s", e.SubAccountID)
+		return fmt.Errorf("Persona not found: %s", e.PersonaID)
 	}
 	return nil
 }
 
 // Delete removes a Persona by primary key.
 func (s *PGPersonaStoreBase) Delete(ctx context.Context, id string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM personas WHERE sub_account_id = $1`, id)
+	_, err := s.pool.Exec(ctx, `DELETE FROM personas WHERE persona_id = $1`, id)
 	return err
 }

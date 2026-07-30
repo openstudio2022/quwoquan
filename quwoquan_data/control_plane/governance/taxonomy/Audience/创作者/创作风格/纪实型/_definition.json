@@ -2,6 +2,7 @@
   "label": "纪实型",
   "labelEn": "Documentary Style",
   "description": "真实记录风格",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

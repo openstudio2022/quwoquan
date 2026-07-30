@@ -43,6 +43,39 @@
         "home_showcase_core",
         "profile_share_interaction_core"
       ],
+      "curation": {
+        "postIds": [
+          "fixture_moment_001",
+          "fixture_post_lifestyle_001",
+          "fixture_photo_001",
+          "fixture_photo_002",
+          "fixture_photo_003",
+          "fixture_post_photography_001",
+          "fixture_post_photography_002",
+          "fixture_post_photography_006",
+          "fixture_post_photography_007",
+          "fixture_post_photography_011",
+          "fixture_post_photography_012",
+          "fixture_post_photography_016",
+          "fixture_post_photography_017",
+          "fixture_post_photography_021",
+          "fixture_post_photography_022",
+          "fixture_post_photography_026",
+          "fixture_post_photography_027",
+          "fixture_post_photography_031",
+          "fixture_article_001",
+          "fixture_video_001",
+          "fixture_post_travel_001",
+          "fixture_post_citywalk_001",
+          "fixture_post_tech_001",
+          "fixture_post_outdoor_001"
+        ],
+        "excludedObjectIntersectionIds": [
+          "u_lin",
+          "c_photo",
+          "e_pku"
+        ]
+      },
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
       ],
@@ -55,9 +88,9 @@
         "/content/posts/fixture_photo_001/comments?sort=hot",
         "/content/posts/fixture_photo_001/comments?sort=latest",
         "/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
-        "/content/sub-accounts/{activePersonaId}/interactions/received?type=share",
-        "/content/sub-accounts/{activePersonaId}/interactions/sent?type=share",
-        "/content/sub-accounts/{activePersonaId}/author-impact"
+        "/content/personas/{activePersonaId}/interactions/received?type=share",
+        "/content/personas/{activePersonaId}/interactions/sent?type=share",
+        "/content/personas/{activePersonaId}/author-impact"
       ]
     },
     {
@@ -67,6 +100,20 @@
         "circle_core",
         "circle_group_chat_link_core"
       ],
+      "curation": {
+        "circleIds": [
+          "fixture_circle_life",
+          "fixture_circle_photo",
+          "fixture_circle_tech",
+          "fixture_circle_travel",
+          "fixture_circle_food",
+          "fixture_circle_city",
+          "fixture_circle_travel_01",
+          "fixture_circle_citywalk_01",
+          "fixture_circle_tech_01",
+          "fixture_circle_outdoor_01"
+        ]
+      },
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
       ],
@@ -85,6 +132,22 @@
         "chat_contacts_core",
         "chat_group_flow_core"
       ],
+      "curation": {
+        "conversationIds": [
+          "fixture_conv_direct",
+          "fixture_conv_group",
+          "fixture_conv_photo_group",
+          "fixture_conv_article_direct"
+        ],
+        "contactUserIds": [
+          "fixture_user_friend",
+          "fixture_user_weekend_1",
+          "fixture_user_weekend_2",
+          "fixture_user_photo",
+          "fixture_user_travel",
+          "fixture_user_article"
+        ]
+      },
       "resetScope": "fixture_chat_*",
       "targetStore": "chat-service:gamma_test_namespace",
       "verifiedEndpoints": [
@@ -105,6 +168,25 @@
         "contact_discovery_core",
         "following_subject_core"
       ],
+      "curation": {
+        "userIds": [
+          "fixture_user_current",
+          "fixture_user_photo",
+          "fixture_user_travel",
+          "fixture_user_video",
+          "fixture_user_article",
+          "fixture_user_friend",
+          "fixture_user_weekend_1",
+          "fixture_user_weekend_2",
+          "fixture_user_owner",
+          "fixture_user_travel_owner",
+          "fixture_user_commenter",
+          "fixture_user_travel_01",
+          "fixture_user_citywalk_01",
+          "fixture_user_tech_01",
+          "fixture_user_outdoor_01"
+        ]
+      },
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
       ],
@@ -126,6 +208,31 @@
         "entity_claim_core",
         "entity_picker_core"
       ],
+      "curation": {
+        "homepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi",
+          "homepage_sight_dongqian_lake",
+          "homepage_sight_west_lake",
+          "fixture_homepage_university_pku",
+          "fixture_homepage_travel_photo_west_lake",
+          "homepage_restaurant_night_market",
+          "homepage_sight_emeishan",
+          "fixture_homepage_school_neworiental",
+          "fixture_homepage_photo_spot_hengshu_studio"
+        ],
+        "pickerHomepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi",
+          "homepage_sight_west_lake",
+          "fixture_homepage_university_pku",
+          "fixture_homepage_travel_photo_west_lake",
+          "homepage_restaurant_night_market",
+          "homepage_sight_emeishan"
+        ]
+      },
       "verificationScopes": [
         "object-homepage-gamma-real-data-closure"
       ],
@@ -345,7 +452,7 @@
           "path": "/me",
           "assertion": "my_profile",
           "expectedOwnerUserId": "{activeOwnerId}",
-          "expectedSubAccountId": "{activePersonaId}"
+          "expectedPersonaId": "{activePersonaId}"
         }
       ]
     }

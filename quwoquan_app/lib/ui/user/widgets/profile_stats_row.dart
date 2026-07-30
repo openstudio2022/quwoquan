@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 /// 用户主页统计行 —— 共享 [ObjectStatsRow] 的薄封装。
 ///
-/// 真相源已下沉到 `object_page/object_stats_row.dart`；此处把 [SubAccountProfileViewData]
+/// 真相源已下沉到 `object_page/object_stats_row.dart`；此处把 [PersonaProfileViewData]
 /// 映射为粉丝/关注/获赞/圈子四项 [ObjectStatItem]，保留 `profile-stats-inline-row` 根 key
 /// 与既有点击分发顺序（fans/following/likes/circles）。
 class ProfileStatsRow extends StatelessWidget {
@@ -19,7 +19,7 @@ class ProfileStatsRow extends StatelessWidget {
   });
 
   final bool isDark;
-  final SubAccountProfileViewData? profile;
+  final PersonaProfileViewData? profile;
   final void Function(String type)? onStatTap;
 
   @override

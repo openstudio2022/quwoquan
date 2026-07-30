@@ -6,6 +6,9 @@ errors:
   kind: USER
   reason: policy_release_invalid
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantPolicyRelease]
   recovery_action: surface
   dart_const: policyReleaseInvalid
   go_const: ErrPolicyReleaseInvalid
@@ -16,6 +19,9 @@ errors:
   kind: USER
   reason: policy_release_digest_mismatch
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantPolicyRelease]
   recovery_action: surface
   dart_const: policyReleaseDigestMismatch
   go_const: ErrPolicyReleaseDigestMismatch
@@ -26,6 +32,9 @@ errors:
   kind: USER
   reason: policy_release_idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantPolicyRelease]
   recovery_action: refresh
   dart_const: policyReleaseIdempotencyConflict
   go_const: ErrPolicyReleaseIdempotencyConflict
@@ -36,6 +45,9 @@ errors:
   kind: SYSTEM
   reason: policy_release_storage_unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StageAssistantPolicyRelease]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: policyReleaseStorageUnavailable

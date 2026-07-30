@@ -6,11 +6,11 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
   Future<void> _shareProfile(BuildContext context) async {
     final state = ref.read(profileNotifierProvider(widget.userId));
     final profile = state.profile;
-    final username = (profile?.username ?? '').trim().isNotEmpty
-        ? profile!.username.trim()
+    final userHandle = (profile?.userHandle ?? '').trim().isNotEmpty
+        ? profile!.userHandle.trim()
         : widget.userId;
     final landingUrl = AppPublicContentLinks.publicWebUrlForPath(
-      AppLinkTemplates.userWebPath(username),
+      AppLinkTemplates.userWebPath(userHandle),
     );
     final displayName = (profile?.displayName ?? '').trim();
     final bio = (profile?.bio ?? '').trim();
@@ -192,7 +192,7 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
           .read(
             personaRelationshipBlockWriterProvider(AppUiSurfaces.profileHome),
           )
-          .blockUser(BlockUserCommand(targetSubAccountId: widget.userId));
+          .blockUser(BlockUserCommand(targetPersonaId: widget.userId));
       ref.invalidate(profileNotifierProvider(widget.userId));
       unawaited(
         ref

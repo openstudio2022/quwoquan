@@ -2,6 +2,7 @@
   "label": "特效",
   "labelEn": "Visual Effects",
   "description": "视频特效与后期处理",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

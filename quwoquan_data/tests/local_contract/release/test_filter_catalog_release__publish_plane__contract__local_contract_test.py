@@ -45,12 +45,20 @@ class _Request:
 
 
 class _FakeTransport:
-    def __init__(self, *, environment: str, rollback_release_id: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        environment: str,
+        rollback_release_id: str = "",
+        active_matches: bool = True,
+    ) -> None:
         self._input = load_environment_import(
             repo_root=REPO_ROOT,
             environment=environment,
         )
         self._rollback_release_id = rollback_release_id
+        self._active_matches = active_matches
+        self._active_read_count = 0
         self.requests: list[_Request] = []
 
     def request_json(
@@ -95,10 +103,17 @@ class _FakeTransport:
                     status=200,
                     body=self._rollback_active_body(),
                 )
+            should_match = self._active_matches or self._active_read_count > 0
+            self._active_read_count += 1
             return FilterCatalogHttpResponse(
                 status=200,
                 body={
                     **self._release_body("active"),
+                    "canonicalDigest": (
+                        self._input.canonical_digest
+                        if should_match
+                        else "0" * 64
+                    ),
                     "categoryCount": self._input.category_count,
                     "presetCount": self._input.preset_count,
                     "activatedAt": "2026-07-21T00:00:00Z",
@@ -173,7 +188,7 @@ def test_public_tls_publish_uses_system_trust_context():
 
 
 def test_gamma_publish_uses_metadata_paths_idempotency_and_canonical_payload():
-    transport = _FakeTransport(environment="gamma")
+    transport = _FakeTransport(environment="gamma", active_matches=False)
 
     receipt = publish_filter_catalog(
         repo_root=REPO_ROOT,
@@ -185,11 +200,13 @@ def test_gamma_publish_uses_metadata_paths_idempotency_and_canonical_payload():
     )
 
     assert [request.method for request in transport.requests] == [
+        "GET",
         "POST",
         "POST",
         "GET",
     ]
-    stage, activate, public_read = transport.requests
+    initial_read, stage, activate, public_read = transport.requests
+    assert initial_read.url == f"{_api_base('gamma')}/content/filter-catalog"
     assert stage.url.endswith("/internal/content/filter-catalog-releases")
     assert activate.url.endswith(
         "/internal/content/filter-catalog-releases/"

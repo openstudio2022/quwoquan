@@ -43,90 +43,96 @@ final class RemoteChatConversationMembershipCommandWriter
   invocationContext;
 
   @override
-  Future<ChatCommandAck> addMembers(ChatAddConversationMembersCommand command) {
+  Future<ChatCommandAck> addMembers(
+    ChatAddConversationMembersCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipAddMembers(
       command,
-      context: invocationContext(
-        ChatRequestPageIds.addMembers,
-        command.idempotencyKey,
-      ),
+      context: invocationContext(ChatRequestPageIds.addMembers, idempotencyKey),
     );
   }
 
   @override
   Future<ChatCommandAck> removeMember(
-    ChatRemoveConversationMemberCommand command,
-  ) {
+    ChatRemoveConversationMemberCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipRemoveMember(
       command,
       context: invocationContext(
         ChatRequestPageIds.removeMember,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatCommandAck> leaveConversation(
-    ChatLeaveConversationCommand command,
-  ) {
+    ChatLeaveConversationCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipLeaveConversation(
       command,
       context: invocationContext(
         ChatRequestPageIds.leaveConversation,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatCommandAck> inviteAssistant(
-    ChatInviteConversationAssistantCommand command,
-  ) {
+    ChatInviteConversationAssistantCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipInviteAssistant(
       command,
       context: invocationContext(
         ChatRequestPageIds.inviteAssistant,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatCommandAck> removeAssistant(
-    ChatRemoveConversationAssistantCommand command,
-  ) {
+    ChatRemoveConversationAssistantCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipRemoveAssistant(
       command,
       context: invocationContext(
         ChatRequestPageIds.removeAssistant,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatCommandAck> transferOwnership(
-    ChatTransferConversationOwnershipCommand command,
-  ) {
+    ChatTransferConversationOwnershipCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipTransferOwnership(
       command,
       context: invocationContext(
         ChatRequestPageIds.transferOwnership,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatCommandAck> updateAdmins(
-    ChatUpdateConversationAdminsCommand command,
-  ) {
+    ChatUpdateConversationAdminsCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationMembershipUpdateGroupAdmins(
       command,
       context: invocationContext(
         ChatRequestPageIds.updateGroupAdmins,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }

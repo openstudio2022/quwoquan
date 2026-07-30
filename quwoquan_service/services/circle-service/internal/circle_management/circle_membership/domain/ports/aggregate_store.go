@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	circlemodel "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 	membershipmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/domain/model"
 )
 
@@ -56,31 +57,31 @@ type MembershipReader interface {
 // CircleSummary is a named read projection; it is not the Circle aggregate
 // and cannot be passed to a Circle command or Store.
 type CircleSummary struct {
-	ID                       string    `json:"circleId"`
-	Name                     string    `json:"name"`
-	Description              string    `json:"description"`
-	CoverURL                 string    `json:"coverUrl"`
-	IconURL                  string    `json:"iconUrl"`
-	OwnerPersonaID           string    `json:"ownerPersonaId"`
-	OwnerDisplayNameSnapshot string    `json:"ownerDisplayNameSnapshot"`
-	Category                 string    `json:"category"`
-	SubCategory              string    `json:"subCategory"`
-	Tags                     []string  `json:"tags"`
-	MemberCount              int64     `json:"memberCount"`
-	PostCount                int64     `json:"postCount"`
-	WeeklyActiveCount        int64     `json:"weeklyActiveCount"`
-	State                    string    `json:"state"`
-	Visibility               string    `json:"visibility"`
-	JoinPolicy               string    `json:"joinPolicy"`
-	Kind                     string    `json:"kind"`
-	DisplaySubjectType       string    `json:"displaySubjectType"`
-	FollowEnabled            bool      `json:"followEnabled"`
-	DefaultPublicGroupID     string    `json:"defaultPublicGroupId"`
-	LinkedHomepageID         string    `json:"linkedHomepageId"`
-	LinkedHomepageType       string    `json:"linkedHomepageType"`
-	LinkedHomepageTitle      string    `json:"linkedHomepageTitle"`
-	CreatedAt                time.Time `json:"createdAt"`
-	UpdatedAt                time.Time `json:"updatedAt"`
+	ID                       string                               `json:"circleId"`
+	Name                     string                               `json:"name"`
+	Description              string                               `json:"description"`
+	CoverURL                 string                               `json:"coverUrl"`
+	IconURL                  string                               `json:"iconUrl"`
+	OwnerPersonaID           string                               `json:"ownerPersonaId"`
+	OwnerDisplayNameSnapshot string                               `json:"ownerDisplayNameSnapshot"`
+	Category                 string                               `json:"category"`
+	SubCategory              string                               `json:"subCategory"`
+	Tags                     []string                             `json:"tags"`
+	MemberCount              int64                                `json:"memberCount"`
+	PostCount                int64                                `json:"postCount"`
+	WeeklyActiveCount        int64                                `json:"weeklyActiveCount"`
+	Status                   circlemodel.CircleStatus             `json:"status"`
+	Visibility               circlemodel.CircleVisibility         `json:"visibility"`
+	JoinPolicy               circlemodel.CircleJoinPolicy         `json:"joinPolicy"`
+	Kind                     circlemodel.CircleKind               `json:"kind"`
+	DisplaySubjectType       circlemodel.CircleDisplaySubjectType `json:"displaySubjectType"`
+	FollowEnabled            bool                                 `json:"followEnabled"`
+	DefaultPublicGroupID     string                               `json:"defaultPublicGroupId"`
+	LinkedHomepageID         string                               `json:"linkedHomepageId"`
+	LinkedHomepageType       circlemodel.HomepageType             `json:"linkedHomepageType"`
+	LinkedHomepageTitle      string                               `json:"linkedHomepageTitle"`
+	CreatedAt                time.Time                            `json:"createdAt"`
+	UpdatedAt                time.Time                            `json:"updatedAt"`
 }
 
 type PersonaCircleQuery struct {

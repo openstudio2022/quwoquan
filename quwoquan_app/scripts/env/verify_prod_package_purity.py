@@ -22,13 +22,14 @@ FORBIDDEN_TOKENS = (
     "requiresSeedReset",
     ".example",
     ".test",
+    ".sim.",
     "127.0.0.1",
     "10.0.2.2",
     "192.168.",
     "mock-cdn.example.com",
 )
 PROD_SIM_PACKAGE_ALLOWED_HOST_TOKENS = frozenset(
-    {".test", "127.0.0.1", "10.0.2.2", "192.168."}
+    {".test", ".sim.", "127.0.0.1", "10.0.2.2", "192.168."}
 )
 PROD_SOURCES = [
     ROOT / "quwoquan_app" / "configs" / "prod" / "app_runtime.yaml",

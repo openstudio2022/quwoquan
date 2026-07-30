@@ -145,10 +145,8 @@ func (relay *OutboxRelay) FlushOnce(ctx context.Context) (int, error) {
 					{Name: "aggregateType", Value: "AssistantLearningFact"},
 					{Name: "aggregateId", Value: event.Payload.EventID},
 					{
-						Name: "aggregateVersion",
-						Value: strconv.Itoa(
-							event.Payload.EventVersion,
-						),
+						Name:  "aggregateVersion",
+						Value: strconv.FormatInt(event.AppendSequence, 10),
 					},
 					{
 						Name:  "appendSequence",

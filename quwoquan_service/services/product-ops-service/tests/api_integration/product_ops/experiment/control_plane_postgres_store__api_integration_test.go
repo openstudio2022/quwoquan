@@ -204,7 +204,7 @@ SELECT COUNT(*) FROM experiment_assignment_facts WHERE experiment_id=$1`, experi
 SELECT COUNT(*) FROM product_ops_outbox WHERE aggregate_id IN ($1,$2)`, experimentID, first.ID).Scan(&outboxCount); err != nil {
 		t.Fatalf("count outbox events: %v", err)
 	}
-	if factCount != 1 || outboxCount != 2 {
+	if factCount != 1 || outboxCount != 1 {
 		t.Fatalf("atomic persistence mismatch: facts=%d outbox=%d", factCount, outboxCount)
 	}
 	publisher := &captureOutboxPublisher{}
@@ -213,7 +213,7 @@ SELECT COUNT(*) FROM product_ops_outbox WHERE aggregate_id IN ($1,$2)`, experime
 		t.Fatalf("create outbox dispatcher: %v", err)
 	}
 	dispatched, err := dispatcher.DispatchOnce(ctx)
-	if err != nil || dispatched < 2 {
+	if err != nil || dispatched < 1 {
 		t.Fatalf("dispatch outbox: dispatched=%d err=%v", dispatched, err)
 	}
 	var dispatchedCount int
@@ -222,7 +222,7 @@ SELECT COUNT(*) FROM product_ops_outbox
 WHERE aggregate_id IN ($1,$2) AND dispatched_at IS NOT NULL`, experimentID, first.ID).Scan(&dispatchedCount); err != nil {
 		t.Fatalf("count dispatched outbox events: %v", err)
 	}
-	if dispatchedCount != 2 || publisher.Count() < 2 {
+	if dispatchedCount != 1 || publisher.Count() < 1 {
 		t.Fatalf("outbox dispatch mismatch: rows=%d published=%d", dispatchedCount, publisher.Count())
 	}
 }

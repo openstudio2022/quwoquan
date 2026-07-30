@@ -1,0 +1,12 @@
+{
+  "label": "西澳大利亚州",
+  "labelEn": "Western Australia",
+  "description": "面积最大州与野花海岸",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

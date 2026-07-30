@@ -1,0 +1,773 @@
+aggregate: ContentBehaviorFact
+description: "ContentBehaviorFact 的用户行为采集、推荐特征声明和训练样本 schema。\n三块原散落于 _shared/types.yaml（枚举）、service.yaml（路由）、_projections/（ML\
+  \ schema）\n的声明统一到此文件，由 codegen 生成：\n  - Dart:   ContentBehaviorTracker（批量缓冲 + auto-flush）\n  - Python:\
+  \ ContentFeatures + ContentTrainingSample（Pydantic BaseModel）\n"
+wire_schema:
+  common_fields:
+  - name: clientEventId
+    source: clientEventId
+    type: string
+    required: true
+    description: '端侧生成的事件幂等 ID。云侧以 rec:event_dedup:{<userId>}:<clientEventId>
+
+      做 SET NX 去重；重复事件不得再次进入 HotPath、训练样本或运营指标。
+
+      '
+  - name: occurredAt
+    source: occurredAt
+    type: timestamp
+    required: true
+    description: '端侧事实发生时间。离线补传必须保留该时间；云侧仅接受有限重放窗口内的时间，
+
+      禁止用接收时间覆盖业务发生时间。
+
+      '
+  - name: feedRequestId
+    source: feedRequestId
+    type: string
+    required: false
+    description: 'Feed 下发时返回的请求归因 ID。端侧曝光、停留、点击、互动和负反馈必须回传
+
+      同一个 feedRequestId，禁止点击时重生，确保召回 → 下发 → 曝光 → 互动漏斗可对齐。
+
+      '
+  - name: referralSource
+    source: referralSource
+    type: enum
+    enum:
+    - organic_feed
+    - friend_share
+    - chat_link
+    - circle_post
+    - author_profile
+    - entity_page
+    - search
+    - push_notification
+    - deep_link
+    - my_intersections
+    - publish_result
+    required: false
+    description: '用户到达内容的来源渠道。曝光/点击/停留/互动/负反馈全事件回传，供推荐侧按来源加权
+
+      （runtime/recommendation.ReferralSourceMultiplier）与归因下钻。端侧 ReferralSource 枚举与
+
+      云侧 ReferralSourceMultiplier 键必须与本闭集一一对应（R08 端云对齐）。
+
+      my_intersections 表示用户在「我的交集 / 我的影响力」中心主动点击交集对象（强关系探索意图，
+
+      非推荐流曝光），区别于 organic_feed，避免污染推荐流来源归因。
+
+      publish_result 表示创作者从发布结果页查看自己的作品，仅用于归因；推荐权重必须为 0，
+
+      避免创作者自检行为污染其消费兴趣画像。
+
+      '
+  - name: position
+    source: position
+    type: int
+    required: false
+    description: '事件发生时内容在 feed 流中的 0-based 序位（唯一 wire 键；契约单轨，旧键 feedPosition
+
+      已删除，服务端不再双读）。与 feedRequestId 组合可还原「某次 feed 下发的第几位被
+
+      曝光/点击」，供位置偏置校正与离线 replay 归因。
+
+      '
+  - name: channelId
+    source: channelId
+    type: string
+    required: false
+    description: '事件发生时 feed 所属频道（如 recommend / following / video）。全事件回传，服务端
+
+      BehaviorEventInput → RawBehaviorEvent / BehaviorSignal / 特征宽表均消费，使 served/impressed
+
+      双轨记账与 CTR、互动率可按频道分桶，供 AB 与频道级归因下钻。
+
+      '
+  - name: policyDigest
+    source: policyDigest
+    type: string
+    required: false
+    description: '事件发生时 feed 下发的唯一推荐策略内容摘要（与 DiscoveryFeedPage.policyDigest 同源）。
+
+      全事件回传并投影到特征宽表，使离线 replay、AB、曝光与转化使用同一不可变策略身份归因。
+
+      '
+  - name: recallPath
+    source: recallPath
+    type: string
+    required: false
+    description: '内容命中的召回通道（阶段五归因）。全事件回传，服务端消费后可按召回源切分
+
+      曝光/转化，定位单通道退化。
+
+      '
+  - name: contentVertical
+    source: contentVertical
+    type: string
+    required: false
+    description: '内容垂类（阶段五归因）。全事件回传，供垂类级 CTR 与供给平衡分析。
+
+      '
+  - name: supplySource
+    source: supplySource
+    type: string
+    required: false
+    description: '内容供给来源（阶段五归因，如 ugc/imported）。全事件回传，供供给侧归因。
+
+      '
+  - name: state
+    source: state
+    type: enum
+    enum:
+    - served
+    - visible
+    - impressed
+    - click
+    - dwell
+    - interaction
+    - negative
+    required: false
+    description: '反馈状态闭集（七态漏斗）。served 由云侧下发写入；visible/impressed/click/dwell/
+
+      interaction/negative 由端侧上报。click 是独立漏斗态（CTR = click / impressed），
+
+      与点赞/评论/分享等深度互动(interaction)分离。training_sample 只能由云侧派生，
+
+      不允许端侧上报。
+
+      '
+  - name: taxonomyReleaseId
+    source: taxonomyReleaseId
+    type: string
+    required: false
+    description: '首启兴趣目录与 taxonomy snapshot 的唯一不可变发布身份。仅 onboarding_interest
+      使用；必须与当前目录绑定精确一致，缺失、旧发布或不匹配均 fail-closed。'
+  state_derivation:
+    served: 云侧 feed 返回即 write-behind 写入 rec:served day-bucket，不作为训练正样本。
+    visible: 端侧进入视窗的弱信号，按 recpolicy 采样或仅本地聚合。
+    impressed: 端侧达到可见面积 + 停留阈值后的真实曝光，写入 rec:impressed day-bucket。
+    click: 端侧点击进入详情/沉浸态的独立漏斗态，作为 CTR 分子，区别于 interaction。
+    dwell: 离开/切走/翻页时聚合停留时长，弱停留可按 recpolicy 丢弃。
+    interaction: 点赞、评论、分享、关注、进圈、加联系人等强正向深度互动行为。
+    negative: dislike、report、hide_author、hide_content_type 等显式负反馈，用户级即时过滤。
+behavior_events:
+- type: impression
+  description: 内容进入可视区域曝光
+  trigger: viewport_visibility_state_transition
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackImpression
+  payload_fields:
+  - postId
+  - state
+  - contentType
+  - intersectionId
+  - intersectionDimension
+  - intersectionClass
+  - intersectionSourceRef
+  - intersectionEvidenceId
+  ml_signal: weak_positive
+  signal_weight: 0.1
+  notes: 'state 为该事件的动作级必填字段，只允许 visible / impressed：visible 表示进入
+
+    视窗的弱证据；impressed 表示达到 recpolicy visibility 的面积与停留门槛。
+
+    服务端禁止把缺失 state 的 impression 猜测为 impressed，以免污染 viewCount、
+
+    CTR 分母和训练样本。
+
+    交集曝光归因（交集统一体验）：当帖/卡承载交集理由时，随曝光带
+
+    intersectionId / intersectionDimension / intersectionClass(fact|affinity) /
+
+    intersectionSourceRef(§5.4 标准 kind) / intersectionEvidenceId，闭合「交集曝光 → 点击 → 转化」漏斗，并供推荐冷却窗口判定。
+
+    非交集曝光时这些字段为空，不影响普通内容曝光归因。
+
+    '
+- type: dwell
+  description: 停留时长（视口内累计时长；wire 键 duration，单位秒）
+  trigger: viewport_exit_or_scroll_away
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackDwell
+  payload_fields:
+  - postId
+  - duration
+  - contentType
+  ml_signal: strong_positive_if_gt_10s
+  signal_weight: 1.0
+  notes: '契约单轨：停留时长唯一 wire 键为 duration（秒，与端侧 BehaviorEvent.duration 一致）；
+
+    旧毫秒键 dwellMs 已删除，服务端不再双读。
+
+    '
+- type: click
+  description: 点击内容卡片进入详情
+  trigger: tap_post_card
+  batch: false
+  batch_route: POST /content/behaviors
+  dart_method: trackClick
+  payload_fields:
+  - postId
+  - contentType
+  - intersectionId
+  - intersectionDimension
+  - intersectionClass
+  - intersectionSourceRef
+  - intersectionEvidenceId
+  ml_signal: strong_positive
+  signal_weight: 0.5
+  notes: '交集点击归因：交集卡点击进入对象页时，随点击带 intersectionId/dimension/class/sourceRef(§5.4 kind)/evidenceId，
+
+    使曝光→点击→转化漏斗可按维度、标准 kind 与事实/概率类别下钻。
+
+    '
+- type: intersection_expand
+  description: 列表入口「查看更多」展开交集列表（我的连接 / 为什么推荐TA 等）
+  trigger: tap_intersection_list_expand
+  batch: false
+  batch_route: POST /content/behaviors
+  dart_method: trackIntersectionExpand
+  payload_fields:
+  - intersectionId
+  - intersectionDimension
+  - intersectionClass
+  - intersectionSourceRef
+  - surfaceId
+  ml_signal: weak_positive
+  signal_weight: 0.2
+  notes: '六场景列表入口展开归因；surfaceId 来自 ui_config codegen 常量。
+
+    端侧执行链已闭环：ContentBehaviorTracker.trackIntersectionExpand +
+
+    ObjectIntersectionCard.onInlineExpand（对象页 section 与全量列表页接线）；
+
+    云侧 SignalWeights 登记 0.2 弱正信号。
+
+    '
+- type: dislike
+  description: 用户明确标记"不感兴趣"
+  trigger: user_action_long_press_or_menu
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackDislike
+  payload_fields:
+  - postId
+  - contentType
+  - authorId
+  ml_signal: explicit_negative
+  signal_weight: -5.0
+- type: undo_dislike
+  description: 用户在短时撤销窗口内撤回"不感兴趣"
+  trigger: user_action_negative_feedback_undo
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackUndoDislike
+  payload_fields:
+  - postId
+  - contentType
+  - authorId
+  ml_signal: neutral_compensation
+  signal_weight: 0.0
+  notes: '仅撤销当前 post 的 rec:negative 精确内容集合，不恢复作者/内容类型屏蔽，
+
+    不计入正向 interaction，也不回写已经展示的历史窗口。
+
+    '
+- type: hide_author
+  description: 用户明确表示减少/不想看该作者内容；推荐侧即时过滤同作者未来窗口
+  trigger: user_action_more_menu_hide_author
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackHideAuthor
+  payload_fields:
+  - postId
+  - authorId
+  - contentType
+  ml_signal: explicit_negative
+  signal_weight: -5.0
+- type: hide_content_type
+  description: 用户明确表示减少此类内容；推荐侧即时过滤同内容类型未来窗口
+  trigger: user_action_more_menu_hide_content_type
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackHideContentType
+  payload_fields:
+  - postId
+  - contentType
+  ml_signal: explicit_negative
+  signal_weight: -4.0
+- type: intersection_feedback
+  description: '用户对「交集 / 交集配对」条目的显式负反馈（不感兴趣 / 忽略 / 拒绝打招呼 / 退出圈子），
+
+    驱动交集主体（subject）跨会话降权与冷却。不绑定具体 post（subjectId 为交集对象）。
+
+    '
+  trigger: user_action_intersection_negative
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackIntersectionFeedback
+  payload_fields:
+  - subjectId
+  - feedbackKind
+  - intersectionId
+  - intersectionDimension
+  - intersectionClass
+  - intersectionSourceRef
+  ml_signal: explicit_negative
+  signal_weight: -5.0
+  notes: "交集负反馈闭环（F 推荐与交集配对差异化）：\n- feedbackKind ∈ intersection_kind_registry.feedbackKinds 闭集\n  （notInterested\
+    \ / dismiss / rejectGreeting / leaveCircle），端上报与云侧降权 / 冷却\n  读同一集合（Go generated.IntersectionFeedbackKinds\
+    \ / Dart intersectionFeedbackKinds），\n  禁止端各写一份（单一真相源 = registry）。\n- subjectId 为交集主体对象 id（person\
+    \ / circle / place 等，与 reason.subjectId /\n  actionTargetId 同源）。云侧 IntersectionService.ReportNegativeFeedback\
+    \ 据此写\n  rec:ineg 交集负反馈冷却集；Feed / ObjectIntersections 合并时对命中 subject 过滤\n  （冷却期内不再推荐），区别于曝光冷却 rec:icool（seen\
+    \ 仅降权保留）。\n- intersectionId / intersectionDimension / intersectionClass(fact|affinity) /\n  intersectionSourceRef\
+    \ 与曝光 → 点击 → 转化保持同一漏斗归因键，使负反馈可按维度 /\n  标准 kind / 类别下钻。intersection_feedback 与 assistant_interest 同为不需\
+    \ contentId\n  的事件（subjectId 承载对象），服务端 contentId 必填校验对其豁免。\n"
+- type: wishlist_add
+  description: '用户显式点亮「想去 / 收藏 / 计划去」对象。该事件是 `coWishlistedEntity`
+
+    的稳定事实源，服务端必须投影到 `entity_wishlist_events`，禁止只停留在
+
+    rm_behavior_events 或端侧本地状态。
+
+    '
+  trigger: user_action_want_to_go_add
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackWishlistAdd
+  payload_fields:
+  - objectId
+  - objectKind
+  - displayName
+  - sourceSurface
+  - entityRefs
+  ml_signal: explicit_positive
+  signal_weight: 3.2
+  notes: 'objectId/objectKind/displayName/sourceSurface 是 wishlist 投影专属字段；
+
+    feedRequestId/referralSource/position 仍走 common_fields。服务端按
+
+    userId + objectId 幂等 upsert 到 entity_wishlist_events(status=active)，
+
+    为 coWishlistedEntity 提供真实用户意图输入。
+
+    '
+- type: wishlist_remove
+  description: '用户取消「想去 / 收藏 / 计划去」对象。服务端必须把对应
+
+    `entity_wishlist_events` 标记为 removed，避免撤销后继续参与共同想去交集。
+
+    '
+  trigger: user_action_want_to_go_remove
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackWishlistRemove
+  payload_fields:
+  - objectId
+  - objectKind
+  - sourceSurface
+  - entityRefs
+  ml_signal: explicit_negative
+  signal_weight: -3.2
+  notes: '与 wishlist_add 使用同一 objectId 幂等键；displayName 可缺省，取消时不需要
+
+    端侧再次提供展示名。
+
+    '
+- type: share
+  description: 分享到外部/圈子
+  trigger: user_action_share_sheet
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackShare
+  payload_fields:
+  - postId
+  - contentType
+  - shareTarget
+  ml_signal: strong_positive
+  signal_weight: 3.0
+  notes: 'shareTarget 为分享渠道（share action id，如 wechat/copy_link/save_image），
+
+    端侧 trackShare 必须显式上报该字段；渠道不再借 tagRefs 承载。
+
+    '
+- type: like
+  description: 点赞（由 intent layer 处理，不走 BehaviorTracker）
+  dedicated_route: POST /content/content/posts/{postId}/like
+  dart_method: null
+  ml_signal: explicit_positive
+  signal_weight: 2.0
+  notes: 'N0-3 服务端权威信号：推荐信号不依赖端侧补报，由 ContentReactionSet outbox
+
+    事实经 ReactionSignalProjector 注入（HotPath + rm_behavior_events + learning）。
+
+    通用批量端点 /content/behaviors 显式拒收 like（防双计与伪造）。
+
+    '
+- type: comment
+  description: '用户在内容下发表评论（由 intent layer 处理，走专用路由）。
+
+    评论是比点赞更强的深度互动信号：用户需主动输入，代表高兴趣度。
+
+    payload 额外携带 commentLength，供推荐侧判断内容吸引力（长评 > 短评）。
+
+    评论走专用路由但仍须回传 common_fields 的归因字段（feedRequestId/referralSource/position），
+
+    使评论这一深度互动可按同一次 feed 下发归因（召回 → 下发 → 曝光 → 评论漏斗对齐），
+
+    不因专用路由而断链。
+
+    '
+  dedicated_route: POST /content/content/posts/{postId}/comments
+  dart_method: null
+  payload_fields:
+  - postId
+  - contentType
+  - commentLength
+  ml_signal: very_strong_positive
+  signal_weight: 2.5
+  notes: 'like/comment/report 三个显式行为均走专用路由，不进批量队列，
+
+    以保证实时性和幂等语义。N0-3 起推荐信号由 CommentCreated outbox 事实经
+
+    CommentSignalProjector 服务端权威注入，批量端点显式拒收 comment。
+
+    commentLength 从评论完成事件回调中获取，是评论事件的专属
+
+    payload；feedRequestId/referralSource/position 为全事件通用归因，
+
+    统一声明在 wire_schema.common_fields，不在此重复列举（单一真相源）。
+
+    '
+- type: report
+  description: 举报（由专用路由处理）
+  dedicated_route: POST /content/reports
+  dart_method: null
+  ml_signal: explicit_negative
+  signal_weight: -10.0
+  notes: 'N0-3 服务端权威信号：content.report.created outbox 事实经
+
+    ReportSignalProjector 注入负信号（HotPath 负反馈集 + 特征轨 + 学习标签）；
+
+    批量端点显式拒收 report。
+
+    '
+- type: skip
+  description: 快速跳过（停留 <1s 即离开，负反馈信号）
+  trigger: viewport_exit_lt_1s
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackSkip
+  payload_fields:
+  - postId
+  - contentType
+  ml_signal: weak_negative
+  signal_weight: -0.3
+- type: follow
+  description: 关注内容作者（强正向社交信号 + 交集转化第一类：关注人）
+  trigger: user_action_follow_button
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackFollow
+  payload_fields:
+  - postId
+  - authorId
+  - intersectionDimension
+  - intersectionSourceRef
+  - intersectionTagRefs
+  ml_signal: very_strong_positive
+  signal_weight: 4.0
+  notes: '交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
+
+    五维之一）+ intersectionSourceRef（§5.4 标准 kind，与曝光/点击/展开同名）+ intersectionTagRefs
+
+    （路径制 tagRef，唯一真相源 control_plane/governance/taxonomy）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
+
+    可按同一 sourceRef 下钻，供推荐回流与「交集转化率」北极星指标按维度/kind/tagRef 切分。
+
+    '
+- type: join_circle
+  description: 加入圈子（交集转化第二类：进圈子）。与 follow 区分以拆分转化漏斗。
+  trigger: user_action_join_circle_button
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackJoinCircle
+  payload_fields:
+  - circleId
+  - intersectionDimension
+  - intersectionSourceRef
+  - intersectionTagRefs
+  ml_signal: very_strong_positive
+  signal_weight: 4.0
+  notes: '交集转化三类行动（关注人 follow / 进圈子 join_circle / 加联系人 add_contact）独立成
+
+    BehaviorAction，使「新增可解释交集数 → 交集转化」漏斗可按动作类型切分。
+
+    circleId 即行为目标对象，经通用 contentId 键上报（BehaviorEvent.contentId 承载目标对象 id），
+
+    不引入独立 circleId wire 键（契约单轨）。
+
+    '
+- type: add_contact
+  description: 添加联系人/加好友（交集转化第三类：加联系人）。与 follow 区分以拆分转化漏斗。
+  trigger: user_action_add_contact_button
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackAddContact
+  payload_fields:
+  - postId
+  - authorId
+  - intersectionDimension
+  - intersectionSourceRef
+  - intersectionTagRefs
+  ml_signal: very_strong_positive
+  signal_weight: 4.5
+- type: author_view
+  description: 进入作者主页/实体主页查看
+  trigger: tap_author_avatar_or_name
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackAuthorView
+  payload_fields:
+  - postId
+  - authorId
+  - entityRefs
+  ml_signal: moderate_positive
+  signal_weight: 1.5
+- type: entity_page_view
+  description: '进入实体主页/圈子详情页查看（交集 identity/location 维度事实源；
+
+    intersection_source 按 entityRefs 反查共同到访/共同关注对象）。
+
+    '
+  trigger: entity_or_circle_page_open
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: null
+  payload_fields:
+  - entityRefs
+  ml_signal: moderate_positive
+  signal_weight: 1.5
+  notes: '由 ContentEngagementTracker.trackEntityPageView 手写触发（页面级生命周期），
+
+    不生成独立 dart_method；目标对象 id 经通用 contentId 键承载并同步写入
+
+    entityRefs，供 intersection_source 的 entity_page_view 反查消费。
+
+    '
+- type: tag_click
+  description: 点击内容标签进入标签聚合页
+  trigger: tap_tag_chip
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackTagClick
+  payload_fields:
+  - postId
+  - tagRefs
+  ml_signal: moderate_positive
+  signal_weight: 1.8
+- type: content_depth
+  description: 内容消费深度（退出时汇总的归一化消费指标）
+  trigger: content_exit_with_depth_data
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: null
+  payload_fields:
+  - postId
+  - engagementDepth
+  - consumedRatio
+  - totalUnits
+  ml_signal: depth_proportional
+  signal_weight: 1.0
+  notes: '由 ContentEngagementTracker 在退出时自动生成，不需要独立 dart_method。
+
+    engagementDepth 为 L0-L4 归一化等级，consumedRatio 为原始消费比例。
+
+    '
+- type: play_progress
+  description: 视频/音频播放进度里程碑
+  trigger: playback_25pct_50pct_75pct_100pct
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackPlayProgress
+  payload_fields:
+  - postId
+  - consumedRatio
+  - totalUnits
+  ml_signal: observational_only
+  signal_weight: 0.0
+  notes: '在 25%/50%/75%/100% 播放节点上报，仅用于消费进度观测。consumedRatio 为当前播放比例，
+
+    totalUnits 为总时长（秒）。它不得直接进入推荐正反馈，因为 seek 到尾部会伪造位置比例；
+
+    合格推荐信号只能由 effective_play 经服务端有效播放 policy 产生。
+
+    '
+- type: effective_play
+  description: '视频播放会话达到服务端有效播放门槛后的单次推荐反馈。端侧只报告真实累计播放候选，
+
+    服务端必须再次排除 seek、buffering、后台和离屏时段，并按 policy 判定是否进入推荐。
+
+    '
+  trigger: video_session_effective_play_qualified
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackEffectivePlay
+  payload_fields:
+  - postId
+  - effectivePlayMs
+  - consumedRatio
+  - totalUnits
+  - state
+  ml_signal: qualified_positive
+  signal_weight: 1.0
+  notes: '每个 playback session + postId 最多接受一次。effectivePlayMs 是前台、可见、实际播放的
+
+    累计候选，不是 wall-clock dwell；consumedRatio 不能单独作为准入证据。服务端 policy
+
+    拒绝未达门槛、重复、seek 虚增或不连续播放，并且只有通过后才写入 BehaviorSignal、
+
+    SignalWeights 和兴趣更新。此事件不得携带 QoE 明细、播放器错误栈、设备型号或网络诊断。
+
+    '
+- type: assistant_interest
+  description: 小艺对话中浮现的兴趣标签回流（对话兴趣 → 推荐特征，不绑定具体 post）
+  trigger: assistant_turn_emerged_tags
+  batch: true
+  batch_route: POST /content/behaviors
+  dart_method: trackAssistantInterest
+  payload_fields:
+  - tagRefs
+  ml_signal: moderate_positive
+  signal_weight: 1.6
+  notes: '由小艺（assistant）每轮对话产出的 diagnostics.emergedTags 合成上报，
+
+    payload 只带 tagRefs（路径制标签），不绑定 postId；
+
+    经 ProcessBatch → RecommendFeatureProjector 进 rm_recommend_feature 的 tagInteraction。
+
+    '
+- type: onboarding_interest
+  description: 新用户首启兴趣采集（interest-onboarding-prior，W11/B12）——四维标签选择写入推荐先验
+  trigger: onboarding_interest_submitted
+  batch: true
+  batch_route: POST /content/behaviors
+  payload_fields:
+  - taxonomyReleaseId
+  - tagRefs
+  ml_signal: strong_positive
+  signal_weight: 2.5
+  notes: '冷启动期新用户占比 100%（全规划 ROI 最高单项）：首启兴趣采集页四维标签
+
+    选择（topic/audience/format/entity；每个值均是 control_plane/governance/taxonomy
+
+    发布的路径制 tagRef，用户声明字段由 user/account/user_account/fields.yaml 的
+
+    interestTags 统一定义）合成上报。payload 只带唯一不可变发布身份 taxonomyReleaseId
+    与 tagRefs（路径制标签），不绑定 postId（与
+
+    assistant_interest 同为 contentId 豁免事件）；经 ProcessBatch → HotPath
+
+    tag weights + RecommendFeatureProjector 进 rm_recommend_feature 先验，
+
+    首刷 TagRecall 立即可用；跳过者维持 hot/explore+UCB 保底。独立 action
+
+    使 onboarding 转化漏斗可与对话兴趣回流分开归因。该确认型事件只走
+    ConfirmedOnboardingInterestWriter，不生成尽力 tracker 入队入口。
+
+    '
+recommend_features:
+  feature_group: content_features
+  update_trigger: PostPublished
+  python_class: ContentFeatures
+  features:
+  - name: content_type
+    source: content_type
+    source_field: contentType
+    type: categorical
+    python_type: str
+    description: 内容类型（image/video/micro/article）
+  - name: tag_count
+    source: tag_count
+    source_field: tagRefs
+    type: int
+    python_type: int
+    transform: list_length
+    description: 标签数量
+  - name: aspect_ratio
+    source: aspect_ratio
+    source_fields:
+    - width
+    - height
+    type: float
+    python_type: Optional[float]
+    nullable: true
+    transform: width / max(height, 1) if width and height else None
+    description: 宽高比；未记录尺寸时为 null
+  - name: has_cover
+    source: has_cover
+    source_field: coverUrl
+    type: bool
+    python_type: bool
+    transform: bool(coverUrl)
+    description: 是否有封面图
+  - name: body_length
+    source: body_length
+    source_field: body
+    type: int
+    python_type: int
+    transform: len(body or '')
+    description: 正文字符数
+  - name: engagement_rate_7d
+    source: engagement_rate_7d
+    type: float
+    python_type: float
+    derived: true
+    description: (likeCount + commentCount) / max(viewCount, 1) 近7天，云侧计算
+  - name: publish_hour
+    source: publish_hour
+    source_field: createdAt
+    type: int
+    python_type: int
+    transform: createdAt.hour
+    description: 发布时刻（0-23），用于时段偏好建模
+training_sample:
+  python_class: ContentTrainingSample
+  label_field: user_engaged
+  label_type: int
+  positive_signals:
+  - type: comment
+    weight: 4
+  - type: like
+    weight: 3
+  - type: dwell
+    condition: duration > 10
+    weight: 2
+  - type: click
+    weight: 1
+  negative_signals:
+  - type: dislike
+    weight: 3
+  - type: hide_author
+    weight: 4
+  - type: hide_content_type
+    weight: 3
+  - type: report
+    weight: 5
+  context_fields:
+  - name: user_id
+    source: user_id
+    type: str
+  - name: device_actor_id
+    source: device_actor_id
+    type: str
+  - name: session_id
+    source: session_id
+    type: str
+  - name: request_time_hour
+    source: request_time_hour
+    type: int
+  item_features_ref: ContentFeatures

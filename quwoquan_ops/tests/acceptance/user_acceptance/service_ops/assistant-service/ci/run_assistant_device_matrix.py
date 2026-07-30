@@ -352,9 +352,9 @@ def run_matrix_test(
         extra={"screenClass": device.get("screenClass", "any")},
     )
     before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
-    if env_name == "beta" and str(device.get("targetPlatform", "")).lower().startswith(
-        "android"
-    ):
+    if env_name in {"alpha", "beta", "gamma"} and str(
+        device.get("targetPlatform", "")
+    ).lower().startswith("android"):
         reverse_result = run_command(
             [
                 "adb",
@@ -552,9 +552,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device-id", action="append", default=[])
     parser.add_argument("--report", default=str(DEFAULT_REPORT_PATH))
     parser.add_argument("--gateway-base-url", default="")
-    parser.add_argument("--ios-gateway-base-url", default="http://127.0.0.1:18080")
-    parser.add_argument("--android-gateway-base-url", default="http://127.0.0.1:18080")
-    parser.add_argument("--gateway-health-url", default="http://127.0.0.1:18080")
+    parser.add_argument("--ios-gateway-base-url", required=True)
+    parser.add_argument("--android-gateway-base-url", required=True)
+    parser.add_argument("--gateway-health-url", required=True)
     parser.add_argument("--gateway-port", type=int, default=18080)
     parser.add_argument("--assistant-port", type=int, default=18087)
     parser.add_argument("--skip-beta-services", action="store_true")

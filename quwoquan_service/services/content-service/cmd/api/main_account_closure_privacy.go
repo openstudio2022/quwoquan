@@ -13,14 +13,30 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
+	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
 	mediainfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/media"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
+
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 const accountClosureSubjectHMACEnv = "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET"
 
 type subjectClosureLookup interface {
 	IsSubjectClosed(ctx context.Context, subjectID string) (bool, error)
+}
+
+type contentAccountRestrictionProjection interface {
+	accountclosure.AccountRestrictionProjection
+	recinfra.AccountRestrictionReader
+	EnsureIndexes(ctx context.Context) error
+}
+
+func newContentAccountRestrictionProjection(
+	db *mongo.Database,
+	closedSubjects accountclosure.PersistentSubjectClosureLookup,
+) (contentAccountRestrictionProjection, error) {
+	return accountclosure.NewAccountRestrictionProjection(db, closedSubjects)
 }
 
 type deferredSubjectClosureGuard struct {
@@ -91,7 +107,13 @@ func startAccountClosureRuntime(
 	cache *accountclosure.RedisPersonalDataCacheCleaner,
 	search *accountclosure.SearchIndexerDeleter,
 	media *mediainfra.ObjectGateway,
+	restrictions accountclosure.AccountRestrictionProjection,
 ) (*accountclosure.Consumer, error) {
+	if restrictions == nil {
+		return nil, errors.New(
+			"content account restriction projection is required",
+		)
+	}
 	processor, err := accountclosure.NewProcessor(store, cache, search, media)
 	if err != nil {
 		return nil, err
@@ -107,6 +129,7 @@ func startAccountClosureRuntime(
 	if err != nil {
 		return nil, err
 	}
+	consumer.WithAccountRestrictionProjection(restrictions)
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		return nil, err
 	}

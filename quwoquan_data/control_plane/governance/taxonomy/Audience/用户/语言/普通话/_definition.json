@@ -2,6 +2,7 @@
   "label": "普通话",
   "labelEn": "Mandarin",
   "description": "使用普通话的用户群体",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

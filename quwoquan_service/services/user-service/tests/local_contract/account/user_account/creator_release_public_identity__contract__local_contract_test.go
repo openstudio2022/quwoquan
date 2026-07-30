@@ -27,7 +27,7 @@ func (creatorPublicIdentityPersonaStore) FindByUserHandle(context.Context, strin
 	return nil, nil
 }
 
-func (creatorPublicIdentityPersonaStore) FindBySubAccountID(context.Context, string) (*usermodel.Persona, error) {
+func (creatorPublicIdentityPersonaStore) FindByPersonaID(context.Context, string) (*usermodel.Persona, error) {
 	return nil, nil
 }
 
@@ -48,7 +48,7 @@ func (r creatorPublicIdentityReader) FindActiveByPublicIdentity(
 	identity string,
 ) (*usermodel.CreatorRuntimeProfile, bool, error) {
 	if r.profile != nil &&
-		(identity == r.profile.SubAccountID || identity == r.profile.CreatorID) {
+		(identity == r.profile.PersonaID || identity == r.profile.CreatorID) {
 		return r.profile, true, nil
 	}
 	return nil, false, nil
@@ -68,15 +68,16 @@ func (r creatorPublicIdentityReader) ListActiveWorks(
 func TestCreatorReleasePublicIdentityContract(t *testing.T) {
 	now := time.Now().UTC()
 	profile := &usermodel.CreatorRuntimeProfile{
-		CreatorID:    "qwq_creator_highland_travel_blogger_001",
-		SubAccountID: "builtin_highland_travel_blogger",
-		Handle:       "highland_slow_travel",
-		DisplayName:  "高原慢旅笔记",
-		Status:       "active",
-		UpdatedAt:    now,
+		CreatorID:   "qwq_creator_highland_travel_blogger_001",
+		PersonaID:   "builtin_highland_travel_blogger",
+		Handle:      "highland_slow_travel",
+		DisplayName: "高原慢旅笔记",
+		Status:      "active",
+		UpdatedAt:   now,
 	}
-	service := application.NewSubAccountService(
+	service := application.NewPersonaService(
 		creatorPublicIdentityPersonaStore{},
+		nil,
 		nil,
 		nil,
 		nil,
@@ -85,19 +86,19 @@ func TestCreatorReleasePublicIdentityContract(t *testing.T) {
 		),
 	)
 
-	for _, identity := range []string{profile.SubAccountID, profile.CreatorID} {
-		view, err := service.GetSubAccountProfileView(context.Background(), identity)
+	for _, identity := range []string{profile.PersonaID, profile.CreatorID} {
+		view, err := service.GetPersonaProfileView(context.Background(), identity)
 		if err != nil {
 			t.Fatalf("read creator by %q: %v", identity, err)
 		}
-		if view["subAccountId"] != profile.SubAccountID ||
+		if view["personaId"] != profile.PersonaID ||
 			view["userId"] != profile.CreatorID ||
 			view["displayName"] != profile.DisplayName {
 			t.Fatalf("creator identity %q resolved unexpected view: %#v", identity, view)
 		}
 	}
 
-	view, err := service.GetSubAccountProfileView(
+	view, err := service.GetPersonaProfileView(
 		context.Background(),
 		profile.Handle,
 	)

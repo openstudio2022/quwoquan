@@ -20,7 +20,7 @@ import (
 const (
 	PushEndpointKindAPNSVoIP  = "apns_voip"
 	PushEndpointKindFCM       = "fcm"
-	PushProviderLocalRecorder = "local_recorder"
+	PushProviderLocalRecorder = "local_push_recorder"
 	PushDeliveryActionRing    = "ring"
 	PushDeliveryActionCancel  = "cancel"
 )

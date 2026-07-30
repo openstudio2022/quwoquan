@@ -8,6 +8,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [SetAssistantPreference, ListAssistantPreferences]
   recovery_action: surface
   dart_const: preferenceInvalidArgument
   go_const: ErrPreferenceInvalidArgument
@@ -19,6 +22,9 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [SetAssistantPreference, RevokeAssistantPreference, RestoreAssistantPreference]
   recovery_action: refresh
   dart_const: preferenceNotFound
   go_const: ErrPreferenceNotFound
@@ -30,6 +36,9 @@ errors:
   kind: USER
   reason: restore_expired
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [RestoreAssistantPreference]
   recovery_action: refresh
   dart_const: preferenceRestoreExpired
   go_const: ErrPreferenceRestoreExpired
@@ -41,6 +50,9 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [SetAssistantPreference, ListAssistantPreferences, RevokeAssistantPreference, RestoreAssistantPreference]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: preferenceStorageUnavailable

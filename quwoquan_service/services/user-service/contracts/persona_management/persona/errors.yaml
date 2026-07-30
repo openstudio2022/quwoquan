@@ -1,6 +1,6 @@
 domain: USER
 aggregate: Persona
-description: 'Persona（分身/子账号）对象专属错误码。格式：MODULE.KIND.REASON。
+description: 'Persona（分身/Persona）对象专属错误码。格式：MODULE.KIND.REASON。
 
   覆盖分身配额、主分身/激活态保护、退役与删除守卫、handle 唯一性；
 
@@ -8,93 +8,124 @@ description: 'Persona（分身/子账号）对象专属错误码。格式：MODU
 
   '
 errors:
-- code: USER.SUB_ACCOUNT.not_found
-  kind: SUB_ACCOUNT
+- code: USER.PERSONA.not_found
+  kind: PERSONA
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - ActivatePersona
+    - ApplyPersonaProfileSync
+    - RetirePersona
+    - UpdatePersona
+    - user.user_account.GetPersonaLifecycleGuard
+    - user.user_account.GetPersonaProfile
+    - user.user_account.GetUserHomepageBundle
   http_status: 404
   recovery_action: surface
-  dart_const: subAccountNotFound
-  go_const: ErrSubAccountNotFound
+  dart_const: personaNotFound
+  go_const: ErrPersonaNotFound
   user_message:
-    zh: 子账号不存在
-    en: Sub-account not found
-- code: USER.SUB_ACCOUNT.last_sub_account
-  kind: SUB_ACCOUNT
+    zh: Persona不存在
+    en: Persona not found
+- code: USER.PERSONA.last_persona
+  kind: PERSONA
   reason: constraint_violation
+  emitted_by:
+  - surface: http
+    operations:
+    - RetirePersona
   http_status: 400
   recovery_action: surface
-  dart_const: lastSubAccount
-  go_const: ErrLastSubAccount
+  dart_const: lastPersona
+  go_const: ErrLastPersona
   user_message:
     zh: 无法删除，这是您的最后一个账号
-    en: Cannot delete the last sub-account
-- code: USER.SUB_ACCOUNT.strict_isolation
-  kind: SUB_ACCOUNT
-  reason: not_found
-  http_status: 404
-  recovery_action: surface
-  dart_const: subAccountStrictIsolation
-  go_const: ErrSubAccountStrictIsolation
-  user_message:
-    zh: 该用户不存在
-    en: User not found
-- code: USER.SUB_ACCOUNT.quota_reached
-  kind: SUB_ACCOUNT
+    en: Cannot delete the last persona
+- code: USER.PERSONA.quota_reached
+  kind: PERSONA
   reason: constraint_violation
+  emitted_by:
+  - surface: http
+    operations:
+    - CreatePersona
   http_status: 400
   recovery_action: surface
-  dart_const: subAccountQuotaReached
-  go_const: ErrSubAccountQuotaReached
+  dart_const: personaQuotaReached
+  go_const: ErrPersonaQuotaReached
   user_message:
     zh: 分身数量已达上限，请先整理现有分身
     en: Persona limit reached, please manage existing personas first
-- code: USER.SUB_ACCOUNT.primary_guard
-  kind: SUB_ACCOUNT
+- code: USER.PERSONA.primary_guard
+  kind: PERSONA
   reason: constraint_violation
+  emitted_by:
+  - surface: http
+    operations:
+    - RetirePersona
   http_status: 400
   recovery_action: surface
-  dart_const: primarySubAccountGuard
-  go_const: ErrPrimarySubAccountGuard
+  dart_const: primaryPersonaGuard
+  go_const: ErrPrimaryPersonaGuard
   user_message:
     zh: 主分身不能退役
     en: Primary persona cannot be retired
-- code: USER.SUB_ACCOUNT.active_guard
-  kind: SUB_ACCOUNT
+- code: USER.PERSONA.active_guard
+  kind: PERSONA
   reason: constraint_violation
+  emitted_by:
+  - surface: http
+    operations:
+    - RetirePersona
   http_status: 400
   recovery_action: surface
-  dart_const: activeSubAccountGuard
-  go_const: ErrActiveSubAccountGuard
+  dart_const: activePersonaGuard
+  go_const: ErrActivePersonaGuard
   user_message:
     zh: 请先切换到其他分身后再继续
     en: Please switch to another persona before continuing
-- code: USER.SUB_ACCOUNT.retired_guard
-  kind: SUB_ACCOUNT
+- code: USER.PERSONA.retired_guard
+  kind: PERSONA
   reason: invalid_status_transition
+  emitted_by:
+  - surface: http
+    operations:
+    - ActivatePersona
+    - UpdatePersona
   http_status: 400
   recovery_action: surface
-  dart_const: retiredSubAccountGuard
-  go_const: ErrRetiredSubAccountGuard
+  dart_const: retiredPersonaGuard
+  go_const: ErrRetiredPersonaGuard
   user_message:
     zh: 该分身已退役，当前操作不可继续
     en: This persona is retired and cannot continue this action
-- code: USER.SUB_ACCOUNT.handle_taken
-  kind: SUB_ACCOUNT
+- code: USER.PERSONA.handle_taken
+  kind: PERSONA
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ApplyPersonaProfileSync
+    - CreatePersona
+    - UpdatePersona
   http_status: 409
   recovery_action: surface
-  dart_const: subAccountHandleTaken
-  go_const: ErrSubAccountHandleTaken
+  dart_const: personaHandleTaken
+  go_const: ErrPersonaHandleTaken
   user_message:
     zh: 该分身号已被占用，请换一个
     en: This persona handle is already taken, please choose another
-- code: USER.SUB_ACCOUNT.handle_readonly
-  kind: SUB_ACCOUNT
+- code: USER.PERSONA.handle_readonly
+  kind: PERSONA
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdatePersona
   http_status: 400
   recovery_action: surface
-  dart_const: subAccountHandleReadonly
-  go_const: ErrSubAccountHandleReadonly
+  dart_const: personaHandleReadonly
+  go_const: ErrPersonaHandleReadonly
   user_message:
     zh: 趣我圈号由系统分配，暂不支持手动修改
     en: Profile handle is system assigned and cannot be changed

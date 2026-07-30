@@ -184,14 +184,14 @@ AppException (abstract)
 
 ### 5.1 输出契约字段必须类型化（禁止在引擎逻辑中直接写字段名字符串）
 
-LLM 输出契约（`assistant_turn_v4`）的字段唯一定义于
+LLM 输出契约（`assistant_turn`）的字段唯一定义于
 `lib/personal_assistant/contracts/assistant_turn_contract.dart` 的 `AssistantTurnOutput` 类。
 
 ```dart
 // ❌ 禁止：在引擎逻辑代码中直接写字段名字符串
 final userMd = (parsed['userMarkdown'] as String?)?.trim() ?? '';
 final decision = (parsed['decision'] as Map?)?.cast<String, dynamic>() ?? {};
-final slotState = turnV2['slotState'];
+final slotState = parsed['slotState'];
 
 // ✅ 必须：通过 AssistantTurnOutput.tryParse() 类型化访问
 final turn = AssistantTurnOutput.tryParse(parsed);
@@ -206,7 +206,7 @@ final slotState = turn?.slotState ?? const {};
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `schema` | `String` | 单轨契约身份（禁止 `contractVersion` / `_vN`） |
+| `contractId` | `String` | 单轨契约身份（禁止 `contractVersion` / `_vN`） |
 | `decision` | `Map<String, dynamic>` | 含 `nextAction`、`confidence`、`reasoning` |
 | `messageKind` | `String` | `progress`/`answer`/`ask_user`/`error`/`fallback` |
 | `userMarkdown` | `String` | 面向用户的 Markdown 回答 |
@@ -216,7 +216,7 @@ final slotState = turn?.slotState ?? const {};
 | `selfCheck` | `Map<String, dynamic>` | 自检结果 |
 | `diagnostics` | `Map<String, dynamic>` | 含 `emergedTags` |
 | `modelSelfScore` | `Map<String, dynamic>` | 含 `score`、`reason` |
-| `toolCalls` | `List<Map>` | 待执行工具调用序列；每项含 `toolName`/`name`、`arguments`、`toolCallId` |
+| `toolCalls` | `List<Map>` | 待执行工具调用序列；每项只含 canonical `toolName` 与 `arguments` |
 | `slotState` | `Map<String, dynamic>` | 槽位状态 |
 | `askUser` | `Map<String, dynamic>` | 追问信息 |
 | `subagentPlan` | `List<Map>` | 含 `goal` |
@@ -226,7 +226,7 @@ final slotState = turn?.slotState ?? const {};
 
 ### 5.3 契约身份：单轨当前形状
 
-- **唯一身份**：`schema: assistant_turn`（或 metadata 声明的当前契约名）；禁止 `assistant_turn_v3/v4`、`contractVersion` 多协议版本分支。
+- **唯一身份**：`contractId: assistant_turn`（以 metadata 当前契约名为准）；禁止 `assistant_turn_v3/v4`、`contractVersion` 多协议版本分支。
 - **禁止**：任何「当前 + 存量」双版本识别路径、旧包裹 key 解包、读后升级 shim。
 - 本地 session 若仍含历史形状：一次性破坏性迁移到当前 schema，或 fail-closed 拒绝加载；不得长期保留双读。
 
@@ -235,7 +235,7 @@ final slotState = turn?.slotState ?? const {};
 if (version == 'assistant_turn_v3' || version == 'assistant_turn_v4')
 
 // ✅ 必须：只认当前 schema
-if ((parsed['schema'] as String?) != 'assistant_turn') {
+if ((parsed['contractId'] as String?) != 'assistant_turn') {
   throw FormatException('unsupported assistant turn schema');
 }
 ```

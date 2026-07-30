@@ -6,7 +6,6 @@
       "name": "public-api",
       "role": "api",
       "classification": "first-party-api",
-      "source": "environment-topology",
       "owner": "platform-runtime",
       "exposure": "public",
       "consumers": ["app", "web", "ops", "ci"]
@@ -15,7 +14,6 @@
       "name": "realtime-signaling",
       "role": "realtime",
       "classification": "first-party-websocket",
-      "source": "environment-topology",
       "owner": "realtime",
       "exposure": "public",
       "consumers": ["app", "web", "ci"]
@@ -24,7 +22,6 @@
       "name": "rtc-signaling",
       "role": "rtc",
       "classification": "first-party-websocket",
-      "source": "environment-topology",
       "owner": "rtc",
       "exposure": "public",
       "consumers": ["app", "ci"]
@@ -33,7 +30,6 @@
       "name": "product-ops",
       "role": "productOps",
       "classification": "first-party-ops-api",
-      "source": "environment-topology",
       "owner": "product-ops",
       "exposure": "public",
       "consumers": ["ops-portal", "ci"]
@@ -42,7 +38,6 @@
       "name": "public-web",
       "role": "publicWeb",
       "classification": "first-party-web",
-      "source": "environment-topology",
       "owner": "app-web",
       "exposure": "public",
       "consumers": ["browser", "share-links", "oauth"]
@@ -51,7 +46,6 @@
       "name": "app-download",
       "role": "appDownload",
       "classification": "first-party-distribution",
-      "source": "environment-topology",
       "owner": "app-release",
       "exposure": "public",
       "consumers": ["browser", "release-ci"]
@@ -60,7 +54,6 @@
       "name": "legal",
       "role": "legal",
       "classification": "first-party-legal",
-      "source": "environment-topology",
       "owner": "legal-static",
       "exposure": "public",
       "consumers": ["app", "browser", "ci"]
@@ -69,7 +62,6 @@
       "name": "media-avatar",
       "role": "mediaAvatar",
       "classification": "first-party-media-read",
-      "source": "environment-topology",
       "owner": "media-delivery",
       "exposure": "public",
       "consumers": ["app", "web", "chat"]
@@ -78,7 +70,6 @@
       "name": "media-image",
       "role": "mediaImage",
       "classification": "first-party-media-read",
-      "source": "environment-topology",
       "owner": "media-delivery",
       "exposure": "public",
       "consumers": ["app", "web", "data-release"]
@@ -87,7 +78,6 @@
       "name": "media-video",
       "role": "mediaVideo",
       "classification": "first-party-media-read",
-      "source": "environment-topology",
       "owner": "media-delivery",
       "exposure": "public",
       "consumers": ["app", "web", "data-release"]
@@ -96,7 +86,6 @@
       "name": "media-upload",
       "role": "mediaUpload",
       "classification": "first-party-media-write",
-      "source": "environment-topology",
       "owner": "media-delivery",
       "exposure": "public",
       "consumers": ["app", "web", "ci"]
@@ -139,17 +128,22 @@
       "consumers": ["local-contract", "api-integration", "user-acceptance"]
     }
   ],
+  "derivedLinkOwnership": {
+    "originRole": "publicWeb",
+    "pathSource": "quwoquan_service/contracts/metadata/_shared/link_templates.yaml",
+    "serviceProjection": "quwoquan_service/generated/linktemplates/link_templates.g.go",
+    "consumers": ["app-navigation", "user-profile-qr", "data-release"]
+  },
   "dnsProvider": {
     "kind": "cloudflare",
-    "apiTokenEnv": "QWQ_DNS_API_TOKEN",
+    "apiTokenEnv": "QWQ_DNS_PROVISIONING_API_TOKEN",
     "zoneIdEnv": "QWQ_DNS_ZONE_ID"
   },
-  "nonProdAddressEnv": "QWQ_NONPROD_PUBLIC_IPV4",
-  "nonProdIpv6AddressEnv": "QWQ_NONPROD_PUBLIC_IPV6",
-  "prodAddressEnv": "QWQ_PROD_PUBLIC_IPV4",
-  "prodIpv6AddressEnv": "QWQ_PROD_PUBLIC_IPV6",
+  "nonProdAddress": "127.0.0.1",
+  "nonProdIpv6Address": "::1",
   "acmeChallengeAuthority": {
     "mode": "scoped-dns-api-token",
+    "apiTokenEnv": "QWQ_ACME_DNS_API_TOKEN",
     "requiredNamePrefix": "_acme-challenge",
     "forbidProductionZoneMutation": true
   },
@@ -182,12 +176,6 @@
       "target": "prod-sim",
       "apex": "sim.quwoquan.com",
       "wildcard": "*.sim.quwoquan.com"
-    },
-    "public-ca-prod": {
-      "target": "prod-hosted",
-      "apex": "quwoquan.com",
-      "wildcard": "*.quwoquan.com",
-      "certificateAutomation": "external"
     }
   },
   "acme": {

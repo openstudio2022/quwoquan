@@ -17,7 +17,7 @@ import (
 
 func TestRtcMediaQoeSummaryUsesCanonicalDenominatorsAndUtcSeries(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	telemetry := application.NewTelemetryService(store, store, store)
+	telemetry := application.NewTelemetryService(store, store)
 	// ReportEventBatch 拒绝超过当前时钟五分钟的 future event。逻辑时钟固定在至少
 	// 一个小时之前的第 30 分钟，既不会落入 future window，也让当前小时样本不跨桶。
 	now := time.Now().UTC().Add(-90 * time.Minute).Truncate(time.Hour).Add(30 * time.Minute)

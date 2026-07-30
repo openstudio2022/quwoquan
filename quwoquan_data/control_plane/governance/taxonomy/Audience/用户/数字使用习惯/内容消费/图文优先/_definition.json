@@ -2,6 +2,7 @@
   "label": "图文优先",
   "labelEn": "Image-Text First",
   "description": "优先消费图文内容",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

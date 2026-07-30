@@ -3,7 +3,7 @@
   "creatorId": "qwq_creator_highland_travel_blogger_001",
   "userId": "builtin_highland_travel_blogger",
   "authorId": "builtin_highland_travel_blogger",
-  "subAccountId": "builtin_highland_travel_blogger",
+  "personaId": "builtin_highland_travel_blogger",
   "displayName": "高原慢旅笔记",
   "userHandle": "highland_slow_travel",
   "headline": "专写高原采风、自然风光与在地体验的旅行博主",
@@ -13,7 +13,6 @@
     "Format/内容角度/叙事/旅行叙事",
     "Format/内容载体/文章/游记",
     "Topic/旅行",
-    "Topic/旅行/住宿/高原住宿",
     "Topic/旅行/旅行主题/文化深度游",
     "Topic/旅行/旅行主题/高原秘境"
   ],
@@ -21,5 +20,10 @@
     "type": "platform_virtual_creator",
     "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
     "visible": true
+  },
+  "avatarAsset": {
+    "assetId": "creator-avatar-qwq_creator_highland_travel_blogger_001-6901797605c33e3f",
+    "kind": "avatar",
+    "sha256": "sha256:6901797605c33e3f9498c2fdc27d59c85bb705addc84cf0a29758199a1246830"
   }
 }

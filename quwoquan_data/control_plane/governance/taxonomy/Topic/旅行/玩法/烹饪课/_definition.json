@@ -2,6 +2,7 @@
   "label": "烹饪课",
   "labelEn": "Cooking Class",
   "description": "当地美食烹饪学习体验",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -54,12 +54,11 @@ func TestRuleScorerIntersectionFactOutranksAffinityLocalContractTest(t *testing.
 	now := time.Now()
 	cands := []recommendation.ContentCandidate{
 		{
-			ContentID:                "fact",
-			ContentType:              "article",
-			PublishedAt:              now,
-			IntersectionFactStrength: 1,
-			IntersectionFreshness:    1,
-			IntersectionClass:        "fact",
+			ContentID:         "fact",
+			ContentType:       "article",
+			PublishedAt:       now,
+			AuthorID:          "u_fact_author",
+			IntersectionClass: "fact",
 		},
 		{
 			ContentID:                   "affinity",
@@ -74,6 +73,13 @@ func TestRuleScorerIntersectionFactOutranksAffinityLocalContractTest(t *testing.
 		Weights:       recpolicy.Baseline().WeightPresets[recpolicy.Baseline().DefaultPreset],
 		Scorer:        recpolicy.Baseline().Scorer,
 		Deterministic: true,
+		// 事实通道读的是 viewer↔候选对象的物化交集边（rm_viewer_object_intersection），
+		// 不是候选自身的 intersectionFactStrength（那是内容侧交集承载力，与看的人无关）。
+		User: &recommendation.UserFeatureVector{
+			IntersectionEdges: map[string]recommendation.IntersectionEdgeFeature{
+				"u_fact_author": {Weight: 1, Freshness: 1, Kind: "commonFollower"},
+			},
+		},
 	}
 	scored, err := scorer.ScoreBatch(context.Background(), features, cands)
 	if err != nil {

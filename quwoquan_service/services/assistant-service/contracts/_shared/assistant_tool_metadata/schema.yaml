@@ -24,6 +24,6 @@ subcontracts:
   recovery_policy:
     class_name: AssistantToolRecoveryPolicyWire
     fields:
-      - { name: action, type: string, default: fail_turn }
-      - { name: disruptionLevel, type: string, default: partial }
+      - { name: action, type: enum, enum_ref: ToolRecoveryAction, default: fail_turn }
+      - { name: disruptionLevel, type: enum, enum_ref: ToolDisruptionLevel, default: partial }
       - { name: userVisibleSummary, type: string, default: '' }

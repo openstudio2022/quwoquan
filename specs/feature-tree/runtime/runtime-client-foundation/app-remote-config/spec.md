@@ -53,7 +53,9 @@
 
 - /config/app 响应包含可审计的快照元信息
 - ETag 命中时可返回轻响应
-- 回滚后新会话拿到回滚后的 packageVersion / configHash
+- 回滚后新会话只以回滚配置内容的 canonical configHash 识别快照
+- 网络响应与磁盘 LKG 使用同一份 canonical wire root；禁止额外持久化信封、packageVersion、根级字段副本、dual-read 或类型宽松转换。
+- `schema`、`fetchedAt`、`maxAgeSec`、`activationPolicy` 与 `configHash` 必须使用唯一声明类型；configHash 必须与去除 fetchedAt/configHash 后的 canonical JSON SHA-256 完全一致，否则整份快照失效。
 
 <a id="req-005"></a>
 ### REQ-005 App 首帧不得等待远程配置网络请求
@@ -107,9 +109,10 @@
 
 - GIVEN 控制面发布新配置包
 - WHEN 客户端请求 /config/app
-- THEN 响应包含 schema/packageVersion/configHash/maxAgeSec
+- THEN 响应包含 schema/configHash/maxAgeSec，configHash 是唯一快照身份
 - THEN ETag 可用于未变更轻响应
 - THEN 回滚后新会话获得回滚版本 hash
+- THEN packageVersion、旧磁盘 wrapper、根级 home_channels/intersection 和字符串化数值均被拒绝或按缺失字段回落，不形成第二条读取轨道
 
 ## 6. 依赖
 

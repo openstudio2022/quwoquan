@@ -5,1245 +5,1309 @@ commercial_defaults:
   target_story: app-cloud-business-object-commercial-closure
 description: 会话管理、消息收发（seq 有序 + clientMsgId 幂等）、讨论成员、离线同步、已读回执、小趣助手会话内参与
 externalDependencies:
-- role: owner
-  capability: runtime.message.transport
-  port: MessageTransportPort
-  operations: [publishEphemeral, subscribeEphemeral, appendDurable, consumeDurable]
-  scenes: [general, realtime]
-  conformance: redis_message_transport
+  - role: owner
+    capability: runtime.message.transport
+    port: MessageTransportPort
+    operations: [publishEphemeral, subscribeEphemeral, appendDurable, consumeDurable]
+    scenes: [general, realtime]
+    conformance: redis_message_transport
 api_routes:
-- method: GET
-  path: /chat/conversations
-  operation: ListConversations
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: ConversationQueryFacet
-    method: listConversations
-    reader: ConversationListReader
-    slice: ConversationPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
-  query_params:
-  - cursor
-  - limit
-  response_entity: Conversation
-  response_body: ChatConversation
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatListConversationsQuery
-    response_type: ChatConversationPageSlice
-    request_encoder: encodeChatListConversationsQuery
-    response_decoder: decodeChatConversationPageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.invalid_argument
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/conversations/timestamps
-  operation: ListConversationTimestamps
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: ConversationQueryFacet
-    method: listConversationTimestamps
-    reader: ConversationTimestampReader
-    slice: ConversationTimestampIndexSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 会话时间戳索引（用于本地缓存增量同步）
-  response_entity: Conversation
-  response_body: ChatConversationTimestamp
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatListConversationTimestampsQuery
-    response_type: ChatConversationTimestampPageSlice
-    request_encoder: encodeChatListConversationTimestampsQuery
-    response_decoder: decodeChatConversationTimestampPageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /chat/conversations
-  operation: CreateConversation
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: ConversationLifecycleCommandFacet
-    method: createConversation
-    aggregate_owner: Conversation
-    mutation_target: Conversation
-    invariant_target: Conversation
-  authorization:
-    principal: persona
-    ownership_policy: self
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  description: '创建私信、私密群或加密会话，并自动创建 ConversationMember + ConversationUserState。
+  - method: GET
+    path: /chat/conversations
+    operation: ListConversations
+    request_bindings:
+      query:
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ConversationQueryFacet
+      method: listConversations
+      reader: ConversationListReader
+      slice: ConversationPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 会话列表（由 ConversationUserState 驱动排序，返回 maxSeq）
+    response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversationPageSlice
+      response_decoder: decodeChatConversationPageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.invalid_argument
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListConversationsQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/conversations/timestamps
+    operation: ListConversationTimestamps
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ConversationQueryFacet
+      method: listConversationTimestamps
+      reader: ConversationTimestampReader
+      slice: ConversationTimestampIndexSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 会话时间戳索引（用于本地缓存增量同步）
+    response_entity: Conversation
+    response_body: ChatConversationTimestamp
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversationTimestampPageSlice
+      response_decoder: decodeChatConversationTimestampPageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListConversationTimestampsQuery
+    request_body_kind: none
+  - method: POST
+    path: /chat/conversations
+    operation: CreateConversation
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationLifecycleCommandFacet
+      method: createConversation
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: '创建私信、私密群或加密会话，并自动创建 ConversationMember + ConversationUserState。
 
-    direct 会话按参与者对唯一：重复创建返回既有会话；group 创建以 Idempotency-Key receipt 保证重放返回首个会话。
+      direct 会话按参与者对唯一：重复创建返回既有会话；group 创建以 Idempotency-Key receipt 保证重放返回首个会话。
 
-    group 的 maxGroupSize 缺省为 1000 且不可超过 1000；direct/encrypted 固定为 2。
+      group 的 maxGroupSize 缺省为 1000 且不可超过 1000；direct/encrypted 固定为 2。
 
-    CircleGroup 绑定会话仅由 circle-service durable event provisioner 创建；调用方不得提交 circleId、circleGroupId、
+      CircleGroup 绑定会话仅由 circle-service durable event provisioner 创建；调用方不得提交 circleId、circleGroupId、
 
-    originType、bindingType 或 lifecyclePolicy。
+      originType。来源字段只可由受信任 durable event provisioner 写入。
 
-    '
-  request_entity: Conversation
-  writable_fields:
-  - type
-  - title
-  - maxGroupSize
-  - initialMemberIds
-  response_body: ChatConversation
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatCreateConversationCommand
-    response_type: ChatConversation
-    request_encoder: encodeChatCreateConversationCommand
-    response_decoder: decodeChatConversation
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.invalid_argument
-  - CHAT.USER.circle_group_binding_write_forbidden
-  - CHAT.USER.not_mutual
-  - CHAT.USER.greeting_required
-  - CHAT.USER.blocked
-  - CHAT.USER.group_member_not_mutual
-  - CHAT.USER.group_member_blocked
-  - CHAT.USER.group_full
-  - CHAT.USER.conversation_idempotency_conflict
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /chat/conversations/batch
-  operation: BatchGetConversations
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: ConversationQueryFacet
-    method: batchGetConversations
-    reader: BatchConversationReader
-    slice: ConversationBatchSlice
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 批量拉取指定会话的完整信息（仅返回请求者为成员的会话）
-  response_entity: Conversation
-  response_body: ChatConversation
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatBatchGetConversationsQuery
-    response_type: ChatConversationBatchSlice
-    request_encoder: encodeChatBatchGetConversationsQuery
-    response_decoder: decodeChatConversationBatchSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/conversations/{conversationId}
-  operation: GetConversation
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: ConversationQueryFacet
-    method: getConversation
-    reader: ConversationDetailReader
-    slice: ConversationDetailSlice
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt；群设置页与聊天信息页共用本事实源，App 不得另建群设置读取旁路）
-  response_entity: Conversation
-  response_body: ChatConversation
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatGetConversationQuery
-    response_type: ChatConversation
-    request_encoder: encodeChatGetConversationQuery
-    response_decoder: decodeChatConversation
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: PATCH
-  path: /chat/conversations/{conversationId}
-  operation: UpdateConversationTitle
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: ConversationLifecycleCommandFacet
-    method: updateConversationTitle
-    aggregate_owner: Conversation
-    mutation_target: Conversation
-    invariant_target: Conversation
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  description: '更新会话展示标题。HTTP 门槛为会话成员；当群治理开关 nameEditableByAdminOnly=true 时，
+'
+    request_entity: ChatCreateConversationCommand
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversation
+      response_decoder: decodeChatConversation
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.invalid_argument
+      - CHAT.USER.circle_group_binding_write_forbidden
+      - CHAT.USER.not_mutual
+      - CHAT.USER.greeting_required
+      - CHAT.USER.blocked
+      - CHAT.USER.group_member_not_mutual
+      - CHAT.USER.group_member_blocked
+      - CHAT.USER.group_full
+      - CHAT.USER.conversation_idempotency_conflict
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: object
+    request_bindings:
+      injected:
+        - name: Idempotency-Key
+          field: idempotencyKey
+  - method: POST
+    path: /chat/conversations/batch
+    operation: BatchGetConversations
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ConversationQueryFacet
+      method: batchGetConversations
+      reader: BatchConversationReader
+      slice: ConversationBatchSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 批量拉取指定会话的完整信息（仅返回请求者为成员的会话）
+    response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversationBatchSlice
+      response_decoder: decodeChatConversationBatchSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatBatchGetConversationsQuery
+    request_body_kind: object
+  - method: GET
+    path: /chat/conversations/{conversationId}
+    operation: GetConversation
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ConversationQueryFacet
+      method: getConversation
+      reader: ConversationDetailReader
+      slice: ConversationDetailSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 会话详情（含 maxSeq、memberCount、membersRosterRevision、updatedAt；群设置页与聊天信息页共用本事实源，App 不得另建群设置读取旁路）
+    response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversation
+      response_decoder: decodeChatConversation
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatGetConversationQuery
+    request_body_kind: none
+  - method: PATCH
+    path: /chat/conversations/{conversationId}
+    operation: UpdateConversationTitle
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      injected:
+        - name: Idempotency-Key
+          field: idempotencyKey
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationLifecycleCommandFacet
+      method: updateConversationTitle
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: '更新会话展示标题。HTTP 门槛为会话成员；当群治理开关 nameEditableByAdminOnly=true 时，
 
-    聚合 invariant 仅放行 owner/admin（否则返回 group_governance_forbidden）。
+      聚合 invariant 仅放行 owner/admin（否则返回 group_governance_forbidden）。
 
-    商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。标题已一致为 no-op 并重放原回执。
+      商用路径只允许更新标题；群来源、成员数、头像和绑定对象由服务端投影维护。标题已一致为 no-op 并重放原回执。
 
-    circleGroupId 非空时标题由 CircleGroup 管理并拒绝本 operation。
+      circleGroupId 非空时标题由 CircleGroup 管理并拒绝本 operation。
 
-    '
-  writable_fields:
-  - title
-  response_entity: Conversation
-  response_body: ChatConversation
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatUpdateConversationTitleCommand
-    response_type: ChatConversation
-    request_encoder: encodeChatUpdateConversationTitleCommand
-    response_decoder: decodeChatConversation
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.USER.group_governance_forbidden
-  - CHAT.USER.circle_group_managed_by_circle
-  - CHAT.USER.conversation_dissolved
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: PATCH
-  path: /chat/conversations/{conversationId}/announcement
-  operation: UpdateAnnouncement
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: ConversationGovernanceCommandFacet
-    method: updateAnnouncement
-    aggregate_owner: Conversation
-    mutation_target: Conversation
-    invariant_target: Conversation
-  authorization:
-    principal: persona
-    ownership_policy: conversation_owner_or_admin
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  description: '更新群公告（仅群聊；owner/admin）。发布非空公告时同事务写入一条
+'
+    response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversation
+      response_decoder: decodeChatConversation
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.USER.group_governance_forbidden
+      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.conversation_dissolved
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatUpdateConversationTitleCommand
+    request_body_kind: object
+  - method: PATCH
+    path: /chat/conversations/{conversationId}/announcement
+    operation: UpdateAnnouncement
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      injected:
+        - name: Idempotency-Key
+          field: idempotencyKey
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationGovernanceCommandFacet
+      method: updateAnnouncement
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner_or_admin
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: '更新群公告（仅群聊；owner/admin）。发布非空公告时同事务写入一条
 
-    type=system_announcement 的会话消息触达全员（公告即触达）；
+      type=system_announcement 的会话消息触达全员（公告即触达）；
 
-    公告内容一致为 no-op 并重放原回执。circleGroupId 非空时公告由 CircleGroup 管理并拒绝本 operation。
+      公告内容一致为 no-op 并重放原回执。circleGroupId 非空时公告由 CircleGroup 管理并拒绝本 operation。
 
-    '
-  writable_fields:
-  - announcement
-  response_entity: Conversation
-  response_body: ChatConversation
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatUpdateAnnouncementCommand
-    response_type: ChatConversation
-    request_encoder: encodeChatUpdateAnnouncementCommand
-    response_decoder: decodeChatConversation
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.USER.group_governance_forbidden
-  - CHAT.USER.circle_group_managed_by_circle
-  - CHAT.USER.conversation_dissolved
-  - CHAT.USER.message_too_long
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: PATCH
-  path: /chat/conversations/{conversationId}/governance
-  operation: UpdateGroupGovernanceSettings
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: ConversationGovernanceCommandFacet
-    method: updateGroupGovernanceSettings
-    aggregate_owner: Conversation
-    mutation_target: Conversation
-    invariant_target: Conversation
-  authorization:
-    principal: persona
-    ownership_policy: conversation_owner_or_admin
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  description: '更新群治理开关（仅群聊；owner/admin）。当前唯一开关：nameEditableByAdminOnly。
+'
+    response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversation
+      response_decoder: decodeChatConversation
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.USER.group_governance_forbidden
+      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.conversation_dissolved
+      - CHAT.USER.message_too_long
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatUpdateAnnouncementCommand
+    request_body_kind: object
+  - method: PATCH
+    path: /chat/conversations/{conversationId}/governance
+    operation: UpdateGroupGovernanceSettings
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      injected:
+        - name: Idempotency-Key
+          field: idempotencyKey
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationGovernanceCommandFacet
+      method: updateGroupGovernanceSettings
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner_or_admin
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: '更新群治理开关（仅群聊；owner/admin）。当前唯一开关：nameEditableByAdminOnly。
 
-    设置一致为 no-op 并重放原回执；变更递增 membersRosterRevision 并发布
+      设置一致为 no-op 并重放原回执；变更递增 membersRosterRevision 并发布
 
-    ConversationRosterUpdated(aspects=[governance]) 供端侧定点刷新。circleGroupId 非空时治理策略由 CircleGroup 管理并拒绝本
-    operation。
+      ConversationRosterUpdated(aspects=[governance]) 供端侧定点刷新。circleGroupId 非空时治理策略由 CircleGroup 管理并拒绝本 operation。
 
-    '
-  writable_fields:
-  - nameEditableByAdminOnly
-  response_entity: Conversation
-  response_body: ChatConversation
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatUpdateGroupGovernanceSettingsCommand
-    response_type: ChatConversation
-    request_encoder: encodeChatUpdateGroupGovernanceSettingsCommand
-    response_decoder: decodeChatConversation
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.USER.group_governance_forbidden
-  - CHAT.USER.circle_group_managed_by_circle
-  - CHAT.USER.conversation_dissolved
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/conversations/{conversationId}/messages/{messageId}/receipts
-  operation: GetReceipts
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: MessageReceiptQueryFacet
-    method: getReceipts
-    reader: MessageReceiptReader
-    slice: MessageReceiptPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 获取消息回执列表（仅 receiptEnabled 会话可用；读取 MessageReceiptFact append-only 事实）
-  response_entity: ChatMessageReceipt
-  response_body: ChatMessageReceipt
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatGetMessageReceiptsQuery
-    response_type: ChatMessageReceiptPageSlice
-    request_encoder: encodeChatGetMessageReceiptsQuery
-    response_decoder: decodeChatMessageReceiptPageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.blocked
-  - CHAT.USER.message_not_found
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: DELETE
-  path: /chat/conversations/{conversationId}
-  operation: DissolveConversation
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: ConversationGovernanceCommandFacet
-    method: dissolveConversation
-    aggregate_owner: Conversation
-    mutation_target: Conversation
-    invariant_target: Conversation
-  authorization:
-    principal: persona
-    ownership_policy: conversation_owner
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  description: '解散私建群（仅群主；circleGroupId 非空的群必须由 CircleGroupArchived durable event 终止）。写入终态 status=dissolved
-    并发布
+'
+    response_entity: Conversation
+    response_body: ChatConversation
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatConversation
+      response_decoder: decodeChatConversation
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.USER.group_governance_forbidden
+      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.USER.conversation_dissolved
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatUpdateGroupGovernanceSettingsCommand
+    request_body_kind: object
+  - method: GET
+    path: /chat/conversations/{conversationId}/messages/{messageId}/receipts
+    operation: GetReceipts
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+        - name: messageId
+          field: messageId
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: MessageReceiptQueryFacet
+      method: getReceipts
+      reader: MessageReceiptReader
+      slice: MessageReceiptPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 获取消息回执列表（仅 receiptEnabled 会话可用；读取 MessageReceiptFact append-only 事实）
+    response_entity: ChatMessageReceipt
+    response_body: ChatMessageReceipt
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatMessageReceiptPageSlice
+      response_decoder: decodeChatMessageReceiptPageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.blocked
+      - CHAT.USER.message_not_found
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatGetMessageReceiptsQuery
+    request_body_kind: none
+  - method: DELETE
+    path: /chat/conversations/{conversationId}
+    operation: DissolveConversation
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      injected:
+        - name: Idempotency-Key
+          field: idempotencyKey
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: ConversationGovernanceCommandFacet
+      method: dissolveConversation
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: persona
+      ownership_policy: conversation_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    description: '解散私建群（仅群主；circleGroupId 非空的群必须由 CircleGroupArchived durable event 终止）。写入终态 status=dissolved 并发布
 
-    ConversationDissolved 事件实时收敛成员端；已解散重复请求为 no-op 并重放原回执。
+      ConversationDissolved 事件实时收敛成员端；已解散重复请求为 no-op 并重放原回执。
 
-    '
-  response_body_kind: ack
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatDissolveConversationCommand
-    response_type: ChatCommandAck
-    request_encoder: encodeChatDissolveConversationCommand
-    response_decoder: decodeChatCommandAck
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.USER.group_governance_forbidden
-  - CHAT.USER.circle_group_managed_by_circle
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/inbox
-  operation: ListInbox
-  actor: persona
-  commercial:
-    status: ready
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_inbox_list
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  application:
-    kind: query
-    facet: ConversationInboxQueryFacet
-    method: listInbox
-    reader: ChatInboxReader
-    slice: ChatInboxPageSlice
-  description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 服务端预合成头像）
-  query_params:
-  - cursor
-  - limit
-  response_entity: ChatInbox
-  response_body: ChatInbox
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatListInboxQuery
-    response_type: ChatInboxPageSlice
-    request_encoder: encodeChatListInboxQuery
-    response_decoder: decodeChatInboxPageSlice
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/message-home
-  operation: ListMessageHome
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: MessageHomeQueryFacet
-    method: listMessageHome
-    reader: MessageHomeReader
-    slice: MessageHomePageSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct
-    中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
-  query_params:
-  - filter
-  - cursor
-  - limit
-  response_entity: MessageHomeRow
-  response_body: MessageHomeRow
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/message_home_contracts.dart
-    request_type: ChatListMessageHomeQuery
-    response_type: ChatMessageHomePageSlice
-    request_encoder: encodeChatListMessageHomeQuery
-    response_decoder: decodeChatMessageHomePageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/contacts
-  operation: ListContacts
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: ContactQueryFacet
-    method: listContacts
-    reader: ContactListReader
-    slice: ContactPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 联系人列表
-  query_params:
-  - cursor
-  - limit
-  response_entity: ChatContactListRow
-  response_body: ChatContactListRow
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatListContactsQuery
-    response_type: ChatContactPageSlice
-    request_encoder: encodeChatListContactsQuery
-    response_decoder: decodeChatContactPageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/contact-home
-  operation: ListContactHome
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: ContactQueryFacet
-    method: listContactHome
-    reader: ContactHomeReader
-    slice: ContactHomePageSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
-  query_params:
-  - filter
-  - limit
-  response_entity: ContactHomeRow
-  response_body: ContactHomeRow
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatListContactHomeQuery
-    response_type: ChatContactHomePageSlice
-    request_encoder: encodeChatListContactHomeQuery
-    response_decoder: decodeChatContactHomePageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/groups/{conversationId}/home
-  operation: GetGroupHome
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: GroupHomeQueryFacet
-    method: getGroupHome
-    reader: GroupHomeReader
-    slice: GroupHomeSlice
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 商用讨论主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
-  response_entity: GroupHome
-  response_body: GroupHome
-  response_body_kind: object
-  client_contract:
-    dart_import: ../chat/conversation_contracts.dart
-    request_type: ChatGetGroupHomeQuery
-    response_type: ChatGroupHome
-    request_encoder: encodeChatGetGroupHomeQuery
-    response_decoder: decodeChatGroupHome
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/group-candidates
-  operation: ListGroupCandidates
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: GroupCandidateQueryFacet
-    method: listGroupCandidates
-    reader: GroupCandidateReader
-    slice: GroupCandidatePageSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts
-    + circles
-  query_params:
-  - conversationId
-  - limit
-  response_entity: ChatContactListRow
-  response_body: ChatContactListRow
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatListGroupCandidatesQuery
-    response_type: ChatContactPageSlice
-    request_encoder: encodeChatListGroupCandidatesQuery
-    response_decoder: decodeChatGroupCandidatePageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/selectable-group-conversations
-  operation: ListSelectableGroupConversations
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: GroupCandidateQueryFacet
-    method: listSelectableGroupConversations
-    reader: SelectableGroupConversationReader
-    slice: SelectableGroupConversationPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: active_persona_inbox
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: '「从群聊/圈子中选择联系人」来源列表（图四）。返回当前用户所在、且含与当前用户互关联系人的群会话，并给出每个群的互关好友数 friendMemberCount。
+'
+    response_body_kind: ack
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatCommandAck
+      response_decoder: decodeChatCommandAck
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.USER.group_governance_forbidden
+      - CHAT.USER.circle_group_managed_by_circle
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatDissolveConversationCommand
+    request_body_kind: none
+  - method: GET
+    path: /chat/inbox
+    operation: ListInbox
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_inbox_list
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    application:
+      kind: query
+      facet: ConversationInboxQueryFacet
+      method: listInbox
+      reader: ChatInboxReader
+      slice: ChatInboxPageSlice
+    description: 用户收件箱（基于 ChatInbox per-user 投影，返回最近会话列表 + unreadCount + mentionUnreadCount + 服务端预合成头像）
+    response_entity: ChatInbox
+    response_body: ChatInbox
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      response_type: ChatInboxPageSlice
+      response_decoder: decodeChatInboxPageSlice
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListInboxQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/message-home
+    operation: ListMessageHome
+    request_bindings:
+      query:
+        - name: filter
+          field: filter
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: MessageHomeQueryFacet
+      method: listMessageHome
+      reader: MessageHomeReader
+      slice: MessageHomePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 商用消息首页聚合行。conversation 行来自 ChatInboxProjection/read watermark，MarkAsRead 后 all/unread/group/direct 中同一会话的 unreadCount 必须一致；notification 行来自 notification-service/AppMessage inbox；App 不得自行拼接通知。
+    response_entity: MessageHomeRow
+    response_body: MessageHomeRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/message_home_contracts.dart
+      response_type: ChatMessageHomePageSlice
+      response_decoder: decodeChatMessageHomePageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListMessageHomeQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/contacts
+    operation: ListContacts
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: cursor
+          field: cursor
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ContactQueryFacet
+      method: listContacts
+      reader: ContactListReader
+      slice: ContactPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 联系人列表
+    response_entity: ChatContactListRow
+    response_body: ChatContactListRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      response_type: ChatContactPageSlice
+      response_decoder: decodeChatContactPageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListContactsQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/contact-home
+    operation: ListContactHome
+    request_bindings:
+      query:
+        - name: filter
+          field: filter
+        - name: limit
+          field: limit
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: ContactQueryFacet
+      method: listContactHome
+      reader: ContactHomeReader
+      slice: ContactHomePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 商用联系首页聚合行，覆盖全部/互关/圈子/讨论。来源、交集、成员数、最近互动均由云端 read model 提供；wire filter 仍为 group。
+    response_entity: ContactHomeRow
+    response_body: ContactHomeRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      response_type: ChatContactHomePageSlice
+      response_decoder: decodeChatContactHomePageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListContactHomeQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/groups/{conversationId}/home
+    operation: GetGroupHome
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: GroupHomeQueryFacet
+      method: getGroupHome
+      reader: GroupHomeReader
+      slice: GroupHomeSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 商用讨论主页 / 聊天信息页统一事实源，供聊天页顶部和聊天信息页消费。
+    response_entity: GroupHome
+    response_body: GroupHome
+    response_body_kind: object
+    client_contract:
+      dart_import: ../chat/conversation_contracts.dart
+      response_type: ChatGroupHome
+      response_decoder: decodeChatGroupHome
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatGetGroupHomeQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/group-candidates
+    operation: ListGroupCandidates
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: conversationId
+          field: conversationId
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: GroupCandidateQueryFacet
+      method: listGroupCandidates
+      reader: GroupCandidateReader
+      slice: GroupCandidatePageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 发起讨论/添加成员候选源，由 chat-service 聚合互关联系人、可复用 group 会话成员，并排除当前会话已有成员；前端不得再自行拼装 inbox + contacts + circles
+    response_entity: ChatContactListRow
+    response_body: ChatContactListRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      response_type: ChatContactPageSlice
+      response_decoder: decodeChatGroupCandidatePageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListGroupCandidatesQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/selectable-group-conversations
+    operation: ListSelectableGroupConversations
+    request_bindings:
+      query:
+        - name: limit
+          field: limit
+        - name: query
+          field: query
+          required: false
+        - name: source
+          field: source
+          required: false
+        - name: cursor
+          field: cursor
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: GroupCandidateQueryFacet
+      method: listSelectableGroupConversations
+      reader: SelectableGroupConversationReader
+      slice: SelectableGroupConversationPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: active_persona_inbox
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: '「从群聊/圈子中选择联系人」来源列表（图四）。返回当前用户所在、且含与当前用户互关联系人的群会话，并给出每个群的互关好友数 friendMemberCount。
 
-    由 chat-service 聚合会话成员与关系能力（relationship gate）计算交集，friendMemberCount==0 的群不返回；前端不得再自行多次拉取成员逐群求交集。
+      由 chat-service 聚合会话成员与关系能力（relationship gate）计算交集，friendMemberCount==0 的群不返回；前端不得再自行多次拉取成员逐群求交集。
 
-    可选 source=group 仅返回 circleId 为空的私建群，source=circle 仅返回 circleId 非空的圈子绑定群；其它值拒绝，避免端侧分页后过滤导致来源漏项。
+      可选 source=group 仅返回 circleId 为空的私建群，source=circle 仅返回 circleId 非空的圈子绑定群；其它值拒绝，避免端侧分页后过滤导致来源漏项。
 
-    响应使用 `items + nextCursor` keyset Slice；cursor、source 和 query 必须在服务端同一读取链路中处理，端侧仅可顺序追加后续页。
+      响应使用 `items + nextCursor` keyset Slice；cursor、source 和 query 必须在服务端同一读取链路中处理，端侧仅可顺序追加后续页。
 
-    '
-  query_params:
-  - cursor
-  - limit
-  - query
-  - source
-  response_entity: SelectableGroupConversationRow
-  response_body: SelectableGroupConversationRow
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatListSelectableGroupConversationsQuery
-    response_type: ChatSelectableGroupConversationPageSlice
-    request_encoder: encodeChatListSelectableGroupConversationsQuery
-    response_decoder: decodeChatSelectableGroupConversationPageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.invalid_argument
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /chat/selectable-group-conversations/{conversationId}/contact-members
-  operation: ListSelectableGroupContactMembers
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: GroupCandidateQueryFacet
-    method: listSelectableGroupContactMembers
-    reader: SelectableGroupContactReader
-    slice: SelectableGroupContactPageSlice
-  authorization:
-    principal: persona
-    ownership_policy: conversation_member
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_conversation_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: '「从群聊中选择联系人」群成员列表（图五）。返回指定群成员中与当前用户互关的联系人（排除当前用户、排除已屏蔽），供发起群聊/添加成员选人。
+'
+    response_entity: SelectableGroupConversationRow
+    response_body: SelectableGroupConversationRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      response_type: ChatSelectableGroupConversationPageSlice
+      response_decoder: decodeChatSelectableGroupConversationPageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.invalid_argument
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListSelectableGroupConversationsQuery
+    request_body_kind: none
+  - method: GET
+    path: /chat/selectable-group-conversations/{conversationId}/contact-members
+    operation: ListSelectableGroupContactMembers
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      query:
+        - name: limit
+          field: limit
+        - name: query
+          field: query
+          required: false
+        - name: cursor
+          field: cursor
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: GroupCandidateQueryFacet
+      method: listSelectableGroupContactMembers
+      reader: SelectableGroupContactReader
+      slice: SelectableGroupContactPageSlice
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: '「从群聊中选择联系人」群成员列表（图五）。返回指定群成员中与当前用户互关的联系人（排除当前用户、排除已屏蔽），供发起群聊/添加成员选人。
 
-    与 ListSelectableGroupConversations 同源使用 relationship gate 判定 mutual；行形状复用联系人行。
+      与 ListSelectableGroupConversations 同源使用 relationship gate 判定 mutual；行形状复用联系人行。
 
-    调用者必须是目标会话成员；响应使用 `items + nextCursor` keyset Slice，query 在分页前由服务端过滤。
+      调用者必须是目标会话成员；响应使用 `items + nextCursor` keyset Slice，query 在分页前由服务端过滤。
 
-    '
-  query_params:
-  - cursor
-  - limit
-  - query
-  response_entity: ChatContactListRow
-  response_body: ChatContactListRow
-  response_body_kind: page
-  client_contract:
-    dart_import: ../chat/contact_contracts.dart
-    request_type: ChatListSelectableGroupContactMembersQuery
-    response_type: ChatContactPageSlice
-    request_encoder: encodeChatListSelectableGroupContactMembersQuery
-    response_decoder: decodeChatSelectableGroupContactMemberPageSlice
-  error_codes:
-  - CHAT.USER.unauthorized
-  - CHAT.USER.conversation_not_found
-  - CHAT.SYSTEM.internal_error
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /internal/chat/account-closure/dead-letters:recover
-  operation: RecoverChatAccountClosureDeadLetter
-  actor: none
-  headers:
-  - Idempotency-Key
-  application:
-    kind: command
-    facet: ConversationAccountClosureRecoveryCommandFacet
-    method: recoverAccountClosureDeadLetter
-    aggregate_owner: Conversation
-    mutation_target: Conversation
-    invariant_target: Conversation
-  authorization:
-    principal: operator
-    scopes:
-    - ops.account_closure.write
-    permissions:
-    - chat.account_closure.recover
-    ownership_policy: service_owned_projection_delivery
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CHAT.USER.invalid_argument
-  - CHAT.USER.unauthorized
-  - CHAT.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: chat_account_closure_dead_letter_recover
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  request_entity: ChatAccountClosureDeadLetterRecoveryRequest
-  response_entity: ChatAccountClosureDeadLetterRecoveryAccepted
-  success_status: 202
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-  description: operator 只释放 Chat 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
+'
+    response_entity: ChatContactListRow
+    response_body: ChatContactListRow
+    response_body_kind: page
+    client_contract:
+      dart_import: ../chat/contact_contracts.dart
+      response_type: ChatContactPageSlice
+      response_decoder: decodeChatSelectableGroupContactMemberPageSlice
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListSelectableGroupContactMembersQuery
+    request_body_kind: none
+  - method: POST
+    path: /internal/chat/account-closure/dead-letters:recover
+    operation: RecoverChatAccountClosureDeadLetter
+    actor: none
+    application:
+      kind: command
+      facet: ConversationAccountClosureRecoveryCommandFacet
+      method: recoverAccountClosureDeadLetter
+      aggregate_owner: Conversation
+      mutation_target: Conversation
+      invariant_target: Conversation
+    authorization:
+      principal: operator
+      scopes:
+        - ops.account_closure.write
+      permissions:
+        - chat.account_closure.recover
+      ownership_policy: service_owned_projection_delivery
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CHAT.USER.invalid_argument
+      - CHAT.USER.unauthorized
+      - CHAT.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_account_closure_dead_letter_recover
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_entity: ChatAccountClosureDeadLetterRecoveryRequest
+    response_entity: ChatAccountClosureDeadLetterRecoveryAccepted
+    success_status: 202
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    description: operator 只释放 Chat 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
 consumers:
-- name: app
-  capabilities:
-  - list_conversations
-  - list_inbox
-  - list_message_home
-  - list_contact_home
-  - get_group_home
-  - create_conversation
-  - update_conversation_title
-  - send_message
-  - recall_message
-  - sync_messages
-  - mark_as_read
-  - get_receipts
-  - list_members
-  - manage_members
-  - update_settings
-  - invite_assistant
-  - remove_assistant
-  - list_contacts
-- name: platform-ops
-  capabilities:
-  - read_conversation
-  - read_messages
-  - read_members
-- name: assistant-service
-  capabilities:
-  - read_conversation
-  - read_messages
-  - send_message
-- name: circle-service
-  capabilities:
-  - create_conversation
-  - manage_members
-- name: realtime-gateway
-  capabilities:
-  - sync_messages
+  - name: app
+    capabilities:
+      - list_conversations
+      - list_inbox
+      - list_message_home
+      - list_contact_home
+      - get_group_home
+      - create_conversation
+      - update_conversation_title
+      - send_message
+      - recall_message
+      - sync_messages
+      - mark_as_read
+      - get_receipts
+      - list_members
+      - manage_members
+      - update_settings
+      - invite_assistant
+      - remove_assistant
+      - list_contacts
+  - name: platform-ops
+    capabilities:
+      - read_conversation
+      - read_messages
+      - read_members
+  - name: assistant-service
+    capabilities:
+      - read_conversation
+      - read_messages
+      - send_message
+  - name: circle-service
+    capabilities:
+      - create_conversation
+      - manage_members
+  - name: realtime-gateway
+    capabilities:
+      - sync_messages
 contract_test:
   mock_strategy:
     app_side:
       mock_target: chat-service API
       data_source: fields.yaml
       scenarios:
-      - name: conversation_list
-        route: GET /chat/conversations
-        assertions:
-        - status_200
-        - items_match_schema
-        - sorted_by_last_message_time
-        - maxSeq_present
-      - name: inbox_list
-        route: GET /chat/inbox
-        assertions:
-        - status_200
-        - items_match_schema
-        - sorted_by_pinned_then_last_message_time
-        - unread_and_mention_counts_present
-      - name: group_chat_lifecycle
-        routes:
-        - POST /chat/conversations
-        - POST /chat/conversations/{id}/members
-        - DELETE /chat/conversations/{id}/members/{uid}
-        assertions:
-        - group_created
-        - member_added
-        - member_removed
-        - memberCount_updated
+        - name: conversation_list
+          route: GET /chat/conversations
+          assertions:
+            - status_200
+            - items_match_schema
+            - sorted_by_last_message_time
+            - maxSeq_present
+        - name: inbox_list
+          route: GET /chat/inbox
+          assertions:
+            - status_200
+            - items_match_schema
+            - sorted_by_pinned_then_last_message_time
+            - unread_and_mention_counts_present
+        - name: group_chat_lifecycle
+          routes:
+            - POST /chat/conversations
+            - POST /chat/conversations/{id}/members
+            - DELETE /chat/conversations/{id}/members/{uid}
+          assertions:
+            - group_created
+            - member_added
+            - member_removed
+            - memberCount_updated
     service_side:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
         mongodb: testcontainers (mongo:7)
         redis: miniredis/v2
       spy_targets:
-      - event_publisher
+        - event_publisher
       mock_targets:
-      - cross_service_clients
+        - cross_service_clients
       data_management:
         seed: fixture 工厂预制到真实 MongoDB
-        cleanup: DeleteMany for conversations, conversations_command_receipts, conversations_outbox, messages,
-          messages_sequences, messages_command_receipts, messages_outbox, messages_outbox_sequences, messages_projection_checkpoints,
-          conversation_memberships, conversation_memberships_command_receipts, conversation_memberships_outbox,
-          conversation_user_states, conversation_user_states_command_receipts, conversation_user_states_outbox,
-          message_receipts, chat_projection_checkpoints, chat_aggregate_outbox_sequences
+        cleanup: DeleteMany for conversations, conversations_command_receipts, conversations_outbox, messages, messages_sequences, messages_command_receipts, messages_outbox, messages_outbox_sequences, messages_projection_checkpoints, conversation_memberships, conversation_memberships_command_receipts, conversation_memberships_outbox, conversation_user_states, conversation_user_states_command_receipts, conversation_user_states_outbox, message_receipts, chat_projection_checkpoints, chat_aggregate_outbox_sequences
         redis_cleanup: miniredis.FlushAll()
       scenarios:
-      - name: create_direct_conversation_unique
-        command: CreateConversation (direct, duplicate participants)
-        assertions:
-        - second create returns existing conversation id
-        - db.conversations.CountDocuments({type:'direct', participants}) → 1
-      - name: dissolve_conversation_noop_replay
-        command: DissolveConversation (repeat with same Idempotency-Key)
-        assertions:
-        - first call archives conversation and writes receipt + outbox in one transaction
-        - replay returns original receipt without new outbox event
+        - name: create_direct_conversation_unique
+          command: CreateConversation (direct, duplicate participants)
+          assertions:
+            - second create returns existing conversation id
+            - db.conversations.CountDocuments({type:'direct', participants}) → 1
+        - name: dissolve_conversation_noop_replay
+          command: DissolveConversation (repeat with same Idempotency-Key)
+          assertions:
+            - first call archives conversation and writes receipt + outbox in one transaction
+            - replay returns original receipt without new outbox event
   coverage_requirements:
-  - all public conversation types (direct/group/encrypted) covered
-  - CircleGroup binding is provisioned only from durable events; public CreateConversation rejects all
-    binding/source fields
-  - governance commands write state/receipt/outbox in one transaction
-  - receipt enabled/disabled paths
+    - all public conversation types (direct/group/encrypted) covered
+    - CircleGroup binding is provisioned only from durable events; public CreateConversation rejects all binding/source fields
+    - governance commands write state/receipt/outbox in one transaction
+    - receipt enabled/disabled paths

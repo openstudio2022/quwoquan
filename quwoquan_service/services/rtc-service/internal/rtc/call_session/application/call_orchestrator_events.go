@@ -41,6 +41,7 @@ func (o *CallOrchestrator) buildEvent(
 	payload.ParticipantCount = session.ParticipantCount
 	payload.EndReason = session.EndReason
 	payload.DurationMs = session.DurationMs
+	payload.CreatedAt = session.CreatedAt.UTC().Format(time.RFC3339Nano)
 	if session.StartedAt != nil {
 		payload.StartedAt = session.StartedAt.UTC().Format(time.RFC3339Nano)
 	}

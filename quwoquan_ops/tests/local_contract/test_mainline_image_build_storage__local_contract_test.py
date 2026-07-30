@@ -16,7 +16,7 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
         encoding="utf-8"
     )
 
-    assert "context: quwoquan_service" in workflow
+    assert '"${{ matrix.context }}"' in workflow
     assert "id: base_images" in workflow
     assert "GO_BASE_IMAGE: ${{ steps.base_images.outputs.go_base_image }}" in workflow
     assert "ALPINE_BASE_IMAGE: ${{ steps.base_images.outputs.alpine_base_image }}" in workflow
@@ -24,6 +24,8 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
     assert '--build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE"' in workflow
     assert '--build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE"' in workflow
     assert '--build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE"' in workflow
+    assert '--cache-from "type=registry,ref=' in workflow
+    assert '--cache-to "type=registry,ref=' in workflow
 
 
 def test_prod_hosted_build_images_match_their_governed_repositories() -> None:
@@ -79,21 +81,18 @@ def test_mainline_image_build_does_not_create_unbounded_actions_storage() -> Non
     assert gate.main() == 0
 
 
-def test_mainline_image_build_retries_only_declared_transient_registry_eof() -> None:
+def test_mainline_image_build_fails_closed_with_signed_attestations() -> None:
     workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "登录镜像仓库（重试瞬时网络失败）" in workflow
-    assert "构建、生成 SBOM/provenance 并推送（重试声明的瞬时 registry EOF）" in workflow
-    assert workflow.count("for attempt in 1 2 3; do") >= 2
-    assert "failed to fetch oauth token:.*EOF" in workflow
-    assert "https://ghcr.io/(token|v2/).*EOF" in workflow
-    assert "https://registry-1\\.docker\\.io/v2/docker/buildkit-syft-scanner/.*EOF" in workflow
-    assert "declared transient registry EOF persisted after" in workflow
-    assert "--attest type=sbom" in workflow
-    assert "--attest type=provenance,mode=max" in workflow
-    assert 'docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25' in workflow
+    assert "--sbom=true" in workflow
+    assert "--provenance=mode=max" in workflow
+    assert "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6" in workflow
+    assert "Verify signed provenance, SBOM, signer and issuer" in workflow
+    assert "continue-on-error" not in workflow.split("  build-release-images:", 1)[1].split(
+        "  validate-deploy:", 1
+    )[0]
 
 
 def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
@@ -130,25 +129,15 @@ def test_mainline_release_delivery_uses_bounded_same_input_retries() -> None:
     assert ":latest" not in workflow
 
 
-def test_mainline_qemu_setup_uses_bounded_same_digest_retries() -> None:
+def test_mainline_qemu_setup_is_digest_pinned() -> None:
     workflow = (ROOT / ".github/workflows/service_pipeline.yml").read_text(
         encoding="utf-8"
     )
     document = yaml.safe_load(workflow)
     steps = document["jobs"]["build-release-images"]["steps"]
-    steps_by_id = {step.get("id"): step for step in steps if step.get("id")}
-    attempts = [steps_by_id[f"qemu_attempt_{attempt}"] for attempt in (1, 2, 3)]
-
-    assert all(
-        step["uses"]
-        == "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130"
-        for step in attempts
-    )
-    assert all(step["with"] == attempts[0]["with"] for step in attempts)
-    assert attempts[0]["continue-on-error"] is True
-    assert attempts[1]["continue-on-error"] is True
-    assert "continue-on-error" not in attempts[2]
-    assert attempts[0]["with"] == {
+    qemu = next(step for step in steps if str(step.get("uses") or "").startswith("docker/setup-qemu-action@"))
+    assert qemu["uses"] == "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130"
+    assert qemu["with"] == {
         "image": (
             "docker.io/tonistiigi/binfmt@sha256:"
             "b4c6a09270133b3c5b4dff94f83067df4dd27eced195fc6a1dbad102999e24dd"
@@ -156,9 +145,6 @@ def test_mainline_qemu_setup_uses_bounded_same_digest_retries() -> None:
         "platforms": "amd64",
         "cache-image": False,
     }
-    runs = [str(step.get("run") or "") for step in steps]
-    assert runs.count("sleep 5") == 1
-    assert runs.count("sleep 15") == 1
 
 
 def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
@@ -168,7 +154,7 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
 
     assert workflow.count("runs-on: [self-hosted, macOS, ARM64]") == 5
     assert "runs-on: ubuntu-latest" not in workflow
-    assert "actions/cache@" not in workflow
+    assert "actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830" in workflow
     assert (
         "docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130"
         in workflow
@@ -182,16 +168,9 @@ def test_mainline_pipeline_uses_controlled_self_hosted_amd64_builder() -> None:
     assert "cache-image: false" in workflow
     assert workflow.count("version: v0.35.0") == 2
     assert workflow.count("cache-binary: false") == 2
-    assert workflow.count("clean: false") == 5
-    assert 'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}"' in workflow
+    assert workflow.count("clean: false") == 2
+    assert 'cache_root="${RUNNER_TEMP}/quwoquan-service-pipeline/go-${RUNNER_ARCH}"' in workflow
     assert 'echo "GOCACHE=${cache_root}/go-build" >> "$GITHUB_ENV"' in workflow
     assert 'echo "GOMODCACHE=${cache_root}/go-mod" >> "$GITHUB_ENV"' in workflow
-    assert 'docker_config="${RUNNER_TEMP}/quwoquan-service-pipeline/${GITHUB_RUN_ID}/${{ matrix.service }}/docker-config"' in workflow
-    assert workflow.count('docker_context="$(docker context show)"') == 2
-    assert workflow.count('docker context inspect "$docker_context"') == 2
-    assert workflow.count('DOCKER_HOST="$docker_host" docker version >/dev/null') == 2
-    assert workflow.count('echo "DOCKER_HOST=${docker_host}" >> "$GITHUB_ENV"') == 2
-    assert 'echo "DOCKER_CONFIG=${docker_config}" >> "$GITHUB_ENV"' in workflow
-    assert "设置 release artifact 隔离 Docker 配置" in workflow
-    assert "${{ runner.temp }}" not in workflow
+    assert "type=registry" in workflow
     assert "github.workspace }}/.qwq_output/env/repo/local/ci/cache/go" not in workflow

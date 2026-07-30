@@ -40,8 +40,9 @@ business_rules:
 - MarkAsRead 后 mentionUnreadCount 必须等于 readSeq 之后提及当前 persona 或 __all__ 且发送者非本人的消息数，不得无条件清零
 - muted、pinned 和 readSeq 只能由 owner persona 修改
 lifecycle:
-  states:
-  - active
-  - removed
+  state_model: row_presence
+  active_condition: user-state row exists for an active membership
+  terminal_outcome: removed
+  terminal_persistence: row is deleted when membership ends
   optimistic_concurrency: version
   idempotency: command_receipt

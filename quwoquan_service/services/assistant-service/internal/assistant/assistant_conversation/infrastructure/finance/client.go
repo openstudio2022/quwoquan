@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 type Config struct {
@@ -36,15 +36,15 @@ func New(cfg Config, httpClient *http.Client) (*Client, error) {
 
 func (c *Client) Lookup(
 	ctx context.Context,
-	request application.ExternalSearchRequest,
-) (application.ExternalSearchResult, error) {
+	request ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
 	symbols := normalizeSymbols(request.Symbols, request.Query)
 	if len(symbols) == 0 {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "finance", Reason: application.ProviderFailureInvalidResponse,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "finance", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
-	references := make([]application.ExternalReference, 0, len(symbols))
+	references := make([]ports.ExternalReference, 0, len(symbols))
 	parts := make([]string, 0, len(symbols))
 	for _, symbol := range symbols {
 		result, err := c.quote(ctx, symbol)
@@ -55,14 +55,14 @@ func (c *Client) Lookup(
 		parts = append(parts, result.summary)
 	}
 	if len(references) == 0 {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "finance", Reason: application.ProviderFailureUnavailable,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "finance", Reason: ports.ProviderFailureUnavailable,
 		}
 	}
 	for index := range references {
 		references[index].Rank = index + 1
 	}
-	return application.ExternalSearchResult{
+	return ports.ExternalSearchResult{
 		Summary:    strings.Join(parts, "；"),
 		References: references,
 	}, nil
@@ -70,14 +70,14 @@ func (c *Client) Lookup(
 
 type quoteResult struct {
 	summary   string
-	reference application.ExternalReference
+	reference ports.ExternalReference
 }
 
 func (c *Client) quote(ctx context.Context, symbol string) (quoteResult, error) {
 	endpoint, err := chartEndpoint(c.chartURL, symbol)
 	if err != nil {
-		return quoteResult{}, application.ProviderFailure{
-			Capability: "finance", Reason: application.ProviderFailureInvalidResponse,
+		return quoteResult{}, ports.ProviderFailure{
+			Capability: "finance", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	body, status, err := c.get(ctx, endpoint)
@@ -85,14 +85,14 @@ func (c *Client) quote(ctx context.Context, symbol string) (quoteResult, error) 
 		return quoteResult{}, err
 	}
 	if status < http.StatusOK || status >= http.StatusMultipleChoices {
-		return quoteResult{}, application.ProviderFailure{
-			Capability: "finance", Reason: application.ProviderFailureUnavailable,
+		return quoteResult{}, ports.ProviderFailure{
+			Capability: "finance", Reason: ports.ProviderFailureUnavailable,
 		}
 	}
 	var decoded chartWire
 	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Chart.Result) == 0 {
-		return quoteResult{}, application.ProviderFailure{
-			Capability: "finance", Reason: application.ProviderFailureInvalidResponse,
+		return quoteResult{}, ports.ProviderFailure{
+			Capability: "finance", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	meta := decoded.Chart.Result[0].Meta
@@ -126,7 +126,7 @@ func (c *Client) quote(ctx context.Context, symbol string) (quoteResult, error) 
 	)
 	return quoteResult{
 		summary: summary,
-		reference: application.ExternalReference{
+		reference: ports.ExternalReference{
 			Title:   "市场行情数据 - " + name + " (" + meta.Symbol + ")",
 			Source:  "market_data",
 			Snippet: summary,
@@ -155,8 +155,8 @@ func (c *Client) get(
 	for attempt := 0; attempt < 2; attempt++ {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
-			return nil, 0, application.ProviderFailure{
-				Capability: "finance", Reason: application.ProviderFailureInvalidResponse,
+			return nil, 0, ports.ProviderFailure{
+				Capability: "finance", Reason: ports.ProviderFailureInvalidResponse,
 			}
 		}
 		request.Header.Set("User-Agent", "quwoquan-assistant/1.0")
@@ -182,14 +182,14 @@ func (c *Client) get(
 	return nil, 0, financeFailure(lastErr)
 }
 
-func financeFailure(err error) application.ProviderFailure {
+func financeFailure(err error) ports.ProviderFailure {
 	if err == context.DeadlineExceeded {
-		return application.ProviderFailure{
-			Capability: "finance", Reason: application.ProviderFailureTimeout,
+		return ports.ProviderFailure{
+			Capability: "finance", Reason: ports.ProviderFailureTimeout,
 		}
 	}
-	return application.ProviderFailure{
-		Capability: "finance", Reason: application.ProviderFailureUnavailable,
+	return ports.ProviderFailure{
+		Capability: "finance", Reason: ports.ProviderFailureUnavailable,
 	}
 }
 

@@ -41,6 +41,15 @@ enum VideoNativePlaybackSignalKind {
   videoFrameProcessing,
 }
 
+/// 当前平台能为 seek 提供的最强 settle 证据。
+///
+/// [positionReadbackOnly] 只能证明 controller 回读位置，不能声称画面
+/// 已渲染。
+enum VideoSeekSettleEvidenceCapability {
+  nativeRenderedFrame,
+  positionReadbackOnly,
+}
+
 int _nextNativePlaybackSignalToken = 1;
 
 /// Creates an opaque controller token without exposing a platform player ID.

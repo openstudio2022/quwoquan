@@ -31,6 +31,16 @@ type IntersectionSource interface {
 	ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]IntersectionReasonView, error)
 }
 
+// IntersectionSupplyProbe 报告某供给口径（registry.coldStartSupply.supplyKeyByKind 的值）
+// 在语料中可被交集命中的去重对象数。
+//
+// 冷启动稀释闸门用它回答「这类交集现在有没有区分度」：语料只有 1 个实体时，
+// 「你和 TA 都看过西湖」对每个用户都成立，等价于没有交集。探针失败时返回 error，
+// 服务端按 fail-open 处理（不因为观测不可用而误杀真实交集），但会记录降级指标。
+type IntersectionSupplyProbe interface {
+	DistinctObjectSupply(ctx context.Context, supplyKey string) (int, error)
+}
+
 type emptyIntersectionSource struct{}
 
 func (emptyIntersectionSource) FactReasons(context.Context, string, string) ([]IntersectionReasonView, error) {
@@ -73,20 +83,13 @@ const (
 	intersectionNegativeFeedbackTTL                 = 60 * 24 * time.Hour
 )
 
-var intersectionDimensionLabels = map[string]string{
-	"identity":     "身份",
-	"location":     "地点",
-	"content":      "内容",
-	"interest":     "兴趣",
-	"relationship": "关系",
-}
-
 // IntersectionService 承载交集统一体验的服务端核心机制：
 // 事实/概率合并排序、跨会话冷却窗口、保鲜过滤、per-dimension 已读水位。
 type IntersectionService struct {
 	source               IntersectionSource
 	redis                intersectionRedis
 	watermarkStore       ports.WatermarkStore
+	supplyProbe          IntersectionSupplyProbe
 	cooldownDays         int
 	negativeFeedbackDays int
 	maxCandidateWindow   int
@@ -103,6 +106,16 @@ func WithIntersectionSource(s IntersectionSource) IntersectionServiceOption {
 	return func(svc *IntersectionService) {
 		if s != nil {
 			svc.source = s
+		}
+	}
+}
+
+// WithIntersectionSupplyProbe 注入冷启动供给探针（P0 稀释闸门）。
+// 未注入时闸门不生效，交集按既有口径全量下发。
+func WithIntersectionSupplyProbe(p IntersectionSupplyProbe) IntersectionServiceOption {
+	return func(svc *IntersectionService) {
+		if p != nil {
+			svc.supplyProbe = p
 		}
 	}
 }
@@ -446,6 +459,7 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 		return IntersectionInboxSummaryView{}, err
 	}
 	wm := s.Watermarks(ctx, userID)
+	kindGate := s.newIntersectionKindGate("inbox")
 	type agg struct {
 		count    int
 		newCount int
@@ -455,7 +469,14 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	total := 0
 	totalNew := 0
 	for _, raw := range reasons {
-		r := HydratePointSummary(raw)
+		// 红点计数与 List 可见条目共用同一 kind 闸门：deferred kind 与供给不足的点
+		// 在两侧同时消失，否则会出现「有红点、点进去空列表」的计数漂移。
+		gated, ok := kindGate.apply(ctx, raw)
+		if !ok {
+			s.metrics.ObserveInboxFiltered("cold_start_supply")
+			continue
+		}
+		r := HydratePointSummary(gated)
 		if !s.isFresh(r) {
 			s.metrics.ObserveInboxFiltered("stale")
 			continue
@@ -490,7 +511,7 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	for _, d := range order {
 		dims = append(dims, IntersectionDimensionTallyView{
 			Dimension: d,
-			Label:     intersectionDimensionLabels[d],
+			Label:     dimensionLabelText(d),
 			Count:     byDim[d].count,
 			NewCount:  byDim[d].newCount,
 		})
@@ -518,9 +539,15 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 		return nil, "", false, err
 	}
 	wm := s.Watermarks(ctx, userID)
+	kindGate := s.newIntersectionKindGate("inbox")
 	filtered := make([]IntersectionReasonView, 0, len(reasons))
 	for _, raw := range reasons {
-		r := HydratePointSummary(raw)
+		gated, ok := kindGate.apply(ctx, raw)
+		if !ok {
+			s.metrics.ObserveInboxFiltered("cold_start_supply")
+			continue
+		}
+		r := HydratePointSummary(gated)
 		if strings.TrimSpace(r.TimeBucket) == "" {
 			r.TimeBucket = resolveIntersectionListTimeBucket(s.now(), r.FreshAt)
 		}
@@ -653,6 +680,9 @@ func compareIntersectionListRank(a, b IntersectionReasonView) int {
 		}
 		return 1
 	}
+	if cmp := compareEdgeWeight(a, b); cmp != 0 {
+		return cmp
+	}
 	if a.TotalPointCount != b.TotalPointCount {
 		if a.TotalPointCount > b.TotalPointCount {
 			return -1
@@ -666,6 +696,25 @@ func compareIntersectionListRank(a, b IntersectionReasonView) int {
 		return 1
 	}
 	return strings.Compare(stableIntersectionListKey(a), stableIntersectionListKey(b))
+}
+
+// compareEdgeWeight 让物化边权参与排序：边权大的在前，返回 -1/0/1。
+//
+// edgeWeight = relationStrength × interactionFrequency × recencyDecay，由
+// intersection_graph_materializer 异步真算并随快照落库。它排在语义序（已看过 /
+// 事实优先 / kind 锚强度 / Strength）之后、裸计数之前：语义序表达「该不该先看」，
+// 边权表达「同等语义下哪条边更实」，裸计数只是边权的一个因子，不该盖过复合信号。
+//
+// 请求期直算的 reason 没有物化边权（0），此时本比较返回 0 并原样落到既有键上，
+// 因此混排不会因为「有没有被物化过」而改变既有顺序。
+func compareEdgeWeight(a, b IntersectionReasonView) int {
+	if a.EdgeWeight == b.EdgeWeight {
+		return 0
+	}
+	if a.EdgeWeight > b.EdgeWeight {
+		return -1
+	}
+	return 1
 }
 
 func intersectionListTimeBucketPriority(r IntersectionReasonView) int {
@@ -785,6 +834,7 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	if strings.TrimSpace(metricChannel) == "" {
 		metricChannel = "default"
 	}
+	kindGate := s.newIntersectionKindGate(metricChannel)
 	merged := make([]IntersectionReasonView, 0, len(facts)+len(affinities))
 	for _, r := range append(facts, affinities...) {
 		// 负反馈冷却优先级最高（用户显式说「不感兴趣/忽略/拒绝/退出」）：命中即过滤，不再推荐，
@@ -797,7 +847,11 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 			s.metrics.ObserveFeedFiltered(metricChannel, "stale")
 			continue
 		}
-		r = HydratePointSummary(r)
+		gated, ok := kindGate.apply(ctx, r)
+		if !ok {
+			continue
+		}
+		r = HydratePointSummary(gated)
 		// T3 空窗治理：展示语言不完备的 reason 不进 spotlight 候选窗
 		// （primaryText 必备；人级 reason 必须有头像，物级由对象头图承载）。
 		if !isSpotlightDisplayComplete(r) {
@@ -830,6 +884,9 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 		if merged[i].Strength != merged[j].Strength {
 			return merged[i].Strength > merged[j].Strength
 		}
+		if cmp := compareEdgeWeight(merged[i], merged[j]); cmp != 0 {
+			return cmp < 0
+		}
 		if merged[i].TotalPointCount != merged[j].TotalPointCount {
 			return merged[i].TotalPointCount > merged[j].TotalPointCount
 		}
@@ -842,6 +899,102 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 		return merged[:limit], nil
 	}
 	return merged, nil
+}
+
+// intersectionKindGate 在下发前按 kind 判定「这条交集能不能出现」，承担两件事：
+//
+//   - deferred 闸门：注册表把 kind 标为 deferred 表示可证数据源缺位，登记占位但禁止
+//     产出。这里整条丢弃，不依赖「恰好没有 producer」的隐式保证。
+//   - 冷启动供给闸门：候选池太小时整类交集没有区分度（人人都命中等于没信息）。
+//
+// 判定结果在单次 Feed / List / ObjectIntersections 调用内缓存：同一 supplyKey 会被
+// 多条 reason 反复问到，缓存保证探针每个 key 最多查一次，且同一响应内判定一致
+// （不会出现同一 kind 一半展示一半不展示）。
+type intersectionKindGate struct {
+	probe   IntersectionSupplyProbe
+	metrics IntersectionMetricsRecorder
+	surface string
+	supply  map[string]int
+}
+
+func (s *IntersectionService) newIntersectionKindGate(surface string) *intersectionKindGate {
+	return &intersectionKindGate{
+		probe:   s.supplyProbe,
+		metrics: s.metrics,
+		surface: surface,
+		supply:  map[string]int{},
+	}
+}
+
+// allowsKind 判断某 kind 是否可下发：先看注册表 status，再看语料供给。
+//
+// 未注册 supplyKey 的 kind 不受供给闸门约束；探针缺失或失败时供给判定 fail-open：
+// 观测能力不可用不应误杀真实交集，但会计入 supply_probe_unavailable 指标。
+// deferred 判定不 fail-open —— 诚实红线不因探针可用性变化。
+func (g *intersectionKindGate) allowsKind(ctx context.Context, kind string) bool {
+	kind = strings.TrimSpace(kind)
+	if kind == "" || g == nil {
+		return true
+	}
+	if _, deferred := generated.IntersectionDeferredKinds[kind]; deferred {
+		g.metrics.ObserveFeedFiltered(g.surface, "deferred_kind")
+		return false
+	}
+	if g.probe == nil {
+		return true
+	}
+	supplyKey := generated.IntersectionColdStartSupplyKeyByKind[kind]
+	if supplyKey == "" {
+		return true
+	}
+	minDistinct := generated.IntersectionColdStartMinDistinctObjects[kind]
+	if minDistinct <= 0 {
+		return true
+	}
+	supply, cached := g.supply[supplyKey]
+	if !cached {
+		measured, err := g.probe.DistinctObjectSupply(ctx, supplyKey)
+		if err != nil {
+			g.supply[supplyKey] = -1
+			g.metrics.ObserveFeedFiltered(g.surface, "supply_probe_unavailable")
+			return true
+		}
+		g.supply[supplyKey] = measured
+		supply = measured
+	}
+	if supply < 0 {
+		return true
+	}
+	return supply >= minDistinct
+}
+
+// apply 剔除 deferred kind 与候选池过小的交集点；无可展示点时整条 reason 不下发。
+//
+// 在 HydratePointSummary 之前执行，保证摘要、锚点与结论句都只由通过闸门的点派生，
+// 不会出现「句子来自被闸掉的 kind、计数来自另一批点」的错配。
+func (g *intersectionKindGate) apply(
+	ctx context.Context,
+	r IntersectionReasonView,
+) (IntersectionReasonView, bool) {
+	if g == nil {
+		return r, true
+	}
+	if len(r.IntersectionPoints) == 0 {
+		return r, g.allowsKind(ctx, r.Kind)
+	}
+	kept := make([]IntersectionPointView, 0, len(r.IntersectionPoints))
+	for _, p := range r.IntersectionPoints {
+		if !g.allowsKind(ctx, p.SourceRef) {
+			g.metrics.ObserveFeedFiltered(g.surface, "cold_start_supply")
+			continue
+		}
+		kept = append(kept, p)
+	}
+	if len(kept) == 0 {
+		return r, false
+	}
+	r.IntersectionPoints = kept
+	return r, true
 }
 
 // isSpotlightDisplayComplete 候选窗完备性（WP1·T3）：复用交集 v3 展示合同，
@@ -892,9 +1045,14 @@ func (s *IntersectionService) ObjectIntersections(ctx context.Context, viewerID,
 		return nil, err
 	}
 	hostTarget := hostTargetForObjectReasons(objectID, objectType, reasons)
+	kindGate := s.newIntersectionKindGate("object_page")
 	out := make([]IntersectionReasonView, 0, len(reasons))
 	for _, raw := range reasons {
-		r := HydratePointSummary(raw)
+		gated, ok := kindGate.apply(ctx, raw)
+		if !ok {
+			continue
+		}
+		r := HydratePointSummary(gated)
 		r = ApplyDisplayContext(r, DisplayContext{
 			Surface:    DisplaySurfaceObjectPage,
 			HostTarget: hostTarget,
@@ -928,6 +1086,9 @@ func (s *IntersectionService) ObjectIntersections(ctx context.Context, viewerID,
 		rj := reasonObjectRank(out[j])
 		if ri != rj {
 			return ri < rj
+		}
+		if cmp := compareEdgeWeight(out[i], out[j]); cmp != 0 {
+			return cmp < 0
 		}
 		return out[i].TotalPointCount > out[j].TotalPointCount
 	})

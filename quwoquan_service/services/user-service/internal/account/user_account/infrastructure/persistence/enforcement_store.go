@@ -319,7 +319,6 @@ func applyAccountEnforcementState(
 		tag, err = tx.Exec(ctx, `
 UPDATE user_profiles
 SET account_state='suspended',
-    status='suspended',
     auth_epoch=$2,
     suspension_case_ref=$3,
     suspended_at=$4,
@@ -336,7 +335,6 @@ WHERE user_id=$1 AND account_state='active'`,
 		tag, err = tx.Exec(ctx, `
 UPDATE user_profiles
 SET account_state='active',
-    status='active',
     auth_epoch=$2,
     suspension_case_ref=NULL,
     profile_version=$3,
@@ -450,7 +448,7 @@ func appendUserAccountEnforcementEvent(
 	eventDigest := sha256.Sum256([]byte(
 		eventType + "\x00" + strings.TrimSpace(decisionID),
 	))
-	if _, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 INSERT INTO user_account_outbox(
   event_id, aggregate_id, aggregate_version, event_type, payload_json, occurred_at
 ) VALUES ($1,$2,$3,$4,$5,$6)
@@ -461,8 +459,14 @@ ON CONFLICT (aggregate_id, aggregate_version, event_type) DO NOTHING`,
 		eventType,
 		payload,
 		occurredAt,
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("append UserAccount enforcement outbox: %w", err)
+	}
+	if tag.RowsAffected() != 1 {
+		return fmt.Errorf(
+			"append UserAccount enforcement outbox: aggregate version conflict",
+		)
 	}
 	return nil
 }

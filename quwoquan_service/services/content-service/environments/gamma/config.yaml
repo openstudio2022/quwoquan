@@ -30,9 +30,8 @@ externalBindings:
       endpoint: CONTENT_OSS_ENDPOINT
       bucket: CONTENT_OSS_BUCKET
       region: CONTENT_OSS_REGION
-      cdn_domain: CONTENT_CDN_DOMAIN
+      media_delivery_base_url: CONTENT_MEDIA_DELIVERY_BASE_URL
       media_upload: CONTENT_MEDIA_UPLOAD_BASE_URL
-      ca_file: CONTENT_OSS_CA_FILE
     secretRefs:
     - CONTENT_OSS_ACCESS_KEY_ID
     - CONTENT_OSS_ACCESS_KEY_SECRET

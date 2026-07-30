@@ -11,7 +11,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	commenterrors "quwoquan_service/services/content-service/generated/content/comment"
+	reactionerrors "quwoquan_service/services/content-service/generated/content/content_reaction"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionports "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction/ports"
@@ -139,12 +139,10 @@ func (s *Service) mutate(
 			return ContentReactionCommandResult{}, reactionReadFailure(err)
 		}
 		if !targetSlice.Exists {
-			if identity.Target.Kind == reactiondomain.TargetKindComment {
-				return ContentReactionCommandResult{},
-					commenterrors.AppErrorFromCommentNotFound("content reaction target Comment does not exist")
-			}
 			return ContentReactionCommandResult{},
-				contentgenerated.AppErrorFromPostNotFound("content reaction target Post does not exist")
+				reactionerrors.AppErrorFromContentReactionTargetNotFound(
+					"content reaction target does not exist",
+				)
 		}
 		targetAuthorID = strings.TrimSpace(targetSlice.AuthorID)
 	}

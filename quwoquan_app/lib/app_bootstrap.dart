@@ -334,7 +334,13 @@ void _showBootstrapRecovery({
     return;
   }
   _bootstrapRecoveryMounted = true;
-  unawaited(AppRecoveryNativeBridge().recordFatalStartup());
+  final failure = BootstrapFailure.fromError(error);
+  unawaited(
+    AppRecoveryNativeBridge().recordFatalStartup(
+      attemptId: AppStartupRuntime.instance.startupAttemptId,
+      failureCode: failure.runtimeFailure.code,
+    ),
+  );
   unawaited(
     RecoveryFailureReporter.instance.record(
       errorSource: 'flutter',
@@ -343,7 +349,6 @@ void _showBootstrapRecovery({
       stackTrace: stack.toString(),
     ),
   );
-  final failure = BootstrapFailure.fromError(error);
   AppStartupRuntime.instance.recordBootstrapFailure(failure.runtimeFailure);
   _logBootstrapException(
     source: 'bootstrap_failure',

@@ -135,7 +135,8 @@ import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 
 // 跨平台防腐层 Provider（平台目标、能力契约、文件存储网关、原生桥）统一从
 // app_providers 再导出，业务层经同一入口消费能力位，禁止直接判断平台。

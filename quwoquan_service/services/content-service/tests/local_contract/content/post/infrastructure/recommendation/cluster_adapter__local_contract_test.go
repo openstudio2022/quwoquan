@@ -16,12 +16,10 @@ import (
 // These blank assignments fail at compile time if the adapter no longer
 // satisfies the required interfaces — zero runtime overhead, instant feedback.
 var (
-	_ rtrec.RedisClient    = (*RedisClusterAdapter)(nil)
-	_ rtrec.RedisPipeliner = (*RedisClusterAdapter)(nil)
+	_ rtrec.RedisPipelineClient = (*RedisClusterAdapter)(nil)
 
-	// Standalone adapter must still satisfy both interfaces too.
-	_ rtrec.RedisClient    = (*RedisClientAdapter)(nil)
-	_ rtrec.RedisPipeliner = (*RedisClientAdapter)(nil)
+	// Standalone adapter must satisfy the same single commercial contract.
+	_ rtrec.RedisPipelineClient = (*RedisClientAdapter)(nil)
 )
 
 // ---------------------------------------------------------------------------

@@ -159,7 +159,7 @@ func TestElasticsearchLogSinkUsesDeterministicDocumentsAndProviderNeutralPrivacy
 		runtimeBatchKey,
 		[]application.RuntimeLogRecord{{
 			Fields: map[string]string{
-				"schema":             "runtime-observability/v1",
+				"schema":             "observability.slim",
 				"occurredAt":         now.Format(time.RFC3339Nano),
 				"logKind":            "error",
 				"severity":           "error",
@@ -338,7 +338,6 @@ func TestElasticsearchLogSinkRepairsPendingPartialRawBatch(t *testing.T) {
 
 	ledger := &pendingRepairLedger{}
 	service := application.NewTelemetryService(
-		telemetrypersistence.NewMemoryTelemetryStore(),
 		store,
 		ledger,
 	)

@@ -89,7 +89,10 @@ func (r *MongoPostQueryReader) FindPostDetail(
 	var detail postports.PostDetailSlice
 	err := r.coll.FindOne(
 		ctx,
-		bson.D{{Key: "_id", Value: string(postID)}},
+		bson.D{
+			{Key: "_id", Value: string(postID)},
+			{Key: "accountRestricted", Value: bson.M{"$ne": true}},
+		},
 		options.FindOne().SetProjection(PostDetailProjection()),
 	).Decode(&detail)
 	if errors.Is(err, mongo.ErrNoDocuments) {
@@ -224,6 +227,7 @@ type postFeedDimensionsDocument struct {
 
 type postFeedDocument struct {
 	postports.PostFeedItemSlice `bson:",inline"`
+	TopLevelDimensions          postFeedDimensionsDocument `bson:",inline"`
 	DeviceInfo                  postFeedDimensionsDocument `bson:"deviceInfo"`
 	ArticleRenderProfile        postFeedDimensionsDocument `bson:"articleRenderProfile"`
 	PrimaryHomepageSnapshot     postFeedDimensionsDocument `bson:"primaryHomepageSnapshot"`
@@ -248,8 +252,9 @@ func (r *MongoPostQueryReader) FindPublishedFeedPost(
 			{Key: "status", Value: "published"},
 			{Key: "visibility", Value: "public"},
 			{Key: "moderationStatus", Value: "approved"},
+			{Key: "accountRestricted", Value: bson.M{"$ne": true}},
 		},
-		options.FindOne().SetProjection(postFeedProjection()),
+		options.FindOne().SetProjection(PostFeedProjection()),
 	).Decode(&document)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return postports.PostFeedItemSlice{}, false, nil
@@ -264,11 +269,12 @@ func (r *MongoPostQueryReader) FindPublishedFeedPost(
 // （published/public/approved），未命中的 id 缺席于返回 map。
 func (r *MongoPostQueryReader) FindPublishedFeedPosts(
 	ctx context.Context,
-	postIDs []postports.PostID,
+	request postports.PostFeedHydrationRequest,
 ) (map[postports.PostID]postports.PostFeedItemSlice, error) {
 	if err := r.ready(); err != nil {
 		return nil, err
 	}
+	postIDs := request.PostIDs()
 	ids := make([]string, 0, len(postIDs))
 	seen := make(map[string]bool, len(postIDs))
 	for _, id := range postIDs {
@@ -283,15 +289,22 @@ func (r *MongoPostQueryReader) FindPublishedFeedPosts(
 	if len(ids) == 0 {
 		return out, nil
 	}
+	filter := bson.D{
+		{Key: "_id", Value: bson.M{"$in": ids}},
+		{Key: "status", Value: "published"},
+		{Key: "visibility", Value: "public"},
+		{Key: "moderationStatus", Value: "approved"},
+		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
+	}
+	filter = appendReleaseBoundHydrationFilter(
+		filter,
+		request.ActiveReleaseID(),
+		request.ManifestDigest(),
+	)
 	cursor, err := r.coll.Find(
 		ctx,
-		bson.D{
-			{Key: "_id", Value: bson.M{"$in": ids}},
-			{Key: "status", Value: "published"},
-			{Key: "visibility", Value: "public"},
-			{Key: "moderationStatus", Value: "approved"},
-		},
-		options.Find().SetProjection(postFeedProjection()),
+		filter,
+		options.Find().SetProjection(PostFeedProjection()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("batch find published feed posts: %w", err)
@@ -337,6 +350,7 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 		{Key: "status", Value: "published"},
 		{Key: "visibility", Value: "public"},
 		{Key: "moderationStatus", Value: "approved"},
+		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
 	}
 	if identity != "" {
 		filter = append(filter, bson.E{Key: "contentIdentity", Value: identity})
@@ -344,6 +358,11 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 	if contentType != "" {
 		filter = append(filter, bson.E{Key: "contentType", Value: contentType})
 	}
+	filter = appendCanonicalReleaseFilter(
+		filter,
+		request.ActiveReleaseID(),
+		request.ManifestDigest(),
+	)
 	if cursorPostID := request.CursorPostID(); cursorPostID != "" {
 		var cursor struct {
 			PostID    string    `bson:"_id"`
@@ -373,7 +392,7 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 		ctx,
 		filter,
 		options.Find().
-			SetProjection(postFeedProjection()).
+			SetProjection(PostFeedProjection()).
 			SetSort(bson.D{{Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}}).
 			SetLimit(int64(request.Limit())),
 	)
@@ -396,9 +415,54 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 	return postports.PostFeedSlice{Items: items}, nil
 }
 
+func appendReleaseBoundHydrationFilter(
+	filter bson.D,
+	activeReleaseID string,
+	manifestDigest string,
+) bson.D {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	if activeReleaseID == "" {
+		return filter
+	}
+	manifestDigest = strings.TrimSpace(manifestDigest)
+	canonical := bson.M{
+		"sourceOwner":     "qwq_data",
+		"releaseId":       activeReleaseID,
+		"lifecycleStatus": "active",
+	}
+	if manifestDigest != "" {
+		canonical["manifestDigest"] = manifestDigest
+	}
+	return append(filter, bson.E{Key: "$or", Value: bson.A{
+		bson.M{"sourceOwner": bson.M{"$ne": "qwq_data"}},
+		canonical,
+	}})
+}
+
+func appendCanonicalReleaseFilter(
+	filter bson.D,
+	activeReleaseID string,
+	manifestDigest string,
+) bson.D {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	if activeReleaseID == "" {
+		return filter
+	}
+	filter = append(filter,
+		bson.E{Key: "sourceOwner", Value: "qwq_data"},
+		bson.E{Key: "releaseId", Value: activeReleaseID},
+		bson.E{Key: "lifecycleStatus", Value: "active"},
+	)
+	if manifestDigest = strings.TrimSpace(manifestDigest); manifestDigest != "" {
+		filter = append(filter, bson.E{Key: "manifestDigest", Value: manifestDigest})
+	}
+	return filter
+}
+
 func normalizePostFeedDocument(document postFeedDocument) postports.PostFeedItemSlice {
 	item := document.PostFeedItemSlice
 	for _, dimensions := range []postFeedDimensionsDocument{
+		document.TopLevelDimensions,
 		document.DeviceInfo,
 		document.ArticleRenderProfile,
 		document.PrimaryHomepageSnapshot,
@@ -455,6 +519,7 @@ func AuthorPostFilter(request postports.AuthorPostReadRequest) (bson.D, error) {
 			bson.E{Key: "status", Value: "published"},
 			bson.E{Key: "visibility", Value: "public"},
 			bson.E{Key: "moderationStatus", Value: "approved"},
+			bson.E{Key: "accountRestricted", Value: bson.M{"$ne": true}},
 		)
 	case postports.AuthorPostAccessOwner:
 		// Owner 可读取自己的 draft/published 和所有 visibility；删除记录不属于
@@ -546,6 +611,8 @@ func PostDetailProjection() bson.D {
 		{Key: "coverFrameTimeMs", Value: 1},
 		{Key: "location", Value: 1},
 		{Key: "locationName", Value: 1},
+		{Key: "geoTagRef", Value: 1},
+		{Key: "visitedAt", Value: 1},
 		{Key: "primaryHomepageId", Value: 1},
 		{Key: "canonicalEntityId", Value: 1},
 		{Key: "primaryHomepageType", Value: 1},
@@ -598,6 +665,7 @@ func AuthorPostProjection() bson.D {
 		{Key: "articleFontPreset", Value: 1},
 		{Key: "contentVertical", Value: 1},
 		{Key: "locationName", Value: 1},
+		{Key: "geoTagRef", Value: 1},
 		{Key: "primaryHomepageId", Value: 1},
 		{Key: "canonicalEntityId", Value: 1},
 		{Key: "status", Value: 1},
@@ -614,7 +682,10 @@ func AuthorPostProjection() bson.D {
 	}
 }
 
-func postFeedProjection() bson.D {
+// PostFeedProjection 是首页 Feed 的封闭 BSON 白名单。mediaItems 只读取
+// adaptive delivery 所需的 typed 子字段，避免为 HLS/CMAF 绑定把完整媒体序列
+// （封面、预览轨与展示文案等）放大到每次首页 hydration。
+func PostFeedProjection() bson.D {
 	return bson.D{
 		{Key: "_id", Value: 1},
 		{Key: "authorId", Value: 1},
@@ -623,16 +694,28 @@ func postFeedProjection() bson.D {
 		{Key: "title", Value: 1},
 		{Key: "body", Value: 1},
 		{Key: "mediaUrls", Value: 1},
+		{Key: "mediaItems.kind", Value: 1},
+		{Key: "mediaItems.mediaAssetId", Value: 1},
+		{Key: "mediaItems.mediaAssetVersion", Value: 1},
+		{Key: "mediaItems.hlsCmafMasterManifestUrl", Value: 1},
+		{Key: "mediaItems.hlsCmafDescriptorVersion", Value: 1},
 		{Key: "videoUrl", Value: 1},
 		{Key: "coverUrl", Value: 1},
 		{Key: "thumbnailUrl", Value: 1},
 		{Key: "coverStrategy", Value: 1},
 		{Key: "coverFrameTimeMs", Value: 1},
+		{Key: "durationMs", Value: 1},
+		{Key: "width", Value: 1},
+		{Key: "height", Value: 1},
 		{Key: "tagRefs", Value: 1},
 		{Key: "entityRefs", Value: 1},
 		{Key: "visibility", Value: 1},
 		{Key: "contentVertical", Value: 1},
 		{Key: "sourceTaskId", Value: 1},
+		{Key: "sourceOwner", Value: 1},
+		{Key: "releaseId", Value: 1},
+		{Key: "manifestDigest", Value: 1},
+		{Key: "lifecycleStatus", Value: 1},
 		{Key: "likeCount", Value: 1},
 		{Key: "commentCount", Value: 1},
 		{Key: "shareCount", Value: 1},

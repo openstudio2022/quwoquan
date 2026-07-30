@@ -37,7 +37,7 @@ def user_profile_wire(profile: dict) -> dict:
     stats = profile.get("stats") or {}
     user_id = profile.get("userId", "")
     return {
-        "subAccountId": user_id,
+        "personaId": user_id,
         "ownerUserId": user_id,
         "userHandle": user_id,
         "username": user_id,
@@ -538,12 +538,12 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path == "/user/persona/personas/active":
             profile = user_profile_wire(user.get("profiles", [])[0])
             return {
-                "subAccountId": profile["subAccountId"],
+                "personaId": profile["personaId"],
                 "ownerUserId": profile["ownerUserId"],
                 "subjectType": profile["subjectType"],
                 "displayName": profile["displayName"],
                 "avatarUrl": profile["avatarUrl"],
-                "personaContextVersion": "beta-fixture-v1",
+                "personaContextVersion": "1",
                 "personaSnapshotVersion": 1,
                 "sourceSurfaceId": "beta.manual",
                 "explicitOverride": False,
@@ -556,15 +556,15 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 "source": "owner_default",
                 "ownerDefaultThemeMode": "system",
                 "ownerDefaultFontSizePreset": "md",
-                "hasSubAccountOverride": False,
+                "hasPersonaOverride": False,
                 "version": 1,
                 "updatedAt": "2026-01-01T00:00:00Z",
             }
-        if path.startswith("/user/sub-accounts/") and path.endswith("/relationship/capability"):
+        if path.startswith("/user/personas/") and path.endswith("/relationship/capability"):
             target_id = path.split("/")[-3]
             return {
-                "viewerSubAccountId": "fixture_user_current",
-                "targetSubAccountId": target_id,
+                "viewerPersonaId": "fixture_user_current",
+                "targetPersonaId": target_id,
                 "relationState": "none",
                 "relationTier": "public",
                 "canFollow": target_id != "fixture_user_current",

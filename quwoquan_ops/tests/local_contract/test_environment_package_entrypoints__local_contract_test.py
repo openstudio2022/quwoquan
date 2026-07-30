@@ -54,12 +54,20 @@ def test_runtime_shared_package_requires_complete_provenance_and_digests(
         encoding="utf-8",
     )
 
-    assert packaging.validate_runtime_shared_package(package_dir, "beta") == []
+    assert packaging.validate_runtime_shared_package(
+        package_dir,
+        "beta",
+        "beta-local",
+    ) == []
 
     (package_dir / "module_catalog.yaml").write_text("tampered\n", encoding="utf-8")
     assert any(
         "digest mismatch for module_catalog.yaml" in issue
-        for issue in packaging.validate_runtime_shared_package(package_dir, "beta")
+        for issue in packaging.validate_runtime_shared_package(
+            package_dir,
+            "beta",
+            "beta-local",
+        )
     )
 
 
@@ -95,16 +103,22 @@ def test_legal_static_package_checksums_and_portal_provenance_are_fail_closed(
     )
 
     portal_root = tmp_path / "ops-portal"
-    portal_package = portal_root / "1.20260722.1"
-    dist = portal_package / "dist"
+    staging_package = portal_root / "staging"
+    dist = staging_package / "dist"
     dist.mkdir(parents=True)
     (dist / "index.html").write_text("<html></html>\n", encoding="utf-8")
+    package_digest = packaging._sha256_tree(dist)
+    portal_package = portal_root / package_digest.removeprefix("sha256:")
+    staging_package.rename(portal_package)
+    dist = portal_package / "dist"
     manifest_path = portal_package / "manifest.json"
     manifest_path.write_text(
         json.dumps(
             {
-                "version": portal_package.name,
-                "builtAt": "2026-07-22T00:00:00Z",
+                "schema": "qwq.ops_portal_application",
+                "packageDigest": package_digest,
+                "sourceGitSha": "a" * 40,
+                "sourceTreeDigest": "sha1:" + ("b" * 40),
                 "opsBaseUrl": "https://ops.example.test",
                 "contentBaseUrl": "https://api.example.test",
                 "entityBaseUrl": "https://api.example.test",
@@ -115,11 +129,11 @@ def test_legal_static_package_checksums_and_portal_provenance_are_fail_closed(
         encoding="utf-8",
     )
     provenance = {
-        "schema": "qwq.ops_portal_package.v1",
+        "schema": "qwq.ops_portal_package",
         "packageKind": "ops-portal",
         "environment": "prod",
         "target": "prod-hosted",
-        "version": portal_package.name,
+        "packageDigest": package_digest,
         "gitRevision": "a" * 40,
         "digests": {
             "manifest": _sha256(manifest_path),
@@ -243,8 +257,6 @@ def test_public_make_targets_delegate_environment_operations_to_stackctl() -> No
         "beta-up",
         "beta-down",
         "beta-status",
-        "config-gray-rollout",
-        "config-rollback",
         "config-slo-gate",
         "deploy-beta-k8s",
     ):
@@ -253,13 +265,23 @@ def test_public_make_targets_delegate_environment_operations_to_stackctl() -> No
         assert "bash quwoquan_ops/cli/" not in recipe
 
 
-def test_stackctl_rejects_missing_portal_oidc_and_routes_private_config_script(
+def test_stackctl_rejects_missing_portal_oidc_and_has_no_private_prod_state_writer(
     tmp_path: Path,
 ) -> None:
     missing_portal_args = stackctl.build_parser().parse_args(
-        ["package", "--env", "prod", "--kind", "ops-portal", "--version", "1.20260722.1"]
+        [
+            "package",
+            "--env",
+            "prod",
+            "--kind",
+            "ops-portal",
+        ]
     )
     with (
+        mock.patch.dict(
+            "os.environ",
+            {"QWQ_DEPLOY_WORK_ROOT": str(tmp_path / "deploy")},
+        ),
         mock.patch.object(stackctl, "resolve_report_dir", return_value=tmp_path / "portal-report"),
         mock.patch.object(stackctl, "_write_summary_bundle"),
         mock.patch.object(stackctl, "relpath", side_effect=str),
@@ -268,31 +290,15 @@ def test_stackctl_rejects_missing_portal_oidc_and_routes_private_config_script(
     assert portal_result["exitCode"] == 2
     assert any("OIDC values" in detail for detail in portal_result["details"])
 
-    config_args = Namespace(
-        target="prod-hosted",
-        service="content-service",
-        from_image="sha256:" + ("a" * 64),
-        to_image="sha256:" + ("b" * 64),
-        from_config="sha256:" + ("c" * 64),
-        to_config="sha256:" + ("d" * 64),
-        step="5",
-        report_dir=str(tmp_path / "config-report"),
+    deploy_modes = stackctl.build_parser().parse_args(
+        ["deploy", "--target", "prod-hosted", "--dry-run", "true"]
     )
-    with (
-        mock.patch.object(stackctl, "resolve_report_dir", return_value=tmp_path / "config-report"),
-        mock.patch.object(
-            stackctl,
-            "run",
-            return_value=CompletedProcess(["private"], 0, "OK", ""),
-        ) as run,
-        mock.patch.object(stackctl, "relpath", side_effect=str),
-    ):
-        result = stackctl._command_config_gray_rollout(config_args)
-    assert result["exitCode"] == 0
-    assert run.call_args.args[0][:2] == [
-        "bash",
-        "quwoquan_ops/cli/prod/config_release_gray_rollout.sh",
-    ]
+    assert deploy_modes.mode == ""
+    stackctl_source = (ROOT / "quwoquan_ops/cli/stackctl.py").read_text(
+        encoding="utf-8"
+    )
+    assert '"config-gray"' not in stackctl_source
+    assert '"config-rollback"' not in stackctl_source
 
 
 if __name__ == "__main__":

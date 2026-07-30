@@ -17,8 +17,6 @@ import (
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/operation"
 	entitygenerated "quwoquan_service/services/entity-service/generated/entity_homepage/homepage"
-	claimgenerated "quwoquan_service/services/entity-service/generated/entity_homepage/homepage_claim_request"
-	statusgenerated "quwoquan_service/services/entity-service/generated/entity_homepage/homepage_status_report"
 	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
@@ -32,6 +30,12 @@ type HomepageIntroductionAsset = homepageapp.IntroductionAsset
 type HomepageContentPreview = homepageapp.ContentPreview
 type HomepageQuestionPreview = homepageapp.QuestionPreview
 type HomepageRelatedGroup = homepageapp.RelatedGroup
+type StructuredFacts = homepageapp.StructuredFacts
+
+// SanitizeStructuredFacts 暴露领域收敛给导入层，让「无 factSource 的字段被丢弃」
+// 在流水线阶段就能报 issue，而不是等聚合静默丢弃后无人知晓。
+var SanitizeStructuredFacts = homepagemodel.SanitizeStructuredFacts
+
 type Homepage = homepageapp.View
 type HomepageInput = homepageapp.Input
 type HomepageBasicInput = homepageapp.BasicInput
@@ -40,6 +44,7 @@ type HomepageSearchItemView = homepageapp.SearchItemView
 type HomepageDataStore interface {
 	homepageports.AggregateStore
 	homepageports.Reader
+	homepageports.DetailProjectionStore
 	homepageports.FollowerProjectionStore
 	homepageports.OutboxReader
 	homepageports.ProjectionCheckpointStore
@@ -657,31 +662,6 @@ func emptyRawMessages(values []json.RawMessage) []json.RawMessage {
 		result = append(result, append(json.RawMessage(nil), value...))
 	}
 	return result
-}
-
-func newAppError(code error, debugMessage string) *rterr.AppError {
-	switch code {
-	case entitygenerated.ErrInvalidArgument:
-		return entitygenerated.AppErrorFromInvalidArgument(debugMessage)
-	case entitygenerated.ErrHomepageNotFound:
-		return entitygenerated.AppErrorFromHomepageNotFound(debugMessage)
-	case entitygenerated.ErrClaimMaterialMissing:
-		return entitygenerated.AppErrorFromClaimMaterialMissing(debugMessage)
-	case entitygenerated.ErrAlreadyClaimed:
-		return entitygenerated.AppErrorFromAlreadyClaimed(debugMessage)
-	case entitygenerated.ErrHomepageOffline:
-		return entitygenerated.AppErrorFromHomepageOffline(debugMessage)
-	case entitygenerated.ErrInvalidHomepageType:
-		return entitygenerated.AppErrorFromInvalidHomepageType(debugMessage)
-	case entitygenerated.ErrPermissionDenied:
-		return entitygenerated.AppErrorFromPermissionDenied(debugMessage)
-	case claimgenerated.ErrClaimNotFound:
-		return claimgenerated.AppErrorFromClaimNotFound(debugMessage)
-	case statusgenerated.ErrStatusReportNotFound:
-		return statusgenerated.AppErrorFromStatusReportNotFound(debugMessage)
-	default:
-		return entitygenerated.AppErrorFromInternalError(debugMessage)
-	}
 }
 
 func wrapDependencyError(err error) error {

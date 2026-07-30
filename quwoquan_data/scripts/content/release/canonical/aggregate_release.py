@@ -24,9 +24,12 @@ from content.release.canonical.object_transaction_contract import (
     _write_json,
     assert_environment_neutral,
 )
+from content.release.canonical.creator_commercial_closure import (
+    creator_commercial_closure_issues,
+)
 from content.release.canonical.release_attestation import ReleaseAttestation
 from content.release.environment.consistency import scan_release_contract
-from content.release.model import ReleaseKind
+from content.release.model import DataSourceOwner, ReleaseKind
 from core.control_types import ContentType
 from core.media_asset_url import (
     build_release_media_manifest,
@@ -227,6 +230,17 @@ def build_aggregate_release(
         entity_refs=entity_refs,
         post_refs=post_refs,
     )
+    creator_issues = creator_commercial_closure_issues(
+        publish_root,
+        creator_refs=creator_refs,
+    )
+    if creator_issues:
+        raise ObjectTransactionError(
+            "aggregate release creator commercial closure invalid: "
+            + "; ".join(
+                f"{item['code']}:{item['ref']}" for item in creator_issues[:5]
+            )
+        )
     desired = {
         "creators": creator_refs,
         "entities": sorted(entity_refs),
@@ -244,8 +258,10 @@ def build_aggregate_release(
             and _existing_refs(final_root) == desired
             and header.get("canonicalMerkle") == selected_merkle
             and header.get("releaseKind") == ReleaseKind.CONTENT
+            and header.get("sourceOwner") == DataSourceOwner.QWQ_DATA
             and header.get("sourceDigests") == source_digest_documents
             and aggregate.get("sourceDigests") == source_digest_documents
+            and aggregate.get("sourceOwner") == DataSourceOwner.QWQ_DATA
             and aggregate.get("payloadSha256") == payload_digest(final_root)
         ):
             return {
@@ -291,6 +307,7 @@ def build_aggregate_release(
         release_header = {
             "schema": RELEASE_SCHEMA,
             "releaseId": release_id,
+            "sourceOwner": DataSourceOwner.QWQ_DATA,
             "releaseKind": ReleaseKind.CONTENT,
             "canonicalMerkle": selected_merkle,
             "executionIds": execution_ids,
@@ -345,6 +362,7 @@ def build_aggregate_release(
             )
         release_attestation = ReleaseAttestation(
             release_id=release_id,
+            source_owner=DataSourceOwner.QWQ_DATA,
             release_kind=ReleaseKind.CONTENT,
             execution_ids=tuple(execution_ids),
             entity_count=len(entity_refs),

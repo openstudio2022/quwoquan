@@ -27,6 +27,7 @@ SCRIPT = (
 )
 SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
+MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 BETA_STARTUP_PATH = ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
 SPEC = importlib.util.spec_from_file_location(
     "run_media_publication_device_matrix_ci",
@@ -69,29 +70,33 @@ class MediaPublicationDeviceMatrixContractTest(unittest.TestCase):
                     get_target(topology, target_name)["origins"]["contentService"],
                 )
 
-    def test_beta_startup_resets_only_manifest_declared_user_fixtures(self) -> None:
+    def test_beta_startup_never_seeds_business_users(self) -> None:
         startup = BETA_STARTUP_PATH.read_text(encoding="utf-8")
-        self.assertIn(
-            'entry.get("resetScope") != "fixture_user_*"',
-            startup,
-        )
-        self.assertIn(
+        for retired in (
+            "app_beta_seed_manifest.json",
+            "beta_manual_seed_user_fixtures",
             "go run ./services/user-service/cmd/seed",
-            startup,
-        )
+            "fixture_user_current",
+            'entry.get("resetScope")',
+        ):
+            self.assertNotIn(retired, startup)
         user_health = startup.index(
             'beta_manual_wait_http_ok "http://127.0.0.1:${USER_PORT}/healthz"',
         )
-        fixture_reset = startup.index(
-            "beta_manual_seed_user_fixtures || return 1",
-            user_health,
-        )
         ready = startup.index(
             "beta Mongo/Redis/content/user runtime OK",
-            fixture_reset,
+            user_health,
         )
-        self.assertLess(user_health, fixture_reset)
-        self.assertLess(fixture_reset, ready)
+        self.assertLess(user_health, ready)
+        self.assertIn(
+            "@creator_profile_release path /auth /auth/* /user /user/* /users /users/*",
+            startup,
+        )
+        self.assertIn(
+            "reverse_proxy ${CONTAINER_HOST_ALIAS}:${USER_PORT}",
+            startup,
+        )
+        self.assertIn("ship apply is the only writer of this directory", startup)
 
     def test_supported_environments_use_topology_and_runtime_anonymous_login(
         self,
@@ -166,8 +171,11 @@ class MediaPublicationDeviceMatrixContractTest(unittest.TestCase):
         self.assertIn("media-publication", mainline["matrixKinds"])
 
     def test_self_hosted_workflow_uses_dedicated_media_runner(self) -> None:
-        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        self.assertIn('matrix_kind}" = "media-publication"', workflow)
+        workflow = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (WORKFLOW_PATH, MATRIX_RUNNER_PATH)
+        )
+        self.assertIn('[[ "$matrix_kind" == "media-publication" ]]', workflow)
         self.assertIn(
             "run_media_publication_device_matrix_ci.py",
             workflow,

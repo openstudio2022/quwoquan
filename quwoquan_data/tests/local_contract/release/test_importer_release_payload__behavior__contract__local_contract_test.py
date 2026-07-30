@@ -16,6 +16,9 @@ def test_importers_read_release_payload_without_publish_root(
 ) -> None:
     release = tmp_path / "releases/release-a"
     run = tmp_path / "runs/apply-a"
+    payload = release / "payload/desired_state.json"
+    payload.parent.mkdir(parents=True)
+    payload.write_text('{"releaseId":"release-a"}\n', encoding="utf-8")
     commands: list[list[str]] = []
 
     def fake_run(command: list[str], **_kwargs: object) -> SimpleNamespace:
@@ -56,8 +59,8 @@ def test_importers_read_release_payload_without_publish_root(
         env="gamma",
         run=run,
         mongo_uri="mongodb://gamma",
-        media_image_base_url="https://cdn.example.invalid/media/image",
-        media_video_base_url="https://cdn.example.invalid/media/video",
+        media_image_base_url="https://cdn.example.invalid",
+        media_video_base_url="https://cdn.example.invalid",
         dry_run=True,
         creator_receipt=run / "creator-import.json",
     )
@@ -67,7 +70,7 @@ def test_importers_read_release_payload_without_publish_root(
         run=run,
         mongo_uri="mongodb://gamma",
         postgres_dsn="postgres://gamma",
-        media_avatar_base_url="https://cdn.example.invalid/media/avatar",
+        media_avatar_base_url="https://cdn.example.invalid",
         dry_run=True,
     )
     importers.run_homepage_importer(
@@ -76,7 +79,7 @@ def test_importers_read_release_payload_without_publish_root(
         run=run,
         run_id="apply-a",
         mongo_uri="mongodb://gamma",
-        media_image_base_url="https://cdn.example.invalid/media/image",
+        media_image_base_url="https://cdn.example.invalid",
         dry_run=True,
         mode=ImportMode.UPSERT,
     )
@@ -91,16 +94,16 @@ def test_importers_read_release_payload_without_publish_root(
         assert "--media-base-url" not in command
     assert commands[0][commands[0].index("--release-id") + 1] == "release-a"
     assert commands[1][commands[1].index("--media-image-base-url") + 1] == (
-        "https://cdn.example.invalid/media/image"
+        "https://cdn.example.invalid"
     )
     assert commands[1][commands[1].index("--media-video-base-url") + 1] == (
-        "https://cdn.example.invalid/media/video"
+        "https://cdn.example.invalid"
     )
     assert commands[2][commands[2].index("--media-avatar-base-url") + 1] == (
-        "https://cdn.example.invalid/media/avatar"
+        "https://cdn.example.invalid"
     )
     assert commands[3][commands[3].index("--media-image-base-url") + 1] == (
-        "https://cdn.example.invalid/media/image"
+        "https://cdn.example.invalid"
     )
 
 

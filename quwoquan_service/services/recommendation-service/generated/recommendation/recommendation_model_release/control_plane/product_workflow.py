@@ -78,7 +78,7 @@ _PRODUCT_WORKFLOW_JSON = r'''{
           ]
         }
       ],
-      "workflow_id": "moderation_case_v1"
+      "workflow_id": "moderation_case"
     },
     {
       "object_type": "appeal_case",
@@ -128,7 +128,7 @@ _PRODUCT_WORKFLOW_JSON = r'''{
           ]
         }
       ],
-      "workflow_id": "appeal_case_v1"
+      "workflow_id": "appeal_case"
     },
     {
       "approval_requirements": {
@@ -190,7 +190,7 @@ _PRODUCT_WORKFLOW_JSON = r'''{
           ]
         }
       ],
-      "workflow_id": "recovery_case_v1"
+      "workflow_id": "recovery_case"
     },
     {
       "object_type": "experiment",
@@ -239,7 +239,7 @@ _PRODUCT_WORKFLOW_JSON = r'''{
           ]
         }
       ],
-      "workflow_id": "experiment_rollout_v1"
+      "workflow_id": "experiment_rollout"
     },
     {
       "object_type": "recommendation_policy",
@@ -288,7 +288,7 @@ _PRODUCT_WORKFLOW_JSON = r'''{
           ]
         }
       ],
-      "workflow_id": "recommendation_policy_v1"
+      "workflow_id": "recommendation_policy"
     }
   ]
 }'''

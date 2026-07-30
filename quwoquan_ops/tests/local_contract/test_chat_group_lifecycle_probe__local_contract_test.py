@@ -141,18 +141,22 @@ class ChatGroupLifecycleProbeLocalContractTest(unittest.TestCase):
         self.assertIn('default="PROD_TEST_AUTH_TOKEN"', source)
         self.assertNotIn("_create_unverified_context", source)
 
-    def test_mainline_beta_bootstrap_runs_stackctl_integration_profile(self) -> None:
+    def test_mainline_beta_bootstrap_runs_stackctl_release_profile(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
-        bootstrap_start = workflow.index("Bootstrap beta-local stack for mainline auto prod")
-        bootstrap_end = workflow.index("      - id: run_matrix", bootstrap_start)
+        bootstrap_start = workflow.index("Run immutable Beta formal runtime")
+        bootstrap_end = workflow.index(
+            "Seal immutable Beta stack evidence", bootstrap_start
+        )
         bootstrap = workflow[bootstrap_start:bootstrap_end]
 
         self.assertIn(
-            "stackctl.py verify --env beta --kind all --profile integration",
+            "stackctl.py verify \\\n            --env beta",
             bootstrap,
         )
+        self.assertIn("--kind all", bootstrap)
+        self.assertIn("--profile release", bootstrap)
         self.assertIn(
-            'report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-verify"',
+            '--report-dir "$ROOT/verify"',
             bootstrap,
         )
 

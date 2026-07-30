@@ -61,7 +61,7 @@ void main() {
       await _expectChatInbox($, provision);
       await _goTo($, AppRoutePaths.profile);
       await _expectProfileShell($, label: 'my profile');
-      await _goTo($, AppRoutePaths.userProfile(username: _otherUserId));
+      await _goTo($, AppRoutePaths.userProfile(userHandle: _otherUserId));
       await _expectProfileShell($, label: 'other profile');
       await _goTo($, AppRoutePaths.myFootprint());
       await _expectFootprintListShell($);

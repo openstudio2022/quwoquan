@@ -41,6 +41,7 @@ business_rules:
 - personaId + subjectType + subjectId 全局唯一
 - follow/unfollow 为关系 set/unset，由服务端内部 CAS 与 idempotency receipt 保证重放安全
 lifecycle:
+  state_field: state
   states:
   - following
   - unfollowed

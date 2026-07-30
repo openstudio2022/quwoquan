@@ -1,59 +1,144 @@
 description: 一次密码、OTP、passkey 或联合登录挑战的短生命周期根
 fields:
-- name: id
-  type: string
-  constraints:
-  - PK
-  - NOT_NULL
-  role: authoritative_state
-- name: accountId
-  type: string
-  constraints:
-  - NULLABLE
-  role: authoritative_state
-  reference: true
-- name: purpose
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: channel
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: destinationHash
-  type: string
-  constraints:
-  - NULLABLE
-  role: authoritative_state
-- name: secretRef
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: status
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: attemptCount
-  type: int
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: expiresAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: completedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  role: authoritative_state
+  - name: id
+    type: string
+    constraints:
+      - PK
+      - NOT_NULL
+    role: authoritative_state
+  - name: accountId
+    type: string
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+    reference: true
+  - name: purpose
+    type: string
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: channel
+    type: string
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: destinationHash
+    type: string
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+  - name: secretRef
+    type: string
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: status
+    type: enum
+    enum_ref: AuthenticationChallengeStatus
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: attemptCount
+    type: int
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: expiresAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: completedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+enums:
+  AuthenticationChallengeStatus:
+    - pending
+    - completed
+    - expired
+    - locked
+    - cancelled
+types:
+  SendOtpCommand:
+    fields:
+      - name: phone
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: platform
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: sourceOperation
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: bindingTicket
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+  ResolveOneTapLoginHintCommand:
+    fields:
+      - name: vendor
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: carrierToken
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+  CreateAlipayAuthorizationRequestCommand:
+    fields:
+      - name: platform
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?

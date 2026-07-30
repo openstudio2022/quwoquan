@@ -38,11 +38,22 @@ type ServiceEgressConfig struct {
 	TimeoutMs int    `yaml:"timeout_ms"`
 }
 
+// ModelTierConfig 是档位到模型标识的映射。模型标识是运营可调配置，不允许写死在
+// adapter 里。
+type ModelTierConfig struct {
+	Fast      string `yaml:"fast"`
+	Balanced  string `yaml:"balanced"`
+	Reasoning string `yaml:"reasoning"`
+}
+
+type ModelConfig struct {
+	NativeToolCalling bool            `yaml:"native_tool_calling"`
+	Tier              ModelTierConfig `yaml:"tier"`
+}
+
 type Config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 	Service struct {
 		Name string `yaml:"name"`
@@ -65,6 +76,7 @@ type Config struct {
 		General  RedisSceneConfig `yaml:"general"`
 		Realtime RedisSceneConfig `yaml:"realtime"`
 	} `yaml:"redis"`
+	Model                    ModelConfig         `yaml:"model"`
 	SearchService            ServiceEgressConfig `yaml:"search_service"`
 	EntityService            ServiceEgressConfig `yaml:"entity_service"`
 	ContentService           ServiceEgressConfig `yaml:"content_service"`

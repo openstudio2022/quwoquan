@@ -83,6 +83,7 @@ business_rules:
 - 通话记录的商用主形态是 CallEnded 事实投影到关联 chat Conversation 的 system_call_log Message；独立 ListCalls 页面 deferred，operation
   仅保留对象查询合同
 lifecycle:
+  state_field: status
   states:
   - initiated
   - ringing

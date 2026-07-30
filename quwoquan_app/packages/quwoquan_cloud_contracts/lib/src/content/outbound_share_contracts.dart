@@ -1,31 +1,35 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/content/outbound_share_contracts.requests.g.dart';
 
-/// A confirmed external delivery. Failed or cancelled share attempts cannot be
-/// represented by this command and therefore cannot append a business fact.
-final class CreateContentOutboundShareCommand {
-  CreateContentOutboundShareCommand({
-    required String postId,
-    required String channel,
-    required String destinationKind,
-    String? destination,
-    required String referralId,
-    required String providerReceiptId,
-    required DateTime clientConfirmedAt,
-  }) : postId = _required(postId, 'postId'),
-       channel = _required(channel, 'channel'),
-       destinationKind = _required(destinationKind, 'destinationKind'),
-       destination = _optional(destination),
-       referralId = _required(referralId, 'referralId'),
-       providerReceiptId = _required(providerReceiptId, 'providerReceiptId'),
-       clientConfirmedAt = clientConfirmedAt.toUtc();
+enum OutboundShareChannel {
+  systemShare('system_share'),
+  wechatFriend('wechat_friend'),
+  wechatMoments('wechat_moments');
 
-  final String postId;
-  final String channel;
-  final String destinationKind;
-  final String? destination;
-  final String referralId;
-  final String providerReceiptId;
-  final DateTime clientConfirmedAt;
+  const OutboundShareChannel(this.wireValue);
+
+  final String wireValue;
+
+  static OutboundShareChannel fromString(String raw) => switch (raw.trim()) {
+    'system_share' => OutboundShareChannel.systemShare,
+    'wechat_friend' => OutboundShareChannel.wechatFriend,
+    'wechat_moments' => OutboundShareChannel.wechatMoments,
+    _ => throw FormatException('Unknown OutboundShareChannel: $raw'),
+  };
+}
+
+enum OutboundShareDestinationKind {
+  externalApp('external_app');
+
+  const OutboundShareDestinationKind(this.wireValue);
+
+  final String wireValue;
+
+  static OutboundShareDestinationKind fromString(String raw) => switch (raw
+      .trim()) {
+    'external_app' => OutboundShareDestinationKind.externalApp,
+    _ => throw FormatException('Unknown OutboundShareDestinationKind: $raw'),
+  };
 }
 
 final class ContentOutboundShareFactResult {
@@ -51,21 +55,6 @@ abstract interface class ContentOutboundShareAppendWriter {
     CreateContentOutboundShareCommand command,
   );
 }
-
-CloudOperationRequestPayload encodeCreateContentOutboundShareCommand(
-  CreateContentOutboundShareCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': command.postId},
-  body: <String, Object?>{
-    'channel': command.channel,
-    'destinationKind': command.destinationKind,
-    if (command.destination != null) 'destination': command.destination,
-    'referralId': command.referralId,
-    'deliverySucceeded': true,
-    'providerReceiptId': command.providerReceiptId,
-    'clientConfirmedAt': command.clientConfirmedAt.toIso8601String(),
-  },
-);
 
 ContentOutboundShareFactResult decodeContentOutboundShareFactResult(
   Object? value,
@@ -98,15 +87,4 @@ String _string(Map<String, Object?> map, String key) {
     throw FormatException('$key must be a non-empty string');
   }
   return value.trim();
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
-}
-
-String? _optional(String? value) {
-  final normalized = value?.trim() ?? '';
-  return normalized.isEmpty ? null : normalized;
 }

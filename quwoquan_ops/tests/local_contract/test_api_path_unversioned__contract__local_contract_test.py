@@ -32,6 +32,14 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
         line = 'url: "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"'
         self.assertTrue(mod.line_is_excluded(line))
 
+    def test_immutable_public_media_slice_assertion_is_excluded(self) -> None:
+        mod = _load_module()
+        self.assertTrue(
+            mod.line_is_excluded(
+                'issues.append("public fixture 当前唯一 canonical 版本必须是 /v1/")'
+            )
+        )
+
     def test_injected_versioned_path_is_rejected(self) -> None:
         mod = _load_module()
         line = 'route := "/v1/content/feed"\n'
@@ -74,6 +82,11 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         self.assertIn('pathTemplate: "/content/feed"', text)
         self.assertNotIn('pathTemplate: "/v1/content/feed"', text)
+
+    def test_global_contracts_and_observability_are_scanned(self) -> None:
+        mod = _load_module()
+        self.assertIn("quwoquan_service/contracts", mod.SCAN_ROOTS)
+        self.assertIn("quwoquan_ops/observability", mod.SCAN_ROOTS)
 
 
 if __name__ == "__main__":

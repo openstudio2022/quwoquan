@@ -4,7 +4,6 @@ import com.flutter.gradle.tasks.FlutterTask
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.Base64
 
 plugins {
@@ -35,6 +34,8 @@ val nativeRecoveryBaseUrl =
     System.getenv("QWQ_APP_RECOVERY_BASE_URL")?.trim().orEmpty()
 val nativePublicWebUrl =
     System.getenv("QWQ_APP_PUBLIC_WEB_URL")?.trim().orEmpty()
+val nativeAppDownloadBaseUrl =
+    System.getenv("QWQ_APP_DOWNLOAD_BASE_URL")?.trim().orEmpty()
 val releaseSigningConfigured =
     releaseKeystorePath.isNotEmpty() &&
         releaseKeystorePassword.isNotEmpty() &&
@@ -62,11 +63,15 @@ gradle.taskGraph.whenReady {
     }
     if (
         shipsProductionBinary &&
-            (nativeRecoveryBaseUrl.isEmpty() || nativePublicWebUrl.isEmpty())
+            (
+                nativeRecoveryBaseUrl.isEmpty() ||
+                    nativePublicWebUrl.isEmpty() ||
+                    nativeAppDownloadBaseUrl.isEmpty()
+            )
     ) {
         throw GradleException(
             "production Android build requires topology-projected " +
-                "QWQ_APP_RECOVERY_BASE_URL and QWQ_APP_PUBLIC_WEB_URL",
+                "recovery, public-web, and app-download base URLs",
         )
     }
     if (shipsProductionBinary && !releaseSigningConfigured) {
@@ -91,29 +96,11 @@ gradle.taskGraph.whenReady {
     }
 }
 
-val repoRootDir = rootProject.projectDir.parentFile.parentFile
-val nativeRuntimeConfigDigest = run {
-    val digest = MessageDigest.getInstance("SHA-256")
-    val runtimeFiles =
-        listOf(
-            repoRootDir.resolve("quwoquan_app/configs/default/app_runtime.yaml"),
-            repoRootDir.resolve("quwoquan_app/configs/$effectiveAppRuntimeEnvironment/app_runtime.yaml"),
-            repoRootDir.resolve("quwoquan_ops/environments/$effectiveAppRuntimeEnvironment/runtime.yaml"),
-        )
-    runtimeFiles.forEach { file ->
-        check(file.isFile) { "native runtime identity input is missing: ${file.absolutePath}" }
-        digest.update(file.relativeTo(repoRootDir).invariantSeparatorsPath.toByteArray(StandardCharsets.UTF_8))
-        digest.update(0.toByte())
-        digest.update(file.readBytes())
-        digest.update(0.toByte())
-    }
-    digest.digest().joinToString("") { byte -> "%02x".format(byte) }
-}
 check(
     expectedRuntimeConfigDigest.isEmpty() ||
-        expectedRuntimeConfigDigest == "sha256:$nativeRuntimeConfigDigest",
+        expectedRuntimeConfigDigest.matches(Regex("sha256:[0-9a-f]{64}")),
 ) {
-    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST does not match native runtime identity"
+    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST must be the canonical packaged runtime identity"
 }
 val androidAbiSplitsEnvVar = "QWQ_ANDROID_ABI_SPLITS"
 val androidAbiSplitsEnabled = envFlagEnabled(androidAbiSplitsEnvVar, false)
@@ -188,13 +175,18 @@ android {
         )
         buildConfigField(
             "String",
+            "QWQ_APP_DOWNLOAD_BASE_URL",
+            escapedBuildConfigString("QWQ_APP_DOWNLOAD_BASE_URL"),
+        )
+        buildConfigField(
+            "String",
             "QWQ_RUNTIME_ENVIRONMENT",
             "\"$effectiveAppRuntimeEnvironment\"",
         )
         buildConfigField(
             "String",
             "QWQ_RUNTIME_CONFIG_DIGEST",
-            "\"sha256:$nativeRuntimeConfigDigest\"",
+            "\"${expectedRuntimeConfigDigest.replace("\\", "\\\\").replace("\"", "\\\"")}\"",
         )
         buildConfigField(
             "String",
@@ -384,6 +376,9 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
         }
         check(defineDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
             "GATE_BLOCK: canonical QWQ_DART_DEFINES_DIGEST is missing."
+        }
+        check(expectedRuntimeConfigDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
+            "GATE_BLOCK: canonical packaged runtime config digest is missing."
         }
         check(
             effectiveLaunchManifestDigest.matches(Regex("sha256:[0-9a-f]{64}")),

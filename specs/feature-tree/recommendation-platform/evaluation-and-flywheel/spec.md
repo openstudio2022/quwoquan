@@ -16,7 +16,7 @@
 - online AB significance。
 - real traffic training promotion。
 - 非深排 P0 指标分桶：qualityScore、supplySource、vertical、recallPath、intersectionClass。
-- P0+ 推荐商用归因看板：首页、旅行、精品、UGC、数据工程供给、recall_path、intersectionClass 和 reasonVersion。
+- P0+ 推荐商用归因看板：首页、旅行、精品、UGC、数据工程供给、recall_path、intersectionClass 和唯一 policyDigest。
 - P1a 推荐商用归因告警：unknown attribution、负反馈、CTR、旅行/精品消费和供给来源失衡。
 
 ### Out of Scope

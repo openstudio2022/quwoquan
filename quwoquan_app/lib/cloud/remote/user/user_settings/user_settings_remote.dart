@@ -17,28 +17,28 @@ final class RemoteUserSettingsQueryReader implements UserSettingsQueryReader {
   @override
   Future<NotificationSettingsView> getNotificationSettings() =>
       client.userUserSettingsGetNotificationSettings(
-        const UserSettingsQuery(),
+        UserSettingsQuery(),
         context: invocationContext(UserRequestPageIds.getNotificationSettings),
       );
 
   @override
   Future<PrivacySettingsView> getPrivacySettings() =>
       client.userUserSettingsGetPrivacySettings(
-        const UserSettingsQuery(),
+        UserSettingsQuery(),
         context: invocationContext(UserRequestPageIds.getPrivacySettings),
       );
 
   @override
   Future<CallSettingsView> getCallSettings() =>
       client.userUserSettingsGetCallSettings(
-        const UserSettingsQuery(),
+        UserSettingsQuery(),
         context: invocationContext(UserRequestPageIds.getCallSettings),
       );
 
   @override
   Future<AppearanceSettingsView> getAppearanceSettings() =>
       client.userUserSettingsGetAppearanceSettings(
-        const UserSettingsQuery(),
+        UserSettingsQuery(),
         context: invocationContext(UserRequestPageIds.getAppearanceSettings),
       );
 }

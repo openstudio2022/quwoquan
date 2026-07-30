@@ -6,7 +6,7 @@ void main() {
   // S2 内容投影单轨：PostReadProjectionFacade 已删除，投影统一经
   // PostReadPresentation.fromPostBase（DTO + wire 单一真相源）。
   group('PostReadPresentation single-rail projection', () {
-    test('subAccountId 与 authorId 保持同一真相源', () {
+    test('personaId 与 authorId 保持同一真相源', () {
       final dto = MicroPostDto.fromMap(<String, dynamic>{
         'id': 'p_canonical',
         'type': 'micro',
@@ -20,7 +20,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
       expect(dto.authorId, 'current_author');
-      expect(dto.subAccountId, 'current_author');
+      expect(dto.personaId, 'current_author');
     });
 
     test('fromPostBase 投射 feedCard 字段', () {

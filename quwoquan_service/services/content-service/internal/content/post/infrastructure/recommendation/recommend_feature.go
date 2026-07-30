@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,7 @@ type RecommendFeatureProjector struct {
 	entityPropagation *rtrec.EntityInterestPropagation
 	signalProcessor   rtrec.SignalProcessor
 	interestAgg       *InterestProfileAggregator
+	sameAsResolver    rtrec.SameAsResolver
 }
 
 func NewRecommendFeatureProjector(db *mongo.Database, opts ...RecommendFeatureProjectorOption) *RecommendFeatureProjector {
@@ -90,6 +92,14 @@ func WithSignalProcessor(sp rtrec.SignalProcessor) RecommendFeatureProjectorOpti
 // domain's rm_user_profile_view, not in this wide table).
 func WithInterestAggregator(agg *InterestProfileAggregator) RecommendFeatureProjectorOption {
 	return func(p *RecommendFeatureProjector) { p.interestAgg = agg }
+}
+
+// WithSameAsResolver wires the cross-axis concept bridge declared by sameAsRefs
+// in the tag taxonomy. Without it, tag affinity stays confined to the axis the
+// tag was observed on, so an interest declared on the audience axis never reaches
+// topic-axis content.
+func WithSameAsResolver(resolver rtrec.SameAsResolver) RecommendFeatureProjectorOption {
+	return func(p *RecommendFeatureProjector) { p.sameAsResolver = resolver }
 }
 
 func (p *RecommendFeatureProjector) Name() string { return "RecommendFeatureProjector" }
@@ -298,7 +308,7 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		}
 
 		if len(tags) > 0 {
-			delta := rtrec.ClassifyAndWeightTags(tags, depth, source)
+			delta := rtrec.ClassifyAndWeightTagsWithBridge(tags, depth, source, p.sameAsResolver)
 			for k, v := range delta.Topic {
 				topicInc[k] += v
 			}
@@ -498,11 +508,13 @@ func DeriveIntersectionFeatures(kindCounts map[string]int) IntersectionFeatureVa
 			out.SharedCircleCount += count
 		case "coCommented":
 			out.CoCommentedCount += count
-		case "coVisitedEntity":
+		case "coVisitedEntity", "sharedEntityAttention":
+			// 共同实体注意力：coVisitedEntity 为 deferred 的可证到访通道，
+			// sharedEntityAttention 为当前在产的浏览通道，二者共用同一排序特征位。
 			out.CoVisitedEntityCount += count
 		case "followeeInObject":
 			out.FolloweeInObjectActive = 1
-		case "followeeViewing":
+		case "followeeViewing", "followeeViewedObject":
 			out.FolloweeViewingActive = 1
 		}
 		if count > bestCount || (count == bestCount && (bestKind == "" || kind < bestKind)) {
@@ -646,14 +658,32 @@ type FeatureStore struct {
 	coll             *mongo.Collection
 	searchIntentColl *mongo.Collection
 	cache            *featureLRU
+	// intersectionEdges 是 viewer 事实交集快照读模型（可选）。装配时接上，
+	// 排序才拿得到真实的 viewer ↔ 对象交集边权；缺省不接则事实通道恒为 0，
+	// 不会退化成用内容侧承载力顶替（fail-closed）。
+	intersectionEdges ViewerIntersectionReadModel
 }
 
-func NewFeatureStore(db *mongo.Database) *FeatureStore {
-	return &FeatureStore{
+func NewFeatureStore(db *mongo.Database, opts ...FeatureStoreOption) *FeatureStore {
+	s := &FeatureStore{
 		coll:             db.Collection("rm_recommend_feature"),
 		searchIntentColl: db.Collection("rm_search_intent"),
 		cache:            newFeatureLRU(5000, 60*time.Second),
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(s)
+		}
+	}
+	return s
+}
+
+// FeatureStoreOption 装配可选依赖。
+type FeatureStoreOption func(*FeatureStore)
+
+// WithViewerIntersectionEdges 接上事实交集快照读模型，让排序消费真实交集边权。
+func WithViewerIntersectionEdges(store ViewerIntersectionReadModel) FeatureStoreOption {
+	return func(s *FeatureStore) { s.intersectionEdges = store }
 }
 
 // UserFeatures holds aggregated user-level features for scoring.
@@ -822,8 +852,19 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		return cached, nil
 	}
 	raw, err := s.GetUserFeatures(ctx, userID)
-	if err != nil || raw == nil {
+	if err != nil {
 		return nil, err
+	}
+	if raw == nil {
+		// 没有互动画像的 viewer 仍可能有事实交集（新用户导入通讯录 / 关注了人）。
+		// 这时不能整体返回 nil：否则交集召回来的候选在排序里拿不到自己的边权。
+		edges := s.viewerIntersectionEdges(ctx, userID)
+		if len(edges) == 0 {
+			return nil, nil
+		}
+		vec := &rtrec.UserFeatureVector{IntersectionEdges: edges}
+		s.cache.put(userID, vec)
+		return vec, nil
 	}
 
 	tagAffinities := make(map[string]float64, len(raw.TagInteraction))
@@ -906,8 +947,93 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		vec.FolloweeViewingActive = ix.FolloweeViewingActive
 		vec.IntersectionSourceRefTop = ix.SourceRefTop
 	}
+	vec.IntersectionEdges = s.viewerIntersectionEdges(ctx, userID)
 	s.cache.put(userID, vec)
 	return vec, nil
+}
+
+// maxViewerIntersectionEdges 单 viewer 注入排序的交集边上限：物化快照本身有窗口，
+// 这里再截一次，避免异常快照把特征向量撑大（截断按边权降序，保留最强边）。
+const maxViewerIntersectionEdges = 200
+
+// viewerIntersectionEdges 把 viewer 的事实交集快照压成「对象 ID → 边权/新鲜度」。
+//
+// 只取物化好的值：边权来自交集图物化器，新鲜度按同一半衰期公式从 freshAt 派生，
+// 在线不重算图谱。deferred kind 一律丢弃：注册表标 deferred 表示可证数据源缺位，
+// 展示侧已经拦住，排序侧也不能借历史快照把它变成隐性权重。
+func (s *FeatureStore) viewerIntersectionEdges(
+	ctx context.Context,
+	viewerID string,
+) map[string]rtrec.IntersectionEdgeFeature {
+	if s == nil || s.intersectionEdges == nil {
+		return nil
+	}
+	doc, ok, err := s.intersectionEdges.Load(ctx, viewerID)
+	if err != nil || !ok || len(doc.Reasons) == 0 {
+		return nil
+	}
+	now := time.Now().UTC()
+	edges := make(map[string]rtrec.IntersectionEdgeFeature, len(doc.Reasons))
+	for _, reason := range doc.Reasons {
+		kind := strings.TrimSpace(reason.Kind)
+		if kind == "" {
+			kind = strings.TrimSpace(reason.Source)
+		}
+		if IsDeferredIntersectionKind(kind) {
+			continue
+		}
+		if reason.EdgeWeight <= 0 {
+			continue
+		}
+		objectID := strings.TrimSpace(reason.ActionTargetID)
+		if objectID == "" {
+			objectID = strings.TrimSpace(reason.RelationObjectID)
+		}
+		if objectID == "" {
+			continue
+		}
+		edge := rtrec.IntersectionEdgeFeature{
+			Weight:    reason.EdgeWeight,
+			Freshness: RecencyDecay(reason.FreshAt, now),
+			Kind:      kind,
+		}
+		if existing, seen := edges[objectID]; seen && existing.Weight >= edge.Weight {
+			continue
+		}
+		edges[objectID] = edge
+	}
+	if len(edges) == 0 {
+		return nil
+	}
+	return capIntersectionEdges(edges, maxViewerIntersectionEdges)
+}
+
+func capIntersectionEdges(
+	edges map[string]rtrec.IntersectionEdgeFeature,
+	limit int,
+) map[string]rtrec.IntersectionEdgeFeature {
+	if limit <= 0 || len(edges) <= limit {
+		return edges
+	}
+	type keyed struct {
+		id   string
+		edge rtrec.IntersectionEdgeFeature
+	}
+	ordered := make([]keyed, 0, len(edges))
+	for id, edge := range edges {
+		ordered = append(ordered, keyed{id: id, edge: edge})
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].edge.Weight != ordered[j].edge.Weight {
+			return ordered[i].edge.Weight > ordered[j].edge.Weight
+		}
+		return ordered[i].id < ordered[j].id
+	})
+	out := make(map[string]rtrec.IntersectionEdgeFeature, limit)
+	for _, item := range ordered[:limit] {
+		out[item.id] = item.edge
+	}
+	return out
 }
 
 func SearchFeaturesFresh(raw *UserFeatures) bool {

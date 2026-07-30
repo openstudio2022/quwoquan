@@ -7,20 +7,20 @@ const ExternalProviderBindingOwner = "integration-service"
 const ExternalProviderBindingObject = "integration.external_integration.external_interaction"
 
 type ExternalProviderBinding struct {
-	State string
-	AdapterID string
-	EndpointRef string
+	State                   string
+	AdapterID               string
+	EndpointRef             string
 	EndpointEnvironmentKeys map[string]string
-	SecretEnvironmentKeys []string
-	TimeoutMilliseconds int
-	RequiredRedisScenes []string
+	SecretEnvironmentKeys   []string
+	TimeoutMilliseconds     int
+	RequiredRedisScenes     []string
 }
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"identity.sms.otp": {
-			State: "enabled",
-			AdapterID: "ext.sms.local_capture",
+			State:       "enabled",
+			AdapterID:   "ext.sms.local_capture",
 			EndpointRef: "environment_binding:integration.sms_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_FIXTURE_ENDPOINT",
@@ -29,12 +29,11 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_SMS_FIXTURE_TOKEN",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State: "enabled",
-			AdapterID: "ext.push.local_recorder",
+			State:       "enabled",
+			AdapterID:   "ext.push.local_recorder",
 			EndpointRef: "environment_binding:integration.push_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"user_service_base_url": "INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL",
@@ -43,18 +42,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_PUSH_FIXTURE_HMAC_KEY",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport_fixture",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport_fixture",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 			},
@@ -62,8 +58,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"beta": {
 		"identity.sms.otp": {
-			State: "enabled",
-			AdapterID: "ext.sms.local_capture",
+			State:       "enabled",
+			AdapterID:   "ext.sms.local_capture",
 			EndpointRef: "environment_binding:integration.sms_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_FIXTURE_ENDPOINT",
@@ -72,12 +68,11 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_SMS_FIXTURE_TOKEN",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State: "enabled",
-			AdapterID: "ext.push.local_recorder",
+			State:       "enabled",
+			AdapterID:   "ext.push.local_recorder",
 			EndpointRef: "environment_binding:integration.push_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"user_service_base_url": "INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL",
@@ -86,18 +81,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_PUSH_FIXTURE_HMAC_KEY",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 			},
@@ -105,8 +97,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"gamma": {
 		"identity.sms.otp": {
-			State: "enabled",
-			AdapterID: "ext.sms.local_capture",
+			State:       "enabled",
+			AdapterID:   "ext.sms.local_capture",
 			EndpointRef: "environment_binding:integration.sms_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_FIXTURE_ENDPOINT",
@@ -115,12 +107,11 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_SMS_FIXTURE_TOKEN",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State: "enabled",
-			AdapterID: "ext.push.local_recorder",
+			State:       "enabled",
+			AdapterID:   "ext.push.local_recorder",
 			EndpointRef: "environment_binding:integration.push_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"user_service_base_url": "INTEGRATION_PUSH_FIXTURE_USER_SERVICE_BASE_URL",
@@ -129,18 +120,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_PUSH_FIXTURE_HMAC_KEY",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 			},
@@ -148,8 +136,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"prod": {
 		"identity.sms.otp": {
-			State: "enabled",
-			AdapterID: "ext.sms.aliyun",
+			State:       "enabled",
+			AdapterID:   "ext.sms.aliyun",
 			EndpointRef: "environment_binding:integration.sms",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "INTEGRATION_SMS_ENDPOINT",
@@ -162,19 +150,18 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"integration.push.delivery": {
-			State: "enabled",
-			AdapterID: "ext.push.dispatch",
+			State:       "enabled",
+			AdapterID:   "ext.push.dispatch",
 			EndpointRef: "environment_binding:integration.push",
 			EndpointEnvironmentKeys: map[string]string{
-				"apns_environment": "INTEGRATION_PUSH_APNS_ENVIRONMENT",
-				"apns_key_id": "INTEGRATION_PUSH_APNS_KEY_ID",
-				"apns_team_id": "INTEGRATION_PUSH_APNS_TEAM_ID",
-				"apns_topic": "INTEGRATION_PUSH_APNS_TOPIC",
-				"fcm_project_id": "INTEGRATION_PUSH_FCM_PROJECT_ID",
+				"apns_environment":      "INTEGRATION_PUSH_APNS_ENVIRONMENT",
+				"apns_key_id":           "INTEGRATION_PUSH_APNS_KEY_ID",
+				"apns_team_id":          "INTEGRATION_PUSH_APNS_TEAM_ID",
+				"apns_topic":            "INTEGRATION_PUSH_APNS_TOPIC",
+				"fcm_project_id":        "INTEGRATION_PUSH_FCM_PROJECT_ID",
 				"user_service_base_url": "INTEGRATION_PUSH_USER_SERVICE_BASE_URL",
 			},
 			SecretEnvironmentKeys: []string{
@@ -182,18 +169,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 			},
@@ -203,7 +187,9 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 
 func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {
 	byCapability, ok := ExternalProviderBindings[environment]
-	if !ok { return ExternalProviderBinding{}, false }
+	if !ok {
+		return ExternalProviderBinding{}, false
+	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }

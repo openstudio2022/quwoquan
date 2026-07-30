@@ -2,6 +2,7 @@
   "label": "单品种草",
   "labelEn": "Single Item Rec",
   "description": "单件商品重点推荐",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

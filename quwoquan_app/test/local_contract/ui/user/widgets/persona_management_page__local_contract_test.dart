@@ -25,7 +25,10 @@ void main() {
 
       expect(find.text('主分身'), findsWidgets);
       expect(find.textContaining('用户号: main_handle'), findsOneWidget);
-      expect(find.textContaining('手机号: 13800000000'), findsWidgets);
+      expect(
+        find.textContaining(ProfileText.personaInheritanceDefault),
+        findsOneWidget,
+      );
     });
 
     testWidgets('分身首屏失败只保留顶栏返回与恢复动作', (tester) async {
@@ -70,10 +73,7 @@ void main() {
 
       await tester.tap(find.text(ProfileText.profileEditLabel).first);
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byType(CupertinoTextField).at(1),
-        '13900000000',
-      );
+      await tester.enterText(find.byType(CupertinoTextField).first, '同步后的主分身');
       await tester.tap(find.text(ProfileText.editProfileSaveAction));
       await tester.pumpAndSettle();
 
@@ -86,7 +86,7 @@ void main() {
     testWidgets('已退役分身展示退役态并隐藏重复退役操作', (tester) async {
       final seed = TestPersonaFacets.defaultSeed()
           .map(
-            (item) => item.subAccountId == 'persona_photo'
+            (item) => item.personaId == 'persona_photo'
                 ? item.copyWith(
                     status: 'retired',
                     retiredAt: DateTime.utc(2026, 4, 23),

@@ -1,0 +1,24 @@
+read_model: CanonicalSearchPayload
+description: 非 content 对象的有界搜索展示切片；由 SearchIndexView 唯一拥有，禁止任意 payload 键穿透搜索响应。
+source_entities:
+- SearchIndexView
+consumers:
+- search-query
+fields:
+- {name: coverUrl, type: string, nullable: true}
+- {name: placeName, type: string, nullable: true}
+- {name: address, type: string, nullable: true}
+- {name: followerCount, type: int, nullable: true}
+- {name: contentCount, type: int, nullable: true}
+- {name: circleId, type: string, nullable: true}
+- {name: categoryId, type: string, nullable: true}
+- {name: subCategory, type: string, nullable: true}
+- {name: domainId, type: string, nullable: true}
+- {name: kind, type: string, nullable: true}
+- {name: displaySubjectType, type: string, nullable: true}
+- {name: memberCount, type: int, nullable: true}
+- {name: postCount, type: int, nullable: true}
+- {name: circleName, type: string, nullable: true}
+- {name: linkedHomepageId, type: string, nullable: true}
+- {name: linkedHomepageType, type: string, nullable: true}
+- {name: linkedHomepageTitle, type: string, nullable: true}

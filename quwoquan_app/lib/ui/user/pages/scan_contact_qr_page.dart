@@ -136,8 +136,8 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
       if (!mounted) {
         return;
       }
-      if (resolved.subAccountId.trim().isEmpty) {
-        throw StateError('empty subAccountId');
+      if (resolved.personaId.trim().isEmpty) {
+        throw StateError('empty personaId');
       }
       unawaited(
         ref
@@ -147,7 +147,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
               action: 'resolve_profile_qr',
               pageName: 'ScanContactQrPage',
               targetType: 'user',
-              targetKey: resolved.subAccountId,
+              targetKey: resolved.personaId,
             ),
       );
       context.pushReplacement(
@@ -155,7 +155,7 @@ class _ScanContactQrPageState extends ConsumerState<ScanContactQrPage>
           handle: resolved.userHandle.isNotEmpty
               ? resolved.userHandle
               : parsed.handle,
-          userId: resolved.subAccountId,
+          userId: resolved.personaId,
           source: 'scan',
         ),
       );

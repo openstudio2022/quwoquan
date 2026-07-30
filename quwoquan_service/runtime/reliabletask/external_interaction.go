@@ -10,10 +10,8 @@ import (
 )
 
 const (
-	ExternalInteractionOperationSmsOTP      = "sms_otp.send"
-	ExternalInteractionOperationPush        = "push_delivery.send"
-	ExternalInteractionOperationOneTapPhone = "one_tap_phone.resolve"
-	ExternalInteractionOperationWebhook     = "webhook.deliver"
+	ExternalInteractionOperationSmsOTP = "sms_otp.send"
+	ExternalInteractionOperationPush   = "push_delivery.send"
 
 	ExternalInteractionStatusAccepted        = "accepted"
 	ExternalInteractionStatusPendingDispatch = "pending_dispatch"
@@ -325,9 +323,7 @@ func (r ExternalInteractionRequest) Validate() error {
 	}
 	switch r.Operation {
 	case ExternalInteractionOperationSmsOTP,
-		ExternalInteractionOperationPush,
-		ExternalInteractionOperationOneTapPhone,
-		ExternalInteractionOperationWebhook:
+		ExternalInteractionOperationPush:
 		return nil
 	default:
 		return fmt.Errorf("unsupported external interaction operation %s", r.Operation)

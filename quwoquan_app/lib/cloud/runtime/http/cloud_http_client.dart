@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/http/retry_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_json_body_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_transport_failure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/cloud/runtime/http/retry_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Callback for API latency instrumentation.
@@ -24,6 +26,14 @@ typedef ApiLatencyObserver =
 typedef CloudUnauthorizedRefresh =
     Future<bool> Function(Future<void> abortTrigger);
 
+/// Canonical account-state failures observed on a generated Gateway request.
+///
+/// [presentedAccessToken] is the bearer actually attached to that request. It
+/// is passed only to the in-process session controller so a late response from
+/// an old session cannot clear a newer login. It must never enter telemetry.
+typedef CloudAuthoritativeSessionFailure =
+    Future<void> Function(CloudException failure, String presentedAccessToken);
+
 final Future<void> _neverAbort = Completer<void>().future;
 
 class CloudHttpClient {
@@ -31,20 +41,25 @@ class CloudHttpClient {
     http.Client? client,
     CloudAuthTokenProvider? authTokenProvider,
     this._onUnauthorizedRefresh,
+    this._onAuthoritativeSessionFailure,
     Duration? timeout,
     this._latencyObserver,
     this._transportFailureClassifier,
+    CloudJsonBodyDecoder? jsonBodyDecoder,
   }) : _client = client ?? RetryHttpClient(),
        _authTokenProvider =
            authTokenProvider ?? const StubCloudAuthTokenProvider(),
-       _timeout = timeout ?? const Duration(seconds: 12);
+       _timeout = timeout ?? const Duration(seconds: 12),
+       _jsonBodyDecoder = jsonBodyDecoder ?? CloudJsonBodyDecoder.shared;
 
   final http.Client _client;
   final CloudAuthTokenProvider _authTokenProvider;
   final CloudUnauthorizedRefresh? _onUnauthorizedRefresh;
+  final CloudAuthoritativeSessionFailure? _onAuthoritativeSessionFailure;
   final Duration _timeout;
   final ApiLatencyObserver? _latencyObserver;
   final CloudTransportFailureClassifier? _transportFailureClassifier;
+  final CloudJsonBodyDecoder _jsonBodyDecoder;
 
   /// Executes exactly one generated-operation network attempt.
   ///
@@ -59,6 +74,7 @@ class CloudHttpClient {
     required bool requireAuth,
     required Future<void> abortTrigger,
     CloudJsonMap? body,
+    int? maximumResponseBodyBytes,
   }) async {
     if (!_sameOrigin(uri, gatewayOrigin)) {
       throw CloudErrorMapper.invalidResponse(
@@ -92,7 +108,12 @@ class CloudHttpClient {
         request.body = jsonEncode(body);
       }
       final streamed = await _sendSingleAttempt(request);
-      final response = await http.Response.fromStream(streamed);
+      final response = await _readJsonResponseWithinLimit(
+        streamed,
+        requestPath: uri.path,
+        abortTrigger: abortTrigger,
+        maximumResponseBodyBytes: maximumResponseBodyBytes,
+      );
       stopwatch.stop();
       _latencyObserver?.call(
         request.method,
@@ -101,8 +122,19 @@ class CloudHttpClient {
         response.statusCode,
       );
       latencyRecorded = true;
-      _guardStatus(response, uri.path);
-      return _decodeBody(response.body, uri.path);
+      await _guardGeneratedOperationStatus(
+        response,
+        uri.path,
+        presentedAccessToken: _bearerTokenFromHeaders(request.headers),
+        abortTrigger: abortTrigger,
+        maximumResponseBodyBytes: maximumResponseBodyBytes,
+      );
+      return await _decodeBody(
+        response,
+        uri.path,
+        abortTrigger: abortTrigger,
+        maximumResponseBodyBytes: maximumResponseBodyBytes,
+      );
     } catch (error) {
       stopwatch.stop();
       if (!latencyRecorded) {
@@ -293,7 +325,7 @@ class CloudHttpClient {
       ),
     );
     _guardStatus(res, uri.path);
-    return _decodeBody(res.body, uri.path);
+    return await _decodeBody(res, uri.path);
   }
 
   /// 供仍在迁入 generated executor 的可见读取使用真实 transport abort。
@@ -353,7 +385,7 @@ class CloudHttpClient {
       },
     );
     _guardStatus(res, uri.path);
-    return _decodeBody(res.body, uri.path);
+    return await _decodeBody(res, uri.path);
   }
 
   Future<CloudHttpDecodedJson> patchJson(
@@ -384,7 +416,7 @@ class CloudHttpClient {
       },
     );
     _guardStatus(res, uri.path);
-    return _decodeBody(res.body, uri.path);
+    return await _decodeBody(res, uri.path);
   }
 
   Future<CloudHttpDecodedJson> putJson(
@@ -415,7 +447,7 @@ class CloudHttpClient {
       },
     );
     _guardStatus(res, uri.path);
-    return _decodeBody(res.body, uri.path);
+    return await _decodeBody(res, uri.path);
   }
 
   /// Low-level POST with raw byte body. Used for gzip-compressed payloads
@@ -470,8 +502,7 @@ class CloudHttpClient {
       },
     );
     _guardStatus(res, uri.path);
-    if (res.body.isEmpty) return const <String, dynamic>{};
-    return _decodeBody(res.body, uri.path);
+    return await _decodeBody(res, uri.path);
   }
 
   /// [getJson] 后立即 [CloudResponseDecoder.asObject]，供需要根对象为 Map 的调用方使用。
@@ -662,6 +693,103 @@ class CloudHttpClient {
     return client.send(request);
   }
 
+  /// Reads a streamed JSON response only while it remains inside the shared
+  /// decoder's hard byte budget.
+  ///
+  /// `http.Response.fromStream` first buffers the complete body, which makes a
+  /// post-hoc length check ineffective against a large or unbounded response.
+  /// This collector rejects on `Content-Length` when available and otherwise
+  /// cancels the subscription at the first overflowing chunk.
+  Future<http.Response> _readJsonResponseWithinLimit(
+    http.StreamedResponse streamed, {
+    required String requestPath,
+    required Future<void> abortTrigger,
+    int? maximumResponseBodyBytes,
+  }) {
+    final maxBytes = _jsonBodyDecoder.effectiveMaximumResponseBytes(
+      maximumResponseBodyBytes,
+    );
+    if (maxBytes == null) {
+      // No live-response budget is inferred from cache, telemetry or server
+      // storage limits. Until the canonical transport policy is injected,
+      // retain the existing behavior and keep commercial closure blocked.
+      return http.Response.fromStream(streamed);
+    }
+    final declaredLength = streamed.contentLength;
+    if (declaredLength != null && declaredLength > maxBytes) {
+      final subscription = streamed.stream.listen((_) {});
+      unawaited(subscription.cancel());
+      return Future<http.Response>.error(
+        const CloudJsonDecodeAdmissionException('response_body_too_large'),
+      );
+    }
+
+    final body = BytesBuilder(copy: false);
+    final completer = Completer<http.Response>();
+    StreamSubscription<List<int>>? subscription;
+    var byteLength = 0;
+    var settled = false;
+
+    void cancelSubscription() {
+      final current = subscription;
+      if (current != null) {
+        unawaited(current.cancel());
+      } else {
+        scheduleMicrotask(() {
+          final delayed = subscription;
+          if (delayed != null) unawaited(delayed.cancel());
+        });
+      }
+    }
+
+    void reject(Object error, [StackTrace? stackTrace]) {
+      if (settled) return;
+      settled = true;
+      cancelSubscription();
+      completer.completeError(error, stackTrace ?? StackTrace.current);
+    }
+
+    subscription = streamed.stream.listen(
+      (chunk) {
+        if (settled) return;
+        if (chunk.length > maxBytes - byteLength) {
+          reject(
+            const CloudJsonDecodeAdmissionException('response_body_too_large'),
+          );
+          return;
+        }
+        body.add(chunk);
+        byteLength += chunk.length;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        reject(error, stackTrace);
+      },
+      onDone: () {
+        if (settled) return;
+        settled = true;
+        completer.complete(
+          http.Response.bytes(
+            body.takeBytes(),
+            streamed.statusCode,
+            request: streamed.request,
+            headers: streamed.headers,
+            isRedirect: streamed.isRedirect,
+            persistentConnection: streamed.persistentConnection,
+            reasonPhrase: streamed.reasonPhrase,
+          ),
+        );
+      },
+      cancelOnError: false,
+    );
+    abortTrigger.then(
+      (_) => reject(http.RequestAbortedException(Uri(path: requestPath))),
+      onError: (Object error, StackTrace stackTrace) {
+        reject(error, stackTrace);
+      },
+    );
+    return completer.future;
+  }
+
   Future<T> _completeBeforeAbort<T>(
     Future<T> operation, {
     required Future<void> abortTrigger,
@@ -733,16 +861,145 @@ class CloudHttpClient {
     );
   }
 
-  CloudHttpDecodedJson _decodeBody(String body, String path) {
-    if (body.isEmpty) return const <String, dynamic>{};
+  Future<void> _guardGeneratedOperationStatus(
+    http.Response response,
+    String path, {
+    required String presentedAccessToken,
+    required Future<void> abortTrigger,
+    int? maximumResponseBodyBytes,
+  }) async {
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    final decodedBody = await _decodeGeneratedOperationErrorBody(
+      response,
+      path,
+      abortTrigger: abortTrigger,
+      maximumResponseBodyBytes: maximumResponseBodyBytes,
+    );
+    final failure = CloudErrorMapper.fromDecodedStatusCode(
+      response.statusCode,
+      body: decodedBody,
+      requestPath: path,
+      retryAfter: response.headers['retry-after'],
+    );
+    final code = failure.code;
+    final isAuthoritativeAccountState =
+        code == UserErrorCode.accountSuspended.code ||
+        code == UserErrorCode.accountDeleted.code;
+    final handler = _onAuthoritativeSessionFailure;
+    if (isAuthoritativeAccountState &&
+        handler != null &&
+        presentedAccessToken.isNotEmpty) {
+      // Every authoritative response carries its own presented bearer into
+      // the session controller. That controller serializes mutations, checks
+      // exact current-token equality and makes duplicate callbacks idempotent.
+      // Transport-level singleflight is intentionally forbidden: an old
+      // bearer's stuck cleanup must never suppress a newer bearer's 403.
+      final cleanup =
+          Future<void>.sync(
+            () => handler(failure, presentedAccessToken),
+          ).then<void>(
+            (_) {},
+            onError: (Object _, StackTrace _) {
+              // Session cleanup owns its fail-closed transition and logging. The
+              // canonical Gateway failure remains the user-visible error.
+            },
+          );
+      await _waitForAuthoritativeSessionFailureCleanup(
+        cleanup,
+        abortTrigger: abortTrigger,
+      );
+    }
+    throw failure;
+  }
+
+  Future<void> _waitForAuthoritativeSessionFailureCleanup(
+    Future<void> cleanup, {
+    required Future<void> abortTrigger,
+  }) {
+    final completer = Completer<void>();
+    final waitBudget = _timeout > Duration.zero ? _timeout : Duration.zero;
+    late final Timer timer;
+
+    void settle() {
+      if (!completer.isCompleted) completer.complete();
+    }
+
+    timer = Timer(waitBudget, settle);
+    cleanup.then<void>((_) => settle());
+    abortTrigger.then<void>(
+      (_) => settle(),
+      onError: (Object _, StackTrace _) => settle(),
+    );
+    return completer.future.whenComplete(timer.cancel);
+  }
+
+  Future<CloudHttpDecodedJson> _decodeGeneratedOperationErrorBody(
+    http.Response response,
+    String path, {
+    required Future<void> abortTrigger,
+    int? maximumResponseBodyBytes,
+  }) async {
+    if (response.bodyBytes.isEmpty) return null;
     try {
-      return jsonDecode(body) as Object?;
+      final decode = _jsonBodyDecoder.decode(
+        bytes: response.bodyBytes,
+        abortTrigger: abortTrigger,
+        maximumResponseBytes: maximumResponseBodyBytes,
+      );
+      return await _completeBeforeAbort(
+        decode,
+        abortTrigger: abortTrigger,
+        requestPath: path,
+      );
+    } on FormatException {
+      // Preserve the historical status-code fallback for malformed error
+      // bodies while still keeping well-formed large JSON off the UI isolate.
+      return null;
+    } catch (error) {
+      if (error is http.RequestAbortedException) rethrow;
+      if (error is CloudJsonDecodeAbortedException) {
+        throw http.RequestAbortedException(Uri(path: path));
+      }
+      throw _mapException(error, requestPath: path);
+    }
+  }
+
+  Future<CloudHttpDecodedJson> _decodeBody(
+    http.Response response,
+    String path, {
+    Future<void>? abortTrigger,
+    int? maximumResponseBodyBytes,
+  }) async {
+    if (response.bodyBytes.isEmpty) return const <String, dynamic>{};
+    try {
+      final decode = _jsonBodyDecoder.decode(
+        bytes: response.bodyBytes,
+        abortTrigger: abortTrigger,
+        maximumResponseBytes: maximumResponseBodyBytes,
+      );
+      if (abortTrigger == null) return await decode;
+      return await _completeBeforeAbort(
+        decode,
+        abortTrigger: abortTrigger,
+        requestPath: path,
+      );
     } catch (e) {
+      if (e is http.RequestAbortedException) rethrow;
+      if (e is CloudJsonDecodeAbortedException) {
+        throw http.RequestAbortedException(Uri(path: path));
+      }
       throw _mapException(e, requestPath: path);
     }
   }
 
   CloudException _mapException(Object error, {required String requestPath}) {
+    if (error is CloudJsonDecodeAdmissionException) {
+      return CloudErrorMapper.invalidResponse(
+        message: 'Cloud JSON response rejected: ${error.reason}',
+        requestPath: requestPath,
+        functionModule: 'cloud_http_client',
+      );
+    }
     return CloudErrorMapper.fromException(
       error,
       requestPath: requestPath,
@@ -753,6 +1010,19 @@ class CloudHttpClient {
   void close() {
     _client.close();
   }
+}
+
+String _bearerTokenFromHeaders(Map<String, String> headers) {
+  String? authorization;
+  for (final entry in headers.entries) {
+    if (entry.key.toLowerCase() == 'authorization') {
+      authorization = entry.value.trim();
+      break;
+    }
+  }
+  const prefix = 'Bearer ';
+  if (authorization == null || !authorization.startsWith(prefix)) return '';
+  return authorization.substring(prefix.length).trim();
 }
 
 bool _sameOrigin(Uri left, Uri right) {

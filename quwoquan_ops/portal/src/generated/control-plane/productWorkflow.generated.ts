@@ -3,7 +3,7 @@
 export const productWorkflow = {
   "workflows": [
     {
-      "workflow_id": "moderation_case_v1",
+      "workflow_id": "moderation_case",
       "object_type": "moderation_case",
       "states": [
         "reported",
@@ -79,7 +79,7 @@ export const productWorkflow = {
       }
     },
     {
-      "workflow_id": "appeal_case_v1",
+      "workflow_id": "appeal_case",
       "object_type": "appeal_case",
       "states": [
         "submitted",
@@ -129,7 +129,7 @@ export const productWorkflow = {
       }
     },
     {
-      "workflow_id": "recovery_case_v1",
+      "workflow_id": "recovery_case",
       "object_type": "recovery_case",
       "states": [
         "requested",
@@ -191,7 +191,7 @@ export const productWorkflow = {
       }
     },
     {
-      "workflow_id": "experiment_rollout_v1",
+      "workflow_id": "experiment_rollout",
       "object_type": "experiment",
       "states": [
         "draft",
@@ -240,7 +240,7 @@ export const productWorkflow = {
       ]
     },
     {
-      "workflow_id": "recommendation_policy_v1",
+      "workflow_id": "recommendation_policy",
       "object_type": "recommendation_policy",
       "states": [
         "draft",

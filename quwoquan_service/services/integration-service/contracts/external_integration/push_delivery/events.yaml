@@ -6,6 +6,7 @@ events:
   - notification-service
   - platform-ops
   channel: event_store
+  payload_entity: PushDeliveryQueuedEvent
   payload_fields:
   - requestId
   - action
@@ -20,10 +21,11 @@ events:
   consumers:
   - platform-ops
   channel: event_store
+  payload_entity: PushDeliveryProviderAttemptedEvent
   payload_fields:
   - requestId
   - provider
-  - providerRequestId
+  - providerRequestDigest
   - status
   - latencyMs
   - normalizedError
@@ -34,13 +36,14 @@ events:
   - notification-service
   - platform-ops
   channel: callback_or_event
+  payload_entity: PushDeliverySucceededEvent
   payload_fields:
   - requestId
   - action
   - deliveryKey
   - callId
   - provider
-  - providerRequestId
+  - providerRequestDigest
   - status
 - name: PushDeliveryFailed
   description: 外部推送最终失败。
@@ -49,6 +52,7 @@ events:
   - notification-service
   - platform-ops
   channel: callback_or_event
+  payload_entity: PushDeliveryFailedEvent
   payload_fields:
   - requestId
   - action
@@ -64,6 +68,7 @@ events:
   - user-service
   - platform-ops
   channel: internal_http_audit
+  payload_entity: PushEndpointInvalidationRequestedEvent
   payload_fields:
   - endpointRef
   - endpointKind

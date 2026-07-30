@@ -1,0 +1,12 @@
+{
+  "label": "马尼拉大都会",
+  "labelEn": "Metro Manila",
+  "description": "首都圈与国家门户",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

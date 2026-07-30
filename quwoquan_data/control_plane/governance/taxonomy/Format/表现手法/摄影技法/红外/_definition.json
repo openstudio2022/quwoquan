@@ -2,6 +2,7 @@
   "label": "红外",
   "labelEn": "Infrared",
   "description": "红外线波段拍摄产生超现实效果",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

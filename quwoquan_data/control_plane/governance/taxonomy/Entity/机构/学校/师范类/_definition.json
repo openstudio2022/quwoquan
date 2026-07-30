@@ -2,6 +2,7 @@
   "label": "师范类",
   "labelEn": "Normal/Teacher Training",
   "description": "以教师培养为主的师范院校",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

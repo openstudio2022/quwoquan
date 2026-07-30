@@ -2,6 +2,7 @@
   "label": "职场互助圈",
   "labelEn": "Career Mutual Aid Circle",
   "description": "校友间的职场帮扶社群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

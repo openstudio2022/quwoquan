@@ -2,6 +2,7 @@
   "label": "大学",
   "labelEn": "University",
   "description": "普通高等学校本科院校",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -7,6 +7,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 )
 
 func (h *ChatHandler) registerInternalRoutes(mux *http.ServeMux) {
@@ -18,6 +19,10 @@ func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.
 	var body struct {
 		CreatorID string `json:"creatorId"`
 		PeerID    string `json:"peerId"`
+		// greetingRequestId 非空表示这条会话是打招呼被回复后升级出来的；
+		// openingMessage 是发起者当时写下的那句话，由 peer（发起者）署名落成首条消息。
+		GreetingRequestID string `json:"greetingRequestId"`
+		OpeningMessage    string `json:"openingMessage"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "请求格式错误", err.Error()))
@@ -33,10 +38,40 @@ func (h *ChatHandler) handleInternalCreateDirect(w http.ResponseWriter, r *http.
 		writeInternalRouteForbidden(w, r)
 		return
 	}
-	conv, err := h.conversationService.CreateOrReuseDirect(r.Context(), creatorID, peerID)
+	greetingID := strings.TrimSpace(body.GreetingRequestID)
+	if strings.TrimSpace(body.OpeningMessage) != "" && greetingID == "" {
+		// 首条消息只允许作为打招呼升级的一部分写入：没有 greetingRequestId 就没有
+		// 「对方已同意」的证据，服务端不得代人向陌生人发话。
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"首条消息必须绑定打招呼请求",
+			"openingMessage requires greetingRequestId",
+		))
+		return
+	}
+	conv, err := h.conversationService.CreateOrReuseDirect(
+		r.Context(),
+		creatorID,
+		peerID,
+		application.DirectConversationPromotion{GreetingRequestID: greetingID},
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
+	}
+	if greetingID != "" {
+		// 发起者是 peer：回复方（creatorID）是被打招呼的人，那句话是 peer 写的。
+		// clientMsgId 由 greetingId 派生，回复重放不会写出第二条。
+		if err := h.messageService.SendGreetingOpeningMessage(
+			r.Context(),
+			conv.ID,
+			peerID,
+			body.OpeningMessage,
+			"greeting:"+greetingID,
+		); err != nil {
+			writeHTTPError(w, r, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"conversationId": conv.ID})
 }

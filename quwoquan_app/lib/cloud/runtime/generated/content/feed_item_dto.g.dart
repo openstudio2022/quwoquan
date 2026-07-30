@@ -19,6 +19,10 @@ class FeedItemDto {
   final String coverUrl;
   final String thumbnailUrl;
   final String? videoUrl;
+  final String? mediaAssetId;
+  final int? mediaAssetVersion;
+  final String? hlsCmafMasterManifestUrl;
+  final int? hlsCmafDescriptorVersion;
   final List<String> imageUrls;
   final int? durationMs;
   final String? coverStrategy;
@@ -66,6 +70,10 @@ class FeedItemDto {
     required this.coverUrl,
     required this.thumbnailUrl,
     this.videoUrl,
+    this.mediaAssetId,
+    this.mediaAssetVersion,
+    this.hlsCmafMasterManifestUrl,
+    this.hlsCmafDescriptorVersion,
     required this.imageUrls,
     this.durationMs,
     this.coverStrategy,
@@ -115,6 +123,10 @@ class FeedItemDto {
       coverUrl: m['coverUrl']?.toString() ?? '',
       thumbnailUrl: m['thumbnailUrl']?.toString() ?? '',
       videoUrl: m['videoUrl']?.toString() ?? null,
+      mediaAssetId: m['mediaAssetId']?.toString() ?? null,
+      mediaAssetVersion: (m['mediaAssetVersion'] as num?)?.toInt() ?? null,
+      hlsCmafMasterManifestUrl: m['hlsCmafMasterManifestUrl']?.toString() ?? null,
+      hlsCmafDescriptorVersion: (m['hlsCmafDescriptorVersion'] as num?)?.toInt() ?? null,
       imageUrls: _parseStringList(m['imageUrls']) ?? <String>[],
       durationMs: (m['durationMs'] as num?)?.toInt() ?? null,
       coverStrategy: m['coverStrategy']?.toString() ?? null,
@@ -165,6 +177,10 @@ class FeedItemDto {
       'coverUrl': source['coverUrl'],
       'thumbnailUrl': source['thumbnailUrl'],
       'videoUrl': source['videoUrl'],
+      'mediaAssetId': source['mediaAssetId'],
+      'mediaAssetVersion': source['mediaAssetVersion'],
+      'hlsCmafMasterManifestUrl': source['hlsCmafMasterManifestUrl'],
+      'hlsCmafDescriptorVersion': source['hlsCmafDescriptorVersion'],
       'imageUrls': source['mediaUrls'],
       'durationMs': source['durationMs'],
       'coverStrategy': source['coverStrategy'],
@@ -215,6 +231,10 @@ class FeedItemDto {
       'coverUrl': coverUrl,
       'thumbnailUrl': thumbnailUrl,
       'videoUrl': videoUrl,
+      'mediaAssetId': mediaAssetId,
+      'mediaAssetVersion': mediaAssetVersion,
+      'hlsCmafMasterManifestUrl': hlsCmafMasterManifestUrl,
+      'hlsCmafDescriptorVersion': hlsCmafDescriptorVersion,
       'imageUrls': imageUrls,
       'durationMs': durationMs,
       'coverStrategy': coverStrategy,
@@ -264,6 +284,10 @@ class FeedItemDto {
     String? coverUrl,
     String? thumbnailUrl,
     String? videoUrl,
+    String? mediaAssetId,
+    int? mediaAssetVersion,
+    String? hlsCmafMasterManifestUrl,
+    int? hlsCmafDescriptorVersion,
     List<String>? imageUrls,
     int? durationMs,
     String? coverStrategy,
@@ -311,6 +335,10 @@ class FeedItemDto {
       coverUrl: coverUrl ?? this.coverUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       videoUrl: videoUrl ?? this.videoUrl,
+      mediaAssetId: mediaAssetId ?? this.mediaAssetId,
+      mediaAssetVersion: mediaAssetVersion ?? this.mediaAssetVersion,
+      hlsCmafMasterManifestUrl: hlsCmafMasterManifestUrl ?? this.hlsCmafMasterManifestUrl,
+      hlsCmafDescriptorVersion: hlsCmafDescriptorVersion ?? this.hlsCmafDescriptorVersion,
       imageUrls: imageUrls ?? this.imageUrls,
       durationMs: durationMs ?? this.durationMs,
       coverStrategy: coverStrategy ?? this.coverStrategy,

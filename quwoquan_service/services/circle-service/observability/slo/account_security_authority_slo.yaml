@@ -1,4 +1,3 @@
-version: 1
 service: circle-service
 domain: circle
 capability: account-security-authority

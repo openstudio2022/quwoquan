@@ -19,10 +19,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.environment_topology import (
-    ENVIRONMENT_CANONICAL_TARGET,
-    get_target,
-    load_environment_topology,
+from quwoquan_ops.cli.lib.output_paths import (
+    app_deployment_package_dir,
+    deployment_target_for_env,
 )
 
 
@@ -128,31 +127,27 @@ def main() -> int:
     parser.add_argument("--rollout-mode", default="")
     args = parser.parse_args()
 
-    cfg = ROOT / "quwoquan_app" / "configs" / args.env / "app_runtime.yaml"
+    target_name = args.target or deployment_target_for_env(args.env)
+    package_dir = app_deployment_package_dir(args.env, target=target_name)
+    cfg = package_dir / "app_runtime.yaml"
     if not cfg.exists():
-        raise SystemExit(f"app runtime config not found: {cfg}")
-    values = parse_runtime_yaml(cfg)
-    target_name = args.target or ENVIRONMENT_CANONICAL_TARGET[args.env]
-    target = get_target(load_environment_topology(), target_name)
-    if target.get("env") != args.env:
         raise SystemExit(
-            f"target {target_name!r} does not belong to environment {args.env!r}"
+            "packaged app runtime config not found; run stackctl package first: "
+            f"{cfg}"
         )
-    public_bases = target["publicBases"]
-    values.update(
-        {
-            "gatewayBaseUrl": public_bases["api"],
-            "legalBaseUrl": public_bases["legal"],
-            "publicWebBaseUrl": public_bases["publicWeb"],
-            "appDownloadBaseUrl": public_bases["appDownload"],
-            "realtimeBaseUrl": public_bases["realtime"],
-            "mediaAvatarCdnBaseUrl": public_bases["mediaAvatar"],
-            "mediaImageCdnBaseUrl": public_bases["mediaImage"],
-            "mediaVideoCdnBaseUrl": public_bases["mediaVideo"],
-            "mediaUploadBaseUrl": public_bases["mediaUpload"],
-            "rtcMediaConnectionUrl": public_bases["rtc"],
-        }
-    )
+    package_report_path = package_dir / "report.json"
+    if not package_report_path.is_file():
+        raise SystemExit(f"packaged app runtime report not found: {package_report_path}")
+    package_report = json.loads(package_report_path.read_text(encoding="utf-8"))
+    if (
+        package_report.get("status") != "packaged"
+        or package_report.get("env") != args.env
+        or package_report.get("target") != target_name
+    ):
+        raise SystemExit(
+            f"packaged app runtime identity mismatch: {args.env}/{target_name}"
+        )
+    values = parse_runtime_yaml(cfg)
     values = apply_overrides(values, args)
     required_endpoint_keys = (
         "gatewayBaseUrl",

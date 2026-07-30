@@ -2,6 +2,7 @@
   "label": "教程",
   "labelEn": "Tutorial",
   "description": "教授方法与步骤的教学内容视角",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

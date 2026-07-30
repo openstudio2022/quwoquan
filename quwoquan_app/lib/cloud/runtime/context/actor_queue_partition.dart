@@ -44,7 +44,8 @@ final class ActorQueuePartition {
     return sha256.convert(utf8.encode(canonical)).toString().substring(0, 24);
   }
 
-  String boxName(String baseName) => '${baseName}_v3_$key';
+  /// Stable queue identity: semantic queue name + actor partition digest.
+  String boxName(String queueName) => '${queueName}_actor_$key';
 
   bool acceptsEnvelope(Object? envelopeKey) =>
       canPersist && envelopeKey is String && envelopeKey == key;

@@ -26,8 +26,11 @@ func TestPremiumPoolProjectionFieldsFailClosed(t *testing.T) {
 	if got := fields["eligibilityState"]; got != "eligible" {
 		t.Fatalf("eligibilityState=%v want eligible", got)
 	}
-	if got := fields["projectionVersion"]; got != PremiumPoolProjectionVersion {
-		t.Fatalf("projectionVersion=%v want %s", got, PremiumPoolProjectionVersion)
+	if got := fields["projectionId"]; got != PremiumPoolProjectionID {
+		t.Fatalf("projectionId=%v want %s", got, PremiumPoolProjectionID)
+	}
+	if _, exists := fields["projectionVersion"]; exists {
+		t.Fatal("retired projectionVersion must not be written")
 	}
 
 	expired := BuildPremiumPoolProjectionFields(PremiumPoolProjectionInput{
@@ -84,15 +87,23 @@ func TestPremiumPoolSourceGatesToPremiumStream(t *testing.T) {
 	}
 
 	premium, err := src.Recall(context.Background(), rtrec.RecallRequest{
-		FeedType: rtrec.FeedSimilar,
-		Surface:  "premium_stream",
-		Limit:    10,
+		FeedType:             rtrec.FeedSimilar,
+		Surface:              "premium_stream",
+		ActiveReleaseID:      "release-current",
+		ActiveManifestDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Limit:                10,
 	})
 	if err != nil {
 		t.Fatalf("premium recall err=%v", err)
 	}
 	if reader.calls != 1 {
 		t.Fatalf("reader calls=%d want 1", reader.calls)
+	}
+	if reader.activeReleaseID != "release-current" {
+		t.Fatalf("reader activeReleaseID=%q want release-current", reader.activeReleaseID)
+	}
+	if reader.manifestDigest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("reader manifestDigest=%q", reader.manifestDigest)
 	}
 	if len(premium) != 1 {
 		t.Fatalf("premium items=%d want 1", len(premium))
@@ -149,12 +160,22 @@ func TestPremiumPoolProjectionFailsClosedOnRejectedAdmission(t *testing.T) {
 }
 
 type stubPremiumPoolReader struct {
-	items []rtrec.ContentCandidate
-	calls int
+	items           []rtrec.ContentCandidate
+	calls           int
+	activeReleaseID string
+	manifestDigest  string
 }
 
-func (s *stubPremiumPoolReader) ActivePremiumCandidates(context.Context, time.Time, int) ([]rtrec.ContentCandidate, error) {
+func (s *stubPremiumPoolReader) ActivePremiumCandidates(
+	_ context.Context,
+	_ time.Time,
+	activeReleaseID string,
+	manifestDigest string,
+	_ int,
+) ([]rtrec.ContentCandidate, error) {
 	s.calls++
+	s.activeReleaseID = activeReleaseID
+	s.manifestDigest = manifestDigest
 	out := make([]rtrec.ContentCandidate, len(s.items))
 	copy(out, s.items)
 	return out, nil

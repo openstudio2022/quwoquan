@@ -128,6 +128,11 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 mock.patch.object(stackctl, "resolve_report_dir", return_value=report_dir),
                 mock.patch.object(
                     stackctl,
+                    "can_reuse_package",
+                    return_value=(True, "fixed candidate ready"),
+                ),
+                mock.patch.object(
+                    stackctl,
                     "load_product_telemetry_log_sink",
                     side_effect=RuntimeError(
                         "endpoint=https://provider.internal token=should-not-appear"
@@ -226,7 +231,6 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
                 api_base="https://api.gamma.quwoquan.com:19000",
                 environment="gamma",
                 target_name="gamma-local",
-                resolve_host="127.0.0.1",
             )
 
         self.assertIs(resolved, query_session)
@@ -235,7 +239,6 @@ class ProductTelemetryLogSinkSecurityLocalContractTest(unittest.TestCase):
             environment="gamma",
             target_name="gamma-local",
             profile="product-telemetry-query",
-            resolve_host="127.0.0.1",
         )
 
     def test_cold_start_reuses_package_bound_images(self) -> None:

@@ -69,7 +69,6 @@ services:
       default:
         aliases:
           - "${QWQ_LOCAL_PUBLIC_UPLOAD_HOST:?QWQ_LOCAL_PUBLIC_UPLOAD_HOST is required}"
-          - "${QWQ_LOCAL_UPLOAD_LOCAL_HOST:?QWQ_LOCAL_UPLOAD_LOCAL_HOST is required}"
     environment:
       MINIO_ROOT_USER: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
       MINIO_ROOT_PASSWORD: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
@@ -94,14 +93,11 @@ services:
       QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET: "${QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET:?QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
       QWQ_LOCAL_PUBLIC_UPLOAD_HOST: "${QWQ_LOCAL_PUBLIC_UPLOAD_HOST:?QWQ_LOCAL_PUBLIC_UPLOAD_HOST is required}"
     volumes:
-      - ${QWQ_LOCAL_OBJECT_STORAGE_CA_FILE:?QWQ_LOCAL_OBJECT_STORAGE_CA_FILE is required}:/etc/qwq-object-storage/ca.crt:ro
       - ./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro
     entrypoint:
       - /bin/sh
       - -ec
       - |
-        install -d -m 0700 /root/.mc/certs/CAs
-        cp /etc/qwq-object-storage/ca.crt /root/.mc/certs/CAs/qwq-local-object-storage.crt
         for attempt in $(seq 1 60); do
           if mc alias set qwq "https://${QWQ_LOCAL_PUBLIC_UPLOAD_HOST}:${QWQ_LOCAL_OBJECT_STORAGE_EDGE_PORT}" "$QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_ID" "$QWQ_LOCAL_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
             mc mb --ignore-existing "qwq/${QWQ_LOCAL_OBJECT_STORAGE_BUCKET}"

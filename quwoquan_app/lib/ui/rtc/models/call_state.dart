@@ -1,33 +1,11 @@
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CallStatus, CallType, EndReason, ParticipantStatus;
 
-enum CallStatus {
-  initiated,
-  ringing,
-  connecting,
-  inCall,
-  ended;
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CallStatus, CallType, EndReason, ParticipantRole, ParticipantStatus;
 
-  static CallStatus fromString(String value) {
-    return switch (value) {
-      'initiated' => CallStatus.initiated,
-      'ringing' => CallStatus.ringing,
-      'connecting' => CallStatus.connecting,
-      'in_call' => CallStatus.inCall,
-      'ended' => CallStatus.ended,
-      _ => CallStatus.initiated,
-    };
-  }
-
-  String toApiString() {
-    return switch (this) {
-      CallStatus.initiated => 'initiated',
-      CallStatus.ringing => 'ringing',
-      CallStatus.connecting => 'connecting',
-      CallStatus.inCall => 'in_call',
-      CallStatus.ended => 'ended',
-    };
-  }
-
+extension CallStatusPresentation on CallStatus {
   bool get isActive =>
       this == CallStatus.initiated ||
       this == CallStatus.ringing ||
@@ -116,53 +94,18 @@ CallStage resolveCallStage({
       return CallStage.inCall;
     case CallStatus.ended:
       return switch (endReason) {
-        EndReason.timeout || EndReason.busy => CallStage.peerNoAnswer,
+        EndReason.noAnswer ||
+        EndReason.timeout ||
         EndReason.rejected => CallStage.peerNoAnswer,
-        EndReason.initiatorHangup => CallStage.peerLeft,
+        EndReason.lastLeave => CallStage.peerLeft,
         _ => CallStage.ended,
       };
   }
 }
 
-enum CallType {
-  audio,
-  video;
-
-  static CallType fromString(String value) {
-    return switch (value) {
-      'video' => CallType.video,
-      _ => CallType.audio,
-    };
-  }
-
-  String toApiString() => name;
-
+extension CallTypePresentation on CallType {
   bool get isVideo => this == CallType.video;
   bool get isAudio => this == CallType.audio;
-}
-
-enum EndReason {
-  completed,
-  cancelled,
-  rejected,
-  timeout,
-  busy,
-  initiatorHangup,
-  networkError,
-  unknown;
-
-  static EndReason fromString(String? value) {
-    return switch (value) {
-      'completed' || 'normal' || 'last_leave' => EndReason.completed,
-      'cancelled' => EndReason.cancelled,
-      'rejected' => EndReason.rejected,
-      'timeout' || 'no_answer' => EndReason.timeout,
-      'busy' => EndReason.busy,
-      'initiator_hangup' => EndReason.initiatorHangup,
-      'network_error' || 'error' => EndReason.networkError,
-      _ => EndReason.unknown,
-    };
-  }
 }
 
 /// 通话结束摘要：由时长 + 结束原因单一派生展示文案。
@@ -196,48 +139,15 @@ class CallSummary {
           '${formatDuration(duration)}';
     }
     return switch (endReason) {
-      EndReason.cancelled ||
-      EndReason.initiatorHangup => CallText.callSummaryCancelled,
-      EndReason.rejected ||
-      EndReason.busy => CallText.callSummaryRejected,
-      EndReason.timeout => CallText.callSummaryNoAnswer,
+      EndReason.cancelled => CallText.callSummaryCancelled,
+      EndReason.rejected => CallText.callSummaryRejected,
+      EndReason.noAnswer || EndReason.timeout => CallText.callSummaryNoAnswer,
       _ => CallText.callSummaryMissed,
     };
   }
 }
 
-enum ParticipantRole {
-  initiator,
-  invitee;
-
-  static ParticipantRole fromString(String value) {
-    return switch (value) {
-      'initiator' => ParticipantRole.initiator,
-      _ => ParticipantRole.invitee,
-    };
-  }
-}
-
-enum ParticipantStatus {
-  invited,
-  ringing,
-  connecting,
-  connected,
-  left,
-  timeout;
-
-  static ParticipantStatus fromString(String value) {
-    return switch (value) {
-      'invited' => ParticipantStatus.invited,
-      'ringing' => ParticipantStatus.ringing,
-      'connecting' => ParticipantStatus.connecting,
-      'connected' => ParticipantStatus.connected,
-      'left' => ParticipantStatus.left,
-      'timeout' => ParticipantStatus.timeout,
-      _ => ParticipantStatus.invited,
-    };
-  }
-
+extension ParticipantStatusPresentation on ParticipantStatus {
   bool get isActive =>
       this == ParticipantStatus.connecting ||
       this == ParticipantStatus.connected;

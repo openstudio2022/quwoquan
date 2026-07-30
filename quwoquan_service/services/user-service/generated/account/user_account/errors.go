@@ -13,11 +13,9 @@ var (
 	ErrUserNotFound                      = errors.New("USER.USER.not_found")
 	ErrUnauthorized                      = errors.New("USER.USER.unauthorized")
 	ErrForbidden                         = errors.New("USER.USER.forbidden")
-	ErrNicknameTaken                     = errors.New("USER.USER.nickname_taken")
 	ErrInvalidArgument                   = errors.New("USER.USER.invalid_argument")
 	ErrAccountEnforcementDecisionInvalid = errors.New("USER.ACCOUNT.enforcement_decision_invalid")
 	ErrAccountStateConflict              = errors.New("USER.ACCOUNT.state_conflict")
-	ErrRateLimited                       = errors.New("USER.USER.rate_limited")
 	ErrInternalError                     = errors.New("USER.SYSTEM.internal_error")
 	ErrProfileInvalidRegion              = errors.New("USER.PROFILE.invalid_region")
 	ErrProfileInvalidTagRef              = errors.New("USER.PROFILE.invalid_tag_ref")
@@ -47,12 +45,6 @@ func AppErrorFromForbidden(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "无权访问该资源", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
-// AppErrorFromNicknameTaken returns *AppError for USER.USER.nickname_taken (user_message from errors.yaml).
-func AppErrorFromNicknameTaken(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrNicknameTaken.Error()))
-	return rerrors.NewAppError(code, "该昵称已被使用，请换一个", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
-}
-
 // AppErrorFromInvalidArgument returns *AppError for USER.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
@@ -69,12 +61,6 @@ func AppErrorFromAccountEnforcementDecisionInvalid(debugMessage string) *rerrors
 func AppErrorFromAccountStateConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAccountStateConflict.Error()))
 	return rerrors.NewAppError(code, "账号当前状态无法执行该操作", debugMessage).WithMetadata("state_conflict", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromRateLimited returns *AppError for USER.USER.rate_limited (user_message from errors.yaml).
-func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 60)
 }
 
 // AppErrorFromInternalError returns *AppError for USER.SYSTEM.internal_error (user_message from errors.yaml).

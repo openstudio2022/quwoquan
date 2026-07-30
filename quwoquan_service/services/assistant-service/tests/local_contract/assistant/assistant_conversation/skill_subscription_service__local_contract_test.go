@@ -10,8 +10,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
 
@@ -21,7 +22,7 @@ func TestMigratedSkillSubscriptionServiceApplicationPort(t *testing.T) {
 }
 
 type proactiveDeliveryPolicyReader struct {
-	policy application.AssistantDeliveryPolicy
+	policy ports.AssistantDeliveryPolicy
 	err    error
 	calls  int
 }
@@ -29,28 +30,28 @@ type proactiveDeliveryPolicyReader struct {
 func (r *proactiveDeliveryPolicyReader) ResolveAssistantDeliveryPolicy(
 	context.Context,
 	string,
-) (application.AssistantDeliveryPolicy, error) {
+) (ports.AssistantDeliveryPolicy, error) {
 	r.calls++
 	return r.policy, r.err
 }
 
 type proactiveNotificationWriter struct {
-	commands []application.NotificationAppMessageCommand
+	commands []ports.NotificationAppMessageCommand
 	failures int
 }
 
 func (w *proactiveNotificationWriter) CreateAppMessage(
 	_ context.Context,
-	command application.NotificationAppMessageCommand,
-) (application.NotificationAppMessageReceipt, error) {
+	command ports.NotificationAppMessageCommand,
+) (ports.NotificationAppMessageReceipt, error) {
 	w.commands = append(w.commands, command)
 	if w.failures > 0 {
 		w.failures--
-		return application.NotificationAppMessageReceipt{}, errors.New(
+		return ports.NotificationAppMessageReceipt{}, errors.New(
 			"notification transport unavailable",
 		)
 	}
-	return application.NotificationAppMessageReceipt{
+	return ports.NotificationAppMessageReceipt{
 		MessageID: "message-" + command.IdempotencyKey,
 	}, nil
 }
@@ -60,8 +61,8 @@ type proactiveSkillRuntime struct{}
 func (proactiveSkillRuntime) SelectSkill(
 	context.Context,
 	assistant.AssistantTurn,
-) (application.SkillSelection, error) {
-	return application.SkillSelection{
+) (orchestration.SkillSelection, error) {
+	return orchestration.SkillSelection{
 		SkillID:     "news_briefing",
 		DomainID:    "assistant",
 		DisplayName: "资讯简报",
@@ -72,35 +73,35 @@ type proactiveFinalModel struct{}
 
 func (proactiveFinalModel) Complete(
 	context.Context,
-	application.ModelRequest,
-) (application.ModelResponse, error) {
-	return application.ModelResponse{Text: "主动订阅结果"}, nil
+	orchestration.ModelRequest,
+) (orchestration.ModelResponse, error) {
+	return orchestration.ModelResponse{Text: "主动订阅结果"}, nil
 }
 
 func newProactiveDeliveryService(
-	store application.SkillSubscriptionStore,
+	store ports.SkillSubscriptionStore,
 	cache rtredis.Client,
 	policy *proactiveDeliveryPolicyReader,
 	notification *proactiveNotificationWriter,
-	options ...application.AssistantServiceOption,
-) *application.AssistantService {
-	loop := application.NewAgentLoop(
+	options ...orchestration.AssistantServiceOption,
+) *orchestration.AssistantService {
+	loop := orchestration.NewAgentLoop(
 		proactiveSkillRuntime{},
-		application.ReactRuntime{Model: proactiveFinalModel{}},
+		orchestration.ReactRuntime{Model: proactiveFinalModel{}},
 		func() time.Time { return time.Now().UTC() },
 	)
 	options = append(
 		options,
-		application.WithSkillSubscriptionStore(store),
-		application.WithAssistantDeliveryPolicyReader(policy),
-		application.WithNotificationAppMessageCommandWriter(notification),
-		application.WithConversationRunStore(
+		orchestration.WithSkillSubscriptionStore(store),
+		orchestration.WithAssistantDeliveryPolicyReader(policy),
+		orchestration.WithNotificationAppMessageCommandWriter(notification),
+		orchestration.WithConversationRunStore(
 			persistence.NewMemoryConversationRunStore(),
 		),
-		application.WithAgentLoop(loop),
+		orchestration.WithAgentLoop(loop),
 		testFrozenPolicyOption(),
 	)
-	return application.NewAssistantService(
+	return orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		cache,
 		options...,
@@ -138,8 +139,8 @@ func proactiveSubscription(
 	}
 }
 
-func allowProactiveDeliveryPolicy() application.AssistantDeliveryPolicy {
-	return application.AssistantDeliveryPolicy{
+func allowProactiveDeliveryPolicy() ports.AssistantDeliveryPolicy {
+	return ports.AssistantDeliveryPolicy{
 		UserID:           "account-proactive",
 		AssistantEnabled: true,
 		Version:          1,
@@ -151,7 +152,7 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 ) {
 	newService := func(
 		membershipCurrent bool,
-	) *application.AssistantService {
+	) *orchestration.AssistantService {
 		return newProactiveDeliveryService(
 			persistence.NewMemorySkillSubscriptionStore(),
 			rtredis.NewMemoryClient(),
@@ -159,7 +160,7 @@ func TestSkillSubscriptionCreationAuthorizesDestination(
 				policy: allowProactiveDeliveryPolicy(),
 			},
 			&proactiveNotificationWriter{},
-			application.WithChatGroundingClient(
+			orchestration.WithChatGroundingClient(
 				&migratedChatMentionServiceFakeChatGroundingClient{
 					membershipDenied: !membershipCurrent,
 				},
@@ -439,12 +440,12 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 ) {
 	tests := []struct {
 		name   string
-		policy application.AssistantDeliveryPolicy
+		policy ports.AssistantDeliveryPolicy
 		now    time.Time
 	}{
 		{
 			name: "global assistant disabled",
-			policy: application.AssistantDeliveryPolicy{
+			policy: ports.AssistantDeliveryPolicy{
 				UserID:           "account-proactive",
 				AssistantEnabled: false,
 				Version:          1,
@@ -453,10 +454,10 @@ func TestSkillSubscriptionDeliveryHonorsGlobalSwitchQuietHoursAndDailyLimit(
 		},
 		{
 			name: "cross-midnight quiet hours",
-			policy: func() application.AssistantDeliveryPolicy {
+			policy: func() ports.AssistantDeliveryPolicy {
 				start := 22 * time.Hour
 				end := 7 * time.Hour
-				return application.AssistantDeliveryPolicy{
+				return ports.AssistantDeliveryPolicy{
 					UserID:           "account-proactive",
 					AssistantEnabled: true,
 					QuietHoursStart:  &start,
@@ -657,7 +658,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 			"subscription-consent",
 			"* * * * *",
 		)
-		subscription.SkillID = application.SkillPersonalContentAccess
+		subscription.SkillID = orchestration.SkillPersonalContentAccess
 		if _, err := store.CreateSkillSubscription(
 			t.Context(),
 			subscription,
@@ -728,7 +729,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 						policy: allowProactiveDeliveryPolicy(),
 					},
 					&proactiveNotificationWriter{},
-					application.WithChatGroundingClient(chat),
+					orchestration.WithChatGroundingClient(chat),
 				)
 				result, err := service.TickSkillSubscriptionCron(
 					t.Context(),
@@ -784,7 +785,7 @@ func TestSkillSubscriptionDeliveryFailsClosedForConsentAndGroupMembership(
 				policy: allowProactiveDeliveryPolicy(),
 			},
 			&proactiveNotificationWriter{},
-			application.WithChatGroundingClient(chat),
+			orchestration.WithChatGroundingClient(chat),
 		).TickSkillSubscriptionCron(
 			t.Context(),
 			assistant.SkillSubscriptionCronTickInput{

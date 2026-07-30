@@ -1,0 +1,12 @@
+{
+  "label": "奥斯陆市",
+  "labelEn": "Oslo",
+  "description": "首都与政治中心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -132,7 +132,7 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		runtimeBatchKey,
 		[]application.RuntimeLogRecord{{
 			Fields: map[string]string{
-				"schema":             "runtime-observability/v1",
+				"schema":             "observability.slim",
 				"occurredAt":         now.Format(time.RFC3339Nano),
 				"observedAt":         now.Add(time.Second).Format(time.RFC3339Nano),
 				"logKind":            "error",

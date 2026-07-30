@@ -17,7 +17,7 @@ void main() {
         'title': '云侧群头像',
         'avatarUrl': 'https://cdn.example.com/groups/conv_cloud_group.png',
         'groupAvatarVersion': 7,
-        'groupAvatarSourceHash': 'members-v7',
+        'groupAvatarSourceHash': 'members-current',
         'creatorId': 'user_001',
         'maxSeq': 12,
         'memberCount': 5,
@@ -33,7 +33,7 @@ void main() {
 
       expect(record.avatarUrl, dto.avatarUrl);
       expect(record.groupAvatarVersion, 7);
-      expect(record.groupAvatarSourceHash, 'members-v7');
+      expect(record.groupAvatarSourceHash, 'members-current');
       expect(record.toChatInboxDto().avatarUrl, dto.avatarUrl);
       expect(record.toChatInboxDto().groupAvatarVersion, 7);
     });
@@ -44,9 +44,9 @@ void main() {
         ensureSqfliteFfiInitialized();
         final namespace = LocalSearchNamespace(
           ownerUserId: 'user_owner',
-          subAccountId: 'persona_001',
+          personaId: 'persona_001',
           subjectType: 'profile',
-          personaContextVersion: 'v1',
+          personaContextVersion: '1',
         );
         final cache = ConversationCacheService()
           ..activateNamespace(namespace.key);
@@ -60,7 +60,7 @@ void main() {
           title: '待更新群头像',
           avatarUrl: 'https://cdn.example.com/groups/old.png',
           groupAvatarVersion: 1,
-          groupAvatarSourceHash: 'members-v1',
+          groupAvatarSourceHash: 'members-before-update',
         );
         cache.putAll(<ConversationCacheRecord>[initial]);
         await store.upsertConversationRecords(
@@ -71,7 +71,7 @@ void main() {
         const patch = ConversationAvatarPatch(
           avatarUrl: 'https://cdn.example.com/groups/new.png',
           groupAvatarVersion: 2,
-          groupAvatarSourceHash: 'members-v2',
+          groupAvatarSourceHash: 'members-after-update',
         );
         cache.applyAvatarPatch('conv_patch_group', patch);
         await store.updateConversationAvatar(
@@ -89,10 +89,10 @@ void main() {
 
         expect(cached?.avatarUrl, patch.avatarUrl);
         expect(cached?.groupAvatarVersion, 2);
-        expect(cached?.groupAvatarSourceHash, 'members-v2');
+        expect(cached?.groupAvatarSourceHash, 'members-after-update');
         expect(stored.single.avatarUrl, patch.avatarUrl);
         expect(stored.single.groupAvatarVersion, 2);
-        expect(stored.single.groupAvatarSourceHash, 'members-v2');
+        expect(stored.single.groupAvatarSourceHash, 'members-after-update');
       },
     );
 
@@ -102,9 +102,9 @@ void main() {
         ensureSqfliteFfiInitialized();
         final namespace = LocalSearchNamespace(
           ownerUserId: 'user_owner',
-          subAccountId: 'persona_001',
+          personaId: 'persona_001',
           subjectType: 'profile',
-          personaContextVersion: 'v1',
+          personaContextVersion: '1',
         );
         final cache = ConversationCacheService()
           ..activateNamespace(namespace.key);
@@ -118,12 +118,12 @@ void main() {
           title: '列表收敛群头像',
           avatarUrl: 'https://cdn.example.com/groups/old.png',
           groupAvatarVersion: 1,
-          groupAvatarSourceHash: 'members-v1',
+          groupAvatarSourceHash: 'members-stale',
         );
         final fresh = stale.copyWith(
           avatarUrl: 'https://cdn.example.com/groups/new.png',
           groupAvatarVersion: 3,
-          groupAvatarSourceHash: 'members-v3',
+          groupAvatarSourceHash: 'members-fresh',
         );
         cache.put(stale);
         await store.upsertConversationRecords(
@@ -147,10 +147,10 @@ void main() {
 
         expect(cached?.avatarUrl, fresh.avatarUrl);
         expect(cached?.groupAvatarVersion, 3);
-        expect(cached?.groupAvatarSourceHash, 'members-v3');
+        expect(cached?.groupAvatarSourceHash, 'members-fresh');
         expect(storedTarget.avatarUrl, fresh.avatarUrl);
         expect(storedTarget.groupAvatarVersion, 3);
-        expect(storedTarget.groupAvatarSourceHash, 'members-v3');
+        expect(storedTarget.groupAvatarSourceHash, 'members-fresh');
       },
     );
   });

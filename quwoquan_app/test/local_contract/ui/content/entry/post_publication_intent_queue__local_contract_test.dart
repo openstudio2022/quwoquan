@@ -39,7 +39,7 @@ void main() {
       hasLength(1),
     );
     final persisted = (await SharedPreferences.getInstance()).getString(
-      'post_publication_intents_v1:user-publication',
+      'post_publication_intents:user-publication',
     );
     expect(persisted, isNotNull);
     first.dispose();
@@ -133,7 +133,7 @@ void main() {
     expect(writer.commands, isEmpty);
     expect(
       (await SharedPreferences.getInstance()).getString(
-        'post_publication_intents_v1:user-publication',
+        'post_publication_intents:user-publication',
       ),
       contains('"stage":"preparingMedia"'),
     );
@@ -625,7 +625,7 @@ ProviderContainer _container({
       currentUserIdProvider.overrideWithValue('user-publication'),
       activePersonaContextProvider.overrideWith(
         (_) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'persona-publication',
+          personaId: 'persona-publication',
           ownerUserId: 'user-publication',
           displayName: '发布者',
           avatarUrl: '',

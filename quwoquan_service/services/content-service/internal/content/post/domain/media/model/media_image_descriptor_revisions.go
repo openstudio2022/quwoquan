@@ -151,7 +151,7 @@ func (a *MediaAsset) applyImageDescriptor(descriptor ImageProcessingDescriptor) 
 	a.processorProfile = strings.TrimSpace(descriptor.ProcessorProfile)
 	a.imageWidth = descriptor.ImageWidth
 	a.imageHeight = descriptor.ImageHeight
-	a.imageDeliveryContentType = strings.TrimSpace(descriptor.ImageDeliveryContentType)
+	a.imageDeliveryMimeType = strings.TrimSpace(descriptor.ImageDeliveryMimeType)
 	a.imageNormalizedObjectKey = strings.TrimSpace(descriptor.ImageNormalizedObjectKey)
 	a.imagePublicSliceKey = strings.TrimSpace(descriptor.ImagePublicSliceKey)
 	a.imageDominantColor = strings.TrimSpace(descriptor.ImageDominantColor)

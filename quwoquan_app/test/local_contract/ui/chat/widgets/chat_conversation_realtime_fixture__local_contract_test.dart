@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import '../../../../support/cloud_services/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -32,6 +33,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authSessionControllerProvider.overrideWith(
+            TestAuthenticatedSessionController.new,
+          ),
           realtimeConnectionManagerProvider.overrideWith(
             () => RealtimeConnectionNotifier(
               delegateFactory:

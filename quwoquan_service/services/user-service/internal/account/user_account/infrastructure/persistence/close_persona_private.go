@@ -88,7 +88,7 @@ func reconcileCounterpartRelationshipCounts(
 		   SELECT target_persona.user_id, COUNT(*)::integer AS delta
 		     FROM persona_relationship_directions AS direction
 		     JOIN personas AS target_persona
-		       ON target_persona.sub_account_id=direction.target_persona_id
+		       ON target_persona.persona_id=direction.target_persona_id
 		    WHERE direction.following=true
 		      AND direction.source_persona_id=ANY($1::text[])
 		    GROUP BY target_persona.user_id
@@ -114,7 +114,7 @@ func reconcileCounterpartRelationshipCounts(
 		   SELECT source_persona.user_id, COUNT(*)::integer AS delta
 		     FROM persona_relationship_directions AS direction
 		     JOIN personas AS source_persona
-		       ON source_persona.sub_account_id=direction.source_persona_id
+		       ON source_persona.persona_id=direction.source_persona_id
 		    WHERE direction.following=true
 		      AND direction.target_persona_id=ANY($1::text[])
 		    GROUP BY source_persona.user_id
@@ -146,17 +146,17 @@ func removeClosedPersonasFromContactMatches(
 		   SELECT record.id,
 		          ARRAY(
 		            SELECT matched_id
-		              FROM unnest(COALESCE(record.matched_sub_account_ids, ARRAY[]::text[]))
+		              FROM unnest(COALESCE(record.matched_persona_ids, ARRAY[]::text[]))
 		                   AS matched_id
 		             WHERE NOT (matched_id=ANY($1::text[]))
 		          ) AS remaining
 		     FROM contact_discovery_records AS record
 		    WHERE record.owner_account_id<>$2
-		      AND COALESCE(record.matched_sub_account_ids, ARRAY[]::text[])
+		      AND COALESCE(record.matched_persona_ids, ARRAY[]::text[])
 		          && $1::text[]
 		 )
 		 UPDATE contact_discovery_records AS record
-		    SET matched_sub_account_ids=cleaned.remaining,
+		    SET matched_persona_ids=cleaned.remaining,
 		        match_count=cardinality(cleaned.remaining)
 		   FROM cleaned
 		  WHERE record.id=cleaned.id`,
@@ -217,8 +217,8 @@ func eraseGreetingRequests(
 	requestPredicate := `
 SELECT id
 FROM greeting_requests
-WHERE requester_sub_account_id=ANY($1::text[])
-   OR target_sub_account_id=ANY($1::text[])`
+WHERE requester_persona_id=ANY($1::text[])
+   OR target_persona_id=ANY($1::text[])`
 	if _, err := tx.Exec(ctx, `
 UPDATE greeting_request_outbox
 SET payload_json='{"redacted":true}'::jsonb,
@@ -230,7 +230,7 @@ WHERE aggregate_id IN (`+requestPredicate+`)`, personaIDs, closedAt); err != nil
 	}
 	if _, err := tx.Exec(ctx, `
 DELETE FROM greeting_request_command_receipts
-WHERE actor_sub_account_id=ANY($1::text[])
+WHERE actor_persona_id=ANY($1::text[])
    OR request_id IN (`+requestPredicate+`)`, personaIDs); err != nil {
 		return fmt.Errorf("delete greeting receipts on account close: %w", err)
 	}

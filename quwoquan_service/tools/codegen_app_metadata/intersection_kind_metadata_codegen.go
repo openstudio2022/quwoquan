@@ -84,7 +84,7 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	}
 	b.WriteString("\n")
 
-	b.WriteString("/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|companion|connect|commerce）。\n")
+	b.WriteString("/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|gathering|connect|commerce）。\n")
 	b.WriteString("/// 端交互 handler 路由维度，与 tier 权限成本正交；端 navigator/徽标/助手分发读 actionKeyMeta.dispatch。\n")
 	b.WriteString(fmt.Sprintf("const List<String> intersectionActionDispatchKeys = %s;\n\n", dartStringListLiteral(r.ActionDispatch)))
 
@@ -101,7 +101,7 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("/// 单个 actionKey 的行动阶梯元数据（registry.actionKeyMeta，§24 M0.1/M0.3/M0.7）。\n")
 	b.WriteString("/// 端据 requiredGates 判断「可执行 / 优雅降级」；tier 区分轻查看/重社交；\n")
 	b.WriteString("/// targetAvailability=deferred 表示承接页/数据源未就绪，端不得伪造成行（§24.10 诚实红线）；\n")
-	b.WriteString("/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|companion|connect|commerce），\n")
+	b.WriteString("/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|gathering|connect|commerce），\n")
 	b.WriteString("/// 端 navigator/徽标/助手分发读本字段，禁止端手写「哪些 actionKey 属助手/约伴」第二份枚举（M0.7）。\n")
 	b.WriteString("class IntersectionActionKeyMeta {\n")
 	b.WriteString("  const IntersectionActionKeyMeta({\n")
@@ -119,10 +119,10 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("  /// 助手类：点击打开小艺解释/追问/续写，而非导航到对象页。\n")
 	b.WriteString("  bool get isAssistant => dispatch == 'assistant';\n")
 	b.WriteString("  /// 同行/线下约伴类：唯一驱动「有人同行」徽标与约伴专属落点。\n")
-	b.WriteString("  bool get isCompanion => dispatch == 'companion';\n")
+	b.WriteString("  bool get isGathering => dispatch == 'gathering';\n")
 	b.WriteString("  /// 重社交连接类（私信/约伴/房间/心动，需破冰阶梯/请求/建群），非简单对象下钻。\n")
 	b.WriteString("  bool get isSocialConnect =>\n")
-	b.WriteString("      dispatch == 'message' || dispatch == 'companion' || dispatch == 'connect';\n\n")
+	b.WriteString("      dispatch == 'message' || dispatch == 'gathering' || dispatch == 'connect';\n\n")
 	b.WriteString("  /// 由 actionKey 查行动阶梯元数据；未知 key 返回 null（端据此安全降级）。\n")
 	b.WriteString("  static IntersectionActionKeyMeta? of(String? actionKey) {\n")
 	b.WriteString("    if (actionKey == null) return null;\n")
@@ -213,37 +213,41 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("    default:\n      return '';\n")
 	b.WriteString("  }\n}\n\n")
 
+	// ── objectType → objectKind (registry.objectTypeBindings) ──
+	b.WriteString("/// 开放 objectType 词汇 → objectKind 闭集（registry.objectTypeBindings）。\n")
+	b.WriteString("/// 新增垂类主页只需在注册表登记并 codegen，端侧不得再写 objectType switch。\n")
+	b.WriteString("/// 未登记 objectType 返回空串，端据此降级为不可导航，而不是默认当成人物。\n")
+	b.WriteString("String intersectionObjectKindForObjectType(String objectType) {\n")
+	b.WriteString("  switch (objectType.trim()) {\n")
+	bindings := append([]recintersectionmeta.ObjectTypeBinding(nil), r.ObjectTypeBindings...)
+	sort.Slice(bindings, func(i, j int) bool {
+		return bindings[i].ObjectType < bindings[j].ObjectType
+	})
+	for _, binding := range bindings {
+		b.WriteString(fmt.Sprintf("    case %s:\n", dartStringLiteral(binding.ObjectType)))
+		b.WriteString(fmt.Sprintf("      return %s;\n", dartStringLiteral(binding.ObjectKind)))
+	}
+	b.WriteString("    default:\n      return '';\n")
+	b.WriteString("  }\n}\n\n")
+
 	// ── IntersectionKindMetadata class ──
-	b.WriteString("/// 单条交集 kind 的端可消费元数据（registry.kinds + actionHintsByKind + visualToneByIconKey 合成）。\n")
-	b.WriteString("/// 端侧禁止再硬编码 kind→iconKey/objectKind/routeId/tone/actionHints switch，一律查本表。\n")
+	//
+	// 只保留「端侧本地行为」真正需要的逐 kind 字段。objectKind / countObjectKind /
+	// dimensions / actionHints / lifecycleApplicable / vertical / moment 全部逐条随
+	// IntersectionReason 下发，编译进包只会形成第二真相源：注册表改一条，端不发版
+	// 就与线上不一致。tone / iconKey 暂留为云侧未下发时的本地视觉兜底。
+	b.WriteString("/// 单条交集 kind 的端可消费元数据（registry.kinds + visualToneByIconKey 合成）。\n")
+	b.WriteString("/// 仅承载云侧未下发时的视觉兜底；objectKind/dimensions/actionHints/vertical/moment\n")
+	b.WriteString("/// 等逐条事实一律直读 IntersectionReason，不在端侧留第二份 kind 表。\n")
 	b.WriteString("class IntersectionKindMetadata {\n")
 	b.WriteString("  const IntersectionKindMetadata({\n")
 	b.WriteString("    required this.kind,\n")
 	b.WriteString("    required this.iconKey,\n")
-	b.WriteString("    required this.objectKind,\n")
-	b.WriteString("    this.countObjectKind,\n")
-	b.WriteString("    required this.dimensions,\n")
-	b.WriteString("    required this.actionHints,\n")
 	b.WriteString("    required this.tone,\n")
-	b.WriteString("    required this.lifecycleApplicable,\n")
-	b.WriteString("    required this.vertical,\n")
-	b.WriteString("    required this.moment,\n")
 	b.WriteString("  });\n\n")
 	b.WriteString("  final String kind;\n")
 	b.WriteString("  final String iconKey;\n")
-	b.WriteString("  final String objectKind;\n")
-	b.WriteString("  final String? countObjectKind;\n")
-	b.WriteString("  final List<String> dimensions;\n")
-	b.WriteString("  final List<String> actionHints;\n")
-	b.WriteString("  final String tone;\n")
-	b.WriteString("  final bool lifecycleApplicable;\n")
-	b.WriteString("  final String vertical;\n")
-	b.WriteString("  /// §24 M0.2 意图时态（retrospective|current|prospective，缺省 current；与 lifecycleState 正交）。\n")
-	b.WriteString("  final String moment;\n\n")
-	b.WriteString("  /// 主维度（dimensions 首项；用于 tone/label 归一）。\n")
-	b.WriteString("  String get primaryDimension => dimensions.isEmpty ? '' : dimensions.first;\n\n")
-	b.WriteString("  /// 主行动 actionKey（actionHints 首项；缺省 ask_assistant 助手解释）。\n")
-	b.WriteString("  String get primaryActionKey => actionHints.isEmpty ? 'ask_assistant' : actionHints.first;\n\n")
+	b.WriteString("  final String tone;\n\n")
 	b.WriteString("  /// 由 kind 查元数据；未知 kind 返回 null（端据此安全降级）。\n")
 	b.WriteString("  static IntersectionKindMetadata? of(String? kind) {\n")
 	b.WriteString("    if (kind == null) return null;\n")
@@ -256,22 +260,10 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, IntersectionKindMetadata>{\n")
 	for _, k := range r.Kinds {
 		tone := r.VisualToneByIcon[k.IconKey]
-		hints := r.ActionHintsByKind[k.Kind]
-		countLiteral := "null"
-		if strings.TrimSpace(k.CountObjectKind) != "" {
-			countLiteral = dartStringLiteral(k.CountObjectKind)
-		}
 		b.WriteString(fmt.Sprintf("  %s: IntersectionKindMetadata(\n", dartStringLiteral(k.Kind)))
 		b.WriteString(fmt.Sprintf("    kind: %s,\n", dartStringLiteral(k.Kind)))
 		b.WriteString(fmt.Sprintf("    iconKey: %s,\n", dartStringLiteral(k.IconKey)))
-		b.WriteString(fmt.Sprintf("    objectKind: %s,\n", dartStringLiteral(k.ObjectKind)))
-		b.WriteString(fmt.Sprintf("    countObjectKind: %s,\n", countLiteral))
-		b.WriteString(fmt.Sprintf("    dimensions: %s,\n", dartStringListLiteral(k.Dimensions)))
-		b.WriteString(fmt.Sprintf("    actionHints: %s,\n", dartStringListLiteral(hints)))
 		b.WriteString(fmt.Sprintf("    tone: %s,\n", dartStringLiteral(tone)))
-		b.WriteString(fmt.Sprintf("    lifecycleApplicable: %t,\n", k.LifecycleApplicable))
-		b.WriteString(fmt.Sprintf("    vertical: %s,\n", dartStringLiteral(k.Vertical)))
-		b.WriteString(fmt.Sprintf("    moment: %s,\n", dartStringLiteral(k.MomentOrDefault())))
 		b.WriteString("  ),\n")
 	}
 	b.WriteString("};\n")

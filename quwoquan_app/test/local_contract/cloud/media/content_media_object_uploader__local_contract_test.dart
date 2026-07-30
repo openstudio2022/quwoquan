@@ -15,7 +15,10 @@ void main() {
     'stream upload sends every header bound into the presigned contract',
     () async {
       final client = _RecordingStreamClient();
-      final uploader = RemoteContentMediaObjectUploader(client: client);
+      final uploader = RemoteContentMediaObjectUploader(
+        client: client,
+        uploadBaseUrl: 'https://upload.example.test',
+      );
 
       await uploader.stream(
         Uri.parse('https://upload.example.test/object'),
@@ -37,7 +40,10 @@ void main() {
     'object-storage failures keep retry policy and canonical failure semantics',
     () async {
       final client = _RecordingStreamClient(statusCode: 503);
-      final uploader = RemoteContentMediaObjectUploader(client: client);
+      final uploader = RemoteContentMediaObjectUploader(
+        client: client,
+        uploadBaseUrl: 'https://upload.example.test',
+      );
 
       await expectLater(
         uploader.stream(
@@ -71,6 +77,7 @@ void main() {
     () async {
       final uploader = RemoteContentMediaObjectUploader(
         client: _RecordingStreamClient(statusCode: 403),
+        uploadBaseUrl: 'https://upload.example.test',
       );
 
       await expectLater(
@@ -103,6 +110,7 @@ void main() {
   test('transport exceptions use the same canonical storage failure', () async {
     final uploader = RemoteContentMediaObjectUploader(
       client: _FailingStreamClient(),
+      uploadBaseUrl: 'https://upload.example.test',
     );
 
     await expectLater(
@@ -124,6 +132,35 @@ void main() {
       ),
     );
   });
+
+  test(
+    'rejects a presigned URL outside the governed upload authority',
+    () async {
+      final client = _RecordingStreamClient();
+      final uploader = RemoteContentMediaObjectUploader(
+        client: client,
+        uploadBaseUrl: 'https://upload.example.test',
+      );
+
+      await expectLater(
+        uploader.stream(
+          Uri.parse('https://attacker.example.invalid/object'),
+          Stream<List<int>>.value(const <int>[7]),
+          contentLength: 1,
+          contentType: 'image/jpeg',
+          expectedSha256: digest,
+        ),
+        throwsA(
+          isA<ContentMediaObjectUploadException>().having(
+            (error) => error.retryable,
+            'retryable',
+            isFalse,
+          ),
+        ),
+      );
+      expect(client.request, isNull);
+    },
+  );
 }
 
 final class _RecordingStreamClient extends http.BaseClient {

@@ -2,6 +2,7 @@ package local_contract
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -58,10 +59,14 @@ func TestHomepageAggregateStableIdentityRestoreAndCASVersion(t *testing.T) {
 	if restored.ID() != "homepage_legacy_original" {
 		t.Fatalf("restore must preserve stored id, got %q", restored.ID())
 	}
-	if len(restored.Snapshot().ContentPreview) != 0 ||
-		len(restored.Snapshot().QuestionPreview) != 0 ||
-		len(restored.Snapshot().RelatedGroups) != 0 {
-		t.Fatal("aggregate must not synthesize shell projections")
+	snapshotType := reflect.TypeOf(restored.Snapshot())
+	for _, projectionField := range []string{
+		"AverageRating", "RatingCount", "ReviewSummary", "ContentPreview",
+		"QuestionPreview", "RelatedGroups", "RelationEdges", "AssistantContext",
+	} {
+		if _, found := snapshotType.FieldByName(projectionField); found {
+			t.Fatalf("projection field %s must not enter Homepage snapshot", projectionField)
+		}
 	}
 }
 

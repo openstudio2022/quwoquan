@@ -1,7 +1,6 @@
 # reliabletask 数据保留与限流技术策略；由 module_catalog.yaml 引用并随 package 投影。
-version: 1
 policies:
-  reliabletask.retention.standard.v1:
+  reliabletask.retention.standard:
     outbox:
       dispatchedTtl: 168h
       failedTtl: 720h
@@ -17,7 +16,7 @@ policies:
     dlq:
       ttl: 2160h
       requiresManualRecoveryPlan: true
-  reliabletask.retention.notification.v1:
+  reliabletask.retention.notification:
     outbox:
       dispatchedTtl: 168h
       failedTtl: 2160h
@@ -39,22 +38,22 @@ policies:
       requiresManualRecoveryPlan: true
 
 rateLimits:
-  reliabletask.rate.chat_avatar.v1:
+  reliabletask.rate.chat_avatar:
     dispatchPerSecond: 50
     claimPerSecond: 20
     retryPerSecond: 10
     priority: high
-  reliabletask.rate.projection.v1:
+  reliabletask.rate.projection:
     dispatchPerSecond: 200
     claimPerSecond: 100
     retryPerSecond: 30
     priority: normal
-  reliabletask.rate.notification_fanout.v1:
+  reliabletask.rate.notification_fanout:
     dispatchPerSecond: 100
     claimPerSecond: 50
     retryPerSecond: 20
     priority: low
-  reliabletask.rate.data_content_supply.v1:
+  reliabletask.rate.data_content_supply:
     dispatchPerSecond: 500
     claimPerSecond: 200
     retryPerSecond: 50

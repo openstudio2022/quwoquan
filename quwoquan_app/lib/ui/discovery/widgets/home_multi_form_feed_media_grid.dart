@@ -123,7 +123,7 @@ class _HomeMomentGridCard extends StatelessWidget {
   }
 }
 
-class _HomeMomentGridTile extends StatelessWidget {
+class _HomeMomentGridTile extends ConsumerWidget {
   const _HomeMomentGridTile({
     required this.tileKey,
     required this.url,
@@ -141,7 +141,7 @@ class _HomeMomentGridTile extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -151,7 +151,10 @@ class _HomeMomentGridTile extends StatelessWidget {
         children: [
           AppCachedNetworkImage(
             imageUrl: url,
-            imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+            imageUrlCandidates: resolveContentMediaUrlCandidates(
+              url,
+              endpointConfig: ref.watch(mediaEndpointConfigProvider),
+            ),
             cdnPreset: CdnImagePreset.thumbnail,
             fit: BoxFit.cover,
             placeholder: _mediaPlaceholder(isDark),
@@ -194,7 +197,7 @@ class _HomeMomentGridTile extends StatelessWidget {
   }
 }
 
-class _HomeFeedImageCarousel extends StatefulWidget {
+class _HomeFeedImageCarousel extends ConsumerStatefulWidget {
   const _HomeFeedImageCarousel({
     required this.urls,
     required this.isDark,
@@ -208,10 +211,12 @@ class _HomeFeedImageCarousel extends StatefulWidget {
   final double aspectRatio;
 
   @override
-  State<_HomeFeedImageCarousel> createState() => _HomeFeedImageCarouselState();
+  ConsumerState<_HomeFeedImageCarousel> createState() =>
+      _HomeFeedImageCarouselState();
 }
 
-class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
+class _HomeFeedImageCarouselState
+    extends ConsumerState<_HomeFeedImageCarousel> {
   late final PageController _controller;
   int _index = 0;
 
@@ -256,6 +261,7 @@ class _HomeFeedImageCarouselState extends State<_HomeFeedImageCarousel> {
                     imageUrl: urls[index],
                     imageUrlCandidates: resolveContentMediaUrlCandidates(
                       urls[index],
+                      endpointConfig: ref.watch(mediaEndpointConfigProvider),
                     ),
                     cdnPreset: CdnImagePreset.cover,
                     fit: BoxFit.cover,
@@ -412,16 +418,32 @@ class _HomeFeedVideoCard extends ConsumerWidget {
     final sharedTimelineEnabled = ref.watch(
       contentFeatureFlagProvider('enable_shared_video_timeline'),
     );
-    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
-    final videoReference = resolver.tryResolve(
+    final endpointConfig = ref.watch(mediaEndpointConfigProvider);
+    final resolver = endpointConfig == null
+        ? null
+        : MediaDeliveryResolver(endpointConfig);
+    final post = dto;
+    final VideoPostDto? videoDto = post is VideoPostDto ? post : null;
+    final mediaAssetId = videoDto?.mediaAssetId?.trim() ?? '';
+    final mediaAssetVersion = videoDto?.mediaAssetVersion ?? 0;
+    final videoReference = resolver?.tryResolve(
       dto.mediaVideoUrl,
       kind: MediaDeliveryKind.video,
-      assetId: dto.id,
+      assetId: mediaAssetId.isEmpty ? dto.id : mediaAssetId,
+      version: mediaAssetVersion,
     );
+    final adaptiveReference = mediaAssetId.isEmpty || mediaAssetVersion <= 0
+        ? null
+        : resolver?.tryResolve(
+            videoDto?.hlsCmafMasterManifestUrl,
+            kind: MediaDeliveryKind.video,
+            assetId: mediaAssetId,
+            version: mediaAssetVersion,
+          );
     final coverRaw = dto.mediaVideoCoverUrl.isNotEmpty
         ? dto.mediaVideoCoverUrl
         : dto.primaryVisualUrl;
-    final coverReference = resolver.tryResolve(
+    final coverReference = resolver?.tryResolve(
       coverRaw,
       kind: MediaDeliveryKind.image,
       assetId: dto.id,
@@ -440,6 +462,9 @@ class _HomeFeedVideoCard extends ConsumerWidget {
               VideoPlayerWidget(
                 key: ValueKey<String>('home-video-player-${dto.id}'),
                 deliveryReference: videoReference,
+                adaptiveDeliveryReference: adaptiveReference,
+                adaptiveDescriptorVersion:
+                    videoDto?.hlsCmafDescriptorVersion ?? 0,
                 thumbnailReference: coverReference,
                 initialize: initialize,
                 autoPlay: autoPlay,
@@ -493,6 +518,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 imageUrl: dto.primaryVisualUrl,
                 imageUrlCandidates: resolveContentMediaUrlCandidates(
                   dto.primaryVisualUrl,
+                  endpointConfig: endpointConfig,
                 ),
                 cdnPreset: CdnImagePreset.cover,
                 fit: BoxFit.cover,

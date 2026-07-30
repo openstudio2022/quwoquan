@@ -15,7 +15,7 @@ type UploadCreationParams struct {
 	ObjectKey       string
 	SHA256          string
 	MediaType       string
-	ContentType     string
+	MimeType        string
 	FileSize        int64
 	AccessPolicy    string
 	Now             time.Time
@@ -31,8 +31,8 @@ func BuildUploadCreation(params UploadCreationParams) (assetports.Creation, erro
 		SourceSessionID:    strings.TrimSpace(params.SourceSessionID),
 		ObjectKey:          strings.TrimSpace(params.ObjectKey),
 		SHA256:             strings.TrimSpace(params.SHA256),
-		MediaType:          strings.TrimSpace(params.MediaType),
-		ContentType:        strings.TrimSpace(params.ContentType),
+		MediaType:          mediamodel.MediaType(strings.TrimSpace(params.MediaType)),
+		MimeType:           strings.TrimSpace(params.MimeType),
 		FileSize:           params.FileSize,
 		AccessPolicy:       mediamodel.AccessPolicy(strings.TrimSpace(params.AccessPolicy)),
 		ProcessingRequired: params.MediaType == "image" || params.MediaType == "video",
@@ -49,12 +49,12 @@ func BuildUploadCreation(params UploadCreationParams) (assetports.Creation, erro
 		SourceSessionID:  snapshot.SourceSessionID,
 		ObjectKey:        snapshot.ObjectKey,
 		SHA256:           snapshot.SHA256,
-		MediaType:        snapshot.MediaType,
-		ContentType:      snapshot.ContentType,
+		MediaType:        string(snapshot.MediaType),
+		MimeType:         snapshot.MimeType,
 		FileSize:         snapshot.FileSize,
 		AccessPolicy:     string(snapshot.AccessPolicy),
 		ProcessingStatus: string(snapshot.ProcessingStatus),
-		CoverStrategy:    snapshot.CoverStrategy,
+		CoverStrategy:    string(snapshot.CoverStrategy),
 		CreatedAt:        snapshot.CreatedAt,
 		UpdatedAt:        snapshot.UpdatedAt,
 	}, nil

@@ -7,19 +7,20 @@
   1. travel   —— GET /content/feed?channelId=travel_photography：
      travel 垂类路由可用，envelope 契约字段完整（items/feedRequestId）。
   2. premium  —— GET /content/feed?channelId=premium_stream：
-     精品沉浸流 fail-closed 路由可用；池空时诚实空 items（不混入普通池）。
+     精品沉浸流 fail-closed 路由可用；release readiness 要求至少一条可交付内容。
   3. objectCards —— GET /content/feed?channelId=recommend（seed viewer 身份）：
-     gamma policy overlay 开启 objectCards 后，若对象卡种子已应用
+     canonical recommendation policy 开启 objectCards 后，若对象卡 release 已激活
      （apply_content_object_cards_seed.py），envelope.objectCards 必须出现
      entity_homepage 卡且 objectId 可路由；--require-object-cards 控制是否阻断。
 
 契约对齐：响应字段以 quwoquan_service/services/content-service/contracts/content/post/operations.yaml 的
 GetFeed response_fields 为真相源（items/nextCursor/cursor/feedRequestId/
-rankingVersion/reasonVersion/objectCards）。
+policyDigest/objectCards）。
 
 用法（gamma-local 完整验证）：
   python3 .../run_recommendation_feed_probe.py \
-    --base-url http://127.0.0.1:18080 --viewer-id fixture_user_current \
+    --env gamma --base-url https://api.gamma.quwoquan.com:19000 \
+    --viewer-id fixture_user_current \
     --require-object-cards --report .qwq_output/env/gamma/runs/rec-feed-probe/report.json
 """
 
@@ -29,6 +30,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -48,7 +50,7 @@ REPO_ROOT = _find_repo_root()
 SCENARIO = "content.recommendation.feed_surfaces_probe"
 REPORT_SCHEMA = "recommendation-feed-probe-report"
 # GetFeed 契约 envelope 必备字段（feedRequestId 服务端权威生成，必须非空）。
-REQUIRED_ENVELOPE_FIELDS = ("items", "feedRequestId")
+REQUIRED_ENVELOPE_FIELDS = ("items", "feedRequestId", "policyDigest")
 
 
 def utc_now() -> str:
@@ -57,12 +59,14 @@ def utc_now() -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--env", default=os.environ.get("API_CONTRACT_ENV", "gamma"))
+    parser.add_argument(
+        "--env",
+        choices=("alpha", "beta", "gamma", "prod"),
+        required=True,
+    )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("REC_FEED_GATEWAY_BASE_URL")
-        or os.environ.get("GAMMA_BASE_URL")
-        or "http://127.0.0.1:18080",
+        required=True,
     )
     parser.add_argument(
         "--test-auth-token",
@@ -81,6 +85,11 @@ def parse_args() -> argparse.Namespace:
         "--require-object-cards",
         action="store_true",
         help="要求 objectCards 场景必须返回 entity_homepage 卡（对象卡种子已应用后开启）",
+    )
+    parser.add_argument(
+        "--require-release-content",
+        action="store_true",
+        help="发布准出时要求 travel 与 premium 两个内容面都返回至少一条内容。",
     )
     parser.add_argument(
         "--report",
@@ -130,6 +139,9 @@ def check_envelope(payload: dict[str, Any]) -> list[str]:
     feed_request_id = str(payload.get("feedRequestId") or "").strip()
     if not feed_request_id:
         errors.append("feedRequestId must be server-populated and non-empty")
+    policy_digest = str(payload.get("policyDigest") or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", policy_digest) is None:
+        errors.append("policyDigest must be a canonical sha256 digest")
     return errors
 
 
@@ -138,7 +150,7 @@ def check_object_cards(payload: dict[str, Any], required: bool) -> list[str]:
     if cards is None:
         if required:
             return [
-                "objectCards absent: gamma policy overlay may not be applied "
+                "objectCards absent: canonical recommendation policy may not be active "
                 "(QWQ_REC_POLICY_PATH) or object-card seed missing"
             ]
         return []
@@ -163,6 +175,15 @@ def check_object_cards(payload: dict[str, Any], required: bool) -> list[str]:
     return errors
 
 
+def check_non_empty_items(payload: dict[str, Any], *, required: bool) -> list[str]:
+    if not required:
+        return []
+    items = payload.get("items")
+    if not isinstance(items, list) or not items:
+        return ["release content feed must contain at least one deliverable item"]
+    return []
+
+
 def main() -> int:
     args = parse_args()
     report: dict[str, Any] = {
@@ -175,6 +196,7 @@ def main() -> int:
             "env": args.env,
             "gatewayBaseUrl": args.base_url.rstrip("/"),
             "requireObjectCards": bool(args.require_object_cards),
+            "requireReleaseContent": bool(args.require_release_content),
             "viewerId": args.viewer_id,
         },
         "surfaces": {},
@@ -208,12 +230,19 @@ def main() -> int:
             failures.append(f"{name}: http {status}")
         else:
             errors = check_envelope(payload)
+            if name in {"travel", "premium"}:
+                errors.extend(
+                    check_non_empty_items(
+                        payload,
+                        required=bool(args.require_release_content),
+                    )
+                )
             if assert_cards:
                 errors.extend(check_object_cards(payload, args.require_object_cards))
             surface_report["errors"] = errors
             surface_report["itemCount"] = len(payload.get("items") or [])
             surface_report["objectCardCount"] = len(payload.get("objectCards") or [])
-            surface_report["rankingVersion"] = payload.get("rankingVersion", "")
+            surface_report["policyDigest"] = payload.get("policyDigest", "")
             if errors:
                 failures.extend(f"{name}: {e}" for e in errors)
         report["surfaces"][name] = surface_report

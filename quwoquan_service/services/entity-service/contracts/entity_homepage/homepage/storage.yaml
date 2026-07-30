@@ -39,6 +39,7 @@ collections:
       keys:
         location: 2dsphere
       sparse: true
+      description: location 以 GeoJSON Point 落库（type=Point，coordinates=[longitude, latitude]）；wire/domain 仍是 latitude/longitude，翻译在存储层完成
     - name: idx_homepages_version
       keys:
         _id: 1
@@ -84,6 +85,14 @@ collections:
         aggregateId: 1
         aggregateVersion: 1
       unique: true
+  homepage_detail_views:
+    entity: HomepageDetailView
+    role: projection
+    description: 跨对象事实组成的 Homepage 详情读投影；评分、预览、关系边和助手上下文不得写回 homepages 聚合文档
+    indexes:
+    - name: idx_homepage_detail_views_updated
+      keys:
+        updatedAt: -1
   homepage_follower_projection:
     entity: HomepageFollowerProjection
     role: projection

@@ -16,10 +16,10 @@ client_projection:
     nullable: false
     source: ownerUserId
     default: ''''''
-  - name: subAccountId
+  - name: personaId
     dart_type: String
     nullable: false
-    source: subAccountId
+    source: personaId
     default: ''''''
   - name: subjectType
     dart_type: String

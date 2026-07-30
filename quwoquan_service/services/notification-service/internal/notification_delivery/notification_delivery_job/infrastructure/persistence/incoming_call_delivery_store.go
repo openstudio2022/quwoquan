@@ -46,6 +46,18 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIncomingCallJob(
 	bool,
 	error,
 ) {
+	if s.restrictions == nil {
+		return notification.IncomingCallDeliveryJob{}, false, errors.New(
+			"notification account restriction projection is not configured",
+		)
+	}
+	restricted, err := s.restrictions.RestrictedSubjects(
+		ctx,
+		[]string{event.TargetPersonaID},
+	)
+	if err != nil {
+		return notification.IncomingCallDeliveryJob{}, false, err
+	}
 	dedupeKey := incomingCallEndpointDedupeKey(
 		event.DeliveryKey,
 		destination.EndpointRef,
@@ -72,11 +84,18 @@ func (s *MongoNotificationDeliveryJobStore) EnsureIncomingCallJob(
 		CreatedAt:       now.UTC(),
 		UpdatedAt:       now.UTC(),
 	}
+	if len(restricted) > 0 {
+		job.AccountRestricted = true
+		job.RestrictionSuppressed = true
+		job.Status = notification.IncomingCallStatusCancelled
+		cancelledAt := now.UTC()
+		job.CancelledAt = &cancelledAt
+	}
 	var (
 		created bool
 		stored  notification.IncomingCallDeliveryJob
 	)
-	err := s.RunInTransaction(ctx, func(txCtx context.Context) error {
+	err = s.RunInTransaction(ctx, func(txCtx context.Context) error {
 		result, err := s.jobs.UpdateOne(
 			txCtx,
 			bson.M{"_id": job.ID},
@@ -132,10 +151,12 @@ func (s *MongoNotificationDeliveryJobStore) MarkIncomingCallRealtimeDispatched(
 		err := s.jobs.FindOneAndUpdate(
 			txCtx,
 			bson.M{
-				"_id":       strings.TrimSpace(jobID),
-				"version":   expectedVersion,
-				"status":    reliabletask.NotificationStatusPending,
-				"expiresAt": bson.M{"$gt": dispatchedAt.UTC()},
+				"_id":                   strings.TrimSpace(jobID),
+				"accountRestricted":     bson.M{"$ne": true},
+				"restrictionSuppressed": bson.M{"$ne": true},
+				"version":               expectedVersion,
+				"status":                reliabletask.NotificationStatusPending,
+				"expiresAt":             bson.M{"$gt": dispatchedAt.UTC()},
 			},
 			bson.M{
 				"$set": bson.M{
@@ -289,7 +310,9 @@ func (s *MongoNotificationDeliveryJobStore) ClaimIncomingCallPush(
 	err := s.jobs.FindOneAndUpdate(
 		ctx,
 		bson.M{
-			"expiresAt": bson.M{"$gt": now.UTC()},
+			"expiresAt":             bson.M{"$gt": now.UTC()},
+			"accountRestricted":     bson.M{"$ne": true},
+			"restrictionSuppressed": bson.M{"$ne": true},
 			"$or": bson.A{
 				bson.M{
 					"status": notification.IncomingCallStatusPushQueued,
@@ -461,10 +484,6 @@ func (s *MongoNotificationDeliveryJobStore) ApplyExternalInteractionResult(
 		set := bson.M{"updatedAt": now.UTC()}
 		eventType := "IncomingCallProviderResultRecorded"
 		if current.ExternalInteractionID == event.RequestID {
-			set["provider"] = event.Provider
-			set["providerRequestDigest"] = event.ProviderRequestDigest
-			set["providerResultStatus"] = event.Status
-			set["providerResultAt"] = event.OccurredAt.UTC()
 			if event.Status == reliabletask.ExternalInteractionStatusSentUnconfirmed &&
 				current.Status == notification.IncomingCallStatusExternalAccepted {
 				set["status"] = notification.IncomingCallStatusSentUnconfirmed
@@ -476,10 +495,6 @@ func (s *MongoNotificationDeliveryJobStore) ApplyExternalInteractionResult(
 				set["status"] = reliabletask.NotificationStatusDead
 			}
 		} else {
-			set["cancellationProvider"] = event.Provider
-			set["cancellationProviderRequestDigest"] = event.ProviderRequestDigest
-			set["cancellationProviderResultStatus"] = event.Status
-			set["cancellationProviderResultAt"] = event.OccurredAt.UTC()
 			eventType = "IncomingCallCancellationProviderResultRecorded"
 		}
 		var updated notification.IncomingCallDeliveryJob
@@ -491,7 +506,13 @@ func (s *MongoNotificationDeliveryJobStore) ApplyExternalInteractionResult(
 		).Decode(&updated); err != nil {
 			return err
 		}
-		return s.appendIncomingCallEvent(txCtx, updated, eventType, now)
+		return s.appendIncomingCallProviderResultEvent(
+			txCtx,
+			updated,
+			event,
+			eventType,
+			now,
+		)
 	})
 }
 
@@ -841,6 +862,50 @@ func (s *MongoNotificationDeliveryJobStore) appendIncomingCallEvent(
 				"deviceId":       job.DeviceID,
 				"deliveryKey":    job.DeliveryKey,
 				"status":         job.Status,
+			},
+			Status:    reliabletask.TaskOutboxStatusPending,
+			CreatedAt: occurredAt.UTC(),
+		}},
+		options.UpdateOne().SetUpsert(true),
+	)
+	return err
+}
+
+func (s *MongoNotificationDeliveryJobStore) appendIncomingCallProviderResultEvent(
+	ctx context.Context,
+	job notification.IncomingCallDeliveryJob,
+	result notification.ExternalInteractionResultEvent,
+	eventType string,
+	occurredAt time.Time,
+) error {
+	action := "ring"
+	if job.CancellationExternalInteractionID == result.RequestID {
+		action = "cancel"
+	}
+	eventID := fmt.Sprintf("%s:%020d:%s", job.ID, job.Version, eventType)
+	_, err := s.outbox.UpdateOne(
+		ctx,
+		bson.M{"_id": eventID},
+		bson.M{"$setOnInsert": notificationDeliveryJobEventDocument{
+			ID:               eventID,
+			AggregateID:      job.ID,
+			AggregateVersion: job.Version,
+			EventType:        eventType,
+			Payload: map[string]string{
+				"jobId":                 job.ID,
+				"callId":                job.CallID,
+				"deviceId":              job.DeviceID,
+				"deliveryKey":           job.DeliveryKey,
+				"action":                action,
+				"attemptId":             result.AttemptID,
+				"requestId":             result.RequestID,
+				"operation":             result.Operation,
+				"provider":              result.Provider,
+				"providerRequestDigest": result.ProviderRequestDigest,
+				"resultStatus":          result.Status,
+				"recoveryAction":        result.RecoveryAction,
+				"occurredAt":            result.OccurredAt.UTC().Format(time.RFC3339Nano),
+				"jobStatus":             job.Status,
 			},
 			Status:    reliabletask.TaskOutboxStatusPending,
 			CreatedAt: occurredAt.UTC(),

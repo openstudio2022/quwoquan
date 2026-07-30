@@ -29,7 +29,11 @@ _OPERATIONS = {
 
 
 def campaigns_root() -> Path:
-    return paths.DATA_LOCAL_ROOT / "content-campaign-submissions"
+    return (
+        paths.DATA_LOCAL_ROOT
+        / "workspace"
+        / "content-campaign-submissions"
+    )
 
 
 def campaign_root(
@@ -77,6 +81,22 @@ def _git_commit(repo_root: Path) -> str:
         text=True,
     )
     return proc.stdout.strip()
+
+
+def _git_branch(repo_root: Path) -> str:
+    proc = subprocess.run(
+        ["git", "branch", "--show-current"],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    branch = proc.stdout.strip()
+    if not branch:
+        raise ValueError(
+            "campaign submission requires a named frozen main branch"
+        )
+    return branch
 
 
 def _require_clean_source_inputs(
@@ -173,6 +193,7 @@ def write_submission(
         "targetNames": list(request.target_names),
         "sourceProviders": list(request.source_providers),
         "retryOf": retry_of,
+        "gitBranch": _git_branch(source_repo),
         "gitCommitSha": _git_commit(source_repo),
         "sourceDigest": source,
         "entityCatalogDigest": catalog_digest,

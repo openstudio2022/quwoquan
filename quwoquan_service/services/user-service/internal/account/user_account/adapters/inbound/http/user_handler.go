@@ -30,7 +30,7 @@ type UserHandler struct {
 	credentialQueries          *credentialapp.CredentialQueryFacade
 	deviceRegistrationCommands *registrationapp.CommandFacade
 	deviceRegistrationQueries  *registrationapp.QueryFacade
-	subAccount                 *application.SubAccountService
+	persona                    *application.PersonaService
 	interestProfile            *application.InterestProfileService
 	subjectFollow              *subjectfollowapp.SubjectFollowService
 	followedSubjectVisit       *visitapp.VisitService
@@ -104,7 +104,7 @@ func NewUserHandler(
 	credentialQueries *credentialapp.CredentialQueryFacade,
 	deviceRegistrationCommands *registrationapp.CommandFacade,
 	deviceRegistrationQueries *registrationapp.QueryFacade,
-	subAccount *application.SubAccountService,
+	persona *application.PersonaService,
 	interestProfile *application.InterestProfileService,
 	subjectFollow *subjectfollowapp.SubjectFollowService,
 	followedSubjectVisit *visitapp.VisitService,
@@ -130,7 +130,7 @@ func NewUserHandler(
 		credentialQueries:          credentialQueries,
 		deviceRegistrationCommands: deviceRegistrationCommands,
 		deviceRegistrationQueries:  deviceRegistrationQueries,
-		subAccount:                 subAccount,
+		persona:                    persona,
 		interestProfile:            interestProfile,
 		subjectFollow:              subjectFollow,
 		followedSubjectVisit:       followedSubjectVisit,
@@ -159,19 +159,19 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /user/profile", h.handleUpdateProfile)
 	mux.HandleFunc("POST "+PullUserSyncPath, h.handlePullUserSync)
 	mux.HandleFunc("GET /me", h.handleGetMeProfile)
-	mux.HandleFunc("GET /user/{subAccountId}", h.handleGetSubAccountProfile)
-	mux.HandleFunc("GET /user/sub-accounts/{subAccountId}/homepage-bundle", h.handleGetUserHomepageBundle)
+	mux.HandleFunc("GET /user/{personaId}", h.handleGetPersonaProfile)
+	mux.HandleFunc("GET /user/personas/{personaId}/homepage-bundle", h.handleGetUserHomepageBundle)
 	mux.HandleFunc("GET /user/search/social-relations", h.handleSearchSocialRelations)
 
-	mux.HandleFunc("POST /user/sub-accounts/{targetSubAccountId}/follow", h.handleFollow)
-	mux.HandleFunc("DELETE /user/sub-accounts/{targetSubAccountId}/follow", h.handleUnfollow)
-	mux.HandleFunc("GET /user/sub-accounts/{subAccountId}/following", h.handleListFollowing)
-	mux.HandleFunc("GET /user/sub-accounts/{subAccountId}/followers", h.handleListFollowers)
-	mux.HandleFunc("GET /user/sub-accounts/{subAccountId}/relationship", h.handleGetRelationship)
-	mux.HandleFunc("GET /user/sub-accounts/{subAccountId}/relationship/capability", h.handleGetRelationshipCapability)
+	mux.HandleFunc("POST /user/personas/{targetPersonaId}/follow", h.handleFollow)
+	mux.HandleFunc("DELETE /user/personas/{targetPersonaId}/follow", h.handleUnfollow)
+	mux.HandleFunc("GET /user/personas/{personaId}/following", h.handleListFollowing)
+	mux.HandleFunc("GET /user/personas/{personaId}/followers", h.handleListFollowers)
+	mux.HandleFunc("GET /user/personas/{personaId}/relationship", h.handleGetRelationship)
+	mux.HandleFunc("GET /user/personas/{personaId}/relationship/capability", h.handleGetRelationshipCapability)
 
-	mux.HandleFunc("POST /user/sub-accounts/{targetSubAccountId}/block", h.handleBlock)
-	mux.HandleFunc("DELETE /user/sub-accounts/{targetSubAccountId}/block", h.handleUnblock)
+	mux.HandleFunc("POST /user/personas/{targetPersonaId}/block", h.handleBlock)
+	mux.HandleFunc("DELETE /user/personas/{targetPersonaId}/block", h.handleUnblock)
 	mux.HandleFunc("GET /user/blocked", h.handleListBlocked)
 
 	h.registerSubjectFollowRoutes(mux)
@@ -182,11 +182,11 @@ func (h *UserHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /user/personas/summary", h.handleGetPersonaManagementSummary)
 	mux.HandleFunc("GET /user/personas/active", h.handleGetActivePersonaContext)
 	mux.HandleFunc("POST /user/personas", h.handleCreatePersona)
-	mux.HandleFunc("PATCH /user/personas/{subAccountId}", h.handleUpdatePersona)
-	mux.HandleFunc("POST /user/personas/{subAccountId}/profile-sync", h.handleApplyPersonaProfileSync)
-	mux.HandleFunc("GET /user/personas/{subAccountId}/lifecycle-guard", h.handleGetPersonaLifecycleGuard)
-	mux.HandleFunc("POST /user/personas/{subAccountId}/retire", h.handleRetirePersona)
-	mux.HandleFunc("POST /user/personas/{subAccountId}/activate", h.handleActivatePersona)
+	mux.HandleFunc("PATCH /user/personas/{personaId}", h.handleUpdatePersona)
+	mux.HandleFunc("POST /user/personas/{personaId}/profile-sync", h.handleApplyPersonaProfileSync)
+	mux.HandleFunc("GET /user/personas/{personaId}/lifecycle-guard", h.handleGetPersonaLifecycleGuard)
+	mux.HandleFunc("POST /user/personas/{personaId}/retire", h.handleRetirePersona)
+	mux.HandleFunc("POST /user/personas/{personaId}/activate", h.handleActivatePersona)
 
 	mux.HandleFunc("GET /users/{userId}/interest-profile", h.handleGetUserInterestProfile)
 

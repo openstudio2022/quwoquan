@@ -38,10 +38,9 @@ def main() -> None:
     policies = set((retention.get("policies") or {}).keys())
     rate_limits = set((retention.get("rateLimits") or {}).keys())
 
-    if not catalog.get("compatibleRuntimeVersion"):
-        fail("catalog.compatibleRuntimeVersion is required")
-    if not catalog.get("schema"):
-        fail("catalog.schema is required")
+    for retired_field in ("version", "schema", "compatibleRuntimeVersion"):
+        if retired_field in catalog:
+            fail(f"catalog.{retired_field} is a retired parallel identity")
     if not isinstance(modules, dict) or not modules:
         fail("catalog.modules must be a non-empty map")
     if not isinstance(tasks, dict) or not tasks:

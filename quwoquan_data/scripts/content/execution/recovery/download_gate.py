@@ -136,7 +136,7 @@ def _source_plan_signature_state(
         if not isinstance(signature, Mapping):
             return "missing_signature"
         saw_signature = True
-        if str(signature.get("hash") or "") != str(expected.get("hash") or ""):
+        if str(signature.get("digest") or "") != str(expected.get("digest") or ""):
             return "stale"
     return "current" if saw_signature else "missing_signature"
 

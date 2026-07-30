@@ -13,6 +13,12 @@ from quwoquan_ops.cli.lib.official_distribution_release import (
     inspect_official_distribution,
     prevalidate_android_distribution_candidate,
 )
+from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
+
+
+APP_EVIDENCE_REF = (
+    "oci://ghcr.io/owner/repo/app-candidate@sha256:" + ("e" * 64)
+)
 
 
 class OfficialDistributionReleaseTest(unittest.TestCase):
@@ -62,12 +68,12 @@ class OfficialDistributionReleaseTest(unittest.TestCase):
             )
 
             self.assertEqual(
-                web_receipt["releaseManifestDigest"],
-                android_receipt["releaseManifestDigest"],
+                web_receipt["artifactDigest"],
+                android_receipt["artifactDigest"],
             )
             self.assertTrue((distribution / "web" / "current").is_symlink())
             latest = json.loads(
-                (distribution / "downloads" / "android" / "latest.json").read_text(
+                (distribution / "download" / "android" / "latest.json").read_text(
                     encoding="utf-8"
                 )
             )
@@ -126,12 +132,12 @@ class OfficialDistributionReleaseTest(unittest.TestCase):
             self.assertTrue(
                 (
                     distribution
-                    / "downloads/android/1.8.2/18201/quwoquan-18201.apk"
+                    / "download/android/1.8.2/18201/quwoquan-18201.apk"
                 ).is_file()
             )
             self.assertEqual(
                 json.loads(
-                    (distribution / "downloads/android/latest.json").read_text()
+                    (distribution / "download/android/latest.json").read_text()
                 )["buildNumber"],
                 "18301",
             )
@@ -176,7 +182,9 @@ def _web_package(root: Path) -> Path:
     (public / "flutter_service_worker.js").write_text("worker();", encoding="utf-8")
     content_digest = _tree_sha256(public)
     manifest = {
-        "schema": "qwq.public-web.release.v1",
+        "schema": "qwq.public-web.release",
+        "sourceGitSha": "b" * 40,
+        "sourceTreeDigest": "sha1:" + ("c" * 40),
         "environment": "prod",
         "publicOrigin": "https://quwoquan.com",
         "releaseId": content_digest[:20],
@@ -193,14 +201,16 @@ def _android_package(root: Path, *, build: str) -> Path:
     apk = root / f"quwoquan-{build}.apk"
     apk.write_bytes(f"signed-apk-{build}".encode("utf-8"))
     manifest = {
-        "schema": "qwq.android.official-release.v1",
+        "schema": "qwq.android.official-release",
+        "sourceGitSha": "b" * 40,
+        "sourceTreeDigest": "sha1:" + ("c" * 40),
         "platform": "android",
         "versionName": "1.8.2",
         "buildNumber": build,
         "minAndroidVersion": "26",
         "packageName": "com.quwoquan.quwoquan_app",
         "apkUrl": (
-            "https://cdn.quwoquan.com/downloads/android/1.8.2/"
+            "https://cdn.quwoquan.com/download/android/1.8.2/"
             f"{build}/quwoquan-{build}.apk"
         ),
         "apkSHA256": hashlib.sha256(apk.read_bytes()).hexdigest(),
@@ -223,27 +233,256 @@ def _release_manifest(
     android_manifest: Path,
 ) -> Path:
     root.mkdir(parents=True)
-    manifest = {
-        "schema": "mainline-release-artifact",
-        "status": "deployable",
-        "artifacts": {
-            "publicWeb": {
-                "schema": "qwq.public-web.release.v1",
-                "manifestSHA256": _sha256_prefixed(web_manifest),
-            },
-            "androidOfficialRelease": {
-                "schema": "qwq.android.official-release.v1",
-                "manifestSHA256": _sha256_prefixed(android_manifest),
+    application_packages: dict[str, dict[str, dict[str, str]]] = {
+        environment: {} for environment in finalizer.ENVIRONMENTS
+    }
+    package_sources = {
+        ("prod", "web"): web_manifest,
+        ("prod", "android"): android_manifest,
+    }
+    for environment in finalizer.ENVIRONMENTS:
+        for surface in finalizer.APPLICATION_PACKAGES[environment]:
+            destination = (
+                root
+                / "packages/applications"
+                / environment
+                / surface
+                / "manifest.json"
+            )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source = package_sources.get((environment, surface))
+            if source is not None:
+                destination.write_bytes(source.read_bytes())
+            elif environment == "prod" and surface == "opsPortal":
+                destination.write_text(
+                    json.dumps(
+                        {
+                            "schema": "qwq.ops_portal_package",
+                            "sourceGitSha": "b" * 40,
+                            "sourceTreeDigest": "sha1:" + ("c" * 40),
+                            "packageDigest": "sha256:" + ("d" * 64),
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            else:
+                destination.write_text(
+                    json.dumps(
+                        {
+                            "schema": finalizer.APPLICATION_PACKAGE_SCHEMA,
+                            "environment": environment,
+                            "surface": surface,
+                            "sourceGitSha": "b" * 40,
+                            "sourceTreeDigest": "sha1:" + ("c" * 40),
+                            "packageDigest": "sha256:" + ("d" * 64),
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+            application_packages[environment][surface] = {
+                "path": destination.relative_to(root).as_posix(),
+                "digest": _sha256_prefixed(destination),
+                "packageDigest": (
+                    "sha256:"
+                    + str(json.loads(destination.read_text())["contentSHA256"])
+                    if environment == "prod" and surface == "web"
+                    else "sha256:"
+                    + str(json.loads(destination.read_text())["apkSHA256"])
+                    if environment == "prod" and surface == "android"
+                    else "sha256:" + ("d" * 64)
+                ),
+                "sourceRef": APP_EVIDENCE_REF,
+            }
+
+    configuration_packages: dict[str, dict[str, dict[str, str]]] = {}
+    for environment in finalizer.ENVIRONMENTS:
+        config = (
+            root
+            / "packages/environments"
+            / environment
+            / "services/content-service/config/config.yaml"
+        )
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(
+            f"config:\n  environment: {environment}\n", encoding="utf-8"
+        )
+        configuration_packages[environment] = {
+            "content-service": {
+                "path": config.relative_to(root).as_posix(),
+                "digest": _sha256_prefixed(config),
+            }
+        }
+    repository = "ghcr.io/owner/repo/content-service"
+    image_digest = "sha256:" + ("a" * 64)
+    image_ref = f"{repository}@{image_digest}"
+
+    evidence = root / "evidence"
+    evidence.mkdir(parents=True, exist_ok=True)
+    contract_graph = evidence / "contractGraph.json"
+    contract_graph.write_text("{}", encoding="utf-8")
+    provider_raw = root / "evidence/raw/provider/provider.json"
+    provider_raw.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(provider_raw, {"status": "passed"})
+    provider_transport_digest = "sha256:" + ("d" * 64)
+    provider = evidence / "providerEvidence.json"
+    _write_json(
+        provider,
+        {
+            "schema": "provider-conformance-readiness",
+            "status": "passed",
+            "sourceEvidence": {
+                "ref": (
+                    "oci://ghcr.io/owner/repo/provider-evidence@"
+                    + provider_transport_digest
+                ),
+                "digest": provider_transport_digest,
+                "files": {
+                    provider_raw.relative_to(root).as_posix(): _sha256_prefixed(
+                        provider_raw
+                    )
+                },
             },
         },
+    )
+    tests = evidence / "testEvidence.json"
+    tests.write_text("{}", encoding="utf-8")
+
+    manifest = finalizer.seal_manifest({
+        "schema": finalizer.SCHEMA,
+        "candidateId": None,
+        "status": "candidate-ready",
+        "generatedAt": "2026-07-28T00:00:00Z",
+        "source": {
+            "gitSha": "b" * 40,
+            "treeDigest": "sha1:" + ("c" * 40),
+            "repository": "owner/repo",
+            "workflowRunId": "42",
+            "sourceArchiveDigest": None,
+        },
+        "artifactDigest": None,
+        "images": {
+            "content-service": {
+                "repository": repository,
+                "transportRef": repository + ":sha-candidate",
+                "digest": image_digest,
+                "ref": image_ref,
+                "attestations": {
+                    "spdxSbom": f"oci://{image_ref}#spdxSbom",
+                    "slsaProvenance": f"oci://{image_ref}#slsaProvenance",
+                },
+            },
+        },
+        "configurationPackages": configuration_packages,
+        "applicationPackages": application_packages,
+        "contractGraphDigest": _sha256_prefixed(contract_graph),
+        "requiredEvidence": {
+            "images": ["content-service"],
+            "configurationPackages": {
+                environment: ["content-service"]
+                for environment in finalizer.ENVIRONMENTS
+            },
+            "applicationPackages": {
+                environment: list(finalizer.APPLICATION_PACKAGES[environment])
+                for environment in finalizer.ENVIRONMENTS
+            },
+            "contractGraphDigest": True,
+            "providerEvidence": True,
+            "testEvidence": list(finalizer.TEST_LAYERS),
+            "environmentReceipts": list(finalizer.ENVIRONMENTS),
+            "rolloutReceipt": True,
+            "rollbackReceipt": True,
+        },
+        "testEvidence": {
+            "path": tests.relative_to(root).as_posix(),
+            "digest": _sha256_prefixed(tests),
+            "status": "passed",
+            "layers": {
+                layer: {"status": "passed", "artifactDigest": image_digest}
+                for layer in finalizer.TEST_LAYERS
+            },
+        },
+        "providerEvidence": {
+            "path": provider.relative_to(root).as_posix(),
+            "digest": _sha256_prefixed(provider),
+            "status": "passed",
+            "evidenceCount": 1,
+        },
+        "environmentReceipts": {},
+        "rolloutReceipt": None,
+        "rollbackReceipt": None,
+        "blockers": ["environment-qualification-evidence-pending"],
+        "missingEvidence": [
+            *(f"environmentReceipts.{environment}" for environment in finalizer.ENVIRONMENTS),
+            "rollbackReceipt.ready",
+            "rolloutReceipt",
+            "rollbackReceipt.outcome",
+        ],
+    })
+    source = manifest["source"]
+    raw = root / "evidence/raw/release-proof.json"
+    raw.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(raw, {"status": "passed"})
+    evidence = {
+        "files": {
+            "releaseProof": {
+                "path": raw.relative_to(root).as_posix(),
+                "digest": _sha256_prefixed(raw),
+            }
+        }
     }
-    encoded = json.dumps(
-        manifest,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    manifest["manifestDigest"] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    evidence_digest = "sha256:" + hashlib.sha256(
+        json.dumps(evidence, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    environment_receipts: dict[str, dict[str, object]] = {}
+    for environment in finalizer.PRE_PROD_ENVIRONMENTS:
+        payload = {
+            "schema": finalizer.ENVIRONMENT_RECEIPT_SCHEMA,
+            "environment": environment,
+            "status": "passed",
+            "candidateId": manifest["candidateId"],
+            "sourceGitSha": source["gitSha"],
+            "sourceTreeDigest": source["treeDigest"],
+            "evidenceDigest": evidence_digest,
+            "evidence": evidence,
+            "verifiedAt": "2026-07-28T00:05:00Z",
+        }
+        receipt_path = root / f"evidence/receipts/environment/{environment}.json"
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        _write_json(receipt_path, payload)
+        environment_receipts[environment] = {
+            **payload,
+            "path": receipt_path.relative_to(root).as_posix(),
+            "digest": _sha256_prefixed(receipt_path),
+        }
+    rollback_payload = {
+        "schema": finalizer.ROLLBACK_RECEIPT_SCHEMA,
+        "environment": "prod",
+        "status": "ready",
+        "candidateId": manifest["candidateId"],
+        "sourceGitSha": source["gitSha"],
+        "sourceTreeDigest": source["treeDigest"],
+        "evidenceDigest": evidence_digest,
+        "evidence": evidence,
+        "verifiedAt": "2026-07-28T00:05:00Z",
+    }
+    rollback_path = root / "evidence/receipts/rollback/ready.json"
+    rollback_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(rollback_path, rollback_payload)
+    manifest["environmentReceipts"] = environment_receipts
+    manifest["rollbackReceipt"] = {
+        **rollback_payload,
+        "path": rollback_path.relative_to(root).as_posix(),
+        "digest": _sha256_prefixed(rollback_path),
+    }
+    manifest["status"] = "deployable"
+    manifest["blockers"] = ["prod-release-evidence-pending"]
+    manifest["missingEvidence"] = [
+        "environmentReceipts.prod",
+        "rolloutReceipt",
+        "rollbackReceipt.outcome",
+    ]
+    manifest = finalizer.seal_manifest(manifest)
+    finalizer.validate_manifest_files(root, manifest)
     path = root / "manifest.json"
     _write_json(path, manifest)
     return path

@@ -11,18 +11,11 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrCommentLikeDuplicate     = errors.New("CONTENT.USER.comment_like_duplicate")
-	ErrCommentReactionForbidden = errors.New("CONTENT.USER.comment_reaction_forbidden")
+	ErrContentReactionTargetNotFound = errors.New("CONTENT.USER.content_reaction_target_not_found")
 )
 
-// AppErrorFromCommentLikeDuplicate returns *AppError for CONTENT.USER.comment_like_duplicate (user_message from errors.yaml).
-func AppErrorFromCommentLikeDuplicate(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.comment_like_duplicate")
-	return rterr.NewAppError(code, "已经点过赞了", debugMessage).WithMetadata("comment_like_duplicate", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromCommentReactionForbidden returns *AppError for CONTENT.USER.comment_reaction_forbidden (user_message from errors.yaml).
-func AppErrorFromCommentReactionForbidden(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.comment_reaction_forbidden")
-	return rterr.NewAppError(code, "当前无法评价这条评论", debugMessage).WithMetadata("comment_reaction_forbidden", 403).WithRecovery("surface", 0)
+// AppErrorFromContentReactionTargetNotFound returns *AppError for CONTENT.USER.content_reaction_target_not_found (user_message from errors.yaml).
+func AppErrorFromContentReactionTargetNotFound(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.content_reaction_target_not_found")
+	return rterr.NewAppError(code, "互动目标不存在或已失效", debugMessage).WithMetadata("content_reaction_target_not_found", 404).WithRecovery("surface", 0)
 }

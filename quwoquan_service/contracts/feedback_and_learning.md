@@ -4,7 +4,7 @@
 - 让“推荐、助手等 AI 能力”的优化从一开始就是**可自动化、可评估、可灰度、可回滚**的系统能力，而不是靠人工拍脑袋调参。
 - 把“用户体验指标（RUM/端侧体验 SLIs）”也纳入反馈闭环：用体验指标驱动系统级优化，并分解到模块/对象/接口的 SLI/SLO/SLA。
 
-本规范定义：体验指标字典、反馈事件范围、事件字段、因果链（trace/causation）、评估记录、版本化与发布治理、以及从体验指标到接口 SLO 的分解方法。
+本规范定义：体验指标字典、反馈事件范围、事件字段、因果链（trace/causation）、评估记录、不可变产物 digest 与单一激活发布治理，以及从体验指标到接口 SLO 的分解方法。
 
 ---
 
@@ -132,53 +132,19 @@
 
 ### 5.2 接口级（API SLO，按模块/对象/接口）
 
-> API SLO 以网关入口或服务入口统计均可，但必须能按 `endpoint` 归因。
+API path、method、operation 和接口 SLO 只由对象所属服务的 `operations.yaml`
+声明；本跨域规范不复制这些值，避免形成会漂移的第二真相源。当前旅程必须从下列
+canonical 契约组装，并按 `operation`/`endpoint` 归因：
 
-#### 5.2.1 Gateway（系统级入口）
+- Content：[`Post operations`](../services/content-service/contracts/content/post/operations.yaml)、[`Comment operations`](../services/content-service/contracts/content/comment/operations.yaml)。
+- Chat：[`Conversation operations`](../services/chat-service/contracts/chat/conversation/operations.yaml)、[`Message operations`](../services/chat-service/contracts/chat/message/operations.yaml)。
+- User：[`AccountSession operations`](../services/user-service/contracts/account/account_session/operations.yaml)、[`UserAccount operations`](../services/user-service/contracts/account/user_account/operations.yaml)。
+- Product Ops：[`EventRecord operations`](../services/product-ops-service/contracts/product_ops/event_record/operations.yaml)、[`ExperimentAssignmentFact operations`](../services/product-ops-service/contracts/product_ops/experiment_assignment_fact/operations.yaml)。
+- Assistant：[`AssistantLearningFact operations`](../services/assistant-service/contracts/assistant/assistant_learning_fact/operations.yaml)、[`AssistantRun operations`](../services/assistant-service/contracts/assistant/assistant_run/operations.yaml)。
 
-- SLO：请求成功率 ≥ 99.95%（月），p95 延迟 ≤ 50ms（不含下游），429 可单独统计
-
-#### 5.2.2 Orchestrator（聚合接口，直接影响页面 TTCR）
-
-- `GET /v1/orch/circles/{circleId}/activities`
-  - SLO：成功率 ≥ 99.5%，p95 ≤ 600ms，p99 ≤ 1200ms
-
-#### 5.2.3 Content（核心业务对象：Post/Comment/Reaction/Feed）
-
-- `GET /v1/content/feed`（`content.feed.list`，发现页唯一 canonical 路径）
-  - SLO：成功率 ≥ 99.5%，p95 ≤ 400ms
-- `GET /v1/content/content/posts/{postId}/comments`
-  - SLO：成功率 ≥ 99.5%，p95 ≤ 300ms
-- `GET /v1/content/content/posts/{postId}/counters`
-  - SLO：成功率 ≥ 99.9%，p95 ≤ 120ms
-
-#### 5.2.4 Chat（核心业务对象：Conversation/Message）
-
-- `GET /v1/chat/conversations`
-  - SLO：成功率 ≥ 99.7%，p95 ≤ 300ms
-- `GET /v1/chat/conversations/{conversationId}/messages`
-  - SLO：成功率 ≥ 99.7%，p95 ≤ 250ms
-
-#### 5.2.5 User（核心业务对象：Auth/Profile/Persona）
-
-- `POST /v1/user/auth/login`（登录）
-  - SLO：成功率 ≥ 99.9%，p95 ≤ 300ms
-- `GET /v1/user/profile/{userId}`
-  - SLO：成功率 ≥ 99.7%，p95 ≤ 250ms
-
-#### 5.2.6 Ops（运营服务：事件接收/实验）
-
-- `POST /v1/ops/events`（体验/行为事件接收）
-  - SLO：成功率 ≥ 99.9%，p95 ≤ 200ms（写入可异步落库，但必须幂等）
-- `GET /v1/ops/product_ops/experiments/{experimentId}/assignments/{subjectKey}`
-  - SLO：成功率 ≥ 99.9%，p95 ≤ 80ms（建议强缓存）
-
-#### 5.2.7 Assistant（自学习与推理）
-
-- `POST /v1/assistant/learning/ingest`（反馈入库）
-  - SLO：成功率 ≥ 99.9%，p95 ≤ 300ms（可异步写入，但需幂等）
-- `POST /v1/assistant/run`（如采用流式，需定义首段响应 SLO）
-  - SLO：见 §5.1
+网关自身的系统级 SLO 由环境入口与可观测配置声明。若旅程需要聚合接口但对象
+契约中不存在该 operation，验收结果必须是 `GATE_BLOCK`；不得在本文发明路径、
+临时代理路径或另一套 SLO。
 
 ### 5.3 分解示例：发现流 TTCR → 接口误差预算（p95）
 
@@ -250,7 +216,7 @@ SLA 建议策略：
 - `traceId` / `parentTraceId` / `causationId`：追踪与因果链（见 `contracts/runtime_errors/errors/runtime_failure_codes.yaml` 与 `contracts/metadata/_shared/envelope.schema.json`）
 - `target`：被作用对象（如 postId/circleId/conversationId/runId 等）
 - `context`：可选上下文（脱敏，避免高基数爆炸；大对象用引用）
-- `labels`：可选（如 experimentId/bucket/modelVersion/policyVersion）
+- `labels`：可选（如 experimentId/bucket/modelDigest/policyDigest/releaseDigest/experimentRevision）
 
 > 事件 envelope（异步）必须遵从 `contracts/metadata/_shared/envelope.schema.json`。
 
@@ -262,24 +228,28 @@ SLA 建议策略：
 
 1. **采集**：反馈事件持续进入（HTTP ingest 或 MQ）
 2. **评估**：离线评估（AUC/CTR/满意度/采纳率等）+ 线上监控（错误率/延迟/SLO）
-3. **产物版本化**：策略/模型/模板必须有 `version`（可回溯）
+3. **产物归一**：策略/模型/模板以 canonical payload 的不可变 digest 作为唯一内容身份
 4. **发布**：灰度到人群（实验/分桶）或灰度到实例（系统层）
-5. **回滚**：指标异常可快速回滚到上一版本
+5. **回滚**：指标异常时原子切回已验签 digest；任一作用域同时只能有一个 active 身份
 
-### 8.2 版本元数据（必须）
+### 8.2 产物与激活元数据（必须）
 
 - `artifactType`：`reco_model` / `reco_policy` / `assistant_template` / `assistant_policy` ...
-- `artifactVersion`：语义版本或 hash
+- `artifactDigest`：canonical payload 的小写 SHA-256；是内容唯一身份，不得再并列语义版本或版本信封
 - `createdAt` / `createdBy`
 - `trainDataRange`（或数据集标识）
 - `evaluationReportId`（评估报告引用）
-- `rollout`（灰度范围与实验号）
+- `rollout`（灰度范围、实验号与单一 active digest；revision 只表达聚合状态序列）
+
+各对象实际字段名仍以所属服务 contracts 为唯一真相源；这里的名称只表达跨域
+语义。旧 digest 可为审计与回滚留存，但不得与 active digest 组成双读、双写或
+并行协议轨道。
 
 ---
 
 ## 9. 服务职责建议（边界）
 
 - **Content/Circle**：负责推荐/排序策略与产物消费；负责把关键事件（曝光/点击/互动）产出为反馈事件
-- **Assistant**：负责助手相关 feedback 的采集、评估与策略/模板版本化；对外暴露 ingest 与 policy 获取
+- **Assistant**：负责助手相关 feedback 的采集、评估与策略/模板不可变 digest 发布；对外暴露对象所属的 canonical operation
 - **Ops（运营）**：负责实验/分桶与运营配置治理；负责把“发布/灰度/回滚/审计”做成业务侧可操作能力
 - **平台模块**：负责 trace/日志/指标/告警与系统配置治理（见 `platform/*` 与 `contracts/configuration.md`）

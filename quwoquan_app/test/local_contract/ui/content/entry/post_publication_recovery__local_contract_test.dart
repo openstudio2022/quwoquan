@@ -188,7 +188,7 @@ ProviderContainer _container({
       currentUserIdProvider.overrideWithValue('user-publication'),
       activePersonaContextProvider.overrideWith(
         (_) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'persona-publication',
+          personaId: 'persona-publication',
           ownerUserId: 'user-publication',
           displayName: '发布者',
           avatarUrl: '',

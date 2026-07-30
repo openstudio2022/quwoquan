@@ -1,4 +1,3 @@
-version: 1
 service: assistant-service
 domain: assistant
 capability: learning-event-feedback-injection
@@ -26,12 +25,12 @@ slis:
     sli: sum(rate(assistant_learning_outbox_relay_tick_total{outcome="succeeded"}[5m])) / sum(rate(assistant_learning_outbox_relay_tick_total[5m]))
     objective: 0.999
   - id: assistant_learning_projection_availability
-    description: active generation projector 调度成功率；失败不得推进 watermark。
+    description: canonical definition digest 对应的 active generation projector 调度成功率；重建仅在追平事实后原子切换并清理非 active generation，失败不得推进 active watermark。
     sli: sum(rate(assistant_learning_projection_tick_total{outcome=~"succeeded|rebuilt"}[5m])) / sum(rate(assistant_learning_projection_tick_total[5m]))
     objective: 0.999
 
 failure_semantics:
   append_store_failed: retain_app_pending_confirmation_record
   relay_failed: retain_transactional_outbox_record
-  projection_failed: retain_previous_watermark_and_active_generation
+  projection_failed: retain_previous_watermark_and_active_generation_without_partial_switch
   context_dependency_failed: freeze_no_injection_decision

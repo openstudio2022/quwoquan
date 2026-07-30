@@ -136,7 +136,7 @@ def main() -> int:
             "TEST_AUTH_TOKEN",
             "TEST_REFRESH_TOKEN",
             "APP_CURRENT_OWNER_ID",
-            "APP_CURRENT_SUB_ACCOUNT_ID",
+            "APP_CURRENT_PERSONA_ID",
         ):
             command_environment.pop(key, None)
     return subprocess.run(

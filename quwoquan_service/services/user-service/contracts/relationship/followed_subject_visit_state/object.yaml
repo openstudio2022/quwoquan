@@ -46,7 +46,8 @@ business_rules:
 - personaId + subjectType + subjectId 唯一
 - lastVisitedAt 只能单调推进，重复 clientRequestId 返回同一 receipt
 lifecycle:
-  states:
-  - active
+  state_model: row_presence
+  active_condition: visit-watermark row exists for viewer and followed subject
+  terminal_outcome: following removal deletes the watermark row
   optimistic_concurrency: store_commit
   idempotency: command_receipt

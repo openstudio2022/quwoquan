@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-
 from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
@@ -25,7 +23,7 @@ class GammaObjectStorageConnection:
     region: str
     access_key: str
     secret_key: str
-    ca_bundle: Path
+    ca_bundle: str
 
 
 def resolve_gamma_object_storage() -> GammaObjectStorageConnection:
@@ -43,5 +41,5 @@ def resolve_gamma_object_storage() -> GammaObjectStorageConnection:
         region=environment["LOCAL_GAMMA_OBJECT_STORAGE_REGION"],
         access_key=environment["LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID"],
         secret_key=environment["LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"],
-        ca_bundle=Path(environment["LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE"]),
+        ca_bundle="",
     )

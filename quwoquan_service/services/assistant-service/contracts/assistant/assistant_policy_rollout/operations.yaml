@@ -51,11 +51,10 @@ api_routes:
     availability_percent: 99.9
   description: 原子提交 cohort mapping 与 previous mapping；只改变后续 Run。
   request_entity: AssistantPolicyRollout
-  request_fields:
-  - policyId
-  - revision
-  - bucketDefinitions
-  - assignments
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: policyId, field: policyId}
   response_entity: AssistantPolicyRollout
   security:
     auth_mode: required
@@ -109,9 +108,10 @@ api_routes:
     availability_percent: 99.9
   description: 精确恢复 previousAssignments 并保留被替换 mapping 供审计。
   request_entity: AssistantPolicyRollout
-  request_fields:
-  - policyId
-  - revision
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: policyId, field: policyId}
   response_entity: AssistantPolicyRollout
   security:
     auth_mode: required

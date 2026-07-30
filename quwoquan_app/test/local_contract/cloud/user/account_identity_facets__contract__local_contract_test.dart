@@ -39,6 +39,8 @@ void main() {
           wechatCode: 'wechat-code',
           deviceId: 'device-1',
           platform: 'ios',
+          agreementVersion: '2026-07',
+          privacyVersion: '2026-07',
         ),
       );
       await login.loginWithAlipay(
@@ -46,6 +48,8 @@ void main() {
           alipayAuthCode: 'alipay-code',
           deviceId: 'device-1',
           platform: 'ios',
+          agreementVersion: '2026-07',
+          privacyVersion: '2026-07',
         ),
       );
       await login.loginWithQq(
@@ -53,6 +57,8 @@ void main() {
           qqAuthCode: 'qq-code',
           deviceId: 'device-1',
           platform: 'ios',
+          agreementVersion: '2026-07',
+          privacyVersion: '2026-07',
         ),
       );
       await login.loginOneTap(
@@ -142,7 +148,11 @@ void main() {
     );
 
     await challenge.sendOtp(
-      SendOtpCommand(phone: '13800000000', sourceOperation: 'bind_phone'),
+      SendOtpCommand(
+        phone: '13800000000',
+        sourceOperation: 'bind_phone',
+        bindingTicket: 'binding-ticket-1',
+      ),
     );
     await challenge.createAlipayAuthorizationRequest(
       CreateAlipayAuthorizationRequestCommand(platform: 'ios'),
@@ -157,6 +167,19 @@ void main() {
     );
     await credentials.bindPhoneCredential(
       BindPhoneCredentialCommand(phone: '13800000000', otpCode: '123456'),
+    );
+    await credentials.completeFederatedPhoneBinding(
+      CompleteFederatedPhoneBindingCommand(
+        bindingTicket: 'binding-ticket-1',
+        phone: '13800000000',
+        otpCode: '123456',
+        challengeId: 'challenge-1',
+        deviceId: 'device-1',
+        platform: 'ios',
+        appVersion: '1.0.0',
+        agreementVersion: '2026-07',
+        privacyVersion: '2026-07',
+      ),
     );
     await credentials.bindCarrierPhoneCredential(
       BindCarrierPhoneCredentialCommand(
@@ -178,6 +201,7 @@ void main() {
             .userAuthenticationChallengeCreateAlipayAuthorizationRequest,
         AppCloudOperationIds.userAuthenticationChallengeResolveOneTapLoginHint,
         AppCloudOperationIds.userCredentialBindingBindPhoneCredential,
+        AppCloudOperationIds.userCredentialBindingCompleteFederatedPhoneBinding,
         AppCloudOperationIds.userCredentialBindingBindCarrierPhoneCredential,
         AppCloudOperationIds.userCredentialBindingUnbindCredential,
       ],
@@ -185,6 +209,17 @@ void main() {
     expect(executor.calls[3].payload.body, <String, Object?>{
       'phone': '13800000000',
       'otpCode': '123456',
+    });
+    expect(executor.calls[4].payload.body, <String, Object?>{
+      'bindingTicket': 'binding-ticket-1',
+      'phone': '13800000000',
+      'otpCode': '123456',
+      'challengeId': 'challenge-1',
+      'deviceId': 'device-1',
+      'platform': 'ios',
+      'appVersion': '1.0.0',
+      'agreementVersion': '2026-07',
+      'privacyVersion': '2026-07',
     });
     expect(executor.calls.last.payload.pathParameters, <String, String>{
       'credentialType': 'carrier_phone',
@@ -208,7 +243,9 @@ void main() {
     expect(slice.items.single.credentialType, 'phone');
     expect(slice.items.single.boundAt.isUtc, isTrue);
     expect(
-      encodeListCredentialsQuery(const ListCredentialsQuery()).body,
+      encodeUserCredentialBindingListCredentialsGeneratedRequest(
+        const ListCredentialsQuery(),
+      ).body,
       isNull,
     );
     expect(
@@ -324,6 +361,14 @@ Object? _responseFor(CloudOperationContract operation) {
         'registered': true,
         'expiresInSeconds': 120,
       },
+    AppCloudOperationIds.userAccountSessionLoginWithWechat ||
+    AppCloudOperationIds.userAccountSessionLoginWithAlipay ||
+    AppCloudOperationIds.userAccountSessionLoginWithQq => <String, Object?>{
+      'status': 'authenticated',
+      'session': _authSessionResponse(),
+    },
+    AppCloudOperationIds.userCredentialBindingCompleteFederatedPhoneBinding =>
+      _authSessionResponse(),
     AppCloudOperationIds.userCredentialBindingBindPhoneCredential ||
     AppCloudOperationIds.userCredentialBindingBindCarrierPhoneCredential ||
     AppCloudOperationIds.userCredentialBindingUnbindCredential =>
@@ -338,13 +383,22 @@ Object? _responseFor(CloudOperationContract operation) {
       'closedAt': '2026-07-20T12:00:00Z',
       'idempotentReplay': false,
     },
-    _ => <String, Object?>{
-      'accessToken': 'access-token',
-      'refreshToken': 'refresh-token',
-      'ownerId': 'owner-1',
-    },
+    _ => _authSessionResponse(),
   };
 }
+
+Map<String, Object?> _authSessionResponse() => <String, Object?>{
+  'accessToken': 'access-token',
+  'refreshToken': 'refresh-token',
+  'ownerId': 'owner-1',
+  'accountState': 'active',
+  'identityOrigin': 'phone',
+  'logicalShard': 0,
+  'anonymousRetentionPolicy': 'retained',
+  'personaCount': 1,
+  'sessionRememberTtlSeconds': 2592000,
+  'activePersona': <String, Object?>{'personaId': 'sub-1'},
+};
 
 final class _RecordedCall {
   const _RecordedCall({

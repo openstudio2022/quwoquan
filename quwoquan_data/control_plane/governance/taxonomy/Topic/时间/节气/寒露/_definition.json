@@ -2,6 +2,7 @@
   "label": "寒露",
   "labelEn": "Cold Dew",
   "description": "二十四节气之寒露",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

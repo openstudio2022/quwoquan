@@ -2,6 +2,7 @@
   "label": "深度长文",
   "labelEn": "Deep Reading",
   "description": "偏好深度长文内容",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

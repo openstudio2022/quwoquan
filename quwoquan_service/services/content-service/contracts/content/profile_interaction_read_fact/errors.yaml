@@ -1,0 +1,31 @@
+entity: ProfileInteractionReadFact
+domain: CONTENT
+description: ProfileInteractionReadFact 追加命令专属的目标归属与投影可用性错误；不跨对象借用 ActivityView 错误。
+errors:
+- code: CONTENT.USER.profile_interaction_read_fact_owner_forbidden
+  kind: USER
+  reason: profile_interaction_read_fact_owner_forbidden
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [UpdateProfileInteractionState]
+  recovery_action: surface
+  dart_const: profileInteractionReadFactOwnerForbidden
+  go_const: ErrProfileInteractionReadFactOwnerForbidden
+  user_message:
+    zh: 无权更新该互动记录
+    en: You cannot update this interaction record
+- code: CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable
+  kind: SYSTEM
+  reason: profile_interaction_read_fact_target_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [UpdateProfileInteractionState]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: profileInteractionReadFactTargetUnavailable
+  go_const: ErrProfileInteractionReadFactTargetUnavailable
+  user_message:
+    zh: 互动记录暂时不可用，请稍后重试
+    en: The interaction record is temporarily unavailable

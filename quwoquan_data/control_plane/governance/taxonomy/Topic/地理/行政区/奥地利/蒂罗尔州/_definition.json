@@ -1,0 +1,12 @@
+{
+  "label": "蒂罗尔州",
+  "labelEn": "Tyrol",
+  "description": "西部高山与滑雪腹地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

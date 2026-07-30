@@ -23,8 +23,8 @@ class CircleEditSubmitPayload {
   final String rulesText;
   final String welcomeMessage;
   final List<String> tags;
-  final String visibility;
-  final String joinPolicy;
+  final CircleVisibility visibility;
+  final CircleJoinPolicy joinPolicy;
   final bool autoSyncChat;
   final String coverUrl;
   final String avatarUrl;
@@ -40,8 +40,8 @@ class CircleEditSubmitPayload {
     iconUrl: avatarUrl,
     category: categoryId,
     tags: tags,
-    visibility: visibility,
-    joinPolicy: joinPolicy,
+    visibility: visibility.wireValue,
+    joinPolicy: joinPolicy.wireValue,
     autoSyncChat: autoSyncChat,
   );
 
@@ -55,8 +55,8 @@ class CircleEditSubmitPayload {
     iconUrl: avatarUrl,
     category: categoryId,
     tags: tags,
-    visibility: visibility,
-    joinPolicy: joinPolicy,
+    visibility: visibility.wireValue,
+    joinPolicy: joinPolicy.wireValue,
     autoSyncChat: autoSyncChat,
   );
 

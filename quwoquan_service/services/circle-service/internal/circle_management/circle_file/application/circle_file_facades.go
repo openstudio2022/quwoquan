@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	generated "quwoquan_service/services/circle-service/generated/circle_management/circle_file"
+	membershiperrors "quwoquan_service/services/circle-service/generated/circle_management/circle_membership"
 	filemodel "quwoquan_service/services/circle-service/internal/circle_management/circle_file/domain/model"
 	fileports "quwoquan_service/services/circle-service/internal/circle_management/circle_file/domain/ports"
 )
@@ -111,7 +113,7 @@ func (facade *CommandFacade) Update(ctx context.Context, command UpdateCommand) 
 		return CommandResult{}, err
 	}
 	if command.ExpectedVersion <= 0 {
-		return CommandResult{}, generated.AppErrorFromInvalidArgument("If-Match version is required")
+		return CommandResult{}, circleerrors.AppErrorFromInvalidArgument("If-Match version is required")
 	}
 	if err := facade.validateParent(ctx, file.CircleID, file.GroupID, file.ID, command.ParentFolderID); err != nil {
 		return CommandResult{}, err
@@ -175,14 +177,14 @@ func (facade *CommandFacade) requireSpaceAccess(ctx context.Context, circleID, g
 		return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromFileStorageWriteFailed(err.Error())
 	}
 	if !found || policy.State != "active" || policy.QuotaBytes <= 0 {
-		return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromCircleNotFound("active Circle storage policy is required")
+		return fileports.CircleStoragePolicySlice{}, circleerrors.AppErrorFromCircleNotFound("active Circle storage policy is required")
 	}
 	membership, found, err := facade.policies.ReadCircleMembership(ctx, policy.CircleID, personaID)
 	if err != nil {
 		return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromFileStorageWriteFailed(err.Error())
 	}
 	if !found || membership.State != "active" {
-		return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromNotMember("active CircleMembership is required")
+		return fileports.CircleStoragePolicySlice{}, membershiperrors.AppErrorFromNotMember("active CircleMembership is required")
 	}
 	if strings.TrimSpace(groupID) != "" {
 		groupMembership, groupFound, groupErr := facade.policies.ReadGroupMembership(ctx, strings.TrimSpace(groupID), personaID)
@@ -190,13 +192,13 @@ func (facade *CommandFacade) requireSpaceAccess(ctx context.Context, circleID, g
 			return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromFileStorageWriteFailed(groupErr.Error())
 		}
 		if !groupFound || groupMembership.State != "active" {
-			return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromNotMember("active CircleGroupMembership is required")
+			return fileports.CircleStoragePolicySlice{}, membershiperrors.AppErrorFromNotMember("active CircleGroupMembership is required")
 		}
 		if elevated && groupMembership.Role != "owner" && groupMembership.Role != "manager" {
-			return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromPermissionDenied("CircleGroup owner or manager is required")
+			return fileports.CircleStoragePolicySlice{}, circleerrors.AppErrorFromPermissionDenied("CircleGroup owner or manager is required")
 		}
 	} else if elevated && membership.Role != "owner" && membership.Role != "admin" {
-		return fileports.CircleStoragePolicySlice{}, generated.AppErrorFromPermissionDenied("Circle owner or admin is required")
+		return fileports.CircleStoragePolicySlice{}, circleerrors.AppErrorFromPermissionDenied("Circle owner or admin is required")
 	}
 	return policy, nil
 }
@@ -259,7 +261,7 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 func trustedFileCommandContext(ctx context.Context) (operation.Context, string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil || strings.TrimSpace(current.IdempotencyKey) == "" {
-		return operation.Context{}, "", generated.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
+		return operation.Context{}, "", circleerrors.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
 	}
 	return current, strings.TrimSpace(current.Actor.PersonaID), nil
 }
@@ -306,7 +308,7 @@ func mapFileCommitError(err error) error {
 	case errors.Is(err, filemodel.ErrIdempotencyConflict):
 		return generated.AppErrorFromFileIdempotencyConflict(err.Error())
 	case errors.Is(err, filemodel.ErrInvalidChange):
-		return generated.AppErrorFromInvalidArgument(err.Error())
+		return circleerrors.AppErrorFromInvalidArgument(err.Error())
 	default:
 		return generated.AppErrorFromFileStorageWriteFailed(err.Error())
 	}
@@ -381,7 +383,7 @@ func (facade *QueryFacade) List(ctx context.Context, query fileports.ListQuery) 
 func (facade *QueryFacade) requireReadAccess(ctx context.Context, circleID, groupID string) (string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil {
-		return "", generated.AppErrorFromInvalidArgument("trusted persona is required")
+		return "", circleerrors.AppErrorFromInvalidArgument("trusted persona is required")
 	}
 	actorID := strings.TrimSpace(current.Actor.PersonaID)
 	membership, found, err := facade.policies.ReadCircleMembership(ctx, strings.TrimSpace(circleID), actorID)
@@ -389,7 +391,7 @@ func (facade *QueryFacade) requireReadAccess(ctx context.Context, circleID, grou
 		return "", generated.AppErrorFromFileStorageWriteFailed(err.Error())
 	}
 	if !found || membership.State != "active" {
-		return "", generated.AppErrorFromNotMember("active CircleMembership is required")
+		return "", membershiperrors.AppErrorFromNotMember("active CircleMembership is required")
 	}
 	if strings.TrimSpace(groupID) != "" {
 		groupMembership, groupFound, groupErr := facade.policies.ReadGroupMembership(ctx, strings.TrimSpace(groupID), actorID)
@@ -397,7 +399,7 @@ func (facade *QueryFacade) requireReadAccess(ctx context.Context, circleID, grou
 			return "", generated.AppErrorFromFileStorageWriteFailed(groupErr.Error())
 		}
 		if !groupFound || groupMembership.State != "active" {
-			return "", generated.AppErrorFromNotMember("active CircleGroupMembership is required")
+			return "", membershiperrors.AppErrorFromNotMember("active CircleGroupMembership is required")
 		}
 	}
 	return actorID, nil

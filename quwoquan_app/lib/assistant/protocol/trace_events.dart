@@ -17,7 +17,7 @@ enum AssistantTraceEventType {
   /// Real-time streaming token delta from synthesis LLM (SSE).
   streamDelta,
 
-  // v2 semantic event types for granular UI rendering
+  // Canonical semantic event types for granular UI rendering.
   planStarted,
   planCompleted,
   searchQueryGenerated,

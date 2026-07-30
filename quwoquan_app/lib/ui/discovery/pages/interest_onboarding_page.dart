@@ -37,6 +37,11 @@ class _InterestOnboardingPageState
 
   final Map<String, List<TagChild>> _options = <String, List<TagChild>>{};
   final Set<String> _selected = <String>{};
+
+  /// 本次实际浏览的 taxonomy 发布号，取自云侧随每个目录节点下发的 releaseId。
+  /// 发布身份是 tag-service 的运行时事实，不是端侧常量：编译进包会让发一个新
+  /// tag 发布变成必须发端。
+  String _taxonomyReleaseId = '';
   InterestOnboardingDraft? _draft;
   bool _loading = true;
   bool _submitting = false;
@@ -76,9 +81,13 @@ class _InterestOnboardingPageState
       for (final dimension in _catalog.dimensions) {
         options[dimension.id] = await _loadLeafChoices(query, dimension.tagRef);
       }
+      final taxonomyReleaseId = _requireSingleTaxonomyReleaseId(
+        options.values.expand((choices) => choices),
+      );
       final draft = await coordinator.load();
       if (!mounted) return;
       setState(() {
+        _taxonomyReleaseId = taxonomyReleaseId;
         _draft = draft;
         if (draft?.status != InterestOnboardingStatus.submitted &&
             draft?.status != InterestOnboardingStatus.skipped) {
@@ -139,6 +148,26 @@ class _InterestOnboardingPageState
     return List<TagChild>.unmodifiable(leaves);
   }
 
+  static String _requireSingleTaxonomyReleaseId(Iterable<TagChild> choices) {
+    final releaseIds = <String>{};
+    for (final choice in choices) {
+      final releaseId = choice.releaseId.trim();
+      if (releaseId.isEmpty) {
+        throw const FormatException(
+          'onboarding interest tag is missing taxonomyReleaseId',
+        );
+      }
+      releaseIds.add(releaseId);
+    }
+    if (releaseIds.length != 1) {
+      throw FormatException(
+        'onboarding interest catalog must use one taxonomy release; '
+        'found ${releaseIds.length}',
+      );
+    }
+    return releaseIds.single;
+  }
+
   Future<void> _resumeAfterLogin() async {
     if (!mounted || _submitting) return;
     final continuation = ref
@@ -149,11 +178,9 @@ class _InterestOnboardingPageState
       final draft = await ref
           .read(interestOnboardingCoordinatorProvider)
           .select(
-            catalogVersion: continuation.catalogVersion,
             taxonomyReleaseId: continuation.taxonomyReleaseId,
             tagRefs: continuation.tagRefs,
             previous: InterestOnboardingDraft(
-              catalogVersion: continuation.catalogVersion,
               taxonomyReleaseId: continuation.taxonomyReleaseId,
               clientEventId: continuation.clientEventId,
               tagRefs: continuation.tagRefs,
@@ -182,8 +209,7 @@ class _InterestOnboardingPageState
       final draft =
           restored ??
           await coordinator.select(
-            catalogVersion: _catalog.version,
-            taxonomyReleaseId: _catalog.taxonomyReleaseId,
+            taxonomyReleaseId: _taxonomyReleaseId,
             tagRefs: _selected,
             previous: _draft,
           );
@@ -197,7 +223,6 @@ class _InterestOnboardingPageState
             .read(authContinuationProvider.notifier)
             .set(
               SubmitOnboardingInterestContinuation(
-                catalogVersion: draft.catalogVersion,
                 taxonomyReleaseId: draft.taxonomyReleaseId,
                 clientEventId: draft.clientEventId,
                 tagRefs: draft.tagRefs,
@@ -243,11 +268,7 @@ class _InterestOnboardingPageState
     try {
       await ref
           .read(interestOnboardingCoordinatorProvider)
-          .skip(
-            catalogVersion: _catalog.version,
-            taxonomyReleaseId: _catalog.taxonomyReleaseId,
-            previous: _draft,
-          );
+          .skip(taxonomyReleaseId: _taxonomyReleaseId, previous: _draft);
     } catch (error) {
       if (!mounted) return;
       await _showActionError(

@@ -19,8 +19,8 @@ void main() {
       'accessToken': 'access-1',
       'refreshToken': 'refresh-1',
       'ownerId': 'owner-1',
-      'activeSub': <String, dynamic>{'subAccountId': 'sub-1'},
-      'subAccountCount': 1,
+      'activePersona': <String, dynamic>{'personaId': 'sub-1'},
+      'personaCount': 1,
       'accountState': 'active',
       'identityOrigin': 'phone',
     });
@@ -31,7 +31,7 @@ void main() {
     expect(stored.accessToken, 'access-1');
     expect(stored.refreshToken, 'refresh-1');
     expect(stored.ownerId, 'owner-1');
-    expect(stored.activeSubAccountId, 'sub-1');
+    expect(stored.activePersonaId, 'sub-1');
     expect(stored.manualLoggedOut, isFalse);
   });
 
@@ -45,8 +45,8 @@ void main() {
         'accessToken': 'access-2',
         'refreshToken': 'refresh-2',
         'ownerId': 'owner-2',
-        'activeSub': <String, dynamic>{'subAccountId': 'sub-2'},
-        'subAccountCount': 1,
+        'activePersona': <String, dynamic>{'personaId': 'sub-2'},
+        'personaCount': 1,
         'accountState': 'active',
         'identityOrigin': 'phone',
         'accountHint': <String, dynamic>{
@@ -71,7 +71,7 @@ void main() {
     },
   );
 
-  test('旧缓存 nicknameCustomized 异常类型按 false 读取', () async {
+  test('malformed nicknameCustomized cannot grant customized status', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'auth.remembered_nickname_customized': 'true',
     });
@@ -80,6 +80,93 @@ void main() {
     final stored = await store.read();
 
     expect(stored.rememberedNicknameCustomized, isFalse);
+  });
+
+  test('read restores the canonical active persona key', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.active_persona_id': 'persona-current',
+    });
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+
+    final stored = await store.read();
+    final preferences = await SharedPreferences.getInstance();
+
+    expect(stored.activePersonaId, 'persona-current');
+    expect(preferences.getString('auth.active_persona_id'), 'persona-current');
+  });
+
+  test('read migrates the sole retired active persona key once', () async {
+    final retiredKey = <String>['auth.active_', 'sub', '_account_id'].join();
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      retiredKey: 'persona-existing-install',
+    });
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+
+    final first = await store.read();
+    final second = await store.read();
+    final preferences = await SharedPreferences.getInstance();
+
+    expect(first.activePersonaId, 'persona-existing-install');
+    expect(second.activePersonaId, 'persona-existing-install');
+    expect(
+      preferences.getString('auth.active_persona_id'),
+      'persona-existing-install',
+    );
+    expect(preferences.containsKey(retiredKey), isFalse);
+  });
+
+  test('read fails closed when persisted persona identity keys conflict', () async {
+    final retiredKey = <String>['auth.active_', 'sub', '_account_id'].join();
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.active_persona_id': 'persona-canonical',
+      retiredKey: 'persona-conflict',
+    });
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+
+    await expectLater(store.read(), throwsStateError);
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('auth.active_persona_id'), 'persona-canonical');
+    expect(
+      preferences.getString(retiredKey),
+      'persona-conflict',
+    );
+  });
+
+  test('active refresh token is never reinterpreted as quick login', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.account_state': 'active',
+      'auth.manual_logged_out': true,
+    });
+    FlutterSecureStorage.setMockInitialValues(<String, String>{
+      'auth.refresh_token': 'active-refresh',
+    });
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+
+    final stored = await store.read();
+
+    expect(stored.refreshToken, 'active-refresh');
+    expect(stored.rememberedRefreshToken, isEmpty);
+    expect(stored.quickLoginRefreshToken, isEmpty);
+    expect(stored.hasValidQuickLoginCredential, isFalse);
+  });
+
+  test('quick login requires its canonical explicit expiry', () async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'auth.manual_logged_out': true,
+      'auth.last_refresh_at_epoch_ms': nowMs,
+      'auth.session_remember_ttl_seconds': 2592000,
+    });
+    FlutterSecureStorage.setMockInitialValues(<String, String>{
+      'auth.remembered_refresh_token': 'remembered-refresh',
+    });
+    final store = AuthSessionStore(secureStorage: const FlutterSecureStorage());
+
+    final stored = await store.read();
+
+    expect(stored.quickLoginRefreshToken, 'remembered-refresh');
+    expect(stored.quickLoginExpiresAtEpochMs, 0);
+    expect(stored.hasValidQuickLoginCredential, isFalse);
   });
 
   test('clearSession records manual logout prompt state', () async {
@@ -121,7 +208,9 @@ void main() {
 
       // 软退出：失效活跃会话（删 accessToken），但保留快速登录凭证与账号摘要。
       expect(stored.accessToken, isEmpty);
-      expect(stored.refreshToken, 'refresh-soft');
+      expect(stored.refreshToken, isEmpty);
+      expect(stored.rememberedRefreshToken, 'refresh-soft');
+      expect(stored.quickLoginRefreshToken, 'refresh-soft');
       expect(stored.ownerId, 'owner-soft');
       expect(stored.rememberedDisplayName, '趣友A');
       expect(stored.rememberedNicknameCustomized, isTrue);

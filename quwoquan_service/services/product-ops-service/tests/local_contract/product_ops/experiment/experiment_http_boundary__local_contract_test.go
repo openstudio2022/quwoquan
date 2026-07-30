@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -57,8 +58,8 @@ func TestExperimentAssignmentHTTPBoundaryUsesOnlyTrustedActorAndImmutableReplay(
 	if replayed != first {
 		t.Fatalf("immutable replay changed fact: first=%+v replay=%+v", first, replayed)
 	}
-	if got := store.eventCount(); got != 1 {
-		t.Fatalf("assignment replay emitted %d events, want 1", got)
+	if got := store.assignmentCount(); got != 1 {
+		t.Fatalf("assignment replay stored %d facts, want 1", got)
 	}
 
 	unauthorizedResponse := httptest.NewRecorder()
@@ -87,7 +88,6 @@ type localExperimentStore struct {
 	mu          sync.Mutex
 	experiment  experimentmodel.Experiment
 	assignments map[string]experimentmodel.AssignmentFact
-	events      []experimentmodel.Event
 }
 
 func newLocalExperimentStore() *localExperimentStore {
@@ -130,26 +130,26 @@ func (s *localExperimentStore) List(context.Context) ([]experimentmodel.Experime
 func (s *localExperimentStore) Append(
 	_ context.Context,
 	fact experimentmodel.AssignmentFact,
-	event experimentmodel.Event,
 ) (experimentmodel.AssignmentFact, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := fact.ExperimentID + "\x00" + fact.PolicyVersion + "\x00" + fact.SubjectKey
+	key := fact.ExperimentID + "\x00" + strconv.FormatInt(fact.ExperimentRevision, 10) + "\x00" + fact.SubjectKey
 	if existing, found := s.assignments[key]; found {
 		return existing, false, nil
 	}
 	s.assignments[key] = fact
-	s.events = append(s.events, event)
 	return fact, true, nil
 }
 
 func (s *localExperimentStore) Get(
 	_ context.Context,
-	experimentID, policyVersion, subjectKey string,
+	experimentID string,
+	experimentRevision int64,
+	subjectKey string,
 ) (experimentmodel.AssignmentFact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := experimentID + "\x00" + policyVersion + "\x00" + subjectKey
+	key := experimentID + "\x00" + strconv.FormatInt(experimentRevision, 10) + "\x00" + subjectKey
 	fact, found := s.assignments[key]
 	if !found {
 		return experimentmodel.AssignmentFact{}, experimentmodel.ErrAssignmentNotFound
@@ -159,13 +159,14 @@ func (s *localExperimentStore) Get(
 
 func (s *localExperimentStore) Stats(
 	_ context.Context,
-	experimentID, policyVersion string,
+	experimentID string,
+	experimentRevision int64,
 ) (experimentports.AssignmentStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stats := experimentports.AssignmentStats{VariantCounts: map[string]int{}}
 	for _, fact := range s.assignments {
-		if fact.ExperimentID == experimentID && fact.PolicyVersion == policyVersion {
+		if fact.ExperimentID == experimentID && fact.ExperimentRevision == experimentRevision {
 			stats.VariantCounts[fact.Variant]++
 			stats.AssignedSubjects++
 		}
@@ -173,10 +174,10 @@ func (s *localExperimentStore) Stats(
 	return stats, nil
 }
 
-func (s *localExperimentStore) eventCount() int {
+func (s *localExperimentStore) assignmentCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return len(s.events)
+	return len(s.assignments)
 }
 
 var (

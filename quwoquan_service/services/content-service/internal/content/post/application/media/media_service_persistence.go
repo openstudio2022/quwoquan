@@ -162,7 +162,7 @@ func mediaAssetResult(
 		CoverFrameTimeMs:             asset.CoverFrameTimeMs(),
 		ImageWidth:                   imageDescriptor.ImageWidth,
 		ImageHeight:                  imageDescriptor.ImageHeight,
-		ImageDeliveryContentType:     imageDescriptor.ImageDeliveryContentType,
+		ImageDeliveryMimeType:        imageDescriptor.ImageDeliveryMimeType,
 		ImageDominantColor:           imageDescriptor.ImageDominantColor,
 		ImageLQIP:                    imageDescriptor.ImageLQIP,
 		ImageContentProfile:          imageDescriptor.ImageContentProfile,
@@ -176,6 +176,8 @@ func mediaAssetResult(
 		VideoKeyframeIntervalMs:      videoDescriptor.VideoKeyframeIntervalMs,
 		VideoFastStart:               videoDescriptor.VideoFastStart,
 		PreviewTrackVersion:          videoDescriptor.PreviewTrackVersion,
+		HLSCMAFDescriptorVersion:     videoDescriptor.HLSCMAFDescriptorVersion,
+		HLSCMAFRenditionCount:        videoDescriptor.HLSCMAFRenditionCount,
 		Replayed:                     replayed,
 	}
 }

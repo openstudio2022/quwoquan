@@ -58,7 +58,7 @@ def _request_json(
         "Accept": "application/json",
         "X-Client-Page-Id": "rtc.provider.b10.fixture_uat",
         "X-Client-User-Id": owner_id,
-        "X-Client-Sub-Account-Id": persona_id,
+        "X-Client-Persona-Id": persona_id,
         "X-Request-Id": f"B10.{uuid.uuid4().hex}",
         "X-Trace-Id": f"B10.{uuid.uuid4().hex}",
     }
@@ -130,7 +130,7 @@ def _role_environment(
             "TEST_AUTH_TOKEN": token,
             "TEST_REFRESH_TOKEN": refresh_token,
             "APP_CURRENT_OWNER_ID": owner_id,
-            "APP_CURRENT_SUB_ACCOUNT_ID": persona_id,
+            "APP_CURRENT_PERSONA_ID": persona_id,
         }
     )
     return environment

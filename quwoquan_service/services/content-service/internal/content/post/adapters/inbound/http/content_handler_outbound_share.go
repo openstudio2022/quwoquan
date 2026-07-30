@@ -13,13 +13,13 @@ import (
 )
 
 type createOutboundShareRequest struct {
-	Channel           string    `json:"channel"`
-	DestinationKind   string    `json:"destinationKind"`
-	Destination       string    `json:"destination,omitempty"`
-	ReferralID        string    `json:"referralId"`
-	DeliverySucceeded bool      `json:"deliverySucceeded"`
-	ProviderReceiptID string    `json:"providerReceiptId"`
-	ClientConfirmedAt time.Time `json:"clientConfirmedAt"`
+	Channel           sharemodel.Channel         `json:"channel"`
+	DestinationKind   sharemodel.DestinationKind `json:"destinationKind"`
+	Destination       string                     `json:"destination,omitempty"`
+	ReferralID        string                     `json:"referralId"`
+	DeliverySucceeded bool                       `json:"deliverySucceeded"`
+	ProviderReceiptID string                     `json:"providerReceiptId"`
+	ClientConfirmedAt time.Time                  `json:"clientConfirmedAt"`
 }
 
 func (h *ContentHandler) handleCreateOutboundShare(w http.ResponseWriter, r *http.Request) {

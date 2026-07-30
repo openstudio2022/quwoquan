@@ -17,6 +17,7 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Behavior action types aligned with behaviors.yaml.
 ///
@@ -152,8 +153,7 @@ class BehaviorEvent {
     this.feedRequestId,
     this.position,
     this.channelId,
-    this.rankingVersion,
-    this.reasonVersion,
+    this.policyDigest,
     this.recallPath,
     this.contentVertical,
     this.supplySource,
@@ -175,14 +175,20 @@ class BehaviorEvent {
     this.intersectionEvidenceId,
     this.subjectId,
     this.feedbackKind,
-    this.catalogVersion,
     this.taxonomyReleaseId,
     this.motionDirection,
     this.motionProfile,
     this.settleMs,
     this.reducedMotion,
     this.committed,
-  }) : occurredAt = (occurredAt ?? DateTime.now()).toUtc();
+  }) : occurredAt = (occurredAt ?? DateTime.now()).toUtc() {
+    final digest = policyDigest;
+    if (digest != null && !isCanonicalSha256Digest(digest)) {
+      throw const FormatException(
+        'policyDigest must be a canonical SHA-256 digest',
+      );
+    }
+  }
 
   final String contentId;
   final BehaviorAction action;
@@ -225,12 +231,9 @@ class BehaviorEvent {
   /// 首页推荐频道 id（following/moment/work/photo/video/article 等）；非首页 feed 面为空字符串。
   final String? channelId;
 
-  /// feed 下发精排管线版本（来源 DiscoveryFeedPage.rankingVersion）；
-  /// 闭合「召回 → 下发(rankingVersion) → 曝光 → 互动」AB / replay 归因。
-  final String? rankingVersion;
-
-  /// feed 下发理由生成版本（envelope.reasonVersion），用于解释理由效果归因。
-  final String? reasonVersion;
+  /// feed 下发的唯一推荐策略内容摘要（来源 DiscoveryFeedPage.policyDigest）；
+  /// 闭合「召回 → 下发 → 曝光 → 互动」AB / replay 归因。
+  final String? policyDigest;
 
   /// item 下发召回路径（如 tag_recall/collab_i2i/collab_u2i/repository_fallback）。
   final String? recallPath;
@@ -300,10 +303,7 @@ class BehaviorEvent {
   /// （intersectionFeedbackKinds，端云同源），驱动 subject 跨会话降权 / 冷却。
   final String? feedbackKind;
 
-  /// 首启兴趣目录版本；服务端依此校验目录、维度和 tag leaf。
-  final String? catalogVersion;
-
-  /// 首启兴趣选择时绑定的 taxonomy snapshot identity.
+  /// 首启兴趣目录与 taxonomy snapshot 的唯一不可变发布身份。
   final String? taxonomyReleaseId;
 
   /// Client-side pageflip motion telemetry, used by video-book comfort audits.
@@ -332,10 +332,7 @@ class BehaviorEvent {
       if (feedRequestId != null) 'feedRequestId': feedRequestId,
       if (position != null) 'position': position,
       if (channelId != null && channelId!.isNotEmpty) 'channelId': channelId,
-      if (rankingVersion != null && rankingVersion!.isNotEmpty)
-        'rankingVersion': rankingVersion,
-      if (reasonVersion != null && reasonVersion!.isNotEmpty)
-        'reasonVersion': reasonVersion,
+      if (policyDigest != null) 'policyDigest': policyDigest,
       if (recallPath != null && recallPath!.isNotEmpty)
         'recallPath': recallPath,
       if (contentVertical != null && contentVertical!.isNotEmpty)
@@ -369,8 +366,6 @@ class BehaviorEvent {
       if (subjectId != null && subjectId!.isNotEmpty) 'subjectId': subjectId,
       if (feedbackKind != null && feedbackKind!.isNotEmpty)
         'feedbackKind': feedbackKind,
-      if (catalogVersion != null && catalogVersion!.isNotEmpty)
-        'catalogVersion': catalogVersion,
       if (taxonomyReleaseId != null && taxonomyReleaseId!.isNotEmpty)
         'taxonomyReleaseId': taxonomyReleaseId,
       if (motionDirection != null && motionDirection!.isNotEmpty)
@@ -409,7 +404,6 @@ abstract class BehaviorRepository implements BehaviorReporter {
   /// 确认型首启行为：失败向调用方返回，绝不静默入尽力队列。
   Future<void> submitOnboardingInterest({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   });
@@ -426,8 +420,7 @@ abstract class BehaviorRepository implements BehaviorReporter {
     ReferralSource? referralSource,
     int? position,
     String? channelId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
     String? recallPath,
     String? contentVertical,
     String? supplySource,
@@ -445,8 +438,7 @@ abstract class BehaviorRepository implements BehaviorReporter {
           referralSource: referralSource,
           position: position,
           channelId: channelId,
-          rankingVersion: rankingVersion,
-          reasonVersion: reasonVersion,
+          policyDigest: policyDigest,
           recallPath: recallPath,
           contentVertical: contentVertical,
           supplySource: supplySource,
@@ -574,7 +566,6 @@ class RemoteBehaviorRepository extends BehaviorRepository
   @override
   Future<void> submitOnboardingInterest({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
@@ -586,11 +577,10 @@ class RemoteBehaviorRepository extends BehaviorRepository
         .where((tagRef) => tagRef.isNotEmpty)
         .toSet()
         .toList(growable: false);
-    if (catalogVersion.trim().isEmpty ||
-        taxonomyReleaseId.trim().isEmpty ||
-        tags.isEmpty) {
+    final releaseID = taxonomyReleaseId.trim();
+    if (releaseID.isEmpty || tags.isEmpty) {
       throw ArgumentError(
-        'onboarding catalogVersion, taxonomyReleaseId and tagRefs are required',
+        'onboarding taxonomyReleaseId and tagRefs are required',
       );
     }
     final feedSessionId = _resolvedFeedSessionId;
@@ -604,8 +594,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
             contentId: '',
             action: BehaviorAction.onboardingInterest,
             clientEventId: clientEventId,
-            catalogVersion: catalogVersion,
-            taxonomyReleaseId: taxonomyReleaseId,
+            taxonomyReleaseId: releaseID,
             sourceSurface: 'interest_onboarding',
             tags: tags,
           ).toJson(),
@@ -739,10 +728,10 @@ class RemoteBehaviorRepository extends BehaviorRepository
   Future<void> _postBehaviorBatch(Uri uri, Map<String, dynamic> body) async {
     if (_disposed) return;
     final jsonStr = jsonEncode(body);
-    final headers = CloudRequestHeaders.withOwnerSubAccountContext(
+    final headers = CloudRequestHeaders.withOwnerPersonaContext(
       CloudRequestHeaders.forPage(ContentRequestPageIds.reportBehaviors),
       ownerUserId: _queuePartition.accountId,
-      subAccountId: _queuePartition.personaId,
+      personaId: _queuePartition.personaId,
     );
     if (_queuePartition.deviceId.isNotEmpty) {
       headers['X-Client-Device-Actor-Id'] = _queuePartition.deviceId;
@@ -839,6 +828,16 @@ class RemoteBehaviorRepository extends BehaviorRepository
   }
 
   BehaviorEvent _behaviorEventFromJson(Map<String, dynamic> json) {
+    // 旧 catalogVersion 队列事件必须 fail-closed，不得在恢复时忽略或双读。
+    if (json.containsKey('catalogVersion')) {
+      throw const FormatException('retired onboarding catalog identity');
+    }
+    final rawPolicyDigest = json['policyDigest'];
+    if (rawPolicyDigest != null && rawPolicyDigest is! String) {
+      throw const FormatException(
+        'policyDigest must be a canonical SHA-256 digest',
+      );
+    }
     final contentId = (json['contentId'] ?? '').toString().trim();
     final clientEventId = (json['clientEventId'] ?? '').toString().trim();
     final occurredAt = DateTime.tryParse(
@@ -875,7 +874,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
       feedRequestId: json['feedRequestId'] as String?,
       position: (json['position'] as num?)?.toInt(),
       channelId: json['channelId'] as String?,
-      rankingVersion: json['rankingVersion'] as String?,
+      policyDigest: rawPolicyDigest as String?,
       commentLength: (json['commentLength'] as num?)?.toInt(),
       authorId: json['authorId'] as String?,
       referralSource: _parseReferralSource(json['referralSource'] as String?),
@@ -898,7 +897,6 @@ class RemoteBehaviorRepository extends BehaviorRepository
       intersectionEvidenceId: json['intersectionEvidenceId'] as String?,
       subjectId: json['subjectId'] as String?,
       feedbackKind: json['feedbackKind'] as String?,
-      catalogVersion: json['catalogVersion'] as String?,
       taxonomyReleaseId: json['taxonomyReleaseId'] as String?,
       motionDirection: json['direction'] as String?,
       motionProfile: json['motionProfile'] as String?,
@@ -926,13 +924,11 @@ final class BehaviorOnboardingInterestWriter
   @override
   Future<void> submit({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) {
     return _repository.submitOnboardingInterest(
       clientEventId: clientEventId,
-      catalogVersion: catalogVersion,
       taxonomyReleaseId: taxonomyReleaseId,
       tagRefs: tagRefs,
     );

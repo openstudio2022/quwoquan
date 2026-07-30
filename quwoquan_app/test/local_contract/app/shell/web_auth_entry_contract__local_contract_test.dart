@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/app/web_shell_test_harness.dart';
@@ -20,7 +21,8 @@ void main() {
       await WebShellTestHarness.tapPrimary(tester, 'chat');
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(find.text(AuthGateReason.openChat.title), findsAtLeastNWidgets(1));
+      final login = tester.widget<LoginPage>(find.byType(LoginPage));
+      expect(login.reason, AuthGateReason.openChat.name);
     });
 
     testWidgets('未登录点击我的入口进入 profileTab 登录门', (tester) async {
@@ -33,10 +35,8 @@ void main() {
       await WebShellTestHarness.tapPrimary(tester, 'profile');
       await tester.pump(const Duration(milliseconds: 600));
 
-      expect(
-        find.text(AuthGateReason.profileTab.title),
-        findsAtLeastNWidgets(1),
-      );
+      final login = tester.widget<LoginPage>(find.byType(LoginPage));
+      expect(login.reason, AuthGateReason.profileTab.name);
     });
   });
 }

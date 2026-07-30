@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/application/user/persona/persona_query.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
@@ -32,8 +32,8 @@ final class MockPersonaFacets
     return PersonaManagementSummaryViewData(
       items: _items.map(_view).toList(growable: false),
       quota: PersonaManagementQuotaViewData(
-        maxSubAccounts: 5,
-        usedSubAccounts: _items.length,
+        maxPersonas: 5,
+        usedPersonas: _items.length,
       ),
       activeContext: _activeContextView(active),
     );
@@ -48,9 +48,9 @@ final class MockPersonaFacets
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
+    String personaId,
   ) async {
-    final item = _item(subAccountId);
+    final item = _item(personaId);
     final isPrimary = item['isPrimary'] == true;
     final isRetired = item['status'] == 'retired';
     final isActive = item['isActive'] == true;
@@ -67,7 +67,7 @@ final class MockPersonaFacets
         ? 'blocked_active_persona'
         : 'allowed';
     return PersonaLifecycleGuardViewData(
-      subAccountId: subAccountId,
+      personaId: personaId,
       requestedAction: 'retire',
       allowed: reason == 'allowed',
       reason: reason,
@@ -76,17 +76,14 @@ final class MockPersonaFacets
   }
 
   @override
-  Future<SubAccountProfileViewData> getSubAccountProfile(
-    String subAccountId,
-  ) async {
-    final item = _item(subAccountId);
-    return SubAccountProfileViewData.fromSubAccountProfileWire(
-      SubAccountProfileWireDto.fromMap(<String, dynamic>{
+  Future<PersonaProfileViewData> getPersonaProfile(String personaId) async {
+    final item = _item(personaId);
+    return PersonaProfileViewData.fromPersonaProfileWire(
+      PersonaProfileWireDto.fromMap(<String, dynamic>{
         ...item,
         'ownerUserId': 'owner-test',
         'subjectType': 'persona',
         'nickname': item['displayName'],
-        'username': item['userHandle'],
         'status': item['status'] ?? 'active',
       }),
     );
@@ -98,11 +95,9 @@ final class MockPersonaFacets
   ) async {
     final id = 'persona-test-${++_version}';
     final item = <String, Object?>{
-      'subAccountId': id,
+      'personaId': id,
       'displayName': command.displayName,
       'userHandle': 'qw_$id',
-      'phone': '',
-      'email': '',
       'avatarUrl': command.avatarUrl ?? '',
       'backgroundUrl': '',
       'bio': '',
@@ -123,12 +118,10 @@ final class MockPersonaFacets
   Future<contracts.PersonaManagementItem> updatePersona(
     contracts.UpdatePersonaCommand command,
   ) async {
-    final item = _item(command.subAccountId);
+    final item = _item(command.personaId);
     if (command.displayName != null) {
       item['displayName'] = command.displayName;
     }
-    if (command.phone != null) item['phone'] = command.phone;
-    if (command.email != null) item['email'] = command.email;
     if (command.avatarUrl != null) item['avatarUrl'] = command.avatarUrl;
     if (command.backgroundUrl != null) {
       item['backgroundUrl'] = command.backgroundUrl;
@@ -147,7 +140,7 @@ final class MockPersonaFacets
   Future<contracts.PersonaProfileSyncResult> applyPersonaProfileSync(
     contracts.ApplyPersonaProfileSyncCommand command,
   ) async {
-    _item(command.subAccountId);
+    _item(command.personaId);
     final targets = command.syncTargetIds ?? const <String>[];
     _version++;
     return contracts.PersonaProfileSyncResult(
@@ -161,8 +154,8 @@ final class MockPersonaFacets
   Future<contracts.PersonaLifecycleGuard> retirePersona(
     contracts.RetirePersonaCommand command,
   ) async {
-    final item = _item(command.subAccountId);
-    final guard = await getPersonaLifecycleGuard(command.subAccountId);
+    final item = _item(command.personaId);
+    final guard = await getPersonaLifecycleGuard(command.personaId);
     if (!guard.allowed) {
       throw personaLifecycleGuardExceptionForReason(guard.reason);
     }
@@ -171,7 +164,7 @@ final class MockPersonaFacets
     item['retiredAt'] = _now();
     _version++;
     return contracts.PersonaLifecycleGuard(
-      subAccountId: command.subAccountId,
+      personaId: command.personaId,
       requestedAction: 'retire',
       allowed: true,
       reason: 'allowed',
@@ -183,7 +176,7 @@ final class MockPersonaFacets
   Future<contracts.ActivePersonaContext> activatePersona(
     contracts.ActivatePersonaCommand command,
   ) async {
-    final target = _item(command.subAccountId);
+    final target = _item(command.personaId);
     if (target['status'] == 'retired') {
       throw personaLifecycleGuardExceptionForReason('blocked_retired_persona');
     }
@@ -193,7 +186,7 @@ final class MockPersonaFacets
     _version++;
     return contracts.ActivePersonaContext(
       ownerUserId: 'owner-test',
-      subAccountId: command.subAccountId,
+      personaId: command.personaId,
       isolationLevel: target['isolationLevel']! as String,
       profileVisibility: target['profileVisibility']! as String,
       contextVersion: _version,
@@ -204,9 +197,9 @@ final class MockPersonaFacets
   }
 
   Map<String, Object?> _item(String id) {
-    if (id.trim().isEmpty) throw ArgumentError.value(id, 'subAccountId');
+    if (id.trim().isEmpty) throw ArgumentError.value(id, 'personaId');
     for (final item in _items) {
-      if (item['subAccountId'] == id) return item;
+      if (item['personaId'] == id) return item;
     }
     throw StateError('persona not found');
   }
@@ -223,7 +216,7 @@ final class MockPersonaFacets
       ActivePersonaContextViewData.fromActivePersonaContextWire(
         ActivePersonaContextWireDto.fromMap(<String, dynamic>{
           'ownerUserId': 'owner-test',
-          'subAccountId': item['subAccountId'],
+          'personaId': item['personaId'],
           'subjectType': 'persona',
           'displayName': item['displayName'],
           'avatarUrl': item['avatarUrl'],
@@ -238,11 +231,9 @@ final class MockPersonaFacets
 
   static List<Map<String, Object?>> _defaultSeed() => <Map<String, Object?>>[
     <String, Object?>{
-      'subAccountId': 'persona_primary',
+      'personaId': 'persona_primary',
       'displayName': '主分身',
       'userHandle': 'main_handle',
-      'phone': '13800000000',
-      'email': 'main@example.com',
       'avatarUrl': 'media/avatar/s/mock/user/primary/v1/avatar.png',
       'backgroundUrl': '',
       'bio': '',
@@ -256,11 +247,9 @@ final class MockPersonaFacets
       'updatedAt': _now(),
     },
     <String, Object?>{
-      'subAccountId': 'persona_photo',
+      'personaId': 'persona_photo',
       'displayName': '摄影分身',
       'userHandle': 'photo_handle',
-      'phone': '',
-      'email': '',
       'avatarUrl': 'media/avatar/s/mock/user/photo/v1/avatar.png',
       'backgroundUrl': '',
       'bio': '',
@@ -270,7 +259,7 @@ final class MockPersonaFacets
       'isActive': false,
       'status': 'active',
       'inheritsProfileFromOwner': false,
-      'overriddenProfileFields': const <String>['email'],
+      'overriddenProfileFields': const <String>['displayName'],
       'updatedAt': _now(),
     },
   ];

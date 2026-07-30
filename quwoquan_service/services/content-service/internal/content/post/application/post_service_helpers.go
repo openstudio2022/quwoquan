@@ -451,6 +451,39 @@ func deriveVideoThumbnailURL(videoURL string, frameTimeMs int64) string {
 	return parsed.String()
 }
 
+// visitedAtEarliestYear 是出行时间的下界年份。到访时间是作者声明的事实，
+// 允许回溯多年补写游记，但明显不可能的年份（如 1900）只可能是端侧误传。
+const visitedAtEarliestYear = 1970
+
+// visitedAtFutureSkew 容忍端侧时钟与服务端的小幅偏差；超出即视为「计划出行」，
+// 而计划不是到访事实，不得写进 visitedAt。
+const visitedAtFutureSkew = 24 * time.Hour
+
+// validateVisitedAt 守住出行时间的事实语义：可空，但一旦声明必须是过去的真实
+// 到访时刻。未来时间会让「同地同期到访」交集把计划当成事实。
+func validateVisitedAt(post *postmodel.Post) error {
+	if post.VisitedAt.IsZero() {
+		return nil
+	}
+	visited := post.VisitedAt.UTC()
+	if visited.Year() < visitedAtEarliestYear {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"出行时间不合法",
+			"visitedAt is earlier than the supported range",
+		)
+	}
+	if visited.After(time.Now().UTC().Add(visitedAtFutureSkew)) {
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"出行时间不能晚于当前时间",
+			"visitedAt must not be in the future",
+		)
+	}
+	post.VisitedAt = visited
+	return nil
+}
+
 func validatePostPublicationPayload(post *postmodel.Post) error {
 	if post.ContentIdentity == "" {
 		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
@@ -465,6 +498,9 @@ func validatePostPublicationPayload(post *postmodel.Post) error {
 		return err
 	}
 	post.Visibility = normalizeVisibility(post.Visibility)
+	if err := validateVisitedAt(post); err != nil {
+		return err
+	}
 	switch strings.TrimSpace(post.ContentType) {
 	case "micro":
 		hasBody := strings.TrimSpace(post.Body) != ""

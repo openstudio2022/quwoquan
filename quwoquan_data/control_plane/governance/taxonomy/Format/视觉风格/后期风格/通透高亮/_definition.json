@@ -1,0 +1,15 @@
+{
+  "label": "通透高亮",
+  "labelEn": "Clean & Airy",
+  "description": "提亮阴影降低对比营造通透感",
+  "axisRole": "contentFormat",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

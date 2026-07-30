@@ -21,14 +21,17 @@ class CampaignRuntimePaths:
 
     @classmethod
     def defaults(cls) -> "CampaignRuntimePaths":
-        campaigns = paths.DATA_LOCAL_ROOT / "content-campaign-submissions"
+        workspace = paths.DATA_LOCAL_ROOT / "workspace"
+        campaigns = workspace / "content-campaign-submissions"
         return cls(
             repo_root=paths.REPO_ROOT.resolve(),
             output_root=paths.OUTPUT_ROOT.resolve(),
             publish_root=paths.PUBLISH_ROOT.resolve(),
             campaigns_root=campaigns.resolve(),
             workspaces_root=(
-                paths.DATA_LOCAL_ROOT / "content-campaign-workspaces"
+                paths.DATA_LOCAL_ROOT
+                / "cache"
+                / "content-campaign-workspaces"
             ).resolve(),
         )
 
@@ -61,6 +64,10 @@ def current_commit(repo_root: Path) -> str:
     return _git(repo_root, "rev-parse", "HEAD").stdout.strip()
 
 
+def current_branch(repo_root: Path) -> str:
+    return _git(repo_root, "branch", "--show-current").stdout.strip()
+
+
 def require_clean_main_tree(repo_root: Path) -> None:
     dirty = _git(
         repo_root,
@@ -79,12 +86,14 @@ def require_clean_main_tree(repo_root: Path) -> None:
 def assert_frozen_main_tree(
     repo_root: Path,
     *,
+    git_branch: str,
     commit_sha: str,
     source_digest: str,
 ) -> None:
     require_clean_main_tree(repo_root)
     assert_frozen_revision(
         repo_root,
+        git_branch=git_branch,
         commit_sha=commit_sha,
         source_digest=source_digest,
     )
@@ -93,10 +102,17 @@ def assert_frozen_main_tree(
 def assert_frozen_revision(
     repo_root: Path,
     *,
+    git_branch: str,
     commit_sha: str,
     source_digest: str,
 ) -> None:
     """Check frozen code inputs even after publish creates intended Git output."""
+    observed_branch = current_branch(repo_root)
+    if observed_branch != git_branch:
+        raise ValueError(
+            "campaign branch drift: "
+            f"frozen={git_branch} current={observed_branch}"
+        )
     observed_commit = current_commit(repo_root)
     if observed_commit != commit_sha:
         raise ValueError(
@@ -195,6 +211,7 @@ __all__ = [
     "assert_frozen_main_tree",
     "assert_frozen_revision",
     "cleanup_clone",
+    "current_branch",
     "current_commit",
     "prepare_detached_clone",
     "require_clean_main_tree",

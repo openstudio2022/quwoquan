@@ -28,6 +28,8 @@
 ### REQ-001 分桶策略引擎
 
 - 以服务端稳定主体键、experimentId 和受控 salt 计算唯一分桶并写入曝光事实。
+- 运行时 assignment policy 以完整内容的 `sha256` 摘要作为唯一身份；策略缺失、禁用、权重不闭合或主体键缺失时 fail-closed。
+- 禁止静态版本、缺失哨兵、隐式 control 与默认 50:50 兼容路径。
 
 ## 4. 契约引用
 
@@ -41,6 +43,7 @@
 - GIVEN 产品运营或增长角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“分桶策略引擎”对应的公开行为。
 - THEN 以服务端稳定主体键、experimentId 和受控 salt 计算唯一分桶并写入曝光事实。
+- AND assignment 携带策略内容 `sha256` 摘要，相同策略与主体产生相同结果，策略或主体无效时不产生伪 control assignment。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖
@@ -48,14 +51,3 @@
 - 前置要求：[`experiment-bucketing-and-rollout`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L1 DEC-001](../../design.md#dec-001)
-
-## 7. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 分桶策略引擎 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“分桶策略引擎”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

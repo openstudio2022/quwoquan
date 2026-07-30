@@ -48,15 +48,15 @@ func (s *SearchService) SearchSocialRelations(
 		if profile == nil {
 			return
 		}
-		view := buildSubAccountProfileView(profile, persona)
-		subAccountID := strings.TrimSpace(asString(view["subAccountId"]))
-		if subAccountID == "" {
-			subAccountID = strings.TrimSpace(profile.UserID)
+		view := buildPersonaProfileView(profile, persona)
+		personaID := strings.TrimSpace(asString(view["personaId"]))
+		if personaID == "" {
+			personaID = strings.TrimSpace(profile.UserID)
 		}
-		if subAccountID == "" {
+		if personaID == "" {
 			return
 		}
-		if _, ok := seen[subAccountID]; ok {
+		if _, ok := seen[personaID]; ok {
 			return
 		}
 
@@ -68,26 +68,28 @@ func (s *SearchService) SearchSocialRelations(
 			displayName = strings.TrimSpace(profile.Nickname)
 		}
 		if displayName == "" {
-			displayName = subAccountID
+			displayName = personaID
 		}
 		avatarVersion, _ := view["avatarVersion"].(int)
-		userHandle := firstNonEmpty(strings.TrimSpace(asString(view["userHandle"])), strings.TrimSpace(asString(view["username"])), subAccountID)
+		userHandle := strings.TrimSpace(asString(view["userHandle"]))
+		if userHandle == "" {
+			return
+		}
 
 		results = append(results, map[string]any{
-			"subAccountId":  subAccountID,
+			"personaId":     personaID,
 			"userHandle":    userHandle,
-			"username":      firstNonEmpty(strings.TrimSpace(asString(view["username"])), strings.TrimSpace(profile.Nickname), subAccountID),
 			"displayName":   displayName,
 			"avatarUrl":     strings.TrimSpace(asString(view["avatarUrl"])),
 			"avatarVersion": avatarVersion,
 			"headline":      strings.TrimSpace(asString(view["bio"])),
 			"chatAvailable": true,
 		})
-		seen[subAccountID] = struct{}{}
+		seen[personaID] = struct{}{}
 	}
 
 	// 趣我圈号(userHandle)精确命中优先：用户输入完整趣我圈号时直接置顶，
-	// 隐私 strict 分身不通过搜索暴露（与 GetSubAccountProfile strict→404 一致）。
+	// 隐私 strict 分身不通过搜索暴露（与 GetPersonaProfile strict→404 一致）。
 	if handle := normalizeUserHandleQuery(normalized); handle != "" {
 		if persona, _ := s.personas.FindByUserHandle(ctx, handle); persona != nil &&
 			!strings.EqualFold(strings.TrimSpace(persona.IsolationLevel), "strict") {
@@ -145,13 +147,4 @@ func asString(value any) string {
 	default:
 		return ""
 	}
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }

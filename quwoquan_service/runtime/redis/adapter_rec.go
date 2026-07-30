@@ -3,19 +3,25 @@ package redis
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
+	"quwoquan_service/runtime/boundedrecord"
 	"quwoquan_service/runtime/recommendation"
 )
 
-// recAdapter bridges redis.Client → recommendation.RedisClient (+ RedisPipeliner).
+// recAdapter bridges redis.Client to the canonical recommendation command and
+// pipeline contract.
 type recAdapter struct {
 	client Client
 }
 
-// NewRecAdapter wraps a redis.Client as a recommendation.RedisClient.
-// Also implements recommendation.RedisPipeliner for single-RTT pipeline reads.
-func NewRecAdapter(client Client) recommendation.RedisClient {
+var _ recommendation.RedisPipelineClient = (*recAdapter)(nil)
+
+// NewRecAdapter wraps a redis.Client as the only supported recommendation
+// HotPath Redis composition. A caller cannot erase the required pipeline
+// capability behind the narrower command-only interface.
+func NewRecAdapter(client Client) recommendation.RedisPipelineClient {
 	return &recAdapter{client: client}
 }
 
@@ -37,6 +43,21 @@ func (a *recAdapter) Set(ctx context.Context, key, value string, ttl time.Durati
 
 func (a *recAdapter) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
 	return a.client.SetNX(ctx, key, value, ttl)
+}
+
+func (a *recAdapter) CreateBoundedImmutableRecordAtomic(
+	ctx context.Context,
+	request boundedrecord.Request,
+) (boundedrecord.Result, error) {
+	creator, ok := a.client.(boundedImmutableRecordAtomicCreator)
+	if !ok {
+		return boundedrecord.Result{}, recommendation.ErrRankedFeedWindowAtomicUnavailable
+	}
+	result, err := creator.CreateBoundedImmutableRecordAtomic(ctx, request)
+	if errors.Is(err, errBoundedImmutableRecordAtomicUnavailable) {
+		err = recommendation.ErrRankedFeedWindowAtomicUnavailable
+	}
+	return result, err
 }
 
 func (a *recAdapter) Del(ctx context.Context, keys ...string) error {
@@ -96,6 +117,11 @@ func (a *recAdapter) PipelineRead(ctx context.Context, ops []recommendation.Pipe
 			r := pipe.SIsMember(ctx, op.Key, op.Member)
 			bResults = append(bResults, r)
 			bIndices = append(bIndices, i)
+		default:
+			return fmt.Errorf(
+				"unsupported recommendation pipeline operation: %d",
+				op.Type,
+			)
 		}
 	}
 

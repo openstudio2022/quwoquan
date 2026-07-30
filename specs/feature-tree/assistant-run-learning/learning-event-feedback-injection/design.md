@@ -19,17 +19,17 @@
 
 - 上游能力：[`assistant-run-learning`](../spec.md) 声明的领域入口。
 - 下游能力：本目录直接 Story 及其公开结果。
-- App 先把 `AppendAssistantLearningFact` command 写入 account/persona/device 分区的加密 pending-confirmation outbox；只有服务端返回同一 `eventId + eventVersion` receipt 后才删除。
+- App 先把 `AppendAssistantLearningFact` command 写入 account/persona/device 分区的加密 pending-confirmation outbox；只有服务端返回同一 `eventId` 且 `payloadDigest` 一致的 receipt 后才删除。
 - assistant-service 在同一 Mongo transaction 内提交 canonical fact、durable receipt、严格递增 append sequence 与脱敏 outbox event；原始文本不得进入 outbox 或投影。
-- versioned projector 按 append sequence 消费唯一事实流，并在同一 transaction 内提交 persona-scoped projection、projection receipt 与 generation watermark。
-- 重建写入 shadow generation；只有 shadow 追平 canonical fact stream 后才原子切换 active generation，读取方不观察半完成重建。
-- Run 创建时先冻结 immutable policy release，再按当前 owner consent、最小样本与字段 allowlist 读取 persona-scoped projection；结果连同 consent、definition 与 watermark 证据冻结到 Run。
+- canonical projector 按 append sequence 消费唯一事实流，并在同一 transaction 内提交 persona-scoped projection、projection receipt 与 generation watermark；唯一 projection definition 以其 canonical contract 的严格 SHA-256 digest 标识。
+- 每次重建写入独立 shadow generation；只有 shadow 追平 canonical fact stream 后才在同一 transaction 原子切换 active generation 并清理全部非 active generation，读取方不观察半完成重建或长期并存的旧投影。
+- Run 创建时先冻结 immutable policy release，再按当前 owner consent、最小样本与字段 allowlist 读取 persona-scoped projection；结果连同 consent、definition digest 与 watermark 证据冻结到 Run。
 
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 学习事实只追加写入并由可重建投影聚合
-- 决策：`AssistantLearningFact` 只通过 `AppendAssistantLearningFact` 追加写入，并由可重建投影聚合。
+### DEC-001 学习事实只追加写入并由单轨可重建投影聚合
+- 决策：`AssistantLearningFact` 只通过 `AppendAssistantLearningFact` 追加写入，并由唯一 canonical definition 的可重建投影聚合；`generationId` 只表示一次原子重建运行，不表示模型或契约版本。
 - 理由：统一学习事件上报、反馈聚合与运行时上下文注入链路。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
@@ -49,10 +49,10 @@
 
 ## 5. 失败与恢复
 
-- 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
+- 失败类型：权限拒绝、依赖超时、CAS 冲突、definition digest 不一致或持久化失败。
 - 可见结果：调用方收到可区分的 canonical failure 或规格明确允许的降级结果；任何失败均不写入成功事实。
 - 恢复动作：调用方按 canonical recovery action 重试、刷新或停止；不得自行合成成功结果。
-- 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
+- 禁止 fallback：不得回退到 Mock、旧 wire、旧 definition 文档、双读双写或页面本地写副本；definition digest 不一致时只能从 canonical facts 重建后原子切换。
 
 ## 6. 质量与观测
 

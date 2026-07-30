@@ -24,6 +24,7 @@ business_rules:
 - retired release 可作为 rollback/replay 目标再次激活，历史 release 与 TagNode snapshot 不物理删除
 - 在线服务不得直接修改 TagNodeView，只能切换已验证 release
 lifecycle:
+  state_field: status
   states:
   - staged
   - active

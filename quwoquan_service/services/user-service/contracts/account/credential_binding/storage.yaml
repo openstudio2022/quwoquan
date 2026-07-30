@@ -46,4 +46,9 @@ tables:
     role: append_only
     infrastructure_only: true
     description: bind/revoke 安全审计事实，与 aggregate state 同一 postgres transaction 提交。
+  federated_phone_binding_tickets:
+    entity: CredentialBinding
+    role: authoritative
+    infrastructure_only: true
+    description: 社交首登手机号绑定的一次性短期票据；只保存 opaque ticket 的 SHA-256，不保存或记录明文。ticket、bind_phone challenge、账号事实、双凭证、设备、consent 与 session 由 CredentialBinding completion packet 在一个 PostgreSQL transaction 中消费和提交。
 role: authoritative

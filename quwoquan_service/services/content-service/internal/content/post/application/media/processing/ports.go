@@ -153,7 +153,7 @@ type ProcessRequest struct {
 	// SourceObjectKey is the private CAS object key of the uploaded bytes.
 	SourceObjectKey string
 	MediaType       string
-	ContentType     string
+	MimeType        string
 	FileSize        int64
 }
 

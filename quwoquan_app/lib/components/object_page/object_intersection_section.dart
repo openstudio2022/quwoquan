@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
@@ -165,54 +166,23 @@ class ObjectIntersectionSection extends ConsumerWidget {
     return card ?? _buildEmptyActionZone(context);
   }
 
+  /// 当前对象页自身作为交集上下文对象。
+  ///
+  /// objectType 是开放词汇（每个垂类主页一个值，如 museum / ancient_town），由
+  /// codegen 注册表 objectTypeBindings 收口成 objectKind 闭集，再经 objectKind 反查
+  /// routeId。端侧不得再写 objectType switch：新增垂类只改注册表并重跑 codegen。
   IntersectionTarget get _contextObjectTarget {
-    final objectType = _normalizedObjectType(query.objectBType);
+    final objectKind = intersectionObjectKindForObjectType(query.objectBType);
+    final routeId = intersectionRouteIdForObjectKind(objectKind);
     return IntersectionTarget(
-      objectType: objectType,
+      objectType: IntersectionTargetNavigator.objectTypeForTarget(
+        objectKind: objectKind,
+        routeId: routeId,
+      ),
       objectId: query.objectBId,
-      objectKind: _objectKindForObjectType(objectType),
-      routeId: _routeIdForObjectType(objectType),
+      objectKind: objectKind,
+      routeId: routeId,
     );
-  }
-
-  static String _normalizedObjectType(String raw) {
-    switch (raw.trim()) {
-      case 'user':
-        return 'user';
-      case 'circle':
-        return 'circle';
-      case 'entity':
-      case 'homepage':
-        return 'homepage';
-      default:
-        return raw.trim();
-    }
-  }
-
-  static String _objectKindForObjectType(String objectType) {
-    switch (objectType) {
-      case 'user':
-        return 'person';
-      case 'circle':
-        return 'circle';
-      case 'homepage':
-        return 'place';
-      default:
-        return '';
-    }
-  }
-
-  static String _routeIdForObjectType(String objectType) {
-    switch (objectType) {
-      case 'user':
-        return 'userProfile';
-      case 'circle':
-        return 'circleDetail';
-      case 'homepage':
-        return 'homepageDetail';
-      default:
-        return '';
-    }
   }
 
   static bool _sameIntersectionTarget(

@@ -68,15 +68,21 @@ api_routes:
     method: issueTicket
     session_owner: Connection
   description: 签发绑定可信 accountId+personaId+deviceId 的短期一次性连接 ticket（WS 升级 query 只携带 ticket）
+  request_entity: IssueConnectionTicketRequest
   request_body_kind: none
+  request_bindings:
+    injected:
+    - {name: authenticatedAccountId, field: accountId}
+    - {name: authenticatedPersonaId, field: personaId}
+    - {name: authenticatedDeviceId, field: deviceId}
   response_entity: ConnectionTicket
   response_body: ConnectionTicket
   response_body_kind: object
   reliability:
     timeout_ms: 1500
     cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
+    retry_mode: none
+    max_attempts: 1
     idempotency: none
   error_codes:
   - REALTIME.USER.unauthorized
@@ -116,8 +122,11 @@ api_routes:
     method: openWebSocket
     session_owner: Connection
   description: WebSocket Upgrade（query 携带一次性 ticket；服务端消费 ticket 派生可信身份后下发 auth_ack）
-  query_params:
-  - ticket
+  request_bindings:
+    query:
+    - name: ticket
+      field: ticket
+      required: true
   error_codes:
   - REALTIME.USER.ticket_invalid
   - REALTIME.USER.ticket_replayed
@@ -138,8 +147,21 @@ api_routes:
   slo:
     latency_p95_ms: 300
     availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: ticket_self
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
   security:
     auth_mode: required
+    principal: account
+    token_transport: query_ticket
+    anonymous_policy: deny
+    visibility: private
 - method: GET
   path: /realtime/poll
   operation: LongPoll
@@ -151,8 +173,11 @@ api_routes:
     reader: ConnectionEventReader
     slice: ConnectionEventBatchSlice
   description: Long-polling 兜底端点（标准 Bearer 鉴权，无需 ticket；hold ≤ timeout 秒，有消息立即返回，超时 204）
-  query_params:
-  - timeout
+  request_bindings:
+    query:
+    - name: timeout
+      field: timeout
+      required: false
   error_codes:
   - REALTIME.USER.unauthorized
   - REALTIME.SYSTEM.account_security_authority_unavailable
@@ -172,8 +197,21 @@ api_routes:
   slo:
     latency_p95_ms: 500
     availability_percent: 99.9
+  authorization:
+    principal: account
+    ownership_policy: connection_self
+  reliability:
+    timeout_ms: 30000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
   security:
     auth_mode: required
+    principal: account
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
 - method: GET
   path: /internal/realtime/personas/{personaId}/presence
   operation: GetPersonaPresence
@@ -185,8 +223,10 @@ api_routes:
     reader: PresenceViewReader
     slice: PresenceView
   description: notification-service 按 persona 读取当前仍有有效 heartbeat 的设备级在线投影；读取时逐 field 清理陈旧项
-  path_params:
-  - personaId
+  request_bindings:
+    path:
+    - name: personaId
+      field: personaId
   response_body: PresenceView
   response_body_kind: object
   authorization:
@@ -234,10 +274,39 @@ api_routes:
     reader: RealtimeConfigReader
     slice: RealtimeConfigSlice
   description: 获取自适应传输系统配置参数（运维可热更新）
+  authorization:
+    principal: public
+    ownership_policy: public_read
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - REALTIME.SYSTEM.internal_error
   privacy:
     request_classification: PUBLIC
     response_classification: PUBLIC
     log_policy: none
+  telemetry:
+    metric: realtime_config_read
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 100
+    availability_percent: 99.95
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: public
 - method: GET
   path: /healthz
   operation: HealthCheck
@@ -249,10 +318,39 @@ api_routes:
     reader: HealthStatusReader
     slice: HealthStatusSlice
   description: 健康检查
+  authorization:
+    principal: public
+    ownership_policy: internal_probe
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 500
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - REALTIME.SYSTEM.internal_error
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: INTERNAL
     log_policy: none
+  telemetry:
+    metric: realtime_health_probe
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 100
+    availability_percent: 99.99
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: internal
 - method: GET
   path: /readyz
   operation: ReadinessCheck
@@ -264,10 +362,39 @@ api_routes:
     reader: HealthStatusReader
     slice: HealthStatusSlice
   description: 检查账户安全 authority、Redis 和 UserAccount security durable consumer 是否可接收流量
+  authorization:
+    principal: public
+    ownership_policy: internal_probe
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - REALTIME.SYSTEM.readiness_unavailable
   privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
+    request_classification: INTERNAL
+    response_classification: INTERNAL
     log_policy: none
+  telemetry:
+    metric: realtime_readiness_probe
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.95
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: internal
 - method: GET
   path: /metrics
   operation: Metrics
@@ -279,16 +406,43 @@ api_routes:
     reader: RuntimeMetricsReader
     slice: RuntimeMetricsSlice
   description: Prometheus 指标端点
+  authorization:
+    principal: public
+    ownership_policy: internal_probe
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes:
+  - REALTIME.SYSTEM.internal_error
   privacy:
-    request_classification: PUBLIC
+    request_classification: INTERNAL
     response_classification: INTERNAL
     log_policy: none
+  telemetry:
+    metric: realtime_metrics_probe
+    trace: true
+    attributes:
+    - operation
+    - outcome
+    - error_code
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: internal
 - method: POST
   path: /internal/realtime/account-closure/dead-letters:recover
   operation: RecoverRealtimeAccountClosureDeadLetter
   actor: none
-  headers:
-  - Idempotency-Key
   application:
     kind: session
     facet: ConnectionAccountClosureRecoveryFacet

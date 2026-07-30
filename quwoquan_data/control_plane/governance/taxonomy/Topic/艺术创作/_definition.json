@@ -2,6 +2,7 @@
   "label": "艺术创作",
   "labelEn": "Art & Creativity",
   "description": "艺术创作与设计内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

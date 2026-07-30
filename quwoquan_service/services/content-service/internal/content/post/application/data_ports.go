@@ -17,24 +17,28 @@ type DataPorts struct {
 }
 
 type MediaAssetBindingSlice struct {
-	AssetID                      string
-	OwnerID                      string
-	Ready                        bool
-	ProcessingStatus             string
-	MediaType                    string
-	ContentType                  string
-	Version                      int64
-	PublicSliceKey               string
-	VerifiedDurationMs           int64
-	VideoWidth                   int
-	VideoHeight                  int
-	VideoPublicSliceKey          string
-	CoverPublicSliceKey          string
-	PreviewTrackVersion          int
-	PreviewTrackManifestSliceKey string
-	CoverStrategy                string
-	ManualCoverAssetID           string
-	CoverFrameTimeMs             int64
+	AssetID                       string
+	OwnerID                       string
+	Ready                         bool
+	ProcessingStatus              string
+	MediaType                     string
+	MimeType                      string
+	Version                       int64
+	PublicSliceKey                string
+	VerifiedDurationMs            int64
+	VideoWidth                    int
+	VideoHeight                   int
+	VideoPublicSliceKey           string
+	CoverPublicSliceKey           string
+	PreviewTrackVersion           int
+	PreviewTrackManifestSliceKey  string
+	HLSCMAFDescriptorVersion      int
+	HLSCMAFDescriptorSliceKey     string
+	HLSCMAFMasterManifestSliceKey string
+	HLSCMAFRenditionCount         int
+	CoverStrategy                 string
+	ManualCoverAssetID            string
+	CoverFrameTimeMs              int64
 }
 
 type MediaAssetBindingReader interface {

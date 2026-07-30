@@ -110,7 +110,7 @@ void main() {
     group('VideoPostDto', () {
       test('fromMap parses canonical video data including width/height', () {
         const raw = <String, dynamic>{
-          'id': 'v1',
+          'id': 'video_portrait',
           'type': 'video',
           'authorId': 'auth2',
           'displayName': '视频创作者',
@@ -126,7 +126,7 @@ void main() {
           'publishedAt': '2026-01-10T00:00:00Z',
         };
         final dto = VideoPostDto.fromMap(raw);
-        expect(dto.id, equals('v1'));
+        expect(dto.id, equals('video_portrait'));
         expect(dto.type, equals('video'));
         expect(dto.videoUrl, equals('https://example.com/video.mp4'));
         expect(dto.thumbnailUrl, equals('https://example.com/thumb.jpg'));
@@ -140,7 +140,7 @@ void main() {
 
       test('aspectRatio for portrait video is less than 1', () {
         const raw = <String, dynamic>{
-          'id': 'v2',
+          'id': 'video_aspect_portrait',
           'type': 'video',
           'authorId': 'a',
           'displayName': 'A',
@@ -451,7 +451,7 @@ void main() {
 
     test('VideoPostDto: rejects videoWidth/videoHeight alias keys', () {
       const raw = <String, dynamic>{
-        'id': 'v3',
+        'id': 'video_alias_rejection',
         'type': 'video',
         'authorId': 'a',
         'displayName': 'A',

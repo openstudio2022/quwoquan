@@ -45,7 +45,7 @@ routes:
     path: /circle/{id}/stats
     query_params: [type]
   - id: userProfile
-    path: /user/{username}
+    path: /user/{userHandle}
   - id: workBrowser
     path: /works/browser/{workId}
     query_params:

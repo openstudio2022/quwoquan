@@ -1,0 +1,12 @@
+{
+  "label": "广岛县",
+  "labelEn": "Hiroshima Prefecture",
+  "description": "濑户内海北岸与和平纪念地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

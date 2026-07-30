@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"quwoquan_service/generated/serviceclients"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 )
 
 type deliveryPolicyAuthorization struct{}
@@ -48,7 +48,7 @@ func TestUserDeliveryPolicyClientUsesGeneratedPathAndStrongPolicy(
 	))
 	defer server.Close()
 
-	client, err := application.NewUserDeliveryPolicyClient(
+	client, err := orchestration.NewUserDeliveryPolicyClient(
 		server.URL,
 		deliveryPolicyAuthorization{},
 		server.Client(),
@@ -98,7 +98,7 @@ func TestUserDeliveryPolicyClientRejectsUntrustedPolicyResponses(
 				},
 			))
 			defer server.Close()
-			client, err := application.NewUserDeliveryPolicyClient(
+			client, err := orchestration.NewUserDeliveryPolicyClient(
 				server.URL,
 				deliveryPolicyAuthorization{},
 				server.Client(),

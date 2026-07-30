@@ -27,6 +27,12 @@
 
 - 连接状态必须由 Redis 支撑多节点查询；网关只消费 owner 事件，不直接写业务 MongoDB。
 - 外部渠道不可用时必须保留可重试或死信事实，不得返回固定成功。
+- WebSocket 只消费 query 中的一次性连接 ticket；ticket 签发和升级均只执行一次，
+  失败后必须重新签发，禁止重放同一 ticket 或由传输层自动重试。
+- Long-poll 只接受与当前连接主体一致的 Bearer 身份，并在声明的有界 hold/timeout
+  内返回事件或无内容终态。
+- 自适应传输配置是公开只读事实；健康、就绪与指标端点只属于内部基础设施探针，
+  readiness 依赖失败必须返回 canonical typed failure，不得暴露自造状态错误体。
 
 ### REQ-002 UserAccount 安全终态闭环
 
@@ -52,6 +58,7 @@
 
 ## 5. 验收场景
 
+<a id="gwt-001"></a>
 ### GWT-001 节点切换后可靠续接
 
 - GIVEN 用户连接在一个 realtime-gateway 节点，在线状态已写入 Redis。

@@ -1,10 +1,9 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/content/filter_catalog_facets.requests.g.dart';
 
 enum FilterCatalogReleaseStatus { staged, active, retired }
 
-final class FilterCatalogQuery {
-  const FilterCatalogQuery();
-}
+
 
 final class FilterCatalogAdjustmentValues {
   const FilterCatalogAdjustmentValues({
@@ -127,9 +126,7 @@ abstract interface class ContentFilterCatalogQuery {
   Future<FilterCatalogSnapshot> getActiveFilterCatalog();
 }
 
-CloudOperationRequestPayload encodeFilterCatalogQuery(FilterCatalogQuery query) {
-  return const CloudOperationRequestPayload();
-}
+
 
 FilterCatalogSnapshot decodeFilterCatalogSnapshot(Object? value) {
   final map = _object(value, 'FilterCatalogSnapshot');

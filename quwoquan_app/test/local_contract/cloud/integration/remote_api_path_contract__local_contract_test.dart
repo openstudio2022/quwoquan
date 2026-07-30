@@ -21,7 +21,6 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_request_page_ids.g.dart';
@@ -37,6 +36,7 @@ import 'package:quwoquan_app/cloud/remote/content/profile_interaction/profile_in
 import 'package:quwoquan_app/cloud/remote/user/persona/persona_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/user_settings/user_settings_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reaction_facets_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
@@ -55,7 +55,7 @@ import '../../../support/homepage_remote_test_support.dart';
 const _baseUrl = 'https://test-gateway.example.com';
 
 const _personaManagementItem = <String, Object?>{
-  'subAccountId': 'persona_1',
+  'personaId': 'persona_1',
   'displayName': '摄影分身',
   'userHandle': 'photo-persona',
   'isolationLevel': 'open',
@@ -71,7 +71,7 @@ const _personaManagementItem = <String, Object?>{
 
 const _activePersonaContext = <String, Object?>{
   'ownerUserId': 'account-1',
-  'subAccountId': 'persona_1',
+  'personaId': 'persona_1',
   'subjectType': 'persona',
   'displayName': '摄影分身',
   'avatarUrl': '',
@@ -164,7 +164,6 @@ MockClient _captureClient(List<_CapturedRequest> log) {
         json.encode({
           'hits': <dynamic>[],
           'requestId': 'search-request-1',
-          'rankingVersion': 'ranking-v1',
           'relatedTerms': <String>[],
           'degradeSignals': <dynamic>[],
         }),
@@ -207,13 +206,12 @@ MockClient _captureClient(List<_CapturedRequest> log) {
       );
     }
     if (request.method == 'GET' &&
-        path == UserApiMetadata.getSubAccountProfilePath(subAccountId: 'u1')) {
+        path == UserApiMetadata.getPersonaProfilePath(personaId: 'u1')) {
       return http.Response(
         json.encode(<String, dynamic>{
-          'subAccountId': 'u1',
+          'personaId': 'u1',
           'ownerUserId': 'owner-u1',
           'userHandle': 'u1',
-          'username': 'u1',
           'displayName': 'User One',
         }),
         200,
@@ -223,7 +221,7 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'POST' &&
         path ==
             ContentApiMetadata.updateProfileInteractionStatePath(
-              subAccountId: 'persona-1',
+              personaId: 'persona-1',
               interactionId: 'activity-1',
             )) {
       return http.Response(
@@ -288,11 +286,11 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'GET' &&
         path ==
             UserApiMetadata.getPersonaLifecycleGuardPath(
-              subAccountId: 'persona_1',
+              personaId: 'persona_1',
             )) {
       return http.Response(
         json.encode(<String, Object?>{
-          'subAccountId': 'persona_1',
+          'personaId': 'persona_1',
           'requestedAction': 'retire',
           'allowed': true,
           'reason': 'allowed',
@@ -305,7 +303,7 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'POST' && path == UserApiMetadata.createPersonaPath) {
       return http.Response(
         json.encode({
-          'subAccountId': 'persona_1',
+          'personaId': 'persona_1',
           'displayName': request.body.isEmpty
               ? ''
               : (jsonDecode(request.body)
@@ -316,16 +314,15 @@ MockClient _captureClient(List<_CapturedRequest> log) {
       );
     }
     if (request.method == 'PATCH' &&
-        path == UserApiMetadata.updatePersonaPath(subAccountId: 'persona_1')) {
+        path == UserApiMetadata.updatePersonaPath(personaId: 'persona_1')) {
       return http.Response(
-        json.encode({'subAccountId': 'persona_1', 'displayName': '新分身名'}),
+        json.encode({'personaId': 'persona_1', 'displayName': '新分身名'}),
         200,
         headers: {'content-type': 'application/json'},
       );
     }
     if (request.method == 'POST' &&
-        path ==
-            UserApiMetadata.activatePersonaPath(subAccountId: 'persona_1')) {
+        path == UserApiMetadata.activatePersonaPath(personaId: 'persona_1')) {
       return http.Response(
         json.encode(_activePersonaContext),
         200,
@@ -335,7 +332,7 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (request.method == 'POST' &&
         path ==
             UserApiMetadata.applyPersonaProfileSyncPath(
-              subAccountId: 'persona_1',
+              personaId: 'persona_1',
             )) {
       return http.Response(
         json.encode({
@@ -348,10 +345,10 @@ MockClient _captureClient(List<_CapturedRequest> log) {
       );
     }
     if (request.method == 'POST' &&
-        path == UserApiMetadata.retirePersonaPath(subAccountId: 'persona_1')) {
+        path == UserApiMetadata.retirePersonaPath(personaId: 'persona_1')) {
       return http.Response(
         json.encode({
-          'subAccountId': 'persona_1',
+          'personaId': 'persona_1',
           'requestedAction': 'retire',
           'allowed': true,
           'reason': 'allowed',
@@ -375,6 +372,18 @@ MockClient _captureClient(List<_CapturedRequest> log) {
     if (isVoid) {
       return http.Response(
         '{}',
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
+    if (request.method == 'GET' && path == ContentApiMetadata.getFeedPath) {
+      return http.Response(
+        json.encode({
+          'items': <dynamic>[],
+          'outcome': 'empty',
+          'emptyReason': 'no_eligible_content',
+        }),
         200,
         headers: {'content-type': 'application/json'},
       );
@@ -415,12 +424,6 @@ final class _TestAuthTokenProvider implements CloudAuthTokenProvider {
   Future<String?> getAccessToken() async => 'integration-contract-token';
 }
 
-void _expectPageHeaders(Map<String, String> headers, {required String pageId}) {
-  expect(headers['X-Client-Page-Id'], pageId);
-  expect(headers['X-Trace-Id'], contains(pageId));
-  expect(headers['X-Request-Id'], contains(pageId));
-}
-
 void _expectSurfaceOperationHeaders(
   Map<String, String> headers, {
   required String clientPageId,
@@ -434,6 +437,39 @@ void _expectSurfaceOperationHeaders(
   expect(headers['X-Trace-Id'], contains(operationId));
   expect(headers['X-Request-Id'], contains(surfaceId));
   expect(headers['X-Request-Id'], contains(operationId));
+}
+
+RemoteContentRepository _contentRepository(
+  List<_CapturedRequest> log, {
+  Future<List<String>> Function()? blockedKeywordsLoader,
+}) {
+  final httpClient = CloudHttpClient(
+    client: _captureClient(log),
+    authTokenProvider: const _TestAuthTokenProvider(),
+  );
+  final client = buildGeneratedCloudOperationClient(
+    httpClient: httpClient,
+    clientContextProvider: const _TestCloudClientContext(),
+    telemetrySink: RecordingCloudOperationTelemetrySink(),
+    environment: CloudRuntimeEnvironment(
+      environment: CloudEnvironment.gamma,
+      gatewayBaseUri: Uri.parse(_baseUrl),
+    ),
+  );
+  return RemoteContentRepository(
+    discoveryFeedQuery: RemoteContentDiscoveryFeedQuery(
+      client: client,
+      invocationContext: (clientPageId) => CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.homeFeed.id,
+        routeId: AppUiSurfaces.homeFeed.routeId,
+        clientPageId: clientPageId,
+        actor: const CloudOperationActorContext(personaId: 'persona-1'),
+      ),
+      blockedKeywordsLoader:
+          blockedKeywordsLoader ?? () async => const <String>[],
+    ),
+    httpClient: httpClient,
+  );
 }
 
 void main() {
@@ -628,9 +664,7 @@ void main() {
 
     setUp(() {
       log = [];
-      repo = RemoteContentRepository(
-        httpClient: CloudHttpClient(client: _captureClient(log)),
-      );
+      repo = _contentRepository(log);
       reactions = RemoteContentPostReactionFacet(
         client: buildGeneratedCloudOperationClient(
           httpClient: CloudHttpClient(
@@ -671,15 +705,17 @@ void main() {
       expect(log.last.path, ContentApiMetadata.getFeedPath);
       expect(log.last.query['sessionId'], 'session-001');
       expect(log.last.query['feedRequestId'], 'feed-req-001');
-      _expectPageHeaders(
+      _expectSurfaceOperationHeaders(
         log.last.headers,
-        pageId: ContentRequestPageIds.getFeed,
+        clientPageId: ContentRequestPageIds.getFeed,
+        surfaceId: AppUiSurfaces.homeFeed.id,
+        operationId: AppCloudOperationIds.contentPostGetFeed,
       );
     });
 
     test('listDiscoveryFeedPage 以编码 header 透传账号屏蔽关键词', () async {
-      final filteredRepo = RemoteContentRepository(
-        httpClient: CloudHttpClient(client: _captureClient(log)),
+      final filteredRepo = _contentRepository(
+        log,
         blockedKeywordsLoader: () async => <String>['重复,营销', '剧透'],
       );
 
@@ -700,44 +736,6 @@ void main() {
       expect(log.last.query['identity'], 'work');
       expect(log.last.query['type'], 'article');
     });
-
-    test(
-      'updatePostSettings → PATCH /content/posts/{postId}/settings',
-      () async {
-        try {
-          await repo.updatePostSettings(
-            postId: 'p1',
-            body: UpdatePostSettingsRequestWire.fromMap({
-              'assistantUsePolicy': 'exclude',
-            }),
-          );
-        } catch (_) {}
-        expect(log.last.method, 'PATCH');
-        expect(
-          log.last.path,
-          ContentApiMetadata.updatePostSettingsPath(postId: 'p1'),
-        );
-      },
-    );
-
-    test(
-      'promotePostToWork → POST /content/posts/{postId}:promoteToWork',
-      () async {
-        try {
-          await repo.promotePostToWork(
-            postId: 'p1',
-            body: PromotePostToWorkRequestWire.fromMap({
-              'contentType': 'image',
-            }),
-          );
-        } catch (_) {}
-        expect(log.last.method, 'POST');
-        expect(
-          log.last.path,
-          ContentApiMetadata.promotePostToWorkPath(postId: 'p1'),
-        );
-      },
-    );
 
     test('likePost → POST /content/posts/{postId}/like', () async {
       try {
@@ -958,7 +956,7 @@ void main() {
       expect(log.last.method, 'GET');
       expect(
         log.last.path,
-        ContentApiMetadata.listUserPostsPath(subAccountId: 'author-1'),
+        ContentApiMetadata.listUserPostsPath(personaId: 'author-1'),
       );
       expect(log.last.query, <String, String>{
         'identity': 'work',
@@ -1016,7 +1014,7 @@ void main() {
       await expectLater(
         adapter.listActivities(
           ContentProfileInteractionPageQuery(
-            subAccountId: 'persona-1',
+            personaId: 'persona-1',
             type: ContentProfileInteractionType.share,
             limit: 9,
           ),
@@ -1037,7 +1035,7 @@ void main() {
       await expectLater(
         adapter.listActivities(
           ContentProfileInteractionPageQuery(
-            subAccountId: 'persona-1',
+            personaId: 'persona-1',
             type: ContentProfileInteractionType.comment,
           ),
           direction: ContentProfileInteractionDirection.sent,
@@ -1057,7 +1055,7 @@ void main() {
       await expectLater(
         adapter.appendReadFact(
           AppendContentProfileInteractionReadFactCommand(
-            subAccountId: 'persona-1',
+            personaId: 'persona-1',
             activityId: 'activity-1',
             state: ContentProfileInteractionReadState.read,
           ),
@@ -1158,7 +1156,7 @@ void main() {
       final result = await personaWriter.createPersona(
         CreatePersonaCommand(displayName: '摄影分身'),
       );
-      expect(result.subAccountId, 'persona_1');
+      expect(result.personaId, 'persona_1');
       expect(log.last.method, 'POST');
       expect(log.last.path, UserApiMetadata.createPersonaPath);
       expect(log.last.body['displayName'], '摄影分身');
@@ -1166,13 +1164,13 @@ void main() {
 
     test('updatePersona → PATCH /user/persona/personas/{id}', () async {
       final result = await personaWriter.updatePersona(
-        UpdatePersonaCommand(subAccountId: 'persona_1', displayName: '新分身名'),
+        UpdatePersonaCommand(personaId: 'persona_1', displayName: '新分身名'),
       );
       expect(result.displayName, '新分身名');
       expect(log.last.method, 'PATCH');
       expect(
         log.last.path,
-        UserApiMetadata.updatePersonaPath(subAccountId: 'persona_1'),
+        UserApiMetadata.updatePersonaPath(personaId: 'persona_1'),
       );
     });
 
@@ -1180,13 +1178,13 @@ void main() {
       'activatePersona → POST /user/persona/personas/{id}/activate',
       () async {
         final result = await personaWriter.activatePersona(
-          ActivatePersonaCommand(subAccountId: 'persona_1'),
+          ActivatePersonaCommand(personaId: 'persona_1'),
         );
-        expect(result.subAccountId, 'persona_1');
+        expect(result.personaId, 'persona_1');
         expect(log.last.method, 'POST');
         expect(
           log.last.path,
-          UserApiMetadata.activatePersonaPath(subAccountId: 'persona_1'),
+          UserApiMetadata.activatePersonaPath(personaId: 'persona_1'),
         );
       },
     );
@@ -1215,7 +1213,7 @@ void main() {
       () async {
         final result = await personaWriter.applyPersonaProfileSync(
           ApplyPersonaProfileSyncCommand(
-            subAccountId: 'persona_1',
+            personaId: 'persona_1',
             applyScope: 'selected',
             fieldsMask: const <String>['phone', 'email'],
           ),
@@ -1224,9 +1222,7 @@ void main() {
         expect(log.last.method, 'POST');
         expect(
           log.last.path,
-          UserApiMetadata.applyPersonaProfileSyncPath(
-            subAccountId: 'persona_1',
-          ),
+          UserApiMetadata.applyPersonaProfileSyncPath(personaId: 'persona_1'),
         );
       },
     );
@@ -1238,16 +1234,14 @@ void main() {
         expect(log.last.method, 'GET');
         expect(
           log.last.path,
-          UserApiMetadata.getPersonaLifecycleGuardPath(
-            subAccountId: 'persona_1',
-          ),
+          UserApiMetadata.getPersonaLifecycleGuardPath(personaId: 'persona_1'),
         );
       },
     );
 
     test('retirePersona → POST /user/persona/personas/{id}/retire', () async {
       final result = await personaWriter.retirePersona(
-        RetirePersonaCommand(subAccountId: 'persona_1'),
+        RetirePersonaCommand(personaId: 'persona_1'),
       );
       expect(result.requestedAction, 'retire');
       expect(result.allowed, isTrue);
@@ -1255,7 +1249,7 @@ void main() {
       expect(log.last.method, 'POST');
       expect(
         log.last.path,
-        UserApiMetadata.retirePersonaPath(subAccountId: 'persona_1'),
+        UserApiMetadata.retirePersonaPath(personaId: 'persona_1'),
       );
     });
   });
@@ -1367,20 +1361,20 @@ void main() {
       );
     });
 
-    test('getUserProfile → GET generated sub-account profile path', () async {
+    test('getUserProfile → GET generated persona profile path', () async {
       final profile = await query.getUserProfile('u1');
 
-      expect(profile.subAccountId, 'u1');
+      expect(profile.personaId, 'u1');
       expect(log.last.method, 'GET');
       expect(
         log.last.path,
-        UserApiMetadata.getSubAccountProfilePath(subAccountId: 'u1'),
+        UserApiMetadata.getPersonaProfilePath(personaId: 'u1'),
       );
       _expectSurfaceOperationHeaders(
         log.last.headers,
-        clientPageId: UserRequestPageIds.getSubAccountProfile,
+        clientPageId: UserRequestPageIds.getPersonaProfile,
         surfaceId: AppUiSurfaces.userProfile.id,
-        operationId: AppCloudOperationIds.userUserAccountGetSubAccountProfile,
+        operationId: AppCloudOperationIds.userUserAccountGetPersonaProfile,
       );
     });
   });

@@ -23,7 +23,7 @@ func TestGatewayVerifiesObjectBeforeCASPromotion(t *testing.T) {
 		context.Background(),
 		sessionapp.PrepareUploadParams{
 			SessionID: "mus-1", OwnerID: "persona-1", MediaType: "image",
-			ContentType: "image/jpeg", FileSize: 128,
+			MimeType: "image/jpeg", FileSize: 128,
 			ExpectedSHA256: objectDigest, ExpiresAt: now.Add(15 * time.Minute),
 		},
 	)
@@ -37,7 +37,7 @@ func TestGatewayVerifiesObjectBeforeCASPromotion(t *testing.T) {
 		context.Background(),
 		sessionapp.CompleteUploadParams{
 			ObjectKey: grant.ObjectKey, ExpectedSHA256: objectDigest,
-			MediaType: "image", ContentType: "image/jpeg", FileSize: 128,
+			MediaType: "image", MimeType: "image/jpeg", FileSize: 128,
 		},
 	)
 	if err != nil {
@@ -64,7 +64,7 @@ func TestGatewayCompletesFromPromotedCASObjectAfterTransactionRetry(t *testing.T
 	}}
 	params := sessionapp.CompleteUploadParams{
 		ObjectKey: "uploads/mus-retry.jpg", ExpectedSHA256: objectDigest,
-		MediaType: "image", ContentType: "image/jpeg", FileSize: 128,
+		MediaType: "image", MimeType: "image/jpeg", FileSize: 128,
 	}
 	if _, err := newGateway(t, discoveryClient, now).CompleteUpload(
 		context.Background(),
@@ -108,7 +108,7 @@ func TestGatewayRejectsMismatchedUploadedBytes(t *testing.T) {
 		context.Background(),
 		sessionapp.CompleteUploadParams{
 			ObjectKey: "uploads/mus-1.jpg", ExpectedSHA256: objectDigest,
-			MediaType: "image", ContentType: "image/jpeg", FileSize: 128,
+			MediaType: "image", MimeType: "image/jpeg", FileSize: 128,
 		},
 	)
 	if err == nil || client.promotedTo != "" {
@@ -149,7 +149,8 @@ func newGateway(
 	t.Helper()
 	gateway, err := NewGateway(
 		Config{
-			Bucket: "media",
+			Bucket:        "media",
+			UploadBaseURL: "https://upload.example.test",
 		},
 		client,
 	)
@@ -160,12 +161,30 @@ func newGateway(
 	return gateway
 }
 
+func TestUploadURLRejectsUnexpectedAuthority(t *testing.T) {
+	now := time.Date(2026, 7, 28, 10, 0, 0, 0, time.UTC)
+	client := &objectClientStub{
+		presignedURL: "https://attacker.example.invalid/object",
+	}
+	gateway := newGateway(t, client, now)
+	if _, err := gateway.UploadURL(
+		context.Background(),
+		"uploads/test/object",
+		"image/jpeg",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		now.Add(time.Minute),
+	); err == nil {
+		t.Fatal("expected unexpected presigned upload authority to be rejected")
+	}
+}
+
 type objectClientStub struct {
 	info              *runtimemedia.ObjectInfo
 	infoByKey         map[string]*runtimemedia.ObjectInfo
 	promotedTo        string
 	promotionMetadata map[string]string
 	deletedKey        string
+	presignedURL      string
 }
 
 func (s *objectClientStub) PresignPutObject(
@@ -175,6 +194,9 @@ func (s *objectClientStub) PresignPutObject(
 	_ runtimemedia.PutObjectConstraints,
 	_ time.Duration,
 ) (string, error) {
+	if s.presignedURL != "" {
+		return s.presignedURL, nil
+	}
 	return "https://upload.example.test/" + key, nil
 }
 

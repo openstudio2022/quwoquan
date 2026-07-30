@@ -2,6 +2,7 @@
   "label": "露天剧场",
   "labelEn": "Open-air Theater",
   "description": "户外露天演出场地",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

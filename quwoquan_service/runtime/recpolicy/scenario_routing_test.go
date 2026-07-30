@@ -45,7 +45,6 @@ func TestPremiumPresetEmphasizesFinishOverPopularity(t *testing.T) {
 
 func TestPresetForScenario_FallsBackOnInvalidMapping(t *testing.T) {
 	p := &RecPolicy{
-		PolicyVersion: "test",
 		DefaultPreset: "control",
 		WeightPresets: map[string]WeightPreset{"control": {}},
 		ScenarioRouting: map[string]string{

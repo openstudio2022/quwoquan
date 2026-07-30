@@ -51,7 +51,7 @@ func TestExperimentControlPlaneUsesGeneratedOperatorGuardAndAtomicPostgres(t *te
 	}
 	var result experimenthttp.UpdateExperimentRolloutResult
 	decodeExperimentResponse(t, created, &result)
-	if result.ID != experimentID || result.Status != "running" || result.PolicyVersion != "2" {
+	if result.ID != experimentID || result.Status != "running" || result.ExperimentRevision != 2 {
 		t.Fatalf("unexpected rollout result: %+v", result)
 	}
 
@@ -110,7 +110,7 @@ func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *test
 			Body: `{"subjectKey":"persona:victim"}`, Credential: personaToken,
 		},
 	)
-	assertExperimentError(t, spoofedBody, http.StatusBadRequest, "OPS.USER.invalid_argument")
+	assertExperimentError(t, spoofedBody, http.StatusBadRequest, "OPS.USER.experiment_assignment_invalid_argument")
 
 	assigned := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{
 		Credential: personaToken,
@@ -148,7 +148,7 @@ func TestExperimentAssignmentDerivesSubjectAndRemainsCommerciallyBlocked(t *test
 	}
 
 	unauthorized := performExperimentRequest(authenticated, http.MethodPost, assignmentPath, experimentRequestOptions{})
-	assertExperimentError(t, unauthorized, http.StatusUnauthorized, "OPS.USER.unauthorized")
+	assertExperimentError(t, unauthorized, http.StatusUnauthorized, "OPS.USER.experiment_assignment_unauthorized")
 
 	var subjects []string
 	rows, err := controlPlanePGPool.Query(context.Background(), `

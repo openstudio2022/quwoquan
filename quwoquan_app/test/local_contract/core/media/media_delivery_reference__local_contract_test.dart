@@ -9,7 +9,7 @@ void main() {
   const archivedImageKey =
       'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png';
   const primaryVideoKey =
-      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4';
+      'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4';
   const casObjectKey =
       'media/objects/sha256/aa/bb/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg';
 
@@ -30,19 +30,19 @@ void main() {
     test('相对 key + 四份不同 MediaEndpointConfig 仅 authority 不同', () {
       final endpointPairs = <({String avatar, String image, String video})>[
         (
-          avatar: 'https://alpha-avatar.example.test:17100',
-          image: 'https://alpha-image.example.test:17100',
-          video: 'https://alpha-video.example.test:17100',
+          avatar: 'https://cdn.alpha.example.invalid:17100/media/avatar',
+          image: 'https://cdn.alpha.example.invalid:17100/media/image',
+          video: 'https://cdn.alpha.example.invalid:17100/media/video',
         ),
         (
-          avatar: 'https://beta-avatar.example.test:18100',
-          image: 'https://beta-image.example.test:18100',
-          video: 'https://beta-video.example.test:18100',
+          avatar: 'https://cdn.beta.example.invalid:18100/media/avatar',
+          image: 'https://cdn.beta.example.invalid:18100/media/image',
+          video: 'https://cdn.beta.example.invalid:18100/media/video',
         ),
         (
-          avatar: 'https://gamma-avatar.example.test:19100',
-          image: 'https://gamma-image.example.test:19100',
-          video: 'https://gamma-video.example.test:19100',
+          avatar: 'https://cdn.gamma.example.invalid:19100/media/avatar',
+          image: 'https://cdn.gamma.example.invalid:19100/media/image',
+          video: 'https://cdn.gamma.example.invalid:19100/media/video',
         ),
         (
           avatar: 'https://cdn.example.com',
@@ -77,10 +77,31 @@ void main() {
           .toSet();
       expect(pathQueries, hasLength(1));
       expect(pathQueries.single.$1, '/$archivedImageKey');
-      expect(pathQueries.single.$2, 'v=1');
+      expect(pathQueries.single.$2, isEmpty);
       expect(
         urls.map((reference) => reference.deliveryUri.authority).toSet(),
         hasLength(4),
+      );
+    });
+
+    test('attachment 由同一 CDN origin 的 /media/attachment slice 解析', () {
+      final resolver = MediaDeliveryResolver(
+        endpoints(
+          avatar: 'https://cdn.example.invalid/media/avatar',
+          image: 'https://cdn.example.invalid/media/image',
+          video: 'https://cdn.example.invalid/media/video',
+        ),
+      );
+      final reference = resolver.resolve(
+        'media/attachment/s/asset/attachment_001/v1/source.pdf',
+        kind: MediaDeliveryKind.attachment,
+        assetId: 'attachment_001',
+        version: 1,
+      );
+      expect(
+        reference.url,
+        'https://cdn.example.invalid/media/attachment/s/asset/'
+        'attachment_001/v1/source.pdf',
       );
     });
 
@@ -138,7 +159,7 @@ void main() {
       );
     });
 
-    test('version>0 写入 v query；合法 archived/primary key 成功', () {
+    test('路径版本是唯一缓存身份，版本 query、无版本路径与漂移均 fail-closed', () {
       final resolver = MediaDeliveryResolver(
         endpoints(
           avatar: 'https://avatar.example.com',
@@ -154,22 +175,55 @@ void main() {
       );
       expect(avatar.url, 'https://avatar.example.com/$archivedAvatarKey');
       expect(avatar.deliveryUri.query, isEmpty);
+      expect(avatar.version, 1);
 
       final image = resolver.resolve(
         archivedImageKey,
         kind: MediaDeliveryKind.image,
-        version: 9,
+        version: 1,
       );
-      expect(image.url, 'https://image.example.com/$archivedImageKey?v=9');
-      expect(image.version, 9);
+      expect(image.url, 'https://image.example.com/$archivedImageKey');
+      expect(image.version, 1);
 
       final video = resolver.resolve(
         primaryVideoKey,
         kind: MediaDeliveryKind.video,
-        version: 3,
+        version: 1,
       );
-      expect(video.url, 'https://video.example.com/$primaryVideoKey?v=3');
+      expect(video.url, 'https://video.example.com/$primaryVideoKey');
       expect(video.kind, MediaDeliveryKind.video);
+
+      expect(
+        resolver.tryResolve(
+          archivedImageKey,
+          kind: MediaDeliveryKind.image,
+          version: 9,
+        ),
+        isNull,
+      );
+      expect(
+        resolver.tryResolve(
+          '$archivedImageKey?v=1',
+          kind: MediaDeliveryKind.image,
+          version: 1,
+        ),
+        isNull,
+      );
+      expect(
+        resolver.tryResolve(
+          'media/image/s/archived-image/post/fixture_photo_001/cover.png',
+          kind: MediaDeliveryKind.image,
+          version: 1,
+        ),
+        isNull,
+      );
+      expect(
+        resolver.tryResolve(
+          '$archivedImageKey?sign=untrusted&t=1',
+          kind: MediaDeliveryKind.image,
+        ),
+        isNull,
+      );
     });
 
     test('视频首帧缩略图显式走 video authority，不把视频误投 image host', () {

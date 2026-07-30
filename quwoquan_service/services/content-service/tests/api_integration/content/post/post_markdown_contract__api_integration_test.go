@@ -19,7 +19,7 @@ import (
 func TestSubmitMarkdownArticleContract(t *testing.T) {
 	mediaID := createReadyPublicationMediaAsset(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		"image",
 	)
 	markdown := fmt.Sprintf(`---
@@ -52,7 +52,7 @@ coverImage: asset://%s
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	created := submitPublishedPostWithAuthor(t, identity.AnonymousFallbackSubAccountID, string(raw))
+	created := submitPublishedPostWithAuthor(t, identity.AnonymousFallbackPersonaID, string(raw))
 
 	if created["articleMarkdown"] == "" {
 		t.Fatalf("expected articleMarkdown in response: %+v", created)
@@ -83,7 +83,7 @@ coverImage: asset://%s
 func TestSubmitMarkdownArticleRejectsStorageAuthorityInManifest(t *testing.T) {
 	mediaID := createReadyPublicationMediaAsset(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		"image",
 	)
 	payload := fmt.Sprintf(`{
@@ -100,7 +100,7 @@ func TestSubmitMarkdownArticleRejectsStorageAuthorityInManifest(t *testing.T) {
 	}`, mediaID, mediaID, mediaID)
 	req := newPostPublicationRequestForTest(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		payload,
 	)
 	rec := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestSubmitMarkdownArticleRejectsMissingManifestAsset(t *testing.T) {
 	}`
 	req := newPostPublicationRequestForTest(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		payload,
 	)
 	rec := httptest.NewRecorder()
@@ -139,7 +139,7 @@ func TestSubmitArticleRejectsArticleDocumentOnlyContract(t *testing.T) {
 
 	req := newPostPublicationRequestForTest(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		`{
 			"contentType":"article",
 			"title":"旧长文不再作为写入真相源",
@@ -159,7 +159,7 @@ func TestSubmitArticleRejectsArticleDocumentOnlyContract(t *testing.T) {
 func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 	mediaID := createReadyPublicationMediaAsset(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		"image",
 	)
 
@@ -170,7 +170,7 @@ func TestSubmitPostPublicationBindsReadyOwnedMedia(t *testing.T) {
 		strings.NewReader(`{"publishIntentId":"`+publishIntentID+`","localDraftId":"media-publication-draft","contentType":"image","body":"原子发布素材测试","visibility":"public","mediaAssetIds":["`+mediaID+`"],"mediaItems":[{"kind":"image","mediaId":"`+mediaID+`"}]}`),
 	)
 	publishReq.Header.Set("Content-Type", "application/json")
-	publishReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	publishReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 	publishReq.Header.Set("Idempotency-Key", publishIntentID)
 	publishRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(publishRec, publishReq)
@@ -217,10 +217,10 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	initReq := httptest.NewRequest(
 		http.MethodPost,
 		"/content/media/uploads:init",
-		strings.NewReader(`{"mediaType":"image","contentType":"image/jpeg","fileSize":256,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`),
+		strings.NewReader(`{"mediaType":"image","mimeType":"image/jpeg","fileSize":256,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`),
 	)
 	initReq.Header.Set("Content-Type", "application/json")
-	initReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	initReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 	initReq.Header.Set("Idempotency-Key", "media-original-init")
 	initRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(initRec, initReq)
@@ -258,10 +258,10 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		"/internal/content/media/"+mediaID+":processing-result",
 		fmt.Sprintf(`{
 			"processingStatus":"ready",
-			"processorProfile":"content_image_normalization_v1",
+			"processorProfile":"content_image_normalization",
 			"imageWidth":640,
 			"imageHeight":480,
-			"imageDeliveryContentType":"image/jpeg",
+			"imageDeliveryMimeType":"image/jpeg",
 			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
 			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.jpg",
 			"imageDominantColor":"#1A2B3C",
@@ -269,12 +269,12 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 			"imageContentProfile":"photographic",
 			"imageDerivativePolicyVersion":1
 		}`, mediaID, mediaID),
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		"media-original-processing",
 	)
 	submitPublishedPostWithAuthor(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		fmt.Sprintf(
 			`{"contentType":"image","body":"原图授权可见性测试","visibility":"public","mediaAssetIds":["%s"],"mediaItems":[{"kind":"image","mediaId":"%s"}]}`,
 			mediaID,
@@ -284,7 +284,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 
 	accessReq := httptest.NewRequest(http.MethodPost, "/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view","sessionId":"sess_original_001"}`))
 	accessReq.Header.Set("Content-Type", "application/json")
-	accessReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	accessReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 	accessReq.Header.Set("Idempotency-Key", "media-original-access")
 	accessRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(accessRec, accessReq)
@@ -306,7 +306,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	}
 	replayReq := httptest.NewRequest(http.MethodPost, "/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view"}`))
 	replayReq.Header.Set("Content-Type", "application/json")
-	replayReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	replayReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 	replayReq.Header.Set("Idempotency-Key", "media-original-access")
 	replayRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(replayRec, replayReq)
@@ -350,7 +350,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 			strings.NewReader(`{"purpose":"view"}`),
 		)
 		request.Header.Set("Content-Type", "application/json")
-		request.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+		request.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 		request.Header.Set("Idempotency-Key", fmt.Sprintf("media-original-access-rate-%d", attempt))
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -364,7 +364,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		strings.NewReader(`{"purpose":"view"}`),
 	)
 	rateLimitedReq.Header.Set("Content-Type", "application/json")
-	rateLimitedReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	rateLimitedReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 	rateLimitedReq.Header.Set("Idempotency-Key", "media-original-access-rate-limited")
 	rateLimitedRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rateLimitedRec, rateLimitedReq)
@@ -399,7 +399,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	}
 	unreferencedMediaID := createReadyPublicationMediaAsset(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		"image",
 	)
 	unreferencedReq := httptest.NewRequest(
@@ -408,7 +408,7 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		strings.NewReader(`{"purpose":"view"}`),
 	)
 	unreferencedReq.Header.Set("Content-Type", "application/json")
-	unreferencedReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	unreferencedReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackPersonaID)
 	unreferencedReq.Header.Set("Idempotency-Key", "media-original-access-unreferenced")
 	unreferencedRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(unreferencedRec, unreferencedReq)

@@ -55,7 +55,7 @@ void main() {
 
       final result = await facet.initiateCall(
         RtcInitiateCallCommand(
-          callType: 'audio',
+          callType: CallType.audio,
           inviteeIds: const <String>['user-2'],
           maxParticipants: 8,
         ),

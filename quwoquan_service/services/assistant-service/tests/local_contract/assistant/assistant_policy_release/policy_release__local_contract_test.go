@@ -23,7 +23,7 @@ func (store *memoryStore) Stage(
 ) (model.Release, bool, error) {
 	if store.command != "" {
 		if store.command != commandID ||
-			store.release.CanonicalDigest != release.CanonicalDigest {
+			store.release.ReleaseDigest != release.ReleaseDigest {
 			return model.Release{}, false, model.ErrIdempotencyConflict
 		}
 		return store.release, true, nil
@@ -36,10 +36,10 @@ func (store *memoryStore) Stage(
 func (store *memoryStore) Get(
 	_ context.Context,
 	policyID string,
-	releaseVersion string,
+	releaseDigest string,
 ) (model.Release, bool, error) {
 	if store.release.PolicyID == policyID &&
-		store.release.ReleaseVersion == releaseVersion {
+		store.release.ReleaseDigest == releaseDigest {
 		return store.release, true, nil
 	}
 	return model.Release{}, false, nil
@@ -50,8 +50,7 @@ func TestPolicyReleaseIsImmutableDigestBoundAndIdempotent(t *testing.T) {
 	now := time.Date(2026, 7, 26, 8, 0, 0, 0, time.UTC)
 	input := model.Release{
 		PolicyID:          "assistant-default",
-		ReleaseVersion:    "2026-07-26.1",
-		CanonicalDigest:   "pending",
+		ReleaseDigest:     "pending",
 		DefaultTemplateID: "default",
 		Templates: []model.Template{{
 			TemplateID:      "default",
@@ -59,7 +58,7 @@ func TestPolicyReleaseIsImmutableDigestBoundAndIdempotent(t *testing.T) {
 			DomainID:        "assistant",
 			PromptPolicy:    "answer with grounded citations",
 			AllowedTools:    []string{"search", "search"},
-			SearchIntensity: "balanced",
+			SearchIntensity: "medium",
 		}},
 		RoutingRules: []model.RoutingRule{},
 		LearningContextPolicy: model.LearningContextPolicy{
@@ -76,7 +75,7 @@ func TestPolicyReleaseIsImmutableDigestBoundAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input.CanonicalDigest = digest
+	input.ReleaseDigest = digest
 	store := &memoryStore{}
 	service := application.NewService(store, func() time.Time { return now })
 
@@ -97,8 +96,8 @@ func TestPolicyReleaseIsImmutableDigestBoundAndIdempotent(t *testing.T) {
 	}
 
 	changed := input
-	changed.ReleaseVersion = "2026-07-26.2"
-	changed.CanonicalDigest = digest
+	changed.Templates = append([]model.Template(nil), input.Templates...)
+	changed.Templates[0].PromptPolicy = "changed policy content"
 	if _, err := service.Stage(context.Background(), "stage-1", changed); !errors.Is(err, model.ErrDigestMismatch) {
 		t.Fatalf("changed replay err=%v want digest mismatch", err)
 	}
@@ -108,14 +107,13 @@ func TestPolicyReleaseRejectsUnsafeLearningContext(t *testing.T) {
 	t.Parallel()
 	_, err := model.Digest(model.Release{
 		PolicyID:          "assistant-default",
-		ReleaseVersion:    "2026-07-26.1",
 		DefaultTemplateID: "default",
 		Templates: []model.Template{{
 			TemplateID:      "default",
 			SkillID:         "assistant.general",
 			DomainID:        "assistant",
 			PromptPolicy:    "answer safely",
-			SearchIntensity: "balanced",
+			SearchIntensity: "medium",
 		}},
 		LearningContextPolicy: model.LearningContextPolicy{
 			Enabled:                true,

@@ -135,15 +135,15 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }) async {
     final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
-    final resolvedSenderSubAccountId = activeContext.subAccountId.isNotEmpty
-        ? activeContext.subAccountId
+    final resolvedSenderPersonaId = activeContext.personaId.isNotEmpty
+        ? activeContext.personaId
         : activeContext.ownerUserId;
     final optimistic = MessageDto(
       id: clientMsgId,
       conversationId: conversationId,
       seq: _unconfirmedSeq,
       clientMsgId: clientMsgId,
-      senderId: resolvedSenderSubAccountId,
+      senderId: resolvedSenderPersonaId,
       senderName: senderName ?? activeContext.displayName,
       senderAvatar: resolveAvatarImageUrl(
         senderAvatar ?? activeContext.avatarUrl,

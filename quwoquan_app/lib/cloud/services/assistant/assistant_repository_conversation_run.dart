@@ -38,10 +38,13 @@ mixin _RemoteAssistantConversationRun on _RemoteAssistantRepositoryBase
     _debugAssistantRepository(
       'response status=${response.statusCode} operation=${AssistantApiMetadata.createAssistantConversationOperation}',
     );
-    final conversation = AssistantConversationWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.createAssistantConversationOperation,
+    final conversation = _assistantConversationWireFromProjection(
+      decodeAssistantConversation(
+        _decodeAssistantObject(
+          response,
+          operationId:
+              AssistantApiMetadata.createAssistantConversationOperation,
+        ),
       ),
     );
     _debugAssistantRepository(
@@ -54,23 +57,10 @@ mixin _RemoteAssistantConversationRun on _RemoteAssistantRepositoryBase
   Future<AssistantConversationWire> getAssistantConversation({
     required String conversationId,
   }) async {
-    final response = await _httpClient.get(
-      _assistantUri(
-        AssistantApiMetadata.getAssistantConversationPath(
-          conversationId: conversationId,
-        ),
-      ),
-      headers: _headersForPersonalAssistantDialog(
-        operationId: AssistantApiMetadata.getAssistantConversationOperation,
-        clientPageId: AssistantRequestPageIds.getAssistantConversation,
-      ),
+    final conversation = await _conversationQuery.getConversation(
+      conversationId: conversationId,
     );
-    return AssistantConversationWire.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.getAssistantConversationOperation,
-      ),
-    );
+    return _assistantConversationWireFromProjection(conversation);
   }
 
   @override
@@ -78,24 +68,30 @@ mixin _RemoteAssistantConversationRun on _RemoteAssistantRepositoryBase
     int limit = kAssistantListPageDefaultLimit,
     String cursor = '',
   }) async {
-    final response = await _httpClient.get(
-      _assistantGetUri(
-        AssistantApiMetadata.listAssistantConversationsPath,
-        <String, String>{
-          'limit': '$limit',
-          if (cursor.trim().isNotEmpty) 'cursor': cursor.trim(),
-        },
-      ),
-      headers: _headersForPersonalAssistantDialog(
-        operationId: AssistantApiMetadata.listAssistantConversationsOperation,
-        clientPageId: AssistantRequestPageIds.listAssistantConversations,
-      ),
+    final page = await _conversationQuery.listConversations(
+      limit: limit,
+      cursor: cursor,
     );
-    return AssistantConversationListPage.fromJson(
-      _decodeAssistantObject(
-        response,
-        operationId: AssistantApiMetadata.listAssistantConversationsOperation,
-      ),
+    return AssistantConversationListPage(
+      items: page.items
+          .map(_assistantConversationWireFromProjection)
+          .toList(growable: false),
+      nextCursor: page.nextCursor ?? '',
+    );
+  }
+
+  AssistantConversationWire _assistantConversationWireFromProjection(
+    AssistantConversationProjection conversation,
+  ) {
+    return AssistantConversationWire(
+      conversationId: conversation.conversationId,
+      userId: conversation.userId,
+      state: conversation.state,
+      activeTurnId: conversation.activeTurnId,
+      lastTurnId: conversation.lastTurnId,
+      summary: conversation.summary,
+      createdAt: conversation.createdAt.toUtc().toIso8601String(),
+      updatedAt: conversation.updatedAt.toUtc().toIso8601String(),
     );
   }
 
@@ -169,6 +165,7 @@ mixin _RemoteAssistantConversationRun on _RemoteAssistantRepositoryBase
       operation: AssistantApiMetadata.startAssistantRunOperation,
     );
     final request = AssistantStartRunRequest(
+      conversationId: conversationId,
       turnType: turnType.trim().isEmpty ? null : turnType.trim(),
       skillId: skillId.trim().isEmpty ? null : skillId.trim(),
       domainId: domainId.trim().isEmpty ? null : domainId.trim(),
@@ -203,7 +200,7 @@ mixin _RemoteAssistantConversationRun on _RemoteAssistantRepositoryBase
         'Idempotency-Key': requestId,
         'Content-Type': 'application/json',
       },
-      body: jsonEncode(request.toJson()),
+      body: jsonEncode(request.toJson()..remove('conversationId')),
     );
     _debugAssistantRepository(
       'response status=${response.statusCode} operation=${AssistantApiMetadata.startAssistantRunOperation}',

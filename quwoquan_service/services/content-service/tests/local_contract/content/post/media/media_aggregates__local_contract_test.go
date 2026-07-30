@@ -273,12 +273,12 @@ func TestReadyVideoRejectsOverOneHourAndUnsafeSeekDescriptors(t *testing.T) {
 		SourceSessionID:  "session-video-boundary",
 		ObjectKey:        "uploads/video-boundary",
 		SHA256:           digestAtomic,
-		MediaType:        "video",
-		ContentType:      "video/mp4",
+		MediaType:        mediamodel.MediaTypeVideo,
+		MimeType:         "video/mp4",
 		FileSize:         2048,
 		AccessPolicy:     mediamodel.AccessPolicyOwnerOnly,
 		ProcessingStatus: mediamodel.ProcessingStatusProcessing,
-		CoverStrategy:    "first_frame",
+		CoverStrategy:    mediamodel.CoverStrategyFirstFrame,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -489,8 +489,8 @@ func seedMediaAsset(
 	now time.Time,
 	assetID string,
 	ownerID string,
-	mediaType string,
-	contentType string,
+	mediaType mediamodel.MediaType,
+	mimeType string,
 	digest string,
 	accessPolicy mediamodel.AccessPolicy,
 ) string {
@@ -498,7 +498,7 @@ func seedMediaAsset(
 	asset, err := mediamodel.CreateMediaAsset(mediamodel.CreateMediaAssetParams{
 		ID: assetID, OwnerID: ownerID, SourceSessionID: "session-" + assetID,
 		ObjectKey: "media/objects/" + strings.TrimPrefix(digest, "sha256:"),
-		SHA256:    digest, MediaType: mediaType, ContentType: contentType,
+		SHA256:    digest, MediaType: mediaType, MimeType: mimeType,
 		FileSize: 256, AccessPolicy: accessPolicy, ProcessingRequired: true, Now: now,
 	})
 	if err != nil {

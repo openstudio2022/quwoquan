@@ -1,7 +1,8 @@
 {
   "label": "社会事件",
   "labelEn": "Social Event",
-  "description": "社会公共领域中的事实事件",
+  "description": "公共议题、社会关注与公共性事件",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -60,6 +60,62 @@ groups:
           summary: "OTP 发送/手机号登录 5xx 比率 > 1%"
           description: "authentication_challenge 一次性消费链路异常（当前 {{ $value | humanizePercentage }}）；核查 challenge 表约束、短信 provider 与 consume 原子性。"
 
+      - alert: LoginClientStateStalled
+        expr: |
+          sum(increase(ops_login_funnel_events_total{action="login_state_changed",result="stalled"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "客户端登录状态停留超过 90 秒"
+          description: "检查 step 标签定位不可退出状态，并关联 login_operation 的失败类型与恢复动作；指标不携带 flowId、手机号或请求标识。"
+
+      - alert: LoginTerminalDuplicateSuppressed
+        expr: |
+          sum(increase(ops_login_funnel_events_total{action="login_terminal",result="duplicate_suppressed"}[10m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "登录终态出现重复竞争"
+          description: "terminal latch 已阻止重复回调；检查成功、关闭、路由 continuation 与 deadline 是否并发触发。"
+
+      - alert: LoginClientOperationFailureRateHigh
+        expr: |
+          (
+            sum(rate(ops_login_operation_events_total{result="failure"}[10m])) by (operation)
+            / clamp_min(sum(rate(ops_login_operation_events_total[10m])) by (operation), 0.001)
+          ) > 0.05
+          and sum(increase(ops_login_operation_events_total[10m])) by (operation) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "客户端登录操作 {{ $labels.operation }} 失败率超过 5%"
+          description: "按 failure_kind 下钻 OTP、运营商或第三方授权失败，并用 SLS 运维事件关联 sourceCode/requestId/traceId。"
+
+      - alert: LoginPhoneBindingAbandonmentHigh
+        expr: |
+          (
+            sum(rate(ops_login_funnel_events_total{action="login_phone_binding",result="cancelled"}[15m])) by (provider)
+            / clamp_min(sum(rate(ops_login_funnel_events_total{action="login_phone_binding",result="required"}[15m])) by (provider), 0.001)
+          ) > 0.20
+          and sum(increase(ops_login_funnel_events_total{action="login_phone_binding",result="required"}[15m])) by (provider) >= 10
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "{{ $labels.provider }} 首次登录绑定手机号放弃率超过 20%"
+          description: "核对绑定页可退出性、短信挑战失败、凭证冲突与更换手机号恢复路径；未完成绑定不得进入 Shell。"
+
       # UserSettings 对象命令（PATCH /user/settings/*）：CAS 写失败或存储异常。
       - alert: UserSettingsWriteFailureRateHigh
         expr: |
@@ -306,18 +362,63 @@ groups:
           summary: "App ANR 近实时事件率超过 0.47%"
           description: "先按 appVersion/networkClass 在产品体验权威回读中核对去重会话率，再下钻 app_anr_outcome 与 runtime signal。"
 
-      - alert: AppJankSessionSignalHigh
+      - alert: AppJankFrameRateHigh
         expr: |
-          sum(rate(ops_app_experience_events_total{event_type="app_frame_jank_outcome"}[10m]))
-          / clamp_min(sum(rate(ops_app_experience_events_total{event_type="app_startup"}[10m])), 0.001) > 0.05
+          (
+            sum(rate(ops_app_janky_frames_total{page_name=~"home|video_book"}[10m]))
+            / clamp_min(sum(rate(ops_app_frame_samples_total{page_name=~"home|video_book"}[10m])), 0.001)
+          ) > 0.05
+          and sum(increase(ops_app_frame_samples_total{page_name=~"home|video_book"}[10m])) >= 300
         for: 10m
         labels:
           severity: warning
           layer: l1
           domain: app-experience
         annotations:
-          summary: "App 卡顿批次相对启动量超过 5%"
-          description: "从产品体验页核对去重会话率、jankyFrames/sampleFrames 和 worstFrameMs；缺启动分母不得解释为健康。"
+          summary: "首页或视频书卡顿帧率超过 5%"
+          description: "告警直接使用 jankyFrames/sampledFrames；从产品体验页按 pageName、appVersion、networkClass 下钻 worstFrameMs。"
+
+      - alert: AppFrameSampleDenominatorMissing
+        expr: absent(ops_app_frame_samples_total)
+        for: 15m
+        labels:
+          severity: critical
+          layer: l1
+          domain: app-experience
+        annotations:
+          summary: "App 帧体验指标缺少 sampledFrames 分母"
+          description: "检查 App 完整 frame batch、telemetry outbox、product-ops ingest 与 Prometheus exporter；缺分母必须显示 unavailable。"
+
+      - alert: VideoBookPlaybackReadyP95High
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ops_video_playback_ready_duration_seconds_bucket{page_name="video_book",result="success"}[10m])) by (le)
+          ) > 2
+          and sum(increase(ops_video_playback_events_total{page_name="video_book"}[10m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          layer: l1
+          domain: app-experience
+        annotations:
+          summary: "视频书 player ready P95 超过 2 秒"
+          description: "按 appVersion/networkClass/devicePlatform 下钻 video_playback_qoe；6 秒仍未就绪必须进入可恢复终态。"
+
+      - alert: VideoBookRebufferRatioHigh
+        expr: |
+          (
+            sum(rate(ops_video_playback_rebuffer_seconds_total{page_name="video_book"}[15m]))
+            / clamp_min(sum(rate(ops_video_playback_effective_seconds_total{page_name="video_book"}[15m])), 0.001)
+          ) > 0.02
+          and sum(increase(ops_video_playback_effective_seconds_total{page_name="video_book"}[15m])) >= 300
+        for: 15m
+        labels:
+          severity: warning
+          layer: l1
+          domain: app-experience
+        annotations:
+          summary: "视频书重缓冲时长占比超过 2%"
+          description: "检查媒体 Range/cache-control、弱网恢复、N+1 预热与 decoder 槽位；分母不足时不触发比率告警。"
 
       - alert: AppExperienceTelemetryMissing
         expr: absent(ops_app_experience_events_total{event_type="app_startup"})
@@ -568,7 +669,7 @@ groups:
     # emitter 状态：
     # - P0 已激活：recommendation_feed_served/impressed/visible/dwell/interaction/negative、
     #   recommendation_behavior_ingest(_dropped)、rec_hotpath_dropped、
-    #   recommendation_exposure_filter_smembers_fallback、recommendation_feed_served_by_attribution_total、
+    #   recommendation_feed_served_by_attribution_total、
     #   recommendation_behavior_by_attribution_total、recommendation_feed_terminal_total。
     # - 仍为预置告警：ExposureGini / ContentCoverage / PolicyTakedownEjection / ABValidity
     #   等 P1/P2 指标，真实 emitter 落地前不代表已具备触发数据。
@@ -635,7 +736,121 @@ groups:
           layer: l2
         annotations:
           summary: "推荐首刷 canonical failure 率 > 0.5%"
-          description: "按 failure_stage 排查 recall/scorer/active_supply/hydration/exposure 终态，当前 {{ $value | humanizePercentage }}。"
+          description: "按 failure_stage 排查 recall/scorer/active_supply/hard_exclusion/ranked_window/hydration/exposure 终态，当前 {{ $value | humanizePercentage }}。"
+
+      - alert: RankedFeedWindowAtomicUnavailable
+        expr: |
+          sum(increase(recommendation_ranked_feed_window_create_total{result="atomic_unavailable"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "RankedFeedWindow 原子 Redis 能力不可用"
+          description: "续页窗口已按 fail-closed 停止签发；核查 rec scene 生产适配器及固定 quotaShard 同槽 Lua 能力，禁止降级为无界 SET NX。"
+
+      - alert: RankedFeedWindowPayloadRejectionRateHigh
+        expr: |
+          sum(rate(recommendation_ranked_feed_window_create_total{result="payload_rejected"}[10m]))
+          / (sum(rate(recommendation_ranked_feed_window_create_total[10m])) + 0.001) > 0.001
+          and sum(increase(recommendation_ranked_feed_window_create_total[10m])) >= 100
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "RankedFeedWindow payload 拒绝率 > 0.1%"
+          description: "未压缩窗口超过 canonical 2 MiB 硬上限，首屏会降级为无 continuation；下钻候选标签/实体引用与训练快照体积。"
+
+      - alert: RankedFeedWindowShardKeyQuotaRejected
+        expr: |
+          sum(increase(recommendation_ranked_feed_window_create_total{result="shard_key_rejected"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "RankedFeedWindow quota shard live-key 准入拒绝"
+          description: "固定分片达到业务 live-key 上限，contender 已 fail-closed 且未跨主体淘汰；核对触达分片分布、配置容量与 Redis 实际容量。"
+
+      - alert: RankedFeedWindowShardByteQuotaRejected
+        expr: |
+          sum(increase(recommendation_ranked_feed_window_create_total{result="shard_byte_rejected"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "RankedFeedWindow quota shard live-byte 准入拒绝"
+          description: "固定分片达到业务 live-byte 上限；核对 payload 分布、分片容量与 Redis 实际容量，禁止改用 maxmemory 淘汰。"
+
+      - alert: RankedFeedWindowRepairBoundRejected
+        expr: |
+          sum(increase(recommendation_ranked_feed_window_create_total{result="repair_bound_rejected"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "RankedFeedWindow quota index/metadata 不变量破坏"
+          description: "有界索引超限、metadata 缺失或 bytes 不一致；创建已 fail-closed。按 canonical quota shard 执行受控巡检与回滚，禁止全量 SCAN 在线修复。"
+
+      - alert: FeedDeliveryPageAtomicUnavailable
+        expr: |
+          sum(increase(content_feed_delivery_page_total{operation="append",result="atomic_unavailable"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "FeedDeliveryPage 原子 Redis 能力不可用"
+          description: "已交付页记录按 fail-closed 停止签发 continuation；核查 rec scene 固定 quotaShard 同槽 Lua 能力，禁止回退非原子写入。"
+
+      - alert: FeedDeliveryPageFailureRateHigh
+        expr: |
+          sum(rate(content_feed_delivery_page_total{result=~"store_unavailable|atomic_unavailable|payload_rejected|conflict|error|invalid|invalid_quota_policy|shard_key_rejected|shard_byte_rejected|repair_bound_rejected"}[10m]))
+          / (sum(rate(content_feed_delivery_page_total[10m])) + 0.001) > 0.001
+          and sum(increase(content_feed_delivery_page_total[10m])) >= 100
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "FeedDeliveryPage 系统失败率 > 0.1%"
+          description: "previous/next cursor 的只追加交付事实不可可靠写读；按 operation/result 下钻原子能力、payload、冲突与 Redis 可用性。"
+
+      - alert: FeedDeliveryPageShardKeyQuotaRejected
+        expr: |
+          sum(increase(content_feed_delivery_page_total{operation="append",result="shard_key_rejected"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "FeedDeliveryPage quota shard live-key 准入拒绝"
+          description: "固定分片达到业务 live-key 上限，新页已 fail-closed 且未跨 scope 淘汰；核对分片分布、配置容量与 Redis 实际容量。"
+
+      - alert: FeedDeliveryPageShardByteQuotaRejected
+        expr: |
+          sum(increase(content_feed_delivery_page_total{operation="append",result="shard_byte_rejected"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "FeedDeliveryPage quota shard live-byte 准入拒绝"
+          description: "固定分片达到业务 live-byte 上限；核对页 payload 分布、配置容量与 Redis 实际容量，禁止改用 maxmemory 淘汰。"
+
+      - alert: FeedDeliveryPageRepairBoundRejected
+        expr: |
+          sum(increase(content_feed_delivery_page_total{operation="append",result="repair_bound_rejected"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "FeedDeliveryPage quota index/metadata 不变量破坏"
+          description: "有界索引超限、metadata 缺失或 bytes 不一致；append 已 fail-closed。按 canonical quota shard 受控巡检，禁止在线全量 SCAN 修复。"
 
       # N1-1 死告警清理：RecScoreDistributionAnomaly 已删除——rec_score_value
       # histogram 无任何 emitter，该告警从未可求值。分数分布/特征漂移监控的
@@ -698,18 +913,6 @@ groups:
         annotations:
           summary: "推荐 HotPath 缓冲丢弃 > 0"
           description: "BufferedHotPath 缓冲溢出丢弃行为信号，需扩容缓冲或限流上游。"
-
-      - alert: RecommendationExposureSMembersFallback
-        expr: |
-          sum(rate(recommendation_exposure_filter_smembers_fallback_total[5m]))
-          / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001) > 0.01
-        for: 10m
-        labels:
-          severity: warning
-          layer: l2
-        annotations:
-          summary: "推荐曝光过滤 SMembers 回退率 > 1%"
-          description: "曝光过滤应使用候选 membership 点查或等价批量点查；SMembers 回退说明容量路径退化。"
 
       - alert: RecommendationClickThroughRateLow
         expr: |
@@ -1902,8 +2105,8 @@ groups:
       # B3 关系与个人投影：关注命令、主体关注、打招呼破冰、关注频道读链路。
       - alert: PersonaFollowCommandErrorRateHigh
         expr: |
-          sum(rate(http_server_requests_total{service="user-service", route=~"/user/sub-accounts/.*/(follow|block)", status!~"2.."}[10m]))
-          / (sum(rate(http_server_requests_total{service="user-service", route=~"/user/sub-accounts/.*/(follow|block)"}[10m])) + 0.001) > 0.02
+          sum(rate(http_server_requests_total{service="user-service", route=~"/user/personas/.*/(follow|block)", status!~"2.."}[10m]))
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/user/personas/.*/(follow|block)"}[10m])) + 0.001) > 0.02
         for: 10m
         labels:
           severity: warning
@@ -2211,6 +2414,19 @@ groups:
         annotations:
           summary: "媒体处理全链路 Job P95 接近 15 分钟超时"
           description: "50 MiB、最长 1 小时视频的处理预算被突破；检查 FFmpeg 容量、对象存储吞吐与 worker CPU。"
+
+      - alert: ContentMediaHLSCMAFPackagingFallbackRateHigh
+        expr: |
+          (
+            sum(rate(content_media_hls_cmaf_packaging_total{result="fallback_progressive"}[15m]))
+            / clamp_min(sum(rate(content_media_hls_cmaf_packaging_total[15m])), 0.001)
+          ) > 0.05
+          and sum(increase(content_media_hls_cmaf_packaging_total[15m])) >= 20
+        for: 15m
+        labels: { severity: warning, layer: l2, domain: content }
+        annotations:
+          summary: "HLS/CMAF 打包回退率超过 5%"
+          description: "资产仍通过同版本 progressive MP4 可用；检查 FFmpeg 容量、CMAF 产物校验与对象存储写入。"
 
       - alert: ContentMediaProcessingCompleteToReadyHigh
         expr: |
@@ -2529,3 +2745,47 @@ groups:
         annotations:
           summary: "评论投影 {{ $labels.check }} 持续不健康"
           description: "评论计数、hotScore、通知流、推荐信号或举报治理至少一条独立 checkpoint 未收敛；按 runbook 检查 relay、checkpoint 与 poison event。"
+
+  - name: quwoquan_l2_api_edge_admission
+    rules:
+      - alert: ApiEdgeAdmissionStateUnavailableDenied
+        expr: |
+          sum(increase(api_edge_admission_decisions_total{outcome="state_unavailable_denied"}[5m])) by (environment) > 0
+        for: 1m
+        labels: {severity: critical, layer: l2, domain: gateway}
+        annotations:
+          summary: "{{ $labels.environment }} 统一入口共享限流状态不可用"
+          description: "api-edge 已按 operation 的 fail_closed 策略拒绝请求；立即检查 admission Redis、停止放量并按上一不可变配置或镜像回滚。"
+
+      - alert: ApiEdgeAdmissionFailOpenObserved
+        expr: |
+          sum(increase(api_edge_admission_decisions_total{outcome="state_unavailable_allowed"}[5m])) by (environment, operation) > 0
+        for: 1m
+        labels: {severity: critical, layer: l2, domain: gateway}
+        annotations:
+          summary: "{{ $labels.environment }} operation {{ $labels.operation }} 执行了显式 fail_open"
+          description: "共享状态不可用时仍放行已经发生；确认该 generated operation 的声明策略并停止扩大故障窗口，禁止补进程内 fallback。"
+
+      - alert: ApiEdgeAdmissionLatencySLOBreach
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(api_edge_admission_duration_seconds_bucket[5m])) by (le, environment)
+          ) > 0.025
+        for: 10m
+        labels: {severity: warning, layer: l2, domain: gateway}
+        annotations:
+          summary: "{{ $labels.environment }} 统一入口 admission P95 超过 25ms"
+          description: "检查 Redis 网络、Lua 执行和连接池容量；该指标不含 owner service 延迟。"
+
+      - alert: ApiEdgeRateLimitedRatioHigh
+        expr: |
+          sum(rate(api_edge_admission_decisions_total{outcome="rate_limited"}[15m])) by (environment, operation)
+          / clamp_min(
+            sum(rate(api_edge_admission_decisions_total{outcome=~"allowed|rate_limited"}[15m])) by (environment, operation),
+            0.001
+          ) > 0.2
+        for: 15m
+        labels: {severity: warning, layer: l2, domain: gateway}
+        annotations:
+          summary: "{{ $labels.environment }} operation {{ $labels.operation }} 限流命中率超过 20%"
+          description: "区分攻击流量、客户端重试风暴与真实业务容量不足；阈值调整必须更新 api-edge 自治配置并重做 stable/gray 总阈值验收。"

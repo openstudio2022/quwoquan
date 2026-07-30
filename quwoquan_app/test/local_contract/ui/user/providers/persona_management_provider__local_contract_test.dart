@@ -22,7 +22,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    // activatePersona 现在会同步更新 AuthSession 的 activeSubAccount，
+    // activatePersona 现在会同步更新 AuthSession 的 activePersona，
     // 该链路依赖 SharedPreferences，需在测试态提供 mock 存储。
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });

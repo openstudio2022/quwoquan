@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from quwoquan_ops.cli.lib.output_paths import env_run_dir, repo_run_dir
-
+from quwoquan_ops.cli.lib.output_paths import (
+    env_run_dir,
+    repo_run_dir,
+    run_evidence_dir,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -138,6 +142,138 @@ def _load_simple_yaml(text: str) -> Any:
         value = value.strip()
         return key, value if value else None
 
+    def parse_flow_value(value: str) -> Any:
+        """Parse the JSON-like YAML flow subset used by metadata contracts."""
+
+        cursor = 0
+
+        def skip_whitespace() -> None:
+            nonlocal cursor
+            while cursor < len(value) and value[cursor].isspace():
+                cursor += 1
+
+        def parse_quoted() -> str:
+            nonlocal cursor
+            quote = value[cursor]
+            start = cursor
+            cursor += 1
+            if quote == '"':
+                escaped = False
+                while cursor < len(value):
+                    character = value[cursor]
+                    cursor += 1
+                    if character == '"' and not escaped:
+                        return json.loads(value[start:cursor])
+                    escaped = character == "\\" and not escaped
+                    if character != "\\":
+                        escaped = False
+                raise ValueError("unterminated double-quoted flow scalar")
+
+            characters: list[str] = []
+            while cursor < len(value):
+                character = value[cursor]
+                cursor += 1
+                if character != "'":
+                    characters.append(character)
+                    continue
+                if cursor < len(value) and value[cursor] == "'":
+                    characters.append("'")
+                    cursor += 1
+                    continue
+                return "".join(characters)
+            raise ValueError("unterminated single-quoted flow scalar")
+
+        def parse_plain_scalar(raw_value: str) -> Any:
+            normalized = raw_value.strip()
+            if not normalized:
+                raise ValueError("empty flow scalar")
+            lowered = normalized.lower()
+            if lowered in {"true", "false"}:
+                return lowered == "true"
+            if lowered in {"null", "none", "~"}:
+                return None
+            try:
+                return int(normalized)
+            except ValueError:
+                return normalized
+
+        def parse_value() -> Any:
+            nonlocal cursor
+            skip_whitespace()
+            if cursor >= len(value):
+                raise ValueError("missing flow value")
+            if value[cursor] == "{":
+                return parse_mapping()
+            if value[cursor] == "[":
+                return parse_list()
+            if value[cursor] in {'"', "'"}:
+                return parse_quoted()
+            start = cursor
+            while cursor < len(value) and value[cursor] not in ",]}":
+                cursor += 1
+            return parse_plain_scalar(value[start:cursor])
+
+        def parse_mapping() -> dict[str, Any]:
+            nonlocal cursor
+            payload: dict[str, Any] = {}
+            cursor += 1
+            skip_whitespace()
+            if cursor < len(value) and value[cursor] == "}":
+                cursor += 1
+                return payload
+            while True:
+                skip_whitespace()
+                if cursor >= len(value):
+                    raise ValueError("unterminated flow mapping")
+                if value[cursor] in {'"', "'"}:
+                    key = parse_quoted()
+                else:
+                    start = cursor
+                    while cursor < len(value) and value[cursor] != ":":
+                        if value[cursor] in "{},[]":
+                            raise ValueError("invalid flow mapping key")
+                        cursor += 1
+                    key = value[start:cursor].strip()
+                if not key or cursor >= len(value) or value[cursor] != ":":
+                    raise ValueError("flow mapping entry is missing ':'")
+                cursor += 1
+                payload[key] = parse_value()
+                skip_whitespace()
+                if cursor >= len(value):
+                    raise ValueError("unterminated flow mapping")
+                delimiter = value[cursor]
+                cursor += 1
+                if delimiter == "}":
+                    return payload
+                if delimiter != ",":
+                    raise ValueError("flow mapping entries must be comma-separated")
+
+        def parse_list() -> list[Any]:
+            nonlocal cursor
+            payload: list[Any] = []
+            cursor += 1
+            skip_whitespace()
+            if cursor < len(value) and value[cursor] == "]":
+                cursor += 1
+                return payload
+            while True:
+                payload.append(parse_value())
+                skip_whitespace()
+                if cursor >= len(value):
+                    raise ValueError("unterminated flow list")
+                delimiter = value[cursor]
+                cursor += 1
+                if delimiter == "]":
+                    return payload
+                if delimiter != ",":
+                    raise ValueError("flow list entries must be comma-separated")
+
+        result = parse_value()
+        skip_whitespace()
+        if cursor != len(value):
+            raise ValueError("unexpected trailing flow content")
+        return result
+
     def parse_scalar(value: str) -> Any:
         value = value.strip()
         if not value:
@@ -154,7 +290,7 @@ def _load_simple_yaml(text: str) -> Any:
         if lowered in {"null", "none", "~"}:
             return None
         if value.startswith("[") or value.startswith("{"):
-            return json.loads(value)
+            return parse_flow_value(value)
         try:
             return int(value)
         except ValueError:
@@ -193,6 +329,7 @@ def run(
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
     check: bool = False,
+    timeout_seconds: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
     merged_env.setdefault("PYTHONDONTWRITEBYTECODE", "1")
@@ -205,12 +342,29 @@ def run(
             env=merged_env,
             stdout=stdout_file,
             stderr=stderr_file,
+            start_new_session=timeout_seconds is not None,
         )
-        returncode = process.wait()
+        timed_out = False
+        try:
+            returncode = process.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+            returncode = 124
         stdout_file.seek(0)
         stderr_file.seek(0)
         stdout = stdout_file.read().decode("utf-8", errors="replace")
         stderr = stderr_file.read().decode("utf-8", errors="replace")
+        if timed_out:
+            stderr += (
+                "\ncommand exceeded its deterministic deadline "
+                f"after {timeout_seconds:.3f}s"
+            )
     result = subprocess.CompletedProcess(
         argv,
         returncode,
@@ -242,8 +396,11 @@ def artifact_run_dir(
     output_root: Path | None = None,
 ) -> Path:
     if output_root is not None:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        return output_root / env_name / f"{stamp}-{command_name}-{target}"
+        return run_evidence_dir(
+            output_root / env_name,
+            command_name,
+            target,
+        )
     if env_name == "repo":
         return repo_run_dir(command_name, target=target or "repo")
     return env_run_dir(env_name, command_name, target=target)

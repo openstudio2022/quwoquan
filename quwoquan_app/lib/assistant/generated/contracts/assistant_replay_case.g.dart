@@ -2,9 +2,64 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_run_response.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_trace_event.g.dart';
+
+class AssistantReplayExpectationsWire {
+  const AssistantReplayExpectationsWire({
+    required this.selectedSkillId,
+    required this.selectedDomainId,
+    this.expectedToolNames = const <String>[],
+    this.expectedClarificationSlotIds = const <String>[],
+    this.expectedReferenceUrls = const <String>[],
+    required this.finalAnswerMode,
+  });
+
+  final String selectedSkillId;
+  final String selectedDomainId;
+  final List<String> expectedToolNames;
+  final List<String> expectedClarificationSlotIds;
+  final List<String> expectedReferenceUrls;
+  final FinalAnswerMode finalAnswerMode;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'selectedSkillId': selectedSkillId,
+        'selectedDomainId': selectedDomainId,
+        'expectedToolNames': expectedToolNames,
+        'expectedClarificationSlotIds': expectedClarificationSlotIds,
+        'expectedReferenceUrls': expectedReferenceUrls,
+        'finalAnswerMode': finalAnswerMode.wireName,
+      };
+
+  factory AssistantReplayExpectationsWire.fromJson(Map<String, dynamic> json) {
+    return AssistantReplayExpectationsWire(
+      selectedSkillId: (json['selectedSkillId'] as String?)?.trim() ?? "",
+      selectedDomainId: (json['selectedDomainId'] as String?)?.trim() ?? "",
+      expectedToolNames: _assistantStringList(json['expectedToolNames']),
+      expectedClarificationSlotIds: _assistantStringList(json['expectedClarificationSlotIds']),
+      expectedReferenceUrls: _assistantStringList(json['expectedReferenceUrls']),
+      finalAnswerMode: parseFinalAnswerModeStrict((json['finalAnswerMode'] as String?)?.trim() ?? ''),
+    );
+  }
+
+  static List<String> _assistantStringList(Object? value) {
+    if (value is List) {
+      return value.map((item) => item.toString().trim()).where((item) => item.isNotEmpty).toList(growable: false);
+    }
+    return const <String>[];
+  }
+}
+
+class AssistantReplayExpectationsWireFields {
+  static const String selectedSkillId = 'selectedSkillId';
+  static const String selectedDomainId = 'selectedDomainId';
+  static const String expectedToolNames = 'expectedToolNames';
+  static const String expectedClarificationSlotIds = 'expectedClarificationSlotIds';
+  static const String expectedReferenceUrls = 'expectedReferenceUrls';
+  static const String finalAnswerMode = 'finalAnswerMode';
+}
 
 class AssistantReplayModelStepWire {
   const AssistantReplayModelStepWire({
@@ -137,6 +192,7 @@ class AssistantReplayCaseWire {
     this.fakeDeviceContext = const <String, dynamic>{},
     this.expectedStreamEvents = const <AssistantStreamEventWire>[],
     this.expectedTraceEvents = const <AssistantTraceEventWire>[],
+    this.expectations = const AssistantReplayExpectationsWire(selectedSkillId: "", selectedDomainId: "", finalAnswerMode: FinalAnswerMode.blocked),
     this.expectedRunResponse = const AssistantRunResponseWire(conversationId: "", turnId: ""),
   });
 
@@ -148,6 +204,7 @@ class AssistantReplayCaseWire {
   final Map<String, dynamic> fakeDeviceContext;
   final List<AssistantStreamEventWire> expectedStreamEvents;
   final List<AssistantTraceEventWire> expectedTraceEvents;
+  final AssistantReplayExpectationsWire expectations;
   final AssistantRunResponseWire expectedRunResponse;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -159,6 +216,7 @@ class AssistantReplayCaseWire {
         'fakeDeviceContext': fakeDeviceContext,
         'expectedStreamEvents': expectedStreamEvents.map((item) => item.toJson()).toList(growable: false),
         'expectedTraceEvents': expectedTraceEvents.map((item) => item.toJson()).toList(growable: false),
+        'expectations': expectations.toJson(),
         'expectedRunResponse': expectedRunResponse.toJson(),
       };
 
@@ -172,6 +230,7 @@ class AssistantReplayCaseWire {
       fakeDeviceContext: (json['fakeDeviceContext'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       expectedStreamEvents: (json['expectedStreamEvents'] as List?)?.whereType<Map>().map((item) => AssistantStreamEventWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantStreamEventWire>[],
       expectedTraceEvents: (json['expectedTraceEvents'] as List?)?.whereType<Map>().map((item) => AssistantTraceEventWire.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTraceEventWire>[],
+      expectations: json['expectations'] is Map ? AssistantReplayExpectationsWire.fromJson((json['expectations'] as Map).cast<String, dynamic>()) : const AssistantReplayExpectationsWire(selectedSkillId: "", selectedDomainId: "", finalAnswerMode: FinalAnswerMode.blocked),
       expectedRunResponse: json['expectedRunResponse'] is Map ? AssistantRunResponseWire.fromJson((json['expectedRunResponse'] as Map).cast<String, dynamic>()) : const AssistantRunResponseWire(conversationId: "", turnId: ""),
     );
   }
@@ -187,5 +246,6 @@ class AssistantReplayCaseWireFields {
   static const String fakeDeviceContext = 'fakeDeviceContext';
   static const String expectedStreamEvents = 'expectedStreamEvents';
   static const String expectedTraceEvents = 'expectedTraceEvents';
+  static const String expectations = 'expectations';
   static const String expectedRunResponse = 'expectedRunResponse';
 }

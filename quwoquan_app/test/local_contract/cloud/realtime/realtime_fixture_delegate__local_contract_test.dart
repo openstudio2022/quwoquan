@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 
@@ -11,7 +12,12 @@ void main() {
   test(
     'fixture delegate enters active and pushes catalog MessageSent',
     () async {
-      final container = ProviderContainer(overrides: [_fixtureOverride]);
+      final container = ProviderContainer(
+        overrides: [
+          authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+          _fixtureOverride,
+        ],
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(
@@ -58,7 +64,12 @@ void main() {
   );
 
   test('fixture delegate switches to idle immediately on leave', () {
-    final container = ProviderContainer(overrides: [_fixtureOverride]);
+    final container = ProviderContainer(
+      overrides: [
+        authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+        _fixtureOverride,
+      ],
+    );
     addTearDown(container.dispose);
 
     final notifier = container.read(realtimeConnectionManagerProvider.notifier);
@@ -93,3 +104,16 @@ final _fixtureOverride = realtimeConnectionManagerProvider.overrideWith(
         ),
   ),
 );
+
+class _AuthenticatedSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'realtime-test-token',
+    refreshToken: 'realtime-test-refresh-token',
+    ownerId: 'realtime-test-owner',
+    activePersonaId: 'realtime-test-persona',
+    accountState: 'active',
+    installId: 'realtime-test-install',
+  );
+}

@@ -153,6 +153,8 @@ class IntersectionReasonChip extends ConsumerWidget {
           iconKey: displayReason.iconKey,
           sourceRef: displayReason.source,
           dimension: displayReason.dimension,
+          tone: displayReason.tone,
+          assetUrl: displayReason.typeVisual?.imageUrl ?? '',
           size: AppSpacing.iconSmall,
         ),
         SizedBox(width: AppSpacing.intraGroupXs),

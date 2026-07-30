@@ -2,6 +2,7 @@
   "label": "性价比型",
   "labelEn": "Value for Money",
   "description": "注重性价比的消费决策",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

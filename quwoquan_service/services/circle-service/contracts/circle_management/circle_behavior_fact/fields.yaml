@@ -1,235 +1,248 @@
 description: 不可变圈子行为事实；actor、session、request 归因仅由可信 Runtime Context 注入。
 fields:
-- name: _id
-  type: string
-  constraints:
-  - PK
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: actorKind
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: personaId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PERSONAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: deviceActorId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: hash
-  api_exposure: none
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: circleId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: write
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: eventType
-  type: enum
-  enum_ref: BehaviorEventType
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: write
-  ops_exposure: read
-  role: append_only_fact
-- name: sessionId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: none
-  ops_exposure: read
-  role: append_only_fact
-- name: requestId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: none
-  ops_exposure: read
-  role: append_only_fact
-- name: occurredAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
+  - name: _id
+    type: string
+    constraints:
+      - PK
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: actorKind
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: personaId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PERSONAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: deviceActorId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: circleId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: eventType
+    type: enum
+    enum_ref: BehaviorEventType
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: sessionId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+  - name: requestId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+  - name: occurredAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
 types:
   ReportCircleBehaviorRequest:
     description: 调用方只提交业务目标和行为；禁止提交 actor、session、requestId 或 occurredAt。
     fields:
-    - name: circleId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: eventType
-      type: enum
-      enum_ref: BehaviorEventType
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
+      - name: circleId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+      - name: eventType
+        type: enum
+        enum_ref: BehaviorEventType
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
   CircleBehaviorFactOutbox:
     fields:
-    - name: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: outboxSequence
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: eventType
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: aggregateId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: payloadJson
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: drop
-      api_exposure: none
-      ops_exposure: read
-    - name: occurredAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
+      - name: _id
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+      - name: outboxSequence
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+      - name: eventType
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+      - name: aggregateId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+      - name: payloadJson
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: drop
+        api_exposure: none
+        ops_exposure: read
+      - name: occurredAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
   CircleBehaviorFactOutboxSequence:
     fields:
-    - name: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: value
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
+      - name: _id
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+      - name: value
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
   CircleBehaviorFactProjectionCheckpoint:
     fields:
-    - name: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: sequence
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
+      - name: _id
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+      - name: sequence
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+      - name: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
   CircleBehaviorFactProjectionInbox:
     fields:
-    - name: _id
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: aggregateId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: appliedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
+      - name: _id
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+      - name: aggregateId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: none
+        ops_exposure: read
+      - name: appliedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: none
+        ops_exposure: read
+  AppendCircleBehaviorFactCommand:
+    fields:
+      - name: circleId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: eventType
+        type: string
+        enum_ref: BehaviorEventType
+        client_dart_type: CircleBehaviorEventType
+        client_wire: canonicalEnum

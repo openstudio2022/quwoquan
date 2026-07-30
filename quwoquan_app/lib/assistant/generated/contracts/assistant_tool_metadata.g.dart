@@ -2,27 +2,29 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+
 class AssistantToolRecoveryPolicyWire {
   const AssistantToolRecoveryPolicyWire({
-    this.action = "fail_turn",
-    this.disruptionLevel = "partial",
+    this.action = ToolRecoveryAction.failTurn,
+    this.disruptionLevel = ToolDisruptionLevel.partial,
     this.userVisibleSummary = "",
   });
 
-  final String action;
-  final String disruptionLevel;
+  final ToolRecoveryAction action;
+  final ToolDisruptionLevel disruptionLevel;
   final String userVisibleSummary;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'action': action,
-        'disruptionLevel': disruptionLevel,
+        'action': action.wireName,
+        'disruptionLevel': disruptionLevel.wireName,
         'userVisibleSummary': userVisibleSummary,
       };
 
   factory AssistantToolRecoveryPolicyWire.fromJson(Map<String, dynamic> json) {
     return AssistantToolRecoveryPolicyWire(
-      action: (json['action'] as String?)?.trim() ?? "fail_turn",
-      disruptionLevel: (json['disruptionLevel'] as String?)?.trim() ?? "partial",
+      action: parseToolRecoveryAction((json['action'] as String?)?.trim() ?? "fail_turn"),
+      disruptionLevel: parseToolDisruptionLevel((json['disruptionLevel'] as String?)?.trim() ?? "partial"),
       userVisibleSummary: (json['userVisibleSummary'] as String?)?.trim() ?? "",
     );
   }

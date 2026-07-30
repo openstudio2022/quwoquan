@@ -10,7 +10,8 @@ import (
 func writeGeneratedOperationContracts(
 	appDir string,
 	lock appContractLock,
-) {
+	requestArtifacts map[string]operationRequestArtifact,
+) error {
 	operations := append(
 		[]appExposedOperation(nil),
 		lock.AppExposedOperations...,
@@ -71,6 +72,9 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.retryMode,\n")
 	b.WriteString("    required this.maxAttempts,\n")
 	b.WriteString("    required this.idempotency,\n")
+	b.WriteString("    this.paginationDefaultItems,\n")
+	b.WriteString("    this.paginationMaximumItems,\n")
+	b.WriteString("    this.maximumResponseBodyBytes,\n")
 	b.WriteString("    required this.versionPrecondition,\n")
 	b.WriteString("    required this.errorCodes,\n")
 	b.WriteString("    required this.requestClassification,\n")
@@ -83,6 +87,10 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.availabilityPercent,\n")
 	b.WriteString("    required this.requestEntity,\n")
 	b.WriteString("    required this.requestBodyKind,\n")
+	b.WriteString("    required this.requestPathBindings,\n")
+	b.WriteString("    required this.requestQueryBindings,\n")
+	b.WriteString("    required this.requestHeaderBindings,\n")
+	b.WriteString("    required this.requestInjectedBindings,\n")
 	b.WriteString("    required this.responseEntity,\n")
 	b.WriteString("    required this.responseBody,\n")
 	b.WriteString("    required this.responseBodyKind,\n")
@@ -127,12 +135,29 @@ func writeGeneratedOperationContracts(
 	b.WriteString("  final List<String> permissions;\n")
 	b.WriteString("  final int timeoutMilliseconds;\n")
 	b.WriteString("  final int maxAttempts;\n")
+	b.WriteString("  final int? paginationDefaultItems;\n")
+	b.WriteString("  final int? paginationMaximumItems;\n")
+	b.WriteString("  final int? maximumResponseBodyBytes;\n")
 	b.WriteString("  final List<String> errorCodes;\n")
 	b.WriteString("  final bool telemetryTrace;\n")
 	b.WriteString("  final List<String> telemetryAttributes;\n")
 	b.WriteString("  final int latencyP95Milliseconds;\n")
 	b.WriteString("  final double availabilityPercent;\n")
+	b.WriteString("  final List<CloudOperationRequestBinding> requestPathBindings;\n")
+	b.WriteString("  final List<CloudOperationRequestBinding> requestQueryBindings;\n")
+	b.WriteString("  final List<CloudOperationRequestBinding> requestHeaderBindings;\n")
+	b.WriteString("  final List<CloudOperationRequestBinding> requestInjectedBindings;\n")
 	b.WriteString("  final List<String> surfaceIds;\n")
+	b.WriteString("}\n\n")
+	b.WriteString("final class CloudOperationRequestBinding {\n")
+	b.WriteString("  const CloudOperationRequestBinding({\n")
+	b.WriteString("    required this.name,\n")
+	b.WriteString("    required this.field,\n")
+	b.WriteString("    required this.required,\n")
+	b.WriteString("  });\n\n")
+	b.WriteString("  final String name;\n")
+	b.WriteString("  final String field;\n")
+	b.WriteString("  final bool required;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("final class CloudOperationActorContext {\n")
 	b.WriteString("  const CloudOperationActorContext({\n")
@@ -226,6 +251,13 @@ func writeGeneratedOperationContracts(
 		if client == nil {
 			continue
 		}
+		artifact, exists := requestArtifacts[operation.CanonicalOperationID]
+		if !exists {
+			return fmt.Errorf(
+				"%s has a client_contract but no generated canonical request artifact",
+				operation.CanonicalOperationID,
+			)
+		}
 		methodName := canonicalOperationIdentifier(operation.CanonicalOperationID)
 		fmt.Fprintf(
 			&b,
@@ -233,11 +265,7 @@ func writeGeneratedOperationContracts(
 			client.ResponseType,
 			methodName,
 		)
-		if client.RequestType != "void" {
-			fmt.Fprintf(&b, "    %s request, {\n", client.RequestType)
-		} else {
-			b.WriteString("    {\n")
-		}
+		fmt.Fprintf(&b, "    %s request, {\n", artifact.RequestType)
 		b.WriteString("    required CloudOperationInvocationContext context,\n")
 		b.WriteString("  }) {\n")
 		fmt.Fprintf(
@@ -256,17 +284,11 @@ func writeGeneratedOperationContracts(
 			"      responseDecoder: %s,\n",
 			client.ResponseDecoder,
 		)
-		if client.RequestType != "void" {
-			fmt.Fprintf(
-				&b,
-				"      requestEncoder: () => %s(request),\n",
-				client.RequestEncoder,
-			)
-		} else {
-			b.WriteString(
-				"      requestEncoder: () => const CloudOperationRequestPayload(),\n",
-			)
-		}
+		fmt.Fprintf(
+			&b,
+			"      requestEncoder: () => %s(request),\n",
+			artifact.Encoder,
+		)
 		b.WriteString("    );\n")
 		b.WriteString("  }\n\n")
 	}
@@ -336,6 +358,25 @@ func writeGeneratedOperationContracts(
 			"    maxAttempts: %d,\n",
 			operation.Reliability.MaxAttempts,
 		)
+		if operation.Pagination != nil {
+			fmt.Fprintf(
+				&b,
+				"    paginationDefaultItems: %d,\n",
+				operation.Pagination.DefaultItems,
+			)
+			fmt.Fprintf(
+				&b,
+				"    paginationMaximumItems: %d,\n",
+				operation.Pagination.MaximumItems,
+			)
+		}
+		if operation.ResponseAdmission != nil {
+			fmt.Fprintf(
+				&b,
+				"    maximumResponseBodyBytes: %d,\n",
+				operation.ResponseAdmission.MaximumBodyBytes,
+			)
+		}
 		fmt.Fprintf(
 			&b,
 			"    errorCodes: %s,\n",
@@ -350,6 +391,30 @@ func writeGeneratedOperationContracts(
 			&b,
 			"    telemetryAttributes: %s,\n",
 			dartStringListLiteral(operation.Telemetry.Attributes),
+		)
+		bindings := appRequestBindings{}
+		if operation.RequestBindings != nil {
+			bindings = *operation.RequestBindings
+		}
+		writeOperationRequestBindings(
+			&b,
+			"requestPathBindings",
+			bindings.Path,
+		)
+		writeOperationRequestBindings(
+			&b,
+			"requestQueryBindings",
+			bindings.Query,
+		)
+		writeOperationRequestBindings(
+			&b,
+			"requestHeaderBindings",
+			bindings.Header,
+		)
+		writeOperationRequestBindings(
+			&b,
+			"requestInjectedBindings",
+			bindings.Injected,
 		)
 		fmt.Fprintf(
 			&b,
@@ -382,6 +447,78 @@ func writeGeneratedOperationContracts(
 		),
 		b.String(),
 	)
+
+	var feedOperation *appExposedOperation
+	for index := range operations {
+		if operations[index].CanonicalOperationID == "content.post.GetFeed" {
+			feedOperation = &operations[index]
+			break
+		}
+	}
+	if feedOperation == nil || feedOperation.Pagination == nil ||
+		feedOperation.ResponseAdmission == nil {
+		panic("content.post.GetFeed must expose pagination and response admission budgets")
+	}
+	var policy strings.Builder
+	policy.WriteString("// Code generated by app-only-emitter. DO NOT EDIT.\n")
+	policy.WriteString("// ContractGraph SHA256: ")
+	policy.WriteString(activeContractSHA256)
+	policy.WriteString("\n\n")
+	policy.WriteString("abstract final class GeneratedContentPostGetFeedPolicy {\n")
+	policy.WriteString("  const GeneratedContentPostGetFeedPolicy._();\n\n")
+	fmt.Fprintf(
+		&policy,
+		"  static const int defaultItems = %d;\n",
+		feedOperation.Pagination.DefaultItems,
+	)
+	fmt.Fprintf(
+		&policy,
+		"  static const int maximumItems = %d;\n",
+		feedOperation.Pagination.MaximumItems,
+	)
+	fmt.Fprintf(
+		&policy,
+		"  static const int maximumResponseBodyBytes = %d;\n",
+		feedOperation.ResponseAdmission.MaximumBodyBytes,
+	)
+	policy.WriteString("}\n")
+	writeFile(
+		filepath.Join(
+			appDir,
+			"packages",
+			"quwoquan_cloud_contracts",
+			"lib",
+			"src",
+			"generated",
+			"content_post_get_feed_policy.g.dart",
+		),
+		policy.String(),
+	)
+	return nil
+}
+
+func writeOperationRequestBindings(
+	output *strings.Builder,
+	property string,
+	bindings []appRequestBinding,
+) {
+	fmt.Fprintf(
+		output,
+		"    %s: <CloudOperationRequestBinding>[\n",
+		property,
+	)
+	for _, binding := range bindings {
+		required := true
+		if binding.Required != nil {
+			required = *binding.Required
+		}
+		output.WriteString("      CloudOperationRequestBinding(\n")
+		fmt.Fprintf(output, "        name: %q,\n", binding.Name)
+		fmt.Fprintf(output, "        field: %q,\n", binding.Field)
+		fmt.Fprintf(output, "        required: %t,\n", required)
+		output.WriteString("      ),\n")
+	}
+	output.WriteString("    ],\n")
 }
 
 func canonicalOperationIdentifier(canonicalOperationID string) string {

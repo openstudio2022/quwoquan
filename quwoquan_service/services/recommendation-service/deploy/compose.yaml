@@ -2,7 +2,7 @@
 services:
   recommendation-service:
     # 服务名、镜像名和 prod K8s Service 统一为 recommendation-service。
-    image: "${QWQ_COMPOSE_RECOMMENDATION_SERVICE_IMAGE:-localhost/quwoquan_service_recommendation-service:latest}"
+    image: "${QWQ_COMPOSE_RECOMMENDATION_SERVICE_IMAGE:?fixed recommendation-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/recommendation-service/build/Dockerfile
@@ -17,7 +17,7 @@ services:
       MONGODB_URI: "${QWQ_COMPOSE_MONGODB_URI:-mongodb://mongodb:27017/?directConnection=true}"
       MONGODB_DATABASE: quwoquan_content
       CONFIG_VERSION: "${QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_RECOMMENDATION_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       PYTHONUNBUFFERED: "1"
       MODEL_CACHE_DIR: /app/cache
       REC_MODEL_UVICORN_WORKERS: "${QWQ_COMPOSE_REC_MODEL_WORKERS:-2}"

@@ -13,16 +13,12 @@ final class SearchRecentHistoryStore {
           '$storageKeyPrefix${sha256.convert(utf8.encode(_requiredActorNamespace(actorNamespace)))}';
 
   static const String storageKeyPrefix = 'global_search_recent_entries_';
-  static const String _legacyGlobalStorageKey =
-      'global_search_recent_entries_v1';
   static const String _schema = 'search_recent_history_cache';
 
   final String _storageKey;
 
   Future<SearchRecentHistoryCacheSnapshot> load() async {
     final preferences = await SharedPreferences.getInstance();
-    // 旧 key 没有身份边界，不能安全归属给任一账号或 Persona。
-    await preferences.remove(_legacyGlobalStorageKey);
     final raw = preferences.getString(_storageKey);
     if (raw == null || raw.trim().isEmpty) {
       return const SearchRecentHistoryCacheSnapshot();
@@ -78,9 +74,7 @@ final class SearchRecentHistoryStore {
   Future<void> clear() async {
     final preferences = await SharedPreferences.getInstance();
     await preferences.remove(_storageKey);
-    await preferences.remove(_legacyGlobalStorageKey);
-    if (preferences.containsKey(_storageKey) ||
-        preferences.containsKey(_legacyGlobalStorageKey)) {
+    if (preferences.containsKey(_storageKey)) {
       throw StateError('recent search cache cleanup verification failed');
     }
   }
@@ -98,9 +92,8 @@ final class SearchRecentHistoryStore {
     for (final key in keys) {
       await preferences.remove(key);
     }
-    await preferences.remove(_legacyGlobalStorageKey);
     final residualCount = preferences.getKeys().where((key) {
-      return key == _legacyGlobalStorageKey || key.startsWith(storageKeyPrefix);
+      return key.startsWith(storageKeyPrefix);
     }).length;
     if (residualCount != 0) {
       throw StateError(

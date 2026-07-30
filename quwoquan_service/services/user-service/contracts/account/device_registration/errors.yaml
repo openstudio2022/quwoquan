@@ -5,6 +5,11 @@ errors:
 - code: USER.DEVICE_PUSH.invalid_endpoint_kind
   kind: DEVICE_PUSH
   reason: invalid_endpoint_kind
+  emitted_by:
+  - surface: http
+    operations:
+    - RemoveDevicePushEndpoint
+    - UpsertDevicePushEndpoint
   http_status: 400
   recovery:
     action: surface
@@ -18,6 +23,10 @@ errors:
 - code: USER.DEVICE_PUSH.invalid_token
   kind: DEVICE_PUSH
   reason: invalid_token
+  emitted_by:
+  - surface: http
+    operations:
+    - UpsertDevicePushEndpoint
   http_status: 400
   recovery:
     action: surface
@@ -31,6 +40,12 @@ errors:
 - code: USER.DEVICE_PUSH.endpoint_not_found
   kind: DEVICE_PUSH
   reason: endpoint_not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - InvalidateDevicePushEndpoint
+    - RemoveDevicePushEndpoint
+    - ResolvePushEndpointSecret
   http_status: 404
   recovery:
     action: none
@@ -44,6 +59,10 @@ errors:
 - code: USER.DEVICE_PUSH.endpoint_not_active
   kind: DEVICE_PUSH
   reason: endpoint_not_active
+  emitted_by:
+  - surface: http
+    operations:
+    - ResolvePushEndpointSecret
   http_status: 409
   recovery:
     action: none
@@ -57,6 +76,10 @@ errors:
 - code: USER.DEVICE_PUSH.token_conflict
   kind: DEVICE_PUSH
   reason: token_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - UpsertDevicePushEndpoint
   http_status: 409
   recovery:
     action: refresh
@@ -70,6 +93,12 @@ errors:
 - code: USER.DEVICE_PUSH.version_conflict
   kind: DEVICE_PUSH
   reason: version_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - InvalidateDevicePushEndpoint
+    - RemoveDevicePushEndpoint
+    - UpsertDevicePushEndpoint
   http_status: 409
   recovery:
     action: retry
@@ -83,6 +112,10 @@ errors:
 - code: USER.DEVICE_PUSH.invalid_invalidation_reason
   kind: DEVICE_PUSH
   reason: invalid_invalidation_reason
+  emitted_by:
+  - surface: http
+    operations:
+    - InvalidateDevicePushEndpoint
   http_status: 400
   recovery:
     action: none
@@ -96,6 +129,11 @@ errors:
 - code: USER.DEVICE_PUSH.crypto_failure
   kind: DEVICE_PUSH
   reason: crypto_failure
+  emitted_by:
+  - surface: http
+    operations:
+    - ResolvePushEndpointSecret
+    - UpsertDevicePushEndpoint
   http_status: 500
   recovery:
     action: retry

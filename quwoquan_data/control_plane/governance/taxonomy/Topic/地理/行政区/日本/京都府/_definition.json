@@ -1,0 +1,12 @@
+{
+  "label": "京都府",
+  "labelEn": "Kyoto Prefecture",
+  "description": "千年古都与世界遗产密集地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

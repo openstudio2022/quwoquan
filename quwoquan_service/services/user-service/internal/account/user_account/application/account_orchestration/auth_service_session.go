@@ -17,12 +17,13 @@ import (
 	"quwoquan_service/services/user-service/generated/account/user_account"
 	sessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
+	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 )
 
 func (s *AuthService) issueLoginResult(
 	ctx context.Context,
 	ownerID, credType, credKey, deviceID string,
-) (*LoginResult, error) {
+) (*sessionapp.AuthSessionGrant, error) {
 	if _, err := s.resolvePhysicalShard(ownerID); err != nil {
 		return nil, err
 	}
@@ -39,32 +40,37 @@ func (s *AuthService) issueLoginResult(
 	}
 	if profile != nil && strings.TrimSpace(credType) != credentialAnonymousDevice {
 		updated := false
+		phone := ""
 		if strings.TrimSpace(profile.AccountState) == accountStateAnonymous {
 			promoteRegisteredProfile(profile)
 			updated = true
 		}
 		if strings.TrimSpace(credType) == credentialPhone && strings.TrimSpace(profile.Phone) == "" {
 			profile.Phone = credKey
+			phone = credKey
 			updated = true
 		}
 		if updated {
-			if err := s.profiles.Update(ctx, profile); err != nil {
-				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("promote owner profile: %v", err))
+			if err := s.profiles.PromoteRegistration(
+				ctx,
+				userrepo.RegistrationPromotion{UserID: ownerID, Phone: phone},
+			); err != nil {
+				return nil, generated.AppErrorFromInternalError(fmt.Sprintf("promote owner account: %v", err))
 			}
 		}
 	}
 
-	activeSub, err := s.personas.FindActiveByUserID(ctx, ownerID)
+	activePersona, err := s.personas.FindActiveByUserID(ctx, ownerID)
 	if err != nil {
 		return nil, err
 	}
 
-	subs, err := s.personas.FindByUserID(ctx, ownerID)
+	personas, err := s.personas.FindByUserID(ctx, ownerID)
 	if err != nil {
 		return nil, err
 	}
 
-	accessToken, err := s.issueAccessToken(ownerID, activeSub, security.AuthEpoch)
+	accessToken, err := s.issueAccessToken(ownerID, activePersona, security.AuthEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -83,12 +89,12 @@ func (s *AuthService) issueLoginResult(
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist refresh token: %v", err))
 	}
 
-	return &LoginResult{
+	return &sessionapp.AuthSessionGrant{
 		AccessToken:               accessToken,
 		RefreshToken:              refreshToken,
 		OwnerID:                   ownerID,
-		ActiveSub:                 buildActiveSubEnvelope(activeSub),
-		SubAccountCount:           len(subs),
+		ActivePersona:             buildActivePersonaEnvelope(activePersona),
+		PersonaCount:              len(personas),
 		AccountState:              defaultString(profileField(profile, func(p *model.UserProfile) string { return p.AccountState }), accountStateForCredentialType(credType)),
 		IdentityOrigin:            defaultString(profileField(profile, func(p *model.UserProfile) string { return p.IdentityOrigin }), identityOriginValue(credType)),
 		LogicalShard:              profileIntField(profile, func(p *model.UserProfile) int { return p.LogicalShard }),
@@ -133,7 +139,7 @@ func (s *AuthService) openAccountSession(
 
 // RefreshToken 单次轮换：旧 hash 标记 rotated 并同 lineage 换发新 token；
 // 已轮换 hash 的重放立即吊销整条 lineage。
-func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ *LoginResult, err error) {
+func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ *sessionapp.AuthSessionGrant, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.RefreshToken")
 	defer func() { rtobs.EndSpan(span, err) }()
 
@@ -163,11 +169,11 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ 
 		return nil, err
 	}
 
-	activeSub, err := s.personas.FindActiveByUserID(ctx, issued.AccountID)
+	activePersona, err := s.personas.FindActiveByUserID(ctx, issued.AccountID)
 	if err != nil {
 		return nil, err
 	}
-	subs, err := s.personas.FindByUserID(ctx, issued.AccountID)
+	personas, err := s.personas.FindByUserID(ctx, issued.AccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +190,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ 
 	}
 	accessToken, err := s.issueAccessToken(
 		issued.AccountID,
-		activeSub,
+		activePersona,
 		security.AuthEpoch,
 	)
 	if err != nil {
@@ -194,12 +200,12 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (_ 
 	if profile != nil && strings.TrimSpace(profile.IdentityOrigin) != "" {
 		credType = strings.TrimSpace(profile.IdentityOrigin)
 	}
-	return &LoginResult{
+	return &sessionapp.AuthSessionGrant{
 		AccessToken:               accessToken,
 		RefreshToken:              nextToken,
 		OwnerID:                   issued.AccountID,
-		ActiveSub:                 buildActiveSubEnvelope(activeSub),
-		SubAccountCount:           len(subs),
+		ActivePersona:             buildActivePersonaEnvelope(activePersona),
+		PersonaCount:              len(personas),
 		AccountState:              defaultString(profileField(profile, func(p *model.UserProfile) string { return p.AccountState }), accountStateForCredentialType(credType)),
 		IdentityOrigin:            defaultString(profileField(profile, func(p *model.UserProfile) string { return p.IdentityOrigin }), identityOriginValue(credType)),
 		LogicalShard:              profileIntField(profile, func(p *model.UserProfile) int { return p.LogicalShard }),
@@ -249,15 +255,15 @@ func generateToken() (string, error) {
 // issueAccessToken 只签发经统一 trust root 配置的短期 JWT。
 func (s *AuthService) issueAccessToken(
 	ownerID string,
-	activeSub *model.Persona,
+	activePersona *model.Persona,
 	authEpoch int64,
 ) (string, error) {
 	if s.accessSigner == nil {
 		return "", generated.AppErrorFromInternalError("access token signer unavailable")
 	}
 	persona := ""
-	if activeSub != nil {
-		persona = activeSub.SubAccountID
+	if activePersona != nil {
+		persona = activePersona.PersonaID
 	}
 	return s.accessSigner.Sign(rtauth.TokenSubject{
 		AccountID: ownerID,

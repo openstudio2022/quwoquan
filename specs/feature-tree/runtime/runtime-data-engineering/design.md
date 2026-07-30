@@ -29,7 +29,7 @@
 - 决策：数据任务先冻结 reviewed commit、source digest、canonical entity catalog、来源、权利与目标事实，并让各 carrier 以独立 execution 并行运行后再经 canonical publish、immutable release 和环境 importer 激活。
 - 理由：`runtime-data-engineering` 是运行时数据工程能力，负责把离线/半自动数据产物整理为 App 与云服务可消费的稳定契约输入。
 - 被否决方案：环境 seed manifest、T3/UAT 自建业务对象、post 依赖 homepage execution、把四载体塞入单一 execution，或调用方/页面复制本层状态并绕过 release/importer。
-- 约束与影响：post 只依赖 canonical entity identity，同一 campaign 的 carrier execution 共享 commit/source/entity-catalog digest 并独立恢复，同一 release 保持环境无关且四环境仅产生独立 activation/import/rollback receipt。
+- 约束与影响：release 聚合以冻结的 source/entity facts 和独立 carrier execution 为输入，用 attestation `payloadSha256` 串联四环境 import/readiness，并在 cleanup 时以进程锁及 acceptance evidence 保留长期验收引用。
 - 关联要求：`REQ-001`
 - 影响 Story：[`article-commercial-scale-closure`](./article-commercial-scale-closure/spec.md)、[`geo-content-trinity`](./geo-content-trinity/spec.md)、[`image-commercial-scale-closure`](./image-commercial-scale-closure/spec.md)、[`video-commercial-scale-closure`](./video-commercial-scale-closure/spec.md)
 - 关联验收：`SIT-001`

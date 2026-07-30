@@ -11,7 +11,14 @@
 
 ## 2. Story 协作与状态流
 
-- [`session-preference-memory-control`](./session-preference-memory-control/spec.md)：服务与 App local_contract 通过。
+- [`context-assembly-slot-filling`](./context-assembly-slot-filling/spec.md)：装配授权后的上下文与槽位状态，是本能力的入口。
+- [`long-term-memory-compaction`](./long-term-memory-compaction/spec.md)：向装配提供事实型长期记忆与压缩后的会话历史。
+- [`session-preference-memory-control`](./session-preference-memory-control/spec.md)：向装配提供结构化文风偏好。
+- [`skill-progressive-disclosure-routing`](./skill-progressive-disclosure-routing/spec.md)：在策略允许集合内确定该次运行的领域技能与其工具策略。
+- [`planner-aggregation-orchestration`](./planner-aggregation-orchestration/spec.md)：消费装配结果与技能策略，决定下一步动作并裁决答案边界。
+- [`tool-fabric-runtime`](./tool-fabric-runtime/spec.md)：为编排执行工具调用并返回受预算与恢复策略约束的观察。
+- [`native-tool-calling-model-routing`](./native-tool-calling-model-routing/spec.md)：为编排提供模型档位与原生工具调用协议。
+- [`trajectory-replay-evaluation-gate`](./trajectory-replay-evaluation-gate/spec.md)：消费上述各 Story 的公开运行结果，以版本化回放语料持续验证完整 Agent 轨迹。
 
 ## 3. 端云与数据流
 
@@ -22,13 +29,13 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 小趣采用统一 Agent 主线与 Skill 中心
-- 决策：小趣采用统一 Agent 主线与 Skill 中心。
+### DEC-001 小趣采用统一 Agent 主线、Skill 中心与轨迹回放准入
+- 决策：小趣采用统一 Agent 主线与 Skill 中心；提示、策略或技能目录变更必须通过同一主线的版本化轨迹回放后才能合入。
 - 理由：以统一 Agent 主线、Skill 中心、Markdown-first 输出、可解释折叠过程与偏好事实回注，提供可持续扩展且可回退的小趣体验。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
-- 影响 Story：[`session-preference-memory-control`](./session-preference-memory-control/spec.md)
+- 影响 Story：[`context-assembly-slot-filling`](./context-assembly-slot-filling/spec.md)、[`long-term-memory-compaction`](./long-term-memory-compaction/spec.md)、[`session-preference-memory-control`](./session-preference-memory-control/spec.md)、[`skill-progressive-disclosure-routing`](./skill-progressive-disclosure-routing/spec.md)、[`planner-aggregation-orchestration`](./planner-aggregation-orchestration/spec.md)、[`tool-fabric-runtime`](./tool-fabric-runtime/spec.md)、[`native-tool-calling-model-routing`](./native-tool-calling-model-routing/spec.md)、[`trajectory-replay-evaluation-gate`](./trajectory-replay-evaluation-gate/spec.md)
 - 关联验收：`SIT-001`
 
 ## 5. 失败与恢复

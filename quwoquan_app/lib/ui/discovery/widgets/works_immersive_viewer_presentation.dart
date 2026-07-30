@@ -165,10 +165,13 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _resolvedArticlePageCount[postId] == safePageCount) {
+      if (!mounted ||
+          !_postStateWindow.contains(postId) ||
+          _resolvedArticlePageCount[postId] == safePageCount) {
         return;
       }
       _setMountedState(() {
+        _rememberPostLocalState(postId);
         _resolvedArticlePageCount[postId] = safePageCount;
       });
     });
@@ -384,9 +387,13 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     if (overrides == null || overrides.isEmpty) {
       return canonical;
     }
+    final now = DateTime.now();
     return <String>[
       for (var index = 0; index < canonical.length; index++)
-        overrides[index] ?? canonical[index],
+        if (overrides[index]?.isUsableAt(now) ?? false)
+          overrides[index]!.url
+        else
+          canonical[index],
     ];
   }
 
@@ -422,7 +429,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   /// 作品级统一投影：raw wire + PostBaseDto 收敛为 [WorkBrowserItemDto]。
   /// 视频集（mediaItems）、图片序列、交集摘要只允许从该投影读取。
   WorkBrowserItemDto _workItemFor(PostBaseDto post) {
-    final cached = _workItemCache[post.id];
+    final cached = _workItemCache.read(post.id);
     if (cached != null) return cached;
     final raw = _effectiveRawPostById(post.id);
     final source = raw == null
@@ -431,14 +438,22 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
             raw.map((k, v) => MapEntry(k.toString(), v)),
           );
     final item = WorkBrowserItemDto.fromMap(source);
-    _workItemCache[post.id] = item;
+    _workItemCache.write(post.id, item);
     return item;
   }
 
   /// 视频集序列：契约 mediaItems[kind=video]，为空时回落单视频；边界解析为交付引用。
   List<_WorksVideoDeliveryItem> _videoItemsFor(PostBaseDto post) {
-    final resolver = MediaDeliveryResolver.fromRuntimeConfig();
+    final endpointConfig = ref.watch(mediaEndpointConfigProvider);
+    if (endpointConfig == null) {
+      return const <_WorksVideoDeliveryItem>[];
+    }
+    final resolver = MediaDeliveryResolver(endpointConfig);
     final rawItems = _workItemFor(post).videoItems;
+    final sourcePost = post;
+    final VideoPostDto? videoPost = sourcePost is VideoPostDto
+        ? sourcePost
+        : null;
     final sources = rawItems.isNotEmpty
         ? rawItems
         : (post.mediaVideoUrl.isEmpty
@@ -457,9 +472,14 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
                       post,
                     ).previewTrackManifestUrl,
                     previewTrackVersion: _workItemFor(post).previewTrackVersion,
+                    hlsCmafMasterManifestUrl:
+                        videoPost?.hlsCmafMasterManifestUrl,
+                    hlsCmafDescriptorVersion:
+                        videoPost?.hlsCmafDescriptorVersion,
                   ),
                 ]);
     final resolved = <_WorksVideoDeliveryItem>[];
+    final identityAllocator = WorksVideoEpisodeIdentityAllocator(post.id);
     for (final item in sources) {
       final delivery = resolver.tryResolve(
         item.url,
@@ -470,9 +490,26 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       if (delivery == null) {
         continue;
       }
+      final assetId = item.mediaAssetId?.trim() ?? '';
+      final assetVersion = item.mediaAssetVersion ?? 0;
+      final adaptiveDelivery = assetId.isEmpty || assetVersion <= 0
+          ? null
+          : resolver.tryResolve(
+              item.hlsCmafMasterManifestUrl,
+              kind: MediaDeliveryKind.video,
+              assetId: assetId,
+              version: assetVersion,
+            );
       resolved.add(
         _WorksVideoDeliveryItem(
+          identity: identityAllocator.allocate(
+            deliveryCacheIdentity: delivery.cacheIdentity,
+            mediaAssetId: item.mediaAssetId,
+            mediaAssetVersion: item.mediaAssetVersion,
+          ),
           deliveryReference: delivery,
+          adaptiveDeliveryReference: adaptiveDelivery,
+          adaptiveDescriptorVersion: item.hlsCmafDescriptorVersion ?? 0,
           coverReference: resolver.tryResolve(
             item.coverUrl,
             kind: MediaDeliveryKind.image,
@@ -544,6 +581,12 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       _currentPage = 0;
       _invalidateVideoViewport(resetDurationWindow: false);
       _pageController.jumpToPage(0);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _retainPostLocalStateAround(_buildFeed(), _currentPage);
     });
   }
 
@@ -771,6 +814,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
 
   void _toggleCaptionExpanded(String postId) {
     _setMountedState(() {
+      _rememberPostLocalState(postId);
       if (_expandedCaptionPostIds.contains(postId)) {
         _expandedCaptionPostIds.remove(postId);
       } else {

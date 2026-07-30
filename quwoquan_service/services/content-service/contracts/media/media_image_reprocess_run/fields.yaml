@@ -34,7 +34,8 @@ fields:
   role: authoritative_state
 - name: status
   source: status
-  type: string
+  type: enum
+  enum_ref: MediaImageReprocessRunStatus
   constraints:
   - NOT_NULL
   classification: INTERNAL
@@ -44,7 +45,7 @@ fields:
   role: authoritative_state
 - name: assetIds
   source: assetIds
-  type: string[]
+  type: '[]string'
   constraints:
   - NOT_NULL
   - MIN_ITEMS_1
@@ -103,7 +104,7 @@ fields:
   role: authoritative_state
 - name: activations
   source: activations
-  type: MediaImageReprocessActivation[]
+  type: '[]MediaImageReprocessActivation'
   constraints:
   - NOT_NULL
   - MAX_ITEMS_500
@@ -173,50 +174,48 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
-- name: assetId
-  source: assetId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  owner: MediaImageReprocessActivation
-  role: owned_value
-  reference: true
-- name: previousRevision
-  source: previousRevision
-  type: int
-  constraints:
-  - NOT_NULL
-  - POSITIVE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  owner: MediaImageReprocessActivation
-  role: owned_value
-- name: activatedRevision
-  source: activatedRevision
-  type: int
-  constraints:
-  - NOT_NULL
-  - POSITIVE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  owner: MediaImageReprocessActivation
-  role: owned_value
-- name: activatedAt
-  source: activatedAt
-  type: datetime
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  owner: MediaImageReprocessActivation
-  role: owned_value
+types:
+  StartMediaImageReprocessRunRequest:
+    fields:
+    - {name: runId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: assetIds, type: '[]string', constraints: [NOT_NULL, MIN_ITEMS_1, MAX_ITEMS_500, UNIQUE_ITEMS], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+  MediaImageReprocessActivation:
+    description: 单个 MediaAsset descriptor revision 的已提交激活审计值。
+    fields:
+    - name: assetId
+      source: assetId
+      type: string
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: drop
+      ops_exposure: read
+      role: owned_value
+      reference: true
+    - name: previousRevision
+      source: previousRevision
+      type: int
+      constraints: [NOT_NULL, POSITIVE]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: owned_value
+    - name: activatedRevision
+      source: activatedRevision
+      type: int
+      constraints: [NOT_NULL, POSITIVE]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: owned_value
+    - name: activatedAt
+      source: activatedAt
+      type: timestamp
+      constraints: [NOT_NULL]
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: drop
+      ops_exposure: read
+      role: owned_value

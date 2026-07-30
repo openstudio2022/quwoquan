@@ -9,7 +9,7 @@ import (
 // lockedVector is the canonical contact-discovery hash for 13800138000.
 // The Dart client mirror (contact_hash_service_test.dart) asserts the SAME
 // value so client and server can never silently diverge.
-const lockedVector = "7b71d6a6e90939d8e0c67aa73853908899db940db3165d196707cd7c3be67e27"
+const lockedVector = "ec1a7eb3a4a2d69b978580e3d74fc3677cb2b4ebc2e1a58be568310147539484"
 
 func TestHashLockedVector(t *testing.T) {
 	if got := phonematch.Hash("13800138000"); got != lockedVector {

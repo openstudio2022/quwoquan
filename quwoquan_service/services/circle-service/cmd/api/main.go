@@ -18,7 +18,6 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
-	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
@@ -69,9 +68,7 @@ type redisSceneCfg struct {
 
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 
 	Service struct {
@@ -114,8 +111,8 @@ func run() error {
 		log.Fatalf("circle-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("circle-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion, imageVersion); err != nil {
+		log.Fatalf("circle-service config identity failed: %v", err)
 	}
 
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
@@ -313,6 +310,14 @@ func run() error {
 	if err := accountClosedProjection.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("circle UserAccountClosed projection indexes failed: %v", err)
 	}
+	accountRestrictionProjection, err :=
+		persistence.NewMongoUserAccountRestrictionProjection(db)
+	if err != nil {
+		log.Fatalf("circle account restriction projection invalid: %v", err)
+	}
+	if err := accountRestrictionProjection.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle account restriction projection indexes failed: %v", err)
+	}
 	accountClosedConsumer, err := messaging.NewUserAccountClosedConsumer(
 		messageTransport,
 		accountClosedProjection,
@@ -323,6 +328,9 @@ func run() error {
 	if err != nil {
 		log.Fatalf("circle UserAccountClosed consumer init failed: %v", err)
 	}
+	accountClosedConsumer.WithUserAccountRestrictionProjection(
+		accountRestrictionProjection,
+	)
 	if err := accountClosedConsumer.EnsureGroup(ctx); err != nil {
 		log.Fatalf("circle UserAccountClosed consumer group failed: %v", err)
 	}
@@ -612,16 +620,14 @@ func run() error {
 	}, ioLogger, processLogger, exceptionLogger)
 
 	hotConfigStore := controlplane.NewHotConfigStore()
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore, rateLimiter)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observed)
+	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:      accessVerifier,
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(observed),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -777,9 +783,9 @@ func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
 	}
 }
 
-func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
+func validateRuntimeConfigurationIdentity(cfg config, configVersion, imageVersion string) error {
 	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
 		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
 	}
-	return nil
+	return controlplane.ValidateImageIdentity(imageVersion)
 }

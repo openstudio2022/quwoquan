@@ -53,6 +53,8 @@
 - 审核未通过的认领申请必须返回明确原因或可重提状态。
 - baseline 不保留硬删除主页的旧口径，应统一切到软下线。
 - 若认领链路或下线合同上线后出现严重治理风险，可先隐藏认领入口或下线上报入口，但不得破坏已下线主页记录保留。
+- `Homepage` 写聚合只保存主页权威状态；关注状态、关注数、评分、内容/问答/群组预览、关系边与助手上下文只存在于独立 named read model。
+- 详情查询返回 `HomepageDetailView`，当前 viewer 的关注事实由独立 `HomepageViewerFollowSlice` 组合；`HomepageShellView` 只引用已有 typed read model，不以内联 `object` 复制投影形状。
 
 ## 6. 契约与依赖
 
@@ -68,3 +70,6 @@
 - GIVEN 执行“homepage claim maintain and offline journey 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“homepage claim maintain and offline journey 能力”对应动作。
 - THEN 直属 Story 共同交付“候选主页发布、认领维护、现实状态异常上报和软下线保留”，失败终态可区分且不产生伪成功事实。
+- THEN `Homepage` 聚合不包含 `role: projection` 字段，详情与壳层查询只组合 typed named read model，viewer-scoped 关注状态不进入聚合快照或版本 CAS。
+
+## 8. 开放事项

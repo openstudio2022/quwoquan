@@ -22,6 +22,7 @@
 
 - vector memory
 - implicit personality inference
+- 事实型长期记忆与长会话压缩，归 [`long-term-memory-compaction`](../long-term-memory-compaction/spec.md)
 
 ## 3. 行为要求
 

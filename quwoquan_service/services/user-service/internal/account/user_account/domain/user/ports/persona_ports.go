@@ -21,7 +21,7 @@ type PersonaReader interface {
 	FindByUserID(ctx context.Context, userID string) ([]model.Persona, error)
 	FindActiveByUserID(ctx context.Context, userID string) (*model.Persona, error)
 	FindByUserHandle(ctx context.Context, userHandle string) (*model.Persona, error)
-	FindBySubAccountID(ctx context.Context, subAccountID string) (*model.Persona, error)
+	FindByPersonaID(ctx context.Context, personaID string) (*model.Persona, error)
 }
 
 // PersonaOwnerAccountReader 是跨对象读取 Persona owner 的最窄 typed port。
@@ -30,16 +30,6 @@ type PersonaReader interface {
 type PersonaOwnerAccountReader interface {
 	ResolveOwnerAccountID(
 		ctx context.Context,
-		subAccountID string,
+		personaID string,
 	) (accountID string, found bool, err error)
-}
-
-// PersonaWriter 只服务两类非公开命令写入：登录 bootstrap 首建 Persona，
-// 以及 owner 基线资料向 active Persona 的展示字段传播（version 单调由
-// personas 表触发器承载）。公开 Persona 命令一律经
-// persona_management/persona/domain/ports.PersonaCommandStore 原子提交
-// state/receipt/outbox，不得回退到本端口。
-type PersonaWriter interface {
-	Create(ctx context.Context, persona *model.Persona) error
-	Update(ctx context.Context, persona *model.Persona) error
 }

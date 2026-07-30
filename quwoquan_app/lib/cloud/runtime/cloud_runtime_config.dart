@@ -267,6 +267,37 @@ class CloudRuntimeConfig {
     if (!_isValidSecureWebSocketUrl(realtimeConnectionUrl)) {
       invalidEndpoints.add('REALTIME_CONNECTION_URL');
     }
+    if (invalidEndpoints.isEmpty) {
+      final publicWeb = Uri.parse(publicWebBaseUrl);
+      final legal = Uri.parse(legalBaseUrl);
+      final appDownload = Uri.parse(appDownloadBaseUrl);
+      final mediaAvatar = Uri.parse(mediaAvatarCdnBaseUrl);
+      final mediaImage = Uri.parse(mediaImageCdnBaseUrl);
+      final mediaVideo = Uri.parse(mediaVideoCdnBaseUrl);
+      final mediaUpload = Uri.parse(mediaUploadBaseUrl);
+      if (!_sameOrigin(publicWeb, legal) ||
+          legal.path != _joinBasePath(publicWeb.path, 'legal')) {
+        invalidEndpoints.add('APP_LEGAL_BASE_URL');
+      }
+      if (!_sameOrigin(mediaAvatar, mediaImage) ||
+          !_sameOrigin(mediaImage, mediaVideo) ||
+          mediaAvatar.path != '/media/avatar' ||
+          mediaImage.path != '/media/image' ||
+          mediaVideo.path != '/media/video') {
+        invalidEndpoints.addAll(<String>[
+          'MEDIA_AVATAR_CDN_BASE_URL',
+          'MEDIA_IMAGE_CDN_BASE_URL',
+          'MEDIA_VIDEO_CDN_BASE_URL',
+        ]);
+      }
+      if (!_sameOrigin(appDownload, mediaImage) ||
+          appDownload.path != '/download') {
+        invalidEndpoints.add('APP_DOWNLOAD_BASE_URL');
+      }
+      if (_sameOrigin(mediaUpload, mediaImage) || mediaUpload.path.isNotEmpty) {
+        invalidEndpoints.add('MEDIA_UPLOAD_BASE_URL');
+      }
+    }
     final validRuntimeEnv =
         runtimeEnv == 'alpha' ||
         runtimeEnv == 'beta' ||
@@ -289,6 +320,7 @@ class CloudRuntimeConfig {
     return uri != null &&
         uri.scheme.toLowerCase() == 'https' &&
         uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty &&
         !uri.hasQuery &&
         !uri.hasFragment;
   }
@@ -298,7 +330,18 @@ class CloudRuntimeConfig {
     return uri != null &&
         uri.scheme.toLowerCase() == 'wss' &&
         uri.host.isNotEmpty &&
+        uri.userInfo.isEmpty &&
         !uri.hasQuery &&
         !uri.hasFragment;
+  }
+
+  static bool _sameOrigin(Uri left, Uri right) =>
+      left.scheme.toLowerCase() == right.scheme.toLowerCase() &&
+      left.host.toLowerCase() == right.host.toLowerCase() &&
+      left.port == right.port;
+
+  static String _joinBasePath(String basePath, String child) {
+    final normalized = basePath.replaceFirst(RegExp(r'/+$'), '');
+    return '$normalized/$child';
   }
 }

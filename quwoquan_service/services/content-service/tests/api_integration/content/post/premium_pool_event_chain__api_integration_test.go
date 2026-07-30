@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/spec.md#gwt-002
 package api_integration
 
 import (
@@ -20,8 +21,8 @@ import (
 // W3 精品流读路径闭环（B3 / R-IX04）：product-ops `events.ops.*` 事件 →
 // PremiumPoolEventConsumer（真实 Redis pub/sub）→ rm_premium_pool 投影（真实
 // Mongo）→ PremiumPoolSource fail-closed 召回 → FeedService premium 频道返回
-// recallPath=premium_pool 的端到端链路。takedown 后 premium feed 立即回空
-// （fail-closed，禁止回退时间流）。
+// recallPath=premium_pool 的端到端链路。takedown 后 premium feed 返回带原因的
+// canonical 健康空页；依赖读取失败仍 fail-closed，且禁止回退时间流。
 func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 	db := requireMongoDB(t)
 	router := requireTestRouter(t)
@@ -31,25 +32,43 @@ func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 	poolColl := db.Collection("rm_premium_pool")
 	feedColl := db.Collection("rm_discovery_feed")
 	postsColl := db.Collection("posts")
+	stateColl := db.Collection("data_release_state")
+	const environment = "api_integration_premium_chain"
+	const releaseID = "rel_api_integration_premium_chain"
+	const manifestDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
 		_, _ = poolColl.DeleteMany(cleanupCtx, bson.M{"contentId": bson.M{"$regex": "^premium_chain_"}})
 		_, _ = feedColl.DeleteMany(cleanupCtx, bson.M{"postId": bson.M{"$regex": "^premium_chain_"}})
 		_, _ = postsColl.DeleteMany(cleanupCtx, bson.M{"_id": bson.M{"$regex": "^premium_chain_"}})
+		_, _ = stateColl.DeleteMany(cleanupCtx, bson.M{"environment": environment})
 	})
 
 	const contentID = "premium_chain_post_001"
 	now := time.Now().UTC()
+	if _, err := stateColl.InsertOne(ctx, bson.M{
+		"environment": environment, "sourceOwner": "qwq_data", "status": "active",
+		"activeReleaseId": releaseID, "manifestDigest": manifestDigest,
+	}); err != nil {
+		t.Fatalf("seed data release state: %v", err)
+	}
 	// 精品候选的召回 join rm_discovery_feed 读模型；渲染详情读 posts 聚合。
 	if _, err := feedColl.InsertOne(ctx, bson.M{
 		"postId":          contentID,
-		"contentType":     "article",
+		"contentType":     "video",
+		"contentIdentity": "work",
 		"authorId":        "premium_chain_author",
 		"title":           "精品池端到端链路验证",
 		"tagRefs":         []string{"Topic/旅行/玩法/摄影旅拍"},
 		"contentVertical": "travel_photography",
 		"supplySource":    "data_engineering",
+		"sourceOwner":     "qwq_data",
+		"releaseId":       releaseID,
+		"manifestDigest":  manifestDigest,
+		"lifecycleStatus": "active",
+		"status":          "published",
+		"visibility":      "public",
 		"publishedAt":     now,
 		"qualityScore":    0.9,
 		"recScore":        0.9,
@@ -58,7 +77,7 @@ func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 	}
 	if _, err := postsColl.InsertOne(ctx, bson.M{
 		"_id":              contentID,
-		"contentType":      "article",
+		"contentType":      "video",
 		"contentIdentity":  "work",
 		"authorId":         "premium_chain_author",
 		"title":            "精品池端到端链路验证",
@@ -66,6 +85,12 @@ func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 		"status":           "published",
 		"visibility":       "public",
 		"moderationStatus": "approved",
+		"sourceOwner":      "qwq_data",
+		"releaseId":        releaseID,
+		"manifestDigest":   manifestDigest,
+		"lifecycleStatus":  "active",
+		"videoUrl":         "https://media.example.test/premium-chain.mp4",
+		"durationMs":       int64(5000),
 		"tagRefs":          []string{"Topic/旅行/玩法/摄影旅拍"},
 		"contentVertical":  "travel_photography",
 		"createdAt":        now,
@@ -123,8 +148,19 @@ func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 	if err := waitForPremiumEligibility(ctx, poolColl, contentID, "eligible"); err != nil {
 		t.Fatalf("premium projection not materialized: %v", err)
 	}
+	supplyReader := persistence.NewMongoActiveSupplyReader(
+		db,
+		environment,
+		persistence.WithPremiumPlayableSupplyReader(
+			recinfra.NewMongoPremiumPoolCandidateReader(db),
+		),
+	)
+	snapshot, err := supplyReader.ActiveSupplySnapshot(ctx)
+	if err != nil || !snapshot.Ready() {
+		t.Fatalf("premium chain active supply not ready: snapshot=%+v err=%v", snapshot, err)
+	}
 
-	feedSvc := newPremiumChainFeedService(db, router)
+	feedSvc := newPremiumChainFeedService(db, router, environment)
 	resp, err := feedSvc.ListFeed(ctx, feedapp.ListFeedRequest{
 		UserID:    "premium_chain_viewer",
 		SessionID: "premium_chain_session",
@@ -152,7 +188,7 @@ func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 		)
 	}
 
-	// takedown 下架 → 池内失效 → premium feed fail-closed 回空（不回退时间流）。
+	// takedown 下架 → 池内失效 → premium feed canonical healthy empty（不回退时间流）。
 	publishOpsEvent(recinfra.PremiumPoolEntryTakedownEjectedEvent, map[string]any{
 		"contentId":       contentID,
 		"scope":           "global",
@@ -162,26 +198,30 @@ func TestPremiumPoolEventChainServesAndEjectsPremiumFeed(t *testing.T) {
 	if err := waitForPremiumEligibility(ctx, poolColl, contentID, "ineligible"); err != nil {
 		t.Fatalf("premium takedown not materialized: %v", err)
 	}
-	after, err := feedSvc.ListFeed(ctx, feedapp.ListFeedRequest{
+	emptyResponse, err := feedSvc.ListFeed(ctx, feedapp.ListFeedRequest{
 		UserID:    "premium_chain_viewer",
 		SessionID: "premium_chain_session_2",
 		ChannelID: "premium",
 		Limit:     10,
 	})
 	if err != nil {
-		t.Fatalf("ListFeed premium after takedown: %v", err)
+		t.Fatalf("premium initial page after takedown: %v", err)
 	}
-	for _, item := range after.Items {
-		if item.PostID == contentID {
-			t.Fatalf("ejected premium content must not be served (fail-closed), got %+v", after.Items)
-		}
+	if len(emptyResponse.Items) != 0 ||
+		emptyResponse.Outcome != feedapp.FeedResponseOutcomeEmpty ||
+		emptyResponse.EmptyReason != feedapp.FeedEmptyReasonNoEligibleContent {
+		t.Fatalf("premium takedown must return canonical healthy empty: %+v", emptyResponse)
 	}
 }
 
 // newPremiumChainFeedService 按生产 main.go 同源方式装配 premium fail-closed
 // 召回：所有源统一包 GatePremiumStreamSource，premium_stream surface 只允许
 // PremiumPoolSource 供给。
-func newPremiumChainFeedService(db *mongo.Database, router *rtredis.Router) *feedapp.FeedService {
+func newPremiumChainFeedService(
+	db *mongo.Database,
+	router *rtredis.Router,
+	environment string,
+) *feedapp.FeedService {
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
 	rawSources := []rtrec.CandidateSource{
 		recinfra.NewTagRecallSource(db),
@@ -196,6 +236,13 @@ func newPremiumChainFeedService(db *mongo.Database, router *rtredis.Router) *fee
 	return feedapp.NewFeedService(
 		engine,
 		persistence.NewMongoPostQueryReader(db.Collection("posts")),
+		feedapp.WithActiveSupplyReader(persistence.NewMongoActiveSupplyReader(
+			db,
+			environment,
+			persistence.WithPremiumPlayableSupplyReader(
+				recinfra.NewMongoPremiumPoolCandidateReader(db),
+			),
+		)),
 	)
 }
 

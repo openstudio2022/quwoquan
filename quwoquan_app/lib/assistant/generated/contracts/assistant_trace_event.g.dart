@@ -2,6 +2,7 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 
 class AssistantTraceEventWire {
@@ -14,6 +15,7 @@ class AssistantTraceEventWire {
     required this.eventType,
     required this.seq,
     this.status = "",
+    this.visibility = TraceVisibility.userVisible,
     this.summary = "",
     this.payload = const <String, dynamic>{},
     this.runtimeFailure,
@@ -28,6 +30,7 @@ class AssistantTraceEventWire {
   final String eventType;
   final int seq;
   final String status;
+  final TraceVisibility visibility;
   final String summary;
   final Map<String, dynamic> payload;
   final RuntimeFailureWire? runtimeFailure;
@@ -42,6 +45,7 @@ class AssistantTraceEventWire {
         'eventType': eventType,
         'seq': seq,
         'status': status,
+        'visibility': visibility.wireName,
         'summary': summary,
         'payload': payload,
         'runtimeFailure': runtimeFailure?.toJson(),
@@ -58,6 +62,7 @@ class AssistantTraceEventWire {
       eventType: (json['eventType'] as String?)?.trim() ?? "",
       seq: (json['seq'] as num?)?.toInt() ?? 0,
       status: (json['status'] as String?)?.trim() ?? "",
+      visibility: parseTraceVisibility((json['visibility'] as String?)?.trim() ?? "user_visible"),
       summary: (json['summary'] as String?)?.trim() ?? "",
       payload: (json['payload'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
       runtimeFailure: json['runtimeFailure'] is Map ? RuntimeFailureWire.fromJson((json['runtimeFailure'] as Map).cast<String, dynamic>()) : null,
@@ -76,6 +81,7 @@ class AssistantTraceEventWireFields {
   static const String eventType = 'eventType';
   static const String seq = 'seq';
   static const String status = 'status';
+  static const String visibility = 'visibility';
   static const String summary = 'summary';
   static const String payload = 'payload';
   static const String runtimeFailure = 'runtimeFailure';

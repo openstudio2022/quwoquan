@@ -67,6 +67,7 @@ class ProfileShell extends ConsumerStatefulWidget {
     this.initialDisplayName,
     this.initialBackgroundUrl,
     this.onBack,
+    this.openMessageComposerOnOpen = false,
   });
 
   final ProfileMode mode;
@@ -75,6 +76,9 @@ class ProfileShell extends ConsumerStatefulWidget {
   final String? initialDisplayName;
   final String? initialBackgroundUrl;
   final VoidCallback? onBack;
+
+  /// 进入主页后一次性执行「私信 / 打招呼」分流（交集卡 `dispatch: message` 的承接）。
+  final bool openMessageComposerOnOpen;
 
   @override
   ConsumerState<ProfileShell> createState() => _ProfileShellState();
@@ -88,6 +92,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   late final ScrollController _profileScrollController;
 
   late String _activeTabId;
+  late bool _pendingMessageComposerIntent;
 
   @override
   void initState() {
@@ -95,6 +100,34 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     _profileScrollController = ScrollController()
       ..addListener(_saveActiveShareScrollOffset);
     _activeTabId = UserProfileUIConfig.defaultTabId;
+    _pendingMessageComposerIntent = widget.openMessageComposerOnOpen;
+  }
+
+  /// 交集卡「打招呼 / 私信」落地：等关系能力位就绪后跑一次主页原有分流。
+  ///
+  /// 能力位未到达前不执行，避免把陌生人误判成可直开会话；游客态由
+  /// [_gatedOpenMessage] 自行登记 continuation 并拉起登录。
+  void _maybeRunPendingMessageComposerIntent(
+    BuildContext context,
+    ProfileState state,
+    ProfileNotifier notifier,
+  ) {
+    if (!_pendingMessageComposerIntent) {
+      return;
+    }
+    final authenticated = ref
+        .read(authSessionControllerProvider)
+        .isAuthenticated;
+    if (authenticated && state.capability == null) {
+      return;
+    }
+    _pendingMessageComposerIntent = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_gatedOpenMessage(context, notifier));
+    });
   }
 
   @override
@@ -132,7 +165,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         .read(
           shareInteractionProvider(
             ShareInteractionBucketKey(
-              subAccountId: widget.userId,
+              personaId: widget.userId,
               direction: direction,
             ),
           ).notifier,
@@ -157,7 +190,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
           .read(
             shareInteractionProvider(
               ShareInteractionBucketKey(
-                subAccountId: widget.userId,
+                personaId: widget.userId,
                 direction: shareDirection,
               ),
             ),
@@ -184,14 +217,14 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.refresh,
-          subAccountId: widget.userId,
+          personaId: widget.userId,
           direction: direction,
         );
     await ref
         .read(
           shareInteractionProvider(
             ShareInteractionBucketKey(
-              subAccountId: widget.userId,
+              personaId: widget.userId,
               direction: direction,
             ),
           ).notifier,
@@ -394,6 +427,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
         }
       }
     });
+    _maybeRunPendingMessageComposerIntent(context, state, notifier);
     final userData = ref.watch(userDataProvider);
     final bg = SettingsSemanticConstants.conversationSheetPanelBackground(
       isDark,
@@ -409,7 +443,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final profile = state.profile;
     final isMine = widget.mode == ProfileMode.mine;
     final impactRequest = (
-      subAccountId: widget.userId,
+      personaId: widget.userId,
       surface: isMine ? AppUiSurfaces.profileHome : AppUiSurfaces.userProfile,
     );
     final impact = ref.watch(authorImpactProvider(impactRequest));
@@ -477,7 +511,6 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     // 头像源在 Shell 层只选择一次，避免主头像与吸顶头像走不同兜底路径。
     final avatarUrl = _firstNonEmptyString([
       widget.initialAvatarUrl,
-      if (isMine) userData?.avatar,
       if (isMine) userData?.avatarUrl,
       profile?.avatarUrl,
     ]);

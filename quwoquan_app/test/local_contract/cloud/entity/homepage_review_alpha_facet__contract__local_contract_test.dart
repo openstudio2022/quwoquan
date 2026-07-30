@@ -104,7 +104,7 @@ void main() {
       final facet = AlphaSubjectFollowFacet();
       final first = await facet.follow(
         FollowSubjectCommand(
-          subjectType: SubjectFollowSubjectType.homepage,
+          subjectType: FollowSubjectKind.homepage,
           subjectId: 'hp-1',
         ),
       );
@@ -113,7 +113,7 @@ void main() {
 
       final replay = await facet.follow(
         FollowSubjectCommand(
-          subjectType: SubjectFollowSubjectType.homepage,
+          subjectType: FollowSubjectKind.homepage,
           subjectId: 'hp-1',
         ),
       );
@@ -121,29 +121,27 @@ void main() {
 
       final unfollow = await facet.unfollow(
         UnfollowSubjectCommand(
-          subjectType: SubjectFollowSubjectType.homepage,
+          subjectType: FollowSubjectKind.homepage,
           subjectId: 'hp-1',
         ),
       );
       expect(unfollow.following, isFalse);
-      expect(
-        facet.isFollowing(SubjectFollowSubjectType.homepage, 'hp-1'),
-        isFalse,
-      );
+      expect(facet.isFollowing(FollowSubjectKind.homepage, 'hp-1'), isFalse);
     });
   });
 
   group('HomepageReview pure contracts — wire 形状', () {
-    test('create 命令 encode 只输出 metadata writable_fields', () {
-      final payload = encodeCreateHomepageReviewCommand(
-        CreateHomepageReviewCommand(
-          homepageId: 'hp-1',
-          rating: 5,
-          body: '很棒',
-          tagRefs: const <String>['publish/tags/scenery'],
-          authorDisplayNameSnapshot: '趣友甲',
-        ),
-      );
+    test('create 命令 encode 只输出 request entity body fields', () {
+      final payload =
+          encodeEntityHomepageReviewCreateHomepageReviewGeneratedRequest(
+            CreateHomepageReviewCommand(
+              homepageId: 'hp-1',
+              rating: 5,
+              body: '很棒',
+              tagRefs: const <String>['publish/tags/scenery'],
+              authorDisplayNameSnapshot: '趣友甲',
+            ),
+          );
       expect(payload.pathParameters, {'homepageId': 'hp-1'});
       expect(payload.body, {
         'rating': 5,

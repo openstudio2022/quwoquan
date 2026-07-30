@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -42,6 +43,8 @@ func rtcPayloadDartScalarType(f *fieldDef) string {
 		return "String"
 	}
 	switch f.Type {
+	case "enum":
+		return f.EnumRef
 	case "int", "long":
 		return "int"
 	case "bool":
@@ -57,6 +60,15 @@ func rtcPayloadFromWireExpr(dartField, wireKey string, f *fieldDef, nullable boo
 	p := fmt.Sprintf("payload['%s']", wireKey)
 	if defLit != "" {
 		switch {
+		case f != nil && f.Type == "enum":
+			return fmt.Sprintf(
+				"      %s: %s == null ? %s : %s.fromString(%s as String),\n",
+				dartField,
+				p,
+				defLit,
+				f.EnumRef,
+				p,
+			)
 		case f != nil && (f.Type == "int" || f.Type == "long"):
 			return fmt.Sprintf("      %s: (%s as num?)?.toInt() ?? %s,\n", dartField, p, defLit)
 		case f != nil && f.Type == "bool":
@@ -67,6 +79,14 @@ func rtcPayloadFromWireExpr(dartField, wireKey string, f *fieldDef, nullable boo
 	}
 	if nullable {
 		switch {
+		case f != nil && f.Type == "enum":
+			return fmt.Sprintf(
+				"      %s: %s == null ? null : %s.fromString(%s as String),\n",
+				dartField,
+				p,
+				f.EnumRef,
+				p,
+			)
 		case f != nil && (f.Type == "int" || f.Type == "long"):
 			return fmt.Sprintf("      %s: (%s as num?)?.toInt(),\n", dartField, p)
 		case f != nil && f.Type == "bool":
@@ -76,6 +96,13 @@ func rtcPayloadFromWireExpr(dartField, wireKey string, f *fieldDef, nullable boo
 		}
 	}
 	switch {
+	case f != nil && f.Type == "enum":
+		return fmt.Sprintf(
+			"      %s: %s.fromString(%s as String),\n",
+			dartField,
+			f.EnumRef,
+			p,
+		)
 	case f != nil && (f.Type == "int" || f.Type == "long"):
 		return fmt.Sprintf("      %s: (%s as num?)?.toInt() ?? 0,\n", dartField, p)
 	case f != nil && f.Type == "bool":
@@ -154,7 +181,9 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 			b.WriteString(fmt.Sprintf("    this.%s,\n", dartID))
 		} else {
 			defLit := rtcDartStringLiteral(def)
-			if f != nil && (f.Type == "int" || f.Type == "long") {
+			if f != nil && f.Type == "enum" {
+				defLit = f.EnumRef + "." + toDartValueName(def)
+			} else if f != nil && (f.Type == "int" || f.Type == "long") {
 				defLit = def
 			}
 			if f != nil && f.Type == "bool" {
@@ -213,7 +242,9 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 		nullable := def == ""
 		defLit := ""
 		if def != "" {
-			if f != nil && (f.Type == "int" || f.Type == "long") {
+			if f != nil && f.Type == "enum" {
+				defLit = f.EnumRef + "." + toDartValueName(def)
+			} else if f != nil && (f.Type == "int" || f.Type == "long") {
 				defLit = def
 			} else if f != nil && f.Type == "bool" {
 				defLit = def
@@ -283,6 +314,24 @@ func renderRtcSignalPayloadsDart(sourcePath string, ff *fieldsFile, ev *rtcEvent
 	b.WriteString("// Source: ")
 	b.WriteString(filepath.ToSlash(sourcePath))
 	b.WriteString("\n// ignore_for_file: prefer_const_constructors\n\n")
+	usedEnumRefs := map[string]bool{}
+	for i := range ev.Events {
+		for _, key := range ev.Events[i].PayloadFields {
+			if field := rtcResolveSessionField(session, rtcPayloadWireKey(key)); field != nil && field.Type == "enum" && strings.TrimSpace(field.EnumRef) != "" {
+				usedEnumRefs[field.EnumRef] = true
+			}
+		}
+	}
+	if len(usedEnumRefs) > 0 {
+		refs := make([]string, 0, len(usedEnumRefs))
+		for ref := range usedEnumRefs {
+			refs = append(refs, ref)
+		}
+		sort.Strings(refs)
+		b.WriteString("import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart' show ")
+		b.WriteString(strings.Join(refs, ", "))
+		b.WriteString(";\n\n")
+	}
 	b.WriteString("/// Gateway `type` string for each metadata event (`client_ws_type`).\n")
 	for i := range ev.Events {
 		e := &ev.Events[i]

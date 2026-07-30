@@ -2,7 +2,7 @@
   "label": "类目",
   "labelEn": "Product Category",
   "description": "商品所属的消费类目（画像）",
-  "maxDepth": 2,
+  "maxDepth": 3,
   "pathPolicy": "prefer-leaf",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"

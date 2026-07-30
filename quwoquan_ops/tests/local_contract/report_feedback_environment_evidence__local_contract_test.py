@@ -182,7 +182,6 @@ class ReportFeedbackEnvironmentEvidenceTest(unittest.TestCase):
             actual = support.operator_session(
                 environment="gamma",
                 base_url="https://api.gamma.quwoquan.com:19000",
-                resolve_host="127.0.0.1",
                 hosted_token_env="unused",
             )
 
@@ -193,7 +192,6 @@ class ReportFeedbackEnvironmentEvidenceTest(unittest.TestCase):
             target_name="gamma-local",
             profile="content-report-operator",
             subject="fixture_content_report_operator",
-            resolve_host="127.0.0.1",
         )
 
     def test_gate_rejects_generic_stack_reports_without_object_probe(self) -> None:

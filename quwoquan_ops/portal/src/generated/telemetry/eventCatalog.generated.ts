@@ -148,6 +148,57 @@ export const eventCatalog = {
       ]
     },
     {
+      "event_type": "login_funnel",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "entryMode",
+        "fromStep",
+        "toStep",
+        "provider",
+        "otpPurpose",
+        "consentState",
+        "durationMs",
+        "attemptIndex",
+        "countdownBucket",
+        "motionReduced",
+        "dismissPolicy"
+      ],
+      "required_extensions": [
+        "action",
+        "flowId",
+        "step",
+        "result"
+      ]
+    },
+    {
+      "event_type": "login_operation",
+      "internal_priority": "critical",
+      "log_type": "event",
+      "normal_sample_rate": 1,
+      "optional_extensions": [
+        "flowId",
+        "step",
+        "provider",
+        "otpPurpose",
+        "failReasonCode",
+        "failureKind",
+        "recoveryAction",
+        "copyKey",
+        "feedbackSurface",
+        "durationMs",
+        "attemptIndex",
+        "requestId",
+        "traceId"
+      ],
+      "required_extensions": [
+        "operationId",
+        "surfaceId",
+        "result"
+      ]
+    },
+    {
       "event_type": "chat_interaction_outcome",
       "internal_priority": "critical",
       "log_type": "event",
@@ -514,6 +565,10 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "attemptIndex": {
+      "minimum": 0,
+      "type": "int"
+    },
     "audioUnderrunCount": {
       "minimum": 0,
       "type": "int"
@@ -599,6 +654,10 @@ export const eventCatalog = {
       "minimum": 0,
       "type": "int"
     },
+    "consentState": {
+      "max_length": 32,
+      "type": "string"
+    },
     "contentType": {
       "enum": [
         "micro",
@@ -609,8 +668,16 @@ export const eventCatalog = {
       ],
       "type": "string"
     },
+    "copyKey": {
+      "max_length": 128,
+      "type": "string"
+    },
     "correlationHash": {
       "max_length": 64,
+      "type": "string"
+    },
+    "countdownBucket": {
+      "max_length": 32,
       "type": "string"
     },
     "declaredDurationMs": {
@@ -651,6 +718,10 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "dismissPolicy": {
+      "max_length": 64,
+      "type": "string"
+    },
     "droppedFrames": {
       "minimum": 0,
       "type": "int"
@@ -665,6 +736,10 @@ export const eventCatalog = {
     "effectivePlaybackMs": {
       "minimum": 0,
       "type": "int"
+    },
+    "entryMode": {
+      "max_length": 64,
+      "type": "string"
     },
     "environment": {
       "enum": [
@@ -681,6 +756,22 @@ export const eventCatalog = {
     },
     "failReasonCode": {
       "max_length": 128,
+      "type": "string"
+    },
+    "failureKind": {
+      "max_length": 64,
+      "type": "string"
+    },
+    "feedbackSurface": {
+      "max_length": 32,
+      "type": "string"
+    },
+    "flowId": {
+      "max_length": 96,
+      "type": "string"
+    },
+    "fromStep": {
+      "max_length": 64,
       "type": "string"
     },
     "governanceAction": {
@@ -711,7 +802,7 @@ export const eventCatalog = {
       "type": "int"
     },
     "jankyFrames": {
-      "minimum": 1,
+      "minimum": 0,
       "type": "int"
     },
     "journey": {
@@ -740,6 +831,9 @@ export const eventCatalog = {
         "assistant"
       ],
       "type": "string"
+    },
+    "motionReduced": {
+      "type": "bool"
     },
     "networkQuality": {
       "enum": [
@@ -778,6 +872,10 @@ export const eventCatalog = {
       "max_length": 128,
       "type": "string"
     },
+    "otpPurpose": {
+      "max_length": 32,
+      "type": "string"
+    },
     "participantCount": {
       "minimum": 0,
       "type": "int"
@@ -789,6 +887,10 @@ export const eventCatalog = {
     "processedVideoFrames": {
       "minimum": 0,
       "type": "int"
+    },
+    "provider": {
+      "max_length": 32,
+      "type": "string"
     },
     "publicationStage": {
       "enum": [
@@ -872,7 +974,13 @@ export const eventCatalog = {
     "seekEvidenceSource": {
       "enum": [
         "controller_command_completion",
-        "native_settled"
+        "native_settled",
+        "source_switch_native_settled",
+        "source_switch_position_readback_native_unsupported",
+        "source_switch_native_settle_timeout",
+        "source_switch_settle_unsupported",
+        "source_switch_command_failed",
+        "source_switch_superseded"
       ],
       "type": "string"
     },
@@ -883,6 +991,10 @@ export const eventCatalog = {
     "seekSettleMaxMs": {
       "minimum": 0,
       "type": "int"
+    },
+    "step": {
+      "max_length": 64,
+      "type": "string"
     },
     "surfaceId": {
       "max_length": 128,
@@ -918,6 +1030,10 @@ export const eventCatalog = {
         "empty",
         "error"
       ],
+      "type": "string"
+    },
+    "toStep": {
+      "max_length": 64,
       "type": "string"
     },
     "traceId": {

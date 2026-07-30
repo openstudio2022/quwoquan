@@ -12,6 +12,9 @@ import json
 import os
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 
@@ -20,12 +23,18 @@ def _find_repo_root() -> Path:
         if (candidate / "quwoquan_app").is_dir() and (candidate / "quwoquan_service").is_dir():
             return candidate
     raise RuntimeError("cannot locate quwoquan repo root")
-import urllib.parse
-import urllib.error
-import urllib.request
 
 
 REPO_ROOT = _find_repo_root()
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    ENVIRONMENT_CANONICAL_TARGET,
+    get_target,
+    load_environment_topology,
+)
+
 FAIL_FAST_EXIT_CODE = 86
 FAIL_FAST_CATEGORIES = {
     "device_not_found",
@@ -89,14 +98,8 @@ def discover_device_ids(platform: str) -> list[str]:
 
 def diagnose_gamma_failure() -> None:
     """将 gamma 失败粗分为：配置/连通/鉴权/可达四类，便于流水线分流。"""
-    base = os.environ.get("GAMMA_BASE_URL", "").strip()
+    base = canonical_gateway_base_url("gamma")
     token = os.environ.get("GAMMA_TEST_AUTH_TOKEN", "").strip()
-    if not base:
-        print(
-            "::error::[gamma/connectivity_config] 缺少 GAMMA_BASE_URL（连通性配置）",
-            file=sys.stderr,
-        )
-        return
     if not token:
         print(
             "::warning::[gamma/auth_config] GAMMA_TEST_AUTH_TOKEN 为空，可能导致鉴权相关用例失败",
@@ -137,6 +140,13 @@ def parse_gateway_port(raw_url: str) -> int:
     if parsed.scheme == "https":
         return 443
     return 80
+
+
+def canonical_gateway_base_url(env_name: str) -> str:
+    target_name = ENVIRONMENT_CANONICAL_TARGET[env_name]
+    return str(
+        get_target(load_environment_topology(), target_name)["publicBases"]["api"]
+    ).rstrip("/")
 
 
 def main() -> int:
@@ -198,39 +208,23 @@ def main() -> int:
     for device_id in device_ids:
         command.extend(["--device-id", device_id])
 
-    if env_name == "gamma":
-        gamma_base_url = os.environ.get("GAMMA_BASE_URL", "").strip()
-        if not gamma_base_url:
-            print(
-                f"::error::缺少 GAMMA_BASE_URL，无法执行 gamma {args.platform} 端侧矩阵",
-                file=sys.stderr,
-            )
-            diagnose_gamma_failure()
-            return 1
-        command.extend(["--skip-beta-services", "--gateway-base-url", gamma_base_url])
-
+    gateway_base_url = canonical_gateway_base_url(env_name)
+    command.extend(
+        [
+            "--gateway-base-url",
+            gateway_base_url,
+            "--ios-gateway-base-url",
+            gateway_base_url,
+            "--android-gateway-base-url",
+            gateway_base_url,
+            "--gateway-health-url",
+            gateway_base_url,
+            "--gateway-port",
+            str(parse_gateway_port(gateway_base_url)),
+        ]
+    )
     if env_name == "beta":
-        beta_gateway_base_url = os.environ.get(
-            "ASSISTANT_MATRIX_GATEWAY_BASE_URL", ""
-        ).strip()
-        beta_gateway_health_url = os.environ.get(
-            "ASSISTANT_MATRIX_GATEWAY_HEALTH_URL", beta_gateway_base_url
-        ).strip()
-        if beta_gateway_base_url:
-            gateway_port = parse_gateway_port(beta_gateway_base_url)
-            command.extend(
-                [
-                    "--skip-beta-services",
-                    "--gateway-base-url",
-                    beta_gateway_base_url,
-                    "--gateway-health-url",
-                    beta_gateway_health_url or beta_gateway_base_url,
-                    "--gateway-port",
-                    str(gateway_port),
-                ]
-            )
-        else:
-            command.extend(["--service-start-timeout-seconds", "180"])
+        command.append("--skip-beta-services")
 
     # iOS 26+ 等新模拟器在全场景 smoke 下容易超过默认 420s（见 beta-ios 矩阵报告：
     # iPhone 17 Pro 上多次 SIGTERM/timeout），为 beta/gamma 的 iOS 矩阵单独放宽。

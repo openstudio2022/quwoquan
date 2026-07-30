@@ -1,0 +1,12 @@
+{
+  "label": "滨海边疆区",
+  "labelEn": "Primorsky Krai",
+  "description": "远东出海口",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

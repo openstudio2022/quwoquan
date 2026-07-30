@@ -32,12 +32,10 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
     media_video_base_url: str = ""
     media_upload_base_url: str = ""
     legal_static_root: str = ""
-    ops_policy_version: str = "mock-alpha"
     ops_lock = threading.Lock()
     ops_event_ids: set[str] = set()
     ops_events: list[dict[str, object]] = []
     ops_visits: list[dict[str, object]] = []
-    ops_experiment_assignments: dict[str, dict[str, dict[str, object]]] = {}
     otp_lock = threading.Lock()
     otp_challenges: dict[str, dict[str, object]] = {}
     otp_send_history: dict[str, list[float]] = {}
@@ -139,7 +137,6 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "requestId": "alpha-search-request",
-                    "rankingVersion": "alpha-mock-v1",
                     "hits": [],
                     "mockBoundary": True,
                 }
@@ -324,8 +321,8 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
                 "identityOrigin": "phone",
                 "logicalShard": int(owner_digest[:4], 16) % 128,
                 "anonymousRetentionPolicy": "merge_on_login",
-                "activeSub": None,
-                "subAccountCount": 0,
+                "activePersona": None,
+                "personaCount": 0,
                 "sessionRememberTtlSeconds": 2592000,
                 "accountHint": {
                     "displayName": "",
@@ -474,20 +471,6 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             self._send_json(self._build_ops_visit_stats(query_params))
             return True
 
-        experiment_id = self._match_experiment_path(path, "/bucket")
-        if experiment_id is not None:
-            self._send_json(
-                self._resolve_experiment_assignment(
-                    experiment_id,
-                    self._query_value(query_params, "subjectKey") or "anonymous",
-                )
-            )
-            return True
-
-        experiment_id = self._match_experiment_path(path, "/stats")
-        if experiment_id is not None:
-            self._send_json(self._build_experiment_stats(experiment_id))
-            return True
         return False
 
     def _handle_ops_post(self, path: str) -> bool:
@@ -497,14 +480,6 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             return True
         if path == "/ops/visits":
             self._send_json(self._record_ops_visit(payload))
-            return True
-
-        experiment_id = self._match_experiment_path(path, "/assign")
-        if experiment_id is not None:
-            subject_key = "anonymous"
-            if isinstance(payload, dict):
-                subject_key = str(payload.get("subjectKey") or "").strip() or "anonymous"
-            self._send_json(self._resolve_experiment_assignment(experiment_id, subject_key))
             return True
         return False
 
@@ -704,67 +679,6 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             "items": items,
             "mockBoundary": True,
         }
-
-    def _resolve_experiment_assignment(
-        self,
-        experiment_id: str,
-        subject_key: str,
-    ) -> dict[str, object]:
-        normalized_experiment = experiment_id.strip()
-        normalized_subject = subject_key.strip() or "anonymous"
-        handler_cls = type(self)
-        with handler_cls.ops_lock:
-            assignments = handler_cls.ops_experiment_assignments.setdefault(
-                normalized_experiment,
-                {},
-            )
-            existing = assignments.get(normalized_subject)
-            if existing is not None:
-                return dict(existing)
-            digest = hashlib.sha256(
-                f"{normalized_experiment}:{normalized_subject}".encode("utf-8")
-            ).hexdigest()
-            bucket = "control" if int(digest[:2], 16) % 2 == 0 else "treatment"
-            assignment = {
-                "experimentId": normalized_experiment,
-                "subjectKey": normalized_subject,
-                "bucket": bucket,
-                "policyVersion": handler_cls.ops_policy_version,
-                "assignmentTrace": "mock-hash",
-                "mockBoundary": True,
-            }
-            assignments[normalized_subject] = assignment
-            return dict(assignment)
-
-    def _build_experiment_stats(self, experiment_id: str) -> dict[str, object]:
-        handler_cls = type(self)
-        with handler_cls.ops_lock:
-            assignments = dict(
-                handler_cls.ops_experiment_assignments.get(experiment_id.strip(), {})
-            )
-        bucket_stats: dict[str, int] = {}
-        for assignment in assignments.values():
-            bucket = str(assignment.get("bucket") or "").strip()
-            if not bucket:
-                continue
-            bucket_stats[bucket] = bucket_stats.get(bucket, 0) + 1
-        return {
-            "experimentId": experiment_id.strip(),
-            "policyVersion": handler_cls.ops_policy_version,
-            "enabled": True,
-            "bucketStats": bucket_stats,
-            "assignedSubjects": len(assignments),
-            "mockBoundary": True,
-        }
-
-    def _match_experiment_path(self, path: str, suffix: str) -> str | None:
-        prefix = "/ops/product_ops/experiments/"
-        if not path.startswith(prefix) or not path.endswith(suffix):
-            return None
-        experiment_id = path[len(prefix) : -len(suffix)].strip("/")
-        if not experiment_id or "/" in experiment_id:
-            return None
-        return experiment_id
 
     def _query_value(
         self,

@@ -53,7 +53,7 @@
 
 - GIVEN recipe 明确 contentType，来源与权利规则来自静态 registry。
 - WHEN execution 执行 download、quality、compose、draft、review。
-- THEN 四类内容均使用相同 source unit、Agent 审计与逐图权利闭包。
+- THEN creator/avatar、entity、article/image/video 与 poster 均经同一 immutable release MediaAsset authority 绑定 source unit、Agent 审计与逐图权利闭包；公开消费者只接收按 kind 物化的 public slice，owner/rights 身份漂移必须 fail-closed。
 - THEN 中间文件只进入 execution，approved 对象才进入 publish/release。
 
 <a id="gwt-002"></a>
@@ -72,20 +72,11 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 多内容类型复用同一来源与权利合同
-
-- 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：当前 creator/avatar 与 post/entity media 尚未形成 private CAS → MediaAsset → public slice 的同源 release 闭包，图片来源、下载字节、授权和消费者引用不能完整回放。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 覆盖 creator/avatar、entity、article/image/video 与 poster。
-
 <a id="open-002"></a>
 ### OPEN-002 失败对象隔离与成功对象独立发布
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺同一 release 的 tag/creator/content/homepage importer、四环境 activation、API/media consumer 与 rollback/replay；直接 seed 仍可绕过主线。
+- 影响或价值：尚缺同一 immutable release digest 的 tag/creator/content/homepage 四环境 activation、API/media consumer readback 与 rollback/replay receipt。仓库内 importer 已统一消费 release MediaAsset authority，环境业务 seed 与环境私有 media manifest 已由架构门禁止，但这些静态约束不能代替 Alpha → Beta → Gamma → Prod 的真实晋级证据。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 覆盖 Alpha → Beta → Gamma → Prod 晋级。

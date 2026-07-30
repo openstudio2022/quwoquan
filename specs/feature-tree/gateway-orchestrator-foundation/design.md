@@ -19,6 +19,9 @@
 
 ## 4. 架构与数据流
 
+- 公开 TLS 入口只终止传输安全和服务静态资源；业务 HTTP 统一进入 `api-edge`，按“验签身份 -> generated ContractGraph operation 授权 -> 共享 admission -> 业务 owner”单轨执行。
+- 限流状态以 `(environment, trusted subject, canonical operation)` 派生的不可逆摘要 key 存入共享 Redis；副本和 `prod` stable/gray 不形成独立配额，rollout stage 不参与 key。
+- 共享状态故障只执行 operation policy 声明的 fail-open/fail-closed，不得切换到进程内计数器；拒绝响应的 `Retry-After` 与 canonical recovery 秒数来自同一原子决定。
 - [`orchestration-degradation-rollback`](./orchestration-degradation-rollback/spec.md)：在聚合调用、下游超时或路由变更失败时维持稳定响应契约，并通过显式降级和可审计回滚恢复服务
 - [`realtime-gateway`](./realtime-gateway/spec.md)：提供有状态的双向实时会话、重连与投递确认
 - [`request-context-propagation`](./request-context-propagation/spec.md)：让同一请求的主体、客户端、requestId、traceId 与 causationId 在同步和异步边界保持一致且可审计
@@ -33,6 +36,7 @@
 - 理由：提供网关统一入口、鉴权限流、防护策略与跨服务编排基础能力。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
+- 约束与影响：TLS/静态入口不得复制业务 path/operation/限流表；业务 owner 不接受绕过 `api-edge` 的公网入口，内部服务仍执行自身 generated authorization 作为 owner 边界。
 - 关联要求：`REQ-001`
 - 关联能力：[`orchestration-degradation-rollback`](./orchestration-degradation-rollback/spec.md)、[`realtime-gateway`](./realtime-gateway/spec.md)、[`request-context-propagation`](./request-context-propagation/spec.md)、[`unified-entry-security`](./unified-entry-security/spec.md)
 

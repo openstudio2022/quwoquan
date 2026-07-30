@@ -31,20 +31,20 @@ func TestStartSyncLoop_StartupLoadAndReload(t *testing.T) {
 	}
 
 	store := NewStoreFromBaseline()
+	baselineDigest := store.EffectiveHash()
 	quietLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go StartSyncLoop(ctx, store, quietLogger, SyncConfig{Path: path, Interval: 10 * time.Millisecond})
 
 	// Startup load must swap to the file policy.
-	if !waitFor(t, time.Second, func() bool { return store.Current().PolicyVersion == "test-v1" }) {
-		t.Fatalf("startup load did not apply file policy, got %q", store.Current().PolicyVersion)
+	if !waitFor(t, time.Second, func() bool { return store.EffectiveHash() != baselineDigest }) {
+		t.Fatalf("startup load did not apply file policy, digest stayed %q", baselineDigest)
 	}
+	initialDigest := store.EffectiveHash()
 
-	// Edit the file (new mtime + new version) -> ticker reload should pick it up.
+	// Edit the file (new mtime + changed policy content) -> reload picks it up.
 	edited := `
-version: 1
-policyVersion: test-v2
 defaultPreset: control
 weightPresets:
   control: { tagRelevance: 3.0, popularity: 2.0, freshness: 1.5, negativePenalty: 5.0 }
@@ -60,8 +60,8 @@ scorer:
 	}
 	_ = os.Chtimes(path, future, future)
 
-	if !waitFor(t, time.Second, func() bool { return store.Current().PolicyVersion == "test-v2" }) {
-		t.Fatalf("reload did not pick up edited policy, got %q", store.Current().PolicyVersion)
+	if !waitFor(t, time.Second, func() bool { return store.EffectiveHash() != initialDigest }) {
+		t.Fatalf("reload did not pick up edited policy, digest stayed %q", initialDigest)
 	}
 }
 
@@ -73,20 +73,20 @@ func TestStartSyncLoop_BadEditKeepsLastGood(t *testing.T) {
 	}
 
 	store := NewStoreFromBaseline()
+	baselineDigest := store.EffectiveHash()
 	quietLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go StartSyncLoop(ctx, store, quietLogger, SyncConfig{Path: path, Interval: 10 * time.Millisecond})
 
-	if !waitFor(t, time.Second, func() bool { return store.Current().PolicyVersion == "test-v1" }) {
-		t.Fatalf("startup load failed, got %q", store.Current().PolicyVersion)
+	if !waitFor(t, time.Second, func() bool { return store.EffectiveHash() != baselineDigest }) {
+		t.Fatalf("startup load failed, digest stayed %q", baselineDigest)
 	}
+	goodDigest := store.EffectiveHash()
 
 	// Write a structurally invalid policy: it must be rejected and the
-	// last-good (test-v1) retained — a bad edit never degrades scoring.
+	// last-good digest retained — a bad edit never degrades scoring.
 	bad := `
-version: 1
-policyVersion: broken
 defaultPreset: missing
 weightPresets:
   control: { tagRelevance: 1.0 }
@@ -101,9 +101,9 @@ scorer:
 	}
 	_ = os.Chtimes(path, future, future)
 
-	// Give the loop several ticks; version must stay test-v1.
+	// Give the loop several ticks; the last-good digest must remain unchanged.
 	time.Sleep(120 * time.Millisecond)
-	if store.Current().PolicyVersion != "test-v1" {
-		t.Fatalf("bad edit changed live policy to %q, want last-good test-v1", store.Current().PolicyVersion)
+	if store.EffectiveHash() != goodDigest {
+		t.Fatalf("bad edit changed live digest to %q, want %q", store.EffectiveHash(), goodDigest)
 	}
 }

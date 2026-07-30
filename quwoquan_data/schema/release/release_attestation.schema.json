@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["schema", "releaseId", "releaseKind", "executionIds", "entityCount", "postCount", "creatorCount", "tagCount", "canonicalMerkle", "sourceDigests", "payloadSha256", "recordedAt"],
+  "required": ["schema", "releaseId", "sourceOwner", "releaseKind", "executionIds", "entityCount", "postCount", "creatorCount", "tagCount", "canonicalMerkle", "sourceDigests", "payloadSha256", "recordedAt"],
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "quwoquan_data.release_attestation"},
     "releaseId": {"type": "string", "minLength": 1},
+    "sourceOwner": {"const": "qwq_data"},
     "releaseKind": {"enum": ["content", "empty_baseline"]},
     "executionIds": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "entityCount": {"type": "integer", "minimum": 0},

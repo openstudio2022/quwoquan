@@ -2,6 +2,7 @@
   "label": "科幻乐园",
   "labelEn": "Sci-fi Theme Park",
   "description": "科技与科幻主题的乐园",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

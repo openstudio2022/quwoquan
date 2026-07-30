@@ -8,14 +8,16 @@ import (
 )
 
 type UpsertInput struct {
-	PreferenceID   string
-	UserID         string
-	Scope          preferencemodel.Scope
-	ConversationID string
-	Kind           preferencemodel.Kind
-	Value          string
-	SourceType     preferencemodel.SourceType
-	Now            time.Time
+	PreferenceID         string
+	UserID               string
+	Scope                preferencemodel.Scope
+	ConversationID       string
+	Kind                 preferencemodel.Kind
+	Value                string
+	SourceType           preferencemodel.SourceType
+	SourceConversationID string
+	ConfirmedAt          *time.Time
+	Now                  time.Time
 }
 
 type ListFilter struct {

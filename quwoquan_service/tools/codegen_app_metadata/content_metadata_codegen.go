@@ -14,7 +14,6 @@ func renderContentMetadataDart(
 	feedRoute routeDef,
 	getPostRoute routeDef,
 	feedDefaultLimit int,
-	writableFields []string,
 	likeRoutes map[string]string,
 ) string {
 	var b strings.Builder
@@ -51,14 +50,8 @@ func renderContentMetadataDart(
 	b.WriteString(fmt.Sprintf("  static const String postDetailPathTemplate = '%s';\n\n", nonEmpty(getPostRoute.Path, "/content/content/posts/{postId}")))
 
 	b.WriteString("  static const List<String> feedQueryParams = <String>[\n")
-	for _, key := range feedRoute.QueryParams {
+	for _, key := range feedRoute.queryBindingNames() {
 		b.WriteString(fmt.Sprintf("    '%s',\n", key))
-	}
-	b.WriteString("  ];\n\n")
-
-	b.WriteString("  static const List<String> publicationWritableFields = <String>[\n")
-	for _, f := range writableFields {
-		b.WriteString(fmt.Sprintf("    '%s',\n", f))
 	}
 	b.WriteString("  ];\n\n")
 

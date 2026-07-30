@@ -191,7 +191,7 @@ func (f *Facade) Create(ctx context.Context, command CreateCommand) (ClaimReques
 		)
 	}
 	if strings.TrimSpace(state.ClaimStatus) == "claimed" {
-		return ClaimRequestView{}, generated.AppErrorFromAlreadyClaimed(
+		return ClaimRequestView{}, claimgenerated.AppErrorFromAlreadyClaimed(
 			fmt.Sprintf("homepage %s is already claimed", command.HomepageID),
 		)
 	}
@@ -566,7 +566,7 @@ func mapDomainError(err error) error {
 	case errors.Is(err, claimmodel.ErrInvalidMaterialURL):
 		return claimgenerated.AppErrorFromInvalidClaimMaterialURL(err.Error())
 	case errors.Is(err, claimmodel.ErrClaimMaterial):
-		return generated.AppErrorFromClaimMaterialMissing(err.Error())
+		return claimgenerated.AppErrorFromClaimMaterialMissing(err.Error())
 	case errors.Is(err, claimmodel.ErrReviewerRequired),
 		errors.Is(err, claimmodel.ErrSelfReview):
 		return generated.AppErrorFromPermissionDenied(err.Error())

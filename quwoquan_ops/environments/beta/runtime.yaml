@@ -3,17 +3,17 @@
   "environment": "beta",
   "dataReleaseTarget": "beta-local",
   "urlRoles": {
-    "api": {"exposure": "public", "scheme": "https", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta", "consumers": ["app.gateway", "data.release-verifier", "ops.health"]},
-    "realtime": {"exposure": "public", "scheme": "wss", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta", "consumers": ["app.realtime", "ops.health"]},
-    "rtc": {"exposure": "public", "scheme": "wss", "host": "rtc.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta", "consumers": ["app.rtc", "ops.health"]},
-    "productOps": {"exposure": "public", "scheme": "https", "host": "ops.beta.quwoquan.com", "portRole": "product-ops-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta", "consumers": ["app.recovery", "ops.release"]},
-    "publicWeb": {"exposure": "public", "scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta", "consumers": ["app.public-links", "web.release", "native.app-links"]},
-    "appDownload": {"exposure": "public", "scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/download", "tlsProfile": "acme-dns01-beta", "consumers": ["app.recovery", "web.download"]},
-    "legal": {"exposure": "public", "scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/legal", "tlsProfile": "acme-dns01-beta", "consumers": ["app.legal", "web.legal"]},
-    "mediaAvatar": {"exposure": "public", "scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "acme-dns01-beta", "consumers": ["app.media", "data.release", "service.chat"]},
-    "mediaImage": {"exposure": "public", "scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "acme-dns01-beta", "consumers": ["app.media", "data.release", "service.content"]},
-    "mediaVideo": {"exposure": "public", "scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "acme-dns01-beta", "consumers": ["app.media", "data.release", "service.content"]},
-    "mediaUpload": {"exposure": "public", "scheme": "https", "host": "upload.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta", "consumers": ["app.media-upload", "service.upload-issuer"]}
+    "api": {"scheme": "https", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
+    "realtime": {"scheme": "wss", "host": "api.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
+    "rtc": {"scheme": "wss", "host": "rtc.beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
+    "productOps": {"scheme": "https", "host": "ops.beta.quwoquan.com", "portRole": "product-ops-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
+    "publicWeb": {"scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"},
+    "appDownload": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/download", "tlsProfile": "acme-dns01-beta"},
+    "legal": {"scheme": "https", "host": "beta.quwoquan.com", "portRole": "api-edge", "pathBase": "/legal", "tlsProfile": "acme-dns01-beta"},
+    "mediaAvatar": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "acme-dns01-beta"},
+    "mediaImage": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "acme-dns01-beta"},
+    "mediaVideo": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "acme-dns01-beta"},
+    "mediaUpload": {"scheme": "https", "host": "upload.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/", "tlsProfile": "acme-dns01-beta"}
   },
   "subnets": {
     "edge": "172.31.10.0/24",
@@ -52,6 +52,12 @@
       "backend": "local",
       "localResourceGroup": "workstation-commercial-runtime",
       "portProfile": "beta-local",
+      "startup": {
+        "dockerProbeTimeoutSeconds": 30,
+        "composeBuildTimeoutSeconds": 3600,
+        "composeBuildNoProgressTimeoutSeconds": 1200,
+        "composeUpTimeoutSeconds": 420
+      },
       "baseRoleSet": "environment",
       "origins": {
         "mediaOrigin": "http://127.0.0.1:18110",

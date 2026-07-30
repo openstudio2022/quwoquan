@@ -41,6 +41,8 @@
 ### REQ-001 experiment bucketing and rollout 能力 SIT
 
 - 推荐 recpolicy 与搜索实验复用 runtime/experiments 的单一 AssignBucket 实现。
+- runtime assignment policy 的唯一运行身份由完整策略内容确定性生成 `sha256` 摘要；缺失、禁用或非法策略直接失败，禁止静态版本、not-found 哨兵与隐式 control/50:50 fallback。
+- Product Ops `experimentRevision` 仅冻结 Experiment 聚合的并发修订号，作为尚未接入热路径的 immutable assignment fact 历史键；它不是 runtime 策略身份，不得成为第二 resolver 或覆盖内容摘要。
 - 推荐实际曝光/行为、搜索查询事实记录服务端权威 experimentBucket，可用于效果归因。
 - 未绑定线上流量的 Product Ops Experiment/ExperimentAssignmentFact 操作保持 default-deny。
 - Portal 不暴露实验目录、rollout 或 assignment 统计，避免将离线控制面事实冒充线上结果。
@@ -51,6 +53,7 @@
 
 - 分桶口径唯一：`experimentBucket` 维度定义复用 `event-schema-governance`，不得各端各自维护第二套桶映射。
 - 分桶算法唯一：推荐与搜索必须复用 `runtime/experiments`；禁止业务服务调用未绑定线上热路径的 assignment 接口形成第二套分桶。
+- runtime 策略身份唯一：只接受策略内容摘要；搜索的 bucket 权重必须来自 search-service canonical runtime config，缺失或权重不闭合时启动/请求 fail-closed。
 - 控制面 fail-closed：未接入实际线上流量的实验控制面必须 default-deny 且无 Portal 入口，不得把离线 assignment 事实冒充线上实验结果。
 - 实验指标必须复用 `analytics-metric-dictionary` 主口径，不得绕过字典直接进 dashboard。
 
@@ -72,14 +75,3 @@
 - THEN 未绑定线上流量的 Product Ops Experiment/ExperimentAssignmentFact 操作保持 default-deny。
 - THEN Portal 不暴露实验目录、rollout 或 assignment 统计，避免将离线控制面事实冒充线上结果。
 - THEN verify_experiment_single_track.py 阻断第二 resolver、热路径回接冻结 assignment API 或 Portal 入口回归。
-
-## 8. 开放事项
-
-<a id="open-001"></a>
-### OPEN-001 experiment bucketing and rollout 能力 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：推荐 recpolicy 与搜索实验复用 runtime/experiments 的单一 AssignBucket 实现。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效

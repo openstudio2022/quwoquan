@@ -1,99 +1,13 @@
 import '../content/post_reader_queries.dart';
+import '../generated/circle_contract_enums.g.dart';
 import '../operation_request_payload.dart';
-
-final class CircleListQuery {
-  const CircleListQuery({
-    this.category,
-    this.domainId,
-    this.recommendFor,
-    this.cursor,
-    this.limit = 20,
-    this.sort,
-  });
-
-  final String? category;
-  final String? domainId;
-  final String? recommendFor;
-  final String? cursor;
-  final int limit;
-  final String? sort;
-}
-
-final class CircleSearchQuery {
-  const CircleSearchQuery({
-    required this.query,
-    this.categoryId,
-    this.subCategory,
-    this.cursor,
-    this.limit = 20,
-  });
-
-  final String query;
-  final String? categoryId;
-  final String? subCategory;
-  final String? cursor;
-  final int limit;
-}
-
-final class CircleDetailQuery {
-  const CircleDetailQuery({required this.circleId});
-
-  final String circleId;
-}
-
-final class CircleFeedQuery {
-  const CircleFeedQuery({
-    required this.circleId,
-    this.identity,
-    this.type,
-    this.cursor,
-    this.limit = 20,
-    this.sort = 'latest',
-  });
-
-  final String circleId;
-  final String? identity;
-  final String? type;
-  final String? cursor;
-  final int limit;
-  final String sort;
-}
+part '../generated/requests/circle/circle_query_contracts.requests.g.dart';
 
 enum CircleDiscoveryFeedScope {
   recommended,
   mine;
 
   String get wireValue => name;
-}
-
-final class CircleDiscoveryFeedQuery {
-  const CircleDiscoveryFeedQuery({
-    this.category,
-    this.subCategory,
-    this.scope = CircleDiscoveryFeedScope.recommended,
-    this.cursor,
-    this.limit = 20,
-    this.sort = 'recommended',
-  });
-
-  final String? category;
-  final String? subCategory;
-  final CircleDiscoveryFeedScope scope;
-  final String? cursor;
-  final int limit;
-  final String sort;
-}
-
-final class CircleStatsQuery {
-  const CircleStatsQuery({required this.circleId});
-
-  final String circleId;
-}
-
-final class CircleImpactQuery {
-  const CircleImpactQuery({required this.circleId});
-
-  final String circleId;
 }
 
 final class CircleSectionProjection {
@@ -125,11 +39,11 @@ final class CircleProjection {
     this.memberCount = 0,
     this.postCount = 0,
     this.weeklyActiveCount = 0,
-    this.status = 'active',
-    this.visibility = 'public',
-    this.joinPolicy = 'open',
-    this.kind = 'interest',
-    this.displaySubjectType = 'circle',
+    this.status = CircleStatus.active,
+    this.visibility = CircleVisibility.public,
+    this.joinPolicy = CircleJoinPolicy.open,
+    this.kind = CircleKind.interest,
+    this.displaySubjectType = CircleDisplaySubjectType.circle,
     this.followEnabled = true,
     this.defaultPublicGroupId,
     this.conversationId,
@@ -163,11 +77,11 @@ final class CircleProjection {
   final int memberCount;
   final int postCount;
   final int weeklyActiveCount;
-  final String status;
-  final String visibility;
-  final String joinPolicy;
-  final String kind;
-  final String displaySubjectType;
+  final CircleStatus status;
+  final CircleVisibility visibility;
+  final CircleJoinPolicy joinPolicy;
+  final CircleKind kind;
+  final CircleDisplaySubjectType displaySubjectType;
   final bool followEnabled;
   final String? defaultPublicGroupId;
   final String? conversationId;
@@ -525,75 +439,6 @@ abstract interface class CircleDiscoveryFeedQueryReader {
   );
 }
 
-CloudOperationRequestPayload encodeCircleListQuery(CircleListQuery query) {
-  _validateLimit(query.limit);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (_optional(query.category) case final value?) 'category': value,
-      if (_optional(query.domainId) case final value?) 'domainId': value,
-      if (_optional(query.recommendFor) case final value?)
-        'recommendFor': value,
-      if (_optional(query.cursor) case final value?) 'cursor': value,
-      'limit': '${query.limit}',
-      if (_optional(query.sort) case final value?) 'sort': value,
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeCircleSearchQuery(CircleSearchQuery query) {
-  _validateLimit(query.limit);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'query': _required(query.query, 'query'),
-      if (_optional(query.categoryId) case final value?) 'categoryId': value,
-      if (_optional(query.subCategory) case final value?) 'subCategory': value,
-      if (_optional(query.cursor) case final value?) 'cursor': value,
-      'limit': '${query.limit}',
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeCircleDetailQuery(CircleDetailQuery query) =>
-    _circlePathPayload(query.circleId);
-
-CloudOperationRequestPayload encodeCircleFeedQuery(CircleFeedQuery query) {
-  _validateLimit(query.limit);
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'circleId': _required(query.circleId, 'circleId'),
-    },
-    queryParameters: <String, String>{
-      if (_optional(query.identity) case final value?) 'identity': value,
-      if (_optional(query.type) case final value?) 'type': value,
-      if (_optional(query.cursor) case final value?) 'cursor': value,
-      'limit': '${query.limit}',
-      'sort': _required(query.sort, 'sort'),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeCircleDiscoveryFeedQuery(
-  CircleDiscoveryFeedQuery query,
-) {
-  _validateLimit(query.limit);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (_optional(query.category) case final value?) 'category': value,
-      if (_optional(query.subCategory) case final value?) 'subCategory': value,
-      'scope': query.scope.wireValue,
-      if (_optional(query.cursor) case final value?) 'cursor': value,
-      'limit': '${query.limit}',
-      'sort': _required(query.sort, 'sort'),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeCircleStatsQuery(CircleStatsQuery query) =>
-    _circlePathPayload(query.circleId);
-
-CloudOperationRequestPayload encodeCircleImpactQuery(CircleImpactQuery query) =>
-    _circlePathPayload(query.circleId);
-
 CirclePageSlice decodeCirclePageSlice(Object? response) {
   final root = response is List<Object?> ? null : _object(response, 'circles');
   final rawItems = root == null ? response : root['items'];
@@ -881,11 +726,13 @@ CircleProjection _decodeCircle(Object? response) {
     memberCount: _integer(value['memberCount']),
     postCount: _integer(value['postCount']),
     weeklyActiveCount: _integer(value['weeklyActiveCount']),
-    status: _optional(value['status']) ?? 'active',
-    visibility: _optional(value['visibility']) ?? 'public',
-    joinPolicy: _optional(value['joinPolicy']) ?? 'open',
-    kind: _optional(value['kind']) ?? 'interest',
-    displaySubjectType: _optional(value['displaySubjectType']) ?? 'circle',
+    status: CircleStatus.fromWire(value['status']),
+    visibility: CircleVisibility.fromWire(value['visibility']),
+    joinPolicy: CircleJoinPolicy.fromWire(value['joinPolicy']),
+    kind: CircleKind.fromWire(value['kind']),
+    displaySubjectType: CircleDisplaySubjectType.fromWire(
+      value['displaySubjectType'],
+    ),
     followEnabled: _boolean(value['followEnabled'], fallback: true),
     defaultPublicGroupId: _optional(value['defaultPublicGroupId']),
     conversationId: _optional(value['conversationId']),
@@ -916,13 +763,6 @@ CircleProjection _decodeCircle(Object? response) {
   );
 }
 
-CloudOperationRequestPayload _circlePathPayload(String circleId) =>
-    CloudOperationRequestPayload(
-      pathParameters: <String, String>{
-        'circleId': _required(circleId, 'circleId'),
-      },
-    );
-
 Map<Object?, Object?> _object(Object? value, String label) {
   if (value is! Map<Object?, Object?>) {
     throw FormatException('$label must be an object');
@@ -939,12 +779,6 @@ List<Object?> _list(Object? value, String label, {bool allowNull = false}) {
     throw FormatException('$label must be a list');
   }
   return value;
-}
-
-String _required(String value, String label) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, label, 'is blank');
-  return normalized;
 }
 
 String _requiredValue(Object? value, String label) {
@@ -972,10 +806,4 @@ DateTime? _date(Object? value) =>
 List<String> _stringList(Object? value) {
   if (value is! List<Object?>) return const <String>[];
   return value.map(_optional).whereType<String>().toList(growable: false);
-}
-
-void _validateLimit(int limit) {
-  if (limit < 1 || limit > 200) {
-    throw ArgumentError.value(limit, 'limit', 'must be in 1..200');
-  }
 }

@@ -43,6 +43,7 @@ business_rules:
 - 完成后通过同事务 outbox 产生 MediaAsset 创建事件，不直接写其他上下文
 - Chat、Profile 与 Content 只能调用本 Facade，不得建立第二套上传会话
 lifecycle:
+  state_field: status
   states:
   - pending
   - completed

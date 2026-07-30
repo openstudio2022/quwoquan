@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/unrecoverable-runtime-recovery/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/unrecoverable-runtime-recovery/spec.md#gwt-002
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/recovery/runtime_recovery_host.dart';
@@ -61,6 +62,13 @@ void main() {
     await tester.pump();
     expect(find.text('应用暂时无法继续使用'), findsNothing);
     expect(find.textContaining('shell-'), findsOneWidget);
+
+    await tester.tap(find.text('fail'));
+    await tester.pump();
+    expect(find.text('应用暂时无法继续使用'), findsOneWidget);
+    expect(find.text('正在检查可用版本'), findsOneWidget);
+    expect(find.text('重新进入应用'), findsNothing);
+    expect(reentryFlags.where((flag) => flag), hasLength(1));
   });
 
   testWidgets('runtime re-entry deadline falls through to version recovery', (

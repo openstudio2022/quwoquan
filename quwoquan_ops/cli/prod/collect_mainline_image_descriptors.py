@@ -7,6 +7,7 @@ rebuilds no image and stores no credential; Docker/Buildx owns registry auth.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import re
 import subprocess
@@ -19,6 +20,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
+from quwoquan_ops.cli.prod.oci_supply_chain import verify_oci_supply_chain
+from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+    validate_manifest,
+    validate_manifest_files,
+)
 
 
 DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
@@ -33,9 +39,11 @@ def parse_args() -> argparse.Namespace:
 
 def load_manifest(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or payload.get("status") != "build-input":
-        raise ValueError("release input manifest is invalid")
-    return payload
+    if not isinstance(payload, dict):
+        raise ValueError("release input manifest must be an object")
+    manifest = validate_manifest(payload, allowed_statuses={"build-input"})
+    validate_manifest_files(path.parent, manifest)
+    return manifest
 
 
 def resolve_registry_digest(ref: str) -> str:
@@ -63,48 +71,80 @@ def resolve_registry_digest(ref: str) -> str:
 
 
 def collect(manifest: dict[str, Any], output_dir: Path) -> dict[str, dict[str, Any]]:
-    required = manifest.get("requiredImages")
-    repositories = manifest.get("imageRepositories")
-    versions = manifest.get("versions")
-    if (
-        not isinstance(required, list)
-        or not all(isinstance(item, str) and item for item in required)
-        or not isinstance(repositories, dict)
-        or not isinstance(versions, dict)
-    ):
-        raise ValueError("release input image set is incomplete")
-    image_version = str(versions.get("imageVersion") or "").strip()
-    if not image_version or image_version == "latest":
-        raise ValueError("release input image version is not immutable")
+    validate_manifest(manifest, allowed_statuses={"build-input"})
+    required = manifest["requiredEvidence"]["images"]
+    images = manifest["images"]
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    descriptors: dict[str, dict[str, Any]] = {}
+    inputs: list[tuple[str, str, str]] = []
     for service in required:
-        repository = str(repositories.get(service) or "").strip()
+        image = images[service]
+        repository = str(image.get("repository") or "").strip()
+        transport_ref = str(image.get("transportRef") or "").strip()
         if not repository.startswith("ghcr.io/"):
             raise ValueError(f"release image repository is not GHCR: {service}")
-        tag_ref = f"{repository}:{image_version}"
-        digest = resolve_registry_digest(tag_ref)
+        if not transport_ref.startswith(repository + ":") or transport_ref.endswith(
+            ":latest"
+        ):
+            raise ValueError(f"release image transport ref is not fixed: {service}")
+        inputs.append((str(service), repository, transport_ref))
+
+    source = manifest.get("source")
+    source_repository = (
+        str(source.get("repository") or "") if isinstance(source, dict) else ""
+    )
+
+    def resolve_and_verify(
+        service: str, repository: str, transport_ref: str
+    ) -> dict[str, Any]:
+        digest = resolve_registry_digest(transport_ref)
         ref = f"{repository}@{digest}"
-        descriptor = {
+        verify_oci_supply_chain(
+            ref,
+            repository=source_repository,
+            signer_workflow=(
+                f"{source_repository}/.github/workflows/service_pipeline.yml"
+            ),
+        )
+        return {
             "service": service,
             "repository": repository,
-            "tag": image_version,
+            "transportRef": transport_ref,
             "digest": digest,
             "ref": ref,
             "attestations": {
                 "spdxSbom": f"oci://{ref}#spdxSbom",
                 "slsaProvenance": f"oci://{ref}#slsaProvenance",
             },
-            "buildDurationSeconds": 0,
         }
+
+    descriptors: dict[str, dict[str, Any]] = {}
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, max(1, len(inputs))),
+        thread_name_prefix="release-image-descriptor",
+    ) as executor:
+        futures = {
+            executor.submit(resolve_and_verify, *item): item[0] for item in inputs
+        }
+        for future in concurrent.futures.as_completed(futures):
+            service = futures[future]
+            try:
+                descriptors[service] = future.result()
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                raise RuntimeError(
+                    f"release image descriptor collection failed for {service}: {error}"
+                ) from error
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    ordered_descriptors: dict[str, dict[str, Any]] = {}
+    for service in required:
+        descriptor = descriptors[service]
         output_dir.joinpath(f"{service}.json").write_text(
             json.dumps(descriptor, ensure_ascii=False, indent=2, sort_keys=True)
             + "\n",
             encoding="utf-8",
         )
-        descriptors[service] = descriptor
-    return descriptors
+        ordered_descriptors[service] = descriptor
+    return ordered_descriptors
 
 
 def main() -> int:

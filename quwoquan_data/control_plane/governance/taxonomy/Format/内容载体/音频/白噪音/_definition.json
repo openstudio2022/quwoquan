@@ -2,6 +2,7 @@
   "label": "白噪音",
   "labelEn": "White Noise",
   "description": "背景白噪音",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

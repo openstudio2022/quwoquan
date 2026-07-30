@@ -21,24 +21,22 @@ final class RemoteProfileQuery implements ProfileQuery {
   final UserHomepageQueryFacet _userHomepageQuery;
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+  Future<PersonaProfileViewData> getUserProfile(String userId) async {
     final normalized = userId.trim();
     final projection = normalized == 'me'
-        ? await _publicProfileQuery.getMeProfile(const GetMeProfileQuery())
-        : await _publicProfileQuery.getSubAccountProfile(
-            GetSubAccountProfileQuery(subAccountId: normalized),
+        ? await _publicProfileQuery.getMeProfile(GetMeProfileQuery())
+        : await _publicProfileQuery.getPersonaProfile(
+            GetPersonaProfileQuery(personaId: normalized),
           );
-    return SubAccountProfileViewData.fromSubAccountProfileProjection(
-      projection,
-    );
+    return PersonaProfileViewData.fromPersonaProfileProjection(projection);
   }
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
     final projection = await _userHomepageQuery.getUserHomepageBundle(
-      GetUserHomepageBundleQuery(subAccountId: subAccountId),
+      GetUserHomepageBundleQuery(personaId: personaId),
     );
     return UserHomepageBundleViewData.fromUserHomepageBundleProjection(
       projection,

@@ -23,6 +23,7 @@ from content.release.environment.topology import (
 )
 from content.release.model import DeploymentEnvironment, ReleaseKind
 from core.io import read_json, write_json
+from core.release_layout import payload_digest
 
 
 def _stub_tag_consumer_verification(**kwargs: object) -> Path:
@@ -47,6 +48,7 @@ def _release(
         {
             "schema": "quwoquan_data.release",
             "releaseId": release_id,
+            "sourceOwner": "qwq_data",
             "releaseKind": release_kind,
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"],
@@ -225,9 +227,9 @@ def test_apply_import_enforces_release_desired_state(
     assert calls[3]["mode"] == "sync"
     assert calls[0]["mongo_uri"] == "mongodb://topology.test"
     target = _target(tmp_path)
-    assert calls[1]["media_avatar_base_url"] == target.media_avatar_base_url
-    assert calls[2]["media_video_base_url"] == target.media_video_base_url
-    assert calls[3]["media_image_base_url"] == target.media_image_base_url
+    assert calls[1]["media_avatar_base_url"] == target.media_delivery_base_url
+    assert calls[2]["media_video_base_url"] == target.media_delivery_base_url
+    assert calls[3]["media_image_base_url"] == target.media_delivery_base_url
     applied = read_json(tmp_path / "env/gamma/runs/data-release/release-a/apply-sync/applied_ref.json")
     assert applied["releaseId"] == "release-a"
     assert applied["releaseRef"] == "data/releases/release-a"
@@ -459,12 +461,72 @@ def test_ship_verify_uses_environment_topology_without_manual_network_arguments(
 
     assert observed["environment"] is environment
     assert observed["api_base_url"] == _target(tmp_path, environment).api_base_url
-    assert observed["resolve_host"] == ""
-    assert observed["insecure_tls"] is False
     result = read_json(
         tmp_path / "env" / environment.value / "runs/data-release" / release.name / "verify-001/result.json"
     )
     assert result["homepageApiVerificationRef"].endswith("/verify-001/homepage-api-verification.json")
+
+
+def test_ship_verify_binds_consumer_readiness_to_verified_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release = _release(tmp_path)
+    _patch_roots(monkeypatch, tmp_path)
+    monkeypatch.setattr(handler, "_release_has_posts", lambda _contract: True)
+    monkeypatch.setattr(
+        handler,
+        "_write_tag_consumer_verification",
+        _stub_tag_consumer_verification,
+    )
+    import_run_id = "apply-ready"
+    import_root = tmp_path / "env/gamma/runs/data-release" / release.name / import_run_id
+    cases = import_root / "homepage_verification_cases.json"
+    write_json(cases, {"environment": "gamma"})
+    write_json(
+        import_root / "result.json",
+        {
+            "environment": "gamma",
+            "releaseId": release.name,
+            "status": "completed",
+            "homepageVerificationCasesRef": cases.relative_to(tmp_path).as_posix(),
+        },
+    )
+
+    def _write_report(**kwargs: object) -> Path:
+        output = Path(str(kwargs["output_path"]))
+        write_json(output, {"passed": True})
+        return output
+
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(handler, "write_post_api_verification", _write_report)
+    monkeypatch.setattr(handler, "write_homepage_api_verification", _write_report)
+    monkeypatch.setattr(handler, "write_environment_release_readiness", _write_report)
+    monkeypatch.setattr(
+        handler,
+        "require_environment_readiness",
+        lambda **kwargs: observed.update(kwargs),
+    )
+
+    handler._verify_release_consumers(
+        argparse.Namespace(
+            release_id=release.name,
+            env="gamma",
+            import_run_id=import_run_id,
+            run_id="verify-ready",
+        )
+    )
+
+    assert observed["environment"] is DeploymentEnvironment.GAMMA
+    assert observed["consumer"] is True
+    assert observed["release_id"] == release.name
+    assert observed["verify_run_id"] == "verify-ready"
+    assert observed["manifest_digest"] == payload_digest(release)
+    assert observed["run"] == (
+        tmp_path / "env/gamma/runs/data-release" / release.name / "verify-ready"
+    )
+    result = read_json(Path(str(observed["run"])) / "result.json")
+    assert result["releaseReadinessRef"].endswith("/verify-ready/release-readiness.json")
 
 
 def test_ship_verify_preserves_failed_consumer_receipt(

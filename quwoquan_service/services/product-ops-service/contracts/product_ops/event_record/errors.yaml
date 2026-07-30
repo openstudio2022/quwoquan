@@ -6,6 +6,8 @@ errors:
   kind: USER
   reason: event_batch_invalid
   http_status: 422
+  emitted_by:
+  - {surface: http, operations: [ReportEventBatch]}
   recovery_action: absorb
   dart_const: eventBatchInvalid
   go_const: ErrEventBatchInvalid
@@ -16,6 +18,8 @@ errors:
   kind: USER
   reason: runtime_log_batch_invalid
   http_status: 422
+  emitted_by:
+  - {surface: http, operations: [ReportRuntimeLogBatch]}
   recovery_action: absorb
   dart_const: runtimeLogBatchInvalid
   go_const: ErrRuntimeLogBatchInvalid
@@ -26,6 +30,8 @@ errors:
   kind: USER
   reason: idempotency_key_invalid
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ReportEventBatch, ReportRuntimeLogBatch]}
   recovery_action: absorb
   dart_const: idempotencyKeyInvalid
   go_const: ErrIdempotencyKeyInvalid
@@ -36,6 +42,8 @@ errors:
   kind: USER
   reason: query_window_invalid
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [GetRuntimeLogSummary, GetRuntimeLogDrilldown, GetEventSummary, GetEventDrilldown]}
   recovery_action: absorb
   dart_const: queryWindowInvalid
   go_const: ErrQueryWindowInvalid
@@ -46,6 +54,8 @@ errors:
   kind: USER
   reason: event_drilldown_forbidden
   http_status: 403
+  emitted_by:
+  - {surface: http, operations: [GetRuntimeLogDrilldown, GetEventDrilldown]}
   recovery_action: request_permission
   dart_const: eventDrilldownForbidden
   go_const: ErrEventDrilldownForbidden
@@ -56,6 +66,8 @@ errors:
   kind: SYSTEM
   reason: logstore_unavailable
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [ReportEventBatch, GetEventSummary, GetEventDrilldown, GetRtcMediaQoeSummary]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: logstoreUnavailable
@@ -67,6 +79,8 @@ errors:
   kind: SYSTEM
   reason: runtime_logstore_unavailable
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [GetRuntimeLogSummary, GetRuntimeLogDrilldown, ReportRuntimeLogBatch]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: runtimeLogstoreUnavailable
@@ -77,7 +91,7 @@ errors:
 - code: OPS.SYSTEM.startup_configuration_invalid
   kind: SYSTEM
   reason: startup_configuration_invalid
-  http_status: 500
+  emitted_by: [app]
   recovery_action: retry
   recovery_after_seconds: 0
   dart_const: startupConfigurationInvalid
@@ -88,7 +102,7 @@ errors:
 - code: OPS.SYSTEM.startup_initialization_failed
   kind: SYSTEM
   reason: startup_initialization_failed
-  http_status: 500
+  emitted_by: [app]
   recovery_action: retry
   recovery_after_seconds: 0
   dart_const: startupInitializationFailed
@@ -99,7 +113,7 @@ errors:
 - code: OPS.SYSTEM.startup_router_unavailable
   kind: SYSTEM
   reason: startup_router_unavailable
-  http_status: 503
+  emitted_by: [app]
   recovery_action: retry
   recovery_after_seconds: 1
   dart_const: startupRouterUnavailable
@@ -107,20 +121,10 @@ errors:
   user_message:
     zh: 页面暂时无法打开，请重试
     en: The page is temporarily unavailable. Please retry.
-- code: OPS.SYSTEM.unclassified_page_failure
-  kind: SYSTEM
-  reason: unclassified_page_failure
-  http_status: 500
-  recovery_action: absorb
-  dart_const: unclassifiedPageFailure
-  go_const: ErrUnclassifiedPageFailure
-  user_message:
-    zh: 页面遇到未分类异常
-    en: The page encountered an unclassified failure.
 - code: OPS.SYSTEM.startup_native_first_frame_timeout
   kind: SYSTEM
   reason: startup_native_first_frame_timeout
-  http_status: 503
+  emitted_by: [app]
   recovery_action: retry
   recovery_after_seconds: 1
   dart_const: startupNativeFirstFrameTimeout
@@ -132,6 +136,8 @@ errors:
   kind: USER
   reason: startup_event_invalid
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ReportStartupEventBatch]}
   recovery_action: absorb
   dart_const: startupEventInvalid
   go_const: ErrStartupEventInvalid
@@ -142,6 +148,8 @@ errors:
   kind: SYSTEM
   reason: startup_telemetry_unavailable
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [ReportStartupEventBatch]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: startupTelemetryUnavailable

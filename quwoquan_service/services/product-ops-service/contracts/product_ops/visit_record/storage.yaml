@@ -3,24 +3,32 @@ collections:
   visit_records:
     entity: VisitRecord
     indexes:
-    - name: idx_visit_user_target
+    - name: uq_visit_user_target
       keys:
         userId: 1
         targetType: 1
         targetKey: 1
-        timestamp: -1
-    - name: idx_visit_target
+      unique: true
+    - name: idx_visit_target_occurred_at
       keys:
         targetType: 1
         targetKey: 1
-        timestamp: -1
-    - name: idx_visit_session
-      keys:
-        sessionId: 1
-        timestamp: -1
-      sparse: true
+        occurredAt: -1
     ttl_index:
-      field: timestamp
+      field: occurredAt
       expire_after_seconds: 15552000
       description: 访问记录 180 天过期
+  visit_record_command_receipts:
+    indexes:
+    - name: idx_visit_receipts_expire
+      keys:
+        expiresAt: 1
+      expireAfterSeconds: 0
+    description: 'actor-scoped RecordVisit 幂等回执（与 VisitRecord 同为 180 天窗口）。
+
+      只持久化不可逆 actor 范围键、canonical command digest 和首次结果；
+
+      与 visit_records 的 visitCount/occurredAt 更新在同一 MongoDB transaction 提交。
+
+      '
 role: authoritative

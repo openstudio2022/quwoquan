@@ -138,7 +138,7 @@ def main() -> int:
             findings.append(f"launcher handoff is invalid: {error}")
         else:
             if (
-                handoff.get("schema") != "app-launcher-handoff-v1"
+                handoff.get("schema") != "app-launcher-handoff"
                 or handoff.get("environment") != "prod"
                 or handoff.get("target") != "prod-hosted"
                 or handoff.get("entrypoint") != "lib/main_prod.dart"

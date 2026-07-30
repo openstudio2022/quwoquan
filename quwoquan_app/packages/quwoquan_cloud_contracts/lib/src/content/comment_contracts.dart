@@ -1,5 +1,6 @@
 import '../operation_request_payload.dart';
 import 'content_reaction_contracts.dart';
+part '../generated/requests/content/comment_contracts.requests.g.dart';
 
 enum ContentCommentStatus { active, hidden, deleted, tombstoned }
 
@@ -28,9 +29,7 @@ enum ContentCommentViewerRelation {
       case '':
         return ContentCommentViewerRelation.none;
       default:
-        throw FormatException(
-          'unsupported ContentCommentViewerRelation: $raw',
-        );
+        throw FormatException('unsupported ContentCommentViewerRelation: $raw');
     }
   }
 }
@@ -82,116 +81,6 @@ final class ContentCommentAttachment {
     }
     return resolvedWidth / resolvedHeight;
   }
-}
-
-final class CreateContentCommentCommand {
-  CreateContentCommentCommand({
-    required String postId,
-    required String content,
-    String? replyToCommentId,
-    Iterable<String> attachmentMediaIds = const <String>[],
-    Iterable<ContentCommentMention> mentions = const <ContentCommentMention>[],
-    String? authorDisplayNameSnapshot,
-    String? authorAvatarUrlSnapshot,
-    this.personaContextVersion,
-  }) : postId = _requiredText(postId, 'postId'),
-       content = _requiredText(content, 'content'),
-       replyToCommentId = _optionalText(replyToCommentId),
-       attachmentMediaIds = List<String>.unmodifiable(
-         attachmentMediaIds.map((id) => _requiredText(id, 'attachmentMediaId')),
-       ),
-       mentions = List<ContentCommentMention>.unmodifiable(mentions),
-       authorDisplayNameSnapshot = _optionalText(authorDisplayNameSnapshot),
-       authorAvatarUrlSnapshot = _optionalText(authorAvatarUrlSnapshot);
-
-  final String postId;
-  final String content;
-  final String? replyToCommentId;
-  final List<String> attachmentMediaIds;
-  final List<ContentCommentMention> mentions;
-  final String? authorDisplayNameSnapshot;
-  final String? authorAvatarUrlSnapshot;
-  final int? personaContextVersion;
-}
-
-final class DeleteContentCommentCommand {
-  DeleteContentCommentCommand({
-    required String postId,
-    required String commentId,
-  }) : postId = _requiredText(postId, 'postId'),
-       commentId = _requiredText(commentId, 'commentId');
-
-  final String postId;
-  final String commentId;
-}
-
-final class ChangeContentCommentPinCommand {
-  ChangeContentCommentPinCommand({
-    required String postId,
-    required String commentId,
-  }) : postId = _requiredText(postId, 'postId'),
-       commentId = _requiredText(commentId, 'commentId');
-
-  final String postId;
-  final String commentId;
-}
-
-final class BindContentCommentAttachmentsCommand {
-  BindContentCommentAttachmentsCommand({
-    required String commentId,
-    required Iterable<String> attachmentMediaIds,
-  }) : commentId = _requiredText(commentId, 'commentId'),
-       attachmentMediaIds = List<String>.unmodifiable(
-         attachmentMediaIds.map((id) => _requiredText(id, 'attachmentMediaId')),
-       );
-
-  final String commentId;
-  final List<String> attachmentMediaIds;
-}
-
-final class ListContentCommentsQuery {
-  ListContentCommentsQuery({
-    required String postId,
-    String? cursor,
-    this.limit = 20,
-    this.sort = ContentCommentSort.hot,
-  }) : postId = _requiredText(postId, 'postId'),
-       cursor = _optionalText(cursor) {
-    _requireLimit(limit);
-  }
-
-  final String postId;
-  final String? cursor;
-  final int limit;
-  final ContentCommentSort sort;
-}
-
-final class ListContentCommentRepliesQuery {
-  ListContentCommentRepliesQuery({
-    required String postId,
-    required String commentId,
-    String? cursor,
-    this.limit = 10,
-  }) : postId = _requiredText(postId, 'postId'),
-       commentId = _requiredText(commentId, 'commentId'),
-       cursor = _optionalText(cursor) {
-    _requireLimit(limit);
-  }
-
-  final String postId;
-  final String commentId;
-  final String? cursor;
-  final int limit;
-}
-
-final class ContentCommentPageQuery {
-  ContentCommentPageQuery({String? cursor, this.limit = 20})
-    : cursor = _optionalText(cursor) {
-    _requireLimit(limit);
-  }
-
-  final String? cursor;
-  final int limit;
 }
 
 final class ContentCommentCommandResult {
@@ -387,91 +276,6 @@ final class ContentReceivedCommentPageSlice extends ContentCommentPageSlice {
     required super.total,
   });
 }
-
-CloudOperationRequestPayload encodeCreateContentCommentCommand(
-  CreateContentCommentCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': command.postId},
-  body: <String, Object?>{
-    'content': command.content,
-    if (command.replyToCommentId != null)
-      'replyToCommentId': command.replyToCommentId,
-    'attachmentMediaIds': command.attachmentMediaIds,
-    'mentions': command.mentions
-        .map(
-          (mention) => <String, Object?>{
-            'subjectType': mention.subjectType,
-            'subjectId': mention.subjectId,
-            if (mention.displayName != null) 'displayName': mention.displayName,
-          },
-        )
-        .toList(growable: false),
-    if (command.authorDisplayNameSnapshot != null)
-      'authorDisplayNameSnapshot': command.authorDisplayNameSnapshot,
-    if (command.authorAvatarUrlSnapshot != null)
-      'authorAvatarUrlSnapshot': command.authorAvatarUrlSnapshot,
-    if (command.personaContextVersion != null)
-      'personaContextVersion': command.personaContextVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeDeleteContentCommentCommand(
-  DeleteContentCommentCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'postId': command.postId,
-    'commentId': command.commentId,
-  },
-);
-
-CloudOperationRequestPayload encodeChangeContentCommentPinCommand(
-  ChangeContentCommentPinCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'postId': command.postId,
-    'commentId': command.commentId,
-  },
-);
-
-CloudOperationRequestPayload encodeBindContentCommentAttachmentsCommand(
-  BindContentCommentAttachmentsCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'commentId': command.commentId},
-  body: <String, Object?>{'attachmentMediaIds': command.attachmentMediaIds},
-);
-
-CloudOperationRequestPayload encodeListContentCommentsQuery(
-  ListContentCommentsQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'postId': query.postId},
-  queryParameters: <String, String>{
-    'limit': '${query.limit}',
-    if (query.cursor != null) 'cursor': query.cursor!,
-    'sort': query.sort.wireValue,
-  },
-);
-
-CloudOperationRequestPayload encodeListContentCommentRepliesQuery(
-  ListContentCommentRepliesQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'postId': query.postId,
-    'commentId': query.commentId,
-  },
-  queryParameters: <String, String>{
-    'limit': '${query.limit}',
-    if (query.cursor != null) 'cursor': query.cursor!,
-  },
-);
-
-CloudOperationRequestPayload encodeContentCommentPageQuery(
-  ContentCommentPageQuery query,
-) => CloudOperationRequestPayload(
-  queryParameters: <String, String>{
-    'limit': '${query.limit}',
-    if (query.cursor != null) 'cursor': query.cursor!,
-  },
-);
 
 ContentCommentCommandResult decodeContentCommentCommandResult(Object? value) {
   final map = _object(value, 'ContentCommentCommandResult');
@@ -720,10 +524,4 @@ String _requiredText(String value, String name) {
 String? _optionalText(String? value) {
   final normalized = value?.trim() ?? '';
   return normalized.isEmpty ? null : normalized;
-}
-
-void _requireLimit(int limit) {
-  if (limit <= 0 || limit > 100) {
-    throw ArgumentError.value(limit, 'limit', 'must be between 1 and 100');
-  }
 }

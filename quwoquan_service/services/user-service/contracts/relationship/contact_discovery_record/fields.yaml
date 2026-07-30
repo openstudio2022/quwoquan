@@ -1,128 +1,145 @@
 fields:
-- name: id
-  source: id
-  type: string
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: ownerAccountId
-  source: ownerAccountId
-  type: string
-  constraints:
-  - NOT_NULL
-  - FK_user_profiles_CASCADE
-  classification: PII
-  log_policy: mask
-  api_exposure: drop
-  ops_exposure: mask
-  description: 发起发现的主控账号 ID（不暴露给匹配结果接收方）
-  role: authoritative_state
-  reference: true
-- name: hashedPhones
-  source: hashedPhones
-  type: string[]
-  constraints:
-  - NOT_NULL
-  classification: SECRET
-  log_policy: drop
-  api_exposure: drop
-  ops_exposure: drop
-  description: '手机号匹配哈希列表（原文不存储）。端云使用同一算法 phonematch.Hash： 先规范化为 E.164（CN 11 位手机自动补 +86），再取 hex(SHA256("<共享salt>:"+E.164))。
-    共享 salt 为应用级命名常量（随客户端分发，非密钥）；服务端对存储的规范化手机号 credential_key 逐条同算法派生后与本列表比对，因此匹配只在哈希域完成、线缆与库内均不出现对方手机号原文。
+  - name: id
+    source: id
+    type: string
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: ownerAccountId
+    source: ownerAccountId
+    type: string
+    constraints:
+      - NOT_NULL
+      - FK_user_profiles_CASCADE
+    classification: PII
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: mask
+    description: 发起发现的主控账号 ID（不暴露给匹配结果接收方）
+    role: authoritative_state
+    reference: true
+  - name: hashedPhones
+    source: hashedPhones
+    type: '[]string'
+    constraints:
+      - NOT_NULL
+    classification: SECRET
+    log_policy: drop
+    api_exposure: drop
+    ops_exposure: drop
+    description: '手机号匹配哈希列表（原文不存储）。端云使用同一算法 phonematch.Hash： 先规范化为 E.164（CN 11 位手机自动补 +86），再取 hex(SHA256("<共享salt>:"+E.164))。 共享 salt 为应用级命名常量（随客户端分发，非密钥）；服务端对存储的规范化手机号 credential_key 逐条同算法派生后与本列表比对，因此匹配只在哈希域完成、线缆与库内均不出现对方手机号原文。
 
-    '
-  role: authoritative_state
-- name: matchedSubAccountIds
-  source: matchedSubAccountIds
-  type: string[]
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 匹配到的 SubAccount ID 列表（仅 subAccountId，不含 ownerAccountId）
-  role: authoritative_state
-  reference: true
-- name: status
-  source: status
-  type: enum
-  enum_ref: DiscoveryStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: matchCount
-  source: matchCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: expireAt
-  source: expireAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 72 小时后自动过期
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: completedAt
-  source: completedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+'
+    role: authoritative_state
+  - name: matchedPersonaIds
+    source: matchedPersonaIds
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 匹配到的 Persona ID 列表（仅 personaId，不含 ownerAccountId）
+    role: authoritative_state
+    reference: true
+  - name: status
+    source: status
+    type: enum
+    enum_ref: DiscoveryStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: matchCount
+    source: matchCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: expireAt
+    source: expireAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 72 小时后自动过期
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: completedAt
+    source: completedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 enums:
   DiscoveryStatus:
     values:
-    - pending
-    - processing
-    - completed
-    - dismissed
+      - pending
+      - processing
+      - completed
+      - dismissed
     description: 'pending: 已提交待处理； processing: 异步匹配中； completed: 匹配完成； dismissed: 用户主动忽略/删除
 
-      '
+'
 state_machine:
   field: status
   transitions:
-  - from: pending
-    to:
-    - processing
-  - from: processing
-    to:
-    - completed
-  - from: completed
-    to:
-    - dismissed
-  - from: pending
-    to:
-    - dismissed
+    - from: pending
+      to:
+        - processing
+    - from: processing
+      to:
+        - completed
+    - from: completed
+      to:
+        - dismissed
+    - from: pending
+      to:
+        - dismissed
+types:
+  InitiateContactDiscoveryCommand:
+    fields:
+      - name: hashedPhones
+        type: '[]string'
+        client_dart_type: List<String>
+        client_normalization: trim_drop_empty
+  DismissContactDiscoveryCommand:
+    fields:
+      - name: id
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_name: discoveryId
+        client_dart_type: String
+        client_normalization: trim
+  GetLatestContactDiscoveryQuery:
+    fields: []

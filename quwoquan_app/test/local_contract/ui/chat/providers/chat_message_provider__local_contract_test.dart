@@ -40,15 +40,15 @@ void main() {
       expect(friendMessage.senderName, '契约联系人');
       expect(
         friendMessage.senderAvatar,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/'
-        'archived-avatar/user/fixture_user_friend/avatar.png',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/s/'
+        'archived-avatar/user/fixture_user_friend/v1/avatar.png',
         reason: '统一 alpha 测试入口注入的 avatar CDN 必须解析相对头像引用',
       );
       expect(selfMessage.senderName, matches(_defaultNicknamePattern));
       expect(
         selfMessage.senderAvatar,
-        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/media/avatar/s/'
-        'archived-avatar/user/fixture_user_current/avatar.png',
+        '${CloudRuntimeConfig.mediaAvatarCdnBaseUrl}/s/'
+        'archived-avatar/user/fixture_user_current/v1/avatar.png',
         reason: '不得改用本地 gateway 或额外 URL 拼接回退',
       );
     });
@@ -64,7 +64,7 @@ void main() {
           ...mockContentFacetOverrides(MockContentRepository()),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'persona_media_test',
+              personaId: 'persona_media_test',
               ownerUserId: 'user_media_test',
               displayName: '富媒体测试分身',
               avatarUrl: '',
@@ -119,7 +119,7 @@ void main() {
           ...mockContentFacetOverrides(MockContentRepository()),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'persona_mention_test',
+              personaId: 'persona_mention_test',
               ownerUserId: 'user_mention_test',
               displayName: '群聊测试分身',
               avatarUrl: '',

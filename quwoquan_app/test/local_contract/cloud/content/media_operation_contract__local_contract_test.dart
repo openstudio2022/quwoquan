@@ -40,7 +40,7 @@ void main() {
         'contentType': 'image/jpeg',
         'fileSize': 256,
         'expectedSha256':
-            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       });
       expect(result.sessionId, 'mus-1');
       expect(result.uploadUrl?.host, 'upload.example.test');

@@ -87,6 +87,40 @@ void main() {
   });
 
   test(
+    'open ignores retired versioned boxes and reads only the stable key',
+    () async {
+      final partition = ActorQueuePartition(
+        environment: 'prod',
+        accountId: 'account-a',
+        personaId: 'persona-a',
+      );
+      const queueName = 'events';
+      // 旧 versioned box 只作为拒绝读取的负例；不得迁移、双读或删除。
+      final retiredBoxNames = <String>[
+        '${queueName}_v1_${partition.key}',
+        '${queueName}_v2_${partition.key}',
+        '${queueName}_v3_${partition.key}',
+      ];
+      for (final retiredBoxName in retiredBoxNames) {
+        final retiredBox = await Hive.openBox<String>(retiredBoxName);
+        await retiredBox.put('retired-event', retiredBoxName);
+        await retiredBox.close();
+      }
+
+      final current = await storage.open(partition, queueName);
+
+      expect(current, isNotNull);
+      expect(current!.name, partition.boxName(queueName));
+      expect(current.name, 'events_actor_${partition.key}');
+      expect(current.get('retired-event'), isNull);
+      for (final retiredBoxName in retiredBoxNames) {
+        expect(Hive.isBoxOpen(retiredBoxName), isFalse);
+        expect(await Hive.boxExists(retiredBoxName), isTrue);
+      }
+    },
+  );
+
+  test(
     'concurrent opens for one actor queue share one encrypted box',
     () async {
       final partition = ActorQueuePartition(

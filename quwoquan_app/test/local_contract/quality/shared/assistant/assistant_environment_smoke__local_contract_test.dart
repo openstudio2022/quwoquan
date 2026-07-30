@@ -195,7 +195,7 @@ Future<void> _sendAndExpect(
           streamState.events.any((event) {
             final process = event.payload['process'];
             return process is Map &&
-                process['stage'] == 'tool_execution' &&
+                process['stage'] == 'searching' &&
                 (event.eventType.wireName == 'process_append' ||
                     event.eventType.wireName == 'process_commit');
           });

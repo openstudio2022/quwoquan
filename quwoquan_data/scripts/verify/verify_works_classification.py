@@ -2,11 +2,12 @@
 """作品判定（WorksClassifier）契约门禁。
 
 校验单一真相源闭环：
-- works_classification.yaml：schema/version/必需键 + 权重覆盖全部 tier/affinity + video 后置。
+- works_classification.yaml：schema/必需键 + 权重覆盖全部 tier/affinity + video 后置。
 - content_source_registry.yaml：sourceTierSignals 完整（复用 verify_content_source_registry）。
 - 判定 smoke：代表样本 decision 正确，且裁决符合 schema/content/works_classification.schema.json。
 
-接入 `qwq-data verify all`；改判定行为先改 yaml + version，再过本门。
+接入 `qwq-data verify all`；改判定行为只改 canonical yaml，再过本门；
+裁决通过配置内容摘要绑定精确策略身份。
 """
 from __future__ import annotations
 
@@ -23,7 +24,11 @@ from core.content_source_registry import (  # noqa: E402
     verify_content_source_registry,
 )
 from core.schema import validate_result  # noqa: E402
-from content.post.image.works_classifier import classify_works, load_works_classification_config  # noqa: E402
+from content.post.image.works_classifier import (  # noqa: E402
+    classify_works,
+    load_works_classification_config,
+    works_classification_policy_digest,
+)
 
 _LONG = """# 九寨沟旅游全攻略
 
@@ -58,8 +63,8 @@ _REQUIRED_KEYS = (
 def check() -> list[str]:
     issues: list[str] = []
     cfg = load_works_classification_config()
-    if int(cfg.get("version") or 0) < 1:
-        issues.append("works_classification.yaml: version must be >= 1")
+    if "version" in cfg:
+        issues.append("works_classification.yaml: parallel version is forbidden")
     for key in _REQUIRED_KEYS:
         if key not in cfg:
             issues.append(f"works_classification.yaml: missing required section {key!r}")
@@ -89,8 +94,8 @@ def check() -> list[str]:
             issues.append(f"verdict[{ref}] schema violations: {schema_errs}")
         if str(verdict.get("decision")) != expect:
             issues.append(f"verdict[{ref}] decision={verdict.get('decision')!r} expected {expect!r}")
-        if int(verdict.get("thresholdsVersion") or 0) != int(cfg.get("version") or 0):
-            issues.append(f"verdict[{ref}] thresholdsVersion drift from config version")
+        if verdict.get("policyDigest") != works_classification_policy_digest(cfg):
+            issues.append(f"verdict[{ref}] policyDigest drift from canonical config")
     return issues
 
 

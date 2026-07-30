@@ -57,7 +57,7 @@ func TestPostgresRtcMediaQoeSummaryUsesRawPercentileAndCanonicalDenominators(
 		postgresRtcMediaQoeEvent(eventNow.Add(-time.Hour), "completed", true, 300, 3),
 		postgresRtcMediaQoeEvent(eventNow.Add(-time.Hour), "connect_failed", false, 0, 4),
 	}
-	telemetry := application.NewTelemetryService(store, store, store)
+	telemetry := application.NewTelemetryService(store, store)
 	if _, err := telemetry.ReportEventBatch(
 		ctx,
 		strings.Repeat("b", 64),

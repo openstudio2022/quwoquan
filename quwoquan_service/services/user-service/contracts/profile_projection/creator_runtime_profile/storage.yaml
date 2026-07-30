@@ -7,9 +7,9 @@ collections:
       keys:
         creatorId: 1
       unique: true
-    - name: idx_creator_runtime_sub_account
+    - name: idx_creator_runtime_persona
       keys:
-        subAccountId: 1
+        personaId: 1
         status: 1
     - name: idx_creator_runtime_handle
       keys:

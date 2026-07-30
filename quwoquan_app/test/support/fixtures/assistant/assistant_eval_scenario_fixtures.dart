@@ -276,16 +276,16 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:skill_selection',
+      eventId: '$turnId:classifying',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 3,
       eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
-          'processId': 'skill_selection',
+          'processId': 'classifying',
           'scope': 'skill',
-          'stage': 'skill_selection',
+          'stage': 'classifying',
           'status': 'completed',
           'order': 1,
           'summary': '已选择${scenario.skillId}处理本次请求。',
@@ -297,16 +297,16 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:tool_execution',
+      eventId: '$turnId:searching',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 4,
       eventType: AssistantStreamEventType.processAppend,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
-          'processId': 'tool_execution',
+          'processId': 'searching',
           'scope': 'skill',
-          'stage': 'tool_execution',
+          'stage': 'searching',
           'status': 'completed',
           'order': 2,
           'summary': scenario.alphaMockStream.toolSummary,
@@ -319,16 +319,16 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:evidence_review',
+      eventId: '$turnId:assessing',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 5,
       eventType: AssistantStreamEventType.processCommit,
       payload: <String, dynamic>{
         'process': <String, dynamic>{
-          'processId': 'evidence_review',
+          'processId': 'assessing',
           'scope': 'aggregation',
-          'stage': 'evidence_review',
+          'stage': 'assessing',
           'status': 'completed',
           'order': 3,
           'summary':
@@ -362,16 +362,16 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:answer_generation',
+      eventId: '$turnId:answering',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 6,
       eventType: AssistantStreamEventType.processAppend,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
-          'processId': 'answer_generation',
+          'processId': 'answering',
           'scope': 'root',
-          'stage': 'answer_generation',
+          'stage': 'answering',
           'status': 'active',
           'order': 4,
         },
@@ -390,16 +390,16 @@ class ScenarioEvalMockAssistantRepository extends AlphaAssistantFacets {
     );
     yield AssistantStreamEventWire(
       schema: 'assistant_stream_event',
-      eventId: '$turnId:answer_generation_complete',
+      eventId: '$turnId:answering_complete',
       conversationId: 'acv_eval_personal_assistant',
       turnId: turnId,
       seq: 8,
       eventType: AssistantStreamEventType.processCommit,
       payload: const <String, dynamic>{
         'process': <String, dynamic>{
-          'processId': 'answer_generation',
+          'processId': 'answering',
           'scope': 'root',
-          'stage': 'answer_generation',
+          'stage': 'answering',
           'status': 'completed',
           'order': 4,
         },

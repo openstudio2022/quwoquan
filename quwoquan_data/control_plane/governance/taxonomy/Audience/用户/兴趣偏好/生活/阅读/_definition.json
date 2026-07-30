@@ -2,6 +2,10 @@
   "label": "阅读",
   "labelEn": "Reading",
   "description": "喜欢阅读、书单与读书空间",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/教育成长/阅读写作"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

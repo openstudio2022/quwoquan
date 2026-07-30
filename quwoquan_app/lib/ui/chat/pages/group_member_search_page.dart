@@ -32,12 +32,12 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
   }
 
   void _openProfile(ChatConversationMemberDto m) {
-    final username = m.userId;
-    if (username.isEmpty) return;
+    final userHandle = m.userHandle.trim();
+    if (userHandle.isEmpty) return;
     context.push(
-      AppRoutePaths.userProfile(username: username),
+      AppRoutePaths.userProfile(userHandle: userHandle),
       extra: UserProfileRouteExtra(
-        subAccountId: username,
+        personaId: m.userId.trim().isEmpty ? null : m.userId.trim(),
         avatar: m.avatarUrl,
         displayName: m.displayName,
       ),

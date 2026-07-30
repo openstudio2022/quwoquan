@@ -129,30 +129,33 @@ type MediaRoomProvider interface {
 
 // CallEventPayload 是事件与实时信令共享的强类型载荷。
 type CallEventPayload struct {
-	CallID              string   `json:"callId"`
-	EventID             string   `json:"eventId,omitempty"`
-	CallType            string   `json:"callType,omitempty"`
-	InitiatorID         string   `json:"initiatorId,omitempty"`
-	InitiatorRingtoneID string   `json:"initiatorRingtoneId,omitempty"`
-	TargetPersonaID     string   `json:"targetPersonaId,omitempty"`
-	CallerName          string   `json:"callerName,omitempty"`
-	CallerAvatarURL     string   `json:"callerAvatarUrl"`
-	SourceLabel         string   `json:"sourceLabel,omitempty"`
-	TrustRelation       string   `json:"trustRelation,omitempty"`
-	DeliveryKey         string   `json:"deliveryKey,omitempty"`
-	ConversationID      string   `json:"conversationId,omitempty"`
-	CircleID            string   `json:"circleId,omitempty"`
-	MaxParticipants     int      `json:"maxParticipants,omitempty"`
-	UserID              string   `json:"userId,omitempty"`
-	Role                string   `json:"role,omitempty"`
-	Status              string   `json:"status"`
-	ParticipantCount    int      `json:"participantCount"`
-	EndReason           string   `json:"endReason,omitempty"`
-	DurationMs          int64    `json:"durationMs,omitempty"`
-	StartedAt           string   `json:"startedAt,omitempty"`
-	EndedAt             string   `json:"endedAt,omitempty"`
-	ExpiresAt           string   `json:"expiresAt,omitempty"`
-	InviteeIDs          []string `json:"inviteeIds,omitempty"`
+	CallID              string `json:"callId"`
+	EventID             string `json:"eventId,omitempty"`
+	CallType            string `json:"callType,omitempty"`
+	InitiatorID         string `json:"initiatorId,omitempty"`
+	InitiatorRingtoneID string `json:"initiatorRingtoneId,omitempty"`
+	TargetPersonaID     string `json:"targetPersonaId,omitempty"`
+	CallerName          string `json:"callerName,omitempty"`
+	CallerAvatarURL     string `json:"callerAvatarUrl"`
+	SourceLabel         string `json:"sourceLabel,omitempty"`
+	TrustRelation       string `json:"trustRelation,omitempty"`
+	DeliveryKey         string `json:"deliveryKey,omitempty"`
+	ConversationID      string `json:"conversationId,omitempty"`
+	CircleID            string `json:"circleId,omitempty"`
+	MaxParticipants     int    `json:"maxParticipants,omitempty"`
+	UserID              string `json:"userId,omitempty"`
+	Role                string `json:"role,omitempty"`
+	Status              string `json:"status"`
+	ParticipantCount    int    `json:"participantCount"`
+	EndReason           string `json:"endReason,omitempty"`
+	DurationMs          int64  `json:"durationMs,omitempty"`
+	StartedAt           string `json:"startedAt,omitempty"`
+	EndedAt             string `json:"endedAt,omitempty"`
+	CreatedAt           string `json:"createdAt"`
+	ExpiresAt           string `json:"expiresAt,omitempty"`
+	// InviteeIDs 只用于一次 mutation 内决定 CallRinging recipients，
+	// 不属于任何对外事件载荷，禁止进入 outbox/realtime JSON。
+	InviteeIDs []string `json:"-"`
 }
 
 // CallRealtimePublisher 是 CallSession outbox 的唯一 relay adapter。

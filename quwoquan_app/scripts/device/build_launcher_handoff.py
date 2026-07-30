@@ -4,69 +4,35 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
-from verify_flutter_run_defines import validate_flutter_run_defines
+from launch_manifest_metadata import (
+    LaunchManifestContractError,
+    canonical_ports,
+    dart_defines_digest,
+    effective_launch_manifest_digest,
+    is_digest_identity,
+    load_launch_manifest_contract,
+    runtime_config_digest,
+    validate_handoff_against_metadata,
+)
 
 
 APP_DIR = Path(__file__).resolve().parents[2]
-ROOT = APP_DIR.parent
-TARGET_ENVIRONMENTS = {
-    "alpha-local": "alpha",
-    "beta-local": "beta",
-    "gamma-local": "gamma",
-    "prod-sim": "prod",
-    "prod-hosted": "prod",
-}
-LOCAL_TARGETS = frozenset({"alpha-local", "beta-local", "gamma-local", "prod-sim"})
 
 
-def runtime_config_digest(environment: str) -> str:
-    digest = hashlib.sha256()
-    files = (
-        ROOT / "quwoquan_app/configs/default/app_runtime.yaml",
-        ROOT / f"quwoquan_app/configs/{environment}/app_runtime.yaml",
-        ROOT / f"quwoquan_ops/environments/{environment}/runtime.yaml",
-    )
-    for path in files:
-        if not path.is_file():
-            raise RuntimeError(f"runtime identity input is missing: {path}")
-        digest.update(path.relative_to(ROOT).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return f"sha256:{digest.hexdigest()}"
-
-
-def dart_defines_digest(defines: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        {str(key): str(value).strip() for key, value in defines.items()},
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
-def effective_launch_manifest_digest(manifest: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        manifest,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
-def _parser() -> argparse.ArgumentParser:
+def _parser(contract: dict[str, Any]) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--env", choices=("alpha", "beta", "gamma", "prod"), required=True)
-    parser.add_argument("--target", choices=tuple(TARGET_ENVIRONMENTS), required=True)
+    environment_choices = contract["schemas"]["app_effective_launch_manifest"][
+        "fields"
+    ]["environment"]["allowed_values"]
+    parser.add_argument("--env", choices=tuple(environment_choices), required=True)
+    parser.add_argument(
+        "--target", choices=tuple(contract["target_environment"]), required=True
+    )
     parser.add_argument("--launch-mode", required=True)
     parser.add_argument("--app-instance-id", default="")
     parser.add_argument("--app-instance-namespace", default="")
@@ -88,7 +54,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
-    expected_environment = TARGET_ENVIRONMENTS[args.target]
+    contract = load_launch_manifest_contract()
+    expected_environment = contract["target_environment"][args.target]
+    local_targets = set(contract["local_transport_targets"])
     if args.env != expected_environment:
         raise ValueError(
             f"target {args.target} requires --env {expected_environment}, got {args.env}"
@@ -130,49 +98,46 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or result.stdout.strip())
     defines = json.loads(result.stdout)
-    entrypoint = "lib/main_prod.dart"
-    defines_digest = dart_defines_digest(defines)
-    config_digest = runtime_config_digest(args.env)
-    issues = validate_flutter_run_defines(
-        defines,
-        expected_env=args.env,
+    if not isinstance(defines, dict):
+        raise ValueError("canonical Dart defines output must be an object")
+    if defines.get("APP_RUNTIME_ENV") != args.env:
+        raise ValueError("canonical Dart defines environment does not match metadata")
+    effective_schema = contract["schemas"]["app_effective_launch_manifest"]
+    handoff_schema = contract["schemas"]["app_launcher_handoff"]
+    entrypoint = effective_schema["fields"]["entrypoint"]["const"]
+    defines_digest = dart_defines_digest(defines, contract)
+    config_digest = runtime_config_digest(
+        args.env,
+        contract,
         target=args.target,
-        entrypoint=entrypoint,
-        defines_digest=defines_digest,
-        runtime_config_digest=config_digest,
     )
-    if issues:
-        raise ValueError("; ".join(issues))
     transport_values = {
         "reverseExpectedPorts": args.reverse_expected_ports.strip(),
         "reverseActualPorts": args.reverse_actual_ports.strip(),
         "reverseReceiptDigest": args.reverse_receipt_digest.strip(),
         "consumerLeaseId": args.consumer_lease_id.strip(),
     }
-    if args.target == "prod-hosted" and any(transport_values.values()):
-        raise ValueError("prod-hosted launcher handoff must not contain local transport")
+    if args.target not in local_targets and any(transport_values.values()):
+        raise ValueError("non-local launcher handoff must not contain local transport")
     if args.transport_required:
-        if args.target not in LOCAL_TARGETS:
+        if args.target not in local_targets:
             raise ValueError("local transport can only be required by a local target")
         missing = [key for key, value in transport_values.items() if not value]
         if missing:
             raise ValueError(
                 "local transport handoff is incomplete: " + ", ".join(sorted(missing))
             )
-        for key in (
-            "reverseReceiptDigest",
-            "consumerLeaseId",
-        ):
-            if re.fullmatch(r"sha256:[0-9a-f]{64}", transport_values[key]) is None:
-                raise ValueError(f"{key} must be a sha256 identity")
-        expected_ports = _canonical_ports(transport_values["reverseExpectedPorts"])
-        actual_ports = _canonical_ports(transport_values["reverseActualPorts"])
+        for key in ("reverseReceiptDigest", "consumerLeaseId"):
+            if not is_digest_identity(transport_values[key], contract):
+                raise ValueError(f"{key} must be a canonical digest identity")
+        expected_ports = canonical_ports(transport_values["reverseExpectedPorts"])
+        actual_ports = canonical_ports(transport_values["reverseActualPorts"])
         if expected_ports != actual_ports:
             raise ValueError("Android reverse expected/actual ports do not match")
         transport_values["reverseExpectedPorts"] = expected_ports
         transport_values["reverseActualPorts"] = actual_ports
     effective_manifest = {
-        "schema": "app-effective-launch-manifest-v1",
+        "schema": effective_schema["schema_value"],
         "environment": args.env,
         "target": args.target,
         "entrypoint": entrypoint,
@@ -181,55 +146,34 @@ def build_handoff(args: argparse.Namespace) -> dict[str, Any]:
         "runtimeConfigDigest": config_digest,
         "recoveryBaseUrl": defines["CLOUD_GATEWAY_BASE_URL"],
         "publicWebBaseUrl": defines["PUBLIC_WEB_BASE_URL"],
-        "requiresLocalTransport": args.target in LOCAL_TARGETS,
+        "appDownloadBaseUrl": defines["APP_DOWNLOAD_BASE_URL"],
+        "requiresLocalTransport": args.target in local_targets,
         "transport": {
             "required": args.transport_required,
             **transport_values,
         },
     }
-    effective_digest = effective_launch_manifest_digest(effective_manifest)
-    manifest_issues = validate_flutter_run_defines(
-        defines,
-        expected_env=args.env,
-        target=args.target,
-        entrypoint=entrypoint,
-        defines_digest=defines_digest,
-        runtime_config_digest=config_digest,
-        effective_launch_manifest=effective_manifest,
-        effective_launch_manifest_digest=effective_digest,
-        transport_required=args.transport_required,
-        reverse_expected_ports=transport_values["reverseExpectedPorts"],
-        reverse_actual_ports=transport_values["reverseActualPorts"],
-        reverse_receipt_digest=transport_values["reverseReceiptDigest"],
-        consumer_lease_id=transport_values["consumerLeaseId"],
-    )
-    if manifest_issues:
-        raise ValueError("; ".join(manifest_issues))
-    return {
+    effective_digest = effective_launch_manifest_digest(effective_manifest, contract)
+    handoff = {
         **effective_manifest,
-        "schema": "app-launcher-handoff-v1",
+        "schema": handoff_schema["schema_value"],
         "dartDefines": defines,
         "effectiveLaunchManifest": effective_manifest,
         "effectiveLaunchManifestDigest": effective_digest,
     }
-
-
-def _canonical_ports(raw: str) -> str:
-    values: set[int] = set()
-    for value in raw.split(","):
-        normalized = value.strip()
-        if not normalized:
-            continue
-        if not normalized.isdigit() or int(normalized) <= 0 or int(normalized) > 65535:
-            raise ValueError(f"invalid Android reverse port: {normalized}")
-        values.add(int(normalized))
-    if not values:
-        raise ValueError("Android reverse ports are empty")
-    return ",".join(str(value) for value in sorted(values))
+    contract_issues = validate_handoff_against_metadata(handoff, contract)
+    if contract_issues:
+        raise ValueError("; ".join(contract_issues))
+    return handoff
 
 
 def main() -> int:
-    args = _parser().parse_args()
+    try:
+        contract = load_launch_manifest_contract()
+    except LaunchManifestContractError as exc:
+        print(f"GATE_BLOCK: {exc}")
+        return 2
+    args = _parser(contract).parse_args()
     try:
         handoff = build_handoff(args)
     except (RuntimeError, ValueError, json.JSONDecodeError) as exc:

@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	generated "quwoquan_service/services/tag-service/generated/tag/object_tag_index_view/persistence/tag/persistence"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	ports "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
 )
@@ -161,7 +162,7 @@ func (s *MongoObjectTagIndexStore) UpsertObjectTagsFromRelease(
 				"updatedAt":        now,
 				"releaseId":        releaseID,
 				"sourceOwner":      sourceOwner,
-				"lifecycleStatus":  "active",
+				"lifecycleStatus":  string(lifecycle.StatusActive),
 				"releaseUpdatedAt": now,
 			},
 			"$setOnInsert": bson.M{
@@ -266,7 +267,7 @@ func (s *MongoObjectTagIndexStore) ApplyUserProfileTagProjection(
 				"sourceOwner":            "user-service",
 				"sourceAggregateVersion": projection.ProfileVersion,
 				"sourceEventId":          eventID,
-				"lifecycleStatus":        "active",
+				"lifecycleStatus":        string(lifecycle.StatusActive),
 				"updatedAt":              projection.OccurredAt.UTC(),
 			},
 			"$setOnInsert": bson.M{"createdAt": projection.OccurredAt.UTC()},

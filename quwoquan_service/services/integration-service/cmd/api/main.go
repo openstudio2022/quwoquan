@@ -352,16 +352,13 @@ func run() error {
 	}
 	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
 
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(withObs)
-
 	server := &http.Server{
 		Addr: cfg.Service.HTTP.Addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:      accessVerifier,
 			DeviceTicketVerifier:     deviceVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(withObs),
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,

@@ -60,7 +60,7 @@ void main() {
     _session = await LocalGammaAnonymousSession.login(
       client: _client,
       baseUrl: _authBase,
-      subject: 'product-ops-api-contract-v1',
+      subject: 'product-ops-api-contract',
     );
     _clientInitialized = true;
   });
@@ -79,7 +79,6 @@ void main() {
             'eventId': eventId,
             'eventType': 'experience',
             'eventName': 'page_open',
-            'eventVersion': 'v1',
             'priority': 'P0',
             'producer': 'app.contract_test',
             'source': 'page_access',

@@ -45,6 +45,12 @@ func cleanSearchCollections(t *testing.T) {
 		"rm_search_term_heat",
 		"search_user_account_closed_inbox",
 		"search_user_account_closed_failures",
+		"search_user_account_restrictions",
+		"search_user_account_restriction_inbox",
+		"search_user_account_restriction_watermarks",
+		"search_test_documents",
+		"search_test_user_account_restrictions",
+		"search_test_user_account_restriction_inbox",
 	} {
 		if _, err := mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{}); err != nil {
 			t.Fatalf("clean %s: %v", coll, err)

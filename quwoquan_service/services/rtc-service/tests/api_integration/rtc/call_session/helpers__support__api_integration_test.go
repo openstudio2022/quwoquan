@@ -113,7 +113,7 @@ var _ = context.Background
 
 func createTestCall(t *testing.T, userID string) map[string]any {
 	t.Helper()
-	payload := `{"callType":"audio","inviteeIds":["user_invitee_001"]}`
+	payload := `{"callType":"audio","inviteeIds":["user_invitee_001"],"maxParticipants":2}`
 	return doPost(t, "/rtc/calls", payload, userID, http.StatusCreated)
 }
 

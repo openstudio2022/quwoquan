@@ -3,7 +3,7 @@ export 'package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.d
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
-extension AssistantJourneyCompat on AssistantJourney {
+extension AssistantJourneyDomainSemantics on AssistantJourney {
   bool get isEmpty =>
       stages.isEmpty && entries.isEmpty && summary.trim().isEmpty;
 
@@ -25,9 +25,10 @@ extension AssistantJourneyCompat on AssistantJourney {
   }
 }
 
-extension AssistantJourneyStageCompat on AssistantJourneyStage {
+extension AssistantJourneyStageDomainSemantics on AssistantJourneyStage {
   bool get isVisible => stageId != JourneyStageId.unknown;
   bool get isCompleted => status == JourneyStageStatus.completed;
   bool get isActive =>
-      status == JourneyStageStatus.active || status == JourneyStageStatus.blocked;
+      status == JourneyStageStatus.active ||
+      status == JourneyStageStatus.blocked;
 }

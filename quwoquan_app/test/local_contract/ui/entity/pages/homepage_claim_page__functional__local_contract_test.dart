@@ -25,7 +25,7 @@ void main() {
       _claimHost(repository: repository, telemetry: telemetry),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-claim')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.tap(find.text(ObjectHomepageText.homepageClaimSubmit));
     await tester.pump();
@@ -40,7 +40,7 @@ void main() {
       '13800000000',
     );
     await tester.tap(find.text(ObjectHomepageText.homepageClaimSubmit));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(repository.createCalls, 1);
     expect(repository.lastDraft?.contactPhone, '13800000000');
@@ -63,13 +63,13 @@ void main() {
       _claimHost(repository: repository, telemetry: telemetry),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-claim')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.enterText(
       find.byType(CupertinoTextField).first,
       '13800000000',
     );
     await tester.tap(find.text(ObjectHomepageText.homepageClaimSubmit));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.byType(AppFormErrorCard), findsOneWidget);
     expect(
@@ -100,7 +100,7 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     final loginContext = tester.element(
       find.byKey(const ValueKey<String>('homepage-login-close')),
@@ -114,7 +114,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('homepage-login-close')),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.pump();
 
     expect(find.text('CLAIM_SAFE_DETAIL'), findsOneWidget);
@@ -129,13 +129,28 @@ Widget _claimHost({
   required HomepageFacetSet repository,
   required RecordingAppTelemetryRecorder telemetry,
 }) {
+  final router = GoRouter(
+    initialLocation: AppRoutePaths.home,
+    routes: <RouteBase>[
+      GoRoute(path: AppRoutePaths.home, builder: (_, _) => const _ClaimHost()),
+      GoRoute(
+        path: AppRoutePaths.homepageClaimPathTemplate.replaceAll('{id}', ':id'),
+        builder: (_, _) => const HomepageClaimPage(homepageId: _homepageId),
+      ),
+      GoRoute(
+        path: AppRoutePaths.loginPathTemplate,
+        builder: (_, _) => const Text('UNEXPECTED_LOGIN'),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       homepageFacetSetProvider.overrideWithValue(repository),
       appTelemetryReporterProvider.overrideWithValue(telemetry),
     ],
-    child: const MaterialApp(home: _ClaimHost()),
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -157,11 +172,8 @@ class _ClaimHostState extends State<_ClaimHost> {
           TextButton(
             key: const ValueKey<String>('open-claim'),
             onPressed: () async {
-              final result = await Navigator.of(context).push<bool>(
-                CupertinoPageRoute<bool>(
-                  builder: (_) =>
-                      const HomepageClaimPage(homepageId: _homepageId),
-                ),
+              final result = await context.push<bool>(
+                AppRoutePaths.homepageClaim(id: _homepageId),
               );
               if (mounted) {
                 setState(() => _result = result);
@@ -243,8 +255,9 @@ class _AuthenticatedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'entity-test-token',
+    refreshToken: 'entity-test-refresh-token',
     ownerId: 'fixture_user_current',
-    activeSubAccountId: 'fixture_user_current',
+    activePersonaId: 'fixture_user_current',
   );
 }
 
@@ -252,4 +265,11 @@ class _GuestSession extends AuthSessionController {
   @override
   AuthSessionState build() =>
       const AuthSessionState(status: AuthSessionStatus.guest);
+}
+
+Future<void> _pumpUi(WidgetTester tester) async {
+  await tester.pump();
+  for (var frame = 0; frame < 6; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }

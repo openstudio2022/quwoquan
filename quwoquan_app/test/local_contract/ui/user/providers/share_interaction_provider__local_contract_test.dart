@@ -1,6 +1,6 @@
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-004
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-005
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-007
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-005
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-007
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -30,11 +30,11 @@ void main() {
     addTearDown(container.dispose);
 
     const receivedKey = ShareInteractionBucketKey(
-      subAccountId: 'persona-a',
+      personaId: 'persona-a',
       direction: ShareInteractionDirection.received,
     );
     const initiatedKey = ShareInteractionBucketKey(
-      subAccountId: 'persona-a',
+      personaId: 'persona-a',
       direction: ShareInteractionDirection.initiated,
     );
     container.read(shareInteractionProvider(receivedKey));
@@ -99,7 +99,7 @@ void main() {
     );
     addTearDown(container.dispose);
     const key = ShareInteractionBucketKey(
-      subAccountId: 'persona-a',
+      personaId: 'persona-a',
       direction: ShareInteractionDirection.received,
     );
     container.read(shareInteractionProvider(key));
@@ -139,7 +139,7 @@ void main() {
     );
     addTearDown(container.dispose);
     const key = ShareInteractionBucketKey(
-      subAccountId: 'persona-a',
+      personaId: 'persona-a',
       direction: ShareInteractionDirection.received,
     );
     container.read(shareInteractionProvider(key));
@@ -178,11 +178,11 @@ class _TestAuthController extends AuthSessionController {
     status: AuthSessionStatus.authenticated,
     accessToken: 'test-token',
     ownerId: 'owner-a',
-    activeSubAccountId: 'persona-a',
+    activePersonaId: 'persona-a',
   );
 
-  void activate(String subAccountId) {
-    state = state.copyWith(activeSubAccountId: subAccountId);
+  void activate(String personaId) {
+    state = state.copyWith(activePersonaId: personaId);
   }
 }
 
@@ -265,13 +265,13 @@ ContentProfileInteractionPage _page(String id, String direction) {
         activityId: id,
         activityType: 'share',
         direction: direction,
-        actorSubAccountId: 'actor',
+        actorPersonaId: 'actor',
         actorDisplayName: '山海来信',
-        targetSubAccountId: 'persona-a',
+        targetPersonaId: 'persona-a',
         targetContentId: 'target',
         targetContentType: 'image',
         targetContentSummary: '川西晨光',
-        displaySubAccountId: 'actor',
+        displayPersonaId: 'actor',
         displayName: '山海来信',
         primaryText: '转发互动',
         previewMediaKind: 'text',

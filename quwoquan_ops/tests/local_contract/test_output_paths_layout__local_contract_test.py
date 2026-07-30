@@ -3,23 +3,22 @@ from __future__ import annotations
 import json
 import sys
 from argparse import Namespace
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli import legal_static, stackctl
 from quwoquan_ops.cli.lib import output_paths
-from quwoquan_ops.cli import legal_static
-from quwoquan_ops.cli import stackctl
+from quwoquan_ops.cli.lib.common import artifact_run_dir
 from quwoquan_ops.cli.prod import render_prod_plane_stack as render
+from quwoquan_ops.gate import verify_output_path_source_contract as source_contract
 from quwoquan_ops.gate.verify_output_layout import output_layout_issues
 from quwoquan_ops.gate.verify_root_layout import source_cache_issues
-from quwoquan_ops.gate import verify_output_path_source_contract as source_contract
-
 
 MANIFEST = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml"
 GATE_REPO = ROOT / "quwoquan_ops" / "gate" / "gate_repo.sh"
@@ -106,6 +105,65 @@ def test_path_resolver_honors_custom_root_and_orthogonal_scopes(
     assert output_paths.repo_runs_root() == root / "env/repo/runs"
     assert output_paths.data_tasks_root() == root / "data/tasks"
     assert output_paths.data_releases_root() == root / "data/releases"
+
+
+def test_package_root_switches_atomically_to_activated_candidate(
+    tmp_path: Path, monkeypatch
+) -> None:
+    deploy_root = tmp_path / "deploy-work"
+    monkeypatch.setenv("QWQ_DEPLOY_WORK_ROOT", str(deploy_root))
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path / "output"))
+    baseline_id = f"sha256:{'a' * 64}"
+    candidate = output_paths.deployment_candidate_dir("alpha-local", baseline_id)
+    (candidate / "packages/app").mkdir(parents=True)
+    (candidate / "manifest.json").write_text("{}\n", encoding="utf-8")
+
+    pointer = output_paths.activate_deployment_candidate(
+        "alpha-local",
+        baseline_id,
+    )
+
+    assert pointer == deploy_root / "alpha-local/active-candidate.json"
+    assert output_paths.deployment_package_root("alpha") == candidate / "packages"
+    assert output_paths.app_deployment_package_dir("alpha") == candidate / "packages/app"
+    assert output_paths.active_deployment_candidate("alpha-local") == {
+        "schema": output_paths.ACTIVE_CANDIDATE_SCHEMA,
+        "target": "alpha-local",
+        "baselineId": baseline_id,
+        "candidateDir": str(candidate),
+    }
+
+
+def test_concurrent_run_evidence_paths_never_share_a_directory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class FixedDatetime:
+        @classmethod
+        def now(cls, tz):
+            assert tz == timezone.utc
+            return datetime(2026, 7, 28, 20, 19, 19, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(output_paths, "datetime", FixedDatetime)
+    env_paths = {
+        output_paths.run_evidence_dir(tmp_path, "inspect", "alpha-local")
+        for _ in range(128)
+    }
+    explicit_root_paths = {
+        artifact_run_dir(
+            "alpha",
+            "inspect",
+            target="alpha-local",
+            output_root=tmp_path,
+        )
+        for _ in range(128)
+    }
+
+    assert len(env_paths) == 128
+    assert len(explicit_root_paths) == 128
+    assert env_paths.isdisjoint(explicit_root_paths)
+    for path in env_paths | explicit_root_paths:
+        assert "inspect-alpha-local" in path.name
 
 
 def test_deployment_workspace_resolves_to_a_real_absolute_target_path(
@@ -232,7 +290,7 @@ def test_deploy_bash_entries_reuse_the_python_target_resolver() -> None:
     ).read_text(encoding="utf-8")
     assert "deployment_render_dir(" in prod_source
     alpha_source = (
-        ROOT / "quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh"
+        ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
     ).read_text(encoding="utf-8")
     beta_source = (
         ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
@@ -240,7 +298,8 @@ def test_deploy_bash_entries_reuse_the_python_target_resolver() -> None:
     prod_sim_source = (
         ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
     ).read_text(encoding="utf-8")
-    assert "certificate_export_dir(" in alpha_source
+    assert "deployment_target_path(" in alpha_source
+    assert "certificate_paths(" in alpha_source
     assert "deployment_render_dir(" in beta_source
     assert "deployment_render_dir(" in prod_sim_source
     assert "deployment_target_path(" in prod_sim_source
@@ -284,7 +343,7 @@ def test_deployment_workspace_cannot_be_nested_under_disposable_output(
         raise AssertionError("deployment workspace nested under output must fail")
 
 
-def test_stackctl_inspect_keeps_configuration_outside_disposable_output(
+def test_stackctl_inspect_captures_configuration_without_deployment_writes(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -306,15 +365,9 @@ def test_stackctl_inspect_keeps_configuration_outside_disposable_output(
     assert result["exitCode"] == 0
     assert not (report_dir / "config.json").exists()
     report = json.loads((report_dir / "report.json").read_text(encoding="utf-8"))
-    assert report["inspection"]["config"] == {
-        "status": "stored_outside_output",
-        "externalConfigRef": (
-            "deployment-work://gamma-local/inspection/inspect-config/config.json"
-        ),
-    }
-    assert (
-        deploy / "gamma-local/inspection/inspect-config/config.json"
-    ).is_file()
+    assert report["inspection"]["config"]["target"]["env"] == "gamma"
+    assert report["inspection"]["config"]["portProfile"] == "gamma-local"
+    assert not (deploy / "gamma-local/inspection").exists()
     assert output_layout_issues(output) == []
 
 

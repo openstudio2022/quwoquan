@@ -50,21 +50,21 @@
         ]
       },
       {
-        "title": "打分耗时 P50 / P95 / P99（by model_version）",
+        "title": "打分耗时 P50 / P95 / P99（by model_release_id）",
         "type": "timeseries",
         "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_version))",
-            "legendFormat": "P50 {{ model_version }}"
+            "expr": "histogram_quantile(0.50, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
+            "legendFormat": "P50 {{ model_release_id }}"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_version))",
-            "legendFormat": "P95 {{ model_version }}"
+            "expr": "histogram_quantile(0.95, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
+            "legendFormat": "P95 {{ model_release_id }}"
           },
           {
-            "expr": "histogram_quantile(0.99, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_version))",
-            "legendFormat": "P99 {{ model_version }}"
+            "expr": "histogram_quantile(0.99, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
+            "legendFormat": "P99 {{ model_release_id }}"
           }
         ]
       },
@@ -75,7 +75,7 @@
         "targets": [
           {
             "expr": "rec_model_loaded{job=~\"$job\"}",
-            "legendFormat": "{{ model_version }}"
+            "legendFormat": "{{ scorer_kind }}"
           }
         ]
       },
@@ -102,17 +102,17 @@
         ]
       },
       {
-        "title": "打分分布 P50 / P95（by model_version）",
+        "title": "打分分布 P50 / P95（by scorer_kind）",
         "type": "timeseries",
         "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
         "targets": [
           {
-            "expr": "histogram_quantile(0.50, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, model_version))",
-            "legendFormat": "P50 {{ model_version }}"
+            "expr": "histogram_quantile(0.50, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, scorer_kind))",
+            "legendFormat": "P50 {{ scorer_kind }}"
           },
           {
-            "expr": "histogram_quantile(0.95, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, model_version))",
-            "legendFormat": "P95 {{ model_version }}"
+            "expr": "histogram_quantile(0.95, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, scorer_kind))",
+            "legendFormat": "P95 {{ scorer_kind }}"
           }
         ]
       }

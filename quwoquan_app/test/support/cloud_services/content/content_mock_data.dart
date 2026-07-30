@@ -557,7 +557,7 @@ class ContentMockData {
   static List<FeedItemDto> get discoveryVideoData => _expandDiscoveryFeed(
     _withCanonicalMedia([
       {
-        'id': 'v1',
+        'id': 'video_tokyo_midnight',
         'type': 'video',
         'authorId': 'a1',
         'displayName': '楹语小筑',
@@ -584,7 +584,7 @@ class ContentMockData {
         'createdAt': '2026-01-10T02:00:00Z',
       },
       {
-        'id': 'v2',
+        'id': 'video_forest_walk',
         'type': 'video',
         'authorId': 'a2',
         'displayName': '自然摄影师',
@@ -597,7 +597,7 @@ class ContentMockData {
         'thumbnailUrl':
             'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
         'videoUrl':
-            'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+            'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
         'body': '在大自然中找回内心的平静。🌲✨ #森林漫步 #自然景观 #心灵治愈',
         'width': 1080,
         'height': 1920,
@@ -609,7 +609,7 @@ class ContentMockData {
         'createdAt': '2026-01-09T10:30:00Z',
       },
       {
-        'id': 'v3',
+        'id': 'video_future_ai',
         'type': 'video',
         'authorId': 'a3',
         'displayName': '未来科技',
@@ -622,7 +622,7 @@ class ContentMockData {
         'thumbnailUrl':
             'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
         'videoUrl':
-            'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+            'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
         'body': '2026年，我们的生活将如何被AI改变？一分钟带你了解。#科技趋势 #未来已来',
         'width': 1920,
         'height': 1080,
@@ -730,7 +730,7 @@ class ContentMockData {
           'label': '同游',
           'sharedCount': 5,
           'strength': 0.76,
-          'displayText': '你和 TA 都去过 西湖',
+          'displayText': '你和 TA 都看过 西湖',
           'objectKind': 'place',
           'relationObjectId': 'homepage_sight_west_lake',
           'actionType': 'view',

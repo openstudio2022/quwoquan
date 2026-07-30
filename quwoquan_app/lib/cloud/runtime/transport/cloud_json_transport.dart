@@ -11,6 +11,7 @@ final class CloudJsonTransportRequest {
     required this.headers,
     required this.abortTrigger,
     this.body,
+    this.maximumResponseBodyBytes,
   });
 
   final String method;
@@ -20,6 +21,7 @@ final class CloudJsonTransportRequest {
   final Map<String, String> headers;
   final Future<void> abortTrigger;
   final CloudJsonMap? body;
+  final int? maximumResponseBodyBytes;
 }
 
 abstract interface class CloudJsonTransport {
@@ -65,6 +67,7 @@ final class HttpCloudJsonTransport implements CloudJsonTransport {
       requireAuth: requireAuth,
       abortTrigger: request.abortTrigger,
       body: request.body,
+      maximumResponseBodyBytes: request.maximumResponseBodyBytes,
     );
   }
 

@@ -18,6 +18,7 @@
     "rawSha256",
     "cleanSha256",
     "policyRevision",
+    "sourceUseMode",
     "rightsMode"
   ],
   "properties": {
@@ -109,7 +110,14 @@
     "policyRevision": {
       "enum": [
         "encyclopedia-primary",
-        "sourced-video-attribution-v1"
+        "sourced-video-attribution"
+      ]
+    },
+    "sourceUseMode": {
+      "enum": [
+        "licensed_adaptation",
+        "factual_reference_only",
+        "blocked"
       ]
     },
     "rightsMode": {
@@ -183,7 +191,10 @@
           "const": "sourced_video_direct_download"
         },
         "policyRevision": {
-          "const": "sourced-video-attribution-v1"
+          "const": "sourced-video-attribution"
+        },
+        "sourceUseMode": {
+          "const": "licensed_adaptation"
         },
         "rightsMode": {
           "const": "attribution_no_watermark"

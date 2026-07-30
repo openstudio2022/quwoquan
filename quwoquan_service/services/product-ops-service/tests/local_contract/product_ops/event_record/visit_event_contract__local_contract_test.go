@@ -21,7 +21,7 @@ import (
 
 func TestTelemetryServiceAcceptsStrictBatchAndMasksSession(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	now := time.Now().UTC().Add(-2 * time.Minute)
 	events := []application.EventRecordInput{
 		validEvent("page_open", "event", now),
@@ -105,7 +105,7 @@ func TestTrustedRuntimeLogBatchUsesTheSameDurableIdempotencyLedger(t *testing.T)
 
 func TestRtcMediaQoeDrilldownPreservesSessionScopedTerminalFacts(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	occurredAt := time.Now().UTC().Add(-time.Minute)
 	event := validEvent("rtc_media_qoe", "event", occurredAt)
 	callType, result := "video", "connection_lost"
@@ -162,7 +162,7 @@ func TestRtcMediaQoeDrilldownPreservesSessionScopedTerminalFacts(t *testing.T) {
 
 func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	now := time.Now().UTC().Add(-time.Minute)
 	valid := validEvent("page_open", "event", now)
 	invalid := validEvent("page_open", "event", now)
@@ -185,7 +185,7 @@ func TestTelemetryServiceRejectsWholeBatchBeforeWrite(t *testing.T) {
 
 func TestTelemetryGeneratedInputAcceptsCataloguedProductAndChatExtensions(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	now := time.Now().UTC().Add(-time.Minute)
 	productAction := validEvent("product_action", "event", now)
 	journey, action := "chat_group", "create"
@@ -216,6 +216,93 @@ func TestTelemetryGeneratedInputAcceptsCataloguedProductAndChatExtensions(t *tes
 	}
 }
 
+func TestTelemetryGeneratedInputAcceptsLoginFunnelAndOperationExtensions(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	service := application.NewTelemetryService(store, store)
+	now := time.Now().UTC().Add(-time.Minute)
+
+	flowID, step, result := "login-flow-1", "otp", "failure"
+	action, entryMode := "otp_verify", "required"
+	fromStep, toStep := "phoneEntry", "otp"
+	provider, otpPurpose := "wechat", "login"
+	consentState, countdownBucket := "accepted", "one_to_thirty"
+	dismissPolicy := "return_to_origin"
+	durationMS, attemptIndex, motionReduced := 850, 1, false
+	funnel := validEvent("login_funnel", "event", now)
+	funnel.PageName = "login"
+	funnel.FlowID = &flowID
+	funnel.Step = &step
+	funnel.Result = &result
+	funnel.Action = &action
+	funnel.EntryMode = &entryMode
+	funnel.FromStep = &fromStep
+	funnel.ToStep = &toStep
+	funnel.Provider = &provider
+	funnel.OtpPurpose = &otpPurpose
+	funnel.ConsentState = &consentState
+	funnel.CountdownBucket = &countdownBucket
+	funnel.DismissPolicy = &dismissPolicy
+	funnel.DurationMS = &durationMS
+	funnel.AttemptIndex = &attemptIndex
+	funnel.MotionReduced = &motionReduced
+
+	operationID, surfaceID := "otp_verify", "login_otp"
+	failureKind, recoveryAction := "network", "retry_verify"
+	copyKey, feedbackSurface := "otpVerifyUnavailable", "inline"
+	requestID, traceID := "request-1", "trace-1"
+	operation := validEvent("login_operation", "event", now.Add(time.Second))
+	operation.PageName = "login"
+	operation.OperationID = &operationID
+	operation.SurfaceID = &surfaceID
+	operation.Result = &result
+	operation.FlowID = &flowID
+	operation.Step = &step
+	operation.Provider = &provider
+	operation.OtpPurpose = &otpPurpose
+	operation.FailureKind = &failureKind
+	operation.RecoveryAction = &recoveryAction
+	operation.CopyKey = &copyKey
+	operation.FeedbackSurface = &feedbackSurface
+	operation.DurationMS = &durationMS
+	operation.AttemptIndex = &attemptIndex
+	operation.RequestID = &requestID
+	operation.TraceID = &traceID
+
+	body, err := json.Marshal(struct {
+		Events []application.EventRecordInput `json:"events"`
+	}{Events: []application.EventRecordInput{funnel, operation}})
+	if err != nil {
+		t.Fatalf("encode login event batch: %v", err)
+	}
+	var decoded struct {
+		Events []application.EventRecordInput `json:"events"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		t.Fatalf("strict login event decode: %v", err)
+	}
+
+	ack, err := service.ReportEventBatch(
+		context.Background(),
+		digestKey("generated-login-event-input-catalog"),
+		decoded.Events,
+	)
+	if err != nil || ack.AcceptedCount != 2 {
+		t.Fatalf("catalogued login extensions must be accepted: ack=%+v err=%v", ack, err)
+	}
+
+	extensions := operation.ExtensionValues()
+	if extensions["copyKey"] != copyKey || extensions["feedbackSurface"] != feedbackSurface {
+		t.Fatalf("login operation lost observable feedback identity: %+v", extensions)
+	}
+	for _, forbidden := range []string{"phone", "phoneNumber", "otp", "bindingTicket", "providerTicket", "token"} {
+		if _, ok := extensions[forbidden]; ok {
+			t.Fatalf("login telemetry must not contain sensitive field %q", forbidden)
+		}
+	}
+}
+
 func TestTelemetryGeneratedInputStrictlyRejectsUndeclaredExtensions(t *testing.T) {
 	validBody := []byte(`{"events":[{"logType":"event","eventType":"chat_interaction_outcome","sessionId":"s.Z3Vlc3RfdGVzdA.1","pageName":"chat_detail","occurredAt":"2026-07-21T01:00:00Z","deviceManufacturer":"Apple","deviceModel":"iPhone","appVersion":"1.0.0","networkClass":"wifi","devicePlatform":"ios","chatAction":"mention_send","chatOutcome":"succeeded","mentionScope":"member"}]}`)
 	var accepted struct {
@@ -240,7 +327,7 @@ func TestTelemetryGeneratedInputStrictlyRejectsUndeclaredExtensions(t *testing.T
 
 func TestTelemetryIngestionAcceptsCellularGenerationsAndRejectsRemovedVPNValue(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	occurredAt := time.Now().UTC().Add(-time.Minute)
 	event := application.EventRecordInput{
 		LogType:            "event",
@@ -304,7 +391,7 @@ func TestTelemetryServiceRejectsCatalogSessionTimeAndRequiredExtensionViolations
 	for name, event := range tests {
 		t.Run(name, func(t *testing.T) {
 			store := telemetrypersistence.NewMemoryTelemetryStore()
-			service := application.NewTelemetryService(store, store, store)
+			service := application.NewTelemetryService(store, store)
 			if _, err := service.ReportEventBatch(context.Background(), digestKey(name), []application.EventRecordInput{event}); err == nil {
 				t.Fatalf("%s must be rejected", name)
 			}
@@ -314,7 +401,7 @@ func TestTelemetryServiceRejectsCatalogSessionTimeAndRequiredExtensionViolations
 
 func TestStartupDiagnosticsUseIndependentIdempotentBatch(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	records := []application.StartupDiagnosticRecord{{
 		EventID: "attempt_000000000001_1", AttemptID: "attempt_000000000001",
 		Phase: "router_ready", Outcome: "ready", OccurredAt: time.Now().UTC().Format(time.RFC3339Nano),
@@ -332,7 +419,7 @@ func TestStartupDiagnosticsUseIndependentIdempotentBatch(t *testing.T) {
 
 func TestStartupDiagnosticsSameProofDoesNotCollapseDistinctBatch(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryService(store, store, store)
+	service := application.NewTelemetryService(store, store)
 	now := time.Now().UTC().Add(-time.Minute)
 	firstRecord := application.StartupDiagnosticRecord{
 		EventID: "attempt_000000000002_1", AttemptID: "attempt_000000000002",
@@ -371,7 +458,7 @@ func TestSLSEventProtocolWritesOnceAndConfirmsTimeoutAfterWrite(t *testing.T) {
 		t.Fatalf("new SLS store: %v", err)
 	}
 	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	service := application.NewTelemetryServiceWithStores(store, ledger)
 	event := validEvent("page_open", "event", time.Now().UTC().Add(-time.Minute))
 	batchKey := digestKey("timeout-after-write")
 
@@ -402,7 +489,7 @@ func TestTelemetryServicePersistsTypedVideoPlaybackQoeWithoutContentAttribution(
 		t.Fatalf("new SLS store: %v", err)
 	}
 	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	service := application.NewTelemetryServiceWithStores(store, ledger)
 	now := time.Now().UTC().Add(-time.Minute)
 	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
 	effectivePlaybackMS := 12000
@@ -476,7 +563,7 @@ func TestTelemetryServiceRejectsUnknownVideoSeekEvidenceSource(t *testing.T) {
 		t.Fatalf("new SLS store: %v", err)
 	}
 	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	service := application.NewTelemetryServiceWithStores(store, ledger)
 	now := time.Now().UTC().Add(-time.Minute)
 	readyMS, rebufferCount, rebufferMS, seekCount := 420, 1, 180, 2
 	effectivePlaybackMS := 12000
@@ -507,7 +594,7 @@ func TestSLSStartupDiagnosticsStayInRestrictedLogstore(t *testing.T) {
 		t.Fatalf("new SLS store: %v", err)
 	}
 	ledger := telemetrypersistence.NewMemoryTelemetryStore()
-	service := application.NewTelemetryServiceWithStores(ledger, store, ledger)
+	service := application.NewTelemetryServiceWithStores(store, ledger)
 	record := application.StartupDiagnosticRecord{
 		EventID: "startup_attempt_000001_1", AttemptID: "startup_attempt_000001", Sequence: 1,
 		Phase: "router_ready", PhaseDurationMS: 100, ElapsedMS: 200, Outcome: "ready",

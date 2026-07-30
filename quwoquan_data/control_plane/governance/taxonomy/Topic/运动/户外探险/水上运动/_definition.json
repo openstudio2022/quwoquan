@@ -2,6 +2,7 @@
   "label": "水上运动",
   "labelEn": "Water Sports",
   "description": "冲浪、帆船、皮划艇等水上运动",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

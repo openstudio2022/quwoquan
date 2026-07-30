@@ -9,12 +9,14 @@ String resolveContentMediaUrl(
   String? gatewayBaseUrl,
   String? imageCdnBaseUrl,
   String? videoCdnBaseUrl,
+  MediaEndpointConfig? endpointConfig,
 }) {
   final candidates = resolveContentMediaUrlCandidates(
     raw,
     gatewayBaseUrl: gatewayBaseUrl,
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
+    endpointConfig: endpointConfig,
   );
   return candidates.isEmpty ? '' : candidates.first;
 }
@@ -24,12 +26,14 @@ String resolveContentVideoUrl(
   String? gatewayBaseUrl,
   String? imageCdnBaseUrl,
   String? videoCdnBaseUrl,
+  MediaEndpointConfig? endpointConfig,
 }) {
   final candidates = resolveContentVideoUrlCandidates(
     raw,
     gatewayBaseUrl: gatewayBaseUrl,
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
+    endpointConfig: endpointConfig,
   );
   return candidates.isEmpty ? '' : candidates.first;
 }
@@ -39,12 +43,14 @@ List<String> resolveContentMediaUrlCandidates(
   String? gatewayBaseUrl,
   String? imageCdnBaseUrl,
   String? videoCdnBaseUrl,
+  MediaEndpointConfig? endpointConfig,
 }) {
   return _resolveMediaReference(
     raw,
     kind: _inferNonVideoKind(raw),
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
+    endpointConfig: endpointConfig,
   );
 }
 
@@ -53,18 +59,26 @@ List<String> resolveContentVideoUrlCandidates(
   String? gatewayBaseUrl,
   String? imageCdnBaseUrl,
   String? videoCdnBaseUrl,
+  MediaEndpointConfig? endpointConfig,
 }) {
   return _resolveMediaReference(
     raw,
     kind: MediaDeliveryKind.video,
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
+    endpointConfig: endpointConfig,
   );
 }
 
 /// 是否像可播放视频源：仅当公开视频引用能解析为唯一注入交付 URI 时为真。
-bool isLikelyContentVideoMediaSource(String? raw) {
-  return resolveContentVideoUrlCandidates(raw).isNotEmpty;
+bool isLikelyContentVideoMediaSource(
+  String? raw, {
+  MediaEndpointConfig? endpointConfig,
+}) {
+  return resolveContentVideoUrlCandidates(
+    raw,
+    endpointConfig: endpointConfig,
+  ).isNotEmpty;
 }
 
 /// 本地相册/拍照尚未上传的临时文件路径，不经公开媒体交付解析。
@@ -84,6 +98,7 @@ List<String> _resolveMediaReference(
   required MediaDeliveryKind kind,
   String? imageCdnBaseUrl,
   String? videoCdnBaseUrl,
+  MediaEndpointConfig? endpointConfig,
 }) {
   final source = raw?.trim() ?? '';
   if (source.isEmpty) {
@@ -97,13 +112,18 @@ List<String> _resolveMediaReference(
     return <String>[source];
   }
 
-  final endpoints = MediaEndpointConfig.tryCreateAvailable(
-    avatarBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
-    imageBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    videoBaseUrl: videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-    attachmentBaseUrl:
-        imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
-  );
+  final endpoints =
+      endpointConfig ??
+      MediaEndpointConfig.tryCreateAvailable(
+        avatarBaseUrl:
+            imageCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+        imageBaseUrl:
+            imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
+        videoBaseUrl:
+            videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+        attachmentBaseUrl:
+            imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
+      );
   if (endpoints == null) {
     return const <String>[];
   }

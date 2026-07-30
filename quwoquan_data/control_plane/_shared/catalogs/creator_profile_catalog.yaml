@@ -1,4 +1,3 @@
-version: 1
 archetypes:
   self_drive_expert:
     label: 自驾路书作者

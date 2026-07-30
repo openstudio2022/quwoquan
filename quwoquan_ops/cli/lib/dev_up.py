@@ -410,6 +410,8 @@ def resolve_app_endpoint_overrides(
     target = get_target(manifest, target_name)
     public_bases = dict(target.get("publicBases") or {})
     gateway_base_url = str(public_bases["api"]).rstrip("/")
+    if device_kind == "web":
+        gateway_base_url = f"{str(public_bases['publicWeb']).rstrip('/')}/api"
     return {
         "target": target_name,
         "gatewayBaseUrl": gateway_base_url,

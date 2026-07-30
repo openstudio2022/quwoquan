@@ -103,7 +103,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
           .read(profileInteractionQueryFacetProvider)
           .listActivities(
             ContentProfileInteractionPageQuery(
-              subAccountId: widget.userId,
+              personaId: widget.userId,
               type: switch (subTab) {
                 InteractionSubTab.likes => ContentProfileInteractionType.like,
                 InteractionSubTab.comments =>
@@ -202,7 +202,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
                 state.interactionDirection == InteractionDirection.received
                 ? ShareInteractionDirection.received
                 : ShareInteractionDirection.initiated,
-            subAccountId: widget.userId,
+            personaId: widget.userId,
             inlineScroll: widget.inlineScroll,
           )
         : _loading
@@ -296,7 +296,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     required InteractionDirection direction,
     required bool isLast,
   }) {
-    final displayUserId = item.displaySubAccountId;
+    final displayUserId = item.displayPersonaId;
     final displayName = item.displayName;
     final avatarUrl = resolveAvatarImageUrl(item.displayAvatarUrl);
     final fg = AppColorsFunctional.getColor(
@@ -559,15 +559,15 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     ProfileInteractionActivityViewData item,
     String resolvedAvatarUrl,
   ) {
-    final userId = item.displaySubAccountId.trim();
+    final userId = item.displayPersonaId.trim();
     if (item.displayUserRouteId != AppLinkTemplates.userRouteId ||
         userId.isEmpty) {
       return;
     }
     context.push(
-      AppRoutePaths.userProfile(username: userId),
+      AppRoutePaths.userProfile(userHandle: userId),
       extra: UserProfileRouteExtra(
-        subAccountId: userId,
+        personaId: userId,
         avatar: resolvedAvatarUrl.isNotEmpty ? resolvedAvatarUrl : null,
         displayName: item.displayName.isNotEmpty ? item.displayName : null,
       ),

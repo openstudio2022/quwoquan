@@ -2,6 +2,7 @@
   "label": "慢剪",
   "labelEn": "Slow Edit",
   "description": "慢节奏缓和剪辑",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

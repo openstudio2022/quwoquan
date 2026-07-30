@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"quwoquan_service/runtime/accountrestriction"
 )
 
 const UserAccountClosedEventName = "UserAccountClosed"
@@ -100,6 +102,17 @@ type UserAccountClosedApplyResult struct {
 	Replayed bool
 }
 
+var ErrUserAccountRestrictionProjectionConflict = errors.New(
+	"chat user account restriction projection conflict",
+)
+
+type UserAccountRestrictionProjectionResult struct {
+	Replayed bool
+	Stale    bool
+	Terminal bool
+	Affected int64
+}
+
 // UserAccountClosedProjection 负责删除 Chat 账户态并不可逆匿名化必须保留的
 // 会话审计事实。实现必须将 eventId inbox 与 Mongo 变更放在同一事务。
 type UserAccountClosedProjection interface {
@@ -107,4 +120,13 @@ type UserAccountClosedProjection interface {
 		ctx context.Context,
 		event UserAccountClosedEvent,
 	) (UserAccountClosedApplyResult, error)
+}
+
+// UserAccountRestrictionProjection owns only the reversible suspended/active
+// read model. It must never call the irreversible UserAccountClosed cleanup.
+type UserAccountRestrictionProjection interface {
+	Apply(
+		ctx context.Context,
+		event accountrestriction.Event,
+	) (UserAccountRestrictionProjectionResult, error)
 }

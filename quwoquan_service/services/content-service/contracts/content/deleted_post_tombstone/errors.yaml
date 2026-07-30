@@ -1,20 +1,4 @@
 entity: DeletedPostTombstone
 domain: CONTENT
-description: 'DeletedPostTombstone 对象专属错误码：已删除内容读取返回 410 Gone。
-
-  共享错误码唯一定义于 content/content/post/errors.yaml；content 域 codegen 与端云 parity
-
-  按固定文件列表合并，code 全域唯一。
-
-  '
-errors:
-- code: CONTENT.USER.content_deleted
-  kind: USER
-  reason: content_deleted
-  http_status: 410
-  recovery_action: surface
-  dart_const: contentDeleted
-  go_const: ErrContentDeleted
-  user_message:
-    zh: 内容已删除
-    en: Content has been deleted
+description: DeletedPostTombstone 是数据对象且不拥有 HTTP operation；410 content_deleted 由真实发射者 Post.GetPost 在 post/errors.yaml 定义。
+errors: []

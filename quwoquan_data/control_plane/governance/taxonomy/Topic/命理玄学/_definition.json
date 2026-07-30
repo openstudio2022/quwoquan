@@ -2,6 +2,7 @@
   "label": "命理玄学",
   "labelEn": "Metaphysics & Fortune",
   "description": "星座、塔罗、风水生肖等民俗玄学内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -1,5 +1,5 @@
 {
-  "description": "实体主页 gamma curated 子集，覆盖对象页、介绍页、认领与选择器的远端联调最小集合。",
+  "description": "实体主页 alpha/beta/gamma 共享测试场景，覆盖作者主页、圈子主页、POI/地点主页、认领与选择器。 [gamma-curated subset]",
   "repositoryExpectations": {
     "alpha": "mock",
     "beta": "remote",
@@ -7,12 +7,11 @@
   },
   "seedSets": {
     "entity_homepage_core": {
-      "description": "gamma 远端最小主页子集。",
+      "description": "作者主页、圈子主页、POI/地点主页、品牌/作品主页。",
       "homepages": [
         {
           "homepageId": "fixture_homepage_author",
           "homepageType": "author",
-          "canonicalEntityId": "entity:author:fixture_user_photo",
           "title": "契约摄影师主页",
           "ownerId": "fixture_user_photo",
           "summary": "作者主页契约数据",
@@ -24,7 +23,6 @@
         {
           "homepageId": "fixture_homepage_circle",
           "homepageType": "circle",
-          "canonicalEntityId": "entity:circle:fixture_circle_photo",
           "title": "契约摄影社主页",
           "ownerId": "fixture_circle_photo",
           "summary": "圈子主页契约数据",
@@ -35,7 +33,6 @@
         {
           "homepageId": "fixture_homepage_poi",
           "homepageType": "poi",
-          "canonicalEntityId": "entity:poi:west_lake_contract",
           "title": "杭州西湖契约主页",
           "summary": "地点主页契约数据",
           "geo": {
@@ -57,7 +54,8 @@
             "景点",
             "湖泊",
             "浙江"
-          ]
+          ],
+          "verified": true
         },
         {
           "homepageId": "homepage_sight_west_lake",
@@ -73,17 +71,81 @@
             "城市地标",
             "赏景"
           ],
+          "verified": true,
+          "establishedYear": 1982,
+          "followerCount": 1286,
+          "averageRating": 4.7,
+          "ratingCount": 328,
+          "reviewSummary": {
+            "averageRating": 4.7,
+            "ratingCount": 328,
+            "highlightTags": [
+              "湖景",
+              "适合散步"
+            ]
+          },
+          "contentPreview": [
+            {
+              "postId": "west_lake_record_1",
+              "title": "西湖日落散步路线",
+              "summary": "一条适合黄昏慢走的完整打卡笔记。",
+              "contentType": "article",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+              "authorName": "湖畔慢行者",
+              "likeCount": 328,
+              "intersectionReasons": [
+                {
+                  "primaryText": "你关注的9人来过「西湖景区」",
+                  "displayText": "关注的人来过",
+                  "dimension": "location"
+                }
+              ]
+            },
+            {
+              "postId": "west_lake_record_2",
+              "title": "断桥边的夜色作品",
+              "summary": "断桥残雪机位与曝光参数实拍。",
+              "contentType": "image",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+              "authorName": "夜色摄影手",
+              "likeCount": 156
+            },
+            {
+              "postId": "west_lake_record_3",
+              "title": "苏堤骑行 vlog",
+              "summary": "清晨苏堤骑行的一镜到底。",
+              "contentType": "video",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+              "authorName": "苏堤骑行客",
+              "likeCount": 204,
+              "intersectionReasons": [
+                {
+                  "primaryText": "你常看的摄影作者都拍过这里",
+                  "displayText": "摄影作者常拍",
+                  "dimension": "interest"
+                }
+              ]
+            }
+          ],
           "introduction": {
             "homepageId": "homepage_sight_west_lake",
             "displayName": "西湖景区",
             "homepageType": "sight",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
             "summary": "杭州西湖核心游览区，由湖面、堤岸、园林、人文节点和城市公共生活共同构成，适合散步、骑行、摄影与长期内容沉淀。",
             "sections": [
               {
                 "kind": "overview",
                 "title": "概况",
                 "bodyMarkdown": "西湖景区位于浙江省杭州市西部，是由湖面、环湖山体、人文街区、园林遗迹与城市公共生活共同构成的开放型景区。它并不是单一景点，而是一组可步行、可骑行、可乘船、可反复进入的城市风景系统。白堤、苏堤、断桥、孤山、曲院风荷、花港观鱼、雷峰塔、南屏晚钟等区域把自然水面、堤岸植物、人文故事和日常休闲连接在一起，形成了杭州最具识别度的城市名片。\n\n从旅行体验看，西湖适合第一次到杭州的人建立城市方位感，也适合本地用户在清晨、傍晚、雨后或节假日选择不同节奏重新进入。游客可以把它理解为一个低门槛的城市漫游起点：从湖滨到断桥偏城市界面，从白堤到孤山偏人文与湖景，从苏堤到花港观鱼偏长线散步和植物景观，从杨公堤到茅家埠偏安静骑行与餐饮停留。不同入口之间距离不短，完整绕湖需要较长时间，因此更适合按半日或一日主题拆分，而不是一次性打卡所有点。\n\n西湖的价值不只在风景好看，也在它持续承接真实内容和讨论：有人分享日落机位，有人记录骑行路线，有人讨论节假日避开拥堵的方式，也有人围绕摄影、亲子散步、人文建筑和城市更新形成长期兴趣圈。趣我圈里的西湖主页因此不只是介绍文字，而是一个连接入口：你可以看到哪些朋友去过、哪些内容绑定了这里、哪些讨论正在发生，以及有哪些兴趣圈围绕这个地方长期沉淀。",
-                "assets": [],
+                "assets": [
+                  {
+                    "assetId": "west_lake_cover",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "西湖湖面与城市天际线",
+                    "sourceRef": "manifest.assets[0]"
+                  }
+                ],
                 "timelineItems": []
               },
               {
@@ -117,6 +179,47 @@
                 "bodyMarkdown": "西湖在杭州城市文脉中长期是公共生活、文人书写与风景营造的核心空间。白居易、苏轼等人文人物与湖堤治理、诗文传播形成了持久关联；近现代以后，西湖又逐步成为城市公园、公共景区和旅游目的地。今天用户实际接触到的西湖，是人文遗存、城市道路、公共交通、商业街区与生态景观共同运转的结果。\n\n理解西湖时不宜只把它看成一张静态照片。断桥、白堤、苏堤、孤山、雷峰塔等名称之所以被反复提起，是因为它们既是空间节点，也是故事节点。用户在这些节点拍照、散步、会面、写攻略、发起讨论，都会让这个主页不断生成新的内容和交集。",
                 "assets": [],
                 "timelineItems": []
+              },
+              {
+                "kind": "body",
+                "title": "苏堤春晓",
+                "bodyMarkdown": "苏堤纵贯西湖南北，是北宋疏浚湖泥堆筑的长堤，堤上六桥起伏、两侧遍植桃柳，春季晨光中的堤桥景观被列为西湖十景之首。\n\n:::figure id=\"fig_su_causeway\" layout=\"fullWidth\" caption=\"苏堤六桥与两侧桃柳\"\nasset://west_lake_su_causeway\n:::\n\n沿堤步行约四十分钟可从南山路走到北山街，串联花港观鱼与曲院风荷两处景点。",
+                "assets": [
+                  {
+                    "assetId": "west_lake_su_causeway",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "苏堤六桥与两侧桃柳",
+                    "role": "inline",
+                    "sourceRef": "manifest.assets[1]"
+                  }
+                ]
+              },
+              {
+                "kind": "relatedObjects",
+                "title": "相关地点和事物",
+                "bodyMarkdown": "断桥残雪、曲院风荷、灵隐寺、河坊街等地点共同构成杭州旅行与城市漫游的关联网络。",
+                "assets": [],
+                "timelineItems": []
+              },
+              {
+                "kind": "relatedImages",
+                "title": "相关图片",
+                "assets": [
+                  {
+                    "assetId": "west_lake_broken_bridge",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "断桥残雪",
+                    "role": "related",
+                    "sourceRef": "manifest.assets[2]"
+                  },
+                  {
+                    "assetId": "west_lake_leifeng_pagoda",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "",
+                    "role": "related",
+                    "sourceRef": "manifest.assets[3]"
+                  }
+                ]
               }
             ],
             "relatedObjects": [
@@ -125,7 +228,11 @@
                 "name": "契约摄影社",
                 "memberCount": 128,
                 "linkedHomepageId": "homepage_sight_west_lake",
-                "linkedHomepageTitle": "西湖景区"
+                "linkedHomepageTitle": "西湖景区",
+                "ownerUserId": "fixture_user_owner",
+                "ownerDisplayNameSnapshot": "契约摄影社主理人",
+                "ownerAvatarUrlSnapshot": "",
+                "evidenceSnapshotId": "circle:fixture_circle_photo:members"
               }
             ],
             "sourceRefs": [
@@ -134,6 +241,50 @@
               "quwoquan_data/entities/地点/景区/西湖景区/manifest.json"
             ],
             "updatedAt": "2026-06-12T00:00:00Z"
+          },
+          "seedSource": {
+            "pageMd": "quwoquan_data/entities/地点/景区/西湖景区/page.md",
+            "entityJson": "quwoquan_data/entities/地点/景区/西湖景区/_entity.json",
+            "manifestJson": "quwoquan_data/entities/地点/景区/西湖景区/manifest.json",
+            "mappingHelper": "quwoquan_data/scripts/build/homepage.py::homepage_introduction_seed_from_triplet"
+          },
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "address": "浙江省杭州市西湖区",
+          "geo": {
+            "lat": 30.2431,
+            "lng": 120.15
+          },
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_photo",
+              "name": "契约摄影社",
+              "memberCount": 128,
+              "linkedHomepageId": "homepage_sight_west_lake",
+              "linkedHomepageTitle": "西湖景区",
+              "ownerUserId": "fixture_user_owner",
+              "ownerDisplayNameSnapshot": "契约摄影社主理人",
+              "ownerAvatarUrlSnapshot": "",
+              "evidenceSnapshotId": "circle:fixture_circle_photo:members"
+            }
+          ],
+          "impactSummary": {
+            "total": 1,
+            "items": [
+              {
+                "helpType": "interest",
+                "action": "open",
+                "intersectionDimension": "interest",
+                "tagRef": "Entity/地点/景区/西湖景区",
+                "source": "entity fixture",
+                "count": 9,
+                "primaryText": "这里打动的人",
+                "subtitleText": "9 位同趣用户关注西湖景区",
+                "impactId": "impact:homepage_sight_west_lake:interest",
+                "evidenceSnapshotId": "impact:homepage_sight_west_lake:interest",
+                "countObjectKind": "user",
+                "iconKey": "sparkles"
+              }
+            ]
           }
         },
         {
@@ -149,6 +300,25 @@
             "校园",
             "大学",
             "北京"
+          ],
+          "contentPreview": [
+            {
+              "postId": "fixture_pku_post_001",
+              "title": "未名湖春日路线",
+              "summary": "AI 冷启动补齐的校园参观与摄影路线。",
+              "contentType": "article",
+              "authorName": "燕园向导",
+              "likeCount": 73
+            }
+          ],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_pku_alumni",
+              "name": "北大校友同趣圈",
+              "memberCount": 1280,
+              "linkedHomepageId": "fixture_homepage_university_pku",
+              "linkedHomepageTitle": "北京大学"
+            }
           ]
         },
         {
@@ -164,6 +334,15 @@
             "旅行摄影",
             "机位",
             "杭州"
+          ],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_west_lake_photo",
+              "name": "西湖旅行摄影圈",
+              "memberCount": 680,
+              "linkedHomepageId": "fixture_homepage_travel_photo_west_lake",
+              "linkedHomepageTitle": "西湖旅行摄影机位"
+            }
           ]
         },
         {
@@ -179,21 +358,15 @@
             "餐厅",
             "夜宵",
             "本地推荐"
-          ]
-        },
-        {
-          "homepageId": "homepage_sight_emeishan",
-          "homepageType": "sight",
-          "canonicalEntityId": "entity:sight:emeishan",
-          "title": "峨眉山",
-          "subtitle": "世界遗产与川西南山地旅行代表目的地",
-          "summary": "承接登山路线、寺院游览、云海日出与川西南旅行内容沉淀。",
-          "city": "乐山",
-          "status": "published",
-          "categoryTags": [
-            "景点",
-            "山地旅行",
-            "乐山"
+          ],
+          "relatedGroups": [
+            {
+              "circleId": "night_market_circle_1",
+              "name": "杭州夜宵地图",
+              "memberCount": 203,
+              "linkedHomepageId": "homepage_restaurant_night_market",
+              "linkedHomepageTitle": "夜巷小馆"
+            }
           ]
         },
         {
@@ -247,6 +420,25 @@
               "linkedHomepageTitle": "新东方"
             }
           ],
+          "impactSummary": {
+            "total": 1,
+            "items": [
+              {
+                "helpType": "identity",
+                "action": "open",
+                "intersectionDimension": "identity",
+                "tagRef": "Entity/教育/新东方",
+                "source": "entity fixture",
+                "count": 3,
+                "primaryText": "这里打动的人",
+                "subtitleText": "3 位校友与新东方有共同经历",
+                "impactId": "impact:fixture_homepage_school_neworiental:identity",
+                "evidenceSnapshotId": "impact:fixture_homepage_school_neworiental:identity",
+                "countObjectKind": "user",
+                "iconKey": "sparkles"
+              }
+            ]
+          },
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-06-30T00:00:00Z",
           "publishedAt": "2026-06-30T00:00:00Z"
@@ -305,6 +497,121 @@
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-06-30T00:00:00Z",
           "publishedAt": "2026-06-30T00:00:00Z"
+        },
+        {
+          "homepageId": "homepage_sight_emeishan",
+          "homepageType": "sight",
+          "canonicalEntityId": "entity:sight:emeishan",
+          "title": "峨眉山",
+          "subtitle": "世界遗产与川西南山地旅行代表目的地",
+          "summary": "峨眉山概况峨眉山，亦作峨眉山，位于四川省峨眉山市境内，景区面积154平方公里。",
+          "city": "乐山",
+          "status": "published",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "categoryTags": [
+            "景点",
+            "山地旅行",
+            "乐山"
+          ],
+          "seedSource": {
+            "channel": "qwq-data fixture entity-introduction",
+            "entityRef": "地点/景区/峨眉山",
+            "sourceTaskId": "旅行/地域/中国/景区/全国景区主页百级0706a"
+          },
+          "introduction": {
+            "homepageId": "homepage_sight_emeishan",
+            "displayName": "峨眉山",
+            "homepageType": "sight",
+            "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "summary": "峨眉山概况峨眉山，亦作峨眉山，位于四川省峨眉山市境内，景区面积154平方公里。",
+            "sections": [
+              {
+                "kind": "body",
+                "title": "概况",
+                "bodyMarkdown": ":::figure id=\"fig2\" layout=\"fullWidth\" caption=\"峨秀湖与峨眉山\"\nasset://峨眉山_detail_2_529e2211\n:::\n\n峨眉山，亦作峨眉山，位于四川省峨眉山市境内，景区面积154平方公里。最高峰万佛顶海拔3099米；佛教圣地华藏寺所在的金顶（3077米）是游山常到的最高点。山势陡峭、风景秀丽，素有「峨眉天下秀」之称。气候类型多样，植被丰富，已知植物约3000种。山路沿途猴群较多，常结队向游人讨食，是峨眉特色之一。为中国四大佛教名山之一，全山约有寺庙26座，其中八大寺尤为重要，佛事频繁；相传亦为普贤菩萨道场。1996年12月6日，峨眉山—乐山大佛作为文化与自然双重遗产列入联合国教科文组织世界遗产名录。",
+                "assets": [
+                  {
+                    "assetId": "峨眉山_detail_2_529e2211",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "峨秀湖与峨眉山",
+                    "role": "inline",
+                    "sourceRef": "entities/地点/景区/峨眉山"
+                  }
+                ]
+              },
+              {
+                "kind": "body",
+                "title": "主要景观",
+                "bodyMarkdown": ":::figure id=\"fig_03\" layout=\"fullWidth\" caption=\"金顶大雄宝殿\"\nasset://峨眉山_detail_2_960263a3\n:::\n:::figure id=\"fig_04\" layout=\"fullWidth\" caption=\"峨眉山報国寺\"\nasset://峨眉山_detail_2_86d56537\n:::\n:::figure id=\"fig_05\" layout=\"fullWidth\" caption=\"秀甲天下\"\nasset://峨眉山_detail_2_f1028c94\n:::\n\n### 金顶\n\n金顶为峨眉山主峰，海拔3077米，是峨眉游山的终点，名胜云集。华藏寺高耸于岩顶，建于唐朝，屋顶以锡瓦覆盖，元代时又被称为「银顶」。寺侧有卧云庵，内设饭堂与客房，可供游客食宿。在金顶可观峨眉四大奇观——日出、云海、佛光、圣灯。金顶与千佛顶、万佛顶相邻；万佛顶亦有建筑，并有观光索道连接金顶与接引殿。\n\n### 报国寺\n\n报国寺位于峨眉山麓，是入峨眉的门户，也是各类佛事活动的中心。寺创建于明万历年间，曾名「会宗堂」；殿内供奉释迦牟尼大弟子普贤菩萨、广成子与陆通等，取儒、道、释三教会宗之意。清康熙帝取「报国主恩」之意，改今名。全寺占地近4万平方米，山门、弥勒殿、大雄殿、七佛殿、普贤殿、藏经楼等沿中轴线由前而后逐渐升高；周围另有花影亭、七香轩、吟翠楼、待月山房等建筑。\n\n### 清音阁\n\n清音阁又称卧云寺，位于牛心岭下黑白二水汇流处，海拔710米；寺内供奉释迦牟尼及文殊、普贤像。阁下有双飞亭，左右各有桥梁，形如鸟翼飞凌，故称双飞桥。亭下黑、白二水汇流处有一高丈许巨石，形似牛心，名「牛心石」。双飞亭柱上悬清末「戊戌六君子」之一刘光第所撰楹联：「双飞两虹影，万古一牛心」。\n\n### 生态猴区\n\n峨眉山多处设有生态猴区，可观赏当地特有的、灵性与野性并存的猕猴。\n\n### 白云峡\n\n白云峡又称「一线天」，绝壁千仞，如刀砍斧劈而成；全长130米，宽约6米，窄处仅3米，有栈道，仅容二人并行。\n\n### 九老洞\n\n九老洞为全山最大洞穴，全长约1500余米，分三段：首段为厅堂与廊道型洞穴，可直立行走，长约120米；中段为网状交叉的迷宫型洞穴，长约160米，不宜深入；下段为裂隙型洞穴，难以容身，少有人入。洞名来自天英、天任、天柱、天心、天禽、天辅、天冲、天芮、天蓬「九老」于此修仙的传说。\n\n仙峰寺、万年寺、伏虎寺亦为山内重要寺院。",
+                "assets": [
+                  {
+                    "assetId": "峨眉山_detail_2_960263a3",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "金顶大雄宝殿",
+                    "role": "inline",
+                    "sourceRef": "entities/地点/景区/峨眉山"
+                  },
+                  {
+                    "assetId": "峨眉山_detail_2_86d56537",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "峨眉山報国寺",
+                    "role": "inline",
+                    "sourceRef": "entities/地点/景区/峨眉山"
+                  },
+                  {
+                    "assetId": "峨眉山_detail_2_f1028c94",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "秀甲天下",
+                    "role": "inline",
+                    "sourceRef": "entities/地点/景区/峨眉山"
+                  }
+                ]
+              },
+              {
+                "kind": "body",
+                "title": "地理位置",
+                "bodyMarkdown": "峨眉山陡然屹立于四川盆地西南边缘，座西向东，南北走向；西面以二三十度的缓冲斜坡与西部群山相接，面向成都平原。所属峨眉山市为省直辖县级市，面积1151.4平方公里，人口约43.5万；辖绥山等12镇、龙门等6乡，市政府驻绥山镇。",
+                "assets": []
+              },
+              {
+                "kind": "body",
+                "title": "气候",
+                "bodyMarkdown": "山区云雾多、日照少、雨量充沛。平原属亚热带湿润季风气候，一月平均气温约6.9℃，七月约26.1℃。因山体高峻陡峭，气候带垂直分布明显：海拔1500—2100米属暖温带；2100—2500米属中温带；2500米以上属亚寒带。海拔2000米以上地区约有半年为冰雪覆盖，一般为10月至次年4月。",
+                "assets": []
+              },
+              {
+                "kind": "body",
+                "title": "野生动物",
+                "bodyMarkdown": "现记录野生动物约2300余种，其中兽类51种、鸟类256种、爬行类34种、鱼类60种、两栖类33种，昆虫类达1000多种。常见有小熊猫、林麝、短尾猴、苏门羚、白鹇、白腹锦鸡、豹、灰斑角雉，以及胡子蛙、弹琴蛙、枯叶蝶、峨眉大蚯蚓（秉前环毛蚓）等；现有国家保护级物种29种。",
+                "assets": []
+              },
+              {
+                "kind": "body",
+                "title": "历代登山线路",
+                "bodyMarkdown": ":::figure id=\"fig_06\" layout=\"fullWidth\" caption=\"峩眉山道里地圖\"\nasset://峨眉山_detail_2_f2e10667\n:::\n\n### 从县城到报国寺的线路（今已无存）\n\n经回龙寺、峨神庙、川主宫、十方院、璧山庙、菩提庵、兴胜寺、圣积寺（老宝楼）、文昌宫、保宁寺、万行庄、海会堂、萧店子，至报国寺。\n\n### 经清音阁的线路\n\n:::figure id=\"fig_07\" layout=\"fullWidth\" caption=\"峨眉山\"\nasset://峨眉山_detail_2_6b16553b\n:::\n\n报国寺至清音阁、万年寺的线路主要有两条：\n\n- 自报国寺经善觉寺、伏虎寺、无量殿、解脱桥、雷音寺（解脱庵）、纯阴殿、华严寺、纯阳殿、五十三步、慧灯寺、神水阁、大峨寺、中峰寺、观音寺、龙升岗、广福寺，至清音阁；\n- 自报国寺经龙门洞、凉风岗、武显岗、白龙洞、金龙寺、万年寺，至清音阁。\n\n到清音阁后，有两条主要线路通往九岭岗：\n\n- 清音阁、黑龙谷栈道（一线天）、三道桥（或经牛心寺、猴子坡、会佛寺、大坪寺、蛇倒退至三道桥）、洪椿坪、九十九道拐、仙峰寺、九老洞、遇仙寺，至九岭岗；\n- 清音阁、白龙洞、金龙寺、万年寺、息心所、长老坪、初殿、华严顶，至九岭岗。\n\n自九岭岗经莲花寺、钻天坡、洗象池、大乘寺、白云寺、雷洞坪、接引殿、七里坡、太子坪、永庆寺、祖师殿、沉香塔、天门寺、七天桥（文殊庵）、金顶、千佛顶，可达顶峰万佛顶。\n\n### 经黑水寺的线路\n\n自县城西门，经赵河坝、石佛寺、玉屏寺、黑水寺、麻子坝、蕨坪、上雷洞坪。\n\n### 经舍身岩的线路\n\n出县城南至高桥，经张沟、真南沱、鸡婆荡、四季坪上卧云庵，至金顶。\n\n### 经灵岩寺的线路\n\n经灵岩寺山后小路，至九老洞。",
+                "assets": [
+                  {
+                    "assetId": "峨眉山_detail_2_f2e10667",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "峩眉山道里地圖",
+                    "role": "inline",
+                    "sourceRef": "entities/地点/景区/峨眉山"
+                  },
+                  {
+                    "assetId": "峨眉山_detail_2_6b16553b",
+                    "url": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+                    "caption": "峨眉山",
+                    "role": "inline",
+                    "sourceRef": "entities/地点/景区/峨眉山"
+                  }
+                ]
+              }
+            ],
+            "sourceRefs": [
+              "entity-service/homepage/homepage_sight_emeishan",
+              "entity:sight:emeishan"
+            ]
+          }
         }
       ]
     },
@@ -357,6 +664,8 @@
         ],
         "textFragments": [
           "契约摄影师主页",
+          "契约摄影社主页",
+          "杭州西湖契约主页",
           "西湖景区",
           "北京大学",
           "西湖旅行摄影机位",

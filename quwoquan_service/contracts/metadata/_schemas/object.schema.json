@@ -91,7 +91,17 @@
       ]
     },
     "lifecycle": {
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "state_field": { "type": "string", "minLength": 1 },
+        "states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "immutable": { "type": "boolean" }
+      }
     },
     "deferred_operations": {
       "type": "object"

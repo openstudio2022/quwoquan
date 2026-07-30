@@ -329,7 +329,7 @@ func doHandlerJSON(
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("X-Client-User-Id", userID)
-	req.Header.Set("X-Client-Sub-Account-Id", userID)
+	req.Header.Set("X-Client-Persona-Id", userID)
 	if method != http.MethodGet && method != http.MethodHead {
 		req = commandOperationContext(req, path, userID)
 	}
@@ -360,7 +360,7 @@ func TestGroupAvatar_CreateConversationReturnsCreatorAvatarBeforeAsyncAvatarRead
 	if elapsed := time.Since(start); elapsed >= 400*time.Millisecond {
 		t.Fatalf("expected create conversation to return before async recompute, elapsed=%s", elapsed)
 	}
-	if got, want := strings.TrimSpace(created["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
+	if got, want := strings.TrimSpace(created["avatarUrl"].(string)), "https://127.0.0.1:18081/media/avatar/s/archived-avatar/user/user_test_001/v1/avatar.png"; got != want {
 		t.Fatalf("expected creator avatar url on create, got %q want %q", got, want)
 	}
 	if got := int(created["groupAvatarVersion"].(float64)); got != 0 {
@@ -395,7 +395,7 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 	if err != nil {
 		t.Fatalf("find conversation: %v", err)
 	}
-	conv.AvatarUrl = "https://test.avatar/user_test_002"
+	conv.AvatarUrl = "media/avatar/s/archived-avatar/user/user_test_002/v1/avatar.png"
 	conv.GroupAvatarAssetId = ""
 	conv.GroupAvatarVersion = 0
 	conv.GroupAvatarSourceHash = ""
@@ -412,7 +412,7 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 		"user_test_001",
 		http.StatusOK,
 	)
-	if got, want := strings.TrimSpace(detail["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
+	if got, want := strings.TrimSpace(detail["avatarUrl"].(string)), "https://127.0.0.1:18081/media/avatar/s/archived-avatar/user/user_test_001/v1/avatar.png"; got != want {
 		t.Fatalf("expected creator avatar fallback, got %q want %q", got, want)
 	}
 	inbox := doHandlerJSON(
@@ -425,7 +425,7 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 		http.StatusOK,
 	)
 	row := findInboxRow(t, inbox["items"], convID)
-	if got, want := strings.TrimSpace(row["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
+	if got, want := strings.TrimSpace(row["avatarUrl"].(string)), "https://127.0.0.1:18081/media/avatar/s/archived-avatar/user/user_test_001/v1/avatar.png"; got != want {
 		t.Fatalf("expected creator avatar fallback in inbox, got %q want %q", got, want)
 	}
 }

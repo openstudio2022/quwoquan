@@ -20,6 +20,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -49,6 +50,9 @@ class _HomePageState extends ConsumerState<HomePage>
   /// R20 · 在 initState 捕获 tracker 实例，dispose 时复用，避免在 dispose 中
   /// 触碰 `ref`（Riverpod 在 widget 卸载阶段使用 ref 不安全）。
   late final JourneyEventTracker _journeyTracker;
+  late final DiscoveryFeedMapNotifier _feedNotifier;
+  int _activeChannelReconcileGeneration = 0;
+  String? _pendingActiveChannelFallbackId;
 
   /// 频道顺序真相源 = homeChannelsProvider（端默认 + 远程覆盖），用于左右滑动切频道。
   List<String> _channelOrder() =>
@@ -62,6 +66,7 @@ class _HomePageState extends ConsumerState<HomePage>
     super.initState();
     _activeChannelId = _initialTabForRoute(widget.routeLocation);
     _journeyTracker = ref.read(journeyEventTrackerProvider);
+    _feedNotifier = ref.read(discoveryFeedMapProvider.notifier);
     // R20 · 页面级曝光：首页进入即上报一次 enter（页面级停留漏斗起点）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -76,6 +81,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void dispose() {
+    _feedNotifier.cancelChannelRequests(_activeChannelId);
     // R20 · 页面级停留：离开首页时上报停留时长（含异常退出路径）。
     // 使用 initState 捕获的 tracker 实例，禁止在 dispose 中读取 `ref`。
     _journeyTracker.trackAction(
@@ -93,6 +99,12 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   void didUpdateWidget(HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isStartupHomeActive && !widget.isStartupHomeActive) {
+      // HomePage 位于 shell 的 IndexedStack，切到其它主 Tab 时不会 dispose。
+      // 主动终止当前频道请求；build 随后卸载 feed surface，释放媒体资源，
+      // provider 正文与 container-scoped 滚动锚点仍保留供返回时恢复。
+      _feedNotifier.deactivateChannel(_activeChannelId);
+    }
     if (oldWidget.routeLocation == widget.routeLocation) {
       return;
     }
@@ -102,6 +114,7 @@ class _HomePageState extends ConsumerState<HomePage>
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      _feedNotifier.deactivateChannel(_activeChannelId);
       setState(() {
         _activeChannelId = routeTab;
       });
@@ -121,6 +134,37 @@ class _HomePageState extends ConsumerState<HomePage>
       default:
         return null;
     }
+  }
+
+  /// 远端频道配置可在本页存活期间替换。build 只计算展示用 fallback，真正的
+  /// lifecycle 状态必须在 frame 结束后同步，避免 build 期间 setState。
+  ///
+  /// callback 执行前重新读取频道真相源：若用户/路由已经切到合法频道，或配置
+  /// 再次变化，则不覆盖更新后的选择；否则使用当下首频道并回收旧频道请求。
+  void _scheduleActiveChannelReconciliation(String fallbackChannelId) {
+    if (_activeChannelId == fallbackChannelId ||
+        _pendingActiveChannelFallbackId == fallbackChannelId) {
+      return;
+    }
+    _pendingActiveChannelFallbackId = fallbackChannelId;
+    final generation = ++_activeChannelReconcileGeneration;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || generation != _activeChannelReconcileGeneration) {
+        return;
+      }
+      _pendingActiveChannelFallbackId = null;
+      final currentOrder = _channelOrder();
+      if (currentOrder.isEmpty || currentOrder.contains(_activeChannelId)) {
+        return;
+      }
+      final validatedFallbackChannelId = currentOrder.first;
+      final removedChannelId = _activeChannelId;
+      _feedNotifier.deactivateChannel(removedChannelId);
+      setState(() {
+        _activeChannelId = validatedFallbackChannelId;
+      });
+      _syncShellRouteForTab(validatedFallbackChannelId);
+    });
   }
 
   void _syncShellRouteForTab(String id) {
@@ -165,6 +209,7 @@ class _HomePageState extends ConsumerState<HomePage>
       );
       return;
     }
+    _feedNotifier.deactivateChannel(_activeChannelId);
     setState(() => _activeChannelId = id);
     _syncShellRouteForTab(id);
   }
@@ -183,6 +228,7 @@ class _HomePageState extends ConsumerState<HomePage>
         return;
       }
       if (_activeChannelId != pending.channelId) {
+        _feedNotifier.deactivateChannel(_activeChannelId);
         setState(() => _activeChannelId = pending.channelId);
       }
       _syncShellRouteForTab(pending.channelId);
@@ -241,6 +287,9 @@ class _HomePageState extends ConsumerState<HomePage>
         channels.any((channel) => channel.id == _activeChannelId)
         ? _activeChannelId
         : (channels.isNotEmpty ? channels.first.id : _activeChannelId);
+    if (effectiveActiveChannelId != _activeChannelId) {
+      _scheduleActiveChannelReconciliation(effectiveActiveChannelId);
+    }
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final searchChromeColor = isDark ? bg : AppColors.primaryColor;
     final searchChromeSurface = AppChromeSurface.immersive;
@@ -309,7 +358,9 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: TabSwipeSwitchRegion(
                   enabled: true,
                   onSwipe: _handleTabSwipe,
-                  child: _buildBody(isDark, channels, effectiveActiveChannelId),
+                  child: widget.isStartupHomeActive
+                      ? _buildBody(isDark, channels, effectiveActiveChannelId)
+                      : const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -368,9 +419,9 @@ class _HomePageState extends ConsumerState<HomePage>
     String? backgroundUrl,
   }) {
     context.push(
-      AppRoutePaths.userProfile(username: userId),
+      AppRoutePaths.userProfile(userHandle: userId),
       extra: UserProfileRouteExtra(
-        subAccountId: userId,
+        personaId: userId,
         avatar: avatarUrl,
         displayName: displayName,
         backgroundImage: backgroundUrl,
@@ -390,6 +441,7 @@ class _HomePageState extends ConsumerState<HomePage>
       ref,
       post: post,
       mediaIndex: mediaIndex,
+      channelId: _activeChannelId,
       feedPosts: feedPosts,
     );
   }
@@ -440,9 +492,9 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
     String? backgroundUrl,
   }) {
     context.push(
-      AppRoutePaths.userProfile(username: userId),
+      AppRoutePaths.userProfile(userHandle: userId),
       extra: UserProfileRouteExtra(
-        subAccountId: userId,
+        personaId: userId,
         avatar: avatarUrl,
         displayName: displayName,
         backgroundImage: backgroundUrl,

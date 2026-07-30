@@ -21,8 +21,8 @@ fields:
   ops_exposure: read
   role: authoritative_state
   reference: true
-- name: subAccountId
-  source: subAccountId
+- name: personaId
+  source: personaId
   type: string
   constraints:
   - NULLABLE
@@ -67,7 +67,8 @@ fields:
   role: authoritative_state
 - name: pageType
   source: pageType
-  type: string
+  type: enum
+  enum_ref: AssistantPageContextType
   constraints:
   - NULLABLE
   classification: PUBLIC
@@ -191,6 +192,7 @@ fields:
 - name: responseType
   source: responseType
   type: enum
+  enum_ref: AssistantResponseType
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -241,17 +243,6 @@ fields:
   ops_exposure: read
   description: Markdown 结构块（compare/trend/diagram 等）解析后的标准块数组
   role: authoritative_state
-- name: responseFormatVersion
-  source: responseFormatVersion
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: Markdown 输出协议版本（例如 md.v1）
-  role: authoritative_state
 - name: decision
   source: decision
   type: object
@@ -272,7 +263,7 @@ fields:
   log_policy: allow
   api_exposure: read
   ops_exposure: read
-  description: 工具观测标准化数组（tool_observation_v1）
+  description: 工具观测标准化数组；只接受当前 canonical 结构，不携带格式版本身份。
   role: authoritative_state
 - name: subagentRuns
   source: subagentRuns
@@ -298,7 +289,8 @@ fields:
   role: authoritative_state
 - name: problemShape
   source: problemShape
-  type: string
+  type: enum
+  enum_ref: ProblemShape
   constraints:
   - NULLABLE
   classification: PUBLIC
@@ -614,8 +606,8 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
-    - name: releaseVersion
-      source: releaseVersion
+    - name: releaseDigest
+      source: releaseDigest
       type: string
       constraints:
       - NOT_NULL
@@ -718,7 +710,8 @@ types:
       ops_exposure: read
     - name: searchIntensity
       source: searchIntensity
-      type: string
+      type: enum
+      enum_ref: SearchIntensity
       constraints:
       - NOT_NULL
       classification: INTERNAL
@@ -821,8 +814,8 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
-    - name: definitionVersion
-      source: definitionVersion
+    - name: definitionDigest
+      source: definitionDigest
       type: string
       constraints:
       - NULLABLE
@@ -996,8 +989,17 @@ types:
       api_exposure: write
       ops_exposure: read
   AssistantStartRunRequest:
-    description: StartAssistantRun 的唯一公开 command body；clientRequestId 是同一用户意图的稳定重放身份。
+    description: StartAssistantRun 的唯一公开 command 输入；conversationId 只从 path 绑定，clientRequestId 是同一用户意图的稳定重放身份。
     fields:
+    - name: conversationId
+      source: conversationId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: read
     - name: turnType
       source: turnType
       type: string
@@ -1256,7 +1258,8 @@ types:
       ops_exposure: read
     - name: searchIntensity
       source: searchIntensity
-      type: string
+      type: enum
+      enum_ref: SearchIntensity
       constraints:
       - NULLABLE
       classification: PUBLIC
@@ -1631,7 +1634,8 @@ types:
       ops_exposure: read
     - name: pageType
       source: pageType
-      type: string
+      type: enum
+      enum_ref: AssistantPageContextType
       constraints:
       - NULLABLE
       classification: PUBLIC
@@ -1717,14 +1721,14 @@ types:
       description: pending | in_progress | done | cancelled 等，具体枚举由实现约定
     - name: dueAt
       source: dueAt
-      type: string
+      type: timestamp
       constraints:
       - NULLABLE
       classification: PUBLIC
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-      description: ISO8601，可选
+      description: 可选截止时间
     - name: priority
       source: priority
       type: string
@@ -1745,7 +1749,7 @@ types:
       ops_exposure: read
     - name: updatedAt
       source: updatedAt
-      type: string
+      type: timestamp
       constraints:
       - NULLABLE
       classification: PUBLIC
@@ -1826,6 +1830,15 @@ types:
       ops_exposure: read
     - name: stage
       source: stage
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: actionCode
+      source: actionCode
       type: string
       constraints:
       - NOT_NULL
@@ -1965,8 +1978,8 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-    - name: version
-      source: version
+    - name: releaseDigest
+      source: releaseDigest
       type: string
       constraints:
       - NOT_NULL
@@ -2091,7 +2104,7 @@ types:
       ops_exposure: read
     - name: createdAt
       source: createdAt
-      type: string
+      type: timestamp
       constraints:
       - NOT_NULL
       classification: PUBLIC
@@ -2100,7 +2113,7 @@ types:
       ops_exposure: read
     - name: completedAt
       source: completedAt
-      type: string
+      type: timestamp
       constraints:
       - NULLABLE
       classification: PUBLIC
@@ -2129,75 +2142,6 @@ types:
       api_exposure: read
       ops_exposure: read
       description: 不透明 keyset 游标；空表示无更多数据
-  AssistantSkillCatalogItemView:
-    description: 技能目录项（与 ListSkills 对齐的可展示元数据）
-    fields:
-    - name: skillId
-      source: skillId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: description
-      source: description
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: category
-      source: category
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: requiresConsent
-      source: requiresConsent
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: iconHint
-      source: iconHint
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  AssistantSkillCatalogListView:
-    description: ListSkills 响应体（items 为目录项）
-    fields:
-    - name: items
-      source: items
-      type: '[]AssistantSkillCatalogItemView'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
   AssistantSuggestedHomepageView:
     description: 创作辅助建议的关联主页候选；前台不暴露「实体」词。
     fields:
@@ -2598,157 +2542,8 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-  AssistantLearningOpsSummaryView:
-    description: 运营侧学习投影摘要（GetLearningOpsSummary 响应，由 AssistantLearningFact 重建）
-    fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: totalFeedbackCount
-      source: totalFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: positiveFeedbackCount
-      source: positiveFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: negativeFeedbackCount
-      source: negativeFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: textFeedbackCount
-      source: textFeedbackCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: highPriorityCount
-      source: highPriorityCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: mediumPriorityCount
-      source: mediumPriorityCount
-      type: int64
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastFeedbackType
-      source: lastFeedbackType
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastFeedbackScore
-      source: lastFeedbackScore
-      type: float
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastFeedbackAt
-      source: lastFeedbackAt
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: ISO8601 或 RFC3339 字符串
-    - name: lastMetricId
-      source: lastMetricId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastMetricScore
-      source: lastMetricScore
-      type: float
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: topReasonCodes
-      source: topReasonCodes
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: metricAverages
-      source: metricAverages
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: metricId -> 平均分
-    - name: latestMetricScores
-      source: latestMetricScores
-      type: object
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
   AssistantSearchXiaoquRequestWire:
-    description: POST /assistant/search/xiaoqu 请求体（与 service.request_fields 对齐）
+    description: POST /assistant/search/xiaoqu 的 canonical request_entity。
     fields:
     - name: userQuery
       source: userQuery
@@ -2761,15 +2556,16 @@ types:
       ops_exposure: read
     - name: searchIntensity
       source: searchIntensity
-      type: string
+      type: enum
+      enum_ref: SearchIntensity
       constraints:
       - NULLABLE
       classification: PUBLIC
       log_policy: allow
       api_exposure: write
       ops_exposure: read
-    - name: subAccountId
-      source: subAccountId
+    - name: personaId
+      source: personaId
       type: string
       constraints:
       - NULLABLE
@@ -2815,7 +2611,7 @@ types:
       ops_exposure: read
       description: 搜索 handoff 或页面入口传入的小趣上下文快照。
   AssistantReportPageContextRequestWire:
-    description: POST /assistant/page-context 请求体（与 service.request_fields 对齐）
+    description: POST /assistant/page-context 的 canonical request_entity。
     fields:
     - name: contextSnapshot
       source: contextSnapshot
@@ -2827,3 +2623,19 @@ types:
       api_exposure: write
       ops_exposure: read
       description: 小趣页面上下文上报的唯一强类型输入。
+  AssistantToolCallEventPayload:
+    description: Assistant Run event journal 中一次工具调用的强类型事实载荷。
+    fields:
+    - {name: runId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: userId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: toolName, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: latencyMs, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: success, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  AssistantSuggestedActionClickEventPayload:
+    description: 用户点击助手建议动作时投递给推荐域的强类型行为事实载荷。
+    fields:
+    - {name: runId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: userId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: actionId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: pageType, type: enum, enum_ref: AssistantPageContextType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: pageObjectId, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: hash, api_exposure: none, ops_exposure: read}

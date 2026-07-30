@@ -28,7 +28,6 @@ type UserAccount struct {
 	BirthDate                *string    `json:"birthDate" db:"birth_date"`
 	Region                   string     `json:"region" db:"region"`
 	RegionCode               string     `json:"regionCode" db:"region_code"`
-	Status                   string     `json:"status" db:"status"`
 	ProfileVersion           int        `json:"profileVersion" db:"profile_version"`
 	FollowerCount            int64      `json:"followerCount" db:"follower_count"`
 	FollowingCount           int64      `json:"followingCount" db:"following_count"`
@@ -36,7 +35,7 @@ type UserAccount struct {
 	CircleCount              int64      `json:"circleCount" db:"circle_count"`
 	LikeCount                int64      `json:"likeCount" db:"like_count"`
 	OwnerDisplayName         string     `json:"-" db:"owner_display_name"`
-	SubAccountCount          int64      `json:"subAccountCount" db:"sub_account_count"`
+	PersonaCount             int64      `json:"personaCount" db:"persona_count"`
 	CreatedAt                time.Time  `json:"createdAt" db:"created_at"`
 	UpdatedAt                time.Time  `json:"updatedAt" db:"updated_at"`
 }

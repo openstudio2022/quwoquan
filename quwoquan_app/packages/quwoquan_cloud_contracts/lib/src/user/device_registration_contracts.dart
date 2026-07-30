@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/device_registration_contracts.requests.g.dart';
 
 enum DevicePushEndpointKind {
   apnsVoip('apns_voip'),
@@ -18,54 +19,6 @@ abstract interface class DeviceRegistrationCommandWriter {
     DevicePushEndpointRemoveCommand command,
   );
 }
-
-final class DevicePushEndpointUpsertCommand {
-  DevicePushEndpointUpsertCommand({
-    required String deviceId,
-    required this.endpointKind,
-    required String token,
-    required String appVersion,
-  }) : deviceId = _required(deviceId, 'deviceId'),
-       token = _required(token, 'token'),
-       appVersion = _required(appVersion, 'appVersion');
-
-  final String deviceId;
-  final DevicePushEndpointKind endpointKind;
-  final String token;
-  final String appVersion;
-}
-
-CloudOperationRequestPayload encodeDevicePushEndpointUpsertCommand(
-  DevicePushEndpointUpsertCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'deviceId': command.deviceId,
-    'endpointKind': command.endpointKind.wireValue,
-  },
-  body: <String, Object?>{
-    'token': command.token,
-    'appVersion': command.appVersion,
-  },
-);
-
-final class DevicePushEndpointRemoveCommand {
-  DevicePushEndpointRemoveCommand({
-    required String deviceId,
-    required this.endpointKind,
-  }) : deviceId = _required(deviceId, 'deviceId');
-
-  final String deviceId;
-  final DevicePushEndpointKind endpointKind;
-}
-
-CloudOperationRequestPayload encodeDevicePushEndpointRemoveCommand(
-  DevicePushEndpointRemoveCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'deviceId': command.deviceId,
-    'endpointKind': command.endpointKind.wireValue,
-  },
-);
 
 final class DevicePushEndpointCommandResultDto {
   const DevicePushEndpointCommandResultDto({
@@ -114,14 +67,6 @@ DevicePushEndpointCommandResultDto decodeDevicePushEndpointCommandResult(
     idempotentReplay: _requiredBool(response, 'idempotentReplay'),
     updatedAt: _requiredTimestamp(response, 'updatedAt'),
   );
-}
-
-String _required(String value, String field) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, field, 'must not be empty');
-  }
-  return normalized;
 }
 
 String _requiredField(Map<Object?, Object?> value, String field) {

@@ -2,6 +2,7 @@
   "label": "通勤场景",
   "labelEn": "Commute Scene",
   "description": "上下班通勤碎片时间",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

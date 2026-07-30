@@ -435,10 +435,6 @@ class AppSpacing {
   /// 对话输入栏发送按钮直径。
   static const double chatInputSendButtonSize = appChromeActionButtonSize;
 
-  /// 评论输入默认高度，与对话输入单行槽一致。
-  @Deprecated('评论底栏改用 commentToolbarInputHeight，解耦聊天输入栏高度')
-  static const double commentInputHeight = chatInputToolbarMinHeight;
-
   // ==================== 评论底栏 / 列表语义 token（对标小红书） ====================
   /// 评论底栏只读胶囊输入条高度（低于聊天输入栏，更轻量）。
   static const double commentToolbarInputHeight = thirtySix;

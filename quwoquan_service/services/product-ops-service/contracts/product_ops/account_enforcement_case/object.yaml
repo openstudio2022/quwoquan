@@ -1,0 +1,49 @@
+kind: aggregate_root
+description: >-
+  Product Ops 账号治理处置的唯一事务边界。moderation 与 appeal 是显式 case 类型，
+  共享同一审批、不可变 decision、投递回执与恢复状态机，禁止复制成两套工作流。
+identity:
+  fields:
+  - id
+  version_field: version
+  version_source: field
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: command_facade
+  cardinality: N:1
+  consistency: runtime
+  kind: reference
+  name: account
+  on_delete: retain
+  reference_fields:
+  - accountId
+  target_object: user.UserAccount
+local_identity_reasons:
+  sourceDecisionId: >-
+    同一 AccountEnforcementCase 聚合边界内的不可变 suspension decision 引用；
+    不存在可被独立修改的第二聚合或跨对象 Store
+capabilities:
+- commandable
+- queryable
+taggable: false
+vector_enabled: false
+business_rules:
+- caseKind 创建后不可变；moderation 只能签发 suspend，appeal 只能签发 restore
+- appeal 必须引用同一账号已成功投递且仍为最新终态的 suspend decision
+- “最新 decision”只按 PostgreSQL 事务分配的单调 decision sequence 判断，不使用跨实例墙钟排序
+- 两名不同受信 operator 对同一版本批准后才可生成唯一不可变 decision
+- 任一 reject 立即关闭 case；已关闭 case、同一 reviewer 冲突决定或同一幂等键不同摘要均 fail-closed
+- 审批终态、decision、command receipt 与 durable HTTP outbox 必须在同一 PostgreSQL transaction 提交
+- UserAccount 调用仅携带最小 decision wire；审核身份、证据与 intake 引用不得跨域发送
+- bounded retry 耗尽后只写不含账号、证据或审核人的 terminal DLQ；恢复只能重置同一 decision
+lifecycle:
+  state_field: status
+  states:
+  - pending_approval
+  - approved
+  - rejected
+  optimistic_concurrency: version
+  idempotency: command_receipt

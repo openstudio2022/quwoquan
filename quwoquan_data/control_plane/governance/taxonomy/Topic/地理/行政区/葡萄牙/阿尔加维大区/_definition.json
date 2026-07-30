@@ -1,0 +1,12 @@
+{
+  "label": "阿尔加维大区",
+  "labelEn": "Algarve",
+  "description": "南部海崖与海滩带",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

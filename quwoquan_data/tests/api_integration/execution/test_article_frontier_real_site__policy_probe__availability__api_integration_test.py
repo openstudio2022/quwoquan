@@ -8,10 +8,7 @@ import os
 
 import pytest
 
-from content.source.research.public_search import (
-    InMemoryDailyPageBudget,
-    discover_article_source_frontier,
-)
+from content.source.research.public_search import discover_article_source_frontier
 
 
 @pytest.mark.api_integration
@@ -23,7 +20,6 @@ def test_wikivoyage_article_frontier_real_site_probe() -> None:
         entity,
         limit=1,
         site_ids=frozenset({"wikivoyage_zh"}),
-        daily_budget=InMemoryDailyPageBudget(),
     )
 
     if not outcome.candidates:

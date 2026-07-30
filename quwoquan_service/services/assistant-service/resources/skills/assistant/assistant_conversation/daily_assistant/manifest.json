@@ -1,0 +1,15 @@
+{
+  "skillId": "daily_assistant",
+  "displayName": "每日助手",
+  "description": "管理待办、日历、会议、作息和学习计划。",
+  "domainId": "life",
+  "problemClass": "general",
+  "activation": "proactive",
+  "executionTarget": "cloud",
+  "iconHint": "checkmark",
+  "toolPolicy": {
+    "allowedTools": ["app_search"],
+    "preferredTools": ["app_search"],
+    "maxToolCalls": 2
+  }
+}

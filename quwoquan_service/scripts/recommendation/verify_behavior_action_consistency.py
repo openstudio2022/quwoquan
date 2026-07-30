@@ -33,7 +33,7 @@ BEHAVIORS_YAML = (
     / "content-service"
     / "contracts"
     / "content"
-    / "post"
+    / "content_behavior_fact"
     / "behaviors.yaml"
 )
 HOTPATH_GO = SERVICE_ROOT / "runtime" / "recommendation" / "hotpath.go"

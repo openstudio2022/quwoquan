@@ -43,6 +43,25 @@ type eventCatalogEntry struct {
 	InternalPriority   string   `yaml:"internal_priority"`
 }
 
+type eventRecordFieldsFile struct {
+	Fields          []eventRecordField    `yaml:"fields"`
+	TypedExtensions typedExtensionBinding `yaml:"typed_extensions"`
+}
+
+type eventRecordField struct {
+	Name string `yaml:"name"`
+}
+
+type typedExtensionBinding struct {
+	Catalog            string `yaml:"catalog"`
+	Discriminator      string `yaml:"discriminator"`
+	DefinitionsKey     string `yaml:"definitions_key"`
+	RequiredByEventKey string `yaml:"required_by_event_key"`
+	OptionalByEventKey string `yaml:"optional_by_event_key"`
+	WireEncoding       string `yaml:"wire_encoding"`
+	UnknownFieldPolicy string `yaml:"unknown_field_policy"`
+}
+
 type appPagesFile struct {
 	Pages            []appPageEntry `yaml:"pages"`
 	InternalPages    []appPageEntry `yaml:"internal_pages"`
@@ -64,14 +83,15 @@ func main() {
 	if err != nil {
 		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
-	errorPaths := []string{
-		"ops/product_ops/app_release/errors.yaml",
-		"ops/product_ops/experiment/errors.yaml",
-		"ops/product_ops/event_record/errors.yaml",
-		"ops/product_ops/recovery_failure/errors.yaml",
+	errorPaths, err := productOpsObjectErrorPaths(
+		source.Paths("ops/product_ops/", "/errors.yaml"),
+	)
+	if err != nil {
+		exitErr(err)
 	}
 	totalErrors := 0
 	for _, sourcePath := range errorPaths {
+		parts := strings.Split(sourcePath, "/")
 		var errorsFile contractcodegen.ErrorsFile
 		if err := source.Decode(sourcePath, &errorsFile); err != nil {
 			exitErr(fmt.Errorf("load %s: %w", sourcePath, err))
@@ -84,10 +104,6 @@ func main() {
 		formatted, err := format.Source([]byte(rendered))
 		if err != nil {
 			exitErr(fmt.Errorf("gofmt generated errors from %s: %w", sourcePath, err))
-		}
-		parts := strings.Split(sourcePath, "/")
-		if len(parts) != 4 || parts[0] != "ops" || parts[3] != "errors.yaml" {
-			exitErr(fmt.Errorf("unexpected ProductOps errors path %q", sourcePath))
 		}
 		outPath := filepath.Join(outputDir, parts[1], parts[2], "errors.go")
 		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
@@ -105,6 +121,14 @@ func main() {
 		exitErr(fmt.Errorf("load %s: %w", eventCatalogPath, err))
 	}
 	if err := validateEventCatalog(catalog); err != nil {
+		exitErr(err)
+	}
+	var eventFields eventRecordFieldsFile
+	const eventFieldsPath = "ops/product_ops/event_record/fields.yaml"
+	if err := source.Decode(eventFieldsPath, &eventFields); err != nil {
+		exitErr(fmt.Errorf("load %s: %w", eventFieldsPath, err))
+	}
+	if err := validateEventRecordFields(eventFields, catalog); err != nil {
 		exitErr(err)
 	}
 	var pages appPagesFile
@@ -125,6 +149,28 @@ func main() {
 		exitErr(err)
 	}
 	fmt.Printf("codegen_product_ops_service: wrote %d errors and %d telemetry events\n", totalErrors, len(catalog.Events))
+}
+
+func productOpsObjectErrorPaths(paths []string) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("ProductOps metadata has no object-owned errors.yaml")
+	}
+	result := append([]string(nil), paths...)
+	sort.Strings(result)
+	for _, sourcePath := range result {
+		parts := strings.Split(sourcePath, "/")
+		if len(parts) != 4 ||
+			parts[0] != "ops" ||
+			parts[1] != "product_ops" ||
+			strings.TrimSpace(parts[2]) == "" ||
+			parts[3] != "errors.yaml" {
+			return nil, fmt.Errorf(
+				"ProductOps errors must be owned by exactly one object: %q",
+				sourcePath,
+			)
+		}
+	}
+	return result, nil
 }
 
 func validateEventCatalog(catalog eventCatalogFile) error {
@@ -168,6 +214,27 @@ func validateEventCatalog(catalog eventCatalogFile) error {
 			}
 			seenValues[value] = struct{}{}
 		}
+	}
+	return nil
+}
+
+func validateEventRecordFields(fields eventRecordFieldsFile, catalog eventCatalogFile) error {
+	rootNames := make([]string, 0, len(fields.Fields))
+	for _, field := range fields.Fields {
+		rootNames = append(rootNames, strings.TrimSpace(field.Name))
+	}
+	if strings.Join(rootNames, ",") != strings.Join(catalog.CommonFields, ",") {
+		return fmt.Errorf("event record fields must contain only the frozen nine-field envelope in canonical order")
+	}
+	binding := fields.TypedExtensions
+	if binding.Catalog != "event_catalog.yaml" ||
+		binding.Discriminator != "eventType" ||
+		binding.DefinitionsKey != "extension_fields" ||
+		binding.RequiredByEventKey != "required_extensions" ||
+		binding.OptionalByEventKey != "optional_extensions" ||
+		binding.WireEncoding != "flattened" ||
+		binding.UnknownFieldPolicy != "reject" {
+		return fmt.Errorf("event record typed_extensions must bind the canonical event catalog without fallback")
 	}
 	return nil
 }

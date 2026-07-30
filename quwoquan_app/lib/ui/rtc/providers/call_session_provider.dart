@@ -78,7 +78,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
             state.status == CallStatus.initiated) {
           state = state.copyWith(
             status: CallStatus.connecting,
-            session: state.session?.copyWith(status: 'connecting'),
+            session: state.session?.copyWith(status: CallStatus.connecting),
           );
         }
       case RtcCallEndedWsPayload(data: final data):
@@ -98,7 +98,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         state = state.copyWith(
           status: CallStatus.inCall,
           session: session.copyWith(
-            status: 'in_call',
+            status: CallStatus.inCall,
             participantCount: data.participantCount,
           ),
           isReconnecting: false,
@@ -188,6 +188,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     String? trustRelation,
     String? expiresAt,
   }) {
+    final parsedCallType = CallType.fromString(callType);
     final callerId = initiatorId.trim();
     final displayName = callerName?.trim().isNotEmpty == true
         ? callerName!.trim()
@@ -195,8 +196,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     final now = DateTime.now().toUtc();
     final session = CallSessionDto(
       callId: callId,
-      callType: callType,
-      status: 'ringing',
+      callType: parsedCallType,
+      status: CallStatus.ringing,
       initiatorId: callerId,
       conversationId: conversationId,
       roomId: '',
@@ -205,9 +206,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       participants: <CallParticipantDto>[
         CallParticipantDto(
           userId: callerId,
-          role: 'initiator',
-          status: 'ringing',
-          isCameraOn: callType == 'video',
+          role: ParticipantRole.initiator,
+          status: ParticipantStatus.ringing,
+          isCameraOn: parsedCallType.isVideo,
         ),
       ],
       createdAt: now,
@@ -224,8 +225,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         expiresAt: DateTime.tryParse(expiresAt ?? '')?.toUtc(),
       ),
       status: CallStatus.ringing,
-      callType: CallType.fromString(callType),
-      isCameraOn: callType == 'video',
+      callType: parsedCallType,
+      isCameraOn: parsedCallType.isVideo,
       isLoading: false,
       clearFailure: true,
     );
@@ -242,11 +243,11 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           state.session?.callId != session.callId) {
         return;
       }
-      if (session.status == 'ended') {
+      if (session.status == CallStatus.ended) {
         state = state.copyWith(
           session: session,
-          callType: CallType.fromString(session.callType),
-          isCameraOn: session.callType == 'video',
+          callType: session.callType,
+          isCameraOn: session.callType.isVideo,
           isLoading: false,
           clearFailure: true,
         );
@@ -256,9 +257,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       }
       state = state.copyWith(
         session: session,
-        status: CallStatus.fromString(session.status),
-        callType: CallType.fromString(session.callType),
-        isCameraOn: session.callType == 'video',
+        status: session.status,
+        callType: session.callType,
+        isCameraOn: session.callType.isVideo,
         isLoading: false,
         clearFailure: true,
       );
@@ -311,7 +312,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           state.status == CallStatus.ended) {
         return;
       }
-      var nextStatus = CallStatus.fromString(session.status);
+      var nextStatus = session.status;
       var nextSession = session;
       // call.connected 已是服务端事件事实；读模型短暂滞后不得把状态回退到
       // ringing/connecting。
@@ -319,12 +320,12 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           nextStatus != CallStatus.inCall &&
           nextStatus != CallStatus.ended) {
         nextStatus = CallStatus.inCall;
-        nextSession = session.copyWith(status: 'in_call');
+        nextSession = session.copyWith(status: CallStatus.inCall);
       }
       if (nextStatus == CallStatus.ended) {
         state = state.copyWith(
           session: nextSession,
-          callType: CallType.fromString(nextSession.callType),
+          callType: nextSession.callType,
           isLoading: false,
           clearFailure: true,
         );
@@ -335,8 +336,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       state = state.copyWith(
         session: nextSession,
         status: nextStatus,
-        callType: CallType.fromString(nextSession.callType),
-        isCameraOn: nextSession.callType == 'video',
+        callType: nextSession.callType,
+        isCameraOn: nextSession.callType.isVideo,
         isLoading: false,
         clearFailure: true,
       );
@@ -432,7 +433,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           .read(activeCallProvider.notifier)
           .startCall(
             callId: session.callId,
-            callType: session.callType,
+            callType: session.callType.toApiString(),
             participants: session.participants,
           );
 
@@ -519,11 +520,11 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           .read(rtcCallParticipantCommandWriterProvider(_activeCallSurface))
           .joinCall(RtcCallIdCommand(callId: callId));
       final session = creds.session;
-      final type = CallType.fromString(session.callType);
+      final type = session.callType;
 
       state = state.copyWith(
         session: session,
-        status: CallStatus.fromString(session.status),
+        status: session.status,
         callType: type,
         isCameraOn: type.isVideo,
         isLoading: false,
@@ -534,7 +535,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
           .read(activeCallProvider.notifier)
           .startCall(
             callId: session.callId,
-            callType: session.callType,
+            callType: session.callType.toApiString(),
             participants: session.participants,
           );
 
@@ -919,10 +920,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   void loadFromSession(CallSessionDto session) {
-    final type = CallType.fromString(session.callType);
+    final type = session.callType;
     state = CallSessionState(
       session: session,
-      status: CallStatus.fromString(session.status),
+      status: session.status,
       callType: type,
       isCameraOn: type.isVideo,
       isMuted: false,

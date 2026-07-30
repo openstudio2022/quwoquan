@@ -7,15 +7,18 @@ import (
 	"strings"
 )
 
-// WriteDerivedMediaFile 将派生媒体写入本地根目录，路径与 objectKey 对齐（使用正斜杠语义）。
-func WriteDerivedMediaFile(localRoot, objectKey string, data []byte) error {
+// WriteDerivedMediaFile materializes one canonical public slice below the
+// configured local delivery root. It never accepts a private object key or an
+// arbitrary relative filesystem path.
+func WriteDerivedMediaFile(localRoot, publicSliceKey string, data []byte) error {
 	root := strings.TrimSpace(localRoot)
 	if root == "" {
 		return fmt.Errorf("local media root is required")
 	}
-	key := strings.TrimSpace(objectKey)
-	if key == "" {
-		return fmt.Errorf("objectKey is required")
+	key := normalizePublicSliceKey(publicSliceKey)
+	_, versioned := publicSliceVersion(key)
+	if key == "" || !versioned {
+		return fmt.Errorf("canonical publicSliceKey is required")
 	}
 	full := filepath.Join(root, filepath.FromSlash(key))
 	dir := filepath.Dir(full)

@@ -54,6 +54,6 @@ List<AssistantAnswerTranscriptRow> _completedAnswers() {
 }
 
 String _answerText(AssistantAnswerTranscriptRow row) {
-  final finalAnswer = row.streamFinalAnswer.trim();
-  return finalAnswer.isNotEmpty ? finalAnswer : row.content.trim();
+  final displayMarkdown = row.persisted.displayMarkdown.trim();
+  return displayMarkdown.isNotEmpty ? displayMarkdown : row.content.trim();
 }

@@ -7,7 +7,6 @@ import argparse
 import json
 import os
 import socket
-import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -52,10 +51,7 @@ def _nonprod_addresses(
     )
 
 
-def desired_dns_records(
-    *,
-    require_addresses: bool = False,
-) -> list[dict[str, Any]]:
+def desired_dns_records() -> list[dict[str, Any]]:
     policy = _policy()
     profiles = [
         profile
@@ -167,6 +163,41 @@ def _cloudflare_request(
     return document
 
 
+def _dns_over_https(name: str, record_type: str) -> list[str]:
+    query = urllib.parse.urlencode({"name": name, "type": record_type})
+    request = urllib.request.Request(
+        f"https://cloudflare-dns.com/dns-query?{query}",
+        headers={"Accept": "application/dns-json"},
+    )
+    last_error: Exception | None = None
+    document: dict[str, Any] | None = None
+    for _attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                decoded = json.loads(response.read().decode("utf-8"))
+            if isinstance(decoded, dict):
+                document = decoded
+                break
+        except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
+            last_error = exc
+    if document is None:
+        raise DomainGovernanceError(
+            f"public DNS-over-HTTPS query failed for {record_type} {name}"
+        ) from last_error
+    if int(document.get("Status", -1)) not in {0, 3}:
+        raise DomainGovernanceError(
+            f"public DNS-over-HTTPS query returned status "
+            f"{document.get('Status')} for {record_type} {name}"
+        )
+    return sorted(
+        {
+            str(answer.get("data") or "").strip()
+            for answer in document.get("Answer") or []
+            if str(answer.get("data") or "").strip()
+        }
+    )
+
+
 def apply_dns_records() -> dict[str, Any]:
     policy = _policy()
     provider = policy.get("dnsProvider") or {}
@@ -180,7 +211,7 @@ def apply_dns_records() -> dict[str, Any]:
         )
 
     changes: list[dict[str, str]] = []
-    for record in desired_dns_records(require_addresses=True):
+    for record in desired_dns_records():
         query = urllib.parse.urlencode(
             {"type": record["type"], "name": record["name"]}
         )
@@ -257,10 +288,14 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
         expected_address, expected_ipv6_address = expected_addresses
         try:
             addresses = sorted(
-                {item[4][0] for item in socket.getaddrinfo(host, None)}
+                {
+                    *_dns_over_https(host, "A"),
+                    *_dns_over_https(host, "AAAA"),
+                }
             )
-        except socket.gaierror:
+        except DomainGovernanceError as exc:
             addresses = []
+            issues.append(str(exc))
         resolved[host] = addresses
         if expected_address not in addresses or expected_ipv6_address not in addresses:
             issues.append(
@@ -279,13 +314,11 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
             ),
         }
     ):
-        result = subprocess.run(
-            ["dig", "+short", "CAA", name],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        rows = [row.strip() for row in result.stdout.splitlines() if row.strip()]
+        try:
+            rows = _dns_over_https(name, "CAA")
+        except DomainGovernanceError as exc:
+            rows = []
+            issues.append(str(exc))
         caa_evidence[name] = rows
         if not any("letsencrypt.org" in row for row in rows):
             issues.append(f"{name} CAA must authorize letsencrypt.org")
@@ -298,15 +331,11 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
         name = str(profile["apex"])
         by_type: dict[str, list[str]] = {}
         for record_type in ("MX", "TXT"):
-            result = subprocess.run(
-                ["dig", "+short", record_type, name],
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            by_type[record_type] = [
-                row.strip() for row in result.stdout.splitlines() if row.strip()
-            ]
+            try:
+                by_type[record_type] = _dns_over_https(name, record_type)
+            except DomainGovernanceError as exc:
+                by_type[record_type] = []
+                issues.append(str(exc))
         mail_evidence[name] = by_type
         if not any(
             row.startswith("0 ") and row.rstrip(".").endswith(" 0")
@@ -366,11 +395,12 @@ def verify_live_state(*, verify_tls: bool) -> dict[str, Any]:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("plan")
-    subparsers.add_parser("apply")
+    plan = subparsers.add_parser("plan")
+    apply = subparsers.add_parser("apply")
     verify = subparsers.add_parser("verify")
     verify.add_argument("--skip-tls", action="store_true")
-    parser.add_argument("--report", default="")
+    for child in (plan, apply, verify):
+        child.add_argument("--report", default="")
     return parser
 
 
@@ -380,7 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "plan":
             payload: Any = {
                 "schema": "quwoquan.domain-governance-plan",
-                "records": desired_dns_records(require_addresses=True),
+                "records": desired_dns_records(),
             }
         elif args.command == "apply":
             payload = apply_dns_records()

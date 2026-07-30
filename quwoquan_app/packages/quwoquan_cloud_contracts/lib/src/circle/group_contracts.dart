@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/circle/group_contracts.requests.g.dart';
 
 enum CircleGroupType { publicGroup, selfBuilt, orgNode }
 
@@ -16,155 +17,6 @@ enum CircleGroupVisibility { public, private }
 enum CircleGroupJoinPolicy { applyOnly, inviteOnly }
 
 enum CircleGroupStatus { active, archived }
-
-final class CreateCircleGroupCommand {
-  CreateCircleGroupCommand({
-    required String circleId,
-    this.parentGroupId,
-    required this.groupType,
-    this.nodeType,
-    required String name,
-    this.description = '',
-    required this.visibility,
-    required this.joinPolicy,
-    required this.storageEnabled,
-    required this.noticeEnabled,
-  }) : circleId = _required(circleId, 'circleId'),
-       name = _required(name, 'name') {
-    if (name.runes.length > 80 || description.runes.length > 2000) {
-      throw ArgumentError(
-        'CircleGroup name/description exceeds contract limit',
-      );
-    }
-    if (groupType == CircleGroupType.orgNode && nodeType == null) {
-      throw ArgumentError('orgNode requires nodeType');
-    }
-    if (groupType != CircleGroupType.orgNode && nodeType != null) {
-      throw ArgumentError('nodeType belongs only to orgNode');
-    }
-  }
-
-  final String circleId;
-  final String? parentGroupId;
-  final CircleGroupType groupType;
-  final CircleGroupNodeType? nodeType;
-  final String name;
-  final String description;
-  final CircleGroupVisibility visibility;
-  final CircleGroupJoinPolicy joinPolicy;
-  final bool storageEnabled;
-  final bool noticeEnabled;
-}
-
-final class UpdateCircleGroupCommand {
-  UpdateCircleGroupCommand({
-    required String circleId,
-    required String groupId,
-    required this.expectedVersion,
-    this.parentGroupId,
-    this.nodeType,
-    this.name,
-    this.description,
-    this.visibility,
-    this.joinPolicy,
-    this.storageEnabled,
-    this.noticeEnabled,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId') {
-    _positive(expectedVersion, 'expectedVersion');
-    if (name != null && (name!.trim().isEmpty || name!.runes.length > 80)) {
-      throw ArgumentError.value(name, 'name', 'must contain 1..80 runes');
-    }
-    if (description != null && description!.runes.length > 2000) {
-      throw ArgumentError.value(description, 'description', 'too long');
-    }
-    if (parentGroupId == null &&
-        nodeType == null &&
-        name == null &&
-        description == null &&
-        visibility == null &&
-        joinPolicy == null &&
-        storageEnabled == null &&
-        noticeEnabled == null) {
-      throw ArgumentError('CircleGroup update must contain a field');
-    }
-  }
-
-  final String circleId;
-  final String groupId;
-  final int expectedVersion;
-
-  /// Empty string explicitly detaches the parent; null omits the field.
-  final String? parentGroupId;
-  final CircleGroupNodeType? nodeType;
-  final String? name;
-  final String? description;
-  final CircleGroupVisibility? visibility;
-  final CircleGroupJoinPolicy? joinPolicy;
-  final bool? storageEnabled;
-  final bool? noticeEnabled;
-}
-
-final class ArchiveCircleGroupCommand {
-  ArchiveCircleGroupCommand({required String circleId, required String groupId})
-    : circleId = _required(circleId, 'circleId'),
-      groupId = _required(groupId, 'groupId');
-
-  final String circleId;
-  final String groupId;
-}
-
-final class CircleGroupQuery {
-  CircleGroupQuery({required String circleId, required String groupId})
-    : circleId = _required(circleId, 'circleId'),
-      groupId = _required(groupId, 'groupId');
-
-  final String circleId;
-  final String groupId;
-}
-
-final class CircleGroupListQuery {
-  CircleGroupListQuery({
-    required String circleId,
-    this.groupType,
-    this.visibility,
-    this.parentGroupId,
-    this.nodeType,
-    this.cursor,
-    this.limit = 20,
-  }) : circleId = _required(circleId, 'circleId') {
-    _limit(limit);
-  }
-
-  final String circleId;
-  final CircleGroupType? groupType;
-  final CircleGroupVisibility? visibility;
-  final String? parentGroupId;
-  final CircleGroupNodeType? nodeType;
-  final String? cursor;
-  final int limit;
-}
-
-final class CircleGroupSearchQuery {
-  CircleGroupSearchQuery({
-    required String circleId,
-    required String query,
-    this.visibility,
-    this.groupType,
-    this.cursor,
-    this.limit = 20,
-  }) : circleId = _required(circleId, 'circleId'),
-       query = _required(query, 'query') {
-    _limit(limit);
-  }
-
-  final String circleId;
-  final String query;
-  final CircleGroupVisibility? visibility;
-  final CircleGroupType? groupType;
-  final String? cursor;
-  final int limit;
-}
 
 final class CircleGroupCommandResult {
   const CircleGroupCommandResult({
@@ -241,89 +93,6 @@ abstract interface class CircleGroupQueryReader {
   Future<CircleGroupPageSlice> search(CircleGroupSearchQuery query);
 }
 
-CloudOperationRequestPayload encodeCreateCircleGroupCommand(
-  CreateCircleGroupCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': command.circleId},
-  body: <String, Object?>{
-    if (command.parentGroupId != null) 'parentGroupId': command.parentGroupId,
-    'groupType': _groupTypeWire(command.groupType),
-    if (command.nodeType != null) 'nodeType': command.nodeType!.name,
-    'name': command.name,
-    'description': command.description,
-    'visibility': command.visibility.name,
-    'joinPolicy': _joinPolicyWire(command.joinPolicy),
-    'storageEnabled': command.storageEnabled,
-    'noticeEnabled': command.noticeEnabled,
-  },
-);
-
-CloudOperationRequestPayload encodeUpdateCircleGroupCommand(
-  UpdateCircleGroupCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'groupId': command.groupId,
-  },
-  headers: <String, String>{'If-Match': '"${command.expectedVersion}"'},
-  body: <String, Object?>{
-    if (command.parentGroupId != null) 'parentGroupId': command.parentGroupId,
-    if (command.nodeType != null) 'nodeType': command.nodeType!.name,
-    if (command.name != null) 'name': command.name,
-    if (command.description != null) 'description': command.description,
-    if (command.visibility != null) 'visibility': command.visibility!.name,
-    if (command.joinPolicy != null)
-      'joinPolicy': _joinPolicyWire(command.joinPolicy!),
-    if (command.storageEnabled != null)
-      'storageEnabled': command.storageEnabled,
-    if (command.noticeEnabled != null) 'noticeEnabled': command.noticeEnabled,
-  },
-);
-
-CloudOperationRequestPayload encodeArchiveCircleGroupCommand(
-  ArchiveCircleGroupCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'groupId': command.groupId,
-  },
-);
-
-CloudOperationRequestPayload encodeCircleGroupQuery(CircleGroupQuery query) =>
-    CloudOperationRequestPayload(
-      pathParameters: <String, String>{
-        'circleId': query.circleId,
-        'groupId': query.groupId,
-      },
-    );
-
-CloudOperationRequestPayload encodeCircleGroupListQuery(
-  CircleGroupListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': query.circleId},
-  queryParameters: <String, String>{
-    if (query.groupType != null) 'groupType': _groupTypeWire(query.groupType!),
-    if (query.visibility != null) 'visibility': query.visibility!.name,
-    if (query.parentGroupId != null) 'parentGroupId': query.parentGroupId!,
-    if (query.nodeType != null) 'nodeType': query.nodeType!.name,
-    if (query.cursor != null) 'cursor': query.cursor!,
-    'limit': query.limit.toString(),
-  },
-);
-
-CloudOperationRequestPayload encodeCircleGroupSearchQuery(
-  CircleGroupSearchQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': query.circleId},
-  queryParameters: <String, String>{
-    'query': query.query,
-    if (query.visibility != null) 'visibility': query.visibility!.name,
-    if (query.groupType != null) 'groupType': _groupTypeWire(query.groupType!),
-    if (query.cursor != null) 'cursor': query.cursor!,
-    'limit': query.limit.toString(),
-  },
-);
-
 CircleGroupCommandResult decodeCircleGroupCommandResult(Object? value) {
   final map = _object(value, 'CircleGroupCommandResult');
   _only(map, const <String>{
@@ -399,17 +168,6 @@ CircleGroupSlice _slice(Object? value) {
   );
 }
 
-String _groupTypeWire(CircleGroupType value) => switch (value) {
-  CircleGroupType.publicGroup => 'public_group',
-  CircleGroupType.selfBuilt => 'self_built',
-  CircleGroupType.orgNode => 'org_node',
-};
-
-String _joinPolicyWire(CircleGroupJoinPolicy value) => switch (value) {
-  CircleGroupJoinPolicy.applyOnly => 'apply_only',
-  CircleGroupJoinPolicy.inviteOnly => 'invite_only',
-};
-
 CircleGroupType _groupType(Object? value) => switch (value) {
   'public_group' => CircleGroupType.publicGroup,
   'self_built' => CircleGroupType.selfBuilt,
@@ -459,12 +217,6 @@ void _only(Map<String, Object?> map, Set<String> allowed) {
   if (unknown.isNotEmpty) throw FormatException('unknown fields: $unknown');
 }
 
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
-}
-
 String _string(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! String || value.trim().isEmpty) {
@@ -505,14 +257,4 @@ DateTime _date(Map<String, Object?> map, String key) {
   final value = DateTime.tryParse(raw);
   if (value == null) throw FormatException('$key must be RFC3339');
   return value.toUtc();
-}
-
-void _positive(int value, String name) {
-  if (value <= 0) throw ArgumentError.value(value, name, 'must be positive');
-}
-
-void _limit(int value) {
-  if (value < 1 || value > 100) {
-    throw ArgumentError.value(value, 'limit', 'must be in 1..100');
-  }
 }

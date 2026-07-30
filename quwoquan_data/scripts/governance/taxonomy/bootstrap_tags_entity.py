@@ -427,8 +427,24 @@ def _gen_entity_商品():
         "可购买消费的商品骨架：物理品类 + 画像维度（原 Audience/商品 画像并入）",
         max_depth=4, expected_size=120, path_policy="prefer-leaf")
 
-    tag("Entity/商品/服饰", "服饰", "Apparel", "服饰单品")
-    tags_list("Entity/商品/服饰", [
+    # 类目是商品品类的唯一真相源。曾经存在扁平的 Entity/商品/{服饰,美妆,食品,数码,...}
+    # 与 Entity/商品/类目/{服饰,美妆,食品饮料,...} 两套并行品类，同轴重名必然让其中一套
+    # 成为孤儿（R14），故已合并到 类目 之下，子品类作为 类目 的第二层。
+    dim("Entity/商品/类目", "类目", "Product Category",
+        "商品所属的消费类目（画像）", max_depth=3, path_policy="prefer-leaf")
+    for cat, en in [
+        ("数码电子", "Digital Electronics"), ("家居家电", "Home & Appliances"),
+        ("母婴", "Maternity & Baby"), ("运动户外", "Sports & Outdoor"),
+        ("图书文具", "Books & Stationery"), ("玩具", "Toys"),
+        ("旅游服务", "Travel Services"), ("医疗健康", "Healthcare"),
+        ("汽车用品", "Auto Product"),
+        # 宠物用品而非「宠物」：Entity/生物 已有宠物物种，同名会与物种骨架混淆。
+        ("宠物用品", "Pet Products"),
+    ]:
+        tag(f"Entity/商品/类目/{cat}", cat, en, f"{cat}类商品")
+
+    tag("Entity/商品/类目/服饰", "服饰", "Apparel", "服饰单品")
+    tags_list("Entity/商品/类目/服饰", [
         ("上衣", "Top", "上装类型"),
         ("下装", "Bottom", "裤子裙子等下装"),
         ("外套", "Outerwear", "外套夹克类型"),
@@ -437,45 +453,22 @@ def _gen_entity_商品():
         ("配饰", "Accessories", "首饰配饰类型"),
     ])
 
-    tag("Entity/商品/美妆", "美妆", "Beauty Product", "美妆护肤商品")
-    tags_list("Entity/商品/美妆", [
+    tag("Entity/商品/类目/美妆", "美妆", "Beauty", "美妆护肤商品")
+    tags_list("Entity/商品/类目/美妆", [
         ("护肤品", "Skincare", "护肤产品类型"),
         ("彩妆品", "Cosmetics", "彩妆产品类型"),
         ("香水", "Perfume", "香水香氛"),
         ("美容工具", "Beauty Tool", "美容仪器工具"),
     ])
 
-    tag("Entity/商品/食品", "食品", "Food Product", "食品饮料商品")
-    tags_list("Entity/商品/食品", [
+    tag("Entity/商品/类目/食品饮料", "食品饮料", "Food & Beverage", "食品饮料商品")
+    tags_list("Entity/商品/类目/食品饮料", [
         ("零食", "Snack", "休闲零食类型"),
         ("饮品", "Beverage", "饮料饮品类型"),
         ("生鲜食材", "Fresh Food", "生鲜农产品"),
         ("调味品", "Condiment", "调料酱料类型", ["酱料"]),
         ("保健品", "Health Supplement", "保健营养品"),
     ])
-
-    for ptype, en, desc in [
-        ("数码", "Digital Product", "数码电子产品"),
-        ("家居", "Home Product", "家居用品"),
-        ("母婴用品", "Baby Product", "母婴产品"),
-        ("运动用品", "Sports Product", "运动健身器材"),
-        ("文具", "Stationery", "文具学习用品"),
-        ("玩具", "Toy", "玩具游戏产品"),
-        ("汽车用品", "Auto Product", "汽车配件用品"),
-    ]:
-        tag(f"Entity/商品/{ptype}", ptype, en, desc)
-
-    dim("Entity/商品/类目", "类目", "Product Category",
-        "商品所属的消费类目（画像）", max_depth=2, path_policy="prefer-leaf")
-    for cat, en in [
-        ("服饰", "Apparel"), ("美妆", "Beauty"), ("食品饮料", "Food & Beverage"),
-        ("数码电子", "Digital Electronics"), ("家居家电", "Home & Appliances"),
-        ("母婴", "Maternity & Baby"), ("运动户外", "Sports & Outdoor"),
-        ("图书文具", "Books & Stationery"), ("玩具", "Toys"),
-        ("旅游服务", "Travel Services"), ("医疗健康", "Healthcare"),
-        ("宠物", "Pet Products"),
-    ]:
-        tag(f"Entity/商品/类目/{cat}", cat, en, f"{cat}类商品")
 
     dim("Entity/商品/价位段", "价位段", "Price Range",
         "商品价格区间（画像）", max_depth=2, path_policy="leaf-only")

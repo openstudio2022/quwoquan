@@ -4,9 +4,9 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 class LocalChatSearchContactRecord {
   const LocalChatSearchContactRecord({
     required this.contactId,
+    this.userHandle = '',
     this.displayName = '',
     this.nickname = '',
-    this.username = '',
     this.subtitle = '',
     this.headline = '',
     this.remark = '',
@@ -17,9 +17,9 @@ class LocalChatSearchContactRecord {
   });
 
   final String contactId;
+  final String userHandle;
   final String displayName;
   final String nickname;
-  final String username;
   final String subtitle;
   final String headline;
   final String remark;
@@ -33,6 +33,7 @@ class LocalChatSearchContactRecord {
   ) {
     return LocalChatSearchContactRecord(
       contactId: dto.userId.trim(),
+      userHandle: dto.userHandle.trim(),
       displayName: dto.displayName.trim(),
       headline: dto.bio.trim(),
       avatarUrl: dto.avatarUrl.trim(),
@@ -43,9 +44,9 @@ class LocalChatSearchContactRecord {
     final contactId = _string(map['contactId']);
     return LocalChatSearchContactRecord(
       contactId: contactId,
+      userHandle: _string(map['userHandle']),
       displayName: _firstNonEmpty(<Object?>[map['displayName'], contactId]),
       nickname: _string(map['nickname']),
-      username: _string(map['username']),
       subtitle: _string(map['subtitle']),
       headline: _string(map['headline']),
       remark: _string(map['remark']),
@@ -59,9 +60,9 @@ class LocalChatSearchContactRecord {
   Map<String, Object?> toWireMap() {
     return <String, Object?>{
       'contactId': contactId,
+      'userHandle': userHandle,
       'displayName': displayName,
       if (nickname.isNotEmpty) 'nickname': nickname,
-      if (username.isNotEmpty) 'username': username,
       if (subtitle.isNotEmpty) 'subtitle': subtitle,
       if (headline.isNotEmpty) 'headline': headline,
       if (remark.isNotEmpty) 'remark': remark,
@@ -75,6 +76,7 @@ class LocalChatSearchContactRecord {
   ChatContactSearchItemDto toSearchItemDto() {
     return ChatContactSearchItemDto(
       contactId: contactId,
+      userHandle: userHandle,
       displayName: displayName,
       avatarUrl: avatarUrl.isEmpty ? null : avatarUrl,
       conversationId: conversationId.isEmpty ? null : conversationId,
@@ -86,9 +88,9 @@ class LocalChatSearchContactRecord {
 
   LocalChatSearchContactRecord copyWith({
     String? contactId,
+    String? userHandle,
     String? displayName,
     String? nickname,
-    String? username,
     String? subtitle,
     String? headline,
     String? remark,
@@ -99,9 +101,9 @@ class LocalChatSearchContactRecord {
   }) {
     return LocalChatSearchContactRecord(
       contactId: contactId ?? this.contactId,
+      userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       nickname: nickname ?? this.nickname,
-      username: username ?? this.username,
       subtitle: subtitle ?? this.subtitle,
       headline: headline ?? this.headline,
       remark: remark ?? this.remark,

@@ -6,13 +6,13 @@ import 'package:crypto/crypto.dart';
 ///
 /// 必须与服务端 `services/user-service/internal/user/account/user_account/domain/user/phonematch` 逐字符等价：
 /// 同一个真实手机号在端云派生出相同 hash，匹配只在哈希域完成，手机号原文不出库、不上行。
-/// `salt` 是应用级命名常量（随客户端分发，非密钥），仅与服务端常量同步升级版本后缀。
+/// `salt` 是应用级稳定命名常量（随客户端分发，非密钥），端云只保留同一个值。
 /// 一致性由两端共享测试向量锁定（见 contact_hash_service__local_contract_test.dart 与
 /// phonematch__local_contract_test.go）。
 class ContactHashService {
   const ContactHashService();
 
-  static const String salt = 'qwq.contact.v1';
+  static const String salt = 'qwq.contact';
 
   /// 规范化为 E.164-ish 形态：CN 11 位手机(以 1 开头)补 +86；已带 + 或国家码的保留为
   /// `+{digits}`。与 Go `phonematch.Canonicalize` 对齐。空输入返回空串。
@@ -29,7 +29,7 @@ class ContactHashService {
     if (hasPlus) {
       return '+$digits';
     }
-    if (digits.length == 11 && digits.codeUnitAt(0) == 0x31 /* '1' */) {
+    if (digits.length == 11 && digits.codeUnitAt(0) == 0x31 /* '1' */ ) {
       return '+86$digits';
     }
     if (digits.length == 13 && digits.startsWith('86')) {

@@ -2,6 +2,7 @@
   "label": "引导线",
   "labelEn": "Leading Lines",
   "description": "利用线条引导视线到主体",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

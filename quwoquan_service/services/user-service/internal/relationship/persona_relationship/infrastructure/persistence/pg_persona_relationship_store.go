@@ -652,7 +652,7 @@ func (s *PgPersonaRelationshipStore) ListBlocked(
 			COALESCE(p.avatar_url, ''),
 			d.blocked_at
 		FROM persona_relationship_directions d
-		LEFT JOIN personas p ON p.sub_account_id = d.target_persona_id
+		LEFT JOIN personas p ON p.persona_id = d.target_persona_id
 		WHERE %s
 		ORDER BY d.blocked_at DESC, d.pair_id DESC
 		LIMIT $%d`, where, len(args)), args...)
@@ -670,7 +670,7 @@ func (s *PgPersonaRelationshipStore) ListBlocked(
 		var row blockedRow
 		if err := rows.Scan(
 			&row.pairID,
-			&row.item.TargetSubAccountID,
+			&row.item.TargetPersonaID,
 			&row.item.DisplayName,
 			&row.item.UserHandle,
 			&row.item.AvatarURL,

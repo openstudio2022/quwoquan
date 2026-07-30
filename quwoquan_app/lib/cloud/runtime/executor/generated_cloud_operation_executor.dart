@@ -80,6 +80,7 @@ final class AppGeneratedCloudOperationExecutor
     late final Map<String, String> encodedHeaders;
     try {
       payload = requestEncoder();
+      _validatePagination(operation, payload.queryParameters);
       encodedHeaders = _validatedEncodedHeaders(payload.headers, operation);
       _validateVersionPrecondition(operation, encodedHeaders);
     } catch (error, stackTrace) {
@@ -154,6 +155,7 @@ final class AppGeneratedCloudOperationExecutor
             },
             abortTrigger: abortTrigger.future,
             body: _bodyAsJsonMap(operation, payload.body),
+            maximumResponseBodyBytes: operation.maximumResponseBodyBytes,
           ),
         );
         final decoded = responseDecoder(response);
@@ -274,12 +276,19 @@ final class AppGeneratedCloudOperationExecutor
     Map<String, String> headers,
     CloudOperationContract operation,
   ) {
-    const allowed = <String>{'if-match'};
+    final allowed = <String>{
+      for (final binding in operation.requestHeaderBindings)
+        binding.name.toLowerCase(),
+    };
     final normalized = <String, String>{};
+    final provided = <String>{};
     for (final entry in headers.entries) {
       final name = entry.key.trim();
       final value = entry.value.trim();
-      if (!allowed.contains(name.toLowerCase()) || value.isEmpty) {
+      final normalizedName = name.toLowerCase();
+      if (!allowed.contains(normalizedName) ||
+          value.isEmpty ||
+          provided.contains(normalizedName)) {
         throw CloudErrorMapper.invalidResponse(
           message: 'Unsupported operation-specific request header: $name',
           requestPath: operation.pathTemplate,
@@ -287,8 +296,38 @@ final class AppGeneratedCloudOperationExecutor
         );
       }
       normalized[name] = value;
+      provided.add(normalizedName);
+    }
+    for (final binding in operation.requestHeaderBindings) {
+      if (binding.required && !provided.contains(binding.name.toLowerCase())) {
+        throw CloudErrorMapper.invalidResponse(
+          message:
+              'Missing required operation-specific request header: ${binding.name}',
+          requestPath: operation.pathTemplate,
+          functionModule: 'generated_cloud_operation_executor',
+        );
+      }
     }
     return Map<String, String>.unmodifiable(normalized);
+  }
+
+  void _validatePagination(
+    CloudOperationContract operation,
+    Map<String, String> queryParameters,
+  ) {
+    final maximumItems = operation.paginationMaximumItems;
+    if (maximumItems == null) return;
+    final rawLimit = queryParameters['limit']?.trim();
+    if (rawLimit == null || rawLimit.isEmpty) return;
+    final limit = int.tryParse(rawLimit);
+    if (limit == null || limit <= 0 || limit > maximumItems) {
+      throw CloudErrorMapper.invalidResponse(
+        message:
+            '${operation.canonicalOperationId} limit must be between 1 and $maximumItems',
+        requestPath: operation.pathTemplate,
+        functionModule: 'generated_cloud_operation_executor',
+      );
+    }
   }
 
   void _validateVersionPrecondition(

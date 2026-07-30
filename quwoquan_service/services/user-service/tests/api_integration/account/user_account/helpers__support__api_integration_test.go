@@ -14,6 +14,7 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	rtauth "quwoquan_service/runtime/auth"
+	useridentity "quwoquan_service/services/user-service/internal/account/user_account/domain/user/identity"
 	reltelemetry "quwoquan_service/services/user-service/internal/relationship/persona_relationship/domain/telemetry"
 )
 
@@ -41,7 +42,7 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 	if strings.TrimSpace(req.Header.Get("Authorization")) == "" {
 		accountID := strings.TrimSpace(req.Header.Get("X-Client-User-Id"))
 		personaID := strings.TrimSpace(
-			req.Header.Get("X-Client-Sub-Account-Id"),
+			req.Header.Get("X-Client-Persona-Id"),
 		)
 		if accountID != "" {
 			var signed map[string]string
@@ -101,13 +102,13 @@ func createTestProfile(t *testing.T, userID, nickname string) {
 			user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy,
 			phone, nickname, nickname_customized, avatar_url, avatar_asset_id, avatar_version,
 			background_url, bio, identity_tags, gender, region, owner_display_name,
-			status, profile_version, sub_account_count, created_at, updated_at
+			profile_version, persona_count, created_at, updated_at
 		)
 		VALUES (
 			$1, 'active', 'migrated_seed', $2, 'preserve',
 			$3, $4, false, '', '', 0,
 			'', '', '', '', '', '',
-			'active', 1, 1, NOW(), NOW()
+			1, 1, NOW(), NOW()
 		)
 		ON CONFLICT (user_id) DO NOTHING`,
 		userID, logicalShard, phone, nickname)
@@ -117,12 +118,35 @@ func createTestProfile(t *testing.T, userID, nickname string) {
 }
 
 func fixtureLogicalShard(userID string) int {
-	const (
-		ruleVersion = "01"
-		originCode  = "mg"
-		slotCount   = 16384
+	if ownerID, err := useridentity.ParseOwnerID(userID); err == nil {
+		return ownerID.LogicalShard()
+	}
+	return useridentity.ComputeLogicalShard("mg", strings.TrimSpace(userID))
+}
+
+func canonicalOwnerIDForTest(t *testing.T, originCode, entropy string) string {
+	t.Helper()
+	ownerID, err := useridentity.NewOwnerID(originCode, entropy)
+	if err != nil {
+		t.Fatalf("build canonical test owner identity: %v", err)
+	}
+	return ownerID.String()
+}
+
+func canonicalPersonaIDForTest(t *testing.T, ownerID, entropy string) string {
+	t.Helper()
+	parsedOwnerID, err := useridentity.ParseOwnerID(ownerID)
+	if err != nil {
+		t.Fatalf("parse canonical test owner identity: %v", err)
+	}
+	personaID, err := useridentity.NewPersonaID(
+		parsedOwnerID.LogicalShardHex(),
+		entropy,
 	)
-	return int(xxhash.Sum64String(ruleVersion+"|"+originCode+"|"+strings.TrimSpace(userID)) % slotCount)
+	if err != nil {
+		t.Fatalf("build canonical test persona identity: %v", err)
+	}
+	return personaID.String()
 }
 
 func createTestPersona(t *testing.T, personaID, userID, displayName string, isPrimary bool, isActiveOverride ...bool) {
@@ -131,11 +155,10 @@ func createTestPersona(t *testing.T, personaID, userID, displayName string, isPr
 	if len(isActiveOverride) > 0 {
 		isActive = isActiveOverride[0]
 	}
-	subAccountID := personaID + "_sa"
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, '', '', '', '', '', true, '{}', $4, false, $5, NOW(), NOW())`,
-		userID, subAccountID, displayName, isPrimary, isActive)
+		INSERT INTO personas (user_id, persona_id, display_name, user_handle, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', '', true, '{}', $4, false, $5, NOW(), NOW())`,
+		userID, personaID, displayName, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("create test persona: %v", err)
 	}
@@ -165,9 +188,10 @@ func cleanAll(t *testing.T) {
 		user_account_enforcement_receipts,
 		profile_update_proposals, profile_update_proposal_audits,
 		profile_update_proposals_command_receipts, profile_update_proposals_outbox,
-		greeting_requests, credential_bindings, credential_bindings_outbox,
+		greeting_requests, authentication_challenges, federated_phone_binding_tickets,
+		credential_bindings, credential_bindings_outbox,
 		user_devices, device_push_endpoints, user_settings_outbox, anonymous_device_bindings,
-		contact_discovery_records, profile_qr_tokens, authentication_challenges,
+		contact_discovery_records, profile_qr_tokens,
 		subject_follows, subject_follow_command_receipts, subject_follow_outbox CASCADE`); err != nil {
 		t.Fatalf("truncate user-service integration database: %v", err)
 	}
@@ -187,17 +211,17 @@ func cleanAll(t *testing.T) {
 	}
 }
 
-// createTestPersonaFull creates a persona fixture keyed by sub_account_id.
-func createTestPersonaFull(t *testing.T, _ string, userID, subAccountID, displayName, isolationLevel string, isPrimary bool, isActiveOverride ...bool) {
+// createTestPersonaFull creates a persona fixture keyed by persona_id.
+func createTestPersonaFull(t *testing.T, _ string, userID, personaID, displayName, isolationLevel string, isPrimary bool, isActiveOverride ...bool) {
 	t.Helper()
 	isActive := isPrimary
 	if len(isActiveOverride) > 0 {
 		isActive = isActiveOverride[0]
 	}
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, '', '', '', '', '', $4, true, '{}', $5, false, $6, NOW(), NOW())`,
-		userID, subAccountID, displayName, isolationLevel, isPrimary, isActive)
+		INSERT INTO personas (user_id, persona_id, display_name, user_handle, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', '', $4, true, '{}', $5, false, $6, NOW(), NOW())`,
+		userID, personaID, displayName, isolationLevel, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("createTestPersonaFull: %v", err)
 	}
@@ -223,10 +247,10 @@ func authHeaders(userID string) map[string]string {
 	return map[string]string{"Authorization": "Bearer " + token}
 }
 
-func authHeadersForPersona(userID, subAccountID string) map[string]string {
+func authHeadersForPersona(userID, personaID string) map[string]string {
 	token, err := testAccessSigner.Sign(rtauth.TokenSubject{
 		AccountID: userID,
-		PersonaID: subAccountID,
+		PersonaID: personaID,
 	})
 	if err != nil {
 		panic("sign user-service api integration persona access token: " + err.Error())
@@ -234,12 +258,12 @@ func authHeadersForPersona(userID, subAccountID string) map[string]string {
 	return map[string]string{"Authorization": "Bearer " + token}
 }
 
-func seedPersonaPostHistory(t *testing.T, subAccountID string) {
+func seedPersonaPostHistory(t *testing.T, personaID string) {
 	t.Helper()
 	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
-		"_id":                       "post_" + subAccountID,
-		"authorId":                  subAccountID,
+		"_id":                       "post_" + personaID,
+		"authorId":                  personaID,
 		"authorDisplayNameSnapshot": "Post Persona",
 		"authorAvatarUrlSnapshot":   "https://example.com/post.jpg",
 		"status":                    "published",
@@ -250,13 +274,13 @@ func seedPersonaPostHistory(t *testing.T, subAccountID string) {
 	}
 }
 
-func seedPersonaCommentHistory(t *testing.T, subAccountID string) {
+func seedPersonaCommentHistory(t *testing.T, personaID string) {
 	t.Helper()
 	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("comments").InsertOne(context.Background(), bson.M{
-		"_id":                       "comment_" + subAccountID,
-		"postId":                    "post_for_" + subAccountID,
-		"authorId":                  subAccountID,
+		"_id":                       "comment_" + personaID,
+		"postId":                    "post_for_" + personaID,
+		"authorId":                  personaID,
 		"authorDisplayNameSnapshot": "Comment Persona",
 		"authorAvatarUrlSnapshot":   "https://example.com/comment.jpg",
 		"content":                   "记录评论",
@@ -267,15 +291,15 @@ func seedPersonaCommentHistory(t *testing.T, subAccountID string) {
 	}
 }
 
-func seedPersonaChatHistory(t *testing.T, subAccountID string) {
+func seedPersonaChatHistory(t *testing.T, personaID string) {
 	t.Helper()
 	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("messages").InsertOne(context.Background(), bson.M{
-		"_id":                       "message_" + subAccountID,
-		"conversationId":            "conv_" + subAccountID,
+		"_id":                       "message_" + personaID,
+		"conversationId":            "conv_" + personaID,
 		"seq":                       1,
-		"senderId":                  subAccountID,
-		"senderSubAccountId":        subAccountID,
+		"senderId":                  personaID,
+		"senderPersonaId":           personaID,
 		"senderDisplayNameSnapshot": "Chat Persona",
 		"senderAvatarUrlSnapshot":   "https://example.com/chat.jpg",
 		"content":                   "记录聊天",
@@ -286,18 +310,18 @@ func seedPersonaChatHistory(t *testing.T, subAccountID string) {
 	}
 }
 
-func seedPersonaNotificationHistory(t *testing.T, subAccountID string) {
+func seedPersonaNotificationHistory(t *testing.T, personaID string) {
 	t.Helper()
 	requireMongoBackedRuntime(t)
 	_, err := mongoDB.Collection("notifications").InsertOne(context.Background(), bson.M{
-		"_id":          "notification_" + subAccountID,
-		"userId":       "viewer_" + subAccountID,
+		"_id":          "notification_" + personaID,
+		"userId":       "viewer_" + personaID,
 		"type":         "social",
 		"title":        "记录通知",
 		"body":         "由分身触发的通知",
-		"senderUserId": subAccountID,
+		"senderUserId": personaID,
 		"targetType":   "post",
-		"targetId":     "post_" + subAccountID,
+		"targetId":     "post_" + personaID,
 		"createdAt":    time.Now().UTC(),
 	})
 	if err != nil {

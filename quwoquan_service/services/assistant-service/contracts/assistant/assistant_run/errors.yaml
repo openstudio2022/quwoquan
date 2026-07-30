@@ -10,6 +10,9 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [GetAssistantRun, CancelAssistantRun, StreamAssistantRunEvents]
   recovery_action: surface
   dart_const: runNotFound
   go_const: ErrRunNotFound
@@ -21,6 +24,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [SearchXiaoquResults, StartAssistantRun, ListConversationTurns, StreamAssistantRunEvents, ReportPageContext, GetSuggestedActions, SuggestCreationAssistance]
   recovery_action: surface
   dart_const: runInvalidArgument
   go_const: ErrRunInvalidArgument
@@ -32,6 +38,9 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
   recovery_action: refresh
   dart_const: intersectionEvidenceNotFound
   go_const: ErrIntersectionEvidenceNotFound
@@ -43,6 +52,9 @@ errors:
   kind: MIDDLEWARE
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: intersectionEvidenceUnavailable
@@ -55,6 +67,9 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [ReportPageContext]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: pageContextUnavailable
@@ -67,6 +82,9 @@ errors:
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
   recovery_action: refresh
   dart_const: runIdempotencyConflict
   go_const: ErrRunIdempotencyConflict
@@ -78,6 +96,9 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun, GetAssistantRun, ListConversationTurns, CancelAssistantRun, StreamAssistantRunEvents]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: runStorageUnavailable
@@ -90,6 +111,9 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: runPolicyUnavailable
@@ -102,6 +126,9 @@ errors:
   kind: USER
   reason: forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [StartAssistantRun, SuggestCreationAssistance]
   recovery_action: surface
   dart_const: skillConsentRequired
   go_const: ErrSkillConsentRequired
@@ -109,45 +136,28 @@ errors:
   user_message:
     zh: 该能力需要先授权后使用
     en: This capability requires consent before use
-- code: ASSISTANT.USER.invalid_action_payload
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: invalidActionPayload
-  go_const: ErrInvalidActionPayload
-  l10n_key: assistant.error.invalid_action_payload
-  user_message:
-    zh: 建议动作数据格式有误，请重试
-    en: Suggested action payload is invalid, please retry
 - code: ASSISTANT.SYSTEM.stream_unavailable
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [SearchXiaoquResults, StreamAssistantRunEvents]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: streamUnavailable
   go_const: ErrStreamUnavailable
   l10n_key: assistant.error.stream_unavailable
   user_message:
-    zh: 流式服务暂不可用，已切换为普通回复
-    en: Streaming is temporarily unavailable; switched to standard response
-- code: ASSISTANT.SYSTEM.markdown_block_parse_failed
-  kind: SYSTEM
-  reason: internal_error
-  http_status: 500
-  recovery_action: retry
-  recovery_after_seconds: 1
-  dart_const: markdownBlockParseFailed
-  go_const: ErrMarkdownBlockParseFailed
-  l10n_key: assistant.error.markdown_block_parse_failed
-  user_message:
-    zh: 格式化卡片渲染失败，已回退为文本展示
-    en: Formatted card rendering failed; fallback to text display
+    zh: 流式服务暂不可用，请稍后重试
+    en: Streaming is temporarily unavailable; please try again later
 - code: ASSISTANT.MIDDLEWARE.upstream_timeout
   kind: MIDDLEWARE
   reason: timeout
   http_status: 504
+  emitted_by:
+  - surface: http
+    operations: [SearchXiaoquResults, SuggestCreationAssistance]
   recovery_action: retry
   recovery_after_seconds: 8
   dart_const: upstreamTimeout
@@ -159,7 +169,8 @@ errors:
 - code: ASSISTANT.MIDDLEWARE.model_provider_unavailable
   kind: MIDDLEWARE
   reason: unavailable
-  http_status: 503
+  emitted_by:
+  - surface: terminal_snapshot
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: modelProviderUnavailable
@@ -171,7 +182,8 @@ errors:
 - code: ASSISTANT.MIDDLEWARE.public_search_provider_unavailable
   kind: MIDDLEWARE
   reason: unavailable
-  http_status: 503
+  emitted_by:
+  - surface: app
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: publicSearchProviderUnavailable
@@ -183,7 +195,8 @@ errors:
 - code: ASSISTANT.MIDDLEWARE.weather_provider_unavailable
   kind: MIDDLEWARE
   reason: unavailable
-  http_status: 503
+  emitted_by:
+  - surface: app
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: weatherProviderUnavailable
@@ -195,7 +208,8 @@ errors:
 - code: ASSISTANT.MIDDLEWARE.finance_provider_unavailable
   kind: MIDDLEWARE
   reason: unavailable
-  http_status: 503
+  emitted_by:
+  - surface: app
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: financeProviderUnavailable
@@ -204,50 +218,3 @@ errors:
   user_message:
     zh: 金融行情数据暂不可用，请稍后重试
     en: Financial market data is temporarily unavailable
-- code: ASSISTANT.SYSTEM.tool_observation_invalid
-  kind: SYSTEM
-  reason: internal_error
-  http_status: 500
-  recovery_action: retry
-  recovery_after_seconds: 1
-  dart_const: toolObservationInvalid
-  go_const: ErrToolObservationInvalid
-  l10n_key: assistant.error.tool_observation_invalid
-  user_message:
-    zh: 工具结果解析失败，已切换到安全回退路径
-    en: Tool observation parsing failed; switched to safe fallback
-- code: ASSISTANT.SYSTEM.decision_parse_failed
-  kind: SYSTEM
-  reason: internal_error
-  http_status: 500
-  recovery_action: retry
-  recovery_after_seconds: 1
-  dart_const: decisionParseFailed
-  go_const: ErrDecisionParseFailed
-  l10n_key: assistant.error.decision_parse_failed
-  user_message:
-    zh: 回复结构解析失败，已回退为文本输出
-    en: Decision parsing failed; fallback to plain text response
-- code: ASSISTANT.SYSTEM.subagent_timeout
-  kind: SYSTEM
-  reason: timeout
-  http_status: 504
-  recovery_action: retry
-  recovery_after_seconds: 3
-  dart_const: subagentTimeout
-  go_const: ErrSubagentTimeout
-  l10n_key: assistant.error.subagent_timeout
-  user_message:
-    zh: 子任务执行超时，已返回当前可用结果
-    en: Subagent execution timed out; returned best-effort result
-- code: ASSISTANT.SYSTEM.subagent_contract_invalid
-  kind: SYSTEM
-  reason: internal_error
-  http_status: 500
-  recovery_action: surface
-  dart_const: subagentContractInvalid
-  go_const: ErrSubagentContractInvalid
-  l10n_key: assistant.error.subagent_contract_invalid
-  user_message:
-    zh: 子任务结果格式异常，已忽略并继续主流程
-    en: Subagent result contract invalid; ignored and continued main flow

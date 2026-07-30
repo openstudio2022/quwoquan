@@ -1,0 +1,13 @@
+{
+  "label": "中等强度",
+  "labelEn": "Moderate",
+  "description": "含较长时间步行或缓坡徒步，日均步行 5-15 公里",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

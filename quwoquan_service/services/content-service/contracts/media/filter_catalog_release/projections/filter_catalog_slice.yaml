@@ -10,6 +10,7 @@ consumers:
 - app
 client_projection:
   dart_class: FilterCatalogSnapshot
+  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart
   external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/filter_catalog_facets.dart
 fields:
 - releaseId

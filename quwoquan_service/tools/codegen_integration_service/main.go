@@ -19,10 +19,14 @@ import (
 )
 
 type apiRoute struct {
-	Method        string   `yaml:"method"`
-	Path          string   `yaml:"path"`
-	Operation     string   `yaml:"operation"`
-	QueryParams   []string `yaml:"query_params"`
+	Method          string `yaml:"method"`
+	Path            string `yaml:"path"`
+	Operation       string `yaml:"operation"`
+	RequestBindings struct {
+		Query []struct {
+			Name string `yaml:"name"`
+		} `yaml:"query"`
+	} `yaml:"request_bindings"`
 	Authorization struct {
 		Scopes []string `yaml:"scopes"`
 	} `yaml:"authorization"`
@@ -280,8 +284,8 @@ func renderLocationMetadata(
 	seenParams := map[string]bool{}
 	for _, route := range routes.APIRoutes {
 		pathByOperation[strings.TrimSpace(route.Operation)] = strings.TrimSpace(route.Path)
-		for _, parameter := range route.QueryParams {
-			parameter = strings.TrimSpace(parameter)
+		for _, binding := range route.RequestBindings.Query {
+			parameter := strings.TrimSpace(binding.Name)
 			if parameter != "" && !seenParams[parameter] {
 				seenParams[parameter] = true
 				queryParams = append(queryParams, parameter)

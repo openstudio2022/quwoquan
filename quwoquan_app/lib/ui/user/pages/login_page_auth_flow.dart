@@ -1,128 +1,122 @@
 part of 'login_page.dart';
 
 extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
-  Future<void> _handlePrimaryLogin() async {
-    final entryBeforeSubmit = _presentation;
-    if (entryBeforeSubmit.kind == LoginEntryKind.submitting) {
-      return;
-    }
-    _invalidateEntryResolution();
-    _trackLoginEvent(
-      'login_primary_clicked',
-      payload: <String, dynamic>{'state': entryBeforeSubmit.kind.name},
+  void _toggleAgreement() {
+    if (_flow.isBusy || _consentSheetVisible) return;
+    final next = _flow.consentState == LoginConsentState.accepted
+        ? LoginConsentState.unchecked
+        : LoginConsentState.accepted;
+    _flowController.replace(_flow.copyWith(consentState: next, feedback: null));
+    _trackLoginFunnel(
+      'login_consent_changed',
+      result: next == LoginConsentState.accepted ? 'accepted' : 'unchecked',
     );
-    if (entryBeforeSubmit.kind == LoginEntryKind.phoneOtp) {
-      await _handlePhoneOtpPrimary();
+  }
+
+  Future<void> _runWithConsent(LoginPendingIntent intent) async {
+    if (_flowController.terminalClaimed || _flow.isBusy) return;
+    if (_flow.consentState == LoginConsentState.accepted) {
+      await _dispatchPendingIntent(intent);
       return;
     }
-    if (entryBeforeSubmit.resolvedPrimaryAction ==
-        LoginPrimaryAction.phoneReauth) {
-      _enterReturningSmsLogin(entryBeforeSubmit.quickLoginPhone);
-      return;
-    }
-    if (entryBeforeSubmit.resolvedPrimaryAction ==
-        LoginPrimaryAction.socialReauth) {
-      await _handleSocialLogin(entryBeforeSubmit.primaryProvider);
-      return;
-    }
-    if (!entryBeforeSubmit.canSubmit) {
-      _updateState(() {
-        _presentation = LoginEntryPresentation(
-          kind: entryBeforeSubmit.kind,
-          accountHint: entryBeforeSubmit.accountHint,
-          carrierHint: entryBeforeSubmit.carrierHint,
-          phoneOtpState: entryBeforeSubmit.phoneOtpState,
-          message: FoundationText.loginQuickLoginUnavailableHint,
-          primaryAction: entryBeforeSubmit.primaryAction,
-          primaryProvider: entryBeforeSubmit.primaryProvider,
-          quickLoginPhone: entryBeforeSubmit.quickLoginPhone,
-        );
-      });
-      return;
-    }
-    if (!_agreementAccepted) {
-      _updateState(() => _showAgreementError = true);
-      return;
-    }
-    final attempt = _beginLoginAttempt();
-    final latency = Stopwatch()..start();
-    _updateState(() {
-      _presentation = LoginEntryPresentation(
-        kind: LoginEntryKind.submitting,
-        accountHint: entryBeforeSubmit.accountHint,
-        carrierHint: entryBeforeSubmit.carrierHint,
-        phoneOtpState: entryBeforeSubmit.phoneOtpState,
-        primaryAction: entryBeforeSubmit.primaryAction,
-        primaryProvider: entryBeforeSubmit.primaryProvider,
-        quickLoginPhone: entryBeforeSubmit.quickLoginPhone,
+    _pendingConsentIntent = intent;
+    if (_consentSheetVisible) return;
+    _consentSheetVisible = true;
+    _flowController.replace(
+      _flow.copyWith(consentState: LoginConsentState.confirming),
+    );
+    _trackLoginFunnel('login_consent_sheet', result: 'shown');
+    final accepted = await showLoginConsentSheet(
+      context,
+      onAgreementTap: () => context.push(AppRoutePaths.legalUserAgreement),
+      onPrivacyTap: () => context.push(AppRoutePaths.legalPrivacyPolicy),
+    );
+    _consentSheetVisible = false;
+    if (!mounted || _flowController.terminalClaimed) return;
+    final pending = _pendingConsentIntent;
+    _pendingConsentIntent = null;
+    if (accepted != true) {
+      _flowController.replace(
+        _flow.copyWith(consentState: LoginConsentState.unchecked),
       );
-    });
+      _trackLoginFunnel('login_consent_sheet', result: 'cancelled');
+      return;
+    }
+    _flowController.replace(
+      _flow.copyWith(consentState: LoginConsentState.accepted, feedback: null),
+    );
+    _trackLoginFunnel('login_consent_sheet', result: 'accepted');
+    if (pending != null) await _dispatchPendingIntent(pending);
+  }
+
+  Future<void> _dispatchPendingIntent(LoginPendingIntent intent) async {
+    switch (intent) {
+      case LoginPendingIntent.oneTap:
+        await _handleOneTapLogin();
+      case LoginPendingIntent.sendOtp:
+        await _requestOtp(consentChecked: true);
+      case LoginPendingIntent.resendOtp:
+        await _requestOtp(resend: true, consentChecked: true);
+      case LoginPendingIntent.socialWechat:
+        await _handleSocialLogin('wechat', consentChecked: true);
+      case LoginPendingIntent.socialQq:
+        await _handleSocialLogin('qq', consentChecked: true);
+      case LoginPendingIntent.socialAlipay:
+        await _handleSocialLogin('alipay', consentChecked: true);
+    }
+  }
+
+  Future<void> _handleOneTapLogin() async {
+    if (_flow.step != LoginStep.oneTap || _flow.isBusy) return;
+    final attempt = _beginLoginAttempt(LoginOperation.exchangingTicket);
+    final stopwatch = Stopwatch()..start();
+    _trackLoginFunnel('login_action_clicked', result: 'started');
     try {
+      if (_flow.entryMode == LoginEntryMode.rememberedSession &&
+          _quickLoginRefreshToken.isNotEmpty) {
+        final result = await ref
+            .read(accountSessionLifecycleCommandWriterProvider)
+            .refreshToken(
+              RefreshTokenCommand(refreshToken: _quickLoginRefreshToken),
+            )
+            .timeout(_LoginFrameHostState._requestTimeout);
+        if (!_isCurrentLoginAttempt(attempt)) return;
+        await ref
+            .read(authSessionControllerProvider.notifier)
+            .applyRefreshGrant(result);
+        if (!_isCurrentLoginAttempt(attempt)) return;
+        _trackLoginOperation(
+          operationId: 'refresh_remembered_session',
+          result: 'success',
+          durationMs: stopwatch.elapsedMilliseconds,
+        );
+        _completeLogin();
+        return;
+      }
+
       final session = ref.read(authSessionControllerProvider);
       final stored = await ref.read(authSessionStoreProvider).read();
-      if (!_isCurrentLoginAttempt(attempt)) {
-        return;
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      var vendor = _probe?.vendor ?? '';
+      var carrierToken = _probe?.carrierToken ?? '';
+      if (_probe?.canOfferLogin != true) {
+        final fresh = await ref
+            .read(oneTapLoginClientProvider)
+            .requestLoginToken()
+            .timeout(_LoginFrameHostState._probeTimeout);
+        vendor = fresh.vendor;
+        carrierToken = fresh.carrierToken;
       }
-      if (entryBeforeSubmit.resolvedPrimaryAction ==
-          LoginPrimaryAction.continueSession) {
-        final quickLoginRefreshToken = stored.quickLoginRefreshToken;
-        if (quickLoginRefreshToken.isNotEmpty) {
-          final result = await ref
-              .read(accountSessionLifecycleCommandWriterProvider)
-              .refreshToken(
-                RefreshTokenCommand(refreshToken: quickLoginRefreshToken),
-              );
-          if (!_isCurrentLoginAttempt(attempt)) {
-            return;
-          }
-          await ref
-              .read(authSessionControllerProvider.notifier)
-              .applyRefreshGrant(result);
-          if (!_isCurrentLoginAttempt(attempt)) {
-            return;
-          }
-          _trackLoginEvent(
-            'login_success',
-            targetKey: 'refresh_token',
-            payload: <String, dynamic>{
-              'state': entryBeforeSubmit.kind.name,
-              'durationMs': latency.elapsedMilliseconds,
-            },
-          );
-          _completeLogin();
-          return;
-        }
-        _setPresentation(
-          const LoginEntryPresentation(
-            kind: LoginEntryKind.phoneOtp,
-            phoneOtpState: LoginPhoneOtpState.idle(),
-            primaryAction: LoginPrimaryAction.requestOtp,
-            message: FoundationText.loginQuickLoginUnavailableHint,
-          ),
-        );
-        return;
-      }
-      final probe = _probe;
-      final carrierHint = entryBeforeSubmit.carrierHint;
-      var token = carrierHint?.carrierToken ?? probe?.carrierToken ?? '';
-      var vendor = carrierHint?.vendor ?? probe?.vendor ?? '';
-      if (entryBeforeSubmit.resolvedPrimaryAction !=
-              LoginPrimaryAction.carrierOneTap ||
-          token.isEmpty ||
-          vendor.isEmpty) {
-        _enterPhoneOtp();
-        return;
-      }
-      Future<AuthSessionGrant> submitOneTap({
-        required String token,
+      Future<AuthSessionGrant> submit({
         required String vendor,
+        required String carrierToken,
       }) {
         return ref
             .read(accountSessionLoginCommandWriterProvider)
             .loginOneTap(
               LoginOneTapCommand(
                 vendor: vendor,
-                carrierToken: token,
+                carrierToken: carrierToken,
                 deviceId: session.installId.isNotEmpty
                     ? session.installId
                     : stored.installId,
@@ -131,209 +125,164 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
                 agreementVersion: AuthLegalConfig.agreementVersion,
                 privacyVersion: AuthLegalConfig.privacyVersion,
               ),
-            );
+            )
+            .timeout(_LoginFrameHostState._requestTimeout);
       }
 
-      late AuthSessionGrant result;
+      late AuthSessionGrant grant;
       try {
-        result = await submitOneTap(token: token, vendor: vendor);
+        grant = await submit(vendor: vendor, carrierToken: carrierToken);
       } on CloudException catch (error) {
-        if (error.code != UserErrorCode.carrierTokenInvalid.code) {
-          rethrow;
-        }
-        // 运营商 token 短时有效：首次被服务端判定失效时，当前用户动作内仅刷新并重试一次。
-        // 第二次仍失败则交给统一恢复矩阵降级短信，避免无限刷新和重复提交。
+        if (error.code != UserErrorCode.carrierTokenInvalid.code) rethrow;
         final fresh = await ref
             .read(oneTapLoginClientProvider)
             .requestLoginToken()
             .timeout(_LoginFrameHostState._probeTimeout);
-        if (!_isCurrentLoginAttempt(attempt)) {
-          return;
-        }
-        token = fresh.carrierToken;
+        if (!_isCurrentLoginAttempt(attempt)) return;
         vendor = fresh.vendor;
-        _probe = null;
-        result = await submitOneTap(token: token, vendor: vendor);
+        carrierToken = fresh.carrierToken;
+        grant = await submit(vendor: vendor, carrierToken: carrierToken);
       }
-      if (!_isCurrentLoginAttempt(attempt)) {
-        return;
-      }
+      if (!_isCurrentLoginAttempt(attempt)) return;
       await ref
           .read(authSessionControllerProvider.notifier)
           .applyRememberedLoginGrant(
-            result,
+            grant,
             rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
-            rememberedLoginMaskedIdentifier: _resolvedMaskedPhone(result),
+            rememberedLoginMaskedIdentifier: _resolvedMaskedPhone(grant),
           );
-      if (!_isCurrentLoginAttempt(attempt)) {
-        return;
-      }
-      _trackLoginEvent(
-        'login_success',
-        targetKey: 'one_tap',
-        payload: <String, dynamic>{
-          'state': entryBeforeSubmit.kind.name,
-          'durationMs': latency.elapsedMilliseconds,
-        },
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      _trackLoginOperation(
+        operationId: 'login_one_tap',
+        result: 'success',
+        durationMs: stopwatch.elapsedMilliseconds,
       );
       _completeLogin();
     } catch (error) {
-      if (!_isCurrentLoginAttempt(attempt)) {
-        return;
-      }
-      _applyTopLevelLoginFailure(
-        entryBeforeSubmit,
-        error,
-        provider: 'one_tap',
-        durationMs: latency.elapsedMilliseconds,
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      final origin = _flow.entryMode == LoginEntryMode.rememberedSession
+          ? LoginFailureOrigin.returningSession
+          : LoginFailureOrigin.oneTap;
+      final feedback = _loginFeedback(error, origin: origin);
+      _trackLoginOperation(
+        operationId: _flow.entryMode == LoginEntryMode.rememberedSession
+            ? 'refresh_remembered_session'
+            : 'login_one_tap',
+        result: 'failure',
+        durationMs: stopwatch.elapsedMilliseconds,
+        error: error,
+        feedback: feedback,
       );
+      if (feedback.blocksAccountLogin) {
+        _transitionFlow(
+          _flow.copyWith(
+            step: LoginStep.blocked,
+            operation: LoginOperation.idle,
+            feedback: feedback,
+          ),
+          action: 'login_state_changed',
+          result: 'blocked',
+        );
+      } else {
+        _enterPhoneEntry(feedback: feedback);
+      }
     } finally {
       _finishLoginAttempt(attempt);
     }
   }
 
-  /// 顶层登录失败（一键/既往会话/三方）统一恢复：绝不停在不可操作空面板。
-  /// 规则：
-  /// - 运营商系列错误 -> 降级到手机号验证码输入态，并解释原因（用户改走短信）。
-  /// - 其它错误 -> 回到失败前的有效操作态（returning/carrier/phoneOtp），
-  ///   由 LoginFeedback 指定唯一就近承载面，用户可重试或换路径。
-  void _applyTopLevelLoginFailure(
-    LoginEntryPresentation entryBeforeSubmit,
-    Object error, {
-    String? fallbackMessage,
-    bool preserveEntry = false,
-    LoginFailureOrigin origin = LoginFailureOrigin.oneTap,
-    String provider = '',
-    int? durationMs,
-  }) {
-    if (!mounted) {
-      return;
-    }
-    final feedback = _loginFeedback(
-      error,
-      origin: origin,
-      fallbackMessage: fallbackMessage,
-    );
-    if (feedback.isSilent) {
-      _updateState(() => _presentation = entryBeforeSubmit);
-      return;
-    }
-    if (feedback.surface == LoginErrorSurface.agreement) {
-      _updateState(() {
-        _showAgreementError = true;
-        _presentation = LoginEntryPresentation(
-          kind: entryBeforeSubmit.kind,
-          accountHint: entryBeforeSubmit.accountHint,
-          carrierHint: entryBeforeSubmit.carrierHint,
-          phoneOtpState: entryBeforeSubmit.phoneOtpState,
-          feedback: feedback,
-          primaryAction: entryBeforeSubmit.primaryAction,
-          primaryProvider: entryBeforeSubmit.primaryProvider,
-          quickLoginPhone: entryBeforeSubmit.quickLoginPhone,
+  void _handleBackOrDismiss() {
+    if (_flowController.terminalClaimed) return;
+    switch (_flow.step) {
+      case LoginStep.resolving:
+      case LoginStep.oneTap:
+        _dismissLogin();
+      case LoginStep.phoneEntry:
+        if (_rootStep == LoginStep.oneTap) {
+          _restoreRoot();
+        } else {
+          _dismissLogin();
+        }
+      case LoginStep.otp:
+        _cancelActiveAttempt();
+        _otpCountdownTicker?.cancel();
+        _otpController.clear();
+        _transitionFlow(
+          _flow.copyWith(
+            step: LoginStep.phoneEntry,
+            operation: LoginOperation.idle,
+            code: '',
+            challengeId: '',
+            otpChallengeState: OtpChallengeState.none,
+            resendDeadline: null,
+            feedback: null,
+          ),
+          action: 'login_state_changed',
         );
-      });
-      return;
+      case LoginStep.socialAuthorizing:
+        _cancelSocialAuthorization();
+      case LoginStep.socialFailed:
+      case LoginStep.socialPhoneEntry:
+      case LoginStep.socialPhoneOtp:
+        _cancelSocialBindingAndRestoreRoot();
+      case LoginStep.blocked:
+        if (_isAccountSuspensionSurface) {
+          _dismissLogin();
+        } else {
+          _enterPhoneEntry(preservePhone: false);
+        }
+      case LoginStep.completing:
+        _cancelActiveAttempt();
+        _restoreRoot();
     }
-    if (feedback.surface == LoginErrorSurface.accountBlocked) {
-      final state =
-          entryBeforeSubmit.phoneOtpState ?? const LoginPhoneOtpState.idle();
-      _setPresentation(
-        LoginEntryPresentation(
-          kind: LoginEntryKind.phoneOtp,
-          phoneOtpState: state.copyWith(
-            phase: feedback.presentation.phase,
-            message: feedback.message,
-            resendSeconds: 0,
-          ),
-          feedback: feedback,
+  }
+
+  void _restoreRoot() {
+    _otpCountdownTicker?.cancel();
+    _otpController.clear();
+    _lastAutoVerifiedCode = '';
+    if (_rootStep == LoginStep.oneTap) {
+      _transitionFlow(
+        LoginFlowState(
+          step: LoginStep.oneTap,
+          flowId: _flow.flowId,
+          consentState: _flow.consentState,
+          entryMode: _rootEntryMode,
+          maskedPhone: _rootMaskedPhone,
         ),
-      );
-      _trackLoginEvent(
-        'login_failed',
-        targetKey: provider,
-        payload: <String, dynamic>{
-          'state': LoginEntryKind.phoneOtp.name,
-          ...feedback.telemetry,
-          'durationMs': ?durationMs,
-        },
+        action: 'login_state_changed',
       );
       return;
     }
-    final isCarrierFailure = switch (feedback.code) {
-      UserErrorCode.carrierUnavailable ||
-      UserErrorCode.carrierProviderTimeout ||
-      UserErrorCode.carrierTokenInvalid ||
-      UserErrorCode.carrierPhoneMismatch => true,
-      _ => false,
-    };
-    if (isCarrierFailure) {
-      _setPresentation(
-        LoginEntryPresentation(
-          kind: LoginEntryKind.phoneOtp,
-          phoneOtpState: const LoginPhoneOtpState.idle(),
-          primaryAction: LoginPrimaryAction.requestOtp,
-          feedback: LoginFeedback(
-            cloudError: feedback.cloudError,
-            code: feedback.code,
-            message: feedback.message,
-            presentation: feedback.presentation,
-            surface: LoginErrorSurface.fallbackNotice,
-            origin: feedback.origin,
-          ),
-          message: feedback.message,
-        ),
-      );
-      _trackLoginEvent(
-        'login_failed',
-        targetKey: provider,
-        payload: <String, dynamic>{
-          'state': LoginEntryKind.phoneOtp.name,
-          ...feedback.telemetry,
-          'durationMs': ?durationMs,
-        },
-      );
-      return;
-    }
-    final recoverKind =
-        !preserveEntry &&
-            entryBeforeSubmit.kind == LoginEntryKind.returningAccount
-        ? LoginEntryKind.phoneOtp
-        : entryBeforeSubmit.kind;
-    _updateState(() {
-      _presentation = LoginEntryPresentation(
-        kind: recoverKind,
-        accountHint: entryBeforeSubmit.accountHint,
-        carrierHint: entryBeforeSubmit.carrierHint,
-        phoneOtpState: entryBeforeSubmit.phoneOtpState,
-        feedback: feedback,
-        message: feedback.message,
-        primaryAction: entryBeforeSubmit.primaryAction,
-        primaryProvider: entryBeforeSubmit.primaryProvider,
-        quickLoginPhone: entryBeforeSubmit.quickLoginPhone,
-      );
-    });
-    _trackLoginEvent(
-      'login_failed',
-      targetKey: provider,
-      payload: <String, dynamic>{
-        'state': recoverKind.name,
-        ...feedback.telemetry,
-        'durationMs': ?durationMs,
-      },
-    );
+    _enterPhoneEntry();
   }
 
   String _resolvedMaskedPhone(AuthSessionGrant result) {
     final fromResult = result.accountHint?.maskedPhone.trim() ?? '';
-    if (fromResult.isNotEmpty) {
-      return fromResult;
-    }
-    return _presentation.accountHint?.maskedPhone ??
-        _presentation.carrierHint?.maskedPhone ??
-        '';
+    if (fromResult.isNotEmpty) return fromResult;
+    return _flow.maskedPhone.isNotEmpty ? _flow.maskedPhone : _rootMaskedPhone;
   }
 
   void _completeLogin() {
+    if (_flowController.terminalClaimed) {
+      _trackLoginFunnel('login_terminal', result: 'duplicate_suppressed');
+      return;
+    }
+    _transitionFlow(
+      _flow.copyWith(
+        step: LoginStep.completing,
+        operation: LoginOperation.idle,
+        feedback: null,
+      ),
+      action: 'login_state_changed',
+    );
+    if (!_flowController.tryClaimTerminal()) {
+      _trackLoginFunnel('login_terminal', result: 'duplicate_suppressed');
+      return;
+    }
+    _activeAttempt = null;
+    _otpCountdownTicker?.cancel();
+    _trackLoginFunnel('login_terminal', result: 'success');
     final callback = widget.onLoggedIn;
     if (callback != null) {
       callback();
@@ -344,29 +293,37 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
       context.go(redirect);
       return;
     }
-    // continuation 仍由原目标表面按类型 take；登录页只负责把该表面恢复到前台，
-    // 不与宿主竞争消费。若没有目标表面，再落安全首页。
     if (ref.read(authContinuationProvider) != null &&
         Navigator.of(context).canPop()) {
       context.pop();
       return;
     }
     final router = GoRouter.maybeOf(context);
-    if (router != null) {
-      router.go(AppRoutePaths.home);
-    }
+    if (router != null) router.go(AppRoutePaths.home);
   }
 
-  void _dismissAsGuest() {
+  void _dismissLogin() {
+    if (!_flowController.tryClaimTerminal()) {
+      _trackLoginFunnel('login_terminal', result: 'duplicate_suppressed');
+      return;
+    }
     _activeAttempt = null;
+    _entryResolutionGeneration += 1;
+    _otpCountdownTicker?.cancel();
+    if (_isAccountSuspensionSurface) {
+      ref
+          .read(authSessionControllerProvider.notifier)
+          .acknowledgeAccountRestrictionNotice();
+    }
     ref.read(authContinuationProvider.notifier).clear();
-    _trackLoginEvent(
-      'login_dismissed',
-      payload: <String, dynamic>{'state': _presentation.kind.name},
-    );
+    _trackLoginFunnel('login_terminal', result: 'dismissed');
     final callback = widget.onDismiss;
     if (callback != null) {
       callback();
+      return;
+    }
+    if (_isAccountSuspensionSurface) {
+      context.go(AppRoutePaths.home);
       return;
     }
     final fallback = safeLoginDismissFallback(
@@ -388,6 +345,40 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
           'hostControlledClose requires an onDismiss callback',
         );
         context.go(fallback);
+    }
+  }
+
+  Future<void> _openAccountRestrictionSupport() async {
+    if (!_isAccountSuspensionSurface || _openingAccountRestrictionSupport) {
+      return;
+    }
+    _openingAccountRestrictionSupport = true;
+    _flowController.refresh();
+    _trackLoginOperation(
+      operationId: 'open_account_restriction_support',
+      result: 'started',
+      feedback: accountSuspensionLoginFeedback(
+        locale: Localizations.localeOf(context).languageCode,
+      ),
+    );
+    final opened = await ref
+        .read(accountRestrictionSupportLauncherProvider)
+        .openOfficialSupport();
+    if (!mounted) return;
+    _openingAccountRestrictionSupport = false;
+    _flowController.refresh();
+    final feedback = opened
+        ? accountSuspensionLoginFeedback(
+            locale: Localizations.localeOf(context).languageCode,
+          )
+        : accountSuspensionSupportUnavailableFeedback();
+    _trackLoginOperation(
+      operationId: 'open_account_restriction_support',
+      result: opened ? 'opened' : 'unavailable',
+      feedback: feedback,
+    );
+    if (!opened) {
+      _flowController.replace(_flow.copyWith(feedback: feedback));
     }
   }
 }

@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan ops API
-    version: v1
+    version: canonical
 paths:
     /control-plane/platform/configs:
         get:
@@ -113,7 +113,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ConfigInstanceReport'
+                            $ref: '#/components/schemas/ReportConfigInstanceRequest'
             responses:
                 "200":
                     description: OK
@@ -210,6 +210,205 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /control-plane/product/account-enforcement-cases/{caseId}:
+        get:
+            operationId: GetAccountEnforcementCase
+            x-contract-operation-id: ops.account_enforcement_case.GetAccountEnforcementCase
+            x-object-id: ops.account_enforcement_case
+            x-actor: account
+            x-application:
+                kind: query
+                facet: AccountEnforcementCaseQueryFacade
+                method: getCase
+                reader: AccountEnforcementCaseReader
+                slice: AccountEnforcementCaseResult
+            parameters:
+                - name: caseId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementCaseResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/account-enforcement-cases/{caseId}:retry-delivery:
+        post:
+            operationId: RetryAccountEnforcementDelivery
+            x-contract-operation-id: ops.account_enforcement_case.RetryAccountEnforcementDelivery
+            x-object-id: ops.account_enforcement_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AccountEnforcementCaseCommandFacade
+                method: retryDelivery
+                aggregateOwner: AccountEnforcementCase
+            parameters:
+                - name: caseId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RetryAccountEnforcementDeliveryRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementCaseResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/account-enforcement-cases/{caseId}:review:
+        post:
+            operationId: ReviewAccountEnforcementCase
+            x-contract-operation-id: ops.account_enforcement_case.ReviewAccountEnforcementCase
+            x-object-id: ops.account_enforcement_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AccountEnforcementCaseCommandFacade
+                method: reviewCase
+                aggregateOwner: AccountEnforcementCase
+            parameters:
+                - name: caseId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReviewAccountEnforcementCaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementCaseResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/account-enforcement-cases/appeal:
+        post:
+            operationId: OpenAccountAppealCase
+            x-contract-operation-id: ops.account_enforcement_case.OpenAccountAppealCase
+            x-object-id: ops.account_enforcement_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AccountEnforcementCaseCommandFacade
+                method: openAppealCase
+                aggregateOwner: AccountEnforcementCase
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/OpenAccountAppealCaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementCaseResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /control-plane/product/account-enforcement-cases/moderation:
+        post:
+            operationId: OpenAccountModerationCase
+            x-contract-operation-id: ops.account_enforcement_case.OpenAccountModerationCase
+            x-object-id: ops.account_enforcement_case
+            x-actor: account
+            x-application:
+                kind: command
+                facet: AccountEnforcementCaseCommandFacade
+                method: openModerationCase
+                aggregateOwner: AccountEnforcementCase
+            parameters:
+                - name: Idempotency-Key
+                  in: header
+                  required: true
+                  description: Stable business replay identity; distinct from X-Request-Id.
+                  schema:
+                    type: string
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/OpenAccountModerationCaseRequest'
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountEnforcementCaseResult'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /control-plane/product/experiments:
         get:
             operationId: ListExperiments
@@ -254,16 +453,15 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: If-Match
+                  in: header
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: true
                   description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-                - name: If-Match
-                  in: header
-                  required: true
-                  description: Quoted positive aggregate version for a snapshot overwrite.
                   schema:
                     type: string
             requestBody:
@@ -299,6 +497,22 @@ paths:
                 method: getRecoveryVersion
                 reader: AppReleaseRecoveryReader
                 slice: AppReleaseRecoveryView
+            parameters:
+                - name: platform
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: appVersion
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: buildNumber
+                  in: query
+                  required: true
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -334,11 +548,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReportEventBatchRequest'
+                            $ref: '#/components/schemas/EventRecordBatchRequest'
             responses:
                 "204":
                     description: No Content
@@ -362,6 +576,67 @@ paths:
                 method: getDrilldown
                 reader: EventDrilldownReader
                 slice: EventDrilldownSlice
+            parameters:
+                - name: logType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: eventType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: pageName
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: appVersion
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: networkClass
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: result
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: errorCode
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sessionId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: from
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: to
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: revealSession
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -416,6 +691,52 @@ paths:
                 method: getSummary
                 reader: EventSummaryReader
                 slice: EventSummarySlice
+            parameters:
+                - name: logType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: eventType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: pageName
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: appVersion
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: networkClass
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: result
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: errorCode
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: from
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: to
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -588,11 +909,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReportRuntimeLogBatchRequest'
+                            $ref: '#/components/schemas/RuntimeLogBatchRequest'
             responses:
                 "204":
                     description: No Content
@@ -616,6 +937,72 @@ paths:
                 method: getDrilldown
                 reader: RuntimeLogDrilldownReader
                 slice: RuntimeLogDrilldownSlice
+            parameters:
+                - name: signal
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: severity
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: errorCode
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: fingerprint
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sourceType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: service
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: appVersion
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: actorHash
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: messageContains
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: from
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: to
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: revealCorrelation
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -643,6 +1030,52 @@ paths:
                 method: getSummary
                 reader: RuntimeLogSummaryReader
                 slice: RuntimeLogSummarySlice
+            parameters:
+                - name: signal
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: severity
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: errorCode
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: fingerprint
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sourceType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: service
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: appVersion
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: from
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: to
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -741,6 +1174,17 @@ paths:
                 method: getStats
                 reader: VisitStatsReader
                 slice: VisitStatsSlice
+            parameters:
+                - name: targetType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: targetKey
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -761,6 +1205,11 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        AccountEnforcementCaseResult:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AccountEnforcementCaseResult
+            x-contract-placeholder: true
         ConfigDomainSlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -795,6 +1244,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: EventDrilldownSlice
+            x-contract-placeholder: true
+        EventRecordBatchRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: EventRecordBatchRequest
             x-contract-placeholder: true
         ExperimentAssignmentFact:
             type: object
@@ -836,35 +1290,55 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GetVisitStatsResponse
             x-contract-placeholder: true
+        OpenAccountAppealCaseRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OpenAccountAppealCaseRequest
+            x-contract-placeholder: true
+        OpenAccountModerationCaseRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OpenAccountModerationCaseRequest
+            x-contract-placeholder: true
         RecordVisitRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecordVisitRequest
             x-contract-placeholder: true
-        ReportEventBatchRequest:
+        ReportConfigInstanceRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReportEventBatchRequest
+            x-contract-entity: ReportConfigInstanceRequest
             x-contract-placeholder: true
         ReportRecoveryFailureRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportRecoveryFailureRequest
             x-contract-placeholder: true
-        ReportRuntimeLogBatchRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReportRuntimeLogBatchRequest
-            x-contract-placeholder: true
         ReportStartupEventBatchRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ReportStartupEventBatchRequest
             x-contract-placeholder: true
+        RetryAccountEnforcementDeliveryRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RetryAccountEnforcementDeliveryRequest
+            x-contract-placeholder: true
+        ReviewAccountEnforcementCaseRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReviewAccountEnforcementCaseRequest
+            x-contract-placeholder: true
         RtcMediaQoeSummarySlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RtcMediaQoeSummarySlice
+            x-contract-placeholder: true
+        RuntimeLogBatchRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RuntimeLogBatchRequest
             x-contract-placeholder: true
         UpdateExperimentRolloutRequest:
             type: object

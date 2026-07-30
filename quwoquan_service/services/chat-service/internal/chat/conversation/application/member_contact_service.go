@@ -75,8 +75,8 @@ func (s *MemberService) ListGroupCandidates(
 		}
 		seen[contactID] = struct{}{}
 		item := map[string]any{
-			"contactId":       contactID,
 			"userId":          contactID,
+			"userHandle":      strings.TrimSpace(hit.UserHandle),
 			"displayName":     hit.DisplayName,
 			"avatarUrl":       hit.AvatarURL,
 			"bio":             hit.Bio,
@@ -84,11 +84,7 @@ func (s *MemberService) ListGroupCandidates(
 			"lastInteraction": hit.LastInteraction,
 			"relationState":   relationState,
 			"source":          hit.Source,
-			"subtitle":        hit.Subtitle,
-			"highlightText":   hit.HighlightText,
-			"matchedField":    hit.MatchedField,
 			"isStarred":       hit.IsStarred,
-			"candidateSource": "server_group_candidates",
 		}
 		items = append(items, item)
 		if len(items) >= limit {
@@ -130,6 +126,7 @@ func contactHitsToMaps(hits []ContactSearchHit) []map[string]any {
 	for _, hit := range hits {
 		items = append(items, map[string]any{
 			"userId":           hit.ContactID,
+			"userHandle":       strings.TrimSpace(hit.UserHandle),
 			"displayName":      hit.DisplayName,
 			"avatarUrl":        hit.AvatarURL,
 			"bio":              hit.Bio,
@@ -320,11 +317,15 @@ func socialSeedIDs(seeds []SocialContactSeed) []string {
 }
 
 func socialSeedToHit(seed SocialContactSeed, profile ProfileSnapshot) ContactSearchHit {
+	userHandle := strings.TrimSpace(seed.UserHandle)
 	displayName := strings.TrimSpace(seed.DisplayName)
 	avatarURL := strings.TrimSpace(seed.AvatarURL)
 	bio := strings.TrimSpace(seed.Bio)
 	if displayName == "" {
 		displayName = strings.TrimSpace(profile.DisplayName)
+	}
+	if userHandle == "" {
+		userHandle = strings.TrimSpace(profile.UserHandle)
 	}
 	if avatarURL == "" {
 		avatarURL = strings.TrimSpace(profile.AvatarURL)
@@ -346,6 +347,7 @@ func socialSeedToHit(seed SocialContactSeed, profile ProfileSnapshot) ContactSea
 	}
 	return ContactSearchHit{
 		ContactID:       strings.TrimSpace(seed.UserID),
+		UserHandle:      userHandle,
 		DisplayName:     displayName,
 		AvatarURL:       avatarURL,
 		Bio:             bio,
@@ -366,6 +368,9 @@ func mergeContactSearchHit(base, next ContactSearchHit) ContactSearchHit {
 	}
 	if base.DisplayName == "" {
 		base.DisplayName = next.DisplayName
+	}
+	if base.UserHandle == "" {
+		base.UserHandle = next.UserHandle
 	}
 	if base.AvatarURL == "" {
 		base.AvatarURL = next.AvatarURL
@@ -405,6 +410,7 @@ func matchesContactQuery(hit ContactSearchHit, query string) bool {
 	matched, _ := containsQuery(
 		[]string{
 			hit.DisplayName,
+			hit.UserHandle,
 			hit.ContactID,
 			hit.Bio,
 			hit.MetFrom,
@@ -425,6 +431,7 @@ func highlightContactHit(hit ContactSearchHit, query string) string {
 	_, highlight := containsQuery(
 		[]string{
 			hit.DisplayName,
+			hit.UserHandle,
 			hit.Bio,
 			hit.MetFrom,
 			hit.LastInteraction,

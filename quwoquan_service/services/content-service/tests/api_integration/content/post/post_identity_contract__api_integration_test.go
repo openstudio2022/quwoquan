@@ -189,7 +189,7 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	)
 	commentReq.Header.Set("Content-Type", "application/json")
 	commentReq.Header.Set("X-Client-User-Id", "thread_commenter")
-	commentReq.Header.Set("X-Client-Sub-Account-Id", "thread_commenter")
+	commentReq.Header.Set("X-Client-Persona-Id", "thread_commenter")
 	ensureIdempotencyHeader(commentReq, "promote-thread-comment")
 	commentRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(commentRec, commentReq)
@@ -461,13 +461,13 @@ func TestPostProjectionRebuildReplaysDurableOutbox(t *testing.T) {
 	}
 }
 
-func TestDiscoveryProjectionPersistsAuthorSubAccountID(t *testing.T) {
+func TestDiscoveryProjectionPersistsAuthorPersonaID(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := submitPublishedPostWithAuthor(t, "projection_author", `{
 		"contentType":"article",
 		"title":"作者主键投影",
-		"body":"发现流必须保留 canonical subAccountId"
+		"body":"发现流必须保留 canonical personaId"
 	}`)
 	postID, _ := created["postId"].(string)
 	if postID == "" {
@@ -502,7 +502,7 @@ func TestListUserPostsByIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/content/sub-accounts/identity_feed_author/posts?identity=work&type=article&limit=20",
+		"/content/personas/identity_feed_author/posts?identity=work&type=article&limit=20",
 		nil,
 	)
 	rec := httptest.NewRecorder()

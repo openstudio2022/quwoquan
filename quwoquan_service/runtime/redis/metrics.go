@@ -8,6 +8,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"quwoquan_service/runtime/boundedrecord"
 )
 
 var (
@@ -168,6 +170,21 @@ func (c *instrumentedClient) SetNX(ctx context.Context, key, value string, ttl t
 	v, err := c.inner.SetNX(ctx, key, value, ttl)
 	c.record(t, err)
 	return v, err
+}
+
+func (c *instrumentedClient) CreateBoundedImmutableRecordAtomic(
+	ctx context.Context,
+	request boundedrecord.Request,
+) (boundedrecord.Result, error) {
+	t := time.Now()
+	creator, ok := c.inner.(boundedImmutableRecordAtomicCreator)
+	if !ok {
+		c.mc.RecordCommand(c.scene, "bounded_immutable_record_atomic_create", time.Since(t), errBoundedImmutableRecordAtomicUnavailable)
+		return boundedrecord.Result{}, errBoundedImmutableRecordAtomicUnavailable
+	}
+	result, err := creator.CreateBoundedImmutableRecordAtomic(ctx, request)
+	c.mc.RecordCommand(c.scene, "bounded_immutable_record_atomic_create", time.Since(t), err)
+	return result, err
 }
 
 func (c *instrumentedClient) Del(ctx context.Context, keys ...string) error {

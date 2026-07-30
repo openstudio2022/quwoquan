@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	PremiumPoolRecallPath        = "premium_pool"
-	PremiumPoolProjectionVersion = "premium_pool_projection_v1"
-	PremiumPoolQualityThreshold  = 0.75
+	PremiumPoolRecallPath       = "premium_pool"
+	PremiumPoolProjectionID     = "premium_pool_projection"
+	PremiumPoolQualityThreshold = 0.75
 )
 
 // PremiumPoolProjectionInput is the content-service projection input for a
@@ -81,7 +81,7 @@ func BuildPremiumPoolProjectionFields(in PremiumPoolProjectionInput, now time.Ti
 		"featuredAt":        featuredAt.UTC(),
 		"expiresAt":         in.ExpiresAt.UTC(),
 		"takedownEjected":   in.TakedownEjected,
-		"projectionVersion": PremiumPoolProjectionVersion,
+		"projectionId":      PremiumPoolProjectionID,
 		"updatedAt":         updatedAt.UTC(),
 	}
 }
@@ -119,7 +119,13 @@ func normalizePremiumPoolToken(raw string) string {
 // PremiumPoolCandidateReader reads an already-materialized premium pool. It is
 // intentionally a content-service read-model boundary, not a product-ops client.
 type PremiumPoolCandidateReader interface {
-	ActivePremiumCandidates(ctx context.Context, now time.Time, limit int) ([]rtrec.ContentCandidate, error)
+	ActivePremiumCandidates(
+		ctx context.Context,
+		now time.Time,
+		activeReleaseID string,
+		activeManifestDigest string,
+		limit int,
+	) ([]rtrec.ContentCandidate, error)
 }
 
 type premiumStreamGateSource struct {
@@ -171,11 +177,22 @@ func (s *PremiumPoolSource) Recall(ctx context.Context, req rtrec.RecallRequest)
 	if s.reader == nil {
 		return nil, fmt.Errorf("premium pool candidate reader is unavailable")
 	}
+	activeReleaseID := strings.TrimSpace(req.ActiveReleaseID)
+	activeManifestDigest := strings.TrimSpace(req.ActiveManifestDigest)
+	if activeReleaseID == "" || activeManifestDigest == "" {
+		return nil, fmt.Errorf("premium pool recall requires active release id and manifest digest")
+	}
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 30
 	}
-	items, err := s.reader.ActivePremiumCandidates(ctx, s.now(), limit)
+	items, err := s.reader.ActivePremiumCandidates(
+		ctx,
+		s.now(),
+		activeReleaseID,
+		activeManifestDigest,
+		limit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -194,35 +211,117 @@ func premiumPoolRoute(req rtrec.RecallRequest) bool {
 }
 
 type MongoPremiumPoolCandidateReader struct {
-	poolColl *mongo.Collection
-	feedColl *mongo.Collection
+	poolColl  *mongo.Collection
+	feedColl  *mongo.Collection
+	postsColl *mongo.Collection
 }
 
 func NewMongoPremiumPoolCandidateReader(db *mongo.Database) *MongoPremiumPoolCandidateReader {
+	if db == nil {
+		return nil
+	}
 	return &MongoPremiumPoolCandidateReader{
-		poolColl: db.Collection("rm_premium_pool"),
-		feedColl: db.Collection("rm_discovery_feed"),
+		poolColl:  db.Collection("rm_premium_pool"),
+		feedColl:  db.Collection("rm_discovery_feed"),
+		postsColl: db.Collection("posts"),
 	}
 }
 
-func (r *MongoPremiumPoolCandidateReader) ActivePremiumCandidates(ctx context.Context, now time.Time, limit int) ([]rtrec.ContentCandidate, error) {
+func (r *MongoPremiumPoolCandidateReader) ActivePremiumCandidates(
+	ctx context.Context,
+	now time.Time,
+	activeReleaseID string,
+	activeManifestDigest string,
+	limit int,
+) ([]rtrec.ContentCandidate, error) {
 	if r == nil || r.poolColl == nil || r.feedColl == nil || limit <= 0 {
 		return nil, nil
 	}
-	cursor, err := r.poolColl.Find(ctx,
-		bson.M{
-			"scope":            "global",
-			"status":           "active",
-			"eligibilityState": "eligible",
-			"qualityAdmission": "approved",
-			"qualityScore":     bson.M{"$gte": PremiumPoolQualityThreshold},
-			"expiresAt":        bson.M{"$gt": now.UTC()},
-			"takedownEjected":  bson.M{"$ne": true},
-		},
-		options.Find().
-			SetSort(bson.D{{Key: "qualityScore", Value: -1}, {Key: "featuredAt", Value: -1}}).
-			SetLimit(int64(limit*2)),
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	activeManifestDigest = strings.TrimSpace(activeManifestDigest)
+	if activeReleaseID == "" || activeManifestDigest == "" {
+		return nil, fmt.Errorf("premium pool candidate read requires active release id and manifest digest")
+	}
+	entries, err := r.activePremiumEntries(
+		ctx,
+		now,
+		activeReleaseID,
+		activeManifestDigest,
+		limit*2,
 	)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	return r.candidatesForEntries(
+		ctx,
+		entries,
+		activeReleaseID,
+		activeManifestDigest,
+		limit,
+	)
+}
+
+func activePremiumPoolFilter(now time.Time) bson.M {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return bson.M{
+		"scope":            "global",
+		"status":           "active",
+		"eligibilityState": "eligible",
+		"qualityAdmission": "approved",
+		"qualityScore":     bson.M{"$gte": PremiumPoolQualityThreshold},
+		"expiresAt":        bson.M{"$gt": now.UTC()},
+		"takedownEjected":  bson.M{"$ne": true},
+	}
+}
+
+func (r *MongoPremiumPoolCandidateReader) activePremiumEntries(
+	ctx context.Context,
+	now time.Time,
+	activeReleaseID string,
+	activeManifestDigest string,
+	limit int,
+) ([]premiumPoolReadDoc, error) {
+	pipeline := mongo.Pipeline{
+		bson.D{{Key: "$match", Value: activePremiumPoolFilter(now)}},
+		bson.D{{Key: "$lookup", Value: bson.M{
+			"from": "rm_discovery_feed",
+			"let":  bson.M{"premiumContentId": "$contentId"},
+			"pipeline": mongo.Pipeline{
+				bson.D{{Key: "$match", Value: bson.M{
+					"$expr":             bson.M{"$eq": bson.A{"$postId", "$$premiumContentId"}},
+					"sourceOwner":       "qwq_data",
+					"releaseId":         activeReleaseID,
+					"manifestDigest":    activeManifestDigest,
+					"lifecycleStatus":   "active",
+					"status":            "published",
+					"visibility":        "public",
+					"accountRestricted": bson.M{"$ne": true},
+				}}},
+				bson.D{{Key: "$project", Value: bson.M{"_id": 1}}},
+			},
+			"as": "activeReleaseFeed",
+		}}},
+		bson.D{{Key: "$match", Value: bson.M{
+			"activeReleaseFeed.0": bson.M{"$exists": true},
+		}}},
+		bson.D{{Key: "$sort", Value: bson.D{
+			{Key: "qualityScore", Value: -1},
+			{Key: "featuredAt", Value: -1},
+			{Key: "contentId", Value: -1},
+		}}},
+	}
+	if limit > 0 {
+		pipeline = append(pipeline, bson.D{{Key: "$limit", Value: int64(limit)}})
+	}
+	pipeline = append(pipeline, bson.D{{Key: "$project", Value: bson.M{
+		"contentId": 1, "qualityScore": 1, "supplySource": 1,
+	}}})
+	cursor, err := r.poolColl.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -232,10 +331,7 @@ func (r *MongoPremiumPoolCandidateReader) ActivePremiumCandidates(ctx context.Co
 	if err := cursor.All(ctx, &entries); err != nil {
 		return nil, err
 	}
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	return r.candidatesForEntries(ctx, entries, limit)
+	return entries, nil
 }
 
 type premiumPoolReadDoc struct {
@@ -244,7 +340,79 @@ type premiumPoolReadDoc struct {
 	SupplySource string  `bson:"supplySource"`
 }
 
-func (r *MongoPremiumPoolCandidateReader) candidatesForEntries(ctx context.Context, entries []premiumPoolReadDoc, limit int) ([]rtrec.ContentCandidate, error) {
+// CountActiveReleasePlayableVideos reuses the exact premium eligibility
+// predicate used by recall, then proves that every counted id joins to both an
+// active discovery projection and a playable hydrated Post in the requested
+// canonical release.
+func (r *MongoPremiumPoolCandidateReader) CountActiveReleasePlayableVideos(
+	ctx context.Context,
+	activeReleaseID string,
+	manifestDigest string,
+) (int64, error) {
+	activeReleaseID = strings.TrimSpace(activeReleaseID)
+	manifestDigest = strings.TrimSpace(manifestDigest)
+	if r == nil || r.poolColl == nil || r.feedColl == nil || r.postsColl == nil {
+		return 0, fmt.Errorf("premium playable supply collections are unavailable")
+	}
+	if activeReleaseID == "" || manifestDigest == "" {
+		return 0, nil
+	}
+	cursor, err := r.poolColl.Aggregate(ctx, mongo.Pipeline{
+		bson.D{{Key: "$match", Value: activePremiumPoolFilter(time.Now().UTC())}},
+		bson.D{{Key: "$group", Value: bson.M{"_id": "$contentId"}}},
+		bson.D{{Key: "$lookup", Value: bson.M{
+			"from": "rm_discovery_feed", "localField": "_id", "foreignField": "postId", "as": "feed",
+		}}},
+		bson.D{{Key: "$unwind", Value: "$feed"}},
+		bson.D{{Key: "$match", Value: bson.M{
+			"feed.sourceOwner": "qwq_data", "feed.releaseId": activeReleaseID,
+			"feed.manifestDigest":  manifestDigest,
+			"feed.lifecycleStatus": "active", "feed.status": "published",
+			"feed.visibility": "public", "feed.accountRestricted": bson.M{"$ne": true},
+			"feed.contentIdentity": "work", "feed.contentType": "video",
+		}}},
+		bson.D{{Key: "$lookup", Value: bson.M{
+			"from": "posts", "localField": "_id", "foreignField": "_id", "as": "post",
+		}}},
+		bson.D{{Key: "$unwind", Value: "$post"}},
+		bson.D{{Key: "$match", Value: bson.M{
+			"post.sourceOwner": "qwq_data", "post.releaseId": activeReleaseID,
+			"post.manifestDigest":  manifestDigest,
+			"post.lifecycleStatus": "active", "post.status": "published",
+			"post.visibility": "public", "post.moderationStatus": "approved",
+			"post.accountRestricted": bson.M{"$ne": true},
+			"post.contentIdentity":   "work", "post.contentType": "video",
+			"post.videoUrl":   bson.M{"$type": "string", "$ne": ""},
+			"post.durationMs": bson.M{"$gt": 0},
+		}}},
+		bson.D{{Key: "$count", Value: "count"}},
+	})
+	if err != nil {
+		return 0, err
+	}
+	defer cursor.Close(ctx)
+	var result struct {
+		Count int64 `bson:"count"`
+	}
+	if !cursor.Next(ctx) {
+		if err := cursor.Err(); err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+	if err := cursor.Decode(&result); err != nil {
+		return 0, err
+	}
+	return result.Count, nil
+}
+
+func (r *MongoPremiumPoolCandidateReader) candidatesForEntries(
+	ctx context.Context,
+	entries []premiumPoolReadDoc,
+	activeReleaseID string,
+	activeManifestDigest string,
+	limit int,
+) ([]rtrec.ContentCandidate, error) {
 	ids := make([]string, 0, len(entries))
 	byID := make(map[string]premiumPoolReadDoc, len(entries))
 	for _, entry := range entries {
@@ -261,10 +429,12 @@ func (r *MongoPremiumPoolCandidateReader) candidatesForEntries(ctx context.Conte
 	if len(ids) == 0 {
 		return nil, nil
 	}
+	filter := bson.M{"postId": bson.M{"$in": ids}}
+	applyCanonicalReleaseFilter(filter, activeReleaseID, activeManifestDigest)
 	candidates, err := queryDiscoveryFeed(
 		ctx,
 		r.feedColl,
-		bson.M{"postId": bson.M{"$in": ids}},
+		filter,
 		options.Find().SetLimit(int64(limit*2)),
 		PremiumPoolRecallPath,
 	)

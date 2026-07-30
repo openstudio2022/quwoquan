@@ -9,8 +9,8 @@ abstract interface class PersonaQuery {
   Future<ActivePersonaContextViewData> getActivePersonaContext();
 
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
+    String personaId,
   );
 
-  Future<SubAccountProfileViewData> getSubAccountProfile(String subAccountId);
+  Future<PersonaProfileViewData> getPersonaProfile(String personaId);
 }

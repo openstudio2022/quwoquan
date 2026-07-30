@@ -2,6 +2,7 @@
   "label": "自驾友好",
   "labelEn": "Driver-friendly",
   "description": "便于自驾停车的住宿",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

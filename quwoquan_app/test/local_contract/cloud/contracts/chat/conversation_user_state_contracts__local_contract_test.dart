@@ -3,20 +3,19 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   test('Chat ConversationUserState commands encode only writable fields', () {
-    final markRead = encodeChatMarkConversationMessageReadCommand(
+    final markRead = encodeChatConversationUserStateMarkAsReadGeneratedRequest(
       ChatMarkConversationMessageReadCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'read-1',
         messageId: 'message-1',
       ),
     );
-    final update = encodeChatUpdateConversationSettingsCommand(
-      ChatUpdateConversationSettingsCommand(
-        conversationId: 'conversation-1',
-        idempotencyKey: 'settings-1',
-        muted: true,
-      ),
-    );
+    final update =
+        encodeChatConversationUserStateUpdateConversationSettingsGeneratedRequest(
+          ChatUpdateConversationSettingsCommand(
+            conversationId: 'conversation-1',
+            muted: true,
+          ),
+        );
 
     expect(markRead.pathParameters, <String, String>{
       'conversationId': 'conversation-1',
@@ -25,11 +24,10 @@ void main() {
     expect(markRead.body, isNull);
     expect(update.body, <String, Object?>{'muted': true});
     expect(
-      () => ChatUpdateConversationSettingsCommand(
+      ChatUpdateConversationSettingsCommand(
         conversationId: 'conversation-1',
-        idempotencyKey: 'settings-2',
-      ),
-      throwsArgumentError,
+      ).muted,
+      isNull,
     );
   });
 }

@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-003
+// spec_ref: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md#sit-003
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -170,6 +171,7 @@ const _nativeContext = <String, Object>{
   'deviceModel': 'Pixel',
   'recoveryBaseUrl': 'https://api.quwoquan.com',
   'publicWebUrl': 'https://quwoquan.com',
+  'appDownloadBaseUrl': 'https://cdn.quwoquan.com/download',
 };
 
 const _exactFailureFields = <String>{

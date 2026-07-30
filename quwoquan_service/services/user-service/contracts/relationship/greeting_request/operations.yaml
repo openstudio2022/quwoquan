@@ -1,428 +1,464 @@
 api_routes:
-- method: POST
-  path: /user/greeting-request
-  operation: SendGreetingRequest
-  actor: persona
-  application:
-    kind: command
-    facet: GreetingRequestCommandFacade
-    method: sendGreetingRequest
-    aggregate_owner: GreetingRequest
-    mutation_target: GreetingRequest
-    invariant_target: GreetingRequest
-  description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
-  writable_fields:
-  - targetSubAccountId
-  - requestMessage
-  - source
-  client_contract:
-    dart_import: ../user/greeting_request_contracts.dart
-    request_type: SendGreetingCommand
-    response_type: GreetingRequestRecord
-    request_encoder: encodeSendGreetingCommand
-    response_decoder: decodeGreetingRequestRecord
-  authorization:
-    principal: persona
-    ownership_policy: actor_self
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.GREETING.target_blocked_sender
-  - USER.GREETING.duplicate_pending
-  - USER.GREETING.already_contact
-  - USER.GREETING.rate_limited
-  - USER.GREETING.sender_realname_required
-  - USER.GREETING.minor_restricted
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_greeting_request_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /user/greeting-request/inbox
-  operation: ListGreetingInbox
-  actor: persona
-  application:
-    kind: query
-    facet: GreetingRequestQueryFacade
-    method: listGreetingInbox
-    reader: ListGreetingInboxReader
-    slice: ListGreetingInboxSlice
-  description: 收件箱（我收到的待处理请求）
-  query_params:
-  - status
-  - cursor
-  - limit
-  client_contract:
-    dart_import: ../user/greeting_request_contracts.dart
-    request_type: ListGreetingRequestsQuery
-    response_type: GreetingRequestSlice
-    request_encoder: encodeListGreetingRequestsQuery
-    response_decoder: decodeGreetingRequestSlice
-  authorization:
-    principal: persona
-    ownership_policy: self
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_greeting_request_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /user/greeting-request/outbox
-  operation: ListGreetingOutbox
-  actor: persona
-  application:
-    kind: query
-    facet: GreetingRequestQueryFacade
-    method: listGreetingOutbox
-    reader: ListGreetingOutboxReader
-    slice: ListGreetingOutboxSlice
-  description: 发件箱（我发出的请求）
-  query_params:
-  - status
-  - cursor
-  - limit
-  client_contract:
-    dart_import: ../user/greeting_request_contracts.dart
-    request_type: ListGreetingRequestsQuery
-    response_type: GreetingRequestSlice
-    request_encoder: encodeListGreetingRequestsQuery
-    response_decoder: decodeGreetingRequestSlice
-  authorization:
-    principal: persona
-    ownership_policy: self
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_greeting_request_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /user/greeting-request/{requestId}/reply
-  operation: ReplyGreetingRequest
-  actor: persona
-  application:
-    kind: command
-    facet: GreetingRequestCommandFacade
-    method: replyGreetingRequest
-    aggregate_owner: GreetingRequest
-    mutation_target: GreetingRequest
-    invariant_target: GreetingRequest
-  description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
-  path_params:
-  - requestId
-  client_contract:
-    dart_import: ../user/greeting_request_contracts.dart
-    request_type: ReplyGreetingCommand
-    response_type: GreetingRequestRecord
-    request_encoder: encodeReplyGreetingCommand
-    response_decoder: decodeGreetingRequestRecord
-  authorization:
-    principal: persona
-    ownership_policy: greeting_target_only
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.GREETING.not_found
-  - USER.GREETING.invalid_status_transition
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_greeting_request_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /user/greeting-request/{requestId}/ignore
-  operation: IgnoreGreetingRequest
-  actor: persona
-  application:
-    kind: command
-    facet: GreetingRequestCommandFacade
-    method: ignoreGreetingRequest
-    aggregate_owner: GreetingRequest
-    mutation_target: GreetingRequest
-    invariant_target: GreetingRequest
-  description: 忽略打招呼
-  path_params:
-  - requestId
-  client_contract:
-    dart_import: ../user/greeting_request_contracts.dart
-    request_type: IgnoreGreetingCommand
-    response_type: GreetingRequestRecord
-    request_encoder: encodeIgnoreGreetingCommand
-    response_decoder: decodeGreetingRequestRecord
-  authorization:
-    principal: persona
-    ownership_policy: greeting_target_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.GREETING.not_found
-  - USER.GREETING.invalid_status_transition
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_greeting_request_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: DELETE
-  path: /user/greeting-request/{requestId}
-  operation: CancelGreetingRequest
-  actor: persona
-  application:
-    kind: command
-    facet: GreetingRequestCommandFacade
-    method: cancelGreetingRequest
-    aggregate_owner: GreetingRequest
-    mutation_target: GreetingRequest
-    invariant_target: GreetingRequest
-  description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
-  path_params:
-  - requestId
-  client_contract:
-    dart_import: ../user/greeting_request_contracts.dart
-    request_type: CancelGreetingCommand
-    response_type: GreetingRequestRecord
-    request_encoder: encodeCancelGreetingCommand
-    response_decoder: decodeGreetingRequestRecord
-  authorization:
-    principal: persona
-    ownership_policy: greeting_requester_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.GREETING.not_found
-  - USER.GREETING.invalid_status_transition
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_greeting_request_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
+  - method: POST
+    path: /user/greeting-request
+    operation: SendGreetingRequest
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: sendGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
+    description: 发起打招呼（创建请求箱条目，未回复前不进入聊天列表）
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      response_type: GreetingRequestRecord
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: actor_self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.target_blocked_sender
+      - USER.GREETING.duplicate_pending
+      - USER.GREETING.already_contact
+      - USER.GREETING.rate_limited
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: SendGreetingCommand
+    request_body_kind: object
+  - method: GET
+    path: /user/greeting-request/inbox
+    operation: ListGreetingInbox
+    request_bindings:
+      query:
+        - name: status
+          field: status
+          required: false
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+    actor: persona
+    application:
+      kind: query
+      facet: GreetingRequestQueryFacade
+      method: listGreetingInbox
+      reader: ListGreetingInboxReader
+      slice: ListGreetingInboxSlice
+    description: 收件箱（我收到的待处理请求）
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      response_type: GreetingRequestSlice
+      response_decoder: decodeGreetingRequestSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ListGreetingRequestsQuery
+    request_body_kind: none
+  - method: GET
+    path: /user/greeting-request/outbox
+    operation: ListGreetingOutbox
+    request_bindings:
+      query:
+        - name: status
+          field: status
+          required: false
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+    actor: persona
+    application:
+      kind: query
+      facet: GreetingRequestQueryFacade
+      method: listGreetingOutbox
+      reader: ListGreetingOutboxReader
+      slice: ListGreetingOutboxSlice
+    description: 发件箱（我发出的请求）
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      response_type: GreetingRequestSlice
+      response_decoder: decodeGreetingRequestSlice
+    authorization:
+      principal: persona
+      ownership_policy: self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ListGreetingRequestsQuery
+    request_body_kind: none
+  - method: POST
+    path: /user/greeting-request/{requestId}/reply
+    operation: ReplyGreetingRequest
+    request_bindings:
+      path:
+        - name: requestId
+          field: requestId
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: replyGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
+    description: 回复打招呼（同步创建或复用正式 1v1 会话，写入 promotedConversationId 后发布 GreetingRequestReplied）
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      response_type: GreetingRequestRecord
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: greeting_target_only
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.not_found
+      - USER.GREETING.invalid_status_transition
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ReplyGreetingCommand
+    request_body_kind: none
+  - method: POST
+    path: /user/greeting-request/{requestId}/ignore
+    operation: IgnoreGreetingRequest
+    request_bindings:
+      path:
+        - name: requestId
+          field: requestId
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: ignoreGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
+    description: 忽略打招呼
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      response_type: GreetingRequestRecord
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: greeting_target_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.not_found
+      - USER.GREETING.invalid_status_transition
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: IgnoreGreetingCommand
+    request_body_kind: none
+  - method: DELETE
+    path: /user/greeting-request/{requestId}
+    operation: CancelGreetingRequest
+    request_bindings:
+      path:
+        - name: requestId
+          field: requestId
+    actor: persona
+    application:
+      kind: command
+      facet: GreetingRequestCommandFacade
+      method: cancelGreetingRequest
+      aggregate_owner: GreetingRequest
+      mutation_target: GreetingRequest
+      invariant_target: GreetingRequest
+    description: 撤回打招呼（仅发起方可操作，仅 pending 状态可撤回）
+    client_contract:
+      dart_import: ../user/greeting_request_contracts.dart
+      response_type: GreetingRequestRecord
+      response_decoder: decodeGreetingRequestRecord
+    authorization:
+      principal: persona
+      ownership_policy: greeting_requester_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.GREETING.not_found
+      - USER.GREETING.invalid_status_transition
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_greeting_request_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: CancelGreetingCommand
+    request_body_kind: none
 consumers:
-- name: app
-  capabilities:
-  - send_greeting
-  - view_inbox
-  - view_outbox
-  - reply_greeting
-  - ignore_greeting
-  - cancel_greeting
+  - name: app
+    capabilities:
+      - send_greeting
+      - view_inbox
+      - view_outbox
+      - reply_greeting
+      - ignore_greeting
+      - cancel_greeting
 contract_test:
   mock_strategy:
     app_side:
       mock_target: user-service API (greeting_request)
       data_source: fields.yaml
       scenarios:
-      - name: send_greeting_success
-        route: POST /user/greeting-request
-        assertions:
-        - status_201
-        - greeting_in_pending
-        - not_in_chat_list
-      - name: send_greeting_duplicate_blocked
-        route: POST /user/greeting-request
-        seed:
-        - existing_pending_greeting
-        assertions:
-        - status_409
-        - error_code_USER.GREETING.duplicate_pending
-      - name: mutual_contact_greeting_rejected
-        route: POST /user/greeting-request
-        seed:
-        - mutual_persona_relationship
-        assertions:
-        - status_409
-        - error_code_USER.GREETING.already_contact
-      - name: reply_upgrades_conversation
-        route: POST /user/greeting-request/{requestId}/reply
-        assertions:
-        - status_200
-        - greeting_status_replied
-        - conversation_created
-      - name: ignore_greeting
-        route: POST /user/greeting-request/{requestId}/ignore
-        assertions:
-        - status_200
-        - greeting_status_ignored
+        - name: send_greeting_success
+          route: POST /user/greeting-request
+          assertions:
+            - status_201
+            - greeting_in_pending
+            - not_in_chat_list
+        - name: send_greeting_duplicate_blocked
+          route: POST /user/greeting-request
+          seed:
+            - existing_pending_greeting
+          assertions:
+            - status_409
+            - error_code_USER.GREETING.duplicate_pending
+        - name: mutual_contact_greeting_rejected
+          route: POST /user/greeting-request
+          seed:
+            - mutual_persona_relationship
+          assertions:
+            - status_409
+            - error_code_USER.GREETING.already_contact
+        - name: reply_upgrades_conversation
+          route: POST /user/greeting-request/{requestId}/reply
+          assertions:
+            - status_200
+            - greeting_status_replied
+            - conversation_created
+        - name: ignore_greeting
+          route: POST /user/greeting-request/{requestId}/ignore
+          assertions:
+            - status_200
+            - greeting_status_ignored
     service_side:
       description: 使用真实 PostgreSQL 验证状态机与会话升级
       real_engines:
         postgresql: embedded-postgres
       spy_targets:
-      - event_publisher
+        - event_publisher
       mock_targets:
-      - chat_service_client
-      - notification_service_client
+        - chat_service_client
+        - notification_service_client
       scenarios:
-      - name: send_greeting_idempotent
-        command: SendGreetingRequest x2 (same pair)
-        assertions:
-        - second call → ErrGreetingDuplicatePending
-        - only one pending row in greeting_requests
-      - name: reply_triggers_conversation_event
-        command: ReplyGreetingRequest
-        seed:
-        - pending_greeting
-        assertions:
-        - greeting.status == replied
-        - eventSpy.AssertPublished('GreetingRequestReplied', {promotedConversationId})
-      - name: blocked_user_gets_rejected
-        command: SendGreetingRequest to blocked user
-        seed:
-        - persona_relationship_block(target → requester)
-        assertions:
-        - status_403
-        - error_code_USER.GREETING.target_blocked_sender
-        - no greeting row created
+        - name: send_greeting_idempotent
+          command: SendGreetingRequest x2 (same pair)
+          assertions:
+            - second call → ErrGreetingDuplicatePending
+            - only one pending row in greeting_requests
+        - name: reply_triggers_conversation_event
+          command: ReplyGreetingRequest
+          seed:
+            - pending_greeting
+          assertions:
+            - greeting.status == replied
+            - eventSpy.AssertPublished('GreetingRequestReplied', {promotedConversationId})
+        - name: blocked_user_gets_rejected
+          command: SendGreetingRequest to blocked user
+          seed:
+            - persona_relationship_block(target → requester)
+          assertions:
+            - status_403
+            - error_code_USER.GREETING.target_blocked_sender
+            - no greeting row created
   coverage_requirements:
-  - status_machine_transitions_covered
-  - idempotency_tested
-  - block_privacy_leak_prevented
-  - rate_limit_tested
+    - status_machine_transitions_covered
+    - idempotency_tested
+    - block_privacy_leak_prevented
+    - rate_limit_tested

@@ -12,6 +12,12 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_rollout/domain/model"
 )
 
+const (
+	releaseDigestOne = "e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d"
+	releaseDigestTwo = "95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc"
+	missingDigest    = "0000000000000000000000000000000000000000000000000000000000000000"
+)
+
 type memoryRolloutStore struct {
 	current  model.Rollout
 	receipts map[string]receipt
@@ -75,10 +81,10 @@ type releaseReader map[string]struct{}
 func (reader releaseReader) Get(
 	_ context.Context,
 	_ string,
-	releaseVersion string,
+	releaseDigest string,
 ) (releasemodel.Release, bool, error) {
-	_, ok := reader[releaseVersion]
-	return releasemodel.Release{ReleaseVersion: releaseVersion}, ok, nil
+	_, ok := reader[releaseDigest]
+	return releasemodel.Release{ReleaseDigest: releaseDigest}, ok, nil
 }
 
 type releaseCatalog map[string]releasemodel.Release
@@ -86,9 +92,9 @@ type releaseCatalog map[string]releasemodel.Release
 func (catalog releaseCatalog) Get(
 	_ context.Context,
 	_ string,
-	releaseVersion string,
+	releaseDigest string,
 ) (releasemodel.Release, bool, error) {
-	release, ok := catalog[releaseVersion]
+	release, ok := catalog[releaseDigest]
 	return release, ok, nil
 }
 
@@ -98,7 +104,7 @@ func TestPolicyRolloutActivationAndRollbackPreserveExactMappings(t *testing.T) {
 	store := &memoryRolloutStore{}
 	service := application.NewService(
 		store,
-		releaseReader{"v1": {}, "v2": {}},
+		releaseReader{releaseDigestOne: {}, releaseDigestTwo: {}},
 		func() time.Time { return now },
 	)
 	buckets := []model.BucketDefinition{
@@ -110,8 +116,8 @@ func TestPolicyRolloutActivationAndRollbackPreserveExactMappings(t *testing.T) {
 		ExpectedRevision:  0,
 		BucketDefinitions: buckets,
 		Assignments: []model.CohortAssignment{
-			{Cohort: "control", ReleaseVersion: "v1"},
-			{Cohort: "treatment", ReleaseVersion: "v1"},
+			{Cohort: "control", ReleaseDigest: releaseDigestOne},
+			{Cohort: "treatment", ReleaseDigest: releaseDigestOne},
 		},
 		ActivatedBy: "service:policy-publisher",
 	})
@@ -123,8 +129,8 @@ func TestPolicyRolloutActivationAndRollbackPreserveExactMappings(t *testing.T) {
 		ExpectedRevision:  1,
 		BucketDefinitions: buckets,
 		Assignments: []model.CohortAssignment{
-			{Cohort: "control", ReleaseVersion: "v1"},
-			{Cohort: "treatment", ReleaseVersion: "v2"},
+			{Cohort: "control", ReleaseDigest: releaseDigestOne},
+			{Cohort: "treatment", ReleaseDigest: releaseDigestTwo},
 		},
 		ActivatedBy: "service:policy-publisher",
 	})
@@ -142,8 +148,8 @@ func TestPolicyRolloutActivationAndRollbackPreserveExactMappings(t *testing.T) {
 	if first.Rollout.Revision != 1 ||
 		second.Rollout.Revision != 2 ||
 		rolledBack.Rollout.Revision != 3 ||
-		rolledBack.Rollout.Assignments[1].ReleaseVersion != "v1" ||
-		rolledBack.Rollout.PreviousAssignments[1].ReleaseVersion != "v2" {
+		rolledBack.Rollout.Assignments[1].ReleaseDigest != releaseDigestOne ||
+		rolledBack.Rollout.PreviousAssignments[1].ReleaseDigest != releaseDigestTwo {
 		t.Fatalf("first=%+v second=%+v rollback=%+v", first, second, rolledBack)
 	}
 }
@@ -151,7 +157,7 @@ func TestPolicyRolloutActivationAndRollbackPreserveExactMappings(t *testing.T) {
 func TestPolicyRolloutReplaysBeforeEvaluatingAdvancedRevision(t *testing.T) {
 	t.Parallel()
 	store := &memoryRolloutStore{}
-	service := application.NewService(store, releaseReader{"v1": {}}, time.Now)
+	service := application.NewService(store, releaseReader{releaseDigestOne: {}}, time.Now)
 	input := application.ActivateInput{
 		PolicyID:         "assistant-default",
 		ExpectedRevision: 0,
@@ -159,7 +165,7 @@ func TestPolicyRolloutReplaysBeforeEvaluatingAdvancedRevision(t *testing.T) {
 			{Cohort: "stable", WeightBasisPoints: 10000},
 		},
 		Assignments: []model.CohortAssignment{
-			{Cohort: "stable", ReleaseVersion: "v1"},
+			{Cohort: "stable", ReleaseDigest: releaseDigestOne},
 		},
 		ActivatedBy: "service:policy-publisher",
 	}
@@ -179,7 +185,7 @@ func TestPolicyRolloutReplaysBeforeEvaluatingAdvancedRevision(t *testing.T) {
 func TestPolicyRolloutRejectsMissingReleaseAndStaleRevision(t *testing.T) {
 	t.Parallel()
 	store := &memoryRolloutStore{}
-	service := application.NewService(store, releaseReader{"v1": {}}, time.Now)
+	service := application.NewService(store, releaseReader{releaseDigestOne: {}}, time.Now)
 	_, err := service.Activate(context.Background(), "activate-missing", application.ActivateInput{
 		PolicyID:         "assistant-default",
 		ExpectedRevision: 0,
@@ -187,7 +193,7 @@ func TestPolicyRolloutRejectsMissingReleaseAndStaleRevision(t *testing.T) {
 			{Cohort: "all", WeightBasisPoints: 10000},
 		},
 		Assignments: []model.CohortAssignment{
-			{Cohort: "all", ReleaseVersion: "missing"},
+			{Cohort: "all", ReleaseDigest: missingDigest},
 		},
 		ActivatedBy: "service:policy-publisher",
 	})
@@ -202,7 +208,7 @@ func TestPolicyRolloutRejectsMissingReleaseAndStaleRevision(t *testing.T) {
 			{Cohort: "all", WeightBasisPoints: 10000},
 		},
 		Assignments: []model.CohortAssignment{
-			{Cohort: "all", ReleaseVersion: "v1"},
+			{Cohort: "all", ReleaseDigest: releaseDigestOne},
 		},
 		ActivatedBy: "service:policy-publisher",
 	})
@@ -224,13 +230,13 @@ func TestFrozenSelectionUsesStablePolicyPersonaBucketAndDefaultTemplate(
 			{Cohort: "treatment", WeightBasisPoints: 5000},
 		},
 		Assignments: []model.CohortAssignment{
-			{Cohort: "control", ReleaseVersion: "v1"},
-			{Cohort: "treatment", ReleaseVersion: "v1"},
+			{Cohort: "control", ReleaseDigest: releaseDigestOne},
+			{Cohort: "treatment", ReleaseDigest: releaseDigestOne},
 		},
 	}}
-	catalog := releaseCatalog{"v1": {
+	catalog := releaseCatalog{releaseDigestOne: {
 		PolicyID:          "assistant-default",
-		ReleaseVersion:    "v1",
+		ReleaseDigest:     releaseDigestOne,
 		DefaultTemplateID: "default",
 		Templates: []releasemodel.Template{{
 			TemplateID:      "default",
@@ -238,7 +244,7 @@ func TestFrozenSelectionUsesStablePolicyPersonaBucketAndDefaultTemplate(
 			DomainID:        "assistant",
 			PromptPolicy:    "default prompt",
 			AllowedTools:    []string{"app_search"},
-			SearchIntensity: "balanced",
+			SearchIntensity: "medium",
 		}},
 	}}
 	service := application.NewService(store, catalog, time.Now)
@@ -263,7 +269,7 @@ func TestFrozenSelectionUsesStablePolicyPersonaBucketAndDefaultTemplate(
 		t.Fatal(err)
 	}
 	if first.Cohort != second.Cohort ||
-		first.ReleaseVersion != "v1" ||
+		first.ReleaseDigest != releaseDigestOne ||
 		first.RuleID != "default" ||
 		first.Template.TemplateID != "default" ||
 		first.RolloutRevision != 7 {

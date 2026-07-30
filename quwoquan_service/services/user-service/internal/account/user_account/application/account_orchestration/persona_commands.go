@@ -30,8 +30,6 @@ type PersonaProfileSyncOptions struct {
 // nil 表示未提供该字段）。
 type UpdatePersonaCommand struct {
 	DisplayName    *string
-	Phone          *string
-	Email          *string
 	AvatarURL      *string
 	BackgroundURL  *string
 	IsolationLevel *string
@@ -64,8 +62,8 @@ type ProfileUpdateCommand struct {
 // derivePersonaSyncMeta 为 profile sync fan-out 的每个目标 Persona 派生
 // 独立幂等键：personas_command_receipts.idempotency_key 全局唯一，
 // 同一命令扇出到多个聚合时每个提交必须有自己的重放身份。
-func derivePersonaSyncMeta(meta PersonaCommandMeta, subAccountID string) PersonaCommandMeta {
-	digest := sha256.Sum256([]byte(meta.IdempotencyKey + "\x00sync\x00" + subAccountID))
+func derivePersonaSyncMeta(meta PersonaCommandMeta, personaID string) PersonaCommandMeta {
+	digest := sha256.Sum256([]byte(meta.IdempotencyKey + "\x00sync\x00" + personaID))
 	return PersonaCommandMeta{
 		IdempotencyKey: fmt.Sprintf("persona-sync-%x", digest[:16]),
 		CommandDigest:  meta.CommandDigest,

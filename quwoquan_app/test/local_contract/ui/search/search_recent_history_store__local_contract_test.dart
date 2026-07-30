@@ -54,7 +54,7 @@ void main() {
     await expectLater(store.load(), throwsA(isA<FormatException>()));
   });
 
-  test('不同账号与 Persona 物理隔离，旧全局缓存不迁移', () async {
+  test('不同账号与 Persona 物理隔离', () async {
     final updatedAt = DateTime.utc(2026, 7, 24, 5, 30);
     final entry = RecentSearchEntryView(
       entryId: 'remote-entry-a',
@@ -62,11 +62,6 @@ void main() {
       scope: SearchScope.all,
       facet: null,
       updatedAt: updatedAt,
-    );
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'global_search_recent_entries_v1',
-      '[{"query":"不应迁移"}]',
     );
     await store.save(
       SearchRecentHistoryCacheSnapshot(entries: <RecentSearchEntryView>[entry]),
@@ -80,6 +75,5 @@ void main() {
       (await store.load()).entries.map((item) => item.entryId),
       const <String>['remote-entry-a'],
     );
-    expect(prefs.containsKey('global_search_recent_entries_v1'), isFalse);
   });
 }

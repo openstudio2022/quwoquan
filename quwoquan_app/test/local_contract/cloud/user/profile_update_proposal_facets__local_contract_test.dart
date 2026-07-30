@@ -47,7 +47,7 @@ void main() {
       'avatarMediaAssetId': 'asset-1',
     });
     expect(executor.body, isNot(contains('actor')));
-    expect(executor.body, isNot(contains('subAccountId')));
+    expect(executor.body, isNot(contains('personaId')));
     expect(executor.body, isNot(contains('media')));
   });
 
@@ -132,7 +132,7 @@ void main() {
       () => decodeProfileUpdateProposalView(
         _proposalView()
           ..remove('personaId')
-          ..['subAccountId'] = 'legacy-persona',
+          ..['legacyPersonaId'] = 'legacy-persona',
       ),
       throwsFormatException,
     );
@@ -166,9 +166,10 @@ void main() {
       ),
       throwsFormatException,
     );
-    final confirmPayload = encodeConfirmProfileUpdateProposalCommand(
-      ConfirmProfileUpdateProposalCommand(proposalId: 'proposal-1'),
-    );
+    final confirmPayload =
+        encodeUserProfileUpdateProposalConfirmProposalGeneratedRequest(
+          ConfirmProfileUpdateProposalCommand(proposalId: 'proposal-1'),
+        );
     expect(confirmPayload.body, isNull);
     expect(
       () => decodeProfileUpdateProposalView(

@@ -13,10 +13,12 @@ final class AppVideoPlayerControllerHandle {
   const AppVideoPlayerControllerHandle({
     required this.controller,
     required this.nativePlaybackSignals,
+    required this.seekSettleEvidenceCapability,
   });
 
   final VideoPlayerController controller;
   final Stream<VideoNativePlaybackSignal> nativePlaybackSignals;
+  final VideoSeekSettleEvidenceCapability seekSettleEvidenceCapability;
 }
 
 /// Video player controller boundary for local files and network URIs.
@@ -31,6 +33,14 @@ final class AppVideoPlayerControllerHandle {
 class AppVideoPlayerControllerFactory {
   const AppVideoPlayerControllerFactory._();
 
+  // VideoPlayerWidget / VideoPlaybackSession owns the single app-lifecycle
+  // pause/resume truth. Opting out of video_player's private observer also lets
+  // a controller whose native create failed be abandoned without retaining a
+  // permanent WidgetsBinding observer through the plugin's incomplete future.
+  static final VideoPlayerOptions _ownedLifecycleOptions = VideoPlayerOptions(
+    allowBackgroundPlayback: true,
+  );
+
   static VideoViewType get preferredViewType =>
       preferredVideoPlaybackViewType(currentAppPlatform);
 
@@ -41,21 +51,35 @@ class AppVideoPlayerControllerFactory {
         path,
         viewType: preferredViewType,
         httpHeaders: videoNativePlaybackSignalRequestHeaders(sessionToken),
+        videoPlayerOptions: _ownedLifecycleOptions,
       ),
       nativePlaybackSignals: videoNativePlaybackSignalsForToken(sessionToken),
+      seekSettleEvidenceCapability: _seekSettleEvidenceCapability,
     );
   }
 
-  static AppVideoPlayerControllerHandle networkUri(Uri uri) {
+  static AppVideoPlayerControllerHandle networkUri(
+    Uri uri, {
+    VideoFormat? formatHint,
+  }) {
     final sessionToken = createVideoNativePlaybackSignalToken();
     return AppVideoPlayerControllerHandle(
       controller: VideoPlayerController.networkUrl(
         uri,
+        formatHint: formatHint,
         httpHeaders: videoNativePlaybackSignalRequestHeaders(sessionToken),
         viewType: preferredViewType,
+        videoPlayerOptions: _ownedLifecycleOptions,
       ),
       nativePlaybackSignals: videoNativePlaybackSignalsForToken(sessionToken),
+      seekSettleEvidenceCapability: _seekSettleEvidenceCapability,
     );
+  }
+
+  static VideoSeekSettleEvidenceCapability get _seekSettleEvidenceCapability {
+    return currentAppPlatform == AppPlatform.android
+        ? VideoSeekSettleEvidenceCapability.nativeRenderedFrame
+        : VideoSeekSettleEvidenceCapability.positionReadbackOnly;
   }
 }
 

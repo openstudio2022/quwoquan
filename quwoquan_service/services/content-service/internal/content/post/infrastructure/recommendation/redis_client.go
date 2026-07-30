@@ -3,6 +3,7 @@ package recommendation
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"runtime"
 	"strconv"
 	"time"
@@ -15,6 +16,8 @@ import (
 type RedisClientAdapter struct {
 	client *redis.Client
 }
+
+var _ rtrec.RedisPipelineClient = (*RedisClientAdapter)(nil)
 
 // RedisPoolConfig tunes the connection pool for high-concurrency recommendation workloads.
 type RedisPoolConfig struct {
@@ -58,6 +61,13 @@ func NewRedisClientAdapterWithPool(addr string, password string, db int, pool Re
 
 func (r *RedisClientAdapter) Get(ctx context.Context, key string) (string, error) {
 	return r.client.Get(ctx, key).Result()
+}
+
+// HasKey lets recommendation distinguish an absent immutable continuation
+// window from a Redis transport failure without depending on go-redis errors.
+func (r *RedisClientAdapter) HasKey(ctx context.Context, key string) (bool, error) {
+	count, err := r.client.Exists(ctx, key).Result()
+	return count > 0, err
 }
 
 func (r *RedisClientAdapter) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
@@ -122,9 +132,14 @@ func (r *RedisClientAdapter) PipelineRead(ctx context.Context, ops []rtrec.Pipel
 		idx int
 		cmd *redis.StringSliceCmd
 	}
+	type pendingBool struct {
+		idx int
+		cmd *redis.BoolCmd
+	}
 
 	hashes := make([]pendingHash, 0, len(ops))
 	sets := make([]pendingSet, 0, len(ops))
+	bools := make([]pendingBool, 0, len(ops))
 
 	for i, op := range ops {
 		switch op.Type {
@@ -134,6 +149,14 @@ func (r *RedisClientAdapter) PipelineRead(ctx context.Context, ops []rtrec.Pipel
 		case rtrec.PipelineSMembers:
 			cmd := pipe.SMembers(ctx, op.Key)
 			sets = append(sets, pendingSet{idx: i, cmd: cmd})
+		case rtrec.PipelineSIsMember:
+			cmd := pipe.SIsMember(ctx, op.Key, op.Member)
+			bools = append(bools, pendingBool{idx: i, cmd: cmd})
+		default:
+			return fmt.Errorf(
+				"unsupported recommendation pipeline operation: %d",
+				op.Type,
+			)
 		}
 	}
 
@@ -154,6 +177,13 @@ func (r *RedisClientAdapter) PipelineRead(ctx context.Context, ops []rtrec.Pipel
 			return err
 		}
 		ops[s.idx].Set = val
+	}
+	for _, b := range bools {
+		val, err := b.cmd.Result()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		ops[b.idx].Bool = val
 	}
 
 	return nil
@@ -185,6 +215,8 @@ func ParseRedisDB(raw string) int {
 type RedisClusterAdapter struct {
 	client *redis.ClusterClient
 }
+
+var _ rtrec.RedisPipelineClient = (*RedisClusterAdapter)(nil)
 
 // NewRedisClusterAdapter creates a cluster client.
 // addrs: list of seed node addresses (e.g. ["host1:6379","host2:6379"]).
@@ -223,6 +255,13 @@ func DefaultClusterPoolConfig() RedisPoolConfig {
 
 func (r *RedisClusterAdapter) Get(ctx context.Context, key string) (string, error) {
 	return r.client.Get(ctx, key).Result()
+}
+
+// HasKey lets recommendation distinguish an absent immutable continuation
+// window from a Redis transport failure without depending on go-redis errors.
+func (r *RedisClusterAdapter) HasKey(ctx context.Context, key string) (bool, error) {
+	count, err := r.client.Exists(ctx, key).Result()
+	return count > 0, err
 }
 
 func (r *RedisClusterAdapter) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
@@ -290,9 +329,14 @@ func (r *RedisClusterAdapter) PipelineRead(ctx context.Context, ops []rtrec.Pipe
 		idx int
 		cmd *redis.StringSliceCmd
 	}
+	type pendingBool struct {
+		idx int
+		cmd *redis.BoolCmd
+	}
 
 	hashes := make([]pendingHash, 0, len(ops))
 	sets := make([]pendingSet, 0, len(ops))
+	bools := make([]pendingBool, 0, len(ops))
 
 	for i, op := range ops {
 		switch op.Type {
@@ -302,6 +346,14 @@ func (r *RedisClusterAdapter) PipelineRead(ctx context.Context, ops []rtrec.Pipe
 		case rtrec.PipelineSMembers:
 			cmd := pipe.SMembers(ctx, op.Key)
 			sets = append(sets, pendingSet{idx: i, cmd: cmd})
+		case rtrec.PipelineSIsMember:
+			cmd := pipe.SIsMember(ctx, op.Key, op.Member)
+			bools = append(bools, pendingBool{idx: i, cmd: cmd})
+		default:
+			return fmt.Errorf(
+				"unsupported recommendation pipeline operation: %d",
+				op.Type,
+			)
 		}
 	}
 
@@ -322,6 +374,13 @@ func (r *RedisClusterAdapter) PipelineRead(ctx context.Context, ops []rtrec.Pipe
 			return err
 		}
 		ops[s.idx].Set = val
+	}
+	for _, b := range bools {
+		val, err := b.cmd.Result()
+		if err != nil && err != redis.Nil {
+			return err
+		}
+		ops[b.idx].Bool = val
 	}
 
 	return nil

@@ -29,6 +29,11 @@ client_projection:
     nullable: false
     source: userId
     default: ''''''
+  - name: userHandle
+    dart_type: String
+    nullable: false
+    source: userHandle
+    default: ''''''
   - name: conversationId
     dart_type: String
     nullable: false

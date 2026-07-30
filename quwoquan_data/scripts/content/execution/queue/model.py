@@ -214,7 +214,7 @@ class QueueJob:
     creator_profile_id: str = ""
     author_id: str = ""
     creator_archetype: str = ""
-    creator_profile_version: str = ""
+    creator_profile_digest: str = ""
     content_type: ContentType | None = None
     carrier: ContentType | None = None
     agent_run_id: str = ""
@@ -271,7 +271,7 @@ class QueueJob:
         creator_profile_id: str,
         author_id: str,
         creator_archetype: str,
-        creator_profile_version: str,
+        creator_profile_digest: str,
         content_type: ContentType | None,
         carrier: ContentType | None,
         created_at: str,
@@ -307,7 +307,7 @@ class QueueJob:
             creator_profile_id=creator_profile_id,
             author_id=author_id,
             creator_archetype=creator_archetype,
-            creator_profile_version=creator_profile_version,
+            creator_profile_digest=creator_profile_digest,
             content_type=content_type,
             carrier=carrier,
             created_at=created_at,
@@ -386,7 +386,7 @@ class QueueJob:
             creator_profile_id=_text(document.get("creatorProfileId")),
             author_id=_text(document.get("authorId")),
             creator_archetype=_text(document.get("creatorArchetype")),
-            creator_profile_version=_text(document.get("creatorProfileVersion")),
+            creator_profile_digest=_text(document.get("creatorProfileDigest")),
             content_type=_optional_content_type(document.get("contentType"), field_name="contentType"),
             carrier=_optional_content_type(document.get("carrier"), field_name="carrier"),
             agent_run_id=_text(document.get("agentRunId")),
@@ -483,7 +483,7 @@ class QueueJob:
             "creatorProfileId": self.creator_profile_id or None,
             "authorId": self.author_id or None,
             "creatorArchetype": self.creator_archetype or None,
-            "creatorProfileVersion": self.creator_profile_version or None,
+            "creatorProfileDigest": self.creator_profile_digest or None,
             "contentType": self.content_type.value if self.content_type else None,
             "carrier": self.carrier.value if self.carrier else None,
             "agentRunId": self.agent_run_id or None,

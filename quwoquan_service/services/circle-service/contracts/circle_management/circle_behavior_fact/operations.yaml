@@ -5,52 +5,51 @@ commercial_defaults:
   gap_id: CIRCLE_BEHAVIOR_FACT_COMMERCIAL_CLOSURE
   target_story: app-cloud-business-object-commercial-closure
 api_routes:
-- method: POST
-  path: /circles/behaviors
-  operation: ReportCircleBehavior
-  commercial:
-    status: ready
-  actor: persona_or_device
-  security:
-    auth_mode: optional
-  application:
-    kind: command
-    facet: CircleBehaviorFactWriter
-    method: appendCircleBehavior
-    append_sink: CircleBehaviorFact
-    mutation_target: CircleBehaviorFact
-    invariant_target: CircleBehaviorFact
-  request_entity: ReportCircleBehaviorRequest
-  authorization:
-    principal: public
-    ownership_policy: authenticated_persona_or_derived_device_actor
-  reliability:
-    timeout_ms: 1000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.behavior_fact_idempotency_conflict
-  - CIRCLE.SYSTEM.behavior_fact_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_behavior_fact_append
-    trace: true
-    attributes:
-    - outcome
-    - event_type
-    - actor_kind
-  slo:
-    latency_p95_ms: 300
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/behavior_fact_contracts.dart
-    request_type: AppendCircleBehaviorFactCommand
-    response_type: void
-    request_encoder: encodeAppendCircleBehaviorFactCommand
-    response_decoder: decodeEmptyCircleBehaviorFactResponse
+  - method: POST
+    path: /circles/behaviors
+    operation: ReportCircleBehavior
+    commercial:
+      status: ready
+    actor: persona_or_device
+    security:
+      auth_mode: optional
+    application:
+      kind: command
+      facet: CircleBehaviorFactWriter
+      method: appendCircleBehavior
+      append_sink: CircleBehaviorFact
+      mutation_target: CircleBehaviorFact
+      invariant_target: CircleBehaviorFact
+    request_entity: AppendCircleBehaviorFactCommand
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    reliability:
+      timeout_ms: 1000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.behavior_fact_idempotency_conflict
+      - CIRCLE.SYSTEM.behavior_fact_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_behavior_fact_append
+      trace: true
+      attributes:
+        - outcome
+        - event_type
+        - actor_kind
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/behavior_fact_contracts.dart
+      response_type: void
+      response_decoder: decodeEmptyCircleBehaviorFactResponse
+    request_body_kind: object

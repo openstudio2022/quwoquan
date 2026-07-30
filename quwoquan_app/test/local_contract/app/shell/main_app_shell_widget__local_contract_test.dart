@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/app/shell/web_app_install_banner.dart';
@@ -35,22 +38,44 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-dynamic _openStartupAuthGateOverride() {
-  return startupAuthRestoreGateProvider.overrideWith(
-    () => _OpenStartupAuthGate(),
-  );
+import '../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
+
+List<Override> _shellTestOverrides({
+  required bool authenticated,
+  AuthSessionStore? store,
+  bool flippable = false,
+}) {
+  return <Override>[
+    ...mockContentFacetOverrides(MockContentRepository()),
+    if (store != null) authSessionStoreProvider.overrideWithValue(store),
+    authSessionControllerProvider.overrideWith(
+      flippable
+          ? _FlippableShellAuthSession.new
+          : () => _StaticShellAuthSession(authenticated),
+    ),
+    activePersonaContextProvider.overrideWith(
+      (ref) async => const ActivePersonaContextViewData(
+        personaId: 'user_001',
+        ownerUserId: 'user_001',
+        subjectType: 'person',
+        displayName: '测试用户',
+        avatarUrl: 'media/avatar/s/asset/test-user/v1/source.webp',
+        isPrimary: true,
+      ),
+    ),
+    incomingCallCoordinatorProvider.overrideWith(
+      _NoopIncomingCallCoordinator.new,
+    ),
+    behaviorReporterProvider.overrideWithValue(_NoopBehaviorReporter()),
+  ];
 }
 
 Widget _buildShell(String location, {bool authenticated = true}) {
   return ScreenUtilInit(
     designSize: const Size(393, 852),
     child: ProviderScope(
-      overrides: [
-        _openStartupAuthGateOverride(),
-        authSessionStoreProvider.overrideWithValue(
-          _TestAuthSessionStore(authenticated: authenticated),
-        ),
-      ],
+      overrides: [..._shellTestOverrides(authenticated: authenticated)],
       child: MaterialApp(
         localizationsDelegates: const [
           AppLocalizations.delegate,
@@ -68,9 +93,64 @@ Widget _buildShell(String location, {bool authenticated = true}) {
   );
 }
 
-class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+final class _StaticShellAuthSession extends AuthSessionController {
+  _StaticShellAuthSession(this.authenticated);
+
+  final bool authenticated;
+
   @override
-  bool build() => true;
+  AuthSessionState build() {
+    if (!authenticated) {
+      return const AuthSessionState(
+        status: AuthSessionStatus.guest,
+        installId: 'install-id',
+      );
+    }
+    return const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      ownerId: 'user_001',
+      activePersonaId: 'user_001',
+      accountState: 'active',
+      identityOrigin: 'phone',
+      installId: 'install-id',
+    );
+  }
+}
+
+final class _FlippableShellAuthSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.guest,
+    installId: 'install-id',
+  );
+}
+
+final class _NoopIncomingCallCoordinator extends IncomingCallCoordinator {
+  _NoopIncomingCallCoordinator(Ref ref)
+    : super(
+        ref: ref,
+        readRouter: () => throw UnimplementedError(
+          'incoming-call routing is outside the shell widget contract',
+        ),
+        firebaseRuntime: ref.read(firebaseIncomingCallRuntimeProvider),
+        nativeBridge: ref.read(incomingCallNativeBridgeProvider),
+      );
+
+  @override
+  void start(String userId) {}
+
+  @override
+  void stop({bool removePushEndpoints = true}) {}
+
+  @override
+  void dispose() {}
+}
+
+final class _NoopBehaviorReporter implements BehaviorReporter {
+  @override
+  Future<void> reportEvents({required List<BehaviorEvent> events}) async {}
 }
 
 Widget _buildDarkShell(String location, {bool authenticated = true}) {
@@ -79,10 +159,7 @@ Widget _buildDarkShell(String location, {bool authenticated = true}) {
     child: ProviderScope(
       overrides: [
         isDarkProvider.overrideWith((ref) => true),
-        _openStartupAuthGateOverride(),
-        authSessionStoreProvider.overrideWithValue(
-          _TestAuthSessionStore(authenticated: authenticated),
-        ),
+        ..._shellTestOverrides(authenticated: authenticated),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -105,12 +182,7 @@ Widget _buildShellRouter({required bool authenticated}) {
   return ScreenUtilInit(
     designSize: const Size(393, 852),
     child: ProviderScope(
-      overrides: [
-        _openStartupAuthGateOverride(),
-        authSessionStoreProvider.overrideWithValue(
-          _TestAuthSessionStore(authenticated: authenticated),
-        ),
-      ],
+      overrides: [..._shellTestOverrides(authenticated: authenticated)],
       child: MaterialApp.router(
         localizationsDelegates: const [
           AppLocalizations.delegate,
@@ -171,8 +243,11 @@ Widget _buildShellRouterWithStore(AuthSessionStore store) {
     designSize: const Size(393, 852),
     child: ProviderScope(
       overrides: [
-        _openStartupAuthGateOverride(),
-        authSessionStoreProvider.overrideWithValue(store),
+        ..._shellTestOverrides(
+          authenticated: false,
+          store: store,
+          flippable: true,
+        ),
       ],
       child: MaterialApp.router(
         localizationsDelegates: const [
@@ -220,12 +295,7 @@ Widget _buildGuardedRouter({
   return ScreenUtilInit(
     designSize: const Size(393, 852),
     child: ProviderScope(
-      overrides: [
-        _openStartupAuthGateOverride(),
-        authSessionStoreProvider.overrideWithValue(
-          _TestAuthSessionStore(authenticated: authenticated),
-        ),
-      ],
+      overrides: [..._shellTestOverrides(authenticated: authenticated)],
       child: _GuardedRouterHost(initialLocation: initialLocation),
     ),
   );
@@ -334,61 +404,6 @@ class _GuardedRouterHostState extends ConsumerState<_GuardedRouterHost> {
   }
 }
 
-class _TestAuthSessionStore implements AuthSessionStore {
-  const _TestAuthSessionStore({required this.authenticated});
-
-  final bool authenticated;
-
-  @override
-  Future<StoredAuthSession> read() async {
-    return StoredAuthSession(
-      accessToken: authenticated ? 'access-token' : '',
-      refreshToken: authenticated ? 'refresh-token' : '',
-      ownerId: authenticated ? 'user_001' : '',
-      activeSubAccountId: authenticated ? 'user_001' : '',
-      accountState: authenticated ? 'active' : '',
-      identityOrigin: authenticated ? 'phone' : '',
-      installId: 'install-id',
-      lastRefreshAtEpochMs: 0,
-      lastForegroundAuthCheckAtEpochMs: 0,
-      manualLoggedOut: false,
-      launchPromptDismissed: !authenticated,
-    );
-  }
-
-  @override
-  Future<void> saveLoginGrant(
-    AuthSessionGrant result, {
-    AuthRememberedLoginMethod rememberedLoginMethod =
-        AuthRememberedLoginMethod.unknown,
-    String? rememberedLoginMaskedIdentifier,
-    String? rememberedLoginIdentifier,
-  }) async {}
-
-  @override
-  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
-
-  @override
-  Future<void> saveRefreshedAccountHint(
-    AccountHintSnapshot? accountHint,
-  ) async {}
-
-  @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
-
-  @override
-  Future<void> clearSession({required bool manualLogout}) async {}
-
-  @override
-  Future<void> softLogout() async {}
-
-  @override
-  Future<void> markLaunchPromptDismissed() async {}
-
-  @override
-  Future<void> markForegroundAuthCheckNow() async {}
-}
-
 class _MutableAuthSessionStore implements AuthSessionStore {
   bool authenticated = false;
 
@@ -398,7 +413,7 @@ class _MutableAuthSessionStore implements AuthSessionStore {
       accessToken: authenticated ? 'access-token' : '',
       refreshToken: authenticated ? 'refresh-token' : '',
       ownerId: authenticated ? 'user_001' : '',
-      activeSubAccountId: authenticated ? 'user_001' : '',
+      activePersonaId: authenticated ? 'user_001' : '',
       accountState: authenticated ? 'active' : '',
       identityOrigin: authenticated ? 'phone' : '',
       installId: 'install-id',
@@ -431,7 +446,7 @@ class _MutableAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {
@@ -467,6 +482,16 @@ void _suppressExpectedErrors() {
     }
     original?.call(details);
   };
+}
+
+Future<void> _pumpRouteTransition(WidgetTester tester) async {
+  // Route completion and Riverpod invalidation can be queued on adjacent
+  // frames. Advance them in bounded increments instead of pumpAndSettle:
+  // the shell intentionally owns continuous animations, so settling the
+  // whole tree would never be a valid completion signal.
+  for (var frame = 0; frame < 12; frame++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
 }
 
 void main() {
@@ -682,12 +707,12 @@ void main() {
 
       // 选具体创作动作时才触发登录。
       await tester.tap(find.text(CreationText.createActionWriteLong));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsOneWidget);
 
       await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byType(MainAppShell), findsOneWidget);
@@ -702,7 +727,7 @@ void main() {
       AuthGate.resetDebounce();
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShellRouter(authenticated: false));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
       expect(
         _activeHomeChannel(tester),
         HomePrimaryTabStrip.recommendedChannelId,
@@ -715,12 +740,12 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsOneWidget);
 
       await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byType(MainAppShell), findsOneWidget);
@@ -747,7 +772,7 @@ void main() {
       _suppressExpectedErrors();
       final store = _MutableAuthSessionStore();
       await tester.pumpWidget(_buildShellRouterWithStore(store));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
       expect(
         _activeHomeChannel(tester),
         HomePrimaryTabStrip.recommendedChannelId,
@@ -760,11 +785,12 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
       expect(find.byType(LoginPage), findsOneWidget);
 
       final loginContext = tester.element(find.byType(LoginPage));
       final container = ProviderScope.containerOf(loginContext);
+      final router = GoRouter.of(loginContext);
       await container
           .read(authSessionControllerProvider.notifier)
           .applyLoginGrant(
@@ -774,15 +800,19 @@ void main() {
               ownerId: 'user_001',
               accountState: 'active',
               identityOrigin: 'phone',
-              activeSub: ActivePersonaEnvelope(subAccountId: 'user_001'),
+              activePersona: ActivePersonaEnvelope(personaId: 'user_001'),
               logicalShard: 0,
               anonymousRetentionPolicy: '',
-              subAccountCount: 1,
+              personaCount: 1,
               sessionRememberTtlSeconds: 0,
             ),
           );
-      GoRouter.of(loginContext).go(AppRoutePaths.home);
-      await tester.pumpAndSettle();
+      // Let the auth-state invalidation finish before replacing the login
+      // route. Production does this across the awaited login command; keeping
+      // the same frame boundary avoids rebuilding a defunct feed element.
+      await tester.pump();
+      router.go(AppRoutePaths.home);
+      await _pumpRouteTransition(tester);
 
       expect(
         _activeHomeChannel(tester),
@@ -795,7 +825,7 @@ void main() {
       AuthGate.resetDebounce();
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShellRouter(authenticated: false));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       await tester.tap(
         find.descendant(
@@ -803,12 +833,12 @@ void main() {
           matching: find.byType(AppProfilePersonIcon),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsOneWidget);
 
       await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byType(MainAppShell), findsOneWidget);
@@ -822,7 +852,7 @@ void main() {
       AuthGate.resetDebounce();
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShellRouter(authenticated: false));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       await tester.tap(
         find.descendant(
@@ -830,13 +860,13 @@ void main() {
           matching: find.text(ChatText.chatPrimaryContacts),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.text('CHAT_PAGE'), findsNothing);
 
       await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byType(MainAppShell), findsOneWidget);
@@ -857,7 +887,7 @@ void main() {
           initialLocation: AppRoutePaths.chat,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       // 守卫应把 /chat 直达重定向到登录页，而非展示受限的会话页。
       expect(find.byType(LoginPage), findsOneWidget);
@@ -865,7 +895,7 @@ void main() {
 
       // 关闭登录页：必须 go 到安全兜底（首页），禁止 pop 回 /chat 再次命中守卫。
       await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.text('CHAT_PAGE'), findsNothing);
@@ -887,7 +917,7 @@ void main() {
           initialLocation: AppRoutePaths.createEntry,
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.text('CREATE_ENTRY_PAGE'), findsOneWidget);
@@ -902,13 +932,13 @@ void main() {
           initialLocation: AppRoutePaths.create(type: 'write'),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsOneWidget);
       expect(find.text('CREATE_PAGE'), findsNothing);
 
       await tester.tap(find.byIcon(CupertinoIcons.xmark));
-      await tester.pumpAndSettle();
+      await _pumpRouteTransition(tester);
 
       expect(find.byType(LoginPage), findsNothing);
       expect(find.byType(MainAppShell), findsOneWidget);
@@ -1218,10 +1248,7 @@ void main() {
                   dismissedForSession: false,
                 ),
               ),
-              _openStartupAuthGateOverride(),
-              authSessionStoreProvider.overrideWithValue(
-                const _TestAuthSessionStore(authenticated: true),
-              ),
+              ..._shellTestOverrides(authenticated: true),
             ],
             child: MaterialApp.router(
               localizationsDelegates: const [
@@ -1287,10 +1314,7 @@ void main() {
                   dismissedForSession: false,
                 ),
               ),
-              _openStartupAuthGateOverride(),
-              authSessionStoreProvider.overrideWithValue(
-                const _TestAuthSessionStore(authenticated: true),
-              ),
+              ..._shellTestOverrides(authenticated: true),
             ],
             child: MaterialApp.router(
               localizationsDelegates: const [
@@ -1440,10 +1464,7 @@ void main() {
               platformCapabilitiesProvider.overrideWithValue(
                 CapabilityProfile.web,
               ),
-              _openStartupAuthGateOverride(),
-              authSessionStoreProvider.overrideWithValue(
-                const _TestAuthSessionStore(authenticated: false),
-              ),
+              ..._shellTestOverrides(authenticated: false),
             ],
             child: MaterialApp.router(
               localizationsDelegates: const [

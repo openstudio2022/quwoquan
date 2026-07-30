@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -17,18 +18,28 @@ void main() {
           profileQueryProvider.overrideWith(
             (ref, surface) => ContactProfileQueryFake(
               searchItems: <SocialRelationSearchItemView>[
-                const SocialRelationSearchItemView(
-                  subAccountId: 'persona-alice',
-                  username: 'alice',
+                SocialRelationSearchItemView(
+                  personaId: 'persona-alice',
+                  userHandle: 'alice',
                   displayName: 'Alice',
                   chatAvailable: false,
-                  relationshipCapability: SocialRelationshipCapabilityView(
+                  relationshipCapability: RelationshipCapabilityDto(
+                    viewerPersonaId: 'persona-viewer',
+                    targetPersonaId: 'persona-alice',
                     relationState: 'not_following',
                     canFollow: true,
                     canUnfollow: false,
+                    canFollowBack: false,
+                    canGreet: true,
                     canOpenConversation: false,
+                    canCreateDirectConversation: false,
+                    canSendMessage: false,
+                    hasPendingGreeting: false,
+                    hasFormalConversation: false,
                     canStartVoiceCall: false,
                     canStartVideoCall: false,
+                    isBlocked: false,
+                    isBlockedBy: false,
                   ),
                 ),
               ],
@@ -61,17 +72,17 @@ final class _LifecycleRelationshipNotifier
 
   @override
   Future<void> setFollowingWithSync(
-    String subAccountId, {
+    String personaId, {
     required bool currentFollowing,
     required bool shouldFollow,
     required AppUiSurface sourceSurface,
     bool flushImmediately = true,
   }) async {
     state = UserRelationshipState(
-      followingSubAccountIds: shouldFollow
-          ? <String>{subAccountId}
+      followingPersonaIds: shouldFollow
+          ? <String>{personaId}
           : const <String>{},
-      knownSubAccountIds: <String>{subAccountId},
+      knownPersonaIds: <String>{personaId},
     );
   }
 }

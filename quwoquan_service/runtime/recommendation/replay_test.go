@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -85,9 +86,7 @@ func TestComputeReplayReportWithOptions_CommercialAttributionAndPromotion(t *tes
 		EligibleContentCount:      8,
 		DataWindowStart:           windowStart,
 		DataWindowEnd:             windowEnd,
-		PolicyVersion:             "policy-v2",
-		RankingVersion:            "rec-v2",
-		ReasonVersion:             "reason-v2",
+		PolicyDigest:              "sha256:" + strings.Repeat("a", 64),
 		ScorerVariant:             "rule-commercial",
 		TimeDecayFeatureFreshness: 0.97,
 		Requests: []ReplayRequest{
@@ -138,11 +137,9 @@ func TestComputeReplayReportWithOptions_CommercialAttributionAndPromotion(t *tes
 	if !report.PromotionAllowed || report.RollbackRecommended {
 		t.Fatalf("promotion verdict drifted: %+v", report)
 	}
-	if report.PolicyVersion != "policy-v2" ||
-		report.RankingVersion != "rec-v2" ||
-		report.ReasonVersion != "reason-v2" ||
+	if report.PolicyDigest != "sha256:"+strings.Repeat("a", 64) ||
 		report.ScorerVariant != "rule-commercial" {
-		t.Fatalf("version metadata missing: %+v", report)
+		t.Fatalf("policy attribution missing: %+v", report)
 	}
 	if report.MAPAtK <= 0 {
 		t.Fatalf("MAP@K should be computed, got %.4f", report.MAPAtK)

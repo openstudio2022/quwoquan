@@ -76,7 +76,8 @@ fields:
   role: projection
 - name: lastMessageType
   source: lastMessageType
-  type: string
+  type: enum
+  enum_ref: MessageType
   constraints:
   - NOT_NULL
   classification: PUBLIC

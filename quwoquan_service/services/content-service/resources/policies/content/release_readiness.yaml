@@ -47,6 +47,24 @@ phases:
         - content_media
         - content_services
   consumer:
+    alpha:
+      target: alpha-local
+      workload: content-release
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+    beta:
+      target: beta-local
+      workload: content-release
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
     gamma:
       target: gamma-local
       workload: content-release
@@ -56,7 +74,28 @@ phases:
         - content_media
         - content_services
         - app_consumer
+    prod:
+      target: prod-hosted
+      workload: full
+      healthScope: content-consumer
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
   commercial:
+    alpha:
+      target: alpha-local
+      workload: full
+      healthScope: full
+      capabilities:
+        - content_api
+        - content_media
+        - content_services
+        - app_consumer
+        - telemetry_log_sink
+        - trace_query
+        - slo_query
     beta:
       target: beta-local
       workload: full

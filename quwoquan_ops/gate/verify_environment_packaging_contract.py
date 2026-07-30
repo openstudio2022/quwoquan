@@ -98,22 +98,15 @@ def validate_provenance(report: dict[str, object], package_dir: Path) -> list[st
             "defaultConfig": package_dir / "default_config.yaml",
             "environmentConfig": package_dir / "config.yaml",
             "environmentRuntime": package_dir / "environment_runtime.yaml",
+            "targetUrlResolution": package_dir / "target-url-resolution.json",
         }
         path = candidates.get(label)
         if path is None or not path.is_file():
             issues.append(f"unknown or missing provenance file {label}")
         elif _sha256(path) != expected:
             issues.append(f"provenance digest mismatch for {label}")
-    releases = provenance.get("releaseFiles", {})
-    if not isinstance(releases, dict):
-        issues.append("invalid provenance releaseFiles")
-    else:
-        for name, expected in releases.items():
-            path = package_dir / "releases" / str(name)
-            if not isinstance(expected, str) or not path.is_file():
-                issues.append(f"invalid provenance release file {name}")
-            elif _sha256(path) != expected:
-                issues.append(f"provenance digest mismatch for release {name}")
+    if "releaseFiles" in provenance:
+        issues.append("legacy releaseFiles provenance is forbidden")
     return issues
 
 
@@ -137,7 +130,11 @@ def package_output_boundary_issues(
     return [f"package must not reside under disposable output: {_display(package_dir)}"]
 
 
-def validate_runtime_shared_package(package_dir: Path, environment: str) -> list[str]:
+def validate_runtime_shared_package(
+    package_dir: Path,
+    environment: str,
+    target: str,
+) -> list[str]:
     manifest_path = package_dir / "manifest.json"
     if not manifest_path.is_file():
         return ["missing runtime-shared manifest"]
@@ -154,13 +151,16 @@ def validate_runtime_shared_package(package_dir: Path, environment: str) -> list
     files = provenance.get("files") if isinstance(provenance, dict) else None
     if not isinstance(files, dict) or set(files) != RUNTIME_SHARED_FILES:
         return [*issues, "runtime-shared package provenance files mismatch"]
-    allowed_files = {*RUNTIME_SHARED_FILES, "manifest.json"}
+    required_files = {*RUNTIME_SHARED_FILES, "manifest.json"}
+    allowed_files = {*required_files, "oci-images.json"}
     actual_files = {
         path.relative_to(package_dir).as_posix()
         for path in package_dir.rglob("*")
         if path.is_file()
     }
-    if actual_files != allowed_files:
+    if not required_files.issubset(actual_files) or not actual_files.issubset(
+        allowed_files
+    ):
         issues.append("runtime-shared package structure contains unexpected or missing files")
     for name in sorted(RUNTIME_SHARED_FILES):
         entry = files.get(name)
@@ -178,6 +178,60 @@ def validate_runtime_shared_package(package_dir: Path, environment: str) -> list
             issues.append(f"runtime-shared payload missing for {name}")
         elif _sha256(path) != expected:
             issues.append(f"runtime-shared provenance digest mismatch for {name}")
+    oci_path = package_dir / "oci-images.json"
+    if oci_path.is_file():
+        try:
+            oci = load_json(oci_path)
+        except (OSError, json.JSONDecodeError) as error:
+            issues.append(f"invalid package OCI image manifest: {error}")
+        else:
+            required = {
+                "schema",
+                "environment",
+                "target",
+                "configurationDigest",
+                "buildInputDigest",
+                "imageDigest",
+                "images",
+            }
+            if set(oci) != required:
+                issues.append("package OCI image manifest fields mismatch")
+            if oci.get("schema") != "stackctl-package-oci-images":
+                issues.append("package OCI image manifest schema mismatch")
+            if oci.get("environment") != environment or oci.get("target") != target:
+                issues.append("package OCI image manifest target identity mismatch")
+            for field in ("configurationDigest", "buildInputDigest", "imageDigest"):
+                if SHA256_RE.fullmatch(str(oci.get(field) or "")) is None:
+                    issues.append(f"package OCI image manifest {field} is invalid")
+            images = oci.get("images")
+            if not isinstance(images, dict) or not images:
+                issues.append("package OCI image manifest images are missing")
+            else:
+                for service, descriptor in images.items():
+                    if (
+                        not isinstance(service, str)
+                        or not service
+                        or not isinstance(descriptor, dict)
+                        or set(descriptor) != {"ref", "imageDigest"}
+                        or not str(descriptor.get("ref") or "").strip()
+                        or SHA256_RE.fullmatch(
+                            str(descriptor.get("imageDigest") or "")
+                        )
+                        is None
+                    ):
+                        issues.append(
+                            f"package OCI image identity is invalid for {service}"
+                        )
+                expected_image_digest = "sha256:" + hashlib.sha256(
+                    json.dumps(
+                        images,
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                        sort_keys=True,
+                    ).encode("utf-8")
+                ).hexdigest()
+                if oci.get("imageDigest") != expected_image_digest:
+                    issues.append("package OCI image set digest mismatch")
     return issues
 
 
@@ -260,11 +314,27 @@ def validate_ops_portal_package(
         provenance = load_json(provenance_path)
     except (OSError, json.JSONDecodeError) as error:
         return [f"invalid ops-portal package metadata: {error}"]
-    version = str(manifest.get("version") or "")
-    if not version or package_dir.name != version:
-        issues.append("ops-portal package version mismatch")
+    package_digest = str(manifest.get("packageDigest") or "")
+    if (
+        not SHA256_RE.fullmatch(package_digest)
+        or package_dir.name != package_digest.removeprefix("sha256:")
+    ):
+        issues.append("ops-portal package digest mismatch")
+    elif _sha256_tree(dist_dir) != package_digest:
+        issues.append("ops-portal packageDigest does not match dist content")
+    if manifest.get("schema") != "qwq.ops_portal_application":
+        issues.append("invalid ops-portal application schema")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(manifest.get("sourceGitSha") or "")):
+        issues.append("ops-portal manifest sourceGitSha invalid")
+    if not re.fullmatch(
+        r"(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})",
+        str(manifest.get("sourceTreeDigest") or ""),
+    ):
+        issues.append("ops-portal manifest sourceTreeDigest invalid")
     for key in (
-        "builtAt",
+        "schema",
+        "sourceGitSha",
+        "sourceTreeDigest",
         "opsBaseUrl",
         "contentBaseUrl",
         "entityBaseUrl",
@@ -273,7 +343,7 @@ def validate_ops_portal_package(
     ):
         if not str(manifest.get(key) or "").strip():
             issues.append(f"ops-portal manifest missing {key}")
-    if provenance.get("schema") != "qwq.ops_portal_package.v1":
+    if provenance.get("schema") != "qwq.ops_portal_package":
         issues.append("invalid ops-portal provenance schema")
     if provenance.get("packageKind") != "ops-portal":
         issues.append("ops-portal provenance packageKind mismatch")
@@ -281,10 +351,12 @@ def validate_ops_portal_package(
         issues.append("ops-portal provenance environment mismatch")
     if target and provenance.get("target") != target:
         issues.append("ops-portal provenance target mismatch")
-    if provenance.get("version") != version:
-        issues.append("ops-portal provenance version mismatch")
+    if provenance.get("packageDigest") != package_digest:
+        issues.append("ops-portal provenance package digest mismatch")
     if not re.fullmatch(r"[0-9a-f]{40}", str(provenance.get("gitRevision") or "")):
         issues.append("ops-portal provenance gitRevision invalid")
+    elif provenance.get("gitRevision") != manifest.get("sourceGitSha"):
+        issues.append("ops-portal provenance source Git mismatch")
     digests = provenance.get("digests")
     if not isinstance(digests, dict):
         return [*issues, "ops-portal provenance digests missing"]
@@ -304,7 +376,7 @@ def validate_service_provenance(
     provenance: dict[str, object], package_dir: Path, service: str, environment: str
 ) -> list[str]:
     issues: list[str] = []
-    if provenance.get("schema") != "qwq.service_package.v1":
+    if provenance.get("schema") != "qwq.service_package":
         issues.append("invalid service package schema")
     if provenance.get("service") != service or provenance.get("environment") != environment:
         issues.append("service package identity mismatch")
@@ -409,8 +481,14 @@ def main() -> int:
         except ValueError as exc:
             issues.append(str(exc))
             continue
-        app_dir = app_deployment_package_dir(env_name, target=target_name)
-        package_root = deployment_package_root(env_name, target=target_name)
+        try:
+            app_dir = app_deployment_package_dir(env_name, target=target_name)
+            package_root = deployment_package_root(env_name, target=target_name)
+        except ValueError as exc:
+            issues.append(
+                f"{env_name}/{target_name} active deployment candidate rejected: {exc}"
+            )
+            continue
         report_path = app_dir / "report.json"
         cfg_path = app_dir / "app_runtime.yaml"
         if not report_path.is_file():
@@ -436,7 +514,11 @@ def main() -> int:
             env_name,
             target=target_name,
         )
-        for issue in validate_runtime_shared_package(runtime_shared_dir, env_name):
+        for issue in validate_runtime_shared_package(
+            runtime_shared_dir,
+            env_name,
+            target_name,
+        ):
             issues.append(f"{_display(runtime_shared_dir)} {issue}")
         for issue in package_output_boundary_issues(runtime_shared_dir, package_root):
             issues.append(f"{_display(runtime_shared_dir)} {issue}")

@@ -102,9 +102,19 @@ func buildExternalProviders(
 		if strings.TrimSpace(smsCfg.Provider) == "ext.sms.local_capture" {
 			providers[smsCfg.Provider] = application.LocalCaptureSMSProvider{}
 		} else {
+			canonicalProviderName := ""
+			switch strings.TrimSpace(smsCfg.Provider) {
+			case "ext.sms.aliyun":
+				canonicalProviderName = "aliyun_sms"
+			default:
+				return nil, nil, fmt.Errorf(
+					"SMS adapter %s has no canonical provider mapping",
+					smsCfg.Provider,
+				)
+			}
 			smsProvider, err := provider.NewHTTPExternalProvider(
 				provider.HTTPExternalProviderConfig{
-					Name:              smsCfg.Provider,
+					Name:              canonicalProviderName,
 					Operation:         reliabletask.ExternalInteractionOperationSmsOTP,
 					Endpoint:          smsCfg.Endpoint,
 					BearerToken:       smsCfg.Token,

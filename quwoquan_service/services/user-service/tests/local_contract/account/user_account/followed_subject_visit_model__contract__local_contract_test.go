@@ -10,7 +10,7 @@ import (
 
 // TestMarkVisitedCommandValidation 固定 metadata 业务规则：
 // personaId/subjectType/subjectId/clientRequestId 必填，subjectType 闭集
-// user/circle/homepage（FollowingSubjectType 枚举同源）。
+// persona/circle/homepage/location（与 FollowSubjectKind 完全一致）。
 func TestMarkVisitedCommandValidation(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
@@ -20,6 +20,16 @@ func TestMarkVisitedCommandValidation(t *testing.T) {
 	); err != nil {
 		t.Fatalf("valid command must be accepted, got %v", err)
 	}
+	if _, err := visitmodel.NewMarkVisitedCommand(
+		"ps_1", "persona", "ps_2", now, "req-2",
+	); err != nil {
+		t.Fatalf("canonical persona subject must be accepted, got %v", err)
+	}
+	if _, err := visitmodel.NewMarkVisitedCommand(
+		"ps_1", "location", "location_shenzhen", now, "req-3",
+	); err != nil {
+		t.Fatalf("canonical location subject must be accepted, got %v", err)
+	}
 
 	invalid := []struct {
 		name                                           string
@@ -28,8 +38,8 @@ func TestMarkVisitedCommandValidation(t *testing.T) {
 		{"missing persona", "", "homepage", "home_1", "req-1"},
 		{"missing subject", "ps_1", "homepage", "", "req-1"},
 		{"missing clientRequestId", "ps_1", "homepage", "home_1", ""},
-		{"invalid subjectType", "ps_1", "location", "loc_1", "req-1"},
-		{"persona subjectType", "ps_1", "persona", "ps_2", "req-1"},
+		{"invalid subjectType", "ps_1", "post", "post_1", "req-1"},
+		{"legacy user subjectType", "ps_1", "user", "ps_2", "req-1"},
 	}
 	for _, tc := range invalid {
 		if _, err := visitmodel.NewMarkVisitedCommand(

@@ -2,6 +2,7 @@
   "label": "带货推广",
   "labelEn": "Product Promotion",
   "description": "商品推广销售内容",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

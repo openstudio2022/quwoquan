@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -18,6 +17,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
+from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+    canonical_manifest_digest,
+    validate_manifest,
+    validate_manifest_files,
+)
 from quwoquan_ops.cli.lib.prod_management_access import prod_management_ssh_host
 
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
@@ -54,12 +58,12 @@ def _plane_spec(plane_name: str) -> PlaneSpec:
 def _compose_image_refs(
     services: list[str],
     *,
-    image_version: str = "",
+    image_transport_tag: str = "",
 ) -> dict[str, str]:
-    if not image_version or image_version == "latest":
-        raise SystemExit("FAIL: fixed image version required for production images")
+    if not image_transport_tag or image_transport_tag == "latest":
+        raise SystemExit("FAIL: fixed image transport tag required for production images")
     return {
-        service: f"localhost/quwoquan_service_{service}:{image_version}"
+        service: f"localhost/quwoquan_service_{service}:{image_transport_tag}"
         for service in services
     }
 
@@ -92,22 +96,14 @@ def _local_image_digest(image_ref: str) -> str | None:
 
 
 def _canonical_manifest_digest(payload: dict[str, Any]) -> str:
-    canonical = dict(payload)
-    canonical.pop("manifestDigest", None)
-    encoded = json.dumps(
-        canonical,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return canonical_manifest_digest(payload)
 
 
 def _release_image_sources(
     manifest_path: Path,
     *,
     services: list[str],
-    image_version: str,
+    image_transport_tag: str,
 ) -> tuple[str, dict[str, str]]:
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -115,17 +111,12 @@ def _release_image_sources(
         raise SystemExit(f"FAIL: cannot read release manifest: {error}") from error
     if not isinstance(manifest, dict):
         raise SystemExit("FAIL: release manifest must be an object")
-    if (
-        manifest.get("schema") != "mainline-release-artifact"
-        or manifest.get("status") != "deployable"
-    ):
-        raise SystemExit("FAIL: release manifest is not deployable")
-    manifest_digest = str(manifest.get("manifestDigest") or "")
-    if manifest_digest != _canonical_manifest_digest(manifest):
-        raise SystemExit("FAIL: release manifest digest mismatch")
-    versions = manifest.get("versions")
-    if not isinstance(versions, dict) or versions.get("imageVersion") != image_version:
-        raise SystemExit("FAIL: release manifest image version mismatch")
+    try:
+        validate_manifest(manifest, allowed_statuses={"deployable"})
+        validate_manifest_files(manifest_path.parent, manifest)
+    except ValueError as error:
+        raise SystemExit(f"FAIL: release evidence manifest is invalid: {error}") from error
+    release_evidence_digest = str(manifest["artifactDigest"])
     images = manifest.get("images")
     if not isinstance(images, dict):
         raise SystemExit("FAIL: release manifest images must be an object")
@@ -136,9 +127,14 @@ def _release_image_sources(
             raise SystemExit(f"FAIL: release manifest missing image for {service}")
         digest = str(image.get("digest") or "")
         repository = str(image.get("repository") or "")
+        transport_ref = str(image.get("transportRef") or "")
         ref = str(image.get("ref") or "")
         if OCI_DIGEST_PATTERN.fullmatch(digest) is None or ref != f"{repository}@{digest}":
             raise SystemExit(f"FAIL: release manifest has invalid digest ref for {service}")
+        if image_transport_tag and transport_ref != f"{repository}:{image_transport_tag}":
+            raise SystemExit(
+                f"FAIL: release manifest transport ref mismatch for {service}"
+            )
         attestations = image.get("attestations")
         if not isinstance(attestations, dict) or not all(
             str(attestations.get(kind) or "") == f"oci://{ref}#{kind}"
@@ -146,7 +142,7 @@ def _release_image_sources(
         ):
             raise SystemExit(f"FAIL: release manifest missing attestations for {service}")
         sources[service] = ref
-    return manifest_digest, sources
+    return release_evidence_digest, sources
 
 
 def _pull_and_tag_release_image(
@@ -278,8 +274,8 @@ def parse_args() -> argparse.Namespace:
         default="linux/amd64",
     )
     parser.add_argument(
-        "--image-version",
-        default=os.environ.get("IMAGE_VERSION", ""),
+        "--image-transport-tag",
+        default=os.environ.get("IMAGE_TRANSPORT_TAG", ""),
     )
     parser.add_argument(
         "--release-manifest",
@@ -304,15 +300,15 @@ def main() -> int:
         raise SystemExit(f"FAIL: missing key file: {key_file}")
     image_refs = _compose_image_refs(
         governed,
-        image_version=args.image_version,
+        image_transport_tag=args.image_transport_tag,
     )
-    manifest_digest = ""
+    release_evidence_digest = ""
     source_refs: dict[str, str] = {}
     if args.release_manifest is not None:
-        manifest_digest, source_refs = _release_image_sources(
+        release_evidence_digest, source_refs = _release_image_sources(
             args.release_manifest,
             services=governed,
-            image_version=args.image_version,
+            image_transport_tag=args.image_transport_tag,
         )
     elif not args.dry_run:
         raise SystemExit("FAIL: --release-manifest is required for production image delivery")
@@ -352,7 +348,7 @@ def main() -> int:
         "services": governed,
         "images": image_refs,
         "sourceImages": source_refs,
-        "releaseManifestDigest": manifest_digest,
+        "releaseEvidenceDigest": release_evidence_digest,
         "imageContentDigests": local_digests,
         "platform": args.platform,
         "rebuildServices": rebuild_services,

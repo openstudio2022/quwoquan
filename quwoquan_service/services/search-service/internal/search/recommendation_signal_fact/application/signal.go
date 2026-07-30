@@ -16,7 +16,6 @@ type Signal struct {
 	NormalizedQuery  string
 	RelatedTerms     []string
 	EngagedObjectIDs []string
-	RankingVersion   string
 	ExperimentBucket string
 	ResultCount      int
 	CreatedAt        time.Time

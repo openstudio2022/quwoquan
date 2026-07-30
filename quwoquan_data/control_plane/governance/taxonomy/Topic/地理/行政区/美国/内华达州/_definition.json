@@ -1,0 +1,12 @@
+{
+  "label": "内华达州",
+  "labelEn": "Nevada",
+  "description": "西部荒漠与娱乐产业州",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

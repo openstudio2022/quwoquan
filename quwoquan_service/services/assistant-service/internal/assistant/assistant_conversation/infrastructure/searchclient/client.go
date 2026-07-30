@@ -243,9 +243,8 @@ func toToolOutput(response rtsearch.RetrieveResponse) map[string]any {
 		"results":   results,
 		"citations": citations,
 		"provenance": map[string]any{
-			"provider":     response.Provenance.Provider,
-			"indexVersion": response.Provenance.IndexVersion,
-			"generatedAt":  response.Provenance.GeneratedAt.Format(time.RFC3339Nano),
+			"provider":    response.Provenance.Provider,
+			"generatedAt": response.Provenance.GeneratedAt.Format(time.RFC3339Nano),
 		},
 	}
 }

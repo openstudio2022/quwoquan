@@ -2,6 +2,40 @@
 // Source: content/content/post/projections/recommendation_realtime_patch.yaml
 // ignore_for_file: prefer_const_constructors
 
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+T? _optionalValue<T>(Object? value, String fieldName) {
+  if (value == null) return null;
+  if (value is! T) {
+    throw FormatException('$fieldName has an invalid type');
+  }
+  return value as T;
+}
+
+String _requiredNonEmptyString(Object? value, String fieldName) {
+  final text = _optionalValue<String>(value, fieldName);
+  if (text == null || text.isEmpty) {
+    throw FormatException('$fieldName must be a non-empty string');
+  }
+  return text;
+}
+
+List<String> _stringList(Object? value, String fieldName) {
+  if (value == null) return const <String>[];
+  if (value is! List<Object?> || value.any((item) => item is! String)) {
+    throw FormatException('$fieldName must be a string list');
+  }
+  return List<String>.unmodifiable(value.cast<String>());
+}
+
+String? _optionalCanonicalSha256(Object? value, String fieldName) {
+  if (value == null) return null;
+  if (value is! String || !isCanonicalSha256Digest(value)) {
+    throw FormatException('$fieldName must be a canonical SHA-256 digest');
+  }
+  return value;
+}
+
 /// Per-user realtime channel template (`realtime_channel_template`).
 const feedRealtimePatchChannelTemplate = 'rt:rec:feed:user:{userId}';
 
@@ -16,15 +50,13 @@ enum FeedRealtimePatchType {
   /// 用户负反馈后，端侧从当前 feed 剔除匹配内容；只剔除非当前阅读 / 未在视口的项。
   negativeFeedbackRemoval('negative_feedback_removal'),
   /// 疲劳 / 时效启发式触发，建议用户刷新；端侧仅提示，不自动刷新打断浏览。
-  refreshSuggestion('refresh_suggestion'),
-  /// 未知/未来值（前向兼容，端侧忽略或降级处理）。
-  unknown('');
+  refreshSuggestion('refresh_suggestion');
 
   const FeedRealtimePatchType(this.wire);
 
   final String wire;
 
-  static FeedRealtimePatchType fromWire(String? value) {
+  static FeedRealtimePatchType fromWire(Object? value) {
     switch (value) {
       case 'new_candidate_hint':
         return FeedRealtimePatchType.newCandidateHint;
@@ -33,7 +65,7 @@ enum FeedRealtimePatchType {
       case 'refresh_suggestion':
         return FeedRealtimePatchType.refreshSuggestion;
       default:
-        return FeedRealtimePatchType.unknown;
+        throw FormatException('Invalid FeedRealtimePatchType wire value: $value');
     }
   }
 }
@@ -55,15 +87,13 @@ enum FeedPatchReasonCode {
   /// 会话内负反馈/快速跳过比例高，疲劳信号
   sessionFatigue('session_fatigue'),
   /// 当前 feed 下发过久，时效信号
-  feedStaleness('feed_staleness'),
-  /// 未知/未来值（前向兼容，端侧忽略或降级处理）。
-  unknown('');
+  feedStaleness('feed_staleness');
 
   const FeedPatchReasonCode(this.wire);
 
   final String wire;
 
-  static FeedPatchReasonCode fromWire(String? value) {
+  static FeedPatchReasonCode fromWire(Object? value) {
     switch (value) {
       case 'negative_dislike':
         return FeedPatchReasonCode.negativeDislike;
@@ -82,7 +112,7 @@ enum FeedPatchReasonCode {
       case 'feed_staleness':
         return FeedPatchReasonCode.feedStaleness;
       default:
-        return FeedPatchReasonCode.unknown;
+        throw FormatException('Invalid FeedPatchReasonCode wire value: $value');
     }
   }
 }
@@ -94,15 +124,13 @@ enum FeedPatchRemovalDimension {
   /// 同作者（removalDimensionValue=authorId）
   author('author'),
   /// 同内容类型（removalDimensionValue=contentType）
-  contentType('content_type'),
-  /// 未知/未来值（前向兼容，端侧忽略或降级处理）。
-  unknown('');
+  contentType('content_type');
 
   const FeedPatchRemovalDimension(this.wire);
 
   final String wire;
 
-  static FeedPatchRemovalDimension fromWire(String? value) {
+  static FeedPatchRemovalDimension fromWire(Object? value) {
     switch (value) {
       case 'post':
         return FeedPatchRemovalDimension.post;
@@ -111,7 +139,7 @@ enum FeedPatchRemovalDimension {
       case 'content_type':
         return FeedPatchRemovalDimension.contentType;
       default:
-        return FeedPatchRemovalDimension.unknown;
+        throw FormatException('Invalid FeedPatchRemovalDimension wire value: $value');
     }
   }
 }
@@ -129,8 +157,7 @@ class FeedRealtimePatch {
     this.removalDimension,
     this.removalDimensionValue,
     this.affectedCount = 0,
-    this.rankingVersion,
-    this.reasonVersion,
+    this.policyDigest,
     this.safeToApplyWhileViewing = false,
     required this.emittedAt,
   });
@@ -145,27 +172,25 @@ class FeedRealtimePatch {
   final FeedPatchRemovalDimension? removalDimension;
   final String? removalDimensionValue;
   final int affectedCount;
-  final String? rankingVersion;
-  final String? reasonVersion;
+  final String? policyDigest;
   final bool safeToApplyWhileViewing;
   final String emittedAt;
 
   factory FeedRealtimePatch.fromWire(Map<String, dynamic> payload) {
     return FeedRealtimePatch(
-      patchId: payload['patchId'] as String? ?? '',
-      patchType: FeedRealtimePatchType.fromWire(payload['patchType'] as String?),
-      userId: payload['userId'] as String? ?? '',
-      feedRequestId: payload['feedRequestId'] as String?,
-      channelId: payload['channelId'] as String?,
-      targetPostIds: (payload['targetPostIds'] as List?)?.whereType<String>().toList() ?? const <String>[],
-      reasonCode: FeedPatchReasonCode.fromWire(payload['reasonCode'] as String?),
-      removalDimension: payload['removalDimension'] == null ? null : FeedPatchRemovalDimension.fromWire(payload['removalDimension'] as String?),
-      removalDimensionValue: payload['removalDimensionValue'] as String?,
-      affectedCount: (payload['affectedCount'] as num?)?.toInt() ?? 0,
-      rankingVersion: payload['rankingVersion'] as String?,
-      reasonVersion: payload['reasonVersion'] as String?,
-      safeToApplyWhileViewing: payload['safeToApplyWhileViewing'] as bool? ?? false,
-      emittedAt: payload['emittedAt'] as String? ?? '',
+      patchId: _requiredNonEmptyString(payload['patchId'], 'patchId'),
+      patchType: FeedRealtimePatchType.fromWire(payload['patchType']),
+      userId: _requiredNonEmptyString(payload['userId'], 'userId'),
+      feedRequestId: _optionalValue<String>(payload['feedRequestId'], 'feedRequestId'),
+      channelId: _optionalValue<String>(payload['channelId'], 'channelId'),
+      targetPostIds: _stringList(payload['targetPostIds'], 'targetPostIds'),
+      reasonCode: FeedPatchReasonCode.fromWire(payload['reasonCode']),
+      removalDimension: payload['removalDimension'] == null ? null : FeedPatchRemovalDimension.fromWire(payload['removalDimension']),
+      removalDimensionValue: _optionalValue<String>(payload['removalDimensionValue'], 'removalDimensionValue'),
+      affectedCount: _optionalValue<int>(payload['affectedCount'], 'affectedCount') ?? 0,
+      policyDigest: _optionalCanonicalSha256(payload['policyDigest'], 'policyDigest'),
+      safeToApplyWhileViewing: _optionalValue<bool>(payload['safeToApplyWhileViewing'], 'safeToApplyWhileViewing') ?? false,
+      emittedAt: _requiredNonEmptyString(payload['emittedAt'], 'emittedAt'),
     );
   }
 }
@@ -182,8 +207,7 @@ const feedRealtimePatchWireKeys = <String>[
   'removalDimension',
   'removalDimensionValue',
   'affectedCount',
-  'rankingVersion',
-  'reasonVersion',
+  'policyDigest',
   'safeToApplyWhileViewing',
   'emittedAt',
 ];

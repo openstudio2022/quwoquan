@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
 package api_integration
 
 import (
@@ -13,6 +14,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/runtime/accountrestriction"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
@@ -278,6 +280,47 @@ func TestUserAccountClosedProjectionDeletesPrivateStateAndAnonymizesAudit(
 			t.Fatal(err)
 		}
 	}
+	restrictionProjection, err :=
+		persistence.NewMongoUserAccountRestrictionProjection(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restrictionProjection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	suspension := accountrestriction.Event{
+		EventID:        "event-suspend-chat-6",
+		EventName:      accountrestriction.UserSuspendedEventName,
+		AccountID:      accountID,
+		AccountVersion: 6,
+		UserID:         accountID,
+		PersonaIDs:     []string{personaA, personaB},
+		AccountState:   "suspended",
+		AuthEpoch:      6,
+		DecisionRef:    "decision-suspend-chat-6",
+		OccurredAt:     now.Add(-time.Minute),
+	}
+	if result, err := restrictionProjection.Apply(ctx, suspension); err != nil || result.Replayed {
+		t.Fatalf("apply Chat suspension: result=%+v err=%v", result, err)
+	}
+	sameVersionConflict := suspension
+	sameVersionConflict.EventID = "event-suspend-chat-6-conflict"
+	sameVersionConflict.DecisionRef = "decision-suspend-chat-6-conflict"
+	if _, err := restrictionProjection.Apply(
+		ctx,
+		sameVersionConflict,
+	); !errors.Is(err, application.ErrUserAccountRestrictionProjectionConflict) {
+		t.Fatalf("same-version Chat restriction conflict err=%v", err)
+	}
+	// Closure must also erase rows written by the superseded generic adapter.
+	insertClosureDocument(t, "chat_user_account_restrictions", bson.M{
+		"_id": accountID, "subjects": []string{accountID, personaA, personaB},
+		"restricted": true, "accountVersion": int64(5),
+	})
+	insertClosureDocument(t, "chat_user_account_restriction_inbox", bson.M{
+		"_id": "event-legacy-suspend-chat-5", "accountId": accountID,
+		"accountVersion": int64(5),
+	})
 
 	event := application.UserAccountClosedEvent{
 		EventID:        "event-close-chat-1",
@@ -296,6 +339,48 @@ func TestUserAccountClosedProjectionDeletesPrivateStateAndAnonymizesAudit(
 	}
 	if result.Replayed {
 		t.Fatal("first application must not report replay")
+	}
+	assertClosureCount(t, "chat_user_account_restrictions", bson.M{}, 0)
+	assertClosureCount(t, "chat_user_account_restriction_inbox", bson.M{}, 0)
+	lateRestore := suspension
+	lateRestore.EventID = "event-restore-chat-after-close-8"
+	lateRestore.EventName = accountrestriction.UserRestoredEventName
+	lateRestore.AccountVersion = 8
+	lateRestore.AccountState = "active"
+	lateRestore.AuthEpoch = 8
+	lateRestore.DecisionRef = "decision-restore-chat-after-close-8"
+	lateRestore.OccurredAt = now.Add(time.Minute)
+	if late, err := restrictionProjection.Apply(ctx, lateRestore); err != nil ||
+		!late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("late Chat restore after closure: result=%+v err=%v", late, err)
+	}
+	delayedSuspend := suspension
+	delayedSuspend.EventID = "event-delayed-suspend-chat-5"
+	delayedSuspend.AccountVersion = 5
+	delayedSuspend.AuthEpoch = 5
+	delayedSuspend.DecisionRef = "decision-delayed-suspend-chat-5"
+	delayedSuspend.OccurredAt = now.Add(-2 * time.Minute)
+	if late, err := restrictionProjection.Apply(ctx, delayedSuspend); err != nil ||
+		!late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("delayed Chat suspend after closure: result=%+v err=%v", late, err)
+	}
+	assertClosureCount(t, "chat_user_account_restrictions", bson.M{}, 0)
+	assertClosureCount(t, "chat_user_account_restriction_inbox", bson.M{}, 0)
+	var terminalWatermark bson.M
+	if err := db.Collection("chat_user_account_restriction_watermarks").FindOne(
+		ctx,
+		bson.M{"terminal": true, "accountVersion": int64(7)},
+	).Decode(&terminalWatermark); err != nil {
+		t.Fatalf("read Chat terminal restriction watermark: %v", err)
+	}
+	encodedWatermark, err := bson.MarshalExtJSON(terminalWatermark, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rawID := range []string{accountID, personaA, personaB} {
+		if strings.Contains(string(encodedWatermark), rawID) {
+			t.Fatalf("Chat terminal watermark retained raw identity %q: %s", rawID, encodedWatermark)
+		}
 	}
 
 	messageA := closureDocument(t, "messages", "message-close-a")

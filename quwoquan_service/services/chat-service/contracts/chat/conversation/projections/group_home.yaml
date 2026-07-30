@@ -74,16 +74,6 @@ client_projection:
     nullable: false
     source: originType
     default: ''''''
-  - name: bindingType
-    dart_type: String
-    nullable: false
-    source: bindingType
-    default: ''''''
-  - name: lifecyclePolicy
-    dart_type: String
-    nullable: false
-    source: lifecyclePolicy
-    default: ''''''
   - name: canManageMembers
     dart_type: bool
     nullable: false

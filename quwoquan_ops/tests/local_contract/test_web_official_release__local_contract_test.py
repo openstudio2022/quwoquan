@@ -24,10 +24,17 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             _trusted_web_origin("prod", "https://quwoquan.com/"),
             "https://quwoquan.com",
         )
+        self.assertEqual(
+            _trusted_web_origin("beta", "https://beta.quwoquan.com:18000"),
+            "https://beta.quwoquan.com",
+        )
         for rejected in (
-            "https://alpha-web.invalid",
+            "https://alpha.example.invalid",
             "https://attacker.example",
             "http://alpha.quwoquan.com",
+            "https://user@alpha.quwoquan.com:17000",
+            "https://alpha.quwoquan.com:17000/path",
+            "https://alpha.quwoquan.com:17000?candidate=mutable",
         ):
             with self.assertRaises(WebOfficialReleaseError):
                 _trusted_web_origin("alpha", rejected)

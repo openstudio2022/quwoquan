@@ -176,8 +176,8 @@ class _ArticleFixtureCircleQuery extends CircleQueryReaderTestDouble {
         name: '契约摄影社',
         ownerId: 'fixture_user_owner',
         category: 'photography',
-        visibility: 'public',
-        joinPolicy: 'approval',
+        visibility: CircleVisibility.public,
+        joinPolicy: CircleJoinPolicy.approval,
         createdAt: DateTime.utc(2026, 5, 6),
         updatedAt: DateTime.utc(2026, 5, 6),
       );

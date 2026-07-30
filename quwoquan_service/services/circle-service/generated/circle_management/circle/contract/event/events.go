@@ -3,9 +3,8 @@ package event
 
 // Event type constants for Circle.
 const (
-	CircleCreated            = "CircleCreated"
-	CircleUpdated            = "CircleUpdated"
-	CircleArchived           = "CircleArchived"
-	CircleConversationLinked = "CircleConversationLinked"
-	CircleSectionsUpdated    = "CircleSectionsUpdated"
+	CircleCreated         = "CircleCreated"
+	CircleUpdated         = "CircleUpdated"
+	CircleArchived        = "CircleArchived"
+	CircleSectionsUpdated = "CircleSectionsUpdated"
 )

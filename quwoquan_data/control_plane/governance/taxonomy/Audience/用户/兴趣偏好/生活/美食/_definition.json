@@ -2,6 +2,10 @@
   "label": "美食",
   "labelEn": "Food",
   "description": "喜欢美食探店与日常餐饮",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/美食餐饮"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

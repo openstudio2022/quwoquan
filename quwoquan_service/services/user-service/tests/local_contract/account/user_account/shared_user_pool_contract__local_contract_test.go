@@ -16,7 +16,7 @@ type sharedUserPoolContract struct {
 		DisplayName         string   `json:"displayName"`
 		AvatarObjectKey     string   `json:"avatarObjectKey"`
 		BackgroundObjectKey string   `json:"backgroundObjectKey"`
-		SubAccountRefs      []string `json:"subAccountRefs"`
+		PersonaRefs         []string `json:"personaRefs"`
 	} `json:"users"`
 }
 
@@ -34,7 +34,7 @@ func TestSharedUserPoolContractMatchesUserServiceIdentityRequirements(t *testing
 		t.Fatalf("user count mismatch: users=%d statistics=%d", len(payload.Users), payload.Statistics.UserCount)
 	}
 	seenUsers := make(map[string]struct{}, len(payload.Users))
-	seenSubAccounts := map[string]struct{}{}
+	seenPersonas := map[string]struct{}{}
 	for index, user := range payload.Users {
 		if user.UserID == "" || user.DisplayName == "" {
 			t.Fatalf("users[%d] requires userId and displayName", index)
@@ -46,14 +46,14 @@ func TestSharedUserPoolContractMatchesUserServiceIdentityRequirements(t *testing
 			t.Fatalf("duplicate userId %q", user.UserID)
 		}
 		seenUsers[user.UserID] = struct{}{}
-		for _, subAccountID := range user.SubAccountRefs {
-			if subAccountID == "" {
-				t.Fatalf("users[%d] contains an empty subAccountRef", index)
+		for _, personaID := range user.PersonaRefs {
+			if personaID == "" {
+				t.Fatalf("users[%d] contains an empty personaRef", index)
 			}
-			if _, exists := seenSubAccounts[subAccountID]; exists {
-				t.Fatalf("duplicate subAccountRef %q", subAccountID)
+			if _, exists := seenPersonas[personaID]; exists {
+				t.Fatalf("duplicate personaRef %q", personaID)
 			}
-			seenSubAccounts[subAccountID] = struct{}{}
+			seenPersonas[personaID] = struct{}{}
 		}
 	}
 }

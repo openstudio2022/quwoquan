@@ -1,0 +1,12 @@
+{
+  "label": "巴登-符腾堡州",
+  "labelEn": "Baden-Württemberg",
+  "description": "黑森林与大学城腹地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

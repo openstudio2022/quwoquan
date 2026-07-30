@@ -106,7 +106,11 @@ final class AlphaChatStateEngine {
     }
 
     _contacts.addAll(
-      _objectList(contacts['contacts']).where(_hasAvatarMediaObject).map(_copy),
+      _objectList(contacts['contacts']).where(_hasAvatarMediaObject).map((row) {
+        final contact = _copy(row);
+        contact['userHandle'] = _text(row['userHandle']);
+        return contact;
+      }),
     );
     _contactCircleIds.addAll(_stringList(contacts['circleIds']));
     _contactGroupConversationIds.addAll(
@@ -170,6 +174,26 @@ final class AlphaChatStateEngine {
       }
     }
     return normalized;
+  }
+
+  String userHandleFor(String userId) {
+    final normalized = userId.trim();
+    for (final contact in _contacts) {
+      if (_text(contact['userId']) == normalized) {
+        return _text(contact['userHandle']);
+      }
+    }
+    for (final rows in _members.values) {
+      for (final member in rows) {
+        if (_text(member['userId']) == normalized) {
+          final userHandle = _text(member['userHandle']);
+          if (userHandle.isNotEmpty) {
+            return userHandle;
+          }
+        }
+      }
+    }
+    return '';
   }
 
   String avatarFor(String userId) {

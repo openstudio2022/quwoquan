@@ -83,8 +83,7 @@ type CreateConversationRequest struct {
 	CircleGroupId            string
 	EntityId                 string
 	OriginType               string
-	BindingType              string
-	LifecyclePolicy          string
+	OriginGreetingRequestID  string
 	CircleGroupSourceEventID string
 	MaxGroupSize             int
 	CreatorId                string
@@ -98,8 +97,6 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	if isCircleBoundCreateRequest(req) ||
 		strings.TrimSpace(req.EntityId) != "" ||
 		strings.TrimSpace(req.OriginType) != "" ||
-		strings.TrimSpace(req.BindingType) != "" ||
-		strings.TrimSpace(req.LifecyclePolicy) != "" ||
 		strings.TrimSpace(req.CircleGroupSourceEventID) != "" {
 		return nil, generated.AppErrorFromCircleGroupBindingWriteForbidden(
 			"public CreateConversation must not supply circle binding or source fields",
@@ -223,8 +220,6 @@ func (s *ConversationService) ProvisionCircleGroupConversation(
 		CircleId:                 req.CircleID,
 		CircleGroupId:            req.CircleGroupID,
 		OriginType:               "circle_group",
-		BindingType:              "circle_group",
-		LifecyclePolicy:          "bound_to_circle_group",
 		CircleGroupSourceEventID: req.SourceEventID,
 		MaxGroupSize:             maxGroupSizeLimit,
 		CreatorId:                req.OwnerPersonaID,
@@ -276,10 +271,8 @@ func (s *ConversationService) createDirectConversation(
 		)
 	}
 	originType := defaultString(req.OriginType, "direct_init")
-	bindingType := defaultString(req.BindingType, "none")
-	lifecyclePolicy := defaultString(req.LifecyclePolicy, "persistent")
 	if req.Type == conversationTypeGroup {
-		originType, bindingType, lifecyclePolicy = inferGroupConversationSemantics(req, originType, bindingType, lifecyclePolicy)
+		originType = inferGroupConversationOrigin(req, originType)
 	}
 	maxGroupSize := 2
 	if req.Type == conversationTypeGroup {
@@ -328,32 +321,31 @@ func (s *ConversationService) createDirectConversation(
 	receiptEnabled := maxGroupSize <= 50
 
 	conv := &model.Conversation{
-		ID:              generateID(),
-		Type:            req.Type,
-		Title:           req.Title,
-		CreatorId:       req.CreatorId,
-		CircleId:        req.CircleId,
-		CircleGroupId:   req.CircleGroupId,
-		EntityId:        req.EntityId,
-		OriginType:      originType,
-		BindingType:     bindingType,
-		LifecyclePolicy: lifecyclePolicy,
-		MaxGroupSize:    maxGroupSize,
-		ReceiptEnabled:  receiptEnabled,
-		Status:          "active",
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:                      generateID(),
+		Type:                    req.Type,
+		Title:                   req.Title,
+		CreatorId:               req.CreatorId,
+		CircleId:                req.CircleId,
+		CircleGroupId:           req.CircleGroupId,
+		EntityId:                req.EntityId,
+		OriginType:              originType,
+		OriginGreetingRequestID: strings.TrimSpace(req.OriginGreetingRequestID),
+		MaxGroupSize:            maxGroupSize,
+		ReceiptEnabled:          receiptEnabled,
+		Status:                  "active",
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
 	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
-	lookup := func(uid string) (string, string, string, int) {
+	lookup := func(uid string) (string, string, string, string, int) {
 		if p, ok := profMap[uid]; ok {
-			return p.DisplayName, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion
+			return p.UserHandle, p.DisplayName, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion
 		}
-		return "", "", "", 0
+		return "", "", "", "", 0
 	}
 
-	creatorDN, creatorAV, creatorAssetID, creatorAvatarVersion := lookup(req.CreatorId)
+	creatorHandle, creatorDN, creatorAV, creatorAssetID, creatorAvatarVersion := lookup(req.CreatorId)
 	if IsGroupConversation(*conv) {
 		conv.AvatarUrl = strings.TrimSpace(creatorAV)
 		if conv.AvatarUrl == "" {
@@ -364,6 +356,7 @@ func (s *ConversationService) createDirectConversation(
 		ID:             generateID(),
 		ConversationId: conv.ID,
 		UserId:         req.CreatorId,
+		UserHandle:     creatorHandle,
 		DisplayName:    creatorDN,
 		AvatarUrl:      creatorAV,
 		AvatarAssetId:  creatorAssetID,
@@ -374,11 +367,12 @@ func (s *ConversationService) createDirectConversation(
 	}
 	initialMembers := make([]*model.ConversationMember, 0, len(initialMemberIds))
 	for i, userID := range initialMemberIds {
-		dn, av, assetID, avatarVersion := lookup(userID)
+		userHandle, dn, av, assetID, avatarVersion := lookup(userID)
 		initialMembers = append(initialMembers, &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: conv.ID,
 			UserId:         userID,
+			UserHandle:     userHandle,
 			DisplayName:    dn,
 			AvatarUrl:      av,
 			AvatarAssetId:  assetID,
@@ -420,17 +414,15 @@ func (s *ConversationService) createDirectConversation(
 			ConversationID: conv.ID,
 			ActorID:        req.CreatorId,
 			Payload: map[string]any{
-				"type":            conv.Type,
-				"creatorId":       req.CreatorId,
-				"circleId":        conv.CircleId,
-				"circleGroupId":   conv.CircleGroupId,
-				"entityId":        conv.EntityId,
-				"originType":      conv.OriginType,
-				"bindingType":     conv.BindingType,
-				"lifecyclePolicy": conv.LifecyclePolicy,
-				"maxGroupSize":    conv.MaxGroupSize,
-				"receiptEnabled":  conv.ReceiptEnabled,
-				"createdAt":       conv.CreatedAt,
+				"type":           conv.Type,
+				"creatorId":      req.CreatorId,
+				"circleId":       conv.CircleId,
+				"circleGroupId":  conv.CircleGroupId,
+				"entityId":       conv.EntityId,
+				"originType":     conv.OriginType,
+				"maxGroupSize":   conv.MaxGroupSize,
+				"receiptEnabled": conv.ReceiptEnabled,
+				"createdAt":      conv.CreatedAt,
 			},
 		},
 		{
@@ -688,42 +680,22 @@ func defaultString(value string, fallback string) string {
 	return trimmed
 }
 
-func inferGroupConversationSemantics(
+func inferGroupConversationOrigin(
 	req CreateConversationRequest,
 	originType string,
-	bindingType string,
-	lifecyclePolicy string,
-) (string, string, string) {
+) string {
 	hasCircleGroup := strings.TrimSpace(req.CircleGroupId) != ""
 	hasCircle := strings.TrimSpace(req.CircleId) != ""
-	if hasCircleGroup {
+	if hasCircleGroup || hasCircle {
 		if originType == "direct_init" {
-			originType = "circle_self_built_group"
+			originType = "circle_group"
 		}
-		if bindingType == "none" {
-			bindingType = "circle_group"
-		}
-		if lifecyclePolicy == "persistent" {
-			lifecyclePolicy = "bound_to_circle"
-		}
-		return originType, bindingType, lifecyclePolicy
-	}
-	if hasCircle {
-		if originType == "direct_init" {
-			originType = "circle_default_group"
-		}
-		if bindingType == "none" {
-			bindingType = "circle"
-		}
-		if lifecyclePolicy == "persistent" {
-			lifecyclePolicy = "bound_to_circle"
-		}
-		return originType, bindingType, lifecyclePolicy
+		return originType
 	}
 	if originType == "direct_init" {
 		originType = "ad_hoc_group"
 	}
-	return originType, bindingType, lifecyclePolicy
+	return originType
 }
 
 func (s *ConversationService) GetConversation(ctx context.Context, conversationId string) (*model.Conversation, error) {
@@ -825,7 +797,25 @@ func (s *ConversationService) UpdateConversationTitle(ctx context.Context, req U
 	return conv, nil
 }
 
-func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID, peerID string) (*model.Conversation, error) {
+// DirectConversationPromotion 描述「这条 1v1 会话是被什么升级出来的」。
+//
+// GreetingRequestID 非空表示来源是被回复的打招呼请求：会话按 contracts 声明落
+// originType=greeting_reply + originGreetingRequestId，让破冰产生的会话与冷启动
+// 私信可区分。零值表示无升级来源（保持 direct_init）。
+type DirectConversationPromotion struct {
+	GreetingRequestID string
+}
+
+// CreateOrReuseDirect 是 user-service 破冰升级的受信任入口：绕过关系门，
+// 因为「对方已回复打招呼」本身就是同意证据，而该同意此刻还没写回关系投影。
+//
+// 复用既有会话时不覆盖 originType：一段已经存在的私信关系不应被后来的打招呼
+// 改写来源，否则漏斗归因会把老会话算成破冰新增。
+func (s *ConversationService) CreateOrReuseDirect(
+	ctx context.Context,
+	creatorID, peerID string,
+	promotion DirectConversationPromotion,
+) (*model.Conversation, error) {
 	if strings.TrimSpace(creatorID) == "" || strings.TrimSpace(peerID) == "" {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
@@ -838,10 +828,17 @@ func (s *ConversationService) CreateOrReuseDirect(ctx context.Context, creatorID
 	} else if existing != nil {
 		return existing, nil
 	}
+	greetingID := strings.TrimSpace(promotion.GreetingRequestID)
+	originType := ""
+	if greetingID != "" {
+		originType = conversationOriginGreetingReply
+	}
 	return s.createDirectConversation(ctx, CreateConversationRequest{
-		Type:             conversationTypeDirect,
-		CreatorId:        creatorID,
-		InitialMemberIds: []string{peerID},
+		Type:                    conversationTypeDirect,
+		CreatorId:               creatorID,
+		InitialMemberIds:        []string{peerID},
+		OriginType:              originType,
+		OriginGreetingRequestID: greetingID,
 	}, true, nil)
 }
 

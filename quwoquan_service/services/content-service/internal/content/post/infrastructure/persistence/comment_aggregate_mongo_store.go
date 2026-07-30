@@ -524,11 +524,13 @@ func (s *MongoCommentDataAdapter) SetCommentHotScore(
 // 幂等：重放时候选集为空，零改动且不再追加事实。
 func (s *MongoCommentDataAdapter) TombstoneCommentsByPost(
 	ctx context.Context,
-	postID string,
+	command commentports.TombstoneCommentsByPostCommand,
 ) (int64, error) {
-	postID = strings.TrimSpace(postID)
-	if postID == "" {
-		return 0, fmt.Errorf("comment tombstone requires post id")
+	postID := strings.TrimSpace(command.PostID)
+	sourceEventID := strings.TrimSpace(command.SourceEventID)
+	occurredAt := command.OccurredAt.UTC()
+	if postID == "" || sourceEventID == "" || command.SourcePostVersion < 1 || occurredAt.IsZero() {
+		return 0, fmt.Errorf("comment tombstone requires complete PostDeleted identity")
 	}
 	session, err := s.comments.Database().Client().StartSession()
 	if err != nil {
@@ -537,7 +539,7 @@ func (s *MongoCommentDataAdapter) TombstoneCommentsByPost(
 	defer session.EndSession(ctx)
 	var tombstoned int64
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
-		now := time.Now().UTC()
+		now := occurredAt
 		result, err := s.comments.UpdateMany(
 			txCtx,
 			bson.M{
@@ -572,12 +574,12 @@ func (s *MongoCommentDataAdapter) TombstoneCommentsByPost(
 		if err != nil {
 			return nil, err
 		}
-		eventID := fmt.Sprintf("evt_tombstone_%s_%d", postID, now.UnixNano())
+		eventID := "comments-tombstoned:" + sourceEventID
 		if _, err := s.outbox.InsertOne(txCtx, commentOutboxDocument{
 			ID:               eventID,
 			EventType:        "CommentsTombstoned",
 			AggregateID:      postID,
-			AggregateVersion: 0,
+			AggregateVersion: command.SourcePostVersion,
 			Payload:          payload,
 			OccurredAt:       now,
 		}); err != nil {

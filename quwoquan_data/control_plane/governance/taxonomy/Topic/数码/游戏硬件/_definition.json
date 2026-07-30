@@ -2,6 +2,7 @@
   "label": "游戏硬件",
   "labelEn": "Gaming Hardware",
   "description": "游戏设备、外设与性能测评",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -15,7 +15,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 ProfileEditSnapshotData _snapshot() {
   return const ProfileEditSnapshotData(
     ownerUserId: 'owner_edit',
-    subAccountId: 'ps_edit',
+    personaId: 'ps_edit',
     avatarUrl: '',
     avatarAssetId: '',
     avatarVersion: 0,

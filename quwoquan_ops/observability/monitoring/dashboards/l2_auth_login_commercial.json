@@ -1,6 +1,6 @@
 {
   "dashboard": {
-    "title": "L2 — 登录 API 与 Provider 健康度",
+    "title": "L2 — 登录体验、API 与 Provider 健康度",
     "uid": "qwq-l2-auth-login",
     "tags": ["quwoquan", "l2", "auth", "login", "commercial"],
     "timezone": "browser",
@@ -48,6 +48,50 @@
             "expr": "topk(30, sum(increase(http_server_error_codes_total{service=\"user-service\",module=\"USER\"}[1h])) by (error_code, kind))",
             "format": "table",
             "instant": true
+          }
+        ]
+      },
+      {
+        "title": "客户端登录漏斗",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_login_funnel_events_total[5m])) by (action, result, step)",
+            "legendFormat": "{{ action }} / {{ result }} / {{ step }}"
+          }
+        ]
+      },
+      {
+        "title": "客户端登录操作失败率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_login_operation_events_total{result=\"failure\"}[5m])) by (operation, failure_kind) / on (operation) group_left clamp_min(sum(rate(ops_login_operation_events_total[5m])) by (operation), 0.001)",
+            "legendFormat": "{{ operation }} / {{ failure_kind }}"
+          }
+        ]
+      },
+      {
+        "title": "登录步骤停留 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_login_state_dwell_seconds_bucket[10m])) by (le, step))",
+            "legendFormat": "P95 {{ step }}"
+          }
+        ]
+      },
+      {
+        "title": "首次登录绑定手机号结果",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(ops_login_funnel_events_total{action=\"login_phone_binding\"}[5m])) by (provider, result)",
+            "legendFormat": "{{ provider }} / {{ result }}"
           }
         ]
       }

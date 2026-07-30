@@ -18,6 +18,7 @@ if str(SCRIPTS) not in sys.path:
 from core.release_layout import payload_digest, payload_file  # noqa: E402
 from core.source_digest import current_source_digest  # noqa: E402
 from content.release.canonical import handler  # noqa: E402
+from content.release.canonical import integrity  # noqa: E402
 from content.release.canonical.aggregate_release import build_aggregate_release  # noqa: E402
 
 
@@ -54,6 +55,63 @@ def _write_rights_snapshot(object_root: Path, asset: dict[str, object]) -> None:
             "manifestAsset": {
                 "assetId": asset["assetId"],
                 "sha256": asset["sha256"],
+            },
+        },
+    )
+
+
+def _write_avatar_rights_snapshot(
+    object_root: Path,
+    asset: dict[str, object],
+) -> None:
+    object_key = str(asset["objectKey"])
+    physical = object_root.parents[1] / object_key
+    byte_count = physical.stat().st_size
+    asset_id = str(asset["assetId"])
+    digest = str(asset["sha256"])
+    _write_json(
+        object_root / "rights_snapshots" / f"{asset_id}.json",
+        {
+            "schema": "quwoquan_data.creator_avatar_rights_snapshot",
+            "assetId": asset_id,
+            "depictsIdentifiablePerson": False,
+            "manifestAsset": {"assetId": asset_id, "sha256": digest},
+            "commercialRights": {
+                "assetId": asset_id,
+                "sourceKind": "licensed_creator_avatar",
+                "sourceUseMode": "licensed_adaptation",
+                "canonicalFilePage": "https://rights.example/avatar-a",
+                "snapshotUrl": "https://rights.example/avatar-a",
+                "pageRevision": "sha256:" + "b" * 64,
+                "originalAssetUrl": "https://rights.example/avatar-a.jpg",
+                "author": "Avatar Author",
+                "source": "https://rights.example/avatar-a",
+                "licenseName": "CC BY 4.0",
+                "licenseShortName": "CC BY 4.0",
+                "licenseUrl": "https://creativecommons.org/licenses/by/4.0",
+                "usageScope": "app_publish",
+                "attribution": "Avatar Author, CC BY 4.0",
+                "caption": "Creator avatar",
+                "captionSource": "rights owner metadata",
+                "modifications": "square crop",
+                "fetchedAt": "2026-07-28T00:00:00Z",
+                "snapshot": {
+                    "ref": "evidence/avatar-a.json",
+                    "sha256": "sha256:" + "c" * 64,
+                    "bytes": 128,
+                },
+                "asset": {
+                    "ref": f"cas/{digest.removeprefix('sha256:')}.jpg",
+                    "sha256": digest,
+                    "bytes": byte_count,
+                    "mimeType": str(asset["mimeType"]),
+                    "width": 64,
+                    "height": 64,
+                },
+                "authorizationProof": "https://rights.example/avatar-a/license",
+                "modelReleaseStatus": "not_required",
+                "rightsAuditStatus": "verified",
+                "rightsAuditIssues": [],
             },
         },
     )
@@ -233,6 +291,7 @@ def test_release_aggregate_handler__execution_ids__contract__local_contract(
 
 def test_release__multi_carrier_object_closure__contract__local_contract(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
     publish_root = tmp_path / "publish"
     release_root = tmp_path / "releases"
@@ -260,6 +319,8 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     _write_json(entity_root / "tag.refs.json", {"tagRefs": []})
     _write_json(entity_root / "asset.refs.json", {"assets": []})
     creator_root = publish_root / "creators" / creator_ref
+    _avatar_key, avatar_asset = _write_cas(publish_root, b"creator-avatar")
+    avatar_asset["kind"] = "avatar"
     _write_json(
         creator_root / "_creator.json",
         {
@@ -272,8 +333,22 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             "entityRefs": [],
         },
     )
-    _write_json(creator_root / "profile.json", {"userId": creator_ref})
-    _write_json(creator_root / "assets.refs.json", {"assets": []})
+    _write_json(
+        creator_root / "profile.json",
+        {
+            "userId": creator_ref,
+            "avatarAsset": {
+                "assetId": avatar_asset["assetId"],
+                "kind": "avatar",
+                "sha256": avatar_asset["sha256"],
+            },
+        },
+    )
+    avatar_asset["bytes"] = (
+        publish_root / str(avatar_asset["objectKey"])
+    ).stat().st_size
+    _write_json(creator_root / "assets.refs.json", {"assets": [avatar_asset]})
+    _write_avatar_rights_snapshot(creator_root, avatar_asset)
     (creator_root / "works.refs.ndjson").write_text("", encoding="utf-8")
 
     executions: list[str] = []
@@ -364,7 +439,19 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     assert result["postCount"] == 3
     assert result["creatorCount"] == 1
     release_header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
+    assert release_header["sourceOwner"] == "qwq_data"
     assert release_header["sourceDigests"] == sorted(
         [current_source_digest().to_document(), alternate_source_digest],
         key=lambda item: item["digest"],
+    )
+    monkeypatch.setattr(integrity.paths, "PUBLISH_ROOT", publish_root)
+    integrity_report = integrity._release_integrity(result["releaseId"], release)
+    stats = integrity_report["stats"]
+    assert stats["postCount"] == 3
+    assert stats["articleCount"] == 1
+    assert stats["imageCount"] == 1
+    assert stats["videoCount"] == 1
+    assert (
+        stats["articleCount"] + stats["imageCount"] + stats["videoCount"]
+        == stats["postCount"]
     )

@@ -22,6 +22,7 @@ business_rules:
 - assignment 由稳定 hash 与激活版本决定，同一 unit 结果确定
 - aggregate、receipt 与 outbox 必须在同一 PostgreSQL transaction 提交
 lifecycle:
+  state_field: status
   states:
   - draft
   - scheduled

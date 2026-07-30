@@ -102,6 +102,8 @@ def test_video_schema_frozen_in_post_manifest():
     schema_path = DATA_ROOT / "schema" / "content" / "post_manifest.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     assert "video" in schema["properties"]["contentType"]["enum"]
+    assert schema["properties"]["contentIdentity"] == {"const": "work"}
+    assert "contentIdentity" in schema["required"]
     assert "videoBindings" in schema["properties"]
     bindings = schema["properties"]["videoBindings"]["items"]
     assert bindings["required"] == ["assetId"]

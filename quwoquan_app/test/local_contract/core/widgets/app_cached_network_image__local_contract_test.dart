@@ -11,19 +11,29 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 import '../../../support/sqflite_ffi_test_support.dart';
 
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002
 
+final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
+  avatarBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/avatar',
+  imageBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/image',
+  videoBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/video',
+  attachmentBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/image',
+);
+
 Widget _wrap(Widget child, {List<Override> overrides = const []}) {
   return ProviderScope(
-    overrides: overrides,
+    overrides: [
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
+      ...overrides,
+    ],
     child: CupertinoApp(
       home: CupertinoPageScaffold(child: Center(child: child)),
     ),
@@ -217,22 +227,30 @@ void main() {
     test('evictAvatar 只驱逐原 URL 的登录头像缓存', () async {
       const target = 'media/avatar/s/mock/user/current/v1/avatar.png';
       const untouched = 'media/avatar/s/mock/user/other/v1/avatar.png';
-      final targetCacheKeys = resolveAvatarImageUrlCandidates(target)
-          .map(
-            (candidate) => CdnImageUrlBuilder.avatar(
-              candidate,
-              size: AppSpacing.loginAvatarSize.toInt(),
-            ),
-          )
-          .toSet();
-      final untouchedCacheKeys = resolveAvatarImageUrlCandidates(untouched)
-          .map(
-            (candidate) => CdnImageUrlBuilder.avatar(
-              candidate,
-              size: AppSpacing.loginAvatarSize.toInt(),
-            ),
-          )
-          .toSet();
+      final targetCacheKeys =
+          resolveAvatarImageUrlCandidates(
+                target,
+                endpointConfig: _testMediaEndpointConfig,
+              )
+              .map(
+                (candidate) => CdnImageUrlBuilder.avatar(
+                  candidate,
+                  size: AppSpacing.loginAvatarSize.toInt(),
+                ),
+              )
+              .toSet();
+      final untouchedCacheKeys =
+          resolveAvatarImageUrlCandidates(
+                untouched,
+                endpointConfig: _testMediaEndpointConfig,
+              )
+              .map(
+                (candidate) => CdnImageUrlBuilder.avatar(
+                  candidate,
+                  size: AppSpacing.loginAvatarSize.toInt(),
+                ),
+              )
+              .toSet();
       expect(targetCacheKeys, isNotEmpty);
       expect(untouchedCacheKeys, isNotEmpty);
       final manager = AppImageCacheController.cacheManagerForPreset(
@@ -248,6 +266,7 @@ void main() {
       await AppImageCacheController.evictAvatar(
         target,
         size: AppSpacing.loginAvatarSize,
+        endpointConfig: _testMediaEndpointConfig,
       );
 
       for (final cacheKey in targetCacheKeys) {
@@ -326,22 +345,24 @@ void main() {
       final image = tester.widget<CachedNetworkImage>(
         find.byType(CachedNetworkImage),
       );
+      const objectKey =
+          'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png';
       expect(
         image.imageUrl,
-        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/background/s/archived-avatar/user/fixture_user_current/v1/background.png',
+        _testMediaEndpointConfig
+            .baseFor(MediaDeliveryKind.image)
+            .replace(path: '/$objectKey')
+            .toString(),
       );
     });
 
-    testWidgets('resolves canonical mock seed image without path rewriting', (
+    testWidgets('resolves canonical published image without path duplication', (
       tester,
     ) async {
+      const objectKey =
+          'media/image/s/archived-image/post/release-post-1/v1/image.jpg';
       await tester.pumpWidget(
-        _wrap(
-          const AppCachedNetworkImage(
-            imageUrl:
-                'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
-          ),
-        ),
+        _wrap(const AppCachedNetworkImage(imageUrl: objectKey)),
       );
 
       final image = tester.widget<CachedNetworkImage>(
@@ -349,9 +370,13 @@ void main() {
       );
       expect(
         image.imageUrl,
-        '${CloudRuntimeConfig.mediaImageCdnBaseUrl}/media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
+        _testMediaEndpointConfig
+            .baseFor(MediaDeliveryKind.image)
+            .replace(path: '/$objectKey')
+            .toString(),
       );
-      expect(image.imageUrl, contains('/mock/seed/'));
+      expect(image.imageUrl, contains('/media/image/'));
+      expect(image.imageUrl, isNot(contains('/media/image/media/image/')));
     });
 
     testWidgets(

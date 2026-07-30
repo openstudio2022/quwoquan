@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/schema/release/creator_avatar_rights_snapshot.schema.json",
+  "title": "Creator Avatar Rights Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "assetId",
+    "depictsIdentifiablePerson",
+    "manifestAsset",
+    "commercialRights"
+  ],
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.creator_avatar_rights_snapshot"
+    },
+    "assetId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "depictsIdentifiablePerson": {
+      "type": "boolean"
+    },
+    "manifestAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assetId",
+        "sha256"
+      ],
+      "properties": {
+        "assetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "commercialRights": {
+      "$ref": "asset_rights_closure.schema.json#/$defs/assetRights"
+    }
+  },
+  "$defs": {
+    "blob": {
+      "$ref": "asset_rights_closure.schema.json#/$defs/blob"
+    }
+  }
+}

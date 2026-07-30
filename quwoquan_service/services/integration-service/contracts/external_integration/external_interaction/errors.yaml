@@ -1,14 +1,13 @@
----
 aggregate: ExternalInteraction
 domain: INTEGRATION
-description: 'integration/external_integration/external_interaction 结构化错误码声明。
-
-  '
+description: ExternalInteraction HTTP 受理/查询与异步 provider worker 的对象本地稳定错误语义。
 errors:
 - code: INTEGRATION.USER.invalid_external_request
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [SubmitExternalInteractionRequest, GetExternalInteractionRequest, ListExternalInteractionAttempts, ListExternalInteractionDeadLetters, RecoverExternalInteractionDeadLetter]}
   recovery_action: surface
   dart_const: invalidExternalRequest
   l10n_key: externalInteractionInvalidRequest
@@ -20,6 +19,8 @@ errors:
   kind: USER
   reason: unsupported_operation
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [SubmitExternalInteractionRequest]}
   recovery_action: surface
   dart_const: unsupportedOperation
   l10n_key: externalInteractionUnsupportedOperation
@@ -27,21 +28,23 @@ errors:
   user_message:
     zh: 暂不支持该外部交互能力
     en: External interaction operation is not supported
-- code: INTEGRATION.USER.payload_not_allowed
+- code: INTEGRATION.USER.dead_letter_recovery_conflict
   kind: USER
-  reason: payload_not_allowed
-  http_status: 400
+  reason: dead_letter_recovery_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [RecoverExternalInteractionDeadLetter]}
   recovery_action: surface
-  dart_const: payloadNotAllowed
-  l10n_key: externalInteractionPayloadNotAllowed
-  go_const: ErrPayloadNotAllowed
+  dart_const: deadLetterRecoveryConflict
+  l10n_key: externalInteractionDeadLetterRecoveryConflict
+  go_const: ErrDeadLetterRecoveryConflict
   user_message:
-    zh: 外部请求包含未允许的字段
-    en: External request contains disallowed payload fields
+    zh: 该恢复请求与已确认的任务不一致
+    en: The recovery request conflicts with the confirmed command receipt
 - code: INTEGRATION.MIDDLEWARE.provider_timeout
   kind: MIDDLEWARE
   reason: timeout
-  http_status: 504
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: providerTimeout
@@ -53,7 +56,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.provider_rejected
   kind: MIDDLEWARE
   reason: upstream_rejected
-  http_status: 502
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: providerRejected
@@ -62,67 +65,24 @@ errors:
   user_message:
     zh: 外部供应商暂时拒绝请求，请稍后重试
     en: External provider rejected the request
-- code: INTEGRATION.SYSTEM.callback_signature_invalid
-  kind: SYSTEM
-  reason: signature_invalid
-  http_status: 401
-  recovery_action: surface
-  dart_const: callbackSignatureInvalid
-  l10n_key: externalInteractionCallbackSignatureInvalid
-  go_const: ErrCallbackSignatureInvalid
-  user_message:
-    zh: 外部回调签名校验失败
-    en: External callback signature is invalid
-- code: INTEGRATION.SYSTEM.dead_letter_created
-  kind: SYSTEM
-  reason: dead_letter
-  http_status: 500
-  recovery_action: escalate
-  dart_const: deadLetterCreated
-  l10n_key: externalInteractionDeadLetterCreated
-  go_const: ErrDeadLetterCreated
-  user_message:
-    zh: 外部交互已进入死信等待处理
-    en: External interaction entered dead-letter queue
-- code: INTEGRATION.SYSTEM.internal_error
+- code: INTEGRATION.SYSTEM.external_interaction_internal_error
   kind: SYSTEM
   reason: internal_error
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [SubmitExternalInteractionRequest, GetExternalInteractionRequest, ListExternalInteractionAttempts, ListExternalInteractionDeadLetters, RecoverExternalInteractionDeadLetter, GetExternalInteractionMetricsSnapshot]}
   recovery_action: retry
   recovery_after_seconds: 5
-  dart_const: internalError
+  dart_const: externalInteractionInternalError
   l10n_key: externalInteractionInternalError
-  go_const: ErrInternalError
+  go_const: ErrExternalInteractionInternalError
   user_message:
     zh: 外部集成网关异常，请稍后重试
     en: External integration gateway internal error
-- code: INTEGRATION.USER.sms_otp_invalid_phone
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: smsOtpInvalidPhone
-  l10n_key: smsOtpInvalidPhone
-  go_const: ErrSmsOtpInvalidPhone
-  user_message:
-    zh: 请输入有效手机号
-    en: Please enter a valid phone number
-- code: INTEGRATION.USER.sms_otp_rate_limited
-  kind: USER
-  reason: rate_limited
-  http_status: 429
-  recovery_action: retry
-  recovery_after_seconds: 60
-  dart_const: smsOtpRateLimited
-  l10n_key: smsOtpRateLimited
-  go_const: ErrSmsOtpRateLimited
-  user_message:
-    zh: 验证码发送太频繁，请稍后再试
-    en: Verification code requests are too frequent
 - code: INTEGRATION.MIDDLEWARE.sms_provider_timeout
   kind: MIDDLEWARE
   reason: timeout
-  http_status: 504
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: smsProviderTimeout
@@ -134,7 +94,7 @@ errors:
 - code: INTEGRATION.MIDDLEWARE.sms_provider_rejected
   kind: MIDDLEWARE
   reason: upstream_rejected
-  http_status: 502
+  emitted_by: [worker]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: smsProviderRejected
@@ -143,21 +103,10 @@ errors:
   user_message:
     zh: 短信供应商暂时不可用，请稍后重试
     en: SMS provider is temporarily unavailable
-- code: INTEGRATION.SYSTEM.sms_callback_signature_invalid
-  kind: SYSTEM
-  reason: signature_invalid
-  http_status: 401
-  recovery_action: surface
-  dart_const: smsCallbackSignatureInvalid
-  l10n_key: smsCallbackSignatureInvalid
-  go_const: ErrSmsCallbackSignatureInvalid
-  user_message:
-    zh: 短信回执签名校验失败
-    en: SMS callback signature is invalid
 - code: INTEGRATION.SYSTEM.sms_otp_code_ref_invalid
   kind: SYSTEM
   reason: secret_invalid
-  http_status: 500
+  emitted_by: [worker]
   recovery_action: surface
   dart_const: smsOtpCodeRefInvalid
   l10n_key: smsOtpCodeRefInvalid

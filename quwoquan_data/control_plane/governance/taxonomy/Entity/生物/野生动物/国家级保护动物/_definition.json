@@ -2,6 +2,7 @@
   "label": "国家级保护动物",
   "labelEn": "Protected Wildlife",
   "description": "国家重点保护野生动物",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

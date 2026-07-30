@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import base64
-import contextlib
 import json
 import os
-import socket
-import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -47,7 +44,6 @@ def reporter_session(
     *,
     environment: str,
     base_url: str,
-    resolve_host: str,
     hosted_token_env: str,
     target_name: str = "",
 ) -> LocalAcceptanceSession:
@@ -64,7 +60,6 @@ def reporter_session(
             base_url,
             environment=environment,
             target_name=local_target,
-            resolve_host=resolve_host,
         )
     return _hosted_session(hosted_token_env, "reporter")
 
@@ -73,7 +68,6 @@ def media_viewer_session(
     *,
     environment: str,
     base_url: str,
-    resolve_host: str,
     target_name: str,
     subject: str,
 ) -> LocalAcceptanceSession:
@@ -92,7 +86,6 @@ def media_viewer_session(
         environment=environment,
         target_name=local_target,
         subject=subject,
-        resolve_host=resolve_host,
     )
 
 
@@ -100,7 +93,6 @@ def moderation_operator_session(
     *,
     environment: str,
     base_url: str,
-    resolve_host: str,
     target_name: str,
 ) -> LocalAcceptanceSession:
     """签发仅能审核 Post 的本地 operator，用于走完真实人工审核状态机。"""
@@ -119,7 +111,6 @@ def moderation_operator_session(
         target_name=local_target,
         profile="content-moderation-operator",
         subject="fixture_content_moderation_operator",
-        resolve_host=resolve_host,
     )
 
 
@@ -127,7 +118,6 @@ def operator_session(
     *,
     environment: str,
     base_url: str,
-    resolve_host: str,
     hosted_token_env: str,
 ) -> LocalAcceptanceSession:
     if environment in LOCAL_TARGETS:
@@ -137,7 +127,6 @@ def operator_session(
             target_name=LOCAL_TARGETS[environment],
             profile="content-report-operator",
             subject="fixture_content_report_operator",
-            resolve_host=resolve_host,
         )
     return _hosted_session(hosted_token_env, "report-operator")
 
@@ -156,32 +145,11 @@ def _hosted_session(token_env: str, actor: str) -> LocalAcceptanceSession:
     )
 
 
-@contextlib.contextmanager
-def _temporary_host_resolution(url: str, resolve_host: str):
-    expected_host = urllib.parse.urlparse(url).hostname or ""
-    if not resolve_host or not expected_host:
-        yield
-        return
-    original_getaddrinfo = socket.getaddrinfo
-
-    def getaddrinfo(host: str | bytes | None, *args: Any, **kwargs: Any) -> Any:
-        if host == expected_host:
-            return original_getaddrinfo(resolve_host, *args, **kwargs)
-        return original_getaddrinfo(host, *args, **kwargs)
-
-    socket.getaddrinfo = getaddrinfo
-    try:
-        yield
-    finally:
-        socket.getaddrinfo = original_getaddrinfo
-
-
 def _open_direct(request: urllib.request.Request, *, timeout: int):
     """直连受控环境，避免开发机代理绕过本地 target host 解析。"""
 
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}),
-        urllib.request.HTTPSHandler(context=ssl._create_unverified_context()),
     )
     return opener.open(request, timeout=timeout)
 
@@ -190,11 +158,9 @@ class ProbeClient:
     def __init__(
         self,
         base_url: str,
-        resolve_host: str,
         session: LocalAcceptanceSession,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.resolve_host = resolve_host
         self.session = session
 
     def request(
@@ -231,10 +197,9 @@ class ProbeClient:
         )
         raw = b""
         try:
-            with _temporary_host_resolution(url, self.resolve_host):
-                with _open_direct(request, timeout=15) as response:
-                    status = int(response.status)
-                    raw = response.read()
+            with _open_direct(request, timeout=15) as response:
+                status = int(response.status)
+                raw = response.read()
         except urllib.error.HTTPError as exc:
             status = int(exc.code)
             raw = exc.read() if exc.fp else b""
@@ -274,7 +239,6 @@ def put_presigned_object(
     payload: bytes,
     content_type: str,
     sha256_digest: str,
-    resolve_host: str,
 ) -> None:
     """经服务端签发的 URL 上传二进制对象，不附带业务 Bearer 凭据。"""
 
@@ -294,13 +258,12 @@ def put_presigned_object(
         method="PUT",
     )
     try:
-        with _temporary_host_resolution(upload_url, resolve_host):
-            with _open_direct(request, timeout=30) as response:
-                if int(response.status) not in {200, 201, 204}:
-                    raise ProbeFailure(
-                        "object_upload_failed",
-                        f"presigned PUT returned HTTP {response.status}",
-                    )
+        with _open_direct(request, timeout=30) as response:
+            if int(response.status) not in {200, 201, 204}:
+                raise ProbeFailure(
+                    "object_upload_failed",
+                    f"presigned PUT returned HTTP {response.status}",
+                )
     except urllib.error.HTTPError as exc:
         error_code = _object_storage_error_code(exc.read() if exc.fp else b"")
         parsed = urllib.parse.urlparse(upload_url)

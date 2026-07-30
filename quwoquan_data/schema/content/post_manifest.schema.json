@@ -81,6 +81,7 @@
     "vertical": { "type": "string", "minLength": 1 },
     "topicId": { "type": "string", "description": "如'峨眉山_金顶日出攻略'" },
     "contentType": { "type": "string", "enum": ["article", "image", "video"] },
+    "contentIdentity": { "const": "work" },
     "title": { "type": "string" },
     "caption": { "type": "string" },
     "entityRefs": { "type": "array", "items": { "type": "string" }, "description": "中文实体名数组" },
@@ -92,7 +93,7 @@
     "authorId": { "type": "string" },
     "creatorProfileId": { "type": "string" },
     "creatorArchetype": { "type": "string" },
-    "creatorProfileVersion": { "type": "string" },
+    "creatorProfileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "creatorDisclosure": {
       "type": "object",
       "required": ["type", "displayText", "visible"],
@@ -218,7 +219,7 @@
       }
     }
   },
-  "required": ["vertical", "topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"],
+  "required": ["vertical", "topicId", "contentType", "contentIdentity", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"],
   "allOf": [
     {
       "if": {

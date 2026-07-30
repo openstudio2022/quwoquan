@@ -48,10 +48,7 @@ api_routes:
     latency_p95_ms: 1000
     availability_percent: 99.9
   description: 对显式 ready image assetIds 创建可审计 run；目标 policy version 由服务端当前 metadata 固化。
-  request_entity: MediaImageReprocessRun
-  request_fields:
-  - runId
-  - assetIds
+  request_entity: StartMediaImageReprocessRunRequest
   response_entity: MediaImageReprocessRun
   security:
     auth_mode: required
@@ -63,6 +60,9 @@ api_routes:
   path: /internal/content/media-image-reprocess-runs/{runId}:pause
   operation: PauseMediaImageReprocessRun
   actor: account
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
   application:
     kind: command
     facet: MediaImageReprocessRunCommandFacet
@@ -111,6 +111,9 @@ api_routes:
   path: /internal/content/media-image-reprocess-runs/{runId}:resume
   operation: ResumeMediaImageReprocessRun
   actor: account
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
   application:
     kind: command
     facet: MediaImageReprocessRunCommandFacet
@@ -159,6 +162,9 @@ api_routes:
   path: /internal/content/media-image-reprocess-runs/{runId}:rollback
   operation: RollbackMediaImageReprocessRun
   actor: account
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
   application:
     kind: command
     facet: MediaImageReprocessRunCommandFacet
@@ -208,6 +214,9 @@ api_routes:
   path: /internal/content/media-image-reprocess-runs/{runId}
   operation: GetMediaImageReprocessRun
   actor: account
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
   application:
     kind: query
     facet: MediaImageReprocessRunQueryFacet

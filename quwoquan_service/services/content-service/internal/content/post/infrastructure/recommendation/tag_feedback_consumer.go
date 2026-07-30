@@ -150,14 +150,48 @@ func (receipt tagFeedbackInboxReceipt) matches(event TagFeedbackRecorded) bool {
 		receipt.RecordedAt.Equal(event.RecordedAt)
 }
 
+// TagFeedbackFeatureDelta 描述一条反馈对 explicitTagAffinities 的作用。
+type TagFeedbackFeatureDelta struct {
+	// Unchanged 表示反馈只落成收据，不改变特征。
+	Unchanged bool
+	// Clears 表示删除既有偏好，回到「无偏好」，而不是写入负偏好。
+	Clears bool
+	// Weight 是 Unchanged 与 Clears 均为 false 时写入的权重。
+	Weight float64
+}
+
+// ResolveTagFeedbackFeatureDelta 把 TagFeedbackAction 翻译成特征写入语义。
+// 取值集合与 tag-service 的 TagFeedbackAction 契约同源，未登记取值必须报错而
+// 不能退化成中性处理，否则负向信号会被静默吞掉。
+func ResolveTagFeedbackFeatureDelta(action string) (TagFeedbackFeatureDelta, error) {
+	switch action {
+	case "click":
+		return TagFeedbackFeatureDelta{Weight: 1.0}, nil
+	case "dislike":
+		// 排序侧对 tagAffinities 做加法，所以负权重直接压低带该标签的候选。
+		// 与 ignore 的区别是 ignore 只回到「无偏好」，dislike 会持续扣分。
+		return TagFeedbackFeatureDelta{Weight: -1.0}, nil
+	case "ignore":
+		return TagFeedbackFeatureDelta{Clears: true}, nil
+	case "correct":
+		// `correct` identifies a bad recommendation but carries no replacement
+		// tag. Treating it as either positive or negative preference would invent
+		// user intent, so the durable receipt records it without changing features.
+		return TagFeedbackFeatureDelta{Unchanged: true}, nil
+	default:
+		return TagFeedbackFeatureDelta{}, malformedTagFeedback("unsupported_action")
+	}
+}
+
 func (p *TagFeedbackFeatureProjector) applyFeature(
 	ctx context.Context,
 	event TagFeedbackRecorded,
 ) error {
-	// `correct` identifies a bad recommendation but carries no replacement
-	// tag. Treating it as either positive or negative preference would invent
-	// user intent, so the durable receipt records it without changing features.
-	if event.Action == "correct" {
+	delta, err := ResolveTagFeedbackFeatureDelta(event.Action)
+	if err != nil {
+		return err
+	}
+	if delta.Unchanged {
 		return nil
 	}
 
@@ -168,13 +202,10 @@ func (p *TagFeedbackFeatureProjector) applyFeature(
 			"updatedAt": event.RecordedAt,
 		},
 	}
-	switch event.Action {
-	case "click":
-		update["$set"].(bson.M)[field] = 1.0
-	case "ignore":
+	if delta.Clears {
 		update["$unset"] = bson.M{field: ""}
-	default:
-		return malformedTagFeedback("unsupported_action")
+	} else {
+		update["$set"].(bson.M)[field] = delta.Weight
 	}
 	if _, err := p.features.UpdateOne(
 		ctx,
@@ -480,7 +511,7 @@ func (event TagFeedbackRecorded) Validate() error {
 		return malformedTagFeedback("invalid_event")
 	}
 	switch event.Action {
-	case "click", "ignore", "correct":
+	case "click", "ignore", "correct", "dislike":
 		return nil
 	default:
 		return malformedTagFeedback("unsupported_action")

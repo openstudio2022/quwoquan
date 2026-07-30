@@ -2,7 +2,7 @@ backend: mongodb
 role: append_only
 collections:
   message_receipts:
-    entity: MessageReceipt
+    entity: MessageReceiptFact
     indexes:
     - name: idx_mr_msg_user
       keys:

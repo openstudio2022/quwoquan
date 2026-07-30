@@ -17,6 +17,16 @@
   5. actionLabelByKey 键集 == actionHintLegend 键集（终端短标签与词典描述同闭集）。
   6. 服务端消费方（intersection_service.go / intersection_hydration*.go）已改为查 generated.Intersection* 表，
      不得回归手写 kind→iconKey/route/asset/action/evidenceRank switch（防漂移再生）。
+  7. §23.4 垂类扩展契约：verticals 闭集中除 general 外每个垂类都必须在 verticalExtensionContract 登记
+     objectKinds（⊆ objectKinds 闭集）/ taxonomyRoots / factProducers / instantiatedKinds（⊆ 已登记 kind）
+     / newKinds；forbidNewKind 为真时 newKinds 必须为空，且任何 kind 名不得带垂类前缀（禁止 travel.* 私有 kind）。
+  8. objectType→objectKind 单一真相源：objectTypeBindings 逐值登记且值 ∈ objectKinds 闭集，
+     objectKinds 每项必填 dimension（∈ dimensions 闭集）与 label；生成表的 objectKindByObjectType /
+     dimensionByObjectKind / labelByObjectKind 与注册表逐字段一致；且
+     intersection_source_object_types.go 必须查这三张表，不得回归 objectID 子串/前缀嗅探。
+  9. 概念收敛迁移：actionKeyMigrations / objectKindMigrations / actionDispatchMigrations 的旧名必须在
+     对应闭集里零残留、新名必须已登记，且 actionKeyMeta.dispatch 全部 ∈ actionDispatch 闭集
+     （防止 companion/trip/meetup/voice_room 的旧值以别名形式回归成第二真相源）。
 
 退出码: 0 通过 / 1 失败。
 """
@@ -44,6 +54,11 @@ SERVICE_GO = (
 HYDRATION_PACKAGE = (
     REPO_ROOT
     / "quwoquan_service/services/content-service/internal/content/post/application/intersection"
+)
+OBJECT_TYPES_GO = (
+    REPO_ROOT
+    / "quwoquan_service/services/content-service/internal/content/post/infrastructure"
+    / "recommendation/intersection_source_object_types.go"
 )
 
 VALUE_TIERS = {"T1", "T2", "T3", "T4"}
@@ -132,6 +147,15 @@ def load_closed_sets(data: dict) -> tuple[set[str], set[str], set[str], set[str]
             fail(f"objectKind {kind} invalid roles {sorted(bad)} (allowed: {sorted(OBJECT_KIND_ROLES)})")
         if "object" in roles and not str(item.get("assetKind", "")).strip():
             fail(f"objectKind {kind} has role object but missing assetKind")
+        # dimension/label 决定这类对象上的共享标签算哪个维度、缺展示名时怎么称呼
+        # （同校 / 同游 / 同圈 / 同好）。缺任一个，服务端就只能回到手写 switch。
+        dimension = str(item.get("dimension", "")).strip()
+        if not dimension:
+            fail(f"objectKind {kind} missing dimension")
+        if dimension not in dim_set:
+            fail(f"objectKind {kind} dimension {dimension} not in dimensions closed set")
+        if not str(item.get("label", "")).strip():
+            fail(f"objectKind {kind} missing label")
         object_kinds.add(kind)
 
     if not REQUIRED_DIMENSIONS <= dim_set:
@@ -144,6 +168,35 @@ def load_closed_sets(data: dict) -> tuple[set[str], set[str], set[str], set[str]
         fail(f"objectKinds missing required members {sorted(REQUIRED_OBJECT_KINDS - object_kinds)}")
 
     return dim_set, life_set, vert_set, object_kinds
+
+
+def validate_object_type_bindings(data: dict, object_kinds: set[str]) -> None:
+    """objectType（开放词汇）→ objectKind（闭集）必须逐值登记，且落在闭集里。
+
+    这层翻译过去是服务端和端上各一段手写 switch，只认 user/circle/homepage，
+    其余垂类主页静默落 default 被当成人物：说成「同好」、点进去跳个人主页。
+    登记在注册表后，新增垂类只改这份 YAML 并重跑 codegen，不必发 Go/Dart 版本。
+    HomepageType 全集是否都有登记由 verify_homepage_type_contract.py 阻断。
+    """
+    bindings = data.get("objectTypeBindings")
+    if not isinstance(bindings, list) or not bindings:
+        fail("objectTypeBindings must be a non-empty list")
+    seen: set[str] = set()
+    for entry in bindings:
+        if not isinstance(entry, dict):
+            fail("objectTypeBindings entries must be mappings (objectType/objectKind)")
+        object_type = str(entry.get("objectType", "")).strip()
+        object_kind = str(entry.get("objectKind", "")).strip()
+        if not object_type:
+            fail("objectTypeBindings entry missing objectType")
+        if object_type in seen:
+            fail(f"duplicate objectTypeBindings entry for objectType {object_type}")
+        seen.add(object_type)
+        if object_kind not in object_kinds:
+            fail(
+                f"objectTypeBindings[{object_type}] objectKind {object_kind!r} "
+                "not in objectKinds closed set"
+            )
 
 
 def validate_icon_key_by_dimension(data: dict, dim_set: set[str]) -> None:
@@ -175,6 +228,7 @@ def load_registry() -> tuple[dict[str, dict], dict]:
     data = yaml.safe_load(REGISTRY.read_text(encoding="utf-8"))
     dim_set, _life_set, vert_set, object_kinds = load_closed_sets(data)
     validate_icon_key_by_dimension(data, dim_set)
+    validate_object_type_bindings(data, object_kinds)
     validate_action_labels(data)
     kinds = data.get("kinds")
     if not isinstance(kinds, list) or not kinds:
@@ -215,7 +269,116 @@ def load_registry() -> tuple[dict[str, dict], dict]:
         if item["kind"] in by_kind:
             fail(f"duplicate kind {item['kind']}")
         by_kind[item["kind"]] = item
+    validate_vertical_extension_contract(data, vert_set, object_kinds, set(by_kind))
+    validate_concept_migrations(data, object_kinds)
     return by_kind, data
+
+
+def validate_concept_migrations(data: dict, object_kinds: set[str]) -> None:
+    """概念收敛迁移：旧名必须在注册表里零残留，且新名必须已登记。
+
+    收敛是一次性迁移而不是别名层：一旦旧名与新名同时存在，同一件事就有两套 actionKey /
+    objectKind / dispatch，端与云会各自选一套，即第二真相源。
+    """
+    action_keys = set(data.get("actionHintLegend") or {})
+    dispatch_set = set(data.get("actionDispatch") or [])
+    targets = {
+        "actionKeyMigrations": (action_keys, "actionHintLegend"),
+        "objectKindMigrations": (object_kinds, "objectKinds"),
+        "actionDispatchMigrations": (dispatch_set, "actionDispatch"),
+    }
+    for section, (registered, registered_name) in targets.items():
+        mapping = data.get(section)
+        if not isinstance(mapping, dict):
+            fail(f"{section} must be a mapping (旧名 → 标准名，删除用空串)")
+        for old, new in sorted(mapping.items()):
+            if old in registered:
+                fail(
+                    f"{section}: legacy name {old!r} still registered in {registered_name} "
+                    "(收敛是一次性迁移，禁止旧名与新名并存)"
+                )
+            if new and new not in registered:
+                fail(f"{section}: target {new!r} not registered in {registered_name}")
+
+    # dispatch 收敛后，actionKeyMeta 不得再引用被迁移掉的旧类别。
+    for key, meta in sorted((data.get("actionKeyMeta") or {}).items()):
+        dispatch = (meta or {}).get("dispatch")
+        if dispatch not in dispatch_set:
+            fail(
+                f"actionKeyMeta[{key}].dispatch {dispatch!r} not in actionDispatch closed set "
+                f"{sorted(dispatch_set)}"
+            )
+
+
+def validate_vertical_extension_contract(
+    data: dict, vert_set: set[str], object_kinds: set[str], registered_kinds: set[str]
+) -> None:
+    """§23.4 垂类扩展契约：垂类只能靠 vertical + objectKind + taxonomy 子树 + 事实生产者扩展。
+
+    这条契约把「垂类差异化只体现在事实丰富度、不体现在结构分叉」变成可执行门禁：
+    新增 kind / dimension / actionKey / 端侧垂类分支都在此被阻断。
+    """
+    contract = data.get("verticalExtensionContract")
+    if not isinstance(contract, dict) or not contract:
+        fail("verticalExtensionContract must be a non-empty mapping (§23.4 垂类扩展契约)")
+    for flag in ("forbidNewKind", "forbidNewDimension", "forbidNewActionKey", "forbidClientVerticalBranch"):
+        if contract.get(flag) is not True:
+            fail(f"verticalExtensionContract.{flag} must be true (§23.4 禁止垂类结构分叉)")
+
+    declared = contract.get("verticals")
+    if not isinstance(declared, dict) or not declared:
+        fail("verticalExtensionContract.verticals must be a non-empty mapping")
+
+    expected_verticals = vert_set - {"general"}
+    missing = expected_verticals - set(declared)
+    if missing:
+        fail(f"verticalExtensionContract.verticals missing entries for {sorted(missing)}")
+    extra = set(declared) - expected_verticals
+    if extra:
+        fail(f"verticalExtensionContract.verticals has entries absent from verticals closed set: {sorted(extra)}")
+
+    for name, entry in sorted(declared.items()):
+        if not isinstance(entry, dict):
+            fail(f"verticalExtensionContract.verticals[{name}] must be a mapping")
+        for field in ("objectKinds", "taxonomyRoots", "factProducers", "instantiatedKinds", "newKinds"):
+            if not isinstance(entry.get(field), list):
+                fail(f"verticalExtensionContract.verticals[{name}].{field} must be a list")
+        bad_objects = set(entry["objectKinds"]) - object_kinds
+        if bad_objects:
+            fail(
+                f"verticalExtensionContract.verticals[{name}].objectKinds {sorted(bad_objects)} "
+                "not in objectKinds closed set (垂类 objectKind 必须映射到已有对象)"
+            )
+        if not entry["objectKinds"]:
+            fail(f"verticalExtensionContract.verticals[{name}].objectKinds must be non-empty")
+        if not entry["taxonomyRoots"]:
+            fail(f"verticalExtensionContract.verticals[{name}].taxonomyRoots must be non-empty")
+        bad_kinds = set(entry["instantiatedKinds"]) - registered_kinds
+        if bad_kinds:
+            fail(
+                f"verticalExtensionContract.verticals[{name}].instantiatedKinds {sorted(bad_kinds)} "
+                "not registered in kinds"
+            )
+        if not entry["instantiatedKinds"]:
+            fail(
+                f"verticalExtensionContract.verticals[{name}].instantiatedKinds must be non-empty "
+                "(垂类必须复用既有通用 kind，而不是新造 kind)"
+            )
+        if entry["newKinds"]:
+            fail(
+                f"verticalExtensionContract.verticals[{name}].newKinds must be empty while "
+                f"forbidNewKind=true (禁止垂类专有 kind: {sorted(entry['newKinds'])})"
+            )
+
+    # 垂类专有 kind 的另一种伪装：把垂类名写进 kind 名（travel.*/travelXxx/campus_*）。
+    for prefix in sorted(expected_verticals):
+        head = prefix.split("_", 1)[0].lower()
+        offenders = sorted(k for k in registered_kinds if k.lower().startswith(head))
+        if offenders:
+            fail(
+                f"kind name must not carry vertical prefix {head!r}: {offenders} "
+                "(§23.4 垂类扩展只改 vertical 字段，禁止独立垂类 kind)"
+            )
 
 
 def validate_action_labels(data: dict) -> None:
@@ -242,6 +405,18 @@ def _table_block(src: str, var_name: str, value_type: str) -> str:
     return m.group(1)
 
 
+def _snake_case(value: str) -> str:
+    result: list[str] = []
+    for index, character in enumerate(value):
+        if "A" <= character <= "Z":
+            if index > 0:
+                result.append("_")
+            result.append(character.lower())
+        else:
+            result.append(character)
+    return "".join(result)
+
+
 def parse_generated_table() -> dict[str, dict]:
     """解析 Go codegen 产物 intersection_kind_table.go 的各查表（§23 单一真相源下发）。"""
     if not GENERATED_TABLE.exists():
@@ -258,11 +433,26 @@ def parse_generated_table() -> dict[str, dict]:
             out[k] = v
         return out
 
+    def parse_text_map(var_name: str) -> tuple[dict[str, str], dict[str, str]]:
+        text_by_key: dict[str, str] = {}
+        l10n_key_by_key: dict[str, str] = {}
+        body = _table_block(src, var_name, "IntersectionText")
+        for key, text, l10n_key in re.findall(
+            r'"([^"]+)":\s*\{Text:\s*"([^"]*)",\s*L10nKey:\s*"([^"]*)"\},',
+            body,
+        ):
+            text_by_key[key] = text
+            l10n_key_by_key[key] = l10n_key
+        return text_by_key, l10n_key_by_key
+
     icon_by_kind = parse_str_map("IntersectionIconKeyByKind")
     icon_by_dim = parse_str_map("IntersectionIconKeyByDimension")
     route_by_obj = parse_str_map("IntersectionRouteIDByObjectKind")
     asset_by_obj = parse_str_map("IntersectionAssetKindByObjectKind")
-    action_label = parse_str_map("IntersectionActionLabelByKey")
+    dimension_by_obj = parse_str_map("IntersectionDimensionByObjectKind")
+    label_by_obj = parse_str_map("IntersectionLabelByObjectKind")
+    kind_by_object_type = parse_str_map("IntersectionObjectKindByObjectType")
+    action_label, action_label_l10n_key = parse_text_map("IntersectionActionLabelByKey")
     # §24 M0：意图时态 / 行动阶梯 str 表。
     moment_by_kind = parse_str_map("IntersectionMomentByKind")
     action_tier = parse_str_map("IntersectionActionTierByKey")
@@ -295,8 +485,12 @@ def parse_generated_table() -> dict[str, dict]:
         "iconKeyByDimension": icon_by_dim,
         "routeByObjectKind": route_by_obj,
         "assetByObjectKind": asset_by_obj,
+        "dimensionByObjectKind": dimension_by_obj,
+        "labelByObjectKind": label_by_obj,
+        "objectKindByObjectType": kind_by_object_type,
         "actionKeysByKind": actions,
         "actionLabelByKey": action_label,
+        "actionLabelL10nKeyByKey": action_label_l10n_key,
         "momentByKind": moment_by_kind,
         "actionTierByKey": action_tier,
         "targetAvailabilityByKey": target_avail,
@@ -322,15 +516,31 @@ def expected_from_registry(by_kind: dict[str, dict], data: dict) -> dict[str, di
         for ok in object_kinds
         if str(ok.get("assetKind", "")).strip()
     }
+    dimension = {ok["kind"]: ok.get("dimension", "") for ok in object_kinds}
+    label = {ok["kind"]: ok.get("label", "") for ok in object_kinds}
+    binding = {
+        entry["objectType"]: entry["objectKind"]
+        for entry in (data.get("objectTypeBindings") or [])
+        if isinstance(entry, dict)
+    }
     action_meta = data.get("actionKeyMeta") or {}
+    action_labels = dict(data.get("actionLabelByKey") or {})
+    action_label_prefix = str(data.get("actionLabelL10nKeyPrefix") or "").strip()
     return {
         "evidenceRank": {k: v["evidenceRank"] for k, v in by_kind.items()},
         "iconKeyByKind": {k: v["iconKey"] for k, v in by_kind.items()},
         "iconKeyByDimension": dict(data.get("iconKeyByDimension") or {}),
         "routeByObjectKind": route,
         "assetByObjectKind": asset,
+        "dimensionByObjectKind": dimension,
+        "labelByObjectKind": label,
+        "objectKindByObjectType": binding,
         "actionKeysByKind": {k: list(v) for k, v in (data.get("actionHintsByKind") or {}).items()},
-        "actionLabelByKey": dict(data.get("actionLabelByKey") or {}),
+        "actionLabelByKey": action_labels,
+        "actionLabelL10nKeyByKey": {
+            key: f"{action_label_prefix}.{_snake_case(key)}"
+            for key in action_labels
+        },
         "momentByKind": {k: (v.get("moment") or "current") for k, v in by_kind.items()},
         "actionTierByKey": {k: v.get("tier", "") for k, v in action_meta.items()},
         "targetAvailabilityByKey": {k: v.get("targetAvailability", "") for k, v in action_meta.items()},
@@ -355,6 +565,113 @@ def diff_field(name: str, expected: dict, actual: dict, problems: list[str]) -> 
             )
 
 
+STATEMENT_VARIANTS = ("personPlace", "noObject", "circleTag")
+
+
+def validate_statement_templates(data: dict, by_kind: dict[str, dict], problems: list[str]) -> int:
+    """结论句模板必须齐备、槽位合法、l10nKey 唯一，且与生成表逐字对齐。
+
+    模板是文案的唯一真相源：缺 l10nKey 就等于「改一句话必须改代码 + 发服务」，
+    槽位越界会把 `{foo}` 原样播给用户，因此两者都按阻断处理。
+    """
+    st = data.get("statementTemplates")
+    if not isinstance(st, dict) or not st.get("byKind"):
+        problems.append("statementTemplates.byKind missing (§17.1 结论句模板真相源)")
+        return 0
+    slots = set(st.get("slots") or [])
+    if not slots:
+        problems.append("statementTemplates.slots closed set is empty")
+        return 0
+    src = GENERATED_TABLE.read_text(encoding="utf-8") if GENERATED_TABLE.exists() else ""
+    seen_keys: dict[str, str] = {}
+    count = 0
+
+    def check_one(owner: str, template: str, l10n_key: str) -> None:
+        nonlocal count
+        count += 1
+        if not template:
+            problems.append(f"statementTemplates {owner}: empty template")
+            return
+        if not l10n_key:
+            problems.append(f"statementTemplates {owner}: missing l10nKey（文案无法脱离发版本地化）")
+        elif l10n_key in seen_keys:
+            problems.append(
+                f"statementTemplates {owner}: l10nKey {l10n_key!r} 与 {seen_keys[l10n_key]} 重复"
+            )
+        else:
+            seen_keys[l10n_key] = owner
+        for slot in re.findall(r"\{([^}]*)\}", template):
+            if slot not in slots:
+                problems.append(f"statementTemplates {owner}: slot {slot!r} 不在 slots 闭集")
+        # 生成表必须逐字带上模板与 key，否则服务端渲染的还是旧文案。
+        if src and (template not in src or (l10n_key and l10n_key not in src)):
+            problems.append(
+                f"statementTemplates {owner}: generated table 缺模板或 l10nKey"
+                "（run `make codegen-rec-intersection`）"
+            )
+
+    for kind, form in sorted(st["byKind"].items()):
+        if kind not in by_kind:
+            problems.append(f"statementTemplates 登记了未注册 kind {kind!r}")
+        if not isinstance(form, dict):
+            problems.append(f"statementTemplates {kind}: entry must be a mapping")
+            continue
+        template = str(form.get("template") or "").strip()
+        check_one(kind, template, str(form.get("l10nKey") or "").strip())
+        if "{action}" in template and not str(form.get("actionFallback") or "").strip():
+            problems.append(f"statementTemplates {kind}: 用了 {{action}} 却没有 actionFallback")
+        counted = form.get("counted")
+        if isinstance(counted, dict):
+            check_one(
+                f"{kind}.counted",
+                str(counted.get("template") or "").strip(),
+                str(counted.get("l10nKey") or "").strip(),
+            )
+        variants = form.get("variants") or {}
+        for name, variant in sorted(variants.items()):
+            if name not in STATEMENT_VARIANTS:
+                problems.append(
+                    f"statementTemplates {kind}: variant {name!r} 不在闭集 {list(STATEMENT_VARIANTS)}"
+                )
+            if isinstance(variant, dict):
+                check_one(
+                    f"{kind}.{name}",
+                    str(variant.get("template") or "").strip(),
+                    str(variant.get("l10nKey") or "").strip(),
+                )
+    return count
+
+
+def check_statements_template_driven(problems: list[str]) -> None:
+    """结论句只能由注册表模板渲染：hydration 不得再手写中文句式。
+
+    此前谓语在 ExplainPrimaryText 与 primaryStatementSpansForReason 各写一份，
+    改文案要改两处代码；这里静态阻断回归。
+    """
+    files = sorted(HYDRATION_PACKAGE.glob("intersection_hydration*.go")) + sorted(
+        HYDRATION_PACKAGE.glob("intersection_statement_template.go")
+    )
+    if not files:
+        problems.append("intersection hydration/statement sources missing")
+        return
+    sources = {path.name: path.read_text(encoding="utf-8") for path in files}
+    joined = "\n".join(sources.values())
+    if "generated.IntersectionStatementFormByKind" not in joined:
+        problems.append(
+            "consumer not table-driven: 结论句渲染必须消费 generated.IntersectionStatementFormByKind"
+        )
+    # 禁止在 hydration 里重新出现「按 kind 拼中文谓语」的句式片段。
+    banned = ("也关注了", "都加入了", "都点赞过", "都去过", "都想去", "都讨论过", "都转发过", "也看过")
+    for name, src in sources.items():
+        for line in src.splitlines():
+            code = line.split("//", 1)[0]
+            if any(phrase in code for phrase in banned):
+                problems.append(
+                    f"hardcoded statement copy in {name}: {line.strip()!r}"
+                    "（文案真相源是 registry.statementTemplates）"
+                )
+
+
 def check_consumers_table_driven(problems: list[str]) -> None:
     """消费方必须查 generated.Intersection* 表，不得回归手写 kind switch。"""
     hydration_files = sorted(HYDRATION_PACKAGE.glob("intersection_hydration*.go"))
@@ -375,6 +692,39 @@ def check_consumers_table_driven(problems: list[str]) -> None:
     for src, token, where in required:
         if token not in src:
             problems.append(f"consumer not table-driven: {where} must consume {token}")
+    check_object_type_translation_table_driven(problems)
+
+
+def check_object_type_translation_table_driven(problems: list[str]) -> None:
+    """objectType 翻译层必须查表，且不得靠 objectID 子串反推类型。
+
+    这层原本是三段手写 switch 加一段 objectID 嗅探（`strings.Contains(id, "_university_")`、
+    `strings.HasPrefix(id, "fixture_homepage_poi")`）。它把注册表之外的知识写进了服务代码：
+    加一个垂类要发版，改一次 ID 命名就静默改语义，fixture 前缀还渗进了生产判定。
+    """
+    if not OBJECT_TYPES_GO.exists():
+        problems.append(f"missing {OBJECT_TYPES_GO.name}")
+        return
+    src = OBJECT_TYPES_GO.read_text(encoding="utf-8")
+    for token in (
+        "generated.IntersectionObjectKindByObjectType",
+        "generated.IntersectionDimensionByObjectKind",
+        "generated.IntersectionLabelByObjectKind",
+    ):
+        if token not in src:
+            problems.append(
+                f"consumer not table-driven: {OBJECT_TYPES_GO.name} must consume {token}"
+            )
+    for banned, why in (
+        ("strings.Contains(id", "objectID 子串嗅探"),
+        ("strings.HasPrefix(id", "objectID 前缀嗅探"),
+        ("fixture_", "fixture 前缀渗入生产判定"),
+    ):
+        if banned in src:
+            problems.append(
+                f"{OBJECT_TYPES_GO.name} reintroduces {why}: {banned!r}; "
+                "objectType 只能来自调用方并经注册表 objectTypeBindings 查表"
+            )
 
 
 def main() -> int:
@@ -389,8 +739,13 @@ def main() -> int:
         "iconKeyByDimension",
         "routeByObjectKind",
         "assetByObjectKind",
+        # objectType→objectKind→dimension/label：交集侧对象语义的唯一真相源。
+        "dimensionByObjectKind",
+        "labelByObjectKind",
+        "objectKindByObjectType",
         "actionKeysByKind",
         "actionLabelByKey",
+        "actionLabelL10nKeyByKey",
         # §24 M0：意图时态 / 行动阶梯 map 表逐字段一致。
         "momentByKind",
         "actionTierByKey",
@@ -406,6 +761,8 @@ def main() -> int:
                 f"{field}: registry={expected[field]!r} generated={actual[field]!r} (run `make codegen-rec-intersection`)"
             )
     check_consumers_table_driven(problems)
+    statement_count = validate_statement_templates(data, by_kind, problems)
+    check_statements_template_driven(problems)
 
     if problems:
         for p in problems:
@@ -415,7 +772,8 @@ def main() -> int:
     print(
         f"[verify-intersection-kind-registry] OK: {len(by_kind)} kinds registered; "
         f"generated Go table aligned across evidenceRank/iconKey/iconKeyByDimension/route/asset/"
-        f"actionKeys/actionLabel (single source = intersection_kind_registry.yaml)"
+        f"actionKeys/actionLabel; {statement_count} statement templates carry l10nKey "
+        f"(single source = intersection_kind_registry.yaml)"
     )
     return 0
 

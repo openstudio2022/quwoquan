@@ -6,6 +6,8 @@ errors:
   kind: USER
   reason: unauthorized
   http_status: 401
+  emitted_by:
+  - {surface: http, operations: [ListAppMessages, GetAppMessage, AckAppMessage, ReadAppMessage, GetAppMessageUnreadCount]}
   recovery_action: surface
   dart_const: unauthorized
   go_const: ErrUnauthorized
@@ -16,6 +18,8 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [CreateAppMessage, ListAppMessages, GetAppMessage, AckAppMessage, ReadAppMessage, RecoverNotificationAccountClosureDeadLetter]}
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
@@ -26,26 +30,20 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - {surface: http, operations: [GetAppMessage, AckAppMessage, ReadAppMessage]}
   recovery_action: surface
   dart_const: appMessageNotFound
   go_const: ErrAppMessageNotFound
   user_message:
     zh: 消息不存在或已过期
     en: App message not found
-- code: NOTIFICATION.USER.delivery_not_found
-  kind: USER
-  reason: not_found
-  http_status: 404
-  recovery_action: refresh
-  dart_const: deliveryNotFound
-  go_const: ErrDeliveryNotFound
-  user_message:
-    zh: 投递记录不存在或已不在死信状态
-    en: Notification delivery was not found in dead-letter state
 - code: NOTIFICATION.USER.idempotency_conflict
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [CreateAppMessage]}
   recovery_action: refresh
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
@@ -56,6 +54,8 @@ errors:
   kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [CreateAppMessage, ListAppMessages, GetAppMessage, GetAppMessageUnreadCount]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: storageReadFailed
@@ -67,6 +67,8 @@ errors:
   kind: SYSTEM
   reason: storage_write_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [CreateAppMessage, AckAppMessage, ReadAppMessage]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: storageWriteFailed
@@ -78,6 +80,8 @@ errors:
   kind: SYSTEM
   reason: internal_error
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [RecoverNotificationAccountClosureDeadLetter]}
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: internalError

@@ -19,7 +19,7 @@ func TestBlock_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/blocked_1/block",
+		"/user/personas/blocked_1/block",
 		"",
 		authHeadersForPersona("blocker_1", "ps_blocker_1"),
 	)
@@ -27,7 +27,7 @@ func TestBlock_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	command := parseJSON(t, rec)
-	if command["targetSubAccountId"] != "blocked_1" ||
+	if command["targetPersonaId"] != "blocked_1" ||
 		command["blocked"] != true ||
 		command["updatedAt"] == "" {
 		t.Fatalf("unexpected block result: %#v", command)
@@ -36,7 +36,7 @@ func TestBlock_Success(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/blocked_1/relationship/capability",
+		"/user/personas/blocked_1/relationship/capability",
 		"",
 		authHeadersForPersona("blocker_1", "ps_blocker_1"),
 	)
@@ -59,14 +59,14 @@ func TestBlock_Idempotent(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/blocked_2/block",
+		"/user/personas/blocked_2/block",
 		"",
 		authHeadersForPersona("blocker_2", "ps_blocker_2"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/blocked_2/block",
+		"/user/personas/blocked_2/block",
 		"",
 		authHeadersForPersona("blocker_2", "ps_blocker_2"),
 	)
@@ -118,7 +118,7 @@ func TestBlock_CounterProjectionClearsBothDirectionsOnce(t *testing.T) {
 		rec := doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/"+edge.target+"/follow",
+			"/user/personas/"+edge.target+"/follow",
 			"",
 			authHeadersForPersona(edge.owner, edge.actor),
 		)
@@ -132,7 +132,7 @@ func TestBlock_CounterProjectionClearsBothDirectionsOnce(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_block_counter_b/block",
+		"/user/personas/ps_block_counter_b/block",
 		"",
 		authHeadersForPersona("block_counter_a", "ps_block_counter_a"),
 	)
@@ -191,14 +191,14 @@ func TestUnblock_Success(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/blocked_3/block",
+		"/user/personas/blocked_3/block",
 		"",
 		authHeadersForPersona("blocker_3", "ps_blocker_3"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/user/sub-accounts/blocked_3/block",
+		"/user/personas/blocked_3/block",
 		"",
 		authHeadersForPersona("blocker_3", "ps_blocker_3"),
 	)
@@ -209,7 +209,7 @@ func TestUnblock_Success(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/blocked_3/relationship/capability",
+		"/user/personas/blocked_3/relationship/capability",
 		"",
 		authHeadersForPersona("blocker_3", "ps_blocker_3"),
 	)
@@ -234,14 +234,14 @@ func TestListBlocked(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/victim_a/block",
+		"/user/personas/victim_a/block",
 		"",
 		authHeadersForPersona("blocker_4", "ps_blocker_4"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/victim_b/block",
+		"/user/personas/victim_b/block",
 		"",
 		authHeadersForPersona("blocker_4", "ps_blocker_4"),
 	)
@@ -263,7 +263,7 @@ func TestListBlocked(t *testing.T) {
 		if !ok {
 			t.Fatalf("blocked item must be an object: %#v", raw)
 		}
-		if item["targetSubAccountId"] == "" ||
+		if item["targetPersonaId"] == "" ||
 			item["displayName"] == "" ||
 			item["blockedAt"] == "" {
 			t.Fatalf("blocked item missing display fields: %#v", item)

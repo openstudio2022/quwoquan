@@ -3,12 +3,12 @@ package runtimemedia
 import "context"
 
 const (
-	DefaultGroupAvatarObjectKey = "media/avatar/s/default/group/v1/default.png"
-	DefaultGroupAvatarVersion   = 1
+	DefaultGroupAvatarPublicSliceKey = "media/avatar/s/default/group/v1/default.png"
+	DefaultGroupAvatarVersion        = 1
 )
 
 func BuildDefaultGroupAvatarURL(cdnBaseURL string) string {
-	return BuildPublicMediaURL(cdnBaseURL, DefaultGroupAvatarObjectKey, DefaultGroupAvatarVersion)
+	return BuildPublicMediaURL(cdnBaseURL, DefaultGroupAvatarPublicSliceKey, DefaultGroupAvatarVersion)
 }
 
 func EnsureDefaultGroupAvatarFile(localRoot string) error {
@@ -21,5 +21,5 @@ func EnsureDefaultGroupAvatarFile(localRoot string) error {
 	if err != nil {
 		return err
 	}
-	return WriteDerivedMediaFile(localRoot, DefaultGroupAvatarObjectKey, pngBytes)
+	return WriteDerivedMediaFile(localRoot, DefaultGroupAvatarPublicSliceKey, pngBytes)
 }

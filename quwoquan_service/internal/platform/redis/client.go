@@ -13,6 +13,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
+	"quwoquan_service/runtime/boundedrecord"
 	rtredis "quwoquan_service/runtime/redis"
 )
 
@@ -44,6 +45,137 @@ func newSceneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 type client struct {
 	raw goredis.UniversalClient
 }
+
+var boundedImmutableRecordAtomicCreateScript = goredis.NewScript(`
+local ttl_ms = tonumber(ARGV[2])
+local owner_digest = ARGV[3]
+local max_owner = tonumber(ARGV[4])
+local max_shard_records = tonumber(ARGV[5])
+local max_shard_bytes = tonumber(ARGV[6])
+local payload_bytes = tonumber(ARGV[7])
+if not ttl_ms or ttl_ms <= 0 or not max_owner or max_owner <= 0
+  or not max_shard_records or max_shard_records <= 0
+  or not max_shard_bytes or max_shard_bytes <= 0
+  or not payload_bytes or payload_bytes <= 0
+  or max_owner > max_shard_records then
+  return redis.error_reply('bounded immutable record policy is invalid')
+end
+
+local server_time = redis.call('TIME')
+local now_us = tonumber(server_time[1]) * 1000000 + tonumber(server_time[2])
+local expires_at_us = now_us + ttl_ms * 1000
+
+local declared = {[KEYS[1]] = true}
+for position = 4, #KEYS do
+  declared[KEYS[position]] = true
+end
+
+local indexed = redis.call('ZRANGE', KEYS[2], 0, max_shard_records)
+if #indexed > max_shard_records then
+  return {'', -4, 0, #indexed, 0}
+end
+for position = 1, #indexed do
+  if not declared[indexed[position]] then
+    return {'', -1, 0, #indexed, 0}
+  end
+end
+
+for position = 1, #indexed do
+  local candidate = indexed[position]
+  local expiry = redis.call('ZSCORE', KEYS[2], candidate)
+  local exists = redis.call('EXISTS', candidate)
+  if not expiry or tonumber(expiry) <= now_us or exists == 0 then
+    redis.call('ZREM', KEYS[2], candidate)
+    redis.call('HDEL', KEYS[3], candidate)
+    if expiry and tonumber(expiry) <= now_us then
+      redis.call('DEL', candidate)
+    end
+  end
+end
+
+indexed = redis.call('ZRANGE', KEYS[2], 0, max_shard_records)
+local live_records = 0
+local live_bytes = 0
+local owner_records = {}
+for position = 1, #indexed do
+  local candidate = indexed[position]
+  local metadata = redis.call('HGET', KEYS[3], candidate)
+  if not metadata then
+    return {'', -4, 0, #indexed, live_bytes}
+  end
+  local candidate_owner, candidate_bytes_text =
+    string.match(metadata, '^([0-9a-f]+):([0-9]+)$')
+  local candidate_bytes = tonumber(candidate_bytes_text)
+  if not candidate_owner or not candidate_bytes or candidate_bytes <= 0 then
+    return {'', -4, 0, #indexed, live_bytes}
+  end
+  live_records = live_records + 1
+  live_bytes = live_bytes + candidate_bytes
+  if candidate_owner == owner_digest then
+    owner_records[#owner_records + 1] = {
+      key = candidate,
+      bytes = candidate_bytes,
+    }
+  end
+end
+
+local existing = redis.call('GET', KEYS[1])
+if existing then
+  local metadata = redis.call('HGET', KEYS[3], KEYS[1])
+  local indexed_expiry = redis.call('ZSCORE', KEYS[2], KEYS[1])
+  if not metadata or not indexed_expiry then
+    return {'', -4, 0, live_records, live_bytes}
+  end
+  local existing_owner, existing_bytes_text =
+    string.match(metadata, '^([0-9a-f]+):([0-9]+)$')
+  local existing_bytes = tonumber(existing_bytes_text)
+  if existing_owner ~= owner_digest or existing_bytes ~= string.len(existing) then
+    return {'', -4, 0, live_records, live_bytes}
+  end
+  return {existing, 0, 0, live_records, live_bytes}
+end
+
+local owner_eviction_count = #owner_records - max_owner + 1
+if owner_eviction_count < 0 then
+  owner_eviction_count = 0
+end
+local owner_eviction_bytes = 0
+for position = 1, owner_eviction_count do
+  owner_eviction_bytes = owner_eviction_bytes + owner_records[position].bytes
+end
+
+local projected_records = live_records - owner_eviction_count + 1
+local projected_bytes = live_bytes - owner_eviction_bytes + payload_bytes
+if projected_records > max_shard_records then
+  return {'', -2, 0, live_records, live_bytes}
+end
+if projected_bytes > max_shard_bytes then
+  return {'', -3, 0, live_records, live_bytes}
+end
+
+for position = 1, owner_eviction_count do
+  local victim = owner_records[position].key
+  redis.call('DEL', victim)
+  redis.call('ZREM', KEYS[2], victim)
+  redis.call('HDEL', KEYS[3], victim)
+end
+
+local persisted = redis.call('SET', KEYS[1], ARGV[1], 'NX', 'PX', ttl_ms)
+if not persisted then
+  return redis.error_reply('bounded immutable record atomic SET NX did not persist')
+end
+redis.call('ZADD', KEYS[2], expires_at_us, KEYS[1])
+redis.call('HSET', KEYS[3], KEYS[1], owner_digest .. ':' .. payload_bytes)
+local index_ttl_ms = redis.call('PTTL', KEYS[2])
+if index_ttl_ms < ttl_ms then
+  redis.call('PEXPIRE', KEYS[2], ttl_ms)
+end
+local metadata_ttl_ms = redis.call('PTTL', KEYS[3])
+if metadata_ttl_ms < ttl_ms then
+  redis.call('PEXPIRE', KEYS[3], ttl_ms)
+end
+return {'', 1, owner_eviction_count, projected_records, projected_bytes}
+`)
 
 func newStandaloneClient(cfg rtredis.SceneConfig) (rtredis.Client, error) {
 	if cfg.Addr == "" {
@@ -146,6 +278,168 @@ func (c *client) SetNX(
 	ttl time.Duration,
 ) (bool, error) {
 	return c.raw.SetNX(ctx, key, value, ttl).Result()
+}
+
+func (c *client) CreateBoundedImmutableRecordAtomic(
+	ctx context.Context,
+	request boundedrecord.Request,
+) (boundedrecord.Result, error) {
+	if err := request.Validate(); err != nil {
+		return boundedrecord.Result{}, err
+	}
+	recordTag, ok := redisClusterHashTag(request.RecordKey)
+	if !ok {
+		return boundedrecord.Result{}, errors.New(
+			"bounded immutable record key must contain a Redis Cluster hash tag",
+		)
+	}
+	for _, key := range []string{
+		request.ShardIndexKey,
+		request.ShardMetadataKey,
+	} {
+		tag, tagged := redisClusterHashTag(key)
+		if !tagged || tag != recordTag {
+			return boundedrecord.Result{}, errors.New(
+				"bounded immutable record keys must share one Redis Cluster hash tag",
+			)
+		}
+	}
+	const maxAttempts = 16
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// Read at most cap+1 members. Seeing cap+1 proves corruption/config
+		// shrink without an unbounded scan. Every record Lua may inspect is then
+		// an explicit EVAL key; a concurrent undeclared member returns retry.
+		indexedKeys, err := c.raw.ZRange(
+			ctx,
+			request.ShardIndexKey,
+			0,
+			int64(request.Policy.MaximumLiveRecordsPerShard),
+		).Result()
+		if err != nil {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"read bounded immutable record quota index: %w",
+				err,
+			)
+		}
+		if len(indexedKeys) > request.Policy.MaximumLiveRecordsPerShard {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"%w: members=%d maximum=%d",
+				boundedrecord.ErrRepairBound,
+				len(indexedKeys),
+				request.Policy.MaximumLiveRecordsPerShard,
+			)
+		}
+		keys := make([]string, 0, len(indexedKeys)+3)
+		keys = append(
+			keys,
+			request.RecordKey,
+			request.ShardIndexKey,
+			request.ShardMetadataKey,
+		)
+		for _, indexedKey := range indexedKeys {
+			tag, tagged := redisClusterHashTag(indexedKey)
+			if !tagged || tag != recordTag {
+				return boundedrecord.Result{}, fmt.Errorf(
+					"%w: indexed key escapes quota shard",
+					boundedrecord.ErrRepairBound,
+				)
+			}
+			if indexedKey != request.RecordKey {
+				keys = append(keys, indexedKey)
+			}
+		}
+		result, err := boundedImmutableRecordAtomicCreateScript.Run(
+			ctx,
+			c.raw,
+			keys,
+			request.Value,
+			strconv.FormatInt(request.TTL.Milliseconds(), 10),
+			request.OwnerDigest,
+			strconv.Itoa(request.Policy.MaximumLiveRecordsPerOwner),
+			strconv.Itoa(request.Policy.MaximumLiveRecordsPerShard),
+			strconv.FormatInt(
+				request.Policy.MaximumLiveBytesPerShard,
+				10,
+			),
+			strconv.Itoa(len(request.Value)),
+		).Slice()
+		if err != nil {
+			return boundedrecord.Result{}, err
+		}
+		if len(result) != 5 {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic result length=%d, want 5",
+				len(result),
+			)
+		}
+		winner, err := redisScriptString(result[0])
+		if err != nil {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic winner: %w",
+				err,
+			)
+		}
+		status, err := redisScriptInt64(result[1])
+		if err != nil {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic status: %w",
+				err,
+			)
+		}
+		if status == -1 {
+			continue
+		}
+		ownerEvicted, err := redisScriptInt64(result[2])
+		if err != nil {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic owner eviction count: %w",
+				err,
+			)
+		}
+		liveRecords, err := redisScriptInt64(result[3])
+		if err != nil {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic live records: %w",
+				err,
+			)
+		}
+		liveBytes, err := redisScriptInt64(result[4])
+		if err != nil {
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic live bytes: %w",
+				err,
+			)
+		}
+		admission := boundedrecord.Result{
+			Winner:       winner,
+			Created:      status == 1,
+			OwnerEvicted: ownerEvicted,
+			UsageMeasured: status == 0 || status == 1 ||
+				status == -2 || status == -3,
+			LiveRecords: liveRecords,
+			LiveBytes:   liveBytes,
+		}
+		switch status {
+		case 0, 1:
+			return admission, nil
+		case -2:
+			return admission, boundedrecord.ErrShardKeyQuota
+		case -3:
+			return admission, boundedrecord.ErrShardByteQuota
+		case -4:
+			return admission, boundedrecord.ErrRepairBound
+		default:
+			return boundedrecord.Result{}, fmt.Errorf(
+				"bounded immutable record atomic status=%d",
+				status,
+			)
+		}
+	}
+	return boundedrecord.Result{}, fmt.Errorf(
+		"%w: exceeded %d retries",
+		boundedrecord.ErrConcurrentIndexChange,
+		maxAttempts,
+	)
 }
 
 func (c *client) Del(ctx context.Context, keys ...string) error {
@@ -499,6 +793,45 @@ func stringArguments(values []string) []interface{} {
 		output[index] = value
 	}
 	return output
+}
+
+func redisScriptString(value interface{}) (string, error) {
+	switch typed := value.(type) {
+	case string:
+		return typed, nil
+	case []byte:
+		return string(typed), nil
+	default:
+		return "", fmt.Errorf("unexpected Redis script string type %T", value)
+	}
+}
+
+func redisScriptInt64(value interface{}) (int64, error) {
+	switch typed := value.(type) {
+	case int64:
+		return typed, nil
+	case int:
+		return int64(typed), nil
+	case string:
+		return strconv.ParseInt(typed, 10, 64)
+	case []byte:
+		return strconv.ParseInt(string(typed), 10, 64)
+	default:
+		return 0, fmt.Errorf("unexpected Redis script integer type %T", value)
+	}
+}
+
+func redisClusterHashTag(key string) (string, bool) {
+	start := strings.IndexByte(key, '{')
+	if start < 0 {
+		return "", false
+	}
+	remainder := key[start+1:]
+	end := strings.IndexByte(remainder, '}')
+	if end <= 0 {
+		return "", false
+	}
+	return remainder[:end], true
 }
 
 func orderedStreamArguments(streams map[string]string) []string {

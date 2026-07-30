@@ -4,8 +4,8 @@ output_path: assistant/generated/contracts/context_continuity_policy.g.dart
 contract: context_continuity_policy
 kind: runtime_context_contract
 fields:
-  - { name: queryIntent, type: string, default: '' }
-  - { name: problemClass, type: string, default: '' }
+  - { name: queryIntent, type: enum, enum_ref: QueryIntent, default: '' }
+  - { name: problemClass, type: enum, enum_ref: ProblemClass, default: general }
   - { name: continuityMode, type: enum, enum_ref: ContextContinuityMode, default: unknown }
   - { name: explicitContinuation, type: bool, default: false }
   - { name: topicOverlap, type: double, default: 0.0 }

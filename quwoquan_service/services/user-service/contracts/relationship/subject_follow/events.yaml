@@ -6,6 +6,7 @@ events:
   - entity-service
   - circle-service
   channel: event_store
+  payload_entity: SubjectFollow
   payload_fields:
   - id
   - personaId

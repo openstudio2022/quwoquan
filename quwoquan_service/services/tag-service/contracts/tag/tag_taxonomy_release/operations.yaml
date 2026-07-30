@@ -57,12 +57,8 @@ api_routes:
     content 必须至少包含一个节点；release-bound empty_baseline 必须恰好为零节点。
 
     '
-  request_fields:
-  - releaseId
-  - sourceOwner
-  - canonicalDigest
-  - releaseKind
-  - nodeCount
+  request_entity: StageTagTaxonomyReleaseRequest
+  request_body_kind: object
   response_entity: TagTaxonomyRelease
   security:
     auth_mode: required
@@ -119,6 +115,10 @@ api_routes:
 
     '
   response_entity: TagTaxonomyRelease
+  request_bindings:
+    path:
+    - name: releaseId
+      field: releaseId
   security:
     auth_mode: required
     principal: service

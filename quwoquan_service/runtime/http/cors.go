@@ -49,7 +49,7 @@ func DefaultCORSOptions() CORSOptions {
 			"X-Client-Sent-At",
 			"X-Client-Session-Id",
 			"X-Client-Surface-Id",
-			"X-Client-Sub-Account-Id",
+			"X-Client-Persona-Id",
 			"X-Client-User-Id",
 			"X-Actor",
 			"X-Environment",

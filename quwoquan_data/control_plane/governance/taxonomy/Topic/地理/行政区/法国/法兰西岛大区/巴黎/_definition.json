@@ -1,0 +1,12 @@
+{
+  "label": "巴黎",
+  "labelEn": "Paris",
+  "description": "首都，政治文化中心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -20,7 +20,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/greeting-request",
-		`{"targetSubAccountId":"sa_gr_tgt","requestMessage":"hello","source":"profile"}`,
+		`{"targetPersonaId":"sa_gr_tgt","requestMessage":"hello","source":"profile"}`,
 		authHeadersForPersona("gr_req", "sa_gr_req"),
 	)
 	if sendRec.Code != http.StatusCreated {
@@ -36,7 +36,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/greeting-request",
-		`{"targetSubAccountId":"sa_gr_tgt","requestMessage":"again","source":"profile"}`,
+		`{"targetPersonaId":"sa_gr_tgt","requestMessage":"again","source":"profile"}`,
 		authHeadersForPersona("gr_req", "sa_gr_req"),
 	)
 	if dupRec.Code != http.StatusConflict {
@@ -64,7 +64,7 @@ func TestGreeting_SendReplyIgnoreCancel(t *testing.T) {
 	capRec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/sa_gr_tgt/relationship/capability",
+		"/user/personas/sa_gr_tgt/relationship/capability",
 		"",
 		authHeadersForPersona("gr_req", "sa_gr_req"),
 	)
@@ -85,7 +85,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/greeting-request",
-		`{"targetSubAccountId":"sa_gr2_tgt","requestMessage":"ping","source":"profile"}`,
+		`{"targetPersonaId":"sa_gr2_tgt","requestMessage":"ping","source":"profile"}`,
 		authHeadersForPersona("gr2_req", "sa_gr2_req"),
 	)
 	sendBody := parseJSON(t, sendRec)
@@ -110,7 +110,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/greeting-request",
-		`{"targetSubAccountId":"sa_gr2_tgt","requestMessage":"again","source":"profile"}`,
+		`{"targetPersonaId":"sa_gr2_tgt","requestMessage":"again","source":"profile"}`,
 		authHeadersForPersona("gr2_req", "sa_gr2_req"),
 	)
 	if sendRec2.Code != http.StatusCreated {
@@ -137,7 +137,7 @@ func TestGreeting_IgnoreAndCancel(t *testing.T) {
 	var count int
 	err := pgPool.QueryRow(context.Background(), `
 		SELECT COUNT(*) FROM greeting_requests
-		WHERE requester_sub_account_id = $1 AND target_sub_account_id = $2 AND status = 'pending'`,
+		WHERE requester_persona_id = $1 AND target_persona_id = $2 AND status = 'pending'`,
 		"sa_gr2_req", "sa_gr2_tgt").Scan(&count)
 	if err != nil {
 		t.Fatalf("count pending: %v", err)
@@ -158,14 +158,14 @@ func TestGreeting_MutualSenderRejected(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/sa_gr4_tgt/follow",
+		"/user/personas/sa_gr4_tgt/follow",
 		"",
 		authHeadersForPersona("gr4_req", "sa_gr4_req"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/sa_gr4_req/follow",
+		"/user/personas/sa_gr4_req/follow",
 		"",
 		authHeadersForPersona("gr4_tgt", "sa_gr4_tgt"),
 	)
@@ -174,7 +174,7 @@ func TestGreeting_MutualSenderRejected(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/greeting-request",
-		`{"targetSubAccountId":"sa_gr4_tgt","requestMessage":"mutual","source":"profile"}`,
+		`{"targetPersonaId":"sa_gr4_tgt","requestMessage":"mutual","source":"profile"}`,
 		authHeadersForPersona("gr4_req", "sa_gr4_req"),
 	)
 	if sendRec.Code != http.StatusConflict {
@@ -197,7 +197,7 @@ func TestGreeting_BlockedSenderRejected(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/sa_gr3_req/block",
+		"/user/personas/sa_gr3_req/block",
 		"",
 		authHeadersForPersona("gr3_tgt", "sa_gr3_tgt"),
 	)
@@ -206,7 +206,7 @@ func TestGreeting_BlockedSenderRejected(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/greeting-request",
-		`{"targetSubAccountId":"sa_gr3_tgt","requestMessage":"blocked","source":"profile"}`,
+		`{"targetPersonaId":"sa_gr3_tgt","requestMessage":"blocked","source":"profile"}`,
 		authHeadersForPersona("gr3_req", "sa_gr3_req"),
 	)
 	if sendRec.Code != http.StatusForbidden {
@@ -220,7 +220,7 @@ func TestGreeting_BlockedSenderRejected(t *testing.T) {
 	var count int
 	err := pgPool.QueryRow(context.Background(), `
 		SELECT COUNT(*) FROM greeting_requests
-		WHERE requester_sub_account_id = $1 AND target_sub_account_id = $2`,
+		WHERE requester_persona_id = $1 AND target_persona_id = $2`,
 		"sa_gr3_req", "sa_gr3_tgt").Scan(&count)
 	if err != nil {
 		t.Fatalf("query greeting: %v", err)

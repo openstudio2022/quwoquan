@@ -2,30 +2,12 @@ domain: OPS
 aggregate: Experiment
 description: Experiment 生命周期、分配事实和运营 Reader 的稳定错误语义。
 errors:
-- code: OPS.USER.unauthorized
+- code: OPS.USER.experiment_invalid_argument
   kind: USER
-  reason: unauthorized
-  http_status: 401
-  recovery_action: reauth
-  dart_const: unauthorized
-  go_const: ErrUnauthorized
-  user_message:
-    zh: 请先登录
-    en: Please sign in
-- code: OPS.USER.forbidden
-  kind: USER
-  reason: forbidden
-  http_status: 403
-  recovery_action: none
-  dart_const: forbidden
-  go_const: ErrForbidden
-  user_message:
-    zh: 无权执行此实验操作
-    en: Not allowed to perform this experiment operation
-- code: OPS.USER.invalid_argument
-  kind: USER
-  reason: invalid_argument
+  reason: experiment_invalid_argument
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [UpdateExperimentRollout]}
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
@@ -36,36 +18,20 @@ errors:
   kind: USER
   reason: experiment_not_found
   http_status: 404
+  emitted_by:
+  - {surface: http, operations: [UpdateExperimentRollout]}
   recovery_action: refresh
   dart_const: experimentNotFound
   go_const: ErrExperimentNotFound
   user_message:
     zh: 实验不存在
     en: Experiment not found
-- code: OPS.USER.assignment_not_found
-  kind: USER
-  reason: assignment_not_found
-  http_status: 404
-  recovery_action: retry
-  dart_const: assignmentNotFound
-  go_const: ErrAssignmentNotFound
-  user_message:
-    zh: 实验分配尚未生成
-    en: Experiment assignment has not been created
-- code: OPS.USER.experiment_not_running
-  kind: USER
-  reason: experiment_not_running
-  http_status: 409
-  recovery_action: refresh
-  dart_const: experimentNotRunning
-  go_const: ErrExperimentNotRunning
-  user_message:
-    zh: 实验当前不可分配
-    en: Experiment is not available for assignment
 - code: OPS.USER.version_conflict
   kind: USER
   reason: version_conflict
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [UpdateExperimentRollout]}
   recovery_action: refresh
   dart_const: versionConflict
   go_const: ErrVersionConflict
@@ -76,16 +42,20 @@ errors:
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [UpdateExperimentRollout]}
   recovery_action: refresh
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
   user_message:
     zh: 重复请求与原操作不一致
     en: The repeated request differs from the original operation
-- code: OPS.SYSTEM.storage_read_failed
+- code: OPS.SYSTEM.experiment_storage_read_failed
   kind: SYSTEM
-  reason: storage_read_failed
+  reason: experiment_storage_read_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [ListExperiments, UpdateExperimentRollout]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: storageReadFailed
@@ -93,10 +63,12 @@ errors:
   user_message:
     zh: 实验读取失败，请稍后重试
     en: Experiment read failed, please retry
-- code: OPS.SYSTEM.storage_write_failed
+- code: OPS.SYSTEM.experiment_storage_write_failed
   kind: SYSTEM
-  reason: storage_write_failed
+  reason: experiment_storage_write_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [UpdateExperimentRollout]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: storageWriteFailed

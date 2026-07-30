@@ -356,20 +356,27 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                             final senderId = msg.senderId;
                             if (msg.isSelf) {
                               final currentUser = ref.read(userDataProvider);
-                              final userId =
-                                  currentUser?.username ?? currentUser?.id;
-                              if (userId != null && userId.isNotEmpty) {
+                              final userHandle =
+                                  currentUser?.userHandle?.trim() ?? '';
+                              if (userHandle.isNotEmpty) {
                                 context.push(
-                                  AppRoutePaths.userProfile(username: userId),
+                                  AppRoutePaths.userProfile(
+                                    userHandle: userHandle,
+                                  ),
                                 );
                               }
                             } else if (senderId.isNotEmpty) {
-                              context.push(
-                                AppRoutePaths.userProfile(username: senderId),
-                                extra: UserProfileRouteExtra(
-                                  subAccountId: senderId,
-                                ),
-                              );
+                              final userHandle = _memberUserHandle(senderId);
+                              if (userHandle.isNotEmpty) {
+                                context.push(
+                                  AppRoutePaths.userProfile(
+                                    userHandle: userHandle,
+                                  ),
+                                  extra: UserProfileRouteExtra(
+                                    personaId: senderId,
+                                  ),
+                                );
+                              }
                             }
                           },
                         ),

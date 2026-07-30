@@ -38,7 +38,9 @@ func TestSendMessage_Direct_RequiresRelationshipGate(t *testing.T) {
 		nil,
 	))
 
-	conv, err := convSvc.CreateOrReuseDirect(context.Background(), "sender_gate", "peer_gate")
+	conv, err := convSvc.CreateOrReuseDirect(
+		context.Background(), "sender_gate", "peer_gate",
+		application.DirectConversationPromotion{})
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
@@ -73,7 +75,9 @@ func TestSendMessage_Direct_AllowsFormalConversation(t *testing.T) {
 		nil,
 	))
 
-	conv, err := convSvc.CreateOrReuseDirect(context.Background(), "sender_ok", "peer_ok")
+	conv, err := convSvc.CreateOrReuseDirect(
+		context.Background(), "sender_ok", "peer_ok",
+		application.DirectConversationPromotion{})
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}

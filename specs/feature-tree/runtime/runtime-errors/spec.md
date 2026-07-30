@@ -52,6 +52,7 @@
 ### REQ-002 提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射
 
 - 提供统一错误码、错误对象、响应封装与 HTTP/RPC 状态映射。
+- 每个 `errors.yaml` 条目必须以 `emitted_by` 声明真实发射 surface；只有 HTTP surface 强制 `http_status` 和对象内 operation 绑定，worker/consumer/player 等非 HTTP surface 禁止伪造 HTTP 状态。
 - 所有服务必须使用 runtime-errors 输出错误响应，禁止手写错误 JSON。
 - 客户端可见域禁止保留 sentinel-only 错误生成路径；生成产物必须包含 `AppErrorFrom*`、`userMessage`、`.WithRecovery(...)`。
 - 端侧所有云侧错误必须保留 raw `code`、`userMessage` 与 `recovery` 前向兼容，同时对已生成的 `*ErrorCode` 提供统一 typed 消费入口；禁止只生成枚举而中央 mapper 不注册。
@@ -76,6 +77,7 @@
 - THEN Flutter 端所有生成的 *ErrorCode 均被 CloudErrorMapper 或统一 registry 注册消费；未知 code 仍靠 userMessage + recovery 前向兼容。
 - THEN 行为上报、异常遥测与 UI 错误展示不保留自建异常或静默吞失败路径。
 - THEN override hit/miss、runtime error code/module/kind/recovery_action 指标和告警规格可复核。
+- THEN `emitted_by` surface、HTTP status 与对象内 operation 引用由 metadata compiler 交叉校验，非 HTTP 错误不被误判为 HTTP 契约。
 
 ## 8. 开放事项
 

@@ -9,8 +9,16 @@ from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from core.release_layout import attestation_root
 from core.io import read_json
 from content.release.canonical.aggregate_release import build_aggregate_release
+from content.release.canonical.acceptance_lease import handle_acceptance_lease
 from content.release.canonical.baseline_release import build_empty_baseline_release
 from content.release.canonical.discard import handle_discard
+from content.release.canonical.lifecycle_exit import handle_lifecycle_exit
+from content.release.canonical.object_transaction_contract import ObjectTransactionError
+from content.release.canonical.release_operation_lock import (
+    ReleaseOperationConflict,
+    release_operation_guard,
+    release_operation_lock_root,
+)
 from content.release.canonical.reset import handle_reset_canonical
 from verify.verify_release_lifecycle import release_lifecycle_issues
 
@@ -23,21 +31,51 @@ def _execution_ids(raw_value: str) -> list[str]:
 
 
 def handle_aggregate_release(args: argparse.Namespace) -> None:
-    report = build_aggregate_release(
-        publish_root=Path(args.publish_root or PUBLISH_ROOT),
-        release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
-        release_id=str(args.release_id),
-        execution_ids=_execution_ids(str(args.execution_ids)),
-    )
+    release_root = Path(args.release_root or (OUTPUT_ROOT / "data/releases"))
+    release_id = str(args.release_id)
+    try:
+        with release_operation_guard(
+            lock_root=release_operation_lock_root(release_root),
+            release_ids=(release_id,),
+            exclusive_releases=True,
+        ):
+            report = build_aggregate_release(
+                publish_root=Path(args.publish_root or PUBLISH_ROOT),
+                release_root=release_root,
+                release_id=release_id,
+                execution_ids=_execution_ids(str(args.execution_ids)),
+            )
+    except (
+        FileNotFoundError,
+        ObjectTransactionError,
+        ReleaseOperationConflict,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release aggregate] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 def handle_baseline_release(args: argparse.Namespace) -> None:
-    report = build_empty_baseline_release(
-        publish_root=Path(args.publish_root or PUBLISH_ROOT),
-        release_root=Path(args.release_root or (OUTPUT_ROOT / "data/releases")),
-        release_id=str(args.release_id),
-    )
+    release_root = Path(args.release_root or (OUTPUT_ROOT / "data/releases"))
+    release_id = str(args.release_id)
+    try:
+        with release_operation_guard(
+            lock_root=release_operation_lock_root(release_root),
+            release_ids=(release_id,),
+            exclusive_releases=True,
+        ):
+            report = build_empty_baseline_release(
+                publish_root=Path(args.publish_root or PUBLISH_ROOT),
+                release_root=release_root,
+                release_id=release_id,
+            )
+    except (
+        FileNotFoundError,
+        ObjectTransactionError,
+        ReleaseOperationConflict,
+        ValueError,
+    ) as exc:
+        raise SystemExit(f"[release baseline] GATE_BLOCK {exc}") from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
@@ -78,6 +116,46 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     discard.add_argument("--release-id", required=True)
     discard.set_defaults(handler=handle_discard)
+
+    lifecycle_exit = commands.add_parser(
+        "lifecycle-exit",
+        help="从既有 original/rollback/replay run 写入 create-once Exit receipt",
+    )
+    lifecycle_exit.add_argument("--env", required=True, choices=("alpha", "beta", "gamma", "prod"))
+    lifecycle_exit.add_argument("--original-release-id", required=True)
+    lifecycle_exit.add_argument("--original-import-run-id", required=True)
+    lifecycle_exit.add_argument("--original-verify-run-id", required=True)
+    lifecycle_exit.add_argument("--rollback-to-release-id", required=True)
+    lifecycle_exit.add_argument("--rollback-run-id", required=True)
+    lifecycle_exit.add_argument("--rollback-verify-run-id", required=True)
+    lifecycle_exit.add_argument("--replay-import-run-id", required=True)
+    lifecycle_exit.add_argument("--replay-verify-run-id", required=True)
+    lifecycle_exit.add_argument("--run-id", required=True, help="append-only Exit run id")
+    lifecycle_exit.set_defaults(handler=handle_lifecycle_exit)
+
+    acceptance_lease = commands.add_parser(
+        "acceptance-lease",
+        help="为真实 UAT 写入 append-only acquire/revoke lease event",
+    )
+    lease_actions = acceptance_lease.add_subparsers(
+        dest="acceptance_lease_action",
+        required=True,
+    )
+    acquire = lease_actions.add_parser("acquire")
+    acquire.add_argument("--env", required=True, choices=("alpha", "beta", "gamma", "prod"))
+    acquire.add_argument("--release-id", required=True)
+    acquire.add_argument("--import-run-id", required=True)
+    acquire.add_argument("--verify-run-id", required=True)
+    acquire.add_argument("--lease-id", required=True)
+    acquire.add_argument("--event-id", default="")
+    acquire.set_defaults(handler=handle_acceptance_lease)
+    revoke = lease_actions.add_parser("revoke")
+    revoke.add_argument("--env", required=True, choices=("alpha", "beta", "gamma", "prod"))
+    revoke.add_argument("--release-id", required=True)
+    revoke.add_argument("--lease-id", required=True)
+    revoke.add_argument("--acquire-event-ref", required=True)
+    revoke.add_argument("--event-id", default="")
+    revoke.set_defaults(handler=handle_acceptance_lease)
 
     reset_canonical = commands.add_parser(
         "reset-canonical",

@@ -1,108 +1,9 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/circle/file_contracts.requests.g.dart';
 
 enum CircleFileType { file, folder }
 
 enum CircleFileStatus { active, deleted }
-
-final class CreateCircleFileCommand {
-  CreateCircleFileCommand({
-    required String circleId,
-    String? groupId,
-    String? parentFolderId,
-    required String name,
-    required this.fileType,
-    String? assetId,
-  }) : circleId = _required(circleId, 'circleId'),
-       name = _required(name, 'name'),
-       groupId = _optional(groupId),
-       parentFolderId = _optional(parentFolderId),
-       assetId = _optional(assetId) {
-    if (this.name.runes.length > 255) {
-      throw ArgumentError.value(name, 'name', 'must contain at most 255 runes');
-    }
-    if (fileType == CircleFileType.file && this.assetId == null) {
-      throw ArgumentError('CircleFile file requires a ready MediaAsset id');
-    }
-    if (fileType == CircleFileType.folder && this.assetId != null) {
-      throw ArgumentError('CircleFile folder cannot bind a MediaAsset');
-    }
-  }
-
-  final String circleId;
-  final String? groupId;
-  final String? parentFolderId;
-  final String name;
-  final CircleFileType fileType;
-  final String? assetId;
-}
-
-final class UpdateCircleFileCommand {
-  UpdateCircleFileCommand({
-    required String circleId,
-    required String fileId,
-    required this.expectedVersion,
-    this.parentFolderId,
-    this.name,
-  }) : circleId = _required(circleId, 'circleId'),
-       fileId = _required(fileId, 'fileId') {
-    _positive(expectedVersion, 'expectedVersion');
-    if (name != null && (name!.trim().isEmpty || name!.runes.length > 255)) {
-      throw ArgumentError.value(name, 'name', 'must contain 1..255 runes');
-    }
-    if (parentFolderId == null && name == null) {
-      throw ArgumentError('CircleFile update must contain a field');
-    }
-  }
-
-  final String circleId;
-  final String fileId;
-  final int expectedVersion;
-
-  /// Empty string moves the object to the root; null omits the field.
-  final String? parentFolderId;
-  final String? name;
-}
-
-final class DeleteCircleFileCommand {
-  DeleteCircleFileCommand({required String circleId, required String fileId})
-    : circleId = _required(circleId, 'circleId'),
-      fileId = _required(fileId, 'fileId');
-
-  final String circleId;
-  final String fileId;
-}
-
-final class CircleFileQuery {
-  CircleFileQuery({required String circleId, required String fileId})
-    : circleId = _required(circleId, 'circleId'),
-      fileId = _required(fileId, 'fileId');
-
-  final String circleId;
-  final String fileId;
-}
-
-final class CircleFileListQuery {
-  CircleFileListQuery({
-    required String circleId,
-    String? groupId,
-    String? parentFolderId,
-    String? cursor,
-    this.limit = 20,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _optional(groupId),
-       parentFolderId = _optional(parentFolderId),
-       cursor = _optional(cursor) {
-    if (limit < 1 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be in 1..100');
-    }
-  }
-
-  final String circleId;
-  final String? groupId;
-  final String? parentFolderId;
-  final String? cursor;
-  final int limit;
-}
 
 final class CircleFileCommandResult {
   const CircleFileCommandResult({
@@ -169,64 +70,6 @@ abstract interface class CircleFileQueryReader {
   Future<CircleFileSlice> get(CircleFileQuery query);
   Future<CircleFilePageSlice> list(CircleFileListQuery query);
 }
-
-CloudOperationRequestPayload encodeCreateCircleFileCommand(
-  CreateCircleFileCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': command.circleId},
-  body: <String, Object?>{
-    if (command.groupId != null) 'groupId': command.groupId,
-    if (command.parentFolderId != null)
-      'parentFolderId': command.parentFolderId,
-    'name': command.name,
-    'fileType': command.fileType.name,
-    if (command.assetId != null) 'assetId': command.assetId,
-  },
-);
-
-CloudOperationRequestPayload encodeUpdateCircleFileCommand(
-  UpdateCircleFileCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'fileId': command.fileId,
-  },
-  headers: <String, String>{'If-Match': '"${command.expectedVersion}"'},
-  body: <String, Object?>{
-    if (command.parentFolderId != null)
-      'parentFolderId': command.parentFolderId,
-    if (command.name != null) 'name': command.name,
-  },
-);
-
-CloudOperationRequestPayload encodeDeleteCircleFileCommand(
-  DeleteCircleFileCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'fileId': command.fileId,
-  },
-);
-
-CloudOperationRequestPayload encodeCircleFileQuery(CircleFileQuery query) =>
-    CloudOperationRequestPayload(
-      pathParameters: <String, String>{
-        'circleId': query.circleId,
-        'fileId': query.fileId,
-      },
-    );
-
-CloudOperationRequestPayload encodeCircleFileListQuery(
-  CircleFileListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': query.circleId},
-  queryParameters: <String, String>{
-    if (query.groupId != null) 'groupId': query.groupId!,
-    if (query.parentFolderId != null) 'parentFolderId': query.parentFolderId!,
-    if (query.cursor != null) 'cursor': query.cursor!,
-    'limit': query.limit.toString(),
-  },
-);
 
 CircleFileCommandResult decodeCircleFileCommandResult(Object? value) {
   final map = _object(value, 'CircleFileCommandResult');
@@ -315,17 +158,6 @@ void _only(Map<String, Object?> map, Set<String> allowed) {
   if (unknown.isNotEmpty) throw FormatException('unknown fields: $unknown');
 }
 
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
-}
-
-String? _optional(String? value) {
-  final normalized = value?.trim() ?? '';
-  return normalized.isEmpty ? null : normalized;
-}
-
 String _string(Map<String, Object?> map, String key) {
   final value = map[key];
   if (value is! String || value.trim().isEmpty) {
@@ -366,8 +198,4 @@ DateTime _date(Map<String, Object?> map, String key) {
   final value = DateTime.tryParse(_string(map, key));
   if (value == null) throw FormatException('$key must be RFC3339');
   return value.toUtc();
-}
-
-void _positive(int value, String name) {
-  if (value <= 0) throw ArgumentError.value(value, name, 'must be positive');
 }

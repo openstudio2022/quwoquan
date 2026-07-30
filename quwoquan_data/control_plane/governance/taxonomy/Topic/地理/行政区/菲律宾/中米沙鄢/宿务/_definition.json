@@ -1,0 +1,12 @@
+{
+  "label": "宿务",
+  "labelEn": "Cebu",
+  "description": "第二大都市与潜水门户",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

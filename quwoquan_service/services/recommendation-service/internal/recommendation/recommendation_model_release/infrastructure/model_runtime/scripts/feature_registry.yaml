@@ -1,6 +1,5 @@
 # feature_registry: shared with recommendation-service inference.
 # Align field names and types with ModelScoreRequest / CandidateInput.
-version: 5
 scenarios:
   content_feed:
     user_features:
@@ -81,6 +80,25 @@ scenarios:
         source: rm_recommend_feature.socialFeatures.intersection.intersectionSourceRefTop
         description: "Strongest fact intersection kind (§5.4 standard name) between viewer and object"
         nullable: true
+      - name: intersectionEdges
+        type: map_object
+        source: rm_viewer_object_intersection.reasons[] (objectId -> edgeWeight/freshness/kind)
+        description: >-
+          Materialized viewer<->object intersection edges. Values carry the graph
+          materializer's edgeWeight (relationStrength x interactionFrequency x
+          recencyDecay), the same-half-life freshness decay and the §5.4 kind.
+          Online ranking matches an edge to a candidate through its authorId or
+          entityRefs, so this is the only real viewer<->candidate intersection
+          strength; the item-side intersectionFactStrength is viewer-independent
+          capacity and must not substitute for it. Deferred kinds are dropped
+          before emission, and the exposure snapshot records the matched edge
+          (intersectionEdgeWeight / Freshness / Kind) so training sees the same
+          edge the online scorer used. Go projects those three candidate-scoped
+          scalars once through StrongestIntersectionEdgeFor; Python serving and
+          training append the same 14-dimension intersection segment. Kind codes
+          are derived from this domain's canonical intersection_kind_registry.yaml,
+          never from a Python-owned mapping.
+        nullable: true
       - name: depthDistribution
         type: map_int
         source: rm_recommend_feature.userFeatures.depthDistribution
@@ -137,7 +155,11 @@ scenarios:
       - name: intersectionFactStrength
         type: float
         source: rm_discovery_feed.intersectionFactStrength
-        description: "Candidate-level fact intersection strength; must outrank affinity in ranking fusion."
+        description: >-
+          Content-side intersection capacity: how many intersection hints (entity/tag
+          refs) the candidate itself carries. Viewer-independent, so it must not be read
+          as "this viewer has an intersection with this content"; the personalized fact
+          channel consumes user_features.intersectionEdgeWeight instead.
       - name: intersectionFreshness
         type: float
         source: rm_discovery_feed.intersectionFreshness

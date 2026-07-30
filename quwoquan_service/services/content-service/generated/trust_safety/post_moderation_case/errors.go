@@ -11,25 +11,11 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrModerationApprovalRequired = errors.New("CONTENT.USER.moderation_approval_required")
-	ErrModerationCaseNotFound     = errors.New("CONTENT.USER.moderation_case_not_found")
-	ErrModerationDecisionStale    = errors.New("CONTENT.USER.moderation_decision_stale")
+	ErrModerationCaseNotFound = errors.New("CONTENT.USER.moderation_case_not_found")
 )
-
-// AppErrorFromModerationApprovalRequired returns *AppError for CONTENT.USER.moderation_approval_required (user_message from errors.yaml).
-func AppErrorFromModerationApprovalRequired(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.moderation_approval_required")
-	return rterr.NewAppError(code, "内容尚未通过当前版本审核", debugMessage).WithMetadata("moderation_approval_required", 409).WithRecovery("retry", 3)
-}
 
 // AppErrorFromModerationCaseNotFound returns *AppError for CONTENT.USER.moderation_case_not_found (user_message from errors.yaml).
 func AppErrorFromModerationCaseNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.moderation_case_not_found")
 	return rterr.NewAppError(code, "未找到当前内容的审核记录", debugMessage).WithMetadata("moderation_case_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromModerationDecisionStale returns *AppError for CONTENT.USER.moderation_decision_stale (user_message from errors.yaml).
-func AppErrorFromModerationDecisionStale(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("CONTENT.USER.moderation_decision_stale")
-	return rterr.NewAppError(code, "内容已编辑，请基于最新版本重新审核", debugMessage).WithMetadata("moderation_decision_stale", 409).WithRecovery("refresh", 0)
 }

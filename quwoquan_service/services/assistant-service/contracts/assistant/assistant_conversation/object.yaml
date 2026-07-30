@@ -46,6 +46,7 @@ business_rules:
 - summary 只由完成 run 的事件按 source sequence 与服务端内部 version CAS 推进
 - archived conversation 不接受新 run
 lifecycle:
+  state_field: state
   states:
   - active
   - archived

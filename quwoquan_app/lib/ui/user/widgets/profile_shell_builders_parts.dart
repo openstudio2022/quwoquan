@@ -18,7 +18,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
   Widget _buildAuthorImpactCard(bool isDark, {required bool suppressFailure}) {
     final isMine = widget.mode == ProfileMode.mine;
     final request = (
-      subAccountId: widget.userId,
+      personaId: widget.userId,
       surface: isMine ? AppUiSurfaces.profileHome : AppUiSurfaces.userProfile,
     );
     final impact = ref.watch(authorImpactProvider(request));
@@ -70,7 +70,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     }
     ref
         .read(authContinuationProvider.notifier)
-        .set(FollowProfileContinuation(subAccountId: widget.userId));
+        .set(FollowProfileContinuation(personaId: widget.userId));
     unawaited(requireLogin(ref, context, AuthGateReason.follow));
   }
 
@@ -116,7 +116,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     }
     ref
         .read(authContinuationProvider.notifier)
-        .set(OpenDirectConversationContinuation(subAccountId: widget.userId));
+        .set(OpenDirectConversationContinuation(personaId: widget.userId));
     await requireLogin(
       ref,
       context,
@@ -127,11 +127,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
 
   String _resolvedDirectCallTargetId() {
     final state = ref.read(profileNotifierProvider(widget.userId));
-    final capabilityTarget = state.displayCapability?.targetSubAccountId.trim();
+    final capabilityTarget = state.displayCapability?.targetPersonaId.trim();
     if (capabilityTarget != null && capabilityTarget.isNotEmpty) {
       return capabilityTarget;
     }
-    final profileTarget = state.profile?.subAccountId.trim();
+    final profileTarget = state.profile?.personaId.trim();
     if (profileTarget != null && profileTarget.isNotEmpty) {
       return profileTarget;
     }
@@ -175,7 +175,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
       ref,
       context,
       AuthGateReason.startCall,
-      dismissFallback: AppRoutePaths.userProfile(username: widget.userId),
+      dismissFallback: AppRoutePaths.userProfile(userHandle: widget.userId),
       dismissPolicy: LoginDismissPolicy.safeFallback,
     );
   }
@@ -247,7 +247,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     if (pending == null) {
       return;
     }
-    if (pending.subAccountId != widget.userId) {
+    if (pending.personaId != widget.userId) {
       // 续接对象不是本主页：放回槽位交由对应主页消费。
       ref.read(authContinuationProvider.notifier).set(pending);
       return;
@@ -265,7 +265,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
         .read(authContinuationProvider.notifier)
         .take<OpenDirectConversationContinuation>();
     if (direct != null) {
-      if (direct.subAccountId != widget.userId) {
+      if (direct.personaId != widget.userId) {
         ref.read(authContinuationProvider.notifier).set(direct);
       } else {
         unawaited(_gatedOpenMessage(context, notifier));
@@ -436,9 +436,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
                     ProfileActionBar(
                       mode: widget.mode,
                       isDark: isDark,
-                      isFollowing:
-                          displayCapability?.viewerFollowsTarget ??
-                          state.isFollowing,
+                      isFollowing: state.isFollowing,
                       capability: displayCapability,
                       onEditProfile: () =>
                           context.push(AppRoutePaths.profileEdit),
@@ -956,8 +954,8 @@ extension _ProfileShellBuilders on _ProfileShellState {
     String type,
     ProfileState state,
   ) {
-    final subjectUserId = state.profile?.subAccountId.trim().isNotEmpty == true
-        ? state.profile!.subAccountId
+    final subjectUserId = state.profile?.personaId.trim().isNotEmpty == true
+        ? state.profile!.personaId
         : widget.userId;
     switch (type) {
       case 'fans':

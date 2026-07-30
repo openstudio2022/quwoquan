@@ -12,6 +12,8 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
+import yaml
+
 from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli.lib.dev_up import (
     app_target_for_env,
@@ -34,7 +36,10 @@ from quwoquan_ops.cli.lib.environment_topology import (
 )
 from quwoquan_ops.cli.lib.local_media_origin import LocalMediaOriginHandler
 from quwoquan_ops.cli.lib.mock_public_plane import MockPublicPlaneHandler
-from quwoquan_ops.cli.stackctl import _health_checks_for_target, _seeded_media_surface_profile_command
+from quwoquan_ops.cli.stackctl import (
+    _health_checks_for_target,
+    _target_media_preflight_profile_command,
+)
 
 ROOT = Path(__file__).resolve().parents[4]
 _ASSISTANT_BETA_GATEWAY_PATH = (
@@ -68,7 +73,7 @@ class _TtyStringIO(io.StringIO):
 
 
 class DevUpTest(unittest.TestCase):
-    def test_alpha_android_physical_uses_plain_localhost_https_transport(self) -> None:
+    def test_alpha_android_physical_keeps_canonical_public_authorities(self) -> None:
         topology = load_environment_topology()
         overrides = resolve_app_endpoint_overrides(
             "alpha",
@@ -77,18 +82,18 @@ class DevUpTest(unittest.TestCase):
         )
         self.assertEqual(
             overrides["gatewayBaseUrl"],
-            "https://localhost:17000",
+            "https://api.alpha.quwoquan.com:17000",
         )
         self.assertEqual(
             overrides["legalBaseUrl"],
-            "https://localhost:17000/legal",
+            "https://alpha.quwoquan.com:17000/legal",
         )
         self.assertEqual(
             overrides["mediaImageBaseUrl"],
-            "https://localhost:17100",
+            "https://cdn.alpha.quwoquan.com:17100/media/image",
         )
 
-    def test_beta_android_emulator_uses_local_loopback_https_transport(self) -> None:
+    def test_beta_android_emulator_keeps_canonical_public_authorities(self) -> None:
         topology = load_environment_topology()
         overrides = resolve_app_endpoint_overrides(
             "beta",
@@ -98,18 +103,18 @@ class DevUpTest(unittest.TestCase):
         self.assertEqual(app_target_for_env("beta"), "beta-local")
         self.assertEqual(
             overrides["gatewayBaseUrl"],
-            "https://beta-api.localhost:18000",
+            "https://api.beta.quwoquan.com:18000",
         )
         self.assertEqual(
             overrides["legalBaseUrl"],
-            "https://beta-api.localhost:18000/legal",
+            "https://beta.quwoquan.com:18000/legal",
         )
         self.assertEqual(
             overrides["mediaImageBaseUrl"],
-            "https://beta-image.localhost:18100",
+            "https://cdn.beta.quwoquan.com:18100/media/image",
         )
 
-    def test_beta_android_physical_uses_local_loopback_https_transport(self) -> None:
+    def test_beta_android_physical_keeps_canonical_public_authorities(self) -> None:
         topology = load_environment_topology()
         overrides = resolve_app_endpoint_overrides(
             "beta",
@@ -118,35 +123,35 @@ class DevUpTest(unittest.TestCase):
         )
         self.assertEqual(
             overrides["gatewayBaseUrl"],
-            "https://beta-api.localhost:18000",
+            "https://api.beta.quwoquan.com:18000",
         )
         self.assertEqual(
             overrides["mediaImageBaseUrl"],
-            "https://beta-image.localhost:18100",
+            "https://cdn.beta.quwoquan.com:18100/media/image",
         )
 
-    def test_android_local_envs_use_manifest_ports_without_emulator_host(self) -> None:
+    def test_android_local_envs_use_canonical_topology_projection(self) -> None:
         topology = load_environment_topology()
         cases = {
             "alpha": (
-                "https://localhost:17000",
-                "https://localhost:17000/legal",
-                "https://localhost:17100",
+                "https://api.alpha.quwoquan.com:17000",
+                "https://alpha.quwoquan.com:17000/legal",
+                "https://cdn.alpha.quwoquan.com:17100/media/image",
             ),
             "beta": (
-                "https://beta-api.localhost:18000",
-                "https://beta-api.localhost:18000/legal",
-                "https://beta-image.localhost:18100",
+                "https://api.beta.quwoquan.com:18000",
+                "https://beta.quwoquan.com:18000/legal",
+                "https://cdn.beta.quwoquan.com:18100/media/image",
             ),
             "gamma": (
-                "https://gamma-api.localhost:19000",
-                "https://gamma-api.localhost:19000/legal",
-                "https://gamma-image.localhost:19100",
+                "https://api.gamma.quwoquan.com:19000",
+                "https://gamma.quwoquan.com:19000/legal",
+                "https://cdn.gamma.quwoquan.com:19100/media/image",
             ),
             "prod-sim": (
-                "https://prod-api.localhost:20000",
-                "https://prod-api.localhost:20000/legal",
-                "https://prod-image.localhost:20100",
+                "https://api.sim.quwoquan.com:20000",
+                "https://sim.quwoquan.com:20000/legal",
+                "https://cdn.sim.quwoquan.com:20100/media/image",
             ),
         }
         for env_name, expected in cases.items():
@@ -170,7 +175,10 @@ class DevUpTest(unittest.TestCase):
         )
         self.assertEqual(overrides["gatewayBaseUrl"], "https://api.quwoquan.com")
         self.assertEqual(overrides["legalBaseUrl"], "https://quwoquan.com/legal")
-        self.assertEqual(overrides["mediaImageBaseUrl"], "https://cdn.quwoquan.com")
+        self.assertEqual(
+            overrides["mediaImageBaseUrl"],
+            "https://cdn.quwoquan.com/media/image",
+        )
         self.assertEqual(overrides["mediaUploadBaseUrl"], "https://upload.quwoquan.com")
         self.assertNotIn("118.31.239.122", "\n".join(overrides.values()))
         self.assertNotIn("10.0.2.2", "\n".join(overrides.values()))
@@ -185,15 +193,15 @@ class DevUpTest(unittest.TestCase):
         self.assertEqual(app_target_for_env("gamma"), "gamma-local")
         self.assertEqual(
             overrides["gatewayBaseUrl"],
-            "https://api.gamma.quwoquan.com:19000",
+            "https://gamma.quwoquan.com:19000/api",
         )
         self.assertEqual(
             overrides["legalBaseUrl"],
-            "https://api.gamma.quwoquan.com:19000/legal",
+            "https://gamma.quwoquan.com:19000/legal",
         )
         self.assertEqual(
             overrides["mediaImageBaseUrl"],
-            "https://cdn.gamma.quwoquan.com:19100",
+            "https://cdn.gamma.quwoquan.com:19100/media/image",
         )
 
     def test_prod_sim_maps_to_prod_runtime_env(self) -> None:
@@ -217,7 +225,7 @@ class DevUpTest(unittest.TestCase):
             ):
                 self.assertEqual(
                     deployment_render_root("gamma-local"),
-                    deploy_root / "gamma-local/rendered",
+                    (deploy_root / "gamma-local/rendered").resolve(),
                 )
                 self.assertEqual(
                     env_cache_target_root("gamma", "gamma-local"),
@@ -234,7 +242,7 @@ class DevUpTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     certificate_export_dir("gamma-local"),
-                    deploy_root / "gamma-local/certificates",
+                    (deploy_root / "gamma-local/certificates").resolve(),
                 )
 
     def test_local_runtime_roots_use_immutable_run_defaults(self) -> None:
@@ -338,56 +346,38 @@ class DevUpTest(unittest.TestCase):
             (0, 1),
         )
 
-    def test_stackctl_media_health_checks_include_video_range(self) -> None:
+    def test_stackctl_media_health_does_not_enumerate_fixture_assets(self) -> None:
         topology = load_environment_topology()
         checks = _health_checks_for_target(topology, "alpha-local", "media")
-        video_check = next(
-            item
-            for item in checks
-            if item["name"] == "media-public-content-video-primary"
+        names = {str(item["name"]) for item in checks}
+        self.assertIn("media-edge-health", names)
+        self.assertFalse(
+            any(name.startswith("media-public-") for name in names),
         )
-        self.assertEqual(video_check["headers"], {"Range": "bytes=0-1"})
-        self.assertEqual(video_check["expectedStatus"], 206)
-        self.assertEqual(video_check["expectedContentTypePrefix"], "video/")
-        self.assertIn(
-            "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
-            video_check["url"],
-        )
-        cover_check = next(
-            item
-            for item in checks
-            if item["name"] == "media-public-media-canary-seek-125s-cover"
-        )
-        self.assertNotIn("headers", cover_check)
-        self.assertNotIn("expectedStatus", cover_check)
-        self.assertEqual(cover_check["expectedContentTypePrefix"], "image/webp")
-        preview_manifest_check = next(
-            item
-            for item in checks
-            if item["name"]
-            == "media-public-media-canary-seek-125s-preview-manifest"
-        )
-        self.assertNotIn("headers", preview_manifest_check)
-        self.assertEqual(
-            preview_manifest_check["expectedContentTypePrefix"],
-            "application/json",
-        )
+        self.assertFalse(any(name.startswith("media-origin-") for name in names))
 
-    def test_stackctl_t4_blocks_on_full_seeded_media_surface(self) -> None:
+    def test_stackctl_t4_requires_release_bound_video_canary(self) -> None:
         for env_name in ("alpha", "beta", "gamma"):
             with self.subTest(env_name=env_name):
-                command = _seeded_media_surface_profile_command(env_name, f"{env_name}-local")
+                command = _target_media_preflight_profile_command(
+                    f"{env_name}-local",
+                    Path(f"/tmp/{env_name}-report"),
+                )
                 self.assertIsNotNone(command)
                 assert command is not None
                 argv = command["argv"]
-                self.assertEqual(command["name"], "seeded-media-surface")
-                self.assertIn("quwoquan_ops/gate/verify_alpha_media_fixture_surface.py", argv)
-                self.assertIn("--env", argv)
-                self.assertIn(env_name, argv)
+                self.assertEqual(
+                    command["name"],
+                    f"{env_name}-local-release-video-canary-preflight",
+                )
+                self.assertIn(
+                    "quwoquan_ops/cli/smoke/verify_video_playback_canary.py",
+                    argv,
+                )
                 self.assertIn("--target", argv)
-                self.assertNotIn("--avatar-base-url", argv)
-                self.assertNotIn("--media-base-url", argv)
-                self.assertNotIn("--video-base-url", argv)
+                self.assertIn(f"{env_name}-local", argv)
+                self.assertNotIn("verify_alpha_media_fixture_surface.py", " ".join(argv))
+                self.assertTrue(command["stopOnFailure"])
 
     def test_alpha_local_content_release_has_no_fixture_authorities(self) -> None:
         script = (
@@ -396,12 +386,16 @@ class DevUpTest(unittest.TestCase):
         self.assertNotIn("test_fixtures", script)
         self.assertNotIn("mock.png", script)
 
-    def test_beta_manual_uses_range_aware_media_origin(self) -> None:
+    def test_beta_manual_uses_release_owned_media_origin(self) -> None:
         script = (ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn("quwoquan_ops/cli/lib/local_media_origin.py", script)
-        self.assertIn("beta_manual_wait_http_range_ok", script)
+        self.assertIn('MEDIA_DIR="$CACHE_DIR/media"', script)
+        self.assertIn("ship apply is the only writer of this directory", script)
+        self.assertIn("path.is_symlink()", script)
+        self.assertNotIn("contracts/metadata/_shared/test_fixtures", script)
+        self.assertNotIn("fixture_photo_001", script)
         self.assertNotIn("python3 -m http.server", script)
 
     def test_android_launchers_use_system_public_ca_only(self) -> None:
@@ -423,9 +417,39 @@ class DevUpTest(unittest.TestCase):
         instance_launcher = (
             ROOT / "quwoquan_app/scripts/device/start_app_instance.sh"
         ).read_text(encoding="utf-8")
-        launcher_handoff = (
+        launcher_handoff_builder = (
             ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"
-        ).read_text(encoding="utf-8")
+        )
+        launch_manifest_metadata = yaml.safe_load(
+            (
+                ROOT
+                / "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        handoff_result = subprocess.run(
+            [
+                "python3",
+                str(launcher_handoff_builder),
+                "--env",
+                "prod",
+                "--target",
+                "prod-hosted",
+                "--launch-mode",
+                "user_acceptance",
+            ],
+            cwd=ROOT / "quwoquan_app",
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        launcher_handoff = json.loads(handoff_result.stdout)
+        effective_handoff = launcher_handoff["effectiveLaunchManifest"]
+        effective_schema = launch_manifest_metadata["schemas"][
+            "app_effective_launch_manifest"
+        ]
+        handoff_schema = launch_manifest_metadata["schemas"][
+            "app_launcher_handoff"
+        ]
         alpha_script = (
             ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
         ).read_text(encoding="utf-8")
@@ -457,9 +481,26 @@ class DevUpTest(unittest.TestCase):
         self.assertIn("QWQ_CONSUMER_LEASE_ACQUIRED", build_gradle)
         self.assertIn("QWQ_ANDROID_LOCAL_PORTS", build_gradle)
         self.assertIn("build_launcher_handoff.py", instance_launcher)
-        self.assertNotIn("runners/alpha", launcher_handoff)
-        self.assertIn("lib/main_prod.dart", launcher_handoff)
-        self.assertIn("prod-sim", launcher_handoff)
+        self.assertEqual(
+            launch_manifest_metadata["target_environment"]["prod-sim"],
+            "prod",
+        )
+        self.assertEqual(
+            launcher_handoff["entrypoint"],
+            effective_schema["fields"]["entrypoint"]["const"],
+        )
+        self.assertEqual(
+            launcher_handoff["entrypoint"],
+            effective_handoff["entrypoint"],
+        )
+        self.assertEqual(
+            launcher_handoff["schema"],
+            handoff_schema["schema_value"],
+        )
+        self.assertEqual(
+            set(launcher_handoff),
+            set(handoff_schema["required_fields"]),
+        )
         self.assertNotIn("QWQ_ANDROID_LOCAL_ENV_CA", instance_launcher)
         self.assertIn("runtimeConfigDigest", instance_launcher)
         self.assertIn("dartDefinesDigest", instance_launcher)
@@ -625,7 +666,7 @@ class DevUpTest(unittest.TestCase):
             ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"',
+            'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/rendered"',
             gamma_script,
         )
         self.assertIn(
@@ -642,7 +683,11 @@ class DevUpTest(unittest.TestCase):
             gamma_script,
         )
         self.assertIn(
-            'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/gamma/local/gamma-local/process"',
+            'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/${QWQ_LOCAL_RELEASE_ENV}/local/${QWQ_LOCAL_RELEASE_TARGET}/process"',
+            gamma_script,
+        )
+        self.assertIn(
+            'LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"',
             gamma_script,
         )
         self.assertIn('-v "${LOCAL_GAMMA_CADDY_DATA_VOLUME}:/data" \\', gamma_script)
@@ -673,9 +718,8 @@ class DevUpTest(unittest.TestCase):
             / "quwoquan_service/services/assistant-service/deploy/compose.yaml"
         ).read_text(encoding="utf-8")
 
-        self.assertIn(
-            'export LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE=', gamma_script
-        )
+        self.assertIn('image_key="LOCAL_GAMMA_${service_key}_IMAGE"', gamma_script)
+        self.assertIn("validate_local_gamma_image_composition", gamma_script)
         self.assertIn(
             'copy_service_package_config "$service"',
             gamma_script,
@@ -700,20 +744,20 @@ class DevUpTest(unittest.TestCase):
         self.assertIn('NOTIFICATION_REDIS_GENERAL_DB: "1"', gamma_compose)
         self.assertIn('NOTIFICATION_REDIS_REALTIME_DB: "4"', gamma_compose)
 
-    def test_gamma_local_search_backfill_blocks_incomplete_read_model(self) -> None:
+    def test_gamma_local_search_projection_is_owned_by_release_activation(self) -> None:
         gamma_script = (
             ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("--request-timeout \"$LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT\"", gamma_script)
-        self.assertIn(
-            "gamma startup is blocked because /search would be incomplete",
-            gamma_script,
-        )
+        self.assertNotIn("LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT", gamma_script)
         self.assertNotIn("WARN: skip search backfill", gamma_script)
         self.assertNotIn("WARN: search backfill failed", gamma_script)
-        self.assertIn("_id: profilePost", gamma_script)
-        self.assertIn("_id: sharedPost", gamma_script)
+        self.assertNotIn("_id: profilePost", gamma_script)
+        self.assertNotIn("_id: sharedPost", gamma_script)
+        self.assertIn(
+            "immutable release activation owns business data and search projections",
+            gamma_script,
+        )
 
     def test_local_launchers_use_canonical_output_roots_without_retired_fallbacks(self) -> None:
         beta_stack = (
@@ -773,10 +817,9 @@ class DevUpTest(unittest.TestCase):
         self.assertEqual(drilldown["totalCount"], 1)
         self.assertEqual(drilldown["items"][0]["eventId"], "evt-1")
 
-    def test_alpha_mock_public_plane_ops_visit_and_experiment_endpoints(self) -> None:
+    def test_alpha_mock_public_plane_ops_visit_keeps_experiments_absent(self) -> None:
         handler = MockPublicPlaneHandler.__new__(MockPublicPlaneHandler)
         MockPublicPlaneHandler.ops_visits = []
-        MockPublicPlaneHandler.ops_experiment_assignments = {}
         record = handler._record_ops_visit(
             {
                 "userId": "user-1",
@@ -793,10 +836,8 @@ class DevUpTest(unittest.TestCase):
             }
         )
         self.assertEqual(stats["totalVisits"], 1)
-        assignment = handler._resolve_experiment_assignment("discovery_feed_v3", "user-1")
-        self.assertEqual(assignment["experimentId"], "discovery_feed_v3")
-        experiment_stats = handler._build_experiment_stats("discovery_feed_v3")
-        self.assertEqual(experiment_stats["assignedSubjects"], 1)
+        self.assertFalse(hasattr(handler, "_resolve_experiment_assignment"))
+        self.assertFalse(hasattr(handler, "_build_experiment_stats"))
 
     def test_alpha_mock_public_plane_serves_legal_static_package(self) -> None:
         previous = {

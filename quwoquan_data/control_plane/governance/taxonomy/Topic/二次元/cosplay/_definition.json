@@ -2,6 +2,7 @@
   "label": "cosplay",
   "labelEn": "Cosplay",
   "description": "角色扮演与服装制作",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

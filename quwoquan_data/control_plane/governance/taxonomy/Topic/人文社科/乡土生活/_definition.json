@@ -2,6 +2,7 @@
   "label": "乡土生活",
   "labelEn": "Local Life",
   "description": "乡村、县城与地方日常生活",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

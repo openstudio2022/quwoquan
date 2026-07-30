@@ -152,6 +152,9 @@ def _coverage_targets(
             values = [str(v).strip() for v in (target.get(list_field) or []) if str(v).strip()]
             if values:
                 row[list_field] = values
+        # coordinates 已在 selection 阶段做过形状/范围校验，这里只透传给物化。
+        if isinstance(target.get("coordinates"), dict):
+            row["coordinates"] = dict(target["coordinates"])
         out.append(row)
     return out
 def homepage_runtime_spec(execution_id: str, spec: dict[str, Any]) -> dict[str, Any]:

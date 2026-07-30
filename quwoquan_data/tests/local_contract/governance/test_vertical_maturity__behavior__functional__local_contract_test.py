@@ -98,7 +98,7 @@ def test_photography_image_rights_accepts_authorized_payload():
 def test_travel_image_rights_are_asset_level_and_accept_authorized_payload():
     policy = load_travel_license_policy()
     assert policy["vertical"] == "travel"
-    assert rights_enforcement_mode("travel") is RightsEnforcementMode.AUDIT_ONLY
+    assert rights_enforcement_mode("travel") is RightsEnforcementMode.ENFORCE
     issues = audit_image_rights(
         {
             "url": "https://example.com/t.jpg",
@@ -177,7 +177,7 @@ def test_travel_image_rights_requires_generated_asset_provenance():
     assert allowed == [], allowed
 
 
-def test_travel_rights_audit_records_gaps_without_blocking_collection():
+def test_travel_rights_audit_records_gaps_and_blocks_collection():
     payload = {
         "url": "https://images.example.com/place.jpg",
         "platform": "test-gallery",
@@ -185,7 +185,7 @@ def test_travel_rights_audit_records_gaps_without_blocking_collection():
         "credit": "test-creator",
     }
     assert audit_image_rights(payload, vertical="travel")
-    assert validate_image_rights(payload, vertical="travel") == []
+    assert validate_image_rights(payload, vertical="travel")
 
 
 def test_vertical_quality_gate_has_golden_samples():

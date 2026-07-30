@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
+
 	"strings"
 )
 
 var generatedRouteTable = []generatedRouteDef{
-	{method: "POST", pathTemplate: "/content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts", operation: "UpdateProfileInteractionState"},
+	{method: "POST", pathTemplate: "/content/personas/{personaId}/interactions/{interactionId}/read-facts", operation: "UpdateProfileInteractionState"},
 }
 
 type generatedRouteDef struct {
@@ -120,29 +120,14 @@ func generatedSplitPath(raw string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-type GeneratedGetFeedParams struct {
-	Limit int
-}
-
-func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetFeedParams {
-	out := GeneratedGetFeedParams{Limit: defaultLimit}
-	q := r.URL.Query()
-	_ = q
-	_ = strconv.IntSize
-	if out.Limit <= 0 {
-		out.Limit = defaultLimit
-	}
-	return out
-}
-
-var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
+var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
 	"UpdateProfileInteractionState": {
 		"state": {},
 	},
 }
 
-func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
-	allowed, ok := generatedWritableFieldSetByOperation[operation]
+func BindGeneratedRequestBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
+	allowed, ok := generatedRequestBodyFieldSetByOperation[operation]
 	if !ok {
 		return nil, nil
 	}
@@ -160,7 +145,7 @@ func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (ma
 	sanitized := make(map[string]any, len(input))
 	for key, value := range input {
 		if _, allowedKey := allowed[key]; !allowedKey {
-			return nil, fmt.Errorf("field %q is not writable for operation %s", key, operation)
+			return nil, fmt.Errorf("field %q is not part of request body for operation %s", key, operation)
 		}
 		sanitized[key] = value
 	}

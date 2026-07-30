@@ -98,7 +98,7 @@ func renderDomain(domain string, operations []ast.Operation) ([]byte, error) {
 		OpenAPI: openAPIVersion,
 		Info: openAPIInfo{
 			Title:   "quwoquan " + domain + " API",
-			Version: "v1",
+			Version: "canonical",
 		},
 		Paths: map[string]openAPIPathItem{},
 		Components: openAPIComponents{
@@ -192,9 +192,10 @@ func buildRequestBody(
 	requestKind := strings.TrimSpace(operation.RequestBodyKind)
 	switch requestKind {
 	case "none":
-		if entity != "" {
-			return nil, fmt.Errorf("request_body_kind=none must not declare request_entity %q", entity)
-		}
+		// request_entity is the complete typed invocation model. For a bodyless
+		// operation all of its fields are bound to path/query/header/injected
+		// positions, so it remains useful to generators but emits no OpenAPI
+		// requestBody.
 		return nil, nil
 	case "object":
 		if entity == "" {
@@ -355,7 +356,7 @@ func pathParameters(pathTemplate string) []openAPIParameter {
 }
 
 func operationParameters(operation ast.Operation) []openAPIParameter {
-	parameters := pathParameters(operation.PathTemplate)
+	parameters := requestBindingParameters(operation)
 	if operation.Reliability.Idempotency == "required" ||
 		operation.Reliability.Idempotency == "optional" {
 		parameters = append(parameters, openAPIParameter{
@@ -366,13 +367,71 @@ func operationParameters(operation ast.Operation) []openAPIParameter {
 			Schema:      openAPISchema{Type: "string"},
 		})
 	}
-	if operation.Concurrency.VersionPrecondition == ast.VersionPreconditionIfMatch {
+	if operation.Concurrency.VersionPrecondition == ast.VersionPreconditionIfMatch &&
+		!hasRequestHeaderBinding(operation, "If-Match") {
 		parameters = append(parameters, openAPIParameter{
 			Name:        "If-Match",
 			In:          "header",
 			Required:    true,
 			Description: "Quoted positive aggregate version for a snapshot overwrite.",
 			Schema:      openAPISchema{Type: "string"},
+		})
+	}
+	return parameters
+}
+
+func hasRequestHeaderBinding(operation ast.Operation, expected string) bool {
+	if operation.RequestBindings == nil {
+		return false
+	}
+	for _, binding := range operation.RequestBindings.Header {
+		if strings.EqualFold(strings.TrimSpace(binding.Name), expected) {
+			return true
+		}
+	}
+	return false
+}
+
+func requestBindingParameters(operation ast.Operation) []openAPIParameter {
+	if operation.RequestBindings == nil {
+		return pathParameters(operation.PathTemplate)
+	}
+	bindings := operation.RequestBindings
+	parameters := make(
+		[]openAPIParameter,
+		0,
+		len(bindings.Path)+len(bindings.Query)+len(bindings.Header),
+	)
+	for _, binding := range bindings.Path {
+		parameters = append(parameters, openAPIParameter{
+			Name:     binding.Name,
+			In:       "path",
+			Required: true,
+			Schema:   openAPISchema{Type: "string"},
+		})
+	}
+	for _, binding := range bindings.Query {
+		required := false
+		if binding.Required != nil {
+			required = *binding.Required
+		}
+		parameters = append(parameters, openAPIParameter{
+			Name:     binding.Name,
+			In:       "query",
+			Required: required,
+			Schema:   openAPISchema{Type: "string"},
+		})
+	}
+	for _, binding := range bindings.Header {
+		required := false
+		if binding.Required != nil {
+			required = *binding.Required
+		}
+		parameters = append(parameters, openAPIParameter{
+			Name:     binding.Name,
+			In:       "header",
+			Required: required,
+			Schema:   openAPISchema{Type: "string"},
 		})
 	}
 	return parameters

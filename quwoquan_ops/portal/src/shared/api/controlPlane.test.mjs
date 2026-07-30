@@ -473,7 +473,7 @@ test('requests effective config from platform control plane', async () => {
     resolvedAt: '2026-05-17T00:00:00Z',
     effectiveHash: 'hash-1',
     desiredHash: 'hash-1',
-    values: [{ key: 'sys.gateway.rate_limit.per_user_rps', value: 50, scopeLevel: 'service', scopeId: 'product-ops-service', sourceLayer: 'service:product-ops-service' }],
+    values: [{ key: 'sys.api-edge.rate_limit.query.limit', value: 50, scopeLevel: 'workload', scopeId: 'api-edge', sourceLayer: 'service:api-edge' }],
     source: 'control-plane',
     driftSummary: { totalInstances: 1, inSyncInstances: 1, outOfSyncInstances: 0 },
   });

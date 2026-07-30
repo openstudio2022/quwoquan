@@ -20,7 +20,6 @@ var (
 	ErrStartupConfigurationInvalid    = errors.New("OPS.SYSTEM.startup_configuration_invalid")
 	ErrStartupInitializationFailed    = errors.New("OPS.SYSTEM.startup_initialization_failed")
 	ErrStartupRouterUnavailable       = errors.New("OPS.SYSTEM.startup_router_unavailable")
-	ErrUnclassifiedPageFailure        = errors.New("OPS.SYSTEM.unclassified_page_failure")
 	ErrStartupNativeFirstFrameTimeout = errors.New("OPS.SYSTEM.startup_native_first_frame_timeout")
 	ErrStartupEventInvalid            = errors.New("OPS.USER.startup_event_invalid")
 	ErrStartupTelemetryUnavailable    = errors.New("OPS.SYSTEM.startup_telemetry_unavailable")
@@ -71,31 +70,25 @@ func AppErrorFromRuntimeLogstoreUnavailable(debugMessage string) *rerrors.AppErr
 // AppErrorFromStartupConfigurationInvalid returns *AppError for OPS.SYSTEM.startup_configuration_invalid (user_message from errors.yaml).
 func AppErrorFromStartupConfigurationInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupConfigurationInvalid.Error()))
-	return rerrors.NewAppError(code, "启动配置不可用，请检查网络后重试", debugMessage).WithMetadata("startup_configuration_invalid", 500).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "启动配置不可用，请检查网络后重试", debugMessage).WithMetadata("startup_configuration_invalid", 0).WithRecovery("retry", 0)
 }
 
 // AppErrorFromStartupInitializationFailed returns *AppError for OPS.SYSTEM.startup_initialization_failed (user_message from errors.yaml).
 func AppErrorFromStartupInitializationFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupInitializationFailed.Error()))
-	return rerrors.NewAppError(code, "应用启动遇到问题，请重试", debugMessage).WithMetadata("startup_initialization_failed", 500).WithRecovery("retry", 0)
+	return rerrors.NewAppError(code, "应用启动遇到问题，请重试", debugMessage).WithMetadata("startup_initialization_failed", 0).WithRecovery("retry", 0)
 }
 
 // AppErrorFromStartupRouterUnavailable returns *AppError for OPS.SYSTEM.startup_router_unavailable (user_message from errors.yaml).
 func AppErrorFromStartupRouterUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupRouterUnavailable.Error()))
-	return rerrors.NewAppError(code, "页面暂时无法打开，请重试", debugMessage).WithMetadata("startup_router_unavailable", 503).WithRecovery("retry", 1)
-}
-
-// AppErrorFromUnclassifiedPageFailure returns *AppError for OPS.SYSTEM.unclassified_page_failure (user_message from errors.yaml).
-func AppErrorFromUnclassifiedPageFailure(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrUnclassifiedPageFailure.Error()))
-	return rerrors.NewAppError(code, "页面遇到未分类异常", debugMessage).WithMetadata("unclassified_page_failure", 500).WithRecovery("absorb", 0)
+	return rerrors.NewAppError(code, "页面暂时无法打开，请重试", debugMessage).WithMetadata("startup_router_unavailable", 0).WithRecovery("retry", 1)
 }
 
 // AppErrorFromStartupNativeFirstFrameTimeout returns *AppError for OPS.SYSTEM.startup_native_first_frame_timeout (user_message from errors.yaml).
 func AppErrorFromStartupNativeFirstFrameTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrStartupNativeFirstFrameTimeout.Error()))
-	return rerrors.NewAppError(code, "应用界面未能及时显示，请重试", debugMessage).WithMetadata("startup_native_first_frame_timeout", 503).WithRecovery("retry", 1)
+	return rerrors.NewAppError(code, "应用界面未能及时显示，请重试", debugMessage).WithMetadata("startup_native_first_frame_timeout", 0).WithRecovery("retry", 1)
 }
 
 // AppErrorFromStartupEventInvalid returns *AppError for OPS.USER.startup_event_invalid (user_message from errors.yaml).

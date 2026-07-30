@@ -36,3 +36,7 @@ def test_governance_schemas_are_valid_json_and_freeze_status_vocabulary() -> Non
     statuses = {"published", "pending_review", "rejected", "offline"}
     assert set(documents["candidate.schema.json"]["properties"]["status"]["enum"]) == statuses
     assert set(documents["semantic_mention.schema.json"]["properties"]["status"]["enum"]) == statuses
+    assert "revision" in documents["candidate.schema.json"]["required"]
+    assert "version" not in documents["candidate.schema.json"]["properties"]
+    assert "candidateRevision" in documents["audit_event.schema.json"]["required"]
+    assert "version" not in documents["audit_event.schema.json"]["properties"]

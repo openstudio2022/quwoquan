@@ -20,7 +20,7 @@ func TestGreeting_SendIdempotentReplay(t *testing.T) {
 	createTestPersonaFull(t, "", "gri_tgt", "sa_gri_tgt", "tgti", "default", true)
 
 	headers := authHeadersForPersona("gri_req", "sa_gri_req")
-	body := `{"targetSubAccountId":"sa_gri_tgt","requestMessage":"hello","source":"profile"}`
+	body := `{"targetPersonaId":"sa_gri_tgt","requestMessage":"hello","source":"profile"}`
 
 	first := doGreetingRequestWithKey(t, body, headers, "greeting-retry-key-1")
 	if first.Code != http.StatusCreated {
@@ -44,7 +44,7 @@ func TestGreeting_SendIdempotentReplay(t *testing.T) {
 	var pendingCount int
 	if err := pgPool.QueryRow(context.Background(), `
 		SELECT COUNT(*) FROM greeting_requests
-		WHERE requester_sub_account_id = 'sa_gri_req' AND status = 'pending'`,
+		WHERE requester_persona_id = 'sa_gri_req' AND status = 'pending'`,
 	).Scan(&pendingCount); err != nil {
 		t.Fatalf("count pending: %v", err)
 	}

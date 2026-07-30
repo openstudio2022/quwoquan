@@ -49,7 +49,7 @@ abstract final class CreatePageText {
   static const String fontPreviewSample = '春江';
   static const String articleReaderPreviewSample = '春风起，纸面轻轻落下';
   static const String markdownHtmlNotAllowed =
-      'QWQ Rich Markdown v1 不允许任意 HTML';
+      'QWQ Rich Markdown 不允许任意 HTML';
   static const String markdownFrontMatterUnclosed = 'front matter 缺少结束 ---';
   static const String markdownFrontMatterInvalid = 'front matter 解析失败';
   static const String markdownDirectiveInvalid = '富布局指令格式不合法';

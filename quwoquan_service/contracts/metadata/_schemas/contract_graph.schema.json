@@ -6,6 +6,7 @@
   "required": [
     "objects",
     "operations",
+    "runtimeEntrypoints",
     "projections",
     "businessObjectMaps",
     "readinessEvidence",
@@ -72,6 +73,49 @@
           },
           "requestEntity": { "type": "string", "minLength": 1 },
           "requestBodyKind": { "enum": ["object", "none"] },
+          "requestBindings": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              },
+              "query": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              },
+              "header": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              },
+              "injected": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              }
+            }
+          },
+          "requestConstants": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["name", "value"],
+                  "properties": {
+                    "name": { "type": "string", "minLength": 1 },
+                    "value": {
+                      "type": ["string", "number", "integer", "boolean", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "responseEntity": { "type": "string", "minLength": 1 },
           "responseBody": { "type": "string", "minLength": 1 },
           "responseBodyKind": { "type": "string", "minLength": 1 },
@@ -139,6 +183,34 @@
               }
             }
           },
+          "pagination": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["defaultItems", "maximumItems"],
+            "properties": {
+              "defaultItems": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "maximumItems": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              }
+            }
+          },
+          "responseAdmission": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["maximumBodyBytes"],
+            "properties": {
+              "maximumBodyBytes": {
+                "type": "integer",
+                "minimum": 1024
+              }
+            }
+          },
           "concurrency": {
             "type": "object",
             "additionalProperties": false,
@@ -202,25 +274,13 @@
             "additionalProperties": false,
             "required": [
               "dartImport",
-              "requestType",
               "responseType",
-              "requestEncoder",
               "responseDecoder"
             ],
             "properties": {
               "dartImport": { "type": "string", "minLength": 1 },
-              "requestType": { "type": "string", "minLength": 1 },
               "responseType": { "type": "string", "minLength": 1 },
-              "requestEncoder": { "type": "string", "minLength": 1 },
-              "responseDecoder": { "type": "string", "minLength": 1 },
-              "pathBindings": {
-                "type": "object",
-                "additionalProperties": { "type": "string", "minLength": 1 }
-              },
-              "queryBindings": {
-                "type": "object",
-                "additionalProperties": { "type": "string", "minLength": 1 }
-              }
+              "responseDecoder": { "type": "string", "minLength": 1 }
             }
           }
         },
@@ -302,11 +362,70 @@
         ]
       }
     },
+    "runtimeEntrypoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "localId",
+          "domain",
+          "objectId",
+          "runtimeKind",
+          "phase",
+          "applicationKind",
+          "facet",
+          "facadeMethod",
+          "sessionOwner",
+          "sourcePath"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "localId": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]+$"
+          },
+          "domain": { "type": "string", "minLength": 1 },
+          "objectId": { "type": "string", "minLength": 1 },
+          "runtimeKind": { "const": "middleware" },
+          "phase": { "const": "post_authorization_pre_owner_proxy" },
+          "applicationKind": { "const": "session" },
+          "facet": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*Facade$"
+          },
+          "facadeMethod": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]*$"
+          },
+          "sessionOwner": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "sourcePath": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "projections": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "domain", "objectId", "readModel", "sourcePath"]
+        "additionalProperties": false,
+        "required": ["id", "domain", "objectId", "readModel", "readModelExplicit", "sourcePath"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "domain": { "type": "string", "minLength": 1 },
+          "objectId": { "type": "string", "minLength": 1 },
+          "readModel": { "type": "string", "minLength": 1 },
+          "readModelExplicit": { "type": "boolean" },
+          "dartClass": { "type": "string", "minLength": 1 },
+          "outputPath": { "type": "string", "minLength": 1 },
+          "fieldNames": { "$ref": "#/$defs/fieldNames" },
+          "sourceEntities": { "$ref": "#/$defs/stringList" },
+          "sourceEvents": { "$ref": "#/$defs/stringList" },
+          "sourcePath": { "type": "string", "minLength": 1 }
+        }
       }
     },
     "businessObjectMaps": {
@@ -497,6 +616,16 @@
     }
   },
   "$defs": {
+    "requestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "field"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      }
+    },
     "boundedContext": {
       "type": "object",
       "additionalProperties": false,

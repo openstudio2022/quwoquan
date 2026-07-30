@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/account_session_contracts.requests.g.dart';
 
 /// AccountSession 聚合登录/刷新/登出命令的 pure contracts。
 /// 真相源：quwoquan_service/services/user-service/contracts/account/account_session/{service,fields}.yaml。
@@ -11,162 +12,11 @@ final class AccountSessionTokenExpiredException implements Exception {
   const AccountSessionTokenExpiredException();
 }
 
-final class LoginWithPhoneCommand {
-  LoginWithPhoneCommand({
-    required String phone,
-    required String otpCode,
-    required String deviceId,
-    required String platform,
-    required String appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) : phone = _required(phone, 'phone'),
-       otpCode = _required(otpCode, 'otpCode'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform'),
-       appVersion = _required(appVersion, 'appVersion'),
-       agreementVersion = _required(agreementVersion, 'agreementVersion'),
-       privacyVersion = _required(privacyVersion, 'privacyVersion');
-
-  final String phone;
-  final String otpCode;
-  final String deviceId;
-  final String platform;
-  final String appVersion;
-  final String agreementVersion;
-  final String privacyVersion;
-}
-
-final class LoginWithWechatCommand {
-  LoginWithWechatCommand({
-    required String wechatCode,
-    required String deviceId,
-    required String platform,
-    this.appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) : wechatCode = _required(wechatCode, 'wechatCode'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform'),
-       agreementVersion = _required(agreementVersion, 'agreementVersion'),
-       privacyVersion = _required(privacyVersion, 'privacyVersion');
-
-  final String wechatCode;
-  final String deviceId;
-  final String platform;
-  final String? appVersion;
-  final String agreementVersion;
-  final String privacyVersion;
-}
-
-final class LoginWithAlipayCommand {
-  LoginWithAlipayCommand({
-    required String alipayAuthCode,
-    required String deviceId,
-    required String platform,
-    this.appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) : alipayAuthCode = _required(alipayAuthCode, 'alipayAuthCode'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform'),
-       agreementVersion = _required(agreementVersion, 'agreementVersion'),
-       privacyVersion = _required(privacyVersion, 'privacyVersion');
-
-  final String alipayAuthCode;
-  final String deviceId;
-  final String platform;
-  final String? appVersion;
-  final String agreementVersion;
-  final String privacyVersion;
-}
-
-final class LoginWithQqCommand {
-  LoginWithQqCommand({
-    required String qqAuthCode,
-    required String deviceId,
-    required String platform,
-    this.appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) : qqAuthCode = _required(qqAuthCode, 'qqAuthCode'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform'),
-       agreementVersion = _required(agreementVersion, 'agreementVersion'),
-       privacyVersion = _required(privacyVersion, 'privacyVersion');
-
-  final String qqAuthCode;
-  final String deviceId;
-  final String platform;
-  final String? appVersion;
-  final String agreementVersion;
-  final String privacyVersion;
-}
-
-final class LoginOneTapCommand {
-  LoginOneTapCommand({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    this.appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) : vendor = _required(vendor, 'vendor'),
-       carrierToken = _required(carrierToken, 'carrierToken'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform'),
-       agreementVersion = _required(agreementVersion, 'agreementVersion'),
-       privacyVersion = _required(privacyVersion, 'privacyVersion');
-
-  final String vendor;
-  final String carrierToken;
-  final String deviceId;
-  final String platform;
-  final String? appVersion;
-  final String agreementVersion;
-  final String privacyVersion;
-}
-
-final class LoginAnonymousCommand {
-  LoginAnonymousCommand({
-    required String installId,
-    required String deviceFingerprintHash,
-    required String platform,
-    required String appVersion,
-  }) : installId = _required(installId, 'installId'),
-       deviceFingerprintHash = _required(
-         deviceFingerprintHash,
-         'deviceFingerprintHash',
-       ),
-       platform = _required(platform, 'platform'),
-       appVersion = _required(appVersion, 'appVersion');
-
-  final String installId;
-  final String deviceFingerprintHash;
-  final String platform;
-  final String appVersion;
-}
-
-final class RefreshTokenCommand {
-  RefreshTokenCommand({required String refreshToken})
-    : refreshToken = _required(refreshToken, 'refreshToken');
-
-  final String refreshToken;
-}
-
-final class LogoutCommand {
-  LogoutCommand({this.refreshToken, this.deviceId});
-
-  final String? refreshToken;
-  final String? deviceId;
-}
-
-/// 登录响应中的激活分身摘要（wire: activeSub envelope）。
+/// 登录响应中的激活分身摘要（wire: activePersona envelope）。
 final class ActivePersonaEnvelope {
-  const ActivePersonaEnvelope({required this.subAccountId});
+  const ActivePersonaEnvelope({required this.personaId});
 
-  final String subAccountId;
+  final String personaId;
 }
 
 /// 登录响应中的既有账号提示（wire: accountHint，用于快速登录确认 UI）。
@@ -198,9 +48,9 @@ final class AuthSessionGrant {
     required this.identityOrigin,
     required this.logicalShard,
     required this.anonymousRetentionPolicy,
-    required this.subAccountCount,
+    required this.personaCount,
     required this.sessionRememberTtlSeconds,
-    this.activeSub,
+    this.activePersona,
     this.accountHint,
   });
 
@@ -211,11 +61,11 @@ final class AuthSessionGrant {
   final String identityOrigin;
   final int logicalShard;
   final String anonymousRetentionPolicy;
-  final int subAccountCount;
+  final int personaCount;
 
   /// 快速登录有效期（秒）；0 表示云端未下发，端侧用默认值兜底。
   final int sessionRememberTtlSeconds;
-  final ActivePersonaEnvelope? activeSub;
+  final ActivePersonaEnvelope? activePersona;
   final AccountHintSnapshot? accountHint;
 }
 
@@ -269,13 +119,9 @@ final class LogoutAck {
 abstract interface class AccountSessionLoginCommandWriter {
   Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command);
 
-  Future<FederatedLoginOutcome> loginWithWechat(
-    LoginWithWechatCommand command,
-  );
+  Future<FederatedLoginOutcome> loginWithWechat(LoginWithWechatCommand command);
 
-  Future<FederatedLoginOutcome> loginWithAlipay(
-    LoginWithAlipayCommand command,
-  );
+  Future<FederatedLoginOutcome> loginWithAlipay(LoginWithAlipayCommand command);
 
   Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command);
 
@@ -300,98 +146,6 @@ abstract interface class AccountSessionCommandWriter
         AccountSessionLoginCommandWriter,
         AccountSessionLifecycleCommandWriter {}
 
-CloudOperationRequestPayload encodeLoginWithPhoneCommand(
-  LoginWithPhoneCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'phone': command.phone,
-    'otpCode': command.otpCode,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    'appVersion': command.appVersion,
-    'agreementVersion': command.agreementVersion,
-    'privacyVersion': command.privacyVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeLoginWithWechatCommand(
-  LoginWithWechatCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'wechatCode': command.wechatCode,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    if (command.appVersion != null) 'appVersion': command.appVersion,
-    'agreementVersion': command.agreementVersion,
-    'privacyVersion': command.privacyVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeLoginWithAlipayCommand(
-  LoginWithAlipayCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'alipayAuthCode': command.alipayAuthCode,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    if (command.appVersion != null) 'appVersion': command.appVersion,
-    'agreementVersion': command.agreementVersion,
-    'privacyVersion': command.privacyVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeLoginWithQqCommand(
-  LoginWithQqCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'qqAuthCode': command.qqAuthCode,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    if (command.appVersion != null) 'appVersion': command.appVersion,
-    'agreementVersion': command.agreementVersion,
-    'privacyVersion': command.privacyVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeLoginOneTapCommand(
-  LoginOneTapCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'vendor': command.vendor,
-    'carrierToken': command.carrierToken,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    if (command.appVersion != null) 'appVersion': command.appVersion,
-    'agreementVersion': command.agreementVersion,
-    'privacyVersion': command.privacyVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeLoginAnonymousCommand(
-  LoginAnonymousCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'installId': command.installId,
-    'deviceFingerprintHash': command.deviceFingerprintHash,
-    'platform': command.platform,
-    'appVersion': command.appVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeRefreshTokenCommand(
-  RefreshTokenCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{'refreshToken': command.refreshToken},
-);
-
-CloudOperationRequestPayload encodeLogoutCommand(LogoutCommand command) =>
-    CloudOperationRequestPayload(
-      body: <String, Object?>{
-        if (command.refreshToken != null) 'refreshToken': command.refreshToken,
-        if (command.deviceId != null) 'deviceId': command.deviceId,
-      },
-    );
-
 AuthSessionGrant decodeAuthSessionGrant(Object? value) {
   final map = _object(value, 'AuthSessionGrant');
   return AuthSessionGrant(
@@ -402,9 +156,9 @@ AuthSessionGrant decodeAuthSessionGrant(Object? value) {
     identityOrigin: _stringOr(map, 'identityOrigin', ''),
     logicalShard: _intOr(map, 'logicalShard', 0),
     anonymousRetentionPolicy: _stringOr(map, 'anonymousRetentionPolicy', ''),
-    subAccountCount: _intOr(map, 'subAccountCount', 0),
+    personaCount: _intOr(map, 'personaCount', 0),
     sessionRememberTtlSeconds: _intOr(map, 'sessionRememberTtlSeconds', 0),
-    activeSub: _activePersona(map['activeSub']),
+    activePersona: _activePersona(map['activePersona']),
     accountHint: _accountHint(map['accountHint']),
   );
 }
@@ -462,12 +216,12 @@ LogoutAck decodeLogoutAck(Object? value) {
 
 ActivePersonaEnvelope? _activePersona(Object? value) {
   if (value == null) return null;
-  final map = _object(value, 'activeSub');
-  final subAccountId = map['subAccountId'];
-  if (subAccountId is! String || subAccountId.trim().isEmpty) {
+  final map = _object(value, 'activePersona');
+  final personaId = map['personaId'];
+  if (personaId is! String || personaId.trim().isEmpty) {
     return null;
   }
-  return ActivePersonaEnvelope(subAccountId: subAccountId.trim());
+  return ActivePersonaEnvelope(personaId: personaId.trim());
 }
 
 AccountHintSnapshot? _accountHint(Object? value) {
@@ -511,10 +265,4 @@ int _intOr(Map<String, Object?> map, String key, int fallback) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return fallback;
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }

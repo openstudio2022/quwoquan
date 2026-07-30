@@ -1,0 +1,12 @@
+{
+  "label": "圣灵群岛",
+  "labelEn": "Whitsundays",
+  "description": "白天堂沙滩与帆船胜地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

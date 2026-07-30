@@ -57,9 +57,19 @@ def current_git_branch(*, cwd: str | Path | None = None) -> str:
         )
     except Exception:  # noqa: BLE001
         return ""
-    if result.returncode != 0:
-        return ""
-    return str(result.stdout or "").strip()
+    branch = (
+        str(result.stdout or "").strip()
+        if result.returncode == 0
+        else ""
+    )
+    if branch:
+        return branch
+    # Campaign lanes deliberately run at detached HEAD. The controller freezes
+    # the named main branch and root execution ID together, then passes both to
+    # the lane; ordinary detached executions remain fail-closed.
+    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip():
+        return str(os.environ.get("QWQ_FROZEN_MAIN_BRANCH") or "").strip()
+    return ""
 
 
 def current_git_commit(*, cwd: str | Path | None = None) -> str:

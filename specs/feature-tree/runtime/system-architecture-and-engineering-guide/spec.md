@@ -78,6 +78,9 @@
 - owned_entity/value_object 只作为聚合成员，不存在独立对象根
 - business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
 - ContractGraph、OpenAPI 和派生对象索引可由受版本控制的 metadata 重建
+- stateful object 的 `lifecycle.state_field` 必须引用同对象 enum field 且 states 与 enum wire value 精确一致；append_only_fact 必须声明 immutable，其他 kind 禁止借用 immutable 逃逸生命周期校验
+- enum 仅允许 global/service/object 三级最近 owner 解析，同名 shadow、同 owner 重复、跨对象私有重复、悬空引用和 dead definition 均 fail-closed
+- fields 中所有 type/semantic_type 必须能解析且语义兼容；projection 必须显式声明 `read_model` 与非空字段 shape，客户端 `dart_class + output_path` 成对且全图唯一
 
 <a id="req-002"></a>
 ### REQ-002 服务目录、DDD 依赖与 CQRS 规则
@@ -115,6 +118,8 @@
 - 每个真实外部调用形成 operations capability 到环境 Binding、adapter/workload 和 conformance evidence 的闭环；共享 capability 由唯一 owner 的 `externalDependencies` 与 consumer object 的显式 capability-use 派生，禁止外置 consumer/root 清单
 - 不存在外部服务总注册表、provider assertion 清单或 registered_only 运行项
 - gamma 外部 Provider 只选择 typed Port 对等本地替身且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
+- Provider request、attempt、result 与 dead-letter 账本只由 `integration.ExternalInteraction` 及其事实对象维护；消费方只保存 `externalInteractionId` 与幂等 inbox receipt，禁止复制 provider 状态账本
+- 声明 identity、事件 payload 或 projection 的 `external_reference` 必须拥有字段契约并使用 typed payload，禁止以未声明字段或原始 `object` 形成第二真相源
 - coturn 和 livekit 位于 Ops external workload；seed-box 数量为零，seed 由各领域服务 job 自治执行
 - legal 位于 static/legal，platform-ops 位于 control-plane，rec-model 归 recommendation-service
 - 上述特殊资产均不被扫描为领域服务或业务对象 owner
@@ -166,6 +171,7 @@
 - THEN owned_entity/value_object 只作为聚合成员，不存在独立对象根
 - THEN business_object_map、对象 readiness、aggregate/entity/service 文件及全局对象 catalog 数量为零
 - THEN ContractGraph、OpenAPI 和派生对象索引可由受版本控制的 metadata 重建
+- THEN lifecycle、enum owner、field type/semantic_type 与 projection shape/output 的跨文档漂移由 compiler 硬失败，且不存在 warn-only 或按服务豁免
 
 <a id="sit-002"></a>
 ### SIT-002 服务目录、DDD 依赖与 CQRS 规则
@@ -208,6 +214,8 @@
 - THEN 每个真实外部调用形成 operations capability 到环境 Binding、adapter/workload 和 conformance evidence 的闭环，且共享 capability 仅由唯一 owner 的 `externalDependencies` 与 consumer object 的显式 capability-use 派生
 - THEN 不存在外部服务总注册表、provider assertion 清单或 registered_only 运行项
 - THEN gamma 外部 Provider 只选择 typed Port 对等本地替身且不使用 UI Mock/Provider override；prod 不选择 mock、fixture、本地替身、明文 secret 或无 conformance adapter
+- THEN Provider request、attempt、result 与 dead-letter 账本只存在于 `integration.ExternalInteraction` 及其事实对象，消费方只保存 `externalInteractionId` 与幂等 inbox receipt
+- THEN 每个声明 identity、事件 payload 或 projection 的 `external_reference` 都有对应字段契约并使用 typed payload，不存在未声明字段或原始 `object`
 - THEN coturn 和 livekit 位于 Ops external workload，seed-box 不存在且 seed 由服务 job 自治执行
 - THEN legal 位于 static/legal，platform-ops 位于 control-plane，rec-model 归 recommendation-service
 - THEN 上述特殊资产均不被扫描为领域服务或业务对象 owner

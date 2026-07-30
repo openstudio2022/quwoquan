@@ -246,6 +246,7 @@ class MediaViewerExtra {
     this.interactionSnapshot = const MediaViewerInteractionSnapshot(),
     this.referralSource = ReferralSource.organicFeed,
     this.feedRequestId,
+    this.policyDigest,
     this.position,
     this.commentContext = const MediaViewerCommentContext(),
   });
@@ -265,6 +266,7 @@ class MediaViewerExtra {
   final MediaViewerInteractionSnapshot interactionSnapshot;
   final ReferralSource referralSource;
   final String? feedRequestId;
+  final String? policyDigest;
 
   /// 入口 post 在 feed 中的位置（推荐归因用；从 feed 列表序号透传）。
   final int? position;
@@ -284,6 +286,7 @@ class MediaViewerExtra {
       interactionSnapshot: interactionSnapshot,
       referralSource: referralSource,
       feedRequestId: feedRequestId,
+      policyDigest: policyDigest,
       position: position,
       commentContext: commentContext ?? this.commentContext,
     );

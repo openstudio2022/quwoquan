@@ -2,6 +2,14 @@
   "label": "后期技巧",
   "labelEn": "Post-processing Tips",
   "description": "Lightroom/PS/手机修图技巧",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
 }

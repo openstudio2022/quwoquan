@@ -42,7 +42,7 @@ def main() -> int:
             )
     except (OSError, ValueError, OfficialDistributionReleaseError) as error:
         report = {
-            "schema": "qwq.android.distribution-prevalidation.v1",
+            "schema": "qwq.android.distribution-prevalidation",
             "status": "GATE_BLOCK",
             "issues": [str(error)],
         }

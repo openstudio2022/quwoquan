@@ -158,7 +158,7 @@ func TestProfileInteractionDeletedTargetBecomesUnavailable(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodDelete, "/content/posts/"+postID, nil)
 	request.Header.Set("X-Client-User-Id", "deleted-owner")
-	request.Header.Set("X-Client-Sub-Account-Id", "deleted-owner")
+	request.Header.Set("X-Client-Persona-Id", "deleted-owner")
 	request.Header.Set("Idempotency-Key", "delete-profile-target")
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
@@ -267,7 +267,7 @@ func createProfileInteractionLike(t *testing.T, postID, actor, idempotencyKey st
 	t.Helper()
 	request := httptest.NewRequest(http.MethodPost, "/content/posts/"+postID+"/like", nil)
 	request.Header.Set("X-Client-User-Id", actor)
-	request.Header.Set("X-Client-Sub-Account-Id", actor)
+	request.Header.Set("X-Client-Persona-Id", actor)
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
@@ -285,7 +285,7 @@ func createProfileInteractionComment(t *testing.T, postID, actor, idempotencyKey
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Client-User-Id", actor)
-	request.Header.Set("X-Client-Sub-Account-Id", actor)
+	request.Header.Set("X-Client-Persona-Id", actor)
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
@@ -300,12 +300,12 @@ func createProfileInteractionShare(t *testing.T, postID, actor, idempotencyKey s
 		http.MethodPost,
 		"/content/posts/"+postID+"/outbound-shares",
 		bytes.NewBufferString(
-			`{"channel":"system_share_sheet","destinationKind":"contact","destination":"profile-recipient","referralId":"profile-referral","deliverySucceeded":true,"providerReceiptId":"profile-receipt"}`,
+			`{"channel":"system_share","destinationKind":"external_app","destination":"profile-recipient","referralId":"profile-referral","deliverySucceeded":true,"providerReceiptId":"profile-receipt","clientConfirmedAt":"2026-07-28T20:00:00Z"}`,
 		),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Client-User-Id", actor)
-	request.Header.Set("X-Client-Sub-Account-Id", actor)
+	request.Header.Set("X-Client-Persona-Id", actor)
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
@@ -362,7 +362,7 @@ func profileInteractionListRequest(
 	request := httptest.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf(
-			"/content/sub-accounts/%s/interactions/%s?%s",
+			"/content/personas/%s/interactions/%s?%s",
 			owner,
 			direction,
 			query.Encode(),
@@ -370,7 +370,7 @@ func profileInteractionListRequest(
 		nil,
 	)
 	request.Header.Set("X-Client-User-Id", viewer)
-	request.Header.Set("X-Client-Sub-Account-Id", viewer)
+	request.Header.Set("X-Client-Persona-Id", viewer)
 	return request
 }
 
@@ -385,7 +385,7 @@ func appendProfileReadFact(
 	request := httptest.NewRequest(
 		http.MethodPost,
 		fmt.Sprintf(
-			"/content/sub-accounts/%s/interactions/%s/read-facts",
+			"/content/personas/%s/interactions/%s/read-facts",
 			owner,
 			activityID,
 		),
@@ -393,7 +393,7 @@ func appendProfileReadFact(
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Client-User-Id", owner)
-	request.Header.Set("X-Client-Sub-Account-Id", owner)
+	request.Header.Set("X-Client-Persona-Id", owner)
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)

@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_food_columnist_001
-subAccountId: builtin_travel_food_columnist
+personaId: builtin_travel_food_columnist
 authorId: builtin_travel_food_columnist
 isSystemBuiltin: true
 displayName: 风物食记林岚
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.88
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/美食餐饮/菜系/中国菜系
   - Topic/美食餐饮/特色食材/应季食材

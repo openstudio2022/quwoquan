@@ -2,6 +2,7 @@
   "label": "银发专享",
   "labelEn": "Senior Guide",
   "description": "适合老年人的攻略",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

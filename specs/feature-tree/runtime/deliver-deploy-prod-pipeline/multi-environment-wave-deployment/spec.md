@@ -27,7 +27,14 @@
 <a id="req-001"></a>
 ### REQ-001 多环境波次部署
 
-- 按 alpha、beta、gamma、prod 的准入顺序发布同一制品，任一波次失败即停止晋级。
+- 同一 `ReleaseEvidenceManifest.candidateId` 必须贯穿 Alpha、Beta、Gamma-local 与 Prod，禁止在环境间重新生成候选身份。
+- `candidate-ready` 必须由同一 Service component、四环境 configuration package、四环境 App 实际 payload、ContractGraph、真实 Provider readiness 和三层测试摘要共同派生；环境阶段不得重新打包或替换其中任一输入。
+- Alpha、Beta、Gamma-local 可以在隔离 runner 并行执行 package/up/health/verify；准入聚合必须严格按 `alpha -> beta -> gamma` 接受回执，任一失败即停止晋级。
+- Gamma-local 是正式阻断阶段，不由旧 nightly 或其他候选摘要的证据替代；仓库不新增 `gamma-hosted`。
+- 三个前置环境全部通过后，Prod 才能进入同一个受审批事务 job，并按 `5% -> 25% -> 100%` 晋级。
+- Alpha/Beta/Gamma 回执必须从各自 raw package/up/health/verify（Beta 另含 Android/iOS 设备矩阵）生成并发布为不可变 OCI；Actions Artifact 只能保留诊断副本，不能作为环境间晋级输入。
+- 主链软目标为 600 秒、硬门为 1800 秒；workflow 创建后达到 1500 秒时禁止开始下一波次，为恢复预留 300 秒。
+- `CiTimingSummary` 必须从 GitHub job DAG 采集真实矩阵长尾和排队时间；证据缺失时返回 `historical_incomplete`，不得填零或假绿。
 
 ## 4. 契约引用
 
@@ -46,6 +53,9 @@
 - GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“多环境波次部署”对应的公开行为。
 - THEN 按 alpha、beta、gamma、prod 的准入顺序发布同一制品，任一波次失败即停止晋级。
+- AND Alpha、Beta、Gamma-local 的隔离并行执行不改变准入顺序，且每个回执均绑定同一 candidate digest。
+- AND App 四个测试 shard 的实际最长 job 时长进入 Delivery Gate 关键路径。
+- AND 达到 1500 秒后不会开始下一阶段，超过 1800 秒时发布门禁失败。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

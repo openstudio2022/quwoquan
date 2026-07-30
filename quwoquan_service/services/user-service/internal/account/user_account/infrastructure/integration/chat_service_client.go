@@ -12,6 +12,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	"quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration"
+	greetingapplication "quwoquan_service/services/user-service/internal/relationship/greeting_request/application"
 )
 
 type ChatServiceClient struct {
@@ -45,12 +46,40 @@ func NewAuthorizedChatServiceClient(
 }
 
 func (c *ChatServiceClient) CreateOrReuseDirect(ctx context.Context, creatorID, peerID string) (string, error) {
+	return c.createDirect(ctx, creatorID, peerID, "", "")
+}
+
+// PromoteGreetingToDirect 是打招呼被回复后的升级调用：除会话本身，还把破冰来源
+// （greetingRequestId）与发起者写下的那句话交给 Chat，由 Chat 落成首条消息。
+// 幂等性由 Chat 侧按 greetingRequestId 派生的 clientMsgId 保证。
+func (c *ChatServiceClient) PromoteGreetingToDirect(
+	ctx context.Context,
+	replierID, requesterID string,
+	promotion greetingapplication.GreetingPromotion,
+) (string, error) {
+	return c.createDirect(
+		ctx,
+		replierID,
+		requesterID,
+		promotion.GreetingRequestID,
+		promotion.OpeningMessage,
+	)
+}
+
+func (c *ChatServiceClient) createDirect(
+	ctx context.Context,
+	creatorID, peerID, greetingRequestID, openingMessage string,
+) (string, error) {
 	if c == nil || c.baseURL == "" {
 		return "", fmt.Errorf("chat service client unavailable")
 	}
 	payload := map[string]any{
 		"creatorId": creatorID,
 		"peerId":    peerID,
+	}
+	if strings.TrimSpace(greetingRequestID) != "" {
+		payload["greetingRequestId"] = greetingRequestID
+		payload["openingMessage"] = openingMessage
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -90,13 +119,13 @@ func (c *ChatServiceClient) CreateOrReuseDirect(ctx context.Context, creatorID, 
 	return result.ConversationID, nil
 }
 
-func (c *ChatServiceClient) HasDirectBetween(ctx context.Context, subAccountA, subAccountB string) (bool, error) {
+func (c *ChatServiceClient) HasDirectBetween(ctx context.Context, personaA, personaB string) (bool, error) {
 	if c == nil || c.baseURL == "" {
 		return false, nil
 	}
 	query := url.Values{}
-	query.Set("memberA", subAccountA)
-	query.Set("memberB", subAccountB)
+	query.Set("memberA", personaA)
+	query.Set("memberB", personaB)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -106,7 +135,7 @@ func (c *ChatServiceClient) HasDirectBetween(ctx context.Context, subAccountA, s
 	if err != nil {
 		return false, err
 	}
-	if err := c.authorizeRequest(ctx, req, subAccountA); err != nil {
+	if err := c.authorizeRequest(ctx, req, personaA); err != nil {
 		return false, err
 	}
 
@@ -146,4 +175,7 @@ func (c *ChatServiceClient) authorizeRequest(
 	return nil
 }
 
-var _ application.ConversationGateway = (*ChatServiceClient)(nil)
+var (
+	_ application.ConversationGateway         = (*ChatServiceClient)(nil)
+	_ greetingapplication.ConversationGateway = (*ChatServiceClient)(nil)
+)

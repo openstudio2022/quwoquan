@@ -2,12 +2,14 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	generated "quwoquan_service/services/rtc-service/generated/rtc/call_session"
 	transport "quwoquan_service/services/rtc-service/generated/rtc/call_session/transport"
 	"quwoquan_service/services/rtc-service/internal/rtc/call_session/application/commandmeta"
 
@@ -86,10 +88,11 @@ func (h *CallHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 
 func (h *CallHandler) handleInitiateCall(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		CallType       string   `json:"callType"`
-		ConversationID string   `json:"conversationId"`
-		CircleID       string   `json:"circleId"`
-		InviteeIDs     []string `json:"inviteeIds"`
+		CallType        string   `json:"callType"`
+		ConversationID  string   `json:"conversationId"`
+		CircleID        string   `json:"circleId"`
+		InviteeIDs      []string `json:"inviteeIds"`
+		MaxParticipants int      `json:"maxParticipants"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
@@ -97,11 +100,12 @@ func (h *CallHandler) handleInitiateCall(w http.ResponseWriter, r *http.Request)
 	}
 
 	resp, err := h.orchestrator.InitiateCall(r.Context(), application.InitiateCallRequest{
-		InitiatorID:    resolveUserID(r),
-		CallType:       body.CallType,
-		ConversationID: body.ConversationID,
-		CircleID:       body.CircleID,
-		InviteeIDs:     body.InviteeIDs,
+		InitiatorID:     resolveUserID(r),
+		CallType:        body.CallType,
+		ConversationID:  body.ConversationID,
+		CircleID:        body.CircleID,
+		InviteeIDs:      body.InviteeIDs,
+		MaxParticipants: body.MaxParticipants,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -234,12 +238,26 @@ func (h *CallHandler) handleListCalls(w http.ResponseWriter, r *http.Request) {
 
 func (h *CallHandler) handleToggleMute(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
-	var body application.ToggleMuteRequest
+	var body struct {
+		Muted *bool `json:"muted"`
+	}
 	if err := readJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
 		return
 	}
-	session, err := h.orchestrator.ToggleMute(r.Context(), callID, resolveUserID(r), body.Muted)
+	if body.Muted == nil {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewInvalidArgument(
+				rterr.ModuleRTC,
+				"请求格式错误",
+				"muted is required",
+			),
+		)
+		return
+	}
+	session, err := h.orchestrator.ToggleMute(r.Context(), callID, resolveUserID(r), *body.Muted)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -249,12 +267,26 @@ func (h *CallHandler) handleToggleMute(w http.ResponseWriter, r *http.Request) {
 
 func (h *CallHandler) handleToggleCamera(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
-	var body application.ToggleCameraRequest
+	var body struct {
+		CameraOn *bool `json:"cameraOn"`
+	}
 	if err := readJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
 		return
 	}
-	session, err := h.orchestrator.ToggleCamera(r.Context(), callID, resolveUserID(r), body.CameraOn)
+	if body.CameraOn == nil {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewInvalidArgument(
+				rterr.ModuleRTC,
+				"请求格式错误",
+				"cameraOn is required",
+			),
+		)
+		return
+	}
+	session, err := h.orchestrator.ToggleCamera(r.Context(), callID, resolveUserID(r), *body.CameraOn)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -302,15 +334,27 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	var appErr *rterr.AppError
+	if !errors.As(err, &appErr) {
+		err = generated.AppErrorFromInternalError(err.Error())
+	}
 	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 func readJSON(r *http.Request, v any) error {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
 		return err
 	}
-	return json.Unmarshal(body, v)
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("request body must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
 }
 
 func queryInt(r *http.Request, key string, defaultVal int) int {

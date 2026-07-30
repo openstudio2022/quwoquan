@@ -7,6 +7,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -16,6 +17,7 @@ import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,7 +65,7 @@ Widget _buildApp() {
               ),
             ),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (context, state) => const SizedBox(),
             ),
           ],
@@ -98,7 +100,7 @@ Widget _buildDarkApp() {
               ),
             ),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (_, _) => const SizedBox(),
             ),
           ],
@@ -112,6 +114,15 @@ Widget _buildAppWithStableFollowingArticles() {
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          personaId: 'test-persona',
+          ownerUserId: 'test-user',
+          displayName: '测试用户',
+          avatarUrl: '',
+        ),
+      ),
+      followingSubjectsProvider.overrideWith((_) async => const []),
       ...mockContentFacetOverrides(MockContentRepository()),
       contentFeatureFlagProvider(
         'enable_article_distribution_profiles',
@@ -151,7 +162,7 @@ Widget _buildAppWithStableFollowingArticles() {
               ),
             ),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (context, state) => const SizedBox(),
             ),
           ],
@@ -165,6 +176,15 @@ Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          personaId: 'test-persona',
+          ownerUserId: 'test-user',
+          displayName: '测试用户',
+          avatarUrl: '',
+        ),
+      ),
+      followingSubjectsProvider.overrideWith((_) async => const []),
       if (!stableArticles)
         ...mockContentFacetOverrides(MockContentRepository())
       else ...[
@@ -192,7 +212,7 @@ Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
               ),
             ),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (context, state) => const SizedBox(),
             ),
           ],
@@ -209,7 +229,7 @@ class _AuthenticatedSession extends AuthSessionController {
       status: AuthSessionStatus.authenticated,
       accessToken: 'test-token',
       ownerId: 'test-user',
-      activeSubAccountId: 'test-sub-account',
+      activePersonaId: 'test-persona',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',
@@ -305,7 +325,7 @@ PostBaseDto _singleRecommendPost() {
     'contentType': 'micro',
     'type': 'micro',
     'authorId': 'fixture_user_current',
-    'subAccountId': 'fixture_user_current',
+    'personaId': 'fixture_user_current',
     'displayName': '即时反馈作者',
     'body': _singleRecommendPostBody,
     'likeCount': 55,
@@ -361,7 +381,7 @@ Widget _buildAppWithSingleRecommendPost() {
               ),
             ),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (context, state) => const SizedBox(),
             ),
           ],

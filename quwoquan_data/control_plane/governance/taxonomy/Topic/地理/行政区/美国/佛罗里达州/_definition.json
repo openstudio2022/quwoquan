@@ -1,0 +1,12 @@
+{
+  "label": "佛罗里达州",
+  "labelEn": "Florida",
+  "description": "东南度假与主题乐园州",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

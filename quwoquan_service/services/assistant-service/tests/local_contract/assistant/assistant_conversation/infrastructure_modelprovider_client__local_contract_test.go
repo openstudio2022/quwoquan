@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 func TestClientStreamsTypedModelCompletion(t *testing.T) {
@@ -43,6 +43,7 @@ func TestClientStreamsTypedModelCompletion(t *testing.T) {
 		Config{
 			CompletionURL: server.URL + "/v1/chat/completions",
 			APIKey:        "test-key",
+			Models:        TierModels{Balanced: "test-balanced"},
 		},
 		&http.Client{Timeout: time.Second},
 	)
@@ -50,14 +51,14 @@ func TestClientStreamsTypedModelCompletion(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	var deltas []string
-	result, err := client.Stream(t.Context(), application.ModelCompletionRequest{
-		Stage: application.ModelStageFinal,
-		Messages: []application.ModelMessage{
+	result, err := client.Stream(t.Context(), ports.ModelCompletionRequest{
+		Stage: ports.ModelStageFinal,
+		Messages: []ports.ModelMessage{
 			{Role: "system", Content: "system"},
 			{Role: "user", Content: "hello"},
 		},
 		Stream: true,
-	}, func(delta application.ModelTextDelta) error {
+	}, func(delta ports.ModelTextDelta) error {
 		deltas = append(deltas, delta.Text)
 		return nil
 	})
@@ -79,15 +80,19 @@ func TestClientRedactsProviderErrorResponse(t *testing.T) {
 	}))
 	defer server.Close()
 	client, err := New(
-		Config{CompletionURL: server.URL, APIKey: "value"},
+		Config{
+			CompletionURL: server.URL,
+			APIKey:        "value",
+			Models:        TierModels{Balanced: "test-balanced"},
+		},
 		&http.Client{Timeout: time.Second},
 	)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	_, err = client.Complete(t.Context(), application.ModelCompletionRequest{
-		Stage:    application.ModelStageFinal,
-		Messages: []application.ModelMessage{{Role: "user", Content: "sensitive prompt"}},
+	_, err = client.Complete(t.Context(), ports.ModelCompletionRequest{
+		Stage:    ports.ModelStageFinal,
+		Messages: []ports.ModelMessage{{Role: "user", Content: "sensitive prompt"}},
 	})
 	if err == nil || strings.Contains(err.Error(), "secret upstream detail") ||
 		!strings.Contains(err.Error(), "capability=model") {

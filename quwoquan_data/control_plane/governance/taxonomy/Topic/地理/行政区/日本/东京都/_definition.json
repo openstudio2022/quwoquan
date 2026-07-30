@@ -1,0 +1,12 @@
+{
+  "label": "东京都",
+  "labelEn": "Tokyo Metropolis",
+  "description": "首都圈核心，政治经济与流行文化中心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

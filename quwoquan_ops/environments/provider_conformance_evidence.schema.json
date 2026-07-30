@@ -5,7 +5,6 @@
   "additionalProperties": false,
   "required": [
     "schema",
-    "version",
     "adapterId",
     "capabilityId",
     "bindingRoots",
@@ -41,9 +40,6 @@
   "properties": {
     "schema": {
       "const": "provider-conformance-evidence"
-    },
-    "version": {
-      "const": 4
     },
     "adapterId": {
       "type": "string",

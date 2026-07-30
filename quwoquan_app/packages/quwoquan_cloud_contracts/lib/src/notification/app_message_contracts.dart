@@ -1,117 +1,12 @@
 import '../operation_request_payload.dart';
+import 'app_message.dart';
+import 'app_message_inbox_slice.dart';
+import 'app_message_unread_count_slice.dart';
 
-final class AppMessageDestination {
-  const AppMessageDestination({required this.type, required this.id});
-
-  final String type;
-  final String id;
-}
-
-final class AppMessageRouteQuery {
-  const AppMessageRouteQuery({this.dimension});
-
-  final String? dimension;
-}
-
-final class AppMessageTarget {
-  const AppMessageTarget({
-    required this.targetType,
-    required this.targetId,
-    this.routeId,
-    this.routePath,
-    this.query = const AppMessageRouteQuery(),
-  });
-
-  final String targetType;
-  final String targetId;
-  final String? routeId;
-  final String? routePath;
-  final AppMessageRouteQuery query;
-}
-
-final class AppMessage {
-  const AppMessage({
-    required this.messageId,
-    required this.userId,
-    required this.messageType,
-    required this.source,
-    required this.sourceId,
-    required this.destination,
-    required this.title,
-    required this.summary,
-    required this.target,
-    required this.read,
-    required this.createdAt,
-    this.deliveredAt,
-    this.ackedAt,
-    this.readAt,
-  });
-
-  final String messageId;
-  final String userId;
-  final String messageType;
-  final String source;
-  final String sourceId;
-  final AppMessageDestination destination;
-  final String title;
-  final String summary;
-  final AppMessageTarget target;
-  final bool read;
-  final DateTime createdAt;
-  final DateTime? deliveredAt;
-  final DateTime? ackedAt;
-  final DateTime? readAt;
-}
-
-final class AppMessageInboxSlice {
-  AppMessageInboxSlice({required Iterable<AppMessage> items, this.nextCursor})
-    : items = List<AppMessage>.unmodifiable(items);
-
-  final List<AppMessage> items;
-  final String? nextCursor;
-}
-
-final class AppMessageUnreadCountSlice {
-  const AppMessageUnreadCountSlice({required this.unreadCount});
-
-  final int unreadCount;
-}
-
-final class ListAppMessagesQuery {
-  const ListAppMessagesQuery({
-    this.messageType,
-    this.read,
-    this.cursor,
-    this.limit = 20,
-  });
-
-  final String? messageType;
-  final bool? read;
-  final String? cursor;
-  final int limit;
-}
-
-final class GetAppMessageQuery {
-  const GetAppMessageQuery({required this.messageId});
-
-  final String messageId;
-}
-
-final class AckAppMessageCommand {
-  const AckAppMessageCommand({required this.messageId});
-
-  final String messageId;
-}
-
-final class ReadAppMessageCommand {
-  const ReadAppMessageCommand({required this.messageId});
-
-  final String messageId;
-}
-
-final class GetAppMessageUnreadCountQuery {
-  const GetAppMessageUnreadCountQuery();
-}
+export 'app_message.dart';
+export 'app_message_inbox_slice.dart';
+export 'app_message_unread_count_slice.dart';
+part '../generated/requests/notification/app_message_contracts.requests.g.dart';
 
 abstract interface class AppMessageQuery {
   Future<AppMessageInboxSlice> listAppMessages(ListAppMessagesQuery query);
@@ -127,63 +22,6 @@ abstract interface class AppMessageCommandWriter {
   Future<AppMessage> acknowledge(AckAppMessageCommand command);
 
   Future<AppMessage> markRead(ReadAppMessageCommand command);
-}
-
-CloudOperationRequestPayload encodeListAppMessagesQuery(
-  ListAppMessagesQuery query,
-) {
-  if (query.limit <= 0 || query.limit > 100) {
-    throw ArgumentError.value(
-      query.limit,
-      'limit',
-      'must be between 1 and 100',
-    );
-  }
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (_optionalText(query.messageType) case final messageType?)
-        'type': messageType,
-      if (query.read case final read?) 'read': '$read',
-      if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
-      'limit': '${query.limit}',
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeGetAppMessageQuery(
-  GetAppMessageQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'messageId': _requiredText(query.messageId, 'messageId'),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeAckAppMessageCommand(
-  AckAppMessageCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'messageId': _requiredText(command.messageId, 'messageId'),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeReadAppMessageCommand(
-  ReadAppMessageCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'messageId': _requiredText(command.messageId, 'messageId'),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeGetAppMessageUnreadCountQuery(
-  GetAppMessageUnreadCountQuery _,
-) {
-  return const CloudOperationRequestPayload();
 }
 
 AppMessageInboxSlice decodeAppMessageInboxSlice(Object? response) {
@@ -336,17 +174,4 @@ DateTime _requiredDateTime(Object? value, String field) {
 DateTime? _optionalDateTime(Object? value, String field) {
   if (value == null) return null;
   return _requiredDateTime(value, field);
-}
-
-String _requiredText(String value, String field) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, field, 'must not be empty');
-  }
-  return normalized;
-}
-
-String? _optionalText(String? value) {
-  final normalized = value?.trim() ?? '';
-  return normalized.isEmpty ? null : normalized;
 }

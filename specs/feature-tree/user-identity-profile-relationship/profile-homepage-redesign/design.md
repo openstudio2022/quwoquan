@@ -2,7 +2,7 @@
 
 > 对应规格：[L2 spec](./spec.md)
 
-> 设计触发原因：“统一个人主页的信息架构、状态模型与跨页面互动一致性”需要 `career-interest-profile-editor`、`owner-subaccount-homepage-unification`、`profile-commercial-readiness` 共享状态 owner、契约或质量边界。
+> 设计触发原因：“统一个人主页的信息架构、状态模型与跨页面互动一致性”需要 `career-interest-profile-editor`、`owner-persona-homepage-unification`、`profile-commercial-readiness` 共享状态 owner、契约或质量边界。
 
 ## 1. 背景、目标与非目标
 
@@ -12,7 +12,7 @@
 ## 2. Story 协作与状态流
 
 - [`career-interest-profile-editor`](./career-interest-profile-editor/spec.md)：职业与兴趣入口不依赖端侧完整枚举。
-- [`owner-subaccount-homepage-unification`](./owner-subaccount-homepage-unification/spec.md)：统一 owner/Persona 主页，同时保持点赞、评论与浏览列表的既有行为。
+- [`owner-persona-homepage-unification`](./owner-persona-homepage-unification/spec.md)：统一 owner/Persona 主页，同时保持点赞、评论与浏览列表的既有行为。
 - [`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)：我的主页首屏展示真实档案与一致统计；alpha/beta/gamma/prod composition 只装配 Remote，对象级 typed double 仅存在 local_contract 测试树。
 
 ## 3. 端云与数据流
@@ -30,7 +30,7 @@
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
-- 影响 Story：[`career-interest-profile-editor`](./career-interest-profile-editor/spec.md)、[`owner-subaccount-homepage-unification`](./owner-subaccount-homepage-unification/spec.md)、[`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)
+- 影响 Story：[`career-interest-profile-editor`](./career-interest-profile-editor/spec.md)、[`owner-persona-homepage-unification`](./owner-persona-homepage-unification/spec.md)、[`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)
 - 关联验收：`SIT-001`
 
 ## 5. 失败与恢复

@@ -42,13 +42,11 @@ upload.gamma.quwoquan.com
 
 建议：
 
-- iOS 模拟器：可先在 macOS `/etc/hosts` 映射到 `127.0.0.1`。
-- Android 模拟器：优先使用 `10.0.2.2` 或本机局域网 IP；如坚持域名，需要让模拟器 DNS 可解析到宿主机。
-- 真机：使用局域网 DNS、路由器 DNS、dnsmasq/CoreDNS 或 VPN 分流；macOS `/etc/hosts` 不会影响真机。
+- macOS / iOS Simulator：直接使用 topology 生成的 canonical authority；公网 DNS 将非生产环境解析到 loopback。
+- Android 模拟器与真机：保留 canonical authority，由 launcher / Patrol runner 对 target 端口执行 `adb reverse`；禁止改写为私有 IP 或 `.localhost`。
+- DNS 或公共 CA 未就绪时 fail-fast，不通过 `/etc/hosts`、私有 CA 或关闭证书校验绕过。
 
 ## TLS
-
-默认 `Caddyfile` 使用 Caddy internal CA。真机/模拟器必须信任本地 CA，否则 HTTPS/WSS 会失败。
 
 本地公开入口必须使用 `*.gamma.quwoquan.com` 的 DNS-01 公共 CA 证书。禁止
 Caddy internal CA、`mkcert`、关闭证书校验或临时 HTTP runtime define。

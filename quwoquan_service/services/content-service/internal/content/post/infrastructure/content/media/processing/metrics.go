@@ -93,7 +93,18 @@ var (
 		},
 		[]string{"reason"},
 	)
+	hlsCMAFPackagingTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "content_media_hls_cmaf_packaging_total",
+			Help: "Optional HLS/CMAF packaging outcomes; fallback_progressive keeps the canonical P0 MP4 available.",
+		},
+		[]string{"result"},
+	)
 )
+
+func observeHLSCMAFPackaging(result string) {
+	hlsCMAFPackagingTotal.WithLabelValues(result).Inc()
+}
 
 // MetricsObserver is the production mediaprocessing.Observer.
 type MetricsObserver struct {

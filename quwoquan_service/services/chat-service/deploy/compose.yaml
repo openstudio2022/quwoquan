@@ -1,7 +1,7 @@
 # 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
 services:
   chat-service:
-    image: "${QWQ_COMPOSE_CHAT_SERVICE_IMAGE:-localhost/quwoquan_service_chat-service:latest}"
+    image: "${QWQ_COMPOSE_CHAT_SERVICE_IMAGE:?fixed chat-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/chat-service/build/Dockerfile
@@ -15,7 +15,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_CHAT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CHAT_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       CHAT_SERVICE_ADDR: ":18081"
       MONGO_URI: mongodb://mongodb:27017
       MONGO_DATABASE: quwoquan_chat
@@ -28,7 +28,6 @@ services:
       RELIABLE_TASK_READY_INDEX_QUEUE: reliabletask.chat.avatar
       CHAT_GROUP_AVATAR_CDN_BASE_URL: "${QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL:?QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL is required}"
       CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT: /var/lib/quwoquan/chat-media
-      SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
       USER_SERVICE_BASE_URL: http://user-service:18081
       CIRCLE_SERVICE_BASE_URL: http://circle-service:18082
       CONTENT_SERVICE_BASE_URL: http://content-service:18080
@@ -53,7 +52,6 @@ services:
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
       - ${QWQ_COMPOSE_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/var/lib/quwoquan/chat-media
-      - ${QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE:?QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/local-ca/object-storage-ca.crt:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
       interval: 10s

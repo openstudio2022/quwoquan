@@ -77,7 +77,7 @@ void main() {
           {
             'dimension': 'location',
             'tagRefs': ['location/geo/west-lake'],
-            'primaryText': '你和 TA 都去过 西湖',
+            'primaryText': '你和 TA 都看过 西湖',
             'totalPointCount': 5,
             'source': 'location',
           },
@@ -88,7 +88,7 @@ void main() {
       final dto = MicroPostDto.fromMap(wire);
 
       expect(dto.intersectionReasons, isNotNull);
-      expect(dto.intersectionReasons!.single.primaryText, '你和 TA 都去过 西湖');
+      expect(dto.intersectionReasons!.single.primaryText, '你和 TA 都看过 西湖');
       expect(dto.intersectionReasons!.single.dimension, 'location');
     });
   });

@@ -22,7 +22,7 @@ import (
 func TestMediaUploadSessionHTTPPacketPersistsOwnerScopedGetAbortAndReplay(t *testing.T) {
 	owner := "media-session-owner"
 	initialized := performMediaCommand(t, http.MethodPost, "/content/media/uploads:init",
-		`{"mediaType":"image","contentType":"image/jpeg","fileSize":64,"expectedSha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}`,
+		`{"mediaType":"image","mimeType":"image/jpeg","fileSize":64,"expectedSha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}`,
 		owner, "media-session-init")
 	sessionID := asTestString(initialized["sessionId"])
 	if sessionID == "" {
@@ -110,7 +110,7 @@ func TestOwnerDiscardMediaAssetIsIdempotentAndRejectsLiveReference(t *testing.T)
 		nil,
 	)
 	request.Header.Set("X-Client-User-Id", owner)
-	request.Header.Set("X-Client-Sub-Account-Id", owner)
+	request.Header.Set("X-Client-Persona-Id", owner)
 	request.Header.Set("Idempotency-Key", "media-discard-in-use")
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
@@ -125,7 +125,7 @@ func TestOwnerDiscardMediaAssetIsIdempotentAndRejectsLiveReference(t *testing.T)
 }
 
 func TestPostBindAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
-	owner := identity.AnonymousFallbackSubAccountID
+	owner := identity.AnonymousFallbackPersonaID
 	mediaID := createReadyPublicationMediaAsset(t, owner, "image")
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	type response struct {
@@ -146,7 +146,7 @@ func TestPostBindAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
 			http.MethodPost,
 			"/content/posts:publish",
 			strings.NewReader(fmt.Sprintf(
-				`{"publishIntentId":"media-fence-publish-%s","localDraftId":"media-fence-draft-%s","contentType":"image","body":"并发引用围栏","visibility":"public","mediaAssetIds":["%s"],"mediaItems":[{"kind":"image","mediaId":"%s"}]}`,
+				`{"publishIntentId":"media-fence-publish-%s","localDraftId":"media-fence-draft-%s","mimeType":"image","body":"并发引用围栏","visibility":"public","mediaAssetIds":["%s"],"mediaItems":[{"kind":"image","mediaId":"%s"}]}`,
 				suffix,
 				suffix,
 				mediaID,
@@ -155,7 +155,7 @@ func TestPostBindAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
 		)
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 		request.Header.Set("Idempotency-Key", "media-fence-publish-"+suffix)
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -170,7 +170,7 @@ func TestPostBindAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
 			nil,
 		)
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 		request.Header.Set("Idempotency-Key", "media-fence-discard-"+suffix)
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -255,7 +255,7 @@ func TestCommentAttachmentAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) 
 		)
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 		request.Header.Set("Idempotency-Key", "media-comment-fence-"+suffix)
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -270,7 +270,7 @@ func TestCommentAttachmentAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) 
 			nil,
 		)
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 		request.Header.Set("Idempotency-Key", "media-comment-discard-"+suffix)
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -319,7 +319,7 @@ func TestCommentAttachmentAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) 
 }
 
 func TestManualCoverAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
-	owner := identity.AnonymousFallbackSubAccountID
+	owner := identity.AnonymousFallbackPersonaID
 	videoID := createReadyPublicationMediaAsset(t, owner, "video")
 	coverID := createReadyPublicationMediaAsset(t, owner, "image")
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -347,7 +347,7 @@ func TestManualCoverAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
 		)
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 		request.Header.Set("Idempotency-Key", "media-cover-fence-"+suffix)
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -362,7 +362,7 @@ func TestManualCoverAndMediaDiscardFenceAllowsOnlyOneCommit(t *testing.T) {
 			nil,
 		)
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 		request.Header.Set("Idempotency-Key", "media-cover-discard-"+suffix)
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)
@@ -416,7 +416,7 @@ func TestCompletedMediaUploadSessionQueryRecoversAssetIdentity(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/content/media/uploads:init",
-		`{"mediaType":"video","contentType":"video/mp4","fileSize":64,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`,
+		`{"mediaType":"video","mimeType":"video/mp4","fileSize":64,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`,
 		owner,
 		"media-session-completion-recovery-init",
 	)
@@ -514,14 +514,14 @@ func TestMediaUploadAdmissionRejectsUnsupportedAndOversizedPayloadsBeforePersist
 	}{
 		{
 			name: "oversized_video",
-			body: `{"mediaType":"video","contentType":"video/mp4","fileSize":52428801,` +
+			body: `{"mediaType":"video","mimeType":"video/mp4","fileSize":52428801,` +
 				`"expectedSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}`,
 			expectedStatus: http.StatusRequestEntityTooLarge,
 			expectedCode:   contentgenerated.ErrMediaFileTooLarge.Error(),
 		},
 		{
 			name: "mismatched_content_type",
-			body: `{"mediaType":"video","contentType":"image/png","fileSize":1024,` +
+			body: `{"mediaType":"video","mimeType":"image/png","fileSize":1024,` +
 				`"expectedSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}`,
 			expectedStatus: http.StatusUnsupportedMediaType,
 			expectedCode:   contentgenerated.ErrMediaTypeUnsupported.Error(),
@@ -536,7 +536,7 @@ func TestMediaUploadAdmissionRejectsUnsupportedAndOversizedPayloadsBeforePersist
 			)
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("X-Client-User-Id", owner)
-			request.Header.Set("X-Client-Sub-Account-Id", owner)
+			request.Header.Set("X-Client-Persona-Id", owner)
 			request.Header.Set("Idempotency-Key", "media-admission-"+testCase.name)
 			response := httptest.NewRecorder()
 			testHandler.ServeHTTP(response, request)
@@ -569,10 +569,10 @@ func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *te
 		"/internal/content/media/"+publicAsset+":processing-result",
 		fmt.Sprintf(`{
 			"processingStatus":"ready",
-			"processorProfile":"content_image_normalization_v1",
+			"processorProfile":"content_image_normalization",
 			"imageWidth":540,
 			"imageHeight":960,
-			"imageDeliveryContentType":"image/png",
+			"imageDeliveryMimeType":"image/png",
 			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.png",
 			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png",
 			"imageDominantColor":"#1A2B3C",
@@ -685,19 +685,19 @@ func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *te
 	}
 
 	for _, testCase := range []struct {
-		mediaType   string
-		contentType string
-		digest      string
+		mediaType string
+		mimeType  string
+		digest    string
 	}{
 		{
-			mediaType:   "audio",
-			contentType: "audio/mpeg",
-			digest:      "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			mediaType: "audio",
+			mimeType:  "audio/mpeg",
+			digest:    "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
 		},
 		{
-			mediaType:   "file",
-			contentType: "application/pdf",
-			digest:      "abababababababababababababababababababababababababababababababab",
+			mediaType: "file",
+			mimeType:  "application/pdf",
+			digest:    "abababababababababababababababababababababababababababababababab",
 		},
 	} {
 		t.Run(testCase.mediaType+"_without_processor_is_ready", func(t *testing.T) {
@@ -705,7 +705,7 @@ func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *te
 				t,
 				owner,
 				testCase.mediaType,
-				testCase.contentType,
+				testCase.mimeType,
 				testCase.digest,
 				"public",
 			)
@@ -721,11 +721,11 @@ func TestMediaAssetHTTPPacketExposesOnlyPublicReadyAssetsAndOwnsVideoCover(t *te
 	}
 }
 
-func completeMediaForHTTPPacket(t *testing.T, owner, mediaType, contentType, digest, policy string) string {
+func completeMediaForHTTPPacket(t *testing.T, owner, mediaType, mimeType, digest, policy string) string {
 	t.Helper()
 	prefix := "media-packet-" + mediaType + "-" + digest[:8]
 	initialized := performMediaCommand(t, http.MethodPost, "/content/media/uploads:init",
-		`{"mediaType":"`+mediaType+`","contentType":"`+contentType+`","fileSize":128,"expectedSha256":"sha256:`+digest+`"}`,
+		`{"mediaType":"`+mediaType+`","mimeType":"`+mimeType+`","fileSize":128,"expectedSha256":"sha256:`+digest+`"}`,
 		owner, prefix+"-init")
 	sessionID := asTestString(initialized["sessionId"])
 	completed := performMediaCommand(t, http.MethodPost, "/content/media/uploads/"+sessionID+":complete",
@@ -742,7 +742,7 @@ func performMediaCommand(t *testing.T, method, path, body, owner, idempotencyKey
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Client-User-Id", owner)
-	request.Header.Set("X-Client-Sub-Account-Id", owner)
+	request.Header.Set("X-Client-Persona-Id", owner)
 	request.Header.Set("Idempotency-Key", idempotencyKey)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
@@ -761,7 +761,7 @@ func performMediaQuery(t *testing.T, path, owner string, expectedStatus int) map
 	request := httptest.NewRequest(http.MethodGet, path, nil)
 	if owner != "" {
 		request.Header.Set("X-Client-User-Id", owner)
-		request.Header.Set("X-Client-Sub-Account-Id", owner)
+		request.Header.Set("X-Client-Persona-Id", owner)
 	}
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)

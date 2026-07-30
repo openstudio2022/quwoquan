@@ -66,8 +66,9 @@ fields:
   type: timestamp
 - name: takedownEjected
   type: bool
-- name: projectionVersion
+- name: projectionId
   type: string
+  description: Stable semantic identity of the sole premium-pool projection; not a version selector.
 - name: updatedAt
   type: timestamp
 indexes:

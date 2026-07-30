@@ -7,13 +7,12 @@ import 'package:quwoquan_app/ui/user/widgets/profile_stats_row.dart';
 
 /// 统计行单行四项（粉丝/关注/获赞/圈子）：值取自 profile；
 /// 四项点击经 onStatTap 分发对应 type。
-SubAccountProfileViewData _profile() {
-  return const SubAccountProfileViewData(
-    subAccountId: 'sa1',
+PersonaProfileViewData _profile() {
+  return const PersonaProfileViewData(
+    personaId: 'sa1',
     ownerUserId: 'u1',
     subjectType: 'user',
     userHandle: 'nature',
-    username: 'nature',
     displayName: '自然摄影师',
     avatarUrl: '',
     backgroundUrl: '',

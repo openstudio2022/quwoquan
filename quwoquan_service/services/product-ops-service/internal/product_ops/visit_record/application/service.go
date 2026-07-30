@@ -2,29 +2,47 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 )
+
+const receiptRetention = 180 * 24 * time.Hour
+
+var (
+	ErrInvalidInput        = errors.New("invalid visit input")
+	ErrIdempotencyRequired = errors.New("visit idempotency key is required")
+	ErrIdempotencyConflict = errors.New("visit idempotency key conflicts with the first command")
+)
+
+var supportedTargetTypes = map[string]struct{}{
+	"page":   {},
+	"post":   {},
+	"circle": {},
+	"user":   {},
+}
 
 type VisitInput struct {
 	UserID     string `json:"userId"`
 	TargetType string `json:"targetType"`
 	TargetKey  string `json:"targetKey"`
-	SessionID  string `json:"sessionId,omitempty"`
-	Source     string `json:"source,omitempty"`
 }
 
 type VisitRecord struct {
-	TargetType string `json:"targetType" bson:"targetType"`
-	TargetKey  string `json:"targetKey" bson:"targetKey"`
-	UserID     string `json:"userId" bson:"userId"`
-	VisitCount int    `json:"visitCount" bson:"visitCount"`
-	LastSeenAt string `json:"lastSeenAt,omitempty" bson:"lastSeenAt,omitempty"`
-	SessionID  string `json:"sessionId,omitempty" bson:"sessionId,omitempty"`
-	Source     string `json:"source,omitempty" bson:"source,omitempty"`
+	TargetType string    `json:"targetType" bson:"targetType"`
+	TargetKey  string    `json:"targetKey" bson:"targetKey"`
+	UserID     string    `json:"-" bson:"userId"`
+	VisitCount int       `json:"visitCount" bson:"visitCount"`
+	OccurredAt time.Time `json:"occurredAt" bson:"occurredAt"`
 }
 
-type VisitStatsQuery struct{ TargetType, TargetKey string }
+type VisitStatsQuery struct {
+	TargetType string
+	TargetKey  string
+}
 
 type VisitStats struct {
 	TotalVisits int           `json:"totalVisits"`
@@ -36,71 +54,98 @@ type CommandResult struct {
 	Replayed bool `json:"replayed,omitempty"`
 }
 
-type Store interface {
-	RecordVisit(context.Context, VisitInput) (VisitRecord, error)
-	GetVisit(ctx context.Context, userID, targetType, targetKey string) (VisitRecord, bool, error)
+// CommitCommand is the object-owned atomic persistence packet. ReceiptID never
+// contains the caller's raw Idempotency-Key; CommandDigest binds the first key
+// use to its actor and target.
+type CommitCommand struct {
+	Input          VisitInput
+	ReceiptID      string
+	CommandDigest  string
+	ReceiptExpires time.Time
+}
+
+type CommandStore interface {
+	CommitVisit(context.Context, CommitCommand) (CommandResult, error)
+}
+
+type StatsReader interface {
 	GetVisitStats(context.Context, VisitStatsQuery) (VisitStats, error)
 }
 
-type LedgerState string
-
-const (
-	LedgerNew      LedgerState = "new"
-	LedgerPending  LedgerState = "pending"
-	LedgerAccepted LedgerState = "accepted"
-)
-
-type Ledger interface {
-	Begin(context.Context, string, int) (LedgerState, error)
-	MarkAccepted(context.Context, string, int) error
+type Store interface {
+	CommandStore
+	StatsReader
 }
-
-var ErrIdempotencyKeyRequired = errors.New("visit idempotency key is required")
 
 type Service struct {
-	store  Store
-	ledger Ledger
+	store Store
+	now   func() time.Time
 }
 
-func NewService(store Store, ledger Ledger) *Service {
-	return &Service{store: store, ledger: ledger}
+func NewService(store Store) *Service {
+	if store == nil {
+		panic("visit record service requires store")
+	}
+	return &Service{store: store, now: time.Now}
 }
 
-func (s *Service) RecordVisit(ctx context.Context, input VisitInput, idempotencyKey string) (CommandResult, error) {
+func (s *Service) RecordVisit(
+	ctx context.Context,
+	input VisitInput,
+	idempotencyKey string,
+) (CommandResult, error) {
+	input.UserID = strings.TrimSpace(input.UserID)
 	input.TargetType = strings.TrimSpace(input.TargetType)
 	input.TargetKey = strings.TrimSpace(input.TargetKey)
-	input.UserID = strings.TrimSpace(input.UserID)
-	if input.UserID == "" {
-		input.UserID = "anonymous"
-	}
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if input.UserID == "" || input.TargetKey == "" || len(input.TargetKey) > 256 {
+		return CommandResult{}, ErrInvalidInput
+	}
+	if _, supported := supportedTargetTypes[input.TargetType]; !supported {
+		return CommandResult{}, ErrInvalidInput
+	}
 	if idempotencyKey == "" {
-		return CommandResult{}, ErrIdempotencyKeyRequired
+		return CommandResult{}, ErrIdempotencyRequired
 	}
-	dedupeKey := "visit:" + input.UserID + ":" + idempotencyKey
-	state, err := s.ledger.Begin(ctx, dedupeKey, 1)
-	if err != nil {
-		return CommandResult{}, err
-	}
-	if state == LedgerAccepted {
-		record, found, err := s.store.GetVisit(ctx, input.UserID, input.TargetType, input.TargetKey)
-		if err != nil {
-			return CommandResult{}, err
-		}
-		if found {
-			return CommandResult{VisitRecord: record, Replayed: true}, nil
-		}
-	}
-	record, err := s.store.RecordVisit(ctx, input)
-	if err != nil {
-		return CommandResult{}, err
-	}
-	if err := s.ledger.MarkAccepted(ctx, dedupeKey, 1); err != nil {
-		return CommandResult{}, err
-	}
-	return CommandResult{VisitRecord: record}, nil
+
+	receiptID := digest(struct {
+		Namespace string `json:"namespace"`
+		UserID    string `json:"userId"`
+		Key       string `json:"key"`
+	}{Namespace: "visit_record", UserID: input.UserID, Key: idempotencyKey})
+	commandDigest := digest(struct {
+		UserID     string `json:"userId"`
+		TargetType string `json:"targetType"`
+		TargetKey  string `json:"targetKey"`
+	}{UserID: input.UserID, TargetType: input.TargetType, TargetKey: input.TargetKey})
+
+	return s.store.CommitVisit(ctx, CommitCommand{
+		Input:          input,
+		ReceiptID:      receiptID,
+		CommandDigest:  commandDigest,
+		ReceiptExpires: s.now().UTC().Add(receiptRetention),
+	})
 }
 
-func (s *Service) GetVisitStats(ctx context.Context, query VisitStatsQuery) (VisitStats, error) {
+func (s *Service) GetVisitStats(
+	ctx context.Context,
+	query VisitStatsQuery,
+) (VisitStats, error) {
+	query.TargetType = strings.TrimSpace(query.TargetType)
+	query.TargetKey = strings.TrimSpace(query.TargetKey)
+	if query.TargetType != "" {
+		if _, supported := supportedTargetTypes[query.TargetType]; !supported {
+			return VisitStats{}, ErrInvalidInput
+		}
+	}
 	return s.store.GetVisitStats(ctx, query)
+}
+
+func digest(value any) string {
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	sum := sha256.Sum256(canonical)
+	return hex.EncodeToString(sum[:])
 }

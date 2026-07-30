@@ -17,7 +17,6 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	configrelease "quwoquan_service/runtime/configrelease"
 	"quwoquan_service/runtime/controlplane"
-	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
@@ -39,9 +38,7 @@ import (
 
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 
 	Service struct {
@@ -76,8 +73,8 @@ func main() {
 		log.Fatalf("tag-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("tag-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
+		log.Fatalf("tag-service config identity failed: %v", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
@@ -289,15 +286,13 @@ func main() {
 	}, ioLogger, processLogger, exceptionLogger)
 	corsHandler := rthttp.WithCORS(observed, rthttp.CORSOptionsFromEnv())
 
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:      accessVerifier,
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(corsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -382,7 +377,7 @@ func applyEnvOverrides(cfg *config) {
 	applyTagRedisEnvOverrides(&cfg.Redis.General)
 }
 
-func validateRuntimeCompatibility(cfg config, configVersion, _ string) error {
+func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
 	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
 		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
 	}

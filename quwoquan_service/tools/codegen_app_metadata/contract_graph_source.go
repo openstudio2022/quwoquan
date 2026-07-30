@@ -21,49 +21,71 @@ var (
 )
 
 type appExposedOperation struct {
-	ActorRequirement     string               `json:"actorRequirement"`
-	AuthMode             string               `json:"authMode"`
-	CanonicalOperationID string               `json:"canonicalOperationId"`
-	ClientContract       *appClientContract   `json:"clientContract"`
-	Commercial           appCommercialBinding `json:"commercial"`
-	Concurrency          appConcurrencyPolicy `json:"concurrency"`
-	Domain               string               `json:"domain"`
-	ErrorCodes           []string             `json:"errorCodes"`
-	Facet                string               `json:"facet"`
-	FacadeMethod         string               `json:"facadeMethod"`
-	AggregateOwner       string               `json:"aggregateOwner"`
-	MutationTarget       string               `json:"mutationTarget"`
-	InvariantTarget      string               `json:"invariantTarget"`
-	Kind                 string               `json:"kind"`
-	LocalOperationID     string               `json:"localOperationId"`
-	Method               string               `json:"method"`
-	ObjectID             string               `json:"objectId"`
-	OwnershipPolicy      string               `json:"ownershipPolicy"`
-	PathTemplate         string               `json:"pathTemplate"`
-	Permissions          []string             `json:"permissions"`
-	Principal            string               `json:"principal"`
-	Privacy              appPrivacyPolicy     `json:"privacy"`
-	Reliability          appReliabilityPolicy `json:"reliability"`
-	RequestEntity        string               `json:"requestEntity"`
-	RequestBodyKind      string               `json:"requestBodyKind"`
-	ResponseBody         string               `json:"responseBody"`
-	ResponseBodyKind     string               `json:"responseBodyKind"`
-	ResponseEntity       string               `json:"responseEntity"`
-	Scopes               []string             `json:"scopes"`
-	SLO                  appSLOPolicy         `json:"slo"`
-	SourcePath           string               `json:"sourcePath"`
-	SurfaceIDs           []string             `json:"surfaceIds"`
-	Telemetry            appTelemetryPolicy   `json:"telemetry"`
+	ActorRequirement     string                      `json:"actorRequirement"`
+	AuthMode             string                      `json:"authMode"`
+	CanonicalOperationID string                      `json:"canonicalOperationId"`
+	ClientContract       *appClientContract          `json:"clientContract"`
+	Commercial           appCommercialBinding        `json:"commercial"`
+	Concurrency          appConcurrencyPolicy        `json:"concurrency"`
+	Domain               string                      `json:"domain"`
+	ErrorCodes           []string                    `json:"errorCodes"`
+	Facet                string                      `json:"facet"`
+	FacadeMethod         string                      `json:"facadeMethod"`
+	AggregateOwner       string                      `json:"aggregateOwner"`
+	MutationTarget       string                      `json:"mutationTarget"`
+	InvariantTarget      string                      `json:"invariantTarget"`
+	Kind                 string                      `json:"kind"`
+	LocalOperationID     string                      `json:"localOperationId"`
+	Method               string                      `json:"method"`
+	ObjectID             string                      `json:"objectId"`
+	OwnershipPolicy      string                      `json:"ownershipPolicy"`
+	PathTemplate         string                      `json:"pathTemplate"`
+	Permissions          []string                    `json:"permissions"`
+	Principal            string                      `json:"principal"`
+	Privacy              appPrivacyPolicy            `json:"privacy"`
+	Reliability          appReliabilityPolicy        `json:"reliability"`
+	Pagination           *appPaginationPolicy        `json:"pagination"`
+	ResponseAdmission    *appResponseAdmissionPolicy `json:"responseAdmission"`
+	RequestEntity        string                      `json:"requestEntity"`
+	RequestBodyKind      string                      `json:"requestBodyKind"`
+	RequestBindings      *appRequestBindings         `json:"requestBindings"`
+	RequestConstants     *appRequestConstants        `json:"requestConstants"`
+	ResponseBody         string                      `json:"responseBody"`
+	ResponseBodyKind     string                      `json:"responseBodyKind"`
+	ResponseEntity       string                      `json:"responseEntity"`
+	Scopes               []string                    `json:"scopes"`
+	SLO                  appSLOPolicy                `json:"slo"`
+	SourcePath           string                      `json:"sourcePath"`
+	SurfaceIDs           []string                    `json:"surfaceIds"`
+	Telemetry            appTelemetryPolicy          `json:"telemetry"`
 }
 
 type appClientContract struct {
-	DartImport      string            `json:"dartImport"`
-	PathBindings    map[string]string `json:"pathBindings"`
-	QueryBindings   map[string]string `json:"queryBindings"`
-	RequestEncoder  string            `json:"requestEncoder"`
-	RequestType     string            `json:"requestType"`
-	ResponseDecoder string            `json:"responseDecoder"`
-	ResponseType    string            `json:"responseType"`
+	DartImport      string `json:"dartImport"`
+	ResponseDecoder string `json:"responseDecoder"`
+	ResponseType    string `json:"responseType"`
+}
+
+type appRequestBindings struct {
+	Path     []appRequestBinding `json:"path"`
+	Query    []appRequestBinding `json:"query"`
+	Header   []appRequestBinding `json:"header"`
+	Injected []appRequestBinding `json:"injected"`
+}
+
+type appRequestBinding struct {
+	Name     string `json:"name"`
+	Field    string `json:"field"`
+	Required *bool  `json:"required"`
+}
+
+type appRequestConstants struct {
+	Body []appRequestConstant `json:"body"`
+}
+
+type appRequestConstant struct {
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
 type appCommercialBinding struct {
@@ -77,6 +99,15 @@ type appReliabilityPolicy struct {
 	MaxAttempts         int    `json:"maxAttempts"`
 	RetryMode           string `json:"retryMode"`
 	TimeoutMilliseconds int    `json:"timeoutMilliseconds"`
+}
+
+type appPaginationPolicy struct {
+	DefaultItems int `json:"defaultItems"`
+	MaximumItems int `json:"maximumItems"`
+}
+
+type appResponseAdmissionPolicy struct {
+	MaximumBodyBytes int `json:"maximumBodyBytes"`
 }
 
 type appConcurrencyPolicy struct {

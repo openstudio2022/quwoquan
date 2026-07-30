@@ -1,10 +1,27 @@
 entity: RecentSearchState
 domain: SEARCH
 errors:
+- code: SEARCH.SYSTEM.internal_error
+  kind: SYSTEM
+  reason: internal_error
+  http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [RecoverSearchAccountClosureDeadLetter]
+  recovery_action: retry
+  recovery_after_seconds: 5
+  dart_const: searchInternalError
+  go_const: ErrSearchInternalError
+  user_message:
+    zh: 搜索服务暂时无法完成该操作
+    en: Search service could not complete the operation
 - code: SEARCH.USER.recent_entry_not_found
   kind: USER
   reason: recent_entry_not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [DeleteRecentSearch]
   recovery_action: refresh
   dart_const: recentEntryNotFound
   go_const: ErrRecentEntryNotFound
@@ -15,6 +32,9 @@ errors:
   kind: USER
   reason: recent_version_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [UpsertRecentSearch, DeleteRecentSearch, ClearRecentSearches]
   recovery_action: refresh
   dart_const: recentVersionConflict
   go_const: ErrRecentVersionConflict
@@ -25,6 +45,9 @@ errors:
   kind: USER
   reason: recent_idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [UpsertRecentSearch, DeleteRecentSearch, ClearRecentSearches]
   recovery_action: refresh
   dart_const: recentIdempotencyConflict
   go_const: ErrRecentIdempotencyConflict
@@ -35,6 +58,9 @@ errors:
   kind: SYSTEM
   reason: recent_storage_failed
   http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [ListRecentSearches, UpsertRecentSearch, DeleteRecentSearch, ClearRecentSearches]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: recentStorageFailed

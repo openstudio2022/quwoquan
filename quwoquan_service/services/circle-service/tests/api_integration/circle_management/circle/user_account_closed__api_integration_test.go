@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
 package api_integration
 
 import (
@@ -12,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"quwoquan_service/runtime/accountrestriction"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/messaging"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/persistence"
@@ -82,6 +84,57 @@ func TestUserAccountClosedRealProjectionNormalReplayAndConflict(
 		redisRouter.Scene("general"),
 	)
 	if err := projection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	restrictionProjection, err :=
+		persistence.NewMongoUserAccountRestrictionProjection(mongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restrictionProjection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	suspension := accountrestriction.Event{
+		EventID:        "event-suspend-circle-10",
+		EventName:      accountrestriction.UserSuspendedEventName,
+		AccountID:      "account-closed",
+		AccountVersion: 10,
+		UserID:         "account-closed",
+		PersonaIDs:     []string{"persona-closed"},
+		AccountState:   "suspended",
+		AuthEpoch:      10,
+		DecisionRef:    "decision-suspend-circle-10",
+		OccurredAt:     now.Add(-time.Minute),
+	}
+	if result, err := restrictionProjection.Apply(ctx, suspension); err != nil || result.Replayed {
+		t.Fatalf("apply Circle suspension: result=%+v err=%v", result, err)
+	}
+	sameVersionConflict := suspension
+	sameVersionConflict.EventID = "event-suspend-circle-10-conflict"
+	sameVersionConflict.DecisionRef = "decision-suspend-circle-10-conflict"
+	if _, err := restrictionProjection.Apply(
+		ctx,
+		sameVersionConflict,
+	); !errors.Is(err, application.ErrUserAccountRestrictionProjectionConflict) {
+		t.Fatalf("same-version Circle restriction conflict err=%v", err)
+	}
+	// Closure also erases legacy rows from the superseded generic adapter.
+	if _, err := mongoDB.Collection("circle_user_account_restrictions").InsertOne(
+		ctx,
+		bson.M{
+			"_id": "account-closed", "subjects": []string{"account-closed", "persona-closed"},
+			"restricted": true, "accountVersion": int64(9),
+		},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mongoDB.Collection("circle_user_account_restriction_inbox").InsertOne(
+		ctx,
+		bson.M{
+			"_id": "event-legacy-suspend-circle-9", "accountId": "account-closed",
+			"accountVersion": int64(9),
+		},
+	); err != nil {
 		t.Fatal(err)
 	}
 	consumer, err := messaging.NewUserAccountClosedConsumerWithConfig(
@@ -158,6 +211,56 @@ func TestUserAccountClosedRealProjectionNormalReplayAndConflict(
 		bson.M{},
 	); count != 2 {
 		t.Fatalf("closed-subject tombstone count=%d want=2", count)
+	}
+	if count := countDocuments(t, "circle_user_account_restrictions", bson.M{}); count != 0 {
+		t.Fatalf("closed-account restriction state remaining=%d", count)
+	}
+	if count := countDocuments(t, "circle_user_account_restriction_inbox", bson.M{}); count != 0 {
+		t.Fatalf("closed-account restriction inbox remaining=%d", count)
+	}
+	lateRestore := suspension
+	lateRestore.EventID = "event-restore-circle-after-close-12"
+	lateRestore.EventName = accountrestriction.UserRestoredEventName
+	lateRestore.AccountVersion = 12
+	lateRestore.AccountState = "active"
+	lateRestore.AuthEpoch = 12
+	lateRestore.DecisionRef = "decision-restore-circle-after-close-12"
+	lateRestore.OccurredAt = now.Add(time.Minute)
+	if late, err := restrictionProjection.Apply(ctx, lateRestore); err != nil ||
+		!late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("late Circle restore after closure: result=%+v err=%v", late, err)
+	}
+	delayedSuspend := suspension
+	delayedSuspend.EventID = "event-delayed-suspend-circle-9"
+	delayedSuspend.AccountVersion = 9
+	delayedSuspend.AuthEpoch = 9
+	delayedSuspend.DecisionRef = "decision-delayed-suspend-circle-9"
+	delayedSuspend.OccurredAt = now.Add(-2 * time.Minute)
+	if late, err := restrictionProjection.Apply(ctx, delayedSuspend); err != nil ||
+		!late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("delayed Circle suspend after closure: result=%+v err=%v", late, err)
+	}
+	if count := countDocuments(t, "circle_user_account_restrictions", bson.M{}); count != 0 {
+		t.Fatalf("late events recreated Circle restriction state=%d", count)
+	}
+	if count := countDocuments(t, "circle_user_account_restriction_inbox", bson.M{}); count != 0 {
+		t.Fatalf("late events recreated Circle restriction inbox=%d", count)
+	}
+	var terminalWatermark bson.M
+	if err := mongoDB.Collection("circle_user_account_restriction_watermarks").FindOne(
+		ctx,
+		bson.M{"terminal": true, "accountVersion": int64(11)},
+	).Decode(&terminalWatermark); err != nil {
+		t.Fatalf("read Circle terminal restriction watermark: %v", err)
+	}
+	encodedWatermark, err := bson.MarshalExtJSON(terminalWatermark, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rawID := range []string{"account-closed", "persona-closed"} {
+		if strings.Contains(string(encodedWatermark), rawID) {
+			t.Fatalf("Circle terminal watermark retained raw identity %q: %s", rawID, encodedWatermark)
+		}
 	}
 
 	if _, err := redisRouter.Scene("general").XAdd(

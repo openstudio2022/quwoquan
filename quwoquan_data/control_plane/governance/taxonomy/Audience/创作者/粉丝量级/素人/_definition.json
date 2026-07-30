@@ -2,6 +2,7 @@
   "label": "素人",
   "labelEn": "Nano Influencer",
   "description": "粉丝1000以内",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

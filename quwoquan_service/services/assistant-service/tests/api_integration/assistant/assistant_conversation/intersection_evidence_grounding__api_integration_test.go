@@ -9,7 +9,7 @@ import (
 	"time"
 
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 )
 
@@ -47,7 +47,7 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 	}
 	handler := assistanthttp.NewHandler(
 		newIntegrationAssistantService(
-			application.WithIntersectionEvidenceReader(reader),
+			orchestration.WithIntersectionEvidenceReader(reader),
 		),
 	).Routes()
 
@@ -119,7 +119,7 @@ func TestAssistantRunAuthorizesIntersectionEvidenceAcrossHTTPBoundary(t *testing
 	}
 
 	reader.result = nil
-	reader.err = application.ErrIntersectionEvidenceNotFound
+	reader.err = orchestration.ErrIntersectionEvidenceNotFound
 	rejected := assistantAPIRequest(
 		t,
 		handler,

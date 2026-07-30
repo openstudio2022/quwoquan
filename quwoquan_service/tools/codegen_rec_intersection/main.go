@@ -99,6 +99,20 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	writeSortedStringMap(&b, r.IconKeyByDimension)
 	b.WriteString("}\n\n")
 
+	// ── iconKey → tone / 远程图标资源（零发版视觉扩展位） ──
+	b.WriteString("// IntersectionToneByIconKey: iconKey → 色板 token 名（registry.visualToneByIconKey）。\n")
+	b.WriteString("// 云侧只下发色号名，端持 light/dark 成对调色板按主题取色；未登记 iconKey 查表落 \"\"。\n")
+	b.WriteString("var IntersectionToneByIconKey = map[string]string{\n")
+	writeSortedStringMap(&b, r.VisualToneByIcon)
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionIconAssetByIconKey: iconKey → 远程图标资源相对路径（registry.iconAssetByIconKey）。\n")
+	b.WriteString("// 值是数据发布 media 根下的 alpha 蒙版图路径；为空表示该图标仍走端侧 glyph 兜底。\n")
+	b.WriteString("// 新增交集类型图标 = 发一次数据 + 登记一行，不需要发端。\n")
+	b.WriteString("var IntersectionIconAssetByIconKey = map[string]string{\n")
+	writeSortedStringMap(&b, r.IconAssetByIconKey)
+	b.WriteString("}\n\n")
+
 	// ── objectKind → routeId / assetKind ──
 	b.WriteString("// IntersectionRouteIDByObjectKind: objectKind → 端路由逻辑名（registry.objectKinds[].routeId）。\n")
 	b.WriteString("// 仅登记非空 routeId；不可导航对象（content/tag）缺省查表落 \"\"（map 零值）。\n")
@@ -122,6 +136,37 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	}
 	b.WriteString("}\n\n")
 
+	// ── objectKind → dimension / label ──
+	b.WriteString("// IntersectionDimensionByObjectKind: objectKind → 共享标签 reason 的交集维度\n")
+	b.WriteString("// （registry.objectKinds[].dimension）。取代服务端手写的 objectDimension switch。\n")
+	b.WriteString("var IntersectionDimensionByObjectKind = map[string]string{\n")
+	for _, ok := range r.ObjectKinds {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", ok.Kind, ok.Dimension))
+	}
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionLabelByObjectKind: objectKind → 展示名缺失时的兜底称谓\n")
+	b.WriteString("// （registry.objectKinds[].label）。取代服务端手写的 objectLabel switch。\n")
+	b.WriteString("var IntersectionLabelByObjectKind = map[string]string{\n")
+	for _, ok := range r.ObjectKinds {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", ok.Kind, ok.Label))
+	}
+	b.WriteString("}\n\n")
+
+	// ── objectType → objectKind ──
+	b.WriteString("// IntersectionObjectKindByObjectType: 开放 objectType 词汇 → objectKind 闭集\n")
+	b.WriteString("// （registry.objectTypeBindings）。HomepageType 全集逐值登记，不留 default；\n")
+	b.WriteString("// 未登记 objectType 查表落 \"\"，由消费方 fail-safe，而不是静默当成人物。\n")
+	b.WriteString("var IntersectionObjectKindByObjectType = map[string]string{\n")
+	bindings := append([]recintersectionmeta.ObjectTypeBinding(nil), r.ObjectTypeBindings...)
+	sort.Slice(bindings, func(i, j int) bool {
+		return bindings[i].ObjectType < bindings[j].ObjectType
+	})
+	for _, binding := range bindings {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", binding.ObjectType, binding.ObjectKind))
+	}
+	b.WriteString("}\n\n")
+
 	// ── actionKeys by kind ──
 	b.WriteString("// IntersectionActionKeysByKind: kind → 行动建议 actionKey 有序列表（registry.actionHintsByKind）。\n")
 	b.WriteString("// 未登记 kind 返回 nil，消费方兜底 [\"ask_assistant\"]。\n")
@@ -142,11 +187,9 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	b.WriteString("}\n\n")
 
 	// ── actionKey → 终端短标签 ──
-	b.WriteString("// IntersectionActionLabelByKey: actionKey → 终端 UI 短标签（registry.actionLabelByKey）。\n")
-	b.WriteString("// 未登记 key 由消费方兜底 ask_assistant 标签。\n")
-	b.WriteString("var IntersectionActionLabelByKey = map[string]string{\n")
-	writeSortedStringMap(&b, r.ActionLabelByKey)
-	b.WriteString("}\n\n")
+	writeTextMap(&b, "IntersectionActionLabelByKey",
+		"actionKey → 终端 UI 短标签（registry.actionLabelByKey）；未登记 key 由消费方兜底 ask_assistant 标签",
+		r.ActionLabelPrefix, r.ActionLabelByKey)
 
 	// ── moment by kind（§24 M0.2 意图时态；缺省 current） ──
 	b.WriteString("// IntersectionMomentByKind: kind → 意图时态（registry.kinds[].moment，缺省 current）。\n")
@@ -202,9 +245,287 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	for _, key := range akKeys {
 		b.WriteString(fmt.Sprintf("\t%q: %q,\n", key, r.ActionKeyMeta[key].Dispatch))
 	}
+	b.WriteString("}\n\n")
+
+	// ── 冷启动稀释闸门（P0 横切；Feed / List / ObjectIntersections 三入口共用） ──
+	b.WriteString("// IntersectionColdStartSupplyKeyByKind: kind → 供给计量口径（registry.coldStartSupply.supplyKeyByKind）。\n")
+	b.WriteString("// 未登记的 kind 不受冷启动闸门约束（对象池天然等于用户池等情形）。\n")
+	b.WriteString("var IntersectionColdStartSupplyKeyByKind = map[string]string{\n")
+	writeSortedStringMap(&b, r.ColdStartSupply.SupplyKeyByKind)
+	b.WriteString("}\n\n")
+
+	// ── deferred kind 闸门（registry.kinds[].status；诚实红线的运行时执行点） ──
+	b.WriteString("// IntersectionDeferredKinds: status == deferred 的 kind 集合（registry.kinds[].status）。\n")
+	b.WriteString("// deferred = 可证数据源缺位，注册表登记占位但禁止产出；消费方必须在下发前整条丢弃，\n")
+	b.WriteString("// 不得依赖「没有 producer」这种隐式保证（deferredReason 说明缺什么）。\n")
+	b.WriteString("var IntersectionDeferredKinds = map[string]struct{}{\n")
+	deferredKinds := make([]string, 0, len(r.Kinds))
+	for _, k := range r.Kinds {
+		if strings.TrimSpace(k.Status) == "deferred" {
+			deferredKinds = append(deferredKinds, k.Kind)
+		}
+	}
+	sort.Strings(deferredKinds)
+	for _, kind := range deferredKinds {
+		b.WriteString(fmt.Sprintf("\t%q: {},\n", kind))
+	}
+	b.WriteString("}\n\n")
+
+	writeStatementTemplates(&b, r)
+
+	writePresentationText(&b, r)
+
+	b.WriteString("// IntersectionColdStartMinDistinctObjects: kind → 最小候选池规模（去重对象数）。\n")
+	b.WriteString("// 语料供给低于该值时整类交集不展示：人人都命中的交集信息量为零（P0 稀释闸门）。\n")
+	b.WriteString("var IntersectionColdStartMinDistinctObjects = map[string]int{\n")
+	supplyKinds := make([]string, 0, len(r.ColdStartSupply.SupplyKeyByKind))
+	for kind := range r.ColdStartSupply.SupplyKeyByKind {
+		supplyKinds = append(supplyKinds, kind)
+	}
+	sort.Strings(supplyKinds)
+	for _, kind := range supplyKinds {
+		b.WriteString(fmt.Sprintf("\t%q: %d,\n", kind, r.ColdStartSupply.MinDistinctObjectsFor(kind)))
+	}
 	b.WriteString("}\n")
 
 	return b.String()
+}
+
+// writeStatementTemplates 输出 §17.1 结论句模板表（registry.statementTemplates）。
+//
+// 文本与 spans 共用这一份模板：消费方按 kind 取 IntersectionStatementForm，用槽位值渲染，
+// 因此 join(primarySpans.text) == primaryText 是渲染器的结构性结果，不再靠两份手写模板对齐。
+func writeStatementTemplates(b *strings.Builder, r *recintersectionmeta.Registry) {
+	st := r.StatementTemplates
+	writeStringSliceVar(b, "IntersectionStatementSlots",
+		"结论句槽位闭集（registry.statementTemplates.slots）", st.Slots)
+
+	b.WriteString("// IntersectionStatementVariant 是一条可渲染模板：Template 带 {slot}，L10nKey 供端取译文。\n")
+	b.WriteString("type IntersectionStatementVariant struct {\n")
+	b.WriteString("\tTemplate string\n")
+	b.WriteString("\tL10nKey  string\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionStatementForm 是单个 kind 的结论句模板族。\n")
+	b.WriteString("// Counted 为零值表示该 kind 无计数降级句（缺具名对象时整条隐藏，不造名）。\n")
+	b.WriteString("type IntersectionStatementForm struct {\n")
+	b.WriteString("\tTemplate       string\n")
+	b.WriteString("\tL10nKey        string\n")
+	b.WriteString("\tActionFallback string\n")
+	b.WriteString("\tCounted        IntersectionStatementVariant\n")
+	b.WriteString("\tVariants       map[string]IntersectionStatementVariant\n")
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionStatementFormByKind: kind → 结论句模板族（registry.statementTemplates.byKind）。\n")
+	b.WriteString("// 未登记 kind 查表落零值，消费方必须据此不产出结论句（§20.4 降级链末级：隐藏）。\n")
+	b.WriteString("var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{\n")
+	kinds := make([]string, 0, len(st.ByKind))
+	for kind := range st.ByKind {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	for _, kind := range kinds {
+		form := st.ByKind[kind]
+		b.WriteString(fmt.Sprintf("\t%q: {\n", kind))
+		b.WriteString(fmt.Sprintf("\t\tTemplate: %q,\n", form.Template))
+		b.WriteString(fmt.Sprintf("\t\tL10nKey:  %q,\n", form.L10nKey))
+		if strings.TrimSpace(form.ActionFallback) != "" {
+			b.WriteString(fmt.Sprintf("\t\tActionFallback: %q,\n", form.ActionFallback))
+		}
+		if form.Counted != nil {
+			b.WriteString(fmt.Sprintf("\t\tCounted: IntersectionStatementVariant{Template: %q, L10nKey: %q},\n",
+				form.Counted.Template, form.Counted.L10nKey))
+		}
+		if len(form.Variants) > 0 {
+			names := make([]string, 0, len(form.Variants))
+			for name := range form.Variants {
+				names = append(names, name)
+			}
+			sort.Strings(names)
+			b.WriteString("\t\tVariants: map[string]IntersectionStatementVariant{\n")
+			for _, name := range names {
+				v := form.Variants[name]
+				b.WriteString(fmt.Sprintf("\t\t\t%q: {Template: %q, L10nKey: %q},\n", name, v.Template, v.L10nKey))
+			}
+			b.WriteString("\t\t},\n")
+		}
+		b.WriteString("\t},\n")
+	}
+	b.WriteString("}\n\n")
+}
+
+// writePresentationText 输出 §17.2 展示文案层（registry.presentationText）。
+//
+// 每条文案生成 IntersectionText{Text, L10nKey} 对：Text 是可直接渲染的基线，
+// L10nKey 供运营态覆盖与本地化按键取译文。服务端渲染层只查这些表，
+// 不再持有中文字面量。
+func writePresentationText(b *strings.Builder, r *recintersectionmeta.Registry) {
+	p := r.PresentationText
+
+	b.WriteString("// IntersectionText 是一条可渲染文案：Text 为契约基线，L10nKey 供运营态覆盖与译文查询。\n")
+	b.WriteString("// 查表落空得零值，消费方必须据此走降级链（省略该成分或整条隐藏），不得回退中文字面量。\n")
+	b.WriteString("type IntersectionText struct {\n")
+	b.WriteString("\tText    string\n")
+	b.WriteString("\tL10nKey string\n")
+	b.WriteString("}\n\n")
+
+	writeTextMap(b, "IntersectionRelationLabelByKind",
+		"kind → 代表人关系限定词（registry.presentationText.relationLabels）",
+		p.RelationLabels.L10nKeyPrefix, p.RelationLabels.ByKind)
+	writeTextConst(b, "IntersectionRelationLabelDefault",
+		"未登记 kind 的关系限定词（空串表示主语不带关系限定）",
+		recintersectionmeta.L10nKeyFor(p.RelationLabels.L10nKeyPrefix, "default"), p.RelationLabels.Default)
+
+	writeTextMap(b, "IntersectionAnonymousActorLabelByKind",
+		"kind → 无具名代表人时的匿名主语（registry.presentationText.anonymousActorLabels）",
+		p.AnonymousActorLabels.L10nKeyPrefix, p.AnonymousActorLabels.ByKind)
+	writeTextConst(b, "IntersectionAnonymousActorLabelDefault",
+		"未登记 kind 的匿名主语",
+		recintersectionmeta.L10nKeyFor(p.AnonymousActorLabels.L10nKeyPrefix, "default"), p.AnonymousActorLabels.Default)
+
+	writeTextMap(b, "IntersectionSubjectPattern",
+		"主语计数与组合语法（registry.presentationText.subjectPatterns）",
+		p.SubjectPatterns.L10nKeyPrefix, p.SubjectPatterns.Patterns)
+
+	writeTextMap(b, "IntersectionViewerSubjectByObjectType",
+		"宿主对象即观察者自身时的主语（registry.presentationText.viewerSubjects）",
+		p.ViewerSubjects.L10nKeyPrefix, p.ViewerSubjects.ByObjectType)
+	writeTextConst(b, "IntersectionViewerSubjectSelfOnly",
+		"仅指代观察者自身的主语",
+		recintersectionmeta.L10nKeyFor(p.ViewerSubjects.L10nKeyPrefix, "selfOnly"), p.ViewerSubjects.SelfOnly)
+
+	writeTextMap(b, "IntersectionInteractionVerbByAction",
+		"互动类型 → 动词短语（registry.presentationText.interactionVerbs）",
+		p.InteractionVerbs.L10nKeyPrefix, p.InteractionVerbs.ByAction)
+	writeTextConst(b, "IntersectionVerbJoinerPair",
+		"两个动词短语之间的连接词",
+		recintersectionmeta.L10nKeyFor(p.InteractionVerbs.L10nKeyPrefix, "joinerPair"), p.InteractionVerbs.Joiners.Pair)
+	writeTextConst(b, "IntersectionVerbJoinerList",
+		"三个及以上动词短语的列举连接词",
+		recintersectionmeta.L10nKeyFor(p.InteractionVerbs.L10nKeyPrefix, "joinerList"), p.InteractionVerbs.Joiners.List)
+	writeTextConst(b, "IntersectionVerbJoinerLast",
+		"末位动词短语之前的连接词",
+		recintersectionmeta.L10nKeyFor(p.InteractionVerbs.L10nKeyPrefix, "joinerLast"), p.InteractionVerbs.Joiners.Last)
+
+	writeTextMap(b, "IntersectionDimensionLabelByDimension",
+		"dimension → 展示名词（registry.presentationText.dimensionLabels）",
+		p.DimensionLabels.L10nKeyPrefix, p.DimensionLabels.ByDimension)
+
+	writeTextMap(b, "IntersectionPointClassLabelByPointClass",
+		"pointClass → 展示名词（registry.presentationText.pointClassLabels）",
+		p.PointClassLabels.L10nKeyPrefix, p.PointClassLabels.ByPointClass)
+
+	writeTextMap(b, "IntersectionKindLabelByKind",
+		"kind → 交集点短标签（registry.presentationText.kindLabels）",
+		p.KindLabels.L10nKeyPrefix, p.KindLabels.ByKind)
+
+	writeTextMap(b, "IntersectionPointTemplateByKind",
+		"kind → 交集点计数短句模板（registry.presentationText.pointTemplates）",
+		p.PointTemplates.L10nKeyPrefix, p.PointTemplates.ByKind)
+
+	writeTextMap(b, "IntersectionActorActionSummaryByKind",
+		"kind → 逐人证据的动作摘要（registry.presentationText.actorActionSummaries）",
+		p.ActorActionSummaries.L10nKeyPrefix, p.ActorActionSummaries.ByKind)
+
+	decor := p.ObjectNameDecorations
+	b.WriteString("// IntersectionObjectNameAffix 是对象名的一对包裹符号。\n")
+	b.WriteString("type IntersectionObjectNameAffix struct {\n")
+	b.WriteString("\tPrefix string\n")
+	b.WriteString("\tSuffix string\n")
+	b.WriteString("}\n\n")
+	b.WriteString("// IntersectionObjectNameDefaultAffix: 普通对象名的包裹符号。\n")
+	b.WriteString(fmt.Sprintf("var IntersectionObjectNameDefaultAffix = IntersectionObjectNameAffix{Prefix: %q, Suffix: %q}\n\n",
+		decor.Default.Prefix, decor.Default.Suffix))
+	b.WriteString("// IntersectionObjectNameWorkTitleAffix: 作品类对象名的包裹符号。\n")
+	b.WriteString(fmt.Sprintf("var IntersectionObjectNameWorkTitleAffix = IntersectionObjectNameAffix{Prefix: %q, Suffix: %q}\n\n",
+		decor.WorkTitle.Prefix, decor.WorkTitle.Suffix))
+	writeStringSetVar(b, "IntersectionWorkTitleKinds",
+		"宾语按作品名装饰的 kind 集合（registry.presentationText.objectNameDecorations.workTitleKinds）",
+		decor.WorkTitleKinds)
+
+	aff := p.AffinityStatements
+	b.WriteString("// IntersectionAffinityChannelText 是概率通道单个渠道的具名 / 无名两种话术。\n")
+	b.WriteString("type IntersectionAffinityChannelText struct {\n")
+	b.WriteString("\tNamed   IntersectionText\n")
+	b.WriteString("\tUnnamed IntersectionText\n")
+	b.WriteString("}\n\n")
+	b.WriteString("// IntersectionAffinityStatementByChannel: 投放渠道 → 概率通道话术\n")
+	b.WriteString("// （registry.presentationText.affinityStatements.byChannel）。\n")
+	b.WriteString("var IntersectionAffinityStatementByChannel = map[string]IntersectionAffinityChannelText{\n")
+	for _, name := range sortedKeys(aff.ByChannel) {
+		channel := aff.ByChannel[name]
+		prefix := recintersectionmeta.L10nKeyFor(aff.L10nKeyPrefix, name)
+		b.WriteString(fmt.Sprintf("\t%q: {\n", name))
+		b.WriteString(fmt.Sprintf("\t\tNamed:   IntersectionText{Text: %q, L10nKey: %q},\n", channel.Named, prefix+".named"))
+		b.WriteString(fmt.Sprintf("\t\tUnnamed: IntersectionText{Text: %q, L10nKey: %q},\n", channel.Unnamed, prefix+".unnamed"))
+		b.WriteString("\t},\n")
+	}
+	b.WriteString("}\n\n")
+	writeTextMap(b, "IntersectionAffinityConfidenceLabelByDimension",
+		"dimension → 概率通道置信标注（registry.presentationText.affinityStatements）",
+		aff.L10nKeyPrefix+".confidence", aff.ConfidenceLabelByDimension)
+	writeTextConst(b, "IntersectionAffinityConfidenceLabelDefault",
+		"未登记 dimension 的概率通道置信标注",
+		recintersectionmeta.L10nKeyFor(aff.L10nKeyPrefix, "confidenceDefault"), aff.DefaultConfidenceLabel)
+
+	writeTextConst(b, "IntersectionConnectionSummaryTemplate",
+		"对象页连接说明模板（registry.presentationText.connectionSummary）",
+		recintersectionmeta.L10nKeyFor(p.ConnectionSummary.L10nKeyPrefix, ""), p.ConnectionSummary.Template)
+	writeTextConst(b, "IntersectionSecondaryTextItemWithCount",
+		"辅助说明单项带计数的组装模板（registry.presentationText.secondaryText）",
+		recintersectionmeta.L10nKeyFor(p.SecondaryText.L10nKeyPrefix, "itemWithCount"), p.SecondaryText.ItemWithCount)
+	writeTextConst(b, "IntersectionSecondaryTextSeparator",
+		"辅助说明各项之间的分隔符",
+		recintersectionmeta.L10nKeyFor(p.SecondaryText.L10nKeyPrefix, "separator"), p.SecondaryText.Separator)
+	writeTextConst(b, "IntersectionListSeparator",
+		"样本名列表分隔符（registry.presentationText.listSeparator）",
+		recintersectionmeta.L10nKeyFor(p.ListSeparator.L10nKeyPrefix, ""), p.ListSeparator.Text)
+
+	writeStringSetVar(b, "IntersectionPlaceholderObjectNames",
+		"通用占位对象名黑名单：命中即视为没有具名对象并走降级链",
+		p.PlaceholderObjectNames)
+	writeStringSetVar(b, "IntersectionPlaceholderRelationLabels",
+		"通用占位关系称谓黑名单：命中即视为没有可用关系限定",
+		p.PlaceholderRelationLabels)
+}
+
+// writeTextMap 输出一张 key → IntersectionText 的查表，l10nKey 按前缀推导。
+func writeTextMap(b *strings.Builder, name, doc, prefix string, entries map[string]string) {
+	b.WriteString(fmt.Sprintf("// %s: %s。\n", name, doc))
+	b.WriteString(fmt.Sprintf("var %s = map[string]IntersectionText{\n", name))
+	for _, key := range sortedKeys(entries) {
+		b.WriteString(fmt.Sprintf("\t%q: {Text: %q, L10nKey: %q},\n",
+			key, entries[key], recintersectionmeta.L10nKeyFor(prefix, key)))
+	}
+	b.WriteString("}\n\n")
+}
+
+// writeTextConst 输出一条独立文案。
+func writeTextConst(b *strings.Builder, name, doc, l10nKey, text string) {
+	b.WriteString(fmt.Sprintf("// %s: %s。\n", name, doc))
+	b.WriteString(fmt.Sprintf("var %s = IntersectionText{Text: %q, L10nKey: %q}\n\n", name, text, l10nKey))
+}
+
+// writeStringSetVar 输出一个集合查表（消费方按 key 判定命中，避免线性扫描）。
+func writeStringSetVar(b *strings.Builder, name, doc string, values []string) {
+	b.WriteString(fmt.Sprintf("// %s: %s。\n", name, doc))
+	b.WriteString(fmt.Sprintf("var %s = map[string]struct{}{\n", name))
+	sorted := append([]string(nil), values...)
+	sort.Strings(sorted)
+	for _, v := range sorted {
+		b.WriteString(fmt.Sprintf("\t%q: {},\n", v))
+	}
+	b.WriteString("}\n\n")
+}
+
+// sortedKeys 保证 codegen 输出稳定（map 迭代无序）。
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func writeStringSliceVar(b *strings.Builder, name, doc string, values []string) {

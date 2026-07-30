@@ -35,7 +35,7 @@ func resolvePersonaID(r *http.Request) string {
 			return strings.TrimSpace(principal.Actor.PersonaID)
 		}
 	}
-	return strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
+	return strings.TrimSpace(r.Header.Get("X-Client-Persona-Id"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -71,6 +71,7 @@ func conversationMemberToWire(
 	}
 	return map[string]any{
 		"userId":           member.UserId,
+		"userHandle":       strings.TrimSpace(member.UserHandle),
 		"displayName":      member.DisplayName,
 		"avatarUrl":        member.AvatarUrl,
 		"role":             member.Role,
@@ -128,16 +129,17 @@ func (h *ChatHandler) messageHomeRowToWire(ctx context.Context, item application
 }
 
 func contactHomeUserRowToWire(contact map[string]any) map[string]any {
-	contactID := firstStringFromMap(contact, "contactId", "userId", "id")
-	displayName := firstStringFromMap(contact, "displayName", "name")
+	userID := stringFromMap(contact, "userId")
+	displayName := stringFromMap(contact, "displayName")
 	metFrom := stringFromMap(contact, "metFrom")
 	bio := stringFromMap(contact, "bio")
 	lastInteraction := stringFromMap(contact, "lastInteraction")
 	return map[string]any{
-		"id":                   contactID,
+		"id":                   userID,
 		"kind":                 "user",
-		"objectId":             contactID,
-		"userId":               contactID,
+		"objectId":             userID,
+		"userId":               userID,
+		"userHandle":           stringFromMap(contact, "userHandle"),
 		"conversationId":       stringFromMap(contact, "conversationId"),
 		"title":                displayName,
 		"subtitle":             stringFromMap(contact, "subtitle"),
@@ -156,6 +158,7 @@ func contactHomeCircleRowToWire(hit application.ContactHomeCircleHit) map[string
 		"id":                   circleID,
 		"kind":                 "circle",
 		"objectId":             circleID,
+		"userHandle":           "",
 		"circleId":             circleID,
 		"title":                strings.TrimSpace(hit.DisplayName),
 		"subtitle":             strings.TrimSpace(hit.Subtitle),
@@ -171,6 +174,7 @@ func (h *ChatHandler) contactHomeGroupRowToWire(ctx context.Context, conv model.
 		"id":                   conv.ID,
 		"kind":                 "group",
 		"objectId":             conv.ID,
+		"userHandle":           "",
 		"conversationId":       conv.ID,
 		"circleId":             conv.CircleId,
 		"circleGroupId":        conv.CircleGroupId,
@@ -210,8 +214,6 @@ func (h *ChatHandler) groupHomeToWire(ctx context.Context, conv model.Conversati
 		"announcement":       conv.Announcement,
 		"capabilities":       []string{"album", "file", "event", "member"},
 		"originType":         conv.OriginType,
-		"bindingType":        conv.BindingType,
-		"lifecyclePolicy":    conv.LifecyclePolicy,
 		"canManageMembers":   canManage,
 		"canDissolve":        canDissolve,
 	}
@@ -327,8 +329,6 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 		"circleGroupId":           conv.CircleGroupId,
 		"entityId":                conv.EntityId,
 		"originType":              conv.OriginType,
-		"bindingType":             conv.BindingType,
-		"lifecyclePolicy":         conv.LifecyclePolicy,
 		"maxSeq":                  conv.MaxSeq,
 		"memberCount":             conv.MemberCount,
 		"membersRosterRevision":   conv.MembersRosterRevision,

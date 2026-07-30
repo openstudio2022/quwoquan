@@ -73,10 +73,24 @@ class CachedContentRepository
       sort: sort,
       limit: limit,
     );
-    await _querySnapshotStore.ensureHydrated();
+    await runCloudOperationPrerequisite(
+      _querySnapshotStore.ensureHydrated,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
     final cached = _querySnapshotStore.get(key);
-    try {
-      final page = await _readDelegate.listDiscoveryFeedPage(
+    final isInitialPage = cursor == null || cursor.trim().isEmpty;
+    if (cached != null && isInitialPage) {
+      final cachedPage = await _visibleCachedFeedPage(
+        key: key,
+        cached: cached,
+        sessionId: sessionId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
+      final revalidation = _revalidateFeedPage(
+        cachedPage: cachedPage,
+        key: key,
         category: category,
         channelId: channelId,
         identity: identity,
@@ -90,37 +104,175 @@ class CachedContentRepository
         cancellation: cancellation,
         deadlineAt: deadlineAt,
       );
-      _storeFeedPage(key, page);
-      return page;
+      return _copyFeedPage(cachedPage, revalidation: revalidation);
+    }
+    try {
+      return await _fetchAndStoreFeedPage(
+        key: key,
+        category: category,
+        channelId: channelId,
+        identity: identity,
+        type: type,
+        subCategory: subCategory,
+        limit: limit,
+        cursor: cursor,
+        sort: sort,
+        sessionId: sessionId,
+        feedRequestId: feedRequestId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
     } catch (error) {
       if (cached != null) {
-        final blockedKeywords = (await _blockedKeywordsLoader())
-            .map((keyword) => keyword.trim().toLowerCase())
-            .where((keyword) => keyword.isNotEmpty)
-            .toSet();
-        _recordCacheHit(key: key, result: cached);
-        final cachedPage = cached.value.toDiscoveryFeedPage();
-        final visibleItems = blockedKeywords.isEmpty
-            ? cachedPage.items
-            : cachedPage.items
-                  .where((item) {
-                    final searchable = '${item.title} ${item.normalizedBody}'
-                        .toLowerCase();
-                    return !blockedKeywords.any(searchable.contains);
-                  })
-                  .toList(growable: false);
-        return DiscoveryFeedPage(
-          items: visibleItems,
-          nextCursor: cachedPage.nextCursor,
-          feedRequestId: cachedPage.feedRequestId,
-          rankingVersion: cachedPage.rankingVersion,
-          reasonVersion: cachedPage.reasonVersion,
-          cacheFallbackError: error,
-          cacheAgeMs: _cacheAgeMs(cached.value.fetchedAt),
+        final cachedPage = await _visibleCachedFeedPage(
+          key: key,
+          cached: cached,
+          sessionId: sessionId,
+          cancellation: cancellation,
+          deadlineAt: deadlineAt,
         );
+        return _copyFeedPage(cachedPage, cacheFallbackError: error);
       }
       rethrow;
     }
+  }
+
+  Future<DiscoveryFeedPage> _fetchAndStoreFeedPage({
+    required String key,
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    required int limit,
+    String? cursor,
+    required String sort,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final page = await _readDelegate.listDiscoveryFeedPage(
+      category: category,
+      channelId: channelId,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+    throwIfCloudOperationInterrupted(
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+    _storeFeedPage(key, page, sessionId: sessionId);
+    return page;
+  }
+
+  Future<DiscoveryFeedPage> _visibleCachedFeedPage({
+    required String key,
+    required CacheReadResult<ContentQuerySnapshot> cached,
+    String? sessionId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final blockedKeywords =
+        (await runCloudOperationPrerequisite(
+              _blockedKeywordsLoader,
+              cancellation: cancellation,
+              deadlineAt: deadlineAt,
+            ))
+            .map((keyword) => keyword.trim().toLowerCase())
+            .where((keyword) => keyword.isNotEmpty)
+            .toSet();
+    _recordCacheHit(key: key, result: cached);
+    final cachedPage = cached.value.toDiscoveryFeedPage(
+      currentSessionId: sessionId,
+    );
+    final visibleItems = blockedKeywords.isEmpty
+        ? cachedPage.items
+        : cachedPage.items
+              .where((item) {
+                final searchable = '${item.title} ${item.normalizedBody}'
+                    .toLowerCase();
+                return !blockedKeywords.any(searchable.contains);
+              })
+              .toList(growable: false);
+    return DiscoveryFeedPage(
+      items: visibleItems,
+      outcome: cachedPage.outcome,
+      emptyReason: cachedPage.emptyReason,
+      objectCards: cachedPage.objectCards,
+      nextCursor: cachedPage.nextCursor,
+      previousCursor: cachedPage.previousCursor,
+      paginationExpiresAt: cachedPage.paginationExpiresAt,
+      feedRequestId: cachedPage.feedRequestId,
+      policyDigest: cachedPage.policyDigest,
+      cacheAgeMs: _cacheAgeMs(cached.value.fetchedAt),
+    );
+  }
+
+  Future<DiscoveryFeedPage> _revalidateFeedPage({
+    required DiscoveryFeedPage cachedPage,
+    required String key,
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    required int limit,
+    String? cursor,
+    required String sort,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    try {
+      return await _fetchAndStoreFeedPage(
+        key: key,
+        category: category,
+        channelId: channelId,
+        identity: identity,
+        type: type,
+        subCategory: subCategory,
+        limit: limit,
+        cursor: cursor,
+        sort: sort,
+        sessionId: sessionId,
+        feedRequestId: feedRequestId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
+    } catch (error) {
+      return _copyFeedPage(cachedPage, cacheFallbackError: error);
+    }
+  }
+
+  DiscoveryFeedPage _copyFeedPage(
+    DiscoveryFeedPage page, {
+    Object? cacheFallbackError,
+    Future<DiscoveryFeedPage>? revalidation,
+  }) {
+    return DiscoveryFeedPage(
+      items: page.items,
+      outcome: page.outcome,
+      emptyReason: page.emptyReason,
+      objectCards: page.objectCards,
+      nextCursor: page.nextCursor,
+      previousCursor: page.previousCursor,
+      paginationExpiresAt: page.paginationExpiresAt,
+      feedRequestId: page.feedRequestId,
+      policyDigest: page.policyDigest,
+      cacheFallbackError: cacheFallbackError,
+      cacheAgeMs: page.cacheAgeMs,
+      revalidation: revalidation,
+    );
   }
 
   @override
@@ -146,7 +298,15 @@ class CachedContentRepository
   }
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    throwIfCloudOperationInterrupted(
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
     final cached = _postCache.getDetail(postId);
     if (cached != null) {
       _recordCacheHit(key: 'post:$postId', result: cached);
@@ -155,7 +315,11 @@ class CachedContentRepository
       }
       return cached.value;
     }
-    final payload = await _readDelegate.getPost(postId: postId);
+    final payload = await _readDelegate.getPost(
+      postId: postId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
     _storePostDetail(payload);
     return payload;
   }
@@ -172,32 +336,6 @@ class CachedContentRepository
     _postCache.removePost(postId);
     _querySnapshotStore.invalidatePost(postId);
     await _querySnapshotStore.flushPersistence();
-  }
-
-  @override
-  Future<PostBaseDto> updatePostSettings({
-    required String postId,
-    required UpdatePostSettingsRequestWire body,
-  }) async {
-    final post = await _writeDelegate.updatePostSettings(
-      postId: postId,
-      body: body,
-    );
-    _storePostProjection(post);
-    return post;
-  }
-
-  @override
-  Future<PostBaseDto> promotePostToWork({
-    required String postId,
-    required PromotePostToWorkRequestWire body,
-  }) async {
-    final post = await _writeDelegate.promotePostToWork(
-      postId: postId,
-      body: body,
-    );
-    _storePostProjection(post);
-    return post;
   }
 
   @override
@@ -260,15 +398,19 @@ class CachedContentRepository
     }
   }
 
-  void _storeFeedPage(String key, DiscoveryFeedPage page) {
+  void _storeFeedPage(String key, DiscoveryFeedPage page, {String? sessionId}) {
     _storePostProjections(page.items);
     _querySnapshotStore.put(
       key: key,
       items: page.items,
       nextCursor: page.nextCursor,
+      previousCursor: page.previousCursor,
+      paginationExpiresAt: page.paginationExpiresAt,
+      paginationSessionId: sessionId,
       feedRequestId: page.feedRequestId,
-      rankingVersion: page.rankingVersion,
-      reasonVersion: page.reasonVersion,
+      policyDigest: page.policyDigest,
+      outcome: page.outcome,
+      emptyReason: page.emptyReason,
     );
   }
 
@@ -286,11 +428,6 @@ class CachedContentRepository
     _registerAuthorSnapshot(payload.post);
   }
 
-  void _storePostProjection(PostBaseDto post) {
-    _postCache.putProjection(post);
-    _registerAuthorSnapshot(post);
-  }
-
   void _storePostProjections(Iterable<PostBaseDto> posts) {
     final materialized = posts.toList(growable: false);
     _postCache.putProjections(materialized);
@@ -302,9 +439,7 @@ class CachedContentRepository
   void _registerAuthorSnapshot(PostBaseDto post) {
     final avatarUrl = post.avatarUrl.trim();
     _userProfileCache?.putAuthorSnapshot(
-      userId: post.subAccountId.trim().isNotEmpty
-          ? post.subAccountId
-          : post.authorId,
+      userId: post.personaId.trim().isNotEmpty ? post.personaId : post.authorId,
       displayName: post.displayName,
       avatarUrl: avatarUrl,
       backgroundUrl: post.authorBackgroundUrl,

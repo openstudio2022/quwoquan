@@ -44,17 +44,17 @@ func (handler *Handler) handleSendGreeting(w http.ResponseWriter, r *http.Reques
 		writeInvalidArg(w, r, "invalid body")
 		return
 	}
-	targetID := strings.TrimSpace(anyString(body["targetSubAccountId"]))
+	targetID := strings.TrimSpace(anyString(body["targetPersonaId"]))
 	if targetID == "" {
-		writeInvalidArg(w, r, "targetSubAccountId required")
+		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
 	greeting, err := handler.service.Send(r.Context(), greetingapp.SendGreetingRequest{
-		RequesterSubAccountID: actorID,
-		TargetSubAccountID:    targetID,
-		RequestMessage:        anyString(body["requestMessage"]),
-		Source:                anyString(body["source"]),
-		IdempotencyKey:        idempotencyKey(r),
+		RequesterPersonaID: actorID,
+		TargetPersonaID:    targetID,
+		RequestMessage:     anyString(body["requestMessage"]),
+		Source:             anyString(body["source"]),
+		IdempotencyKey:     idempotencyKey(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)

@@ -8,10 +8,9 @@ from typing import Any, Mapping
 
 import yaml
 
-SOURCE_PLAN_RULE_SIGNATURE_VERSION = "quwoquan.source_plan_rules"
-
 _DATA_ROOT = Path(__file__).resolve().parents[2]
 _GLOBAL_RULE_RELATIVE_PATHS = (
+    "scripts/core/source_plan_contract.py",
     "scripts/content/source/prepare.py",
     "scripts/content/source/source_inputs.py",
     "scripts/content/source/research/auto_plan_writer.py",
@@ -80,7 +79,6 @@ def source_plan_rule_signature(vertical: str, entity_id: str) -> dict[str, Any]:
     if rights_path.is_file():
         global_files[str(rights_path.relative_to(_DATA_ROOT))] = _file_sha256(rights_path)
     parts = {
-        "version": SOURCE_PLAN_RULE_SIGNATURE_VERSION,
         "vertical": vertical,
         "entityId": entity_id,
         "globalFiles": global_files,
@@ -88,8 +86,7 @@ def source_plan_rule_signature(vertical: str, entity_id: str) -> dict[str, Any]:
     }
     digest = hashlib.sha256(_stable_json(parts).encode("utf-8")).hexdigest()
     return {
-        "version": SOURCE_PLAN_RULE_SIGNATURE_VERSION,
         "vertical": vertical,
         "entityId": entity_id,
-        "hash": digest,
+        "digest": f"sha256:{digest}",
     }

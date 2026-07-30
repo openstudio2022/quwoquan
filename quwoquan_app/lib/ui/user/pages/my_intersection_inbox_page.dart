@@ -62,7 +62,11 @@ class _MyIntersectionInboxPageState
   String _selectedImpactFilter = 'all';
   late _IntersectionDetailTab _selectedTab;
 
-  /// 二级筛选闭集（与「我的主页」二级页签同款胶囊样式）。
+  /// 二级筛选闭集 = 交集五维（`_shared/types.yaml#IntersectionDimension`）+「全部」。
+  ///
+  /// 筛选轴与模型同一套维度，因此 identity / content 不再因为筛选是 objectKind 与
+  /// dimension 的混合匹配而不可达；标签复用 [DiscoveryFeedText.intersectionDimensionShortLabels]，
+  /// 与结论句里的维度弱标同一份文案。
   static const List<ProfileSecondaryTabItem> _filterTabs =
       <ProfileSecondaryTabItem>[
         ProfileSecondaryTabItem(
@@ -70,29 +74,34 @@ class _MyIntersectionInboxPageState
           label: DiscoveryFeedText.intersectionFilterAll,
         ),
         ProfileSecondaryTabItem(
-          id: 'person',
-          label: DiscoveryFeedText.intersectionFilterPeople,
+          id: 'relationship',
+          label: DiscoveryFeedText.intersectionDimensionRelationship,
         ),
         ProfileSecondaryTabItem(
-          id: 'circle',
-          label: DiscoveryFeedText.intersectionFilterCircles,
+          id: 'location',
+          label: DiscoveryFeedText.intersectionDimensionLocation,
         ),
         ProfileSecondaryTabItem(
-          id: 'place',
-          label: DiscoveryFeedText.intersectionFilterPlaces,
+          id: 'identity',
+          label: DiscoveryFeedText.intersectionDimensionIdentity,
+        ),
+        ProfileSecondaryTabItem(
+          id: 'content',
+          label: DiscoveryFeedText.intersectionDimensionContent,
         ),
         ProfileSecondaryTabItem(
           id: 'interest',
-          label: DiscoveryFeedText.intersectionFilterInterests,
+          label: DiscoveryFeedText.intersectionDimensionInterest,
         ),
       ];
 
-  /// 二级筛选可选值闭集；不在集合内（如 `fact`/`impact`/空）一律归一到 `all`。
+  /// 二级筛选可选值闭集；不在集合内（如 `fact`/`impact`/旧 objectKind 值/空）一律归一到 `all`。
   static const Set<String> _filterIds = <String>{
     'all',
-    'person',
-    'circle',
-    'place',
+    'relationship',
+    'location',
+    'identity',
+    'content',
     'interest',
   };
 
@@ -148,12 +157,15 @@ class _MyIntersectionInboxPageState
     _selectedTab = widget.filter.trim() == 'impact'
         ? _IntersectionDetailTab.impact
         : _IntersectionDetailTab.intersections;
-    // 默认「全部」高亮：仅 person/circle/place/interest 是合法二级筛选；
-    // fact / impact / 空 等一律归一到 all，避免「无选中」假象。
-    final rawFilter = widget.filter.trim();
-    _selectedIntersectionFilter = _filterIds.contains(rawFilter)
-        ? rawFilter
+    // 二级筛选高亮的真相源是深链维度：从红点 / 通知 / 交集句下钻带 dimension 进来时，
+    // 必须让对应维度胶囊选中，否则列表已按维度收窄却高亮「全部」。
+    // filter（fact / impact / 空）不是维度，不参与胶囊选中。
+    final rawDimension = widget.dimension.trim();
+    _selectedIntersectionFilter = _filterIds.contains(rawDimension)
+        ? rawDimension
         : 'all';
+    // 打动页签的筛选轴仍是 records/discussion/homepage，走 filter 参数。
+    final rawFilter = widget.filter.trim();
     _selectedImpactFilter = _impactFilterIds.contains(rawFilter)
         ? rawFilter
         : 'all';
@@ -162,14 +174,20 @@ class _MyIntersectionInboxPageState
     }
   }
 
+  /// 拉取当前筛选下的交集列表。
+  ///
+  /// 维度筛选走云侧 `dimension` 参数（五维闭集，云侧 `reasonHasDimension` 会同时看
+  /// reason 与 point 的维度），`filter` 恒为 `fact`：本页交集页签只展示事实交集，
+  /// 概率推荐不混入。此前把胶囊 id（person/circle/place/interest）当作 `filter` 传，
+  /// 云侧闭集只认 all/new/fact/affinity，因此那些值被静默忽略、分页拉的是未收窄的全量，
+  /// 只靠端上二次过滤，既让 identity/content 不可达，也让翻页页码与筛选结果错位。
   Future<void> _load() {
+    final selected = _selectedIntersectionFilter;
     return ref
         .read(myIntersectionListProvider.notifier)
         .loadAndMarkVisited(
-          dimension: widget.dimension,
-          filter: _selectedIntersectionFilter == 'all'
-              ? 'fact'
-              : _selectedIntersectionFilter,
+          dimension: selected == 'all' ? widget.dimension : selected,
+          filter: 'fact',
           sourceRef: widget.sourceRef,
           timeBucket: widget.timeBucket,
         );
@@ -218,7 +236,7 @@ class _MyIntersectionInboxPageState
         ? _buildImpactTimelineChildren(
             ref.watch(
               authorImpactProvider((
-                subAccountId: ref.watch(currentUserIdProvider),
+                personaId: ref.watch(currentUserIdProvider),
                 surface: AppUiSurfaces.myIntersections,
               )),
             ),
@@ -277,7 +295,7 @@ class _MyIntersectionInboxPageState
       ];
     }
     return <Widget>[
-      // 二级筛选（全部/人/圈子/地点/兴趣）：accent 胶囊，与「我的主页」二级页签同款。
+      // 二级筛选（全部 + 交集五维）：accent 胶囊，与「我的主页」二级页签同款。
       ProfileSecondaryTabBar(
         tabs: _filterTabs,
         selectedId: _selectedIntersectionFilter,
@@ -316,6 +334,8 @@ class _MyIntersectionInboxPageState
               iconKey: displayReason.iconKey,
               sourceRef: _sourceRefFor(displayReason),
               dimension: displayReason.dimension,
+              tone: displayReason.tone,
+              typeIconUrl: displayReason.typeVisual?.imageUrl ?? '',
               lifecycleState: displayReason.lifecycleState,
               onTap: () => _openReason(displayReason),
               onSpanTap: (span) => _onSpanTap(displayReason, span),
@@ -391,19 +411,20 @@ class _MyIntersectionInboxPageState
     return filtered;
   }
 
-  bool _matchesFilter(IntersectionReason item, String filter) {
-    switch (filter) {
-      case 'person':
-        return item.objectKind == 'person' || item.dimension == 'relationship';
-      case 'circle':
-        return item.objectKind == 'circle';
-      case 'place':
-        return item.objectKind == 'place' || item.dimension == 'location';
-      case 'interest':
-        return item.dimension == 'interest' || item.objectKind == 'tag';
-      default:
-        return true;
+  /// 端侧维度谓词：与云侧 `reasonHasDimension` 同口径——reason 维度命中，或任一
+  /// intersectionPoint 维度命中（point 维度缺省回落 reason 维度）。
+  ///
+  /// 云侧已按同一谓词收窄，这里只兜住「缓存里还留着上一次筛选结果」的过渡帧，
+  /// 不做任何 objectKind 与 dimension 的混合匹配（那会让维度筛选变成对象类型筛选）。
+  bool _matchesFilter(IntersectionReason item, String dimension) {
+    if (item.dimension == dimension) return true;
+    for (final point in item.intersectionPoints) {
+      final pointDimension = point.dimension.trim().isEmpty
+          ? item.dimension
+          : point.dimension;
+      if (pointDimension == dimension) return true;
     }
+    return false;
   }
 
   void _onSpanTap(IntersectionReason reason, IntersectionTextSpan span) {

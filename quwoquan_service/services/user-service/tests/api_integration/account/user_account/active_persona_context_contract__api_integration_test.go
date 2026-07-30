@@ -12,10 +12,10 @@ func TestActivePersonaContext_CarriesAvatarVersionedUrl(t *testing.T) {
 	createTestPersonaFull(t, "persona_active_context", "owner_active_context", "sa_active_context", "当前分身", "open", true, true)
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		`UPDATE personas SET avatar_url = $1, avatar_version = $2 WHERE persona_id = $3`,
 		"https://cdn.example.com/active-context-avatar.png",
 		11,
-		"owner_active_context",
+		"sa_active_context",
 	); err != nil {
 		t.Fatalf("seed active context avatar version: %v", err)
 	}
@@ -32,8 +32,8 @@ func TestActivePersonaContext_CarriesAvatarVersionedUrl(t *testing.T) {
 	}
 
 	body := parseJSON(t, rec)
-	if body["subAccountId"] != "sa_active_context" {
-		t.Fatalf("expected active subAccountId, got %#v", body["subAccountId"])
+	if body["personaId"] != "sa_active_context" {
+		t.Fatalf("expected active personaId, got %#v", body["personaId"])
 	}
 	if body["avatarUrl"] != "https://cdn.example.com/active-context-avatar.png?v=11" {
 		t.Fatalf("expected versioned avatarUrl, got %#v", body["avatarUrl"])

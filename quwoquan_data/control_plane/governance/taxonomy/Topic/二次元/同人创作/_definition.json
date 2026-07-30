@@ -2,6 +2,7 @@
   "label": "同人创作",
   "labelEn": "Fan Creation",
   "description": "同人文同人画二创",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

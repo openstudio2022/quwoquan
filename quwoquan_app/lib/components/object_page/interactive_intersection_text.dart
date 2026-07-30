@@ -27,7 +27,7 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 /// 这样三个角色（object/count）的可点击语义统一，避免「有 onSpanTap 动作却因
 /// 无 target 而失去点击态」的矛盾（消费方负责对 target 为空的 object 片段优雅降级）。
 ///
-/// 槽②句内头像（架构基线 v2 §21.5.1）：当某片段携带 [IntersectionTextSpan.visual]
+/// 槽②句内头像（canonical 交集设计）：当某片段携带 [IntersectionTextSpan.visual]
 /// 且 `imageUrl` 非空时，在该片段文字**前**以 [WidgetSpan] 渲染一枚行内小头像（不带
 /// 文本、PlaceholderAlignment.middle）。它是装饰性视觉，不向句子注入任何字符，因此
 /// `join(spans.text) == primaryText` 不变量保持成立；行内头像与其文字共享同一 [onSpanTap]

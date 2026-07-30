@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('CircleDto — 常规契约', () {
@@ -16,9 +17,9 @@ void main() {
         memberCount: 42,
         postCount: 100,
         weeklyActiveCount: 15,
-        status: 'active',
-        visibility: 'public',
-        joinPolicy: 'open',
+        status: CircleStatus.active,
+        visibility: CircleVisibility.public,
+        joinPolicy: CircleJoinPolicy.open,
         conversationId: 'conv_1',
         autoSyncChat: true,
         sectionConfig: [
@@ -163,9 +164,9 @@ void main() {
       expect(minimal.memberCount, 0);
       expect(minimal.postCount, 0);
       expect(minimal.weeklyActiveCount, 0);
-      expect(minimal.status, 'active');
-      expect(minimal.visibility, 'public');
-      expect(minimal.joinPolicy, 'open');
+      expect(minimal.status, CircleStatus.active);
+      expect(minimal.visibility, CircleVisibility.public);
+      expect(minimal.joinPolicy, CircleJoinPolicy.open);
       expect(minimal.autoSyncChat, true);
       expect(minimal.storageUsedBytes, 0);
       expect(minimal.storageQuotaBytes, 1073741824);

@@ -27,9 +27,10 @@ type FeedbackRecorder struct {
 // 它只保留当前模型向量实际消费的稀疏字段，既保证与在线评分同源，也避免把整张
 // 用户特征宽表复制进每条曝光事实。
 type trainingFeatureSnapshot struct {
-	userFeatures map[string]any
-	itemFeatures map[string]any
-	capturedAt   time.Time
+	userFeatures  map[string]any
+	itemFeatures  map[string]any
+	capturedAt    time.Time
+	validationErr error
 }
 
 func newTrainingFeatureSnapshot(
@@ -39,6 +40,27 @@ func newTrainingFeatureSnapshot(
 ) *trainingFeatureSnapshot {
 	if capturedAt.IsZero() {
 		capturedAt = time.Now().UTC()
+	}
+	if err := validateRankedFeedCandidateFeatureBudget(candidate); err != nil {
+		return &trainingFeatureSnapshot{
+			userFeatures:  map[string]any{},
+			itemFeatures:  map[string]any{},
+			capturedAt:    capturedAt.UTC(),
+			validationErr: err,
+		}
+	}
+	if user != nil {
+		if err := validateRankedFeedDepthDistribution(user.DepthDistribution); err != nil {
+			// Do not clone an unbounded/corrupt histogram into every ranked item.
+			// The snapshot remains explicitly invalid so both delivery accounting
+			// and RankedFeedWindow admission fail closed.
+			return &trainingFeatureSnapshot{
+				userFeatures:  map[string]any{},
+				itemFeatures:  map[string]any{},
+				capturedAt:    capturedAt.UTC(),
+				validationErr: err,
+			}
+		}
 	}
 	return &trainingFeatureSnapshot{
 		userFeatures: trainingUserFeatures(user, candidate),
@@ -51,7 +73,13 @@ func trainingUserFeatures(user *UserFeatureVector, candidate CandidateInput) map
 	if user == nil {
 		return map[string]any{}
 	}
+	// 事实交集边已在 candidateInputAt 通过 StrongestIntersectionEdgeFor
+	// 唯一投影。快照必须直接复用在线候选的同三标量，不得再读原始 map
+	// 二次匹配，否则会产生在线/训练竞态偏斜。
 	return map[string]any{
+		"intersectionEdgeWeight":    candidate.IntersectionEdgeWeight,
+		"intersectionEdgeFreshness": candidate.IntersectionEdgeFreshness,
+		"intersectionEdgeKind":      candidate.IntersectionEdgeKind,
 		"tagAffinities":             selectFloatFeatures(user.TagAffinities, candidate.Tags),
 		"authorAffinities":          selectFloatFeatures(user.AuthorAffinities, []string{candidate.AuthorID}),
 		"engagementRate":            user.EngagementRate,
@@ -172,7 +200,7 @@ func recImpressionContext(
 	authorID string,
 	tags []string,
 	rank int,
-	feedRequestID, modelBucket, modelVersion, modelReleaseID string,
+	feedRequestID, modelBucket, modelChannel, modelReleaseID string,
 ) map[string]any {
 	return map[string]any{
 		"score":          score,
@@ -181,7 +209,7 @@ func recImpressionContext(
 		"rank":           rank,
 		"feedRequestId":  feedRequestID,
 		"modelBucket":    modelBucket,
-		"modelVersion":   modelVersion,
+		"modelChannel":   modelChannel,
 		"modelReleaseId": modelReleaseID,
 	}
 }
@@ -200,14 +228,14 @@ func recEngagementContext(duration float64, recScore float64, tags []string, fee
 }
 
 // ImpressionAttribution 是一次 feed 下发的曝光归因（fact 契约字段来源）。
-// FeedRequestID 是曝光批次的稳定归因键；ModelBucket/ModelVersion 是本次
-// 命中的评分轨道（rule 分桶时 ModelVersion 为空）。PersonaID 是服务端已验证的
+// FeedRequestID 是曝光批次的稳定归因键；ModelBucket/ModelChannel 是本次
+// 命中的评分轨道（rule 分桶时 ModelChannel 为空）。PersonaID 是服务端已验证的
 // 人格身份，必须随曝光事实保留，不能由客户端行为 payload 补写。
 type ImpressionAttribution struct {
 	FeedRequestID  string
 	PersonaID      string
 	ModelBucket    string
-	ModelVersion   string
+	ModelChannel   string
 	ModelReleaseID string
 }
 
@@ -258,7 +286,7 @@ func (f *FeedbackRecorder) RecordImpression(
 			rank,
 			attribution.FeedRequestID,
 			attribution.ModelBucket,
-			attribution.ModelVersion,
+			attribution.ModelChannel,
 			attribution.ModelReleaseID,
 		)
 		snapshot := item.trainingFeatures
@@ -328,6 +356,13 @@ func validateImpressionTrainingSnapshot(item FeedItem) error {
 			item.ContentID,
 		)
 	}
+	if snapshot.validationErr != nil {
+		return fmt.Errorf(
+			"record recommendation impression %q: invalid immutable feature snapshot: %w",
+			item.ContentID,
+			snapshot.validationErr,
+		)
+	}
 	return nil
 }
 
@@ -352,8 +387,7 @@ func (f *FeedbackRecorder) RecordEngagement(ctx context.Context, signal Behavior
 	}
 	contextMap := recEngagementContext(signal.Duration, recScore, signal.Tags, signal.FeedRequestID, signal.ReferralSource, signal.ContentType, signal.AuthorID)
 	contextMap["channelId"] = signal.ChannelID
-	contextMap["rankingVersion"] = signal.RankingVersion
-	contextMap["reasonVersion"] = signal.ReasonVersion
+	contextMap["policyDigest"] = signal.PolicyDigest
 	contextMap["recallPath"] = signal.RecallPath
 	contextMap["contentVertical"] = signal.ContentVertical
 	contextMap["supplySource"] = signal.SupplySource
@@ -396,6 +430,5 @@ func (f *FeedbackRecorder) RecordScorecard(ctx context.Context, userID, bucket s
 		RunID:       bucket,
 		Score:       score,
 		Comment:     comment,
-		Version:     "v1",
 	})
 }

@@ -9,6 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 SUITES_PATH = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 WORKFLOW_PATH = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
+PLATFORM_WORKFLOW_PATH = ROOT / ".github/workflows/beta-device-platform.yml"
+MATRIX_RUNNER_PATH = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
 GAMMA_RUNNER_PATH = ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh"
 UAT_PATH = ROOT / (
     "quwoquan_app/test/user_acceptance/patrol/settings/"
@@ -40,11 +42,14 @@ class AccountClosureGammaPatrolMatrixContractTest(unittest.TestCase):
     def test_self_hosted_matrix_uses_unique_disposable_install_identity(
         self,
     ) -> None:
-        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        workflow = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (WORKFLOW_PATH, PLATFORM_WORKFLOW_PATH, MATRIX_RUNNER_PATH)
+        )
         gamma_runner = GAMMA_RUNNER_PATH.read_text(encoding="utf-8")
 
         self.assertIn(
-            'matrix_kind}" = "account-closure"',
+            '[[ "$matrix_kind" == "account-closure" ]]',
             workflow,
         )
         self.assertIn(
@@ -58,11 +63,11 @@ class AccountClosureGammaPatrolMatrixContractTest(unittest.TestCase):
         )
         self.assertIn("-{device}\"", workflow)
         self.assertIn(
-            '--patrol-install-id "${closure_install_id}"',
+            '--patrol-install-id "$closure_install_id"',
             workflow,
         )
         self.assertIn(
-            'ACCOUNT_CLOSURE_DISPOSABLE_ACK}" != "true"',
+            'ACCOUNT_CLOSURE_DISPOSABLE_ACK:-}" != "true"',
             workflow,
         )
         self.assertIn(
@@ -70,9 +75,10 @@ class AccountClosureGammaPatrolMatrixContractTest(unittest.TestCase):
             workflow,
         )
         self.assertIn(
-            '--device-id "${ACCOUNT_CLOSURE_PROD_DEVICE_ID}"',
+            '[[ "$ACCOUNT_CLOSURE_PROD_DEVICE_ID" != "$MOBILE_DEVICE_ID" ]]',
             workflow,
         )
+        self.assertIn('--device-id "$MOBILE_DEVICE_ID"', workflow)
         self.assertIn(
             "prod_closure_selected_platform_seen",
             workflow,

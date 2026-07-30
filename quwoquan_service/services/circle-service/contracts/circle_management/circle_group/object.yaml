@@ -58,6 +58,7 @@ business_rules:
 - owner/manager/member 角色只由 CircleGroupMembership 聚合维护
 - memberCount 与活跃度只由 named Reader/投影派生，不写入权威聚合
 lifecycle:
+  state_field: status
   states:
   - active
   - archived

@@ -45,6 +45,7 @@ events:
   - realtime-gateway
   - projection-workers
   channel: transactional_outbox
+  payload_entity: Conversation
   payload_fields:
   - conversationId
   - membersRosterRevision
@@ -63,6 +64,7 @@ events:
   - realtime-gateway
   - notification-service
   channel: transactional_outbox
+  payload_entity: Conversation
   payload_fields:
   - conversationId
   - groupAvatarAssetId
@@ -82,6 +84,7 @@ events:
   - realtime-gateway
   - projection-workers
   channel: transactional_outbox
+  payload_entity: Conversation
   payload_fields:
   - conversationId
   - status

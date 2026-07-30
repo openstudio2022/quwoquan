@@ -9,10 +9,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../support/recording_cloud_operation_telemetry_sink.dart';
 
-const _gatewayUrl = String.fromEnvironment(
-  'GAMMA_GATEWAY_URL',
-  defaultValue: 'http://127.0.0.1:18080',
-);
+const _gatewayUrl = String.fromEnvironment('GAMMA_GATEWAY_URL');
 
 final class _GammaClientContext implements CloudClientContextProvider {
   const _GammaClientContext();
@@ -33,6 +30,11 @@ void main() {
   test(
     'generated client 通过 gamma gateway 读取 Location nearby/search seed',
     () async {
+      expect(
+        Uri.tryParse(_gatewayUrl),
+        isA<Uri>().having((uri) => uri.scheme, 'scheme', 'https'),
+        reason: 'GAMMA_GATEWAY_URL 必须由 topology UAT launcher 显式注入',
+      );
       final httpClient = CloudHttpClient();
       final telemetry = RecordingCloudOperationTelemetrySink();
       addTearDown(httpClient.close);

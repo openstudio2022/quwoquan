@@ -1,0 +1,12 @@
+{
+  "label": "阿布扎比市",
+  "labelEn": "Abu Dhabi",
+  "description": "谢赫扎耶德清真寺与文化区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

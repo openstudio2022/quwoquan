@@ -16,8 +16,8 @@ void main() {
       seedInbox: <GreetingRequestRecord>[
         GreetingRequestRecord(
           id: 'greeting_inbox_1',
-          requesterSubAccountId: 'ps_sender',
-          targetSubAccountId: 'ps_me',
+          requesterPersonaId: 'ps_sender',
+          targetPersonaId: 'ps_me',
           requestMessage: '你好，想交流一下',
           status: 'pending',
           source: 'profile',
@@ -28,8 +28,8 @@ void main() {
       seedOutbox: <GreetingRequestRecord>[
         GreetingRequestRecord(
           id: 'greeting_outbox_1',
-          requesterSubAccountId: 'ps_me',
-          targetSubAccountId: 'ps_target',
+          requesterPersonaId: 'ps_me',
+          targetPersonaId: 'ps_target',
           requestMessage: '你的作品很有意思',
           status: 'pending',
           source: 'profile',

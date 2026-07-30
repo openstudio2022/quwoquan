@@ -2,6 +2,7 @@
   "label": "交通枢纽",
   "labelEn": "Transport Hub",
   "description": "交通运输核心节点类型骨架",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

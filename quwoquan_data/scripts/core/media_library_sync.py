@@ -60,19 +60,25 @@ def sync_media_library(
     verify_existing: bool = True,
     object_keys: Iterable[str] | None = None,
     object_digests: Mapping[str, str] | None = None,
+    prune_unselected: bool = False,
 ) -> dict[str, Any]:
     """把受摘要约束的媒体对象增量同步进环境媒体根。
 
     ``object_keys`` is the required release closure for ship/import.  The
     unscoped form remains available only to the explicit private CAS command.
     Immutable releases use ``object_digests`` so public slice filenames never
-    need to encode or expose their private CAS identity.
+    need to encode or expose their private CAS identity. ``prune_unselected``
+    is valid only for that immutable public-slice mode: after every selected
+    object passes checksum verification, stale public slices are removed so a
+    full-sync release cannot inherit fixture or prior-release media.
     """
     source_root = Path(source_root)
     dest_root = Path(dest_root)
     cas_root = source_root / _CAS_RELATIVE_ROOT
     if object_keys is not None and object_digests is not None:
         raise ValueError("object_keys and object_digests are mutually exclusive")
+    if prune_unselected and object_digests is None:
+        raise ValueError("prune_unselected requires object_digests")
     selected_keys = tuple(object_keys) if object_keys is not None else None
     selected_digests = dict(object_digests) if object_digests is not None else None
     report: dict[str, Any] = {
@@ -82,6 +88,7 @@ def sync_media_library(
         "copied": 0,
         "skipped": 0,
         "repaired": 0,
+        "pruned": 0,
         "failed": 0,
         "bytesCopied": 0,
         "objects": 0,
@@ -94,7 +101,10 @@ def sync_media_library(
         "issues": [],
         "syncedAt": now_iso(),
     }
-    if selected_keys == () or selected_digests == {}:
+    if selected_keys == ():
+        return report
+    if selected_digests == {}:
+        _prune_public_slices(dest_root, expected=set(), report=report)
         return report
     if selected_digests is None and not cas_root.is_dir():
         report["issues"].append(f"source CAS root missing: {cas_root}")
@@ -186,7 +196,33 @@ def sync_media_library(
             continue
         report["copied"] += 1
         report["bytesCopied"] += source_file.stat().st_size
+    if prune_unselected and not report["failed"] and not report["issues"]:
+        _prune_public_slices(
+            dest_root,
+            expected={Path(key) for key in selected_digests or {}},
+            report=report,
+        )
     return report
+
+
+def _prune_public_slices(
+    dest_root: Path,
+    *,
+    expected: set[Path],
+    report: dict[str, Any],
+) -> None:
+    for prefix in _PUBLIC_SLICE_PREFIXES:
+        slice_root = dest_root / prefix.rstrip("/")
+        if not slice_root.is_dir():
+            continue
+        for path in sorted(slice_root.rglob("*"), reverse=True):
+            if path.is_file():
+                if path.relative_to(dest_root) not in expected:
+                    path.unlink()
+                    report["pruned"] += 1
+                continue
+            if path.is_dir() and not any(path.iterdir()):
+                path.rmdir()
 
 
 def _portable_path(path: Path) -> str:

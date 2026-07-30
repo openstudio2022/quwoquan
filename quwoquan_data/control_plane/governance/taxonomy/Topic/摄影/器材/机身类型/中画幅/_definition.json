@@ -1,0 +1,14 @@
+{
+  "label": "中画幅",
+  "labelEn": "Medium Format",
+  "description": "cameraModel 命中中画幅机型表",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

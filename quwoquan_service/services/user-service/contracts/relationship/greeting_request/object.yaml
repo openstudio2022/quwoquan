@@ -31,7 +31,7 @@ relationships:
   name: requesterPersona
   on_delete: retain
   reference_fields:
-  - requesterSubAccountId
+  - requesterPersonaId
   target_object: user.Persona
 - access: named_reader
   cardinality: N:1
@@ -40,7 +40,7 @@ relationships:
   name: targetPersona
   on_delete: retain
   reference_fields:
-  - targetSubAccountId
+  - targetPersonaId
   target_object: user.Persona
 capabilities:
 - queryable
@@ -54,10 +54,12 @@ business_rules:
 - accept 只能执行一次并通过 Chat Command Facade 创建正式 Conversation
 - reject 或 expire 后不得恢复原 request
 lifecycle:
+  state_field: status
   states:
   - pending
-  - accepted
-  - rejected
+  - replied
+  - ignored
+  - blocked
   - expired
   - cancelled
   optimistic_concurrency: version

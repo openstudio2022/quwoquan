@@ -7,9 +7,9 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 /// 仅承载 UserProfile 对象的公开资料、主页聚合、统计与社交搜索投影；作者影响
 /// 摘要和证据由 content/content/post 的 AuthorImpactQuery 提供。
 abstract interface class ProfileQuery {
-  Future<SubAccountProfileViewData> getUserProfile(String userId);
+  Future<PersonaProfileViewData> getUserProfile(String userId);
 
-  Future<UserHomepageBundleViewData> getUserHomepageBundle(String subAccountId);
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(String personaId);
 
   Future<UserProfileStatsViewData> getUserStats(String userId);
 

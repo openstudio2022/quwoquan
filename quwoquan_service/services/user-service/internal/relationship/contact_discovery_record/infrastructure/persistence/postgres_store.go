@@ -40,11 +40,11 @@ func (s *PgContactDiscoveryStore) UpdateStatus(ctx context.Context, id, status s
 	return err
 }
 
-func (s *PgContactDiscoveryStore) Complete(ctx context.Context, id string, matchedSubAccountIDs []string) error {
+func (s *PgContactDiscoveryStore) Complete(ctx context.Context, id string, matchedPersonaIDs []string) error {
 	now := time.Now().UTC()
 	_, err := s.pool.Exec(ctx,
-		`UPDATE contact_discovery_records SET status = 'completed', matched_sub_account_ids = $2, match_count = $3, completed_at = $4 WHERE id = $1`,
-		id, matchedSubAccountIDs, len(matchedSubAccountIDs), now)
+		`UPDATE contact_discovery_records SET status = 'completed', matched_persona_ids = $2, match_count = $3, completed_at = $4 WHERE id = $1`,
+		id, matchedPersonaIDs, len(matchedPersonaIDs), now)
 	return err
 }
 
@@ -59,8 +59,9 @@ func (s *PgContactDiscoveryStore) DeleteExpired(ctx context.Context) (int64, err
 }
 
 // FindPhoneMatches matches the initiator's uploaded hashes against active
-// phone / carrier_phone credentials of non-strict personas. The stored
-// credential_key is normalized plaintext; we hash it here through
+// phone / carrier_phone CredentialBindings and projects matched accounts onto
+// their non-strict active Personas. The stored credential_key is normalized
+// plaintext; we hash it here through
 // phonematch.Hash (the single client/server hashing source of truth) and
 // intersect with the uploaded set, so the wire only ever carried hashes and we
 // never persist or return another user's plaintext phone or ownerAccountId.
@@ -84,9 +85,9 @@ func (s *PgContactDiscoveryStore) FindPhoneMatches(ctx context.Context, hashedPh
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT cb.credential_key,
-		       p.sub_account_id,
-		       COALESCE(NULLIF(p.user_handle, ''), p.sub_account_id),
-		       COALESCE(NULLIF(p.display_name, ''), NULLIF(up.owner_display_name, ''), NULLIF(up.nickname, ''), p.sub_account_id),
+		       p.persona_id,
+		       COALESCE(NULLIF(p.user_handle, ''), p.persona_id),
+		       COALESCE(NULLIF(p.display_name, ''), NULLIF(up.owner_display_name, ''), NULLIF(up.nickname, ''), p.persona_id),
 		       COALESCE(NULLIF(p.avatar_url, ''), NULLIF(up.avatar_url, ''), ''),
 		       GREATEST(COALESCE(p.avatar_version, 0), COALESCE(up.avatar_version, 0)),
 		       COALESCE(up.region, '')
@@ -109,7 +110,7 @@ func (s *PgContactDiscoveryStore) FindPhoneMatches(ctx context.Context, hashedPh
 		var m model.ContactPhoneMatch
 		if err := rows.Scan(
 			&credentialKey,
-			&m.SubAccountID,
+			&m.PersonaID,
 			&m.UserHandle,
 			&m.DisplayName,
 			&m.AvatarURL,
@@ -125,10 +126,10 @@ func (s *PgContactDiscoveryStore) FindPhoneMatches(ctx context.Context, hashedPh
 		if _, ok := wanted[hash]; !ok {
 			continue
 		}
-		if _, dup := seen[m.SubAccountID]; dup {
+		if _, dup := seen[m.PersonaID]; dup {
 			continue
 		}
-		seen[m.SubAccountID] = struct{}{}
+		seen[m.PersonaID] = struct{}{}
 		m.HashedPhone = hash
 		matches = append(matches, m)
 	}

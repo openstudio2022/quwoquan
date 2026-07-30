@@ -113,7 +113,7 @@ void main() {
           mediaAssetIds: const <String>['video-asset-contract'],
         );
         final wire = Map<String, Object?>.from(
-          encodeSubmitContentPostPublicationCommand(command).body! as Map,
+          encodeContentPostSubmitPostPublicationGeneratedRequest(command).body! as Map,
         );
         expect(wire, isNot(contains('thumbnailUrl')));
         expect(wire, isNot(contains('coverUrl')));
@@ -489,7 +489,7 @@ void main() {
           mediaAssetIds: const <String>[],
         );
         final body = Map<String, Object?>.from(
-          encodeSubmitContentPostPublicationCommand(command).body! as Map,
+          encodeContentPostSubmitPostPublicationGeneratedRequest(command).body! as Map,
         );
         expect(
           body['semanticMentions'],
@@ -512,7 +512,7 @@ void main() {
           ),
           isTrue,
         );
-        // 顶层只读投影仍被 wire writable_fields 剥离。
+        // canonical 发布请求实体不拥有顶层只读投影字段。
         expect(body.containsKey('tagRefs'), isFalse);
         expect(body.containsKey('entityRefs'), isFalse);
       },

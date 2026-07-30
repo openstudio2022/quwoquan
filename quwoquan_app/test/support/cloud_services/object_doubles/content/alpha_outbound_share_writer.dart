@@ -23,7 +23,7 @@ final class AlphaContentOutboundShareWriter
     final result = ContentOutboundShareFactResult(
       eventId: 'alpha_outbound_share_${_receiptByReferral.length + 1}',
       postId: command.postId,
-      channel: command.channel,
+      channel: command.channel.wireValue,
       referralId: command.referralId,
       occurredAt: command.clientConfirmedAt,
       replayed: false,

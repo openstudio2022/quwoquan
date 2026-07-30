@@ -2,6 +2,7 @@
   "label": "农家乐",
   "labelEn": "Farmhouse Stay",
   "description": "农家住宿业态",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

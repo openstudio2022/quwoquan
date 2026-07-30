@@ -116,7 +116,7 @@ type sessionDocument struct {
 	OwnerID        string              `bson:"ownerId"`
 	ObjectKey      string              `bson:"objectKey"`
 	MediaType      string              `bson:"mediaType"`
-	ContentType    string              `bson:"contentType"`
+	MimeType       string              `bson:"mimeType"`
 	FileSize       int64               `bson:"fileSize"`
 	ExpectedSHA256 string              `bson:"expectedSha256"`
 	AssetID        string              `bson:"assetId,omitempty"`
@@ -344,7 +344,7 @@ func sessionDocumentFromModel(session *sessionmodel.Session) sessionDocument {
 	snapshot := session.Snapshot()
 	return sessionDocument{
 		ID: snapshot.ID, Version: snapshot.Version, OwnerID: snapshot.OwnerID, ObjectKey: snapshot.ObjectKey,
-		MediaType: snapshot.MediaType, ContentType: snapshot.ContentType, FileSize: snapshot.FileSize,
+		MediaType: string(snapshot.MediaType), MimeType: snapshot.MimeType, FileSize: snapshot.FileSize,
 		ExpectedSHA256: snapshot.ExpectedSHA256, AssetID: snapshot.AssetID, Status: snapshot.Status,
 		CreatedAt: snapshot.CreatedAt, UpdatedAt: snapshot.UpdatedAt, ExpiresAt: snapshot.ExpiresAt,
 		CompletedAt: snapshot.CompletedAt, AbortedAt: snapshot.AbortedAt,
@@ -354,7 +354,7 @@ func sessionDocumentFromModel(session *sessionmodel.Session) sessionDocument {
 func sessionFromDocument(document sessionDocument) (*sessionmodel.Session, error) {
 	session, err := sessionmodel.Restore(sessionmodel.Snapshot{
 		ID: document.ID, Version: document.Version, OwnerID: document.OwnerID, ObjectKey: document.ObjectKey,
-		MediaType: document.MediaType, ContentType: document.ContentType, FileSize: document.FileSize,
+		MediaType: sessionmodel.MediaType(document.MediaType), MimeType: document.MimeType, FileSize: document.FileSize,
 		ExpectedSHA256: document.ExpectedSHA256, AssetID: document.AssetID, Status: document.Status,
 		CreatedAt: document.CreatedAt, UpdatedAt: document.UpdatedAt, ExpiresAt: document.ExpiresAt,
 		CompletedAt: document.CompletedAt, AbortedAt: document.AbortedAt,

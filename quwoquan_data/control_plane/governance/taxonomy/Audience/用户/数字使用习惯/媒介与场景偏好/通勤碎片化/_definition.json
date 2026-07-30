@@ -2,6 +2,7 @@
   "label": "通勤碎片化",
   "labelEn": "Commute Snacking",
   "description": "通勤路上碎片消费",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

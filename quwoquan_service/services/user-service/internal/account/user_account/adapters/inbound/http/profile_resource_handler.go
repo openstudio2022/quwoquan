@@ -94,7 +94,6 @@ func profileUpdateResponse(profile *usermodel.UserProfile) map[string]any {
 		"birthDate":          profile.BirthDate,
 		"region":             profile.Region,
 		"regionTagRef":       profile.RegionCode,
-		"status":             profile.Status,
 		"profileVersion":     profile.ProfileVersion,
 		"updatedAt":          profile.UpdatedAt,
 	}
@@ -170,7 +169,7 @@ func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request)
 		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
-	view, err := h.subAccount.GetMeProfileView(r.Context(), userID)
+	view, err := h.persona.GetMeProfileView(r.Context(), userID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -230,26 +229,23 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 		writeHTTPError(w, r, err)
 		return
 	}
-	if activeViewerID, resolveErr := h.resolveActorSubAccountID(r.Context(), r, ""); resolveErr == nil && activeViewerID != "" {
+	if activeViewerID, resolveErr := h.resolveActorPersonaID(r.Context(), r, ""); resolveErr == nil && activeViewerID != "" {
 		viewerID = activeViewerID
 	}
 	for _, item := range items {
-		targetSubAccountID := strings.TrimSpace(anyString(item["subAccountId"]))
-		rel, _ := h.relationship.GetRelationship(r.Context(), viewerID, targetSubAccountID)
-		isBlocked, _ := h.relationship.CheckBlocked(r.Context(), viewerID, targetSubAccountID)
-		isBlockedBy, _ := h.relationship.CheckBlocked(r.Context(), targetSubAccountID, viewerID)
-		capability := h.buildRelationshipCapabilityView(
-			r.Context(), viewerID, targetSubAccountID, rel, isBlocked, isBlockedBy,
+		targetPersonaID := strings.TrimSpace(anyString(item["personaId"]))
+		rel, _ := h.relationship.GetRelationship(r.Context(), viewerID, targetPersonaID)
+		isBlocked, _ := h.relationship.CheckBlocked(r.Context(), viewerID, targetPersonaID)
+		isBlockedBy, _ := h.relationship.CheckBlocked(r.Context(), targetPersonaID, viewerID)
+		capability := h.relationshipCapabilityView(
+			r.Context(), viewerID, targetPersonaID, rel, isBlocked, isBlockedBy,
 		)
-		if targetSubAccountID != "" {
-			capability["targetSubAccountId"] = targetSubAccountID
-		}
-		if item["chatAvailable"] != nil && item["chatAvailable"] != capability["canOpenConversation"] {
+		if item["chatAvailable"] != nil && item["chatAvailable"] != capability.CanOpenConversation {
 			reltelemetry.Collector().RecordCapabilityMismatch()
 			usertelemetry.RolloutCollector().RecordAttributionMismatch()
 		}
 		item["relationshipCapability"] = capability
-		item["chatAvailable"] = capability["canOpenConversation"] == true
+		item["chatAvailable"] = capability.CanOpenConversation
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": ""})
 }

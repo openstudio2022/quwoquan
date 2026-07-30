@@ -8,8 +8,8 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
@@ -26,7 +26,7 @@ func TestBehaviorEventIdempotencyIndexExcludesEmptyClientEventIDs(t *testing.T) 
 	})
 	events := db.Collection("rm_behavior_events")
 
-	store := persistence.NewMongoBehaviorEventStore(db, nilLogger())
+	store := behaviorpersistence.NewMongoBehaviorEventStore(db, nilLogger())
 	cursor, err := events.Indexes().List(ctx)
 	if err != nil {
 		t.Fatalf("list migrated behavior event indexes: %v", err)

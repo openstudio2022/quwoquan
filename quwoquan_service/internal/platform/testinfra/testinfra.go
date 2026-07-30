@@ -52,6 +52,7 @@ type suiteConfig struct {
 // TearDown, so schema cleanup and test execution remain deterministic.
 type PostgresFixture struct {
 	DB       *sql.DB
+	dsn      string
 	server   *embeddedpostgres.EmbeddedPostgres
 	root     string
 	mu       sync.Mutex
@@ -124,7 +125,17 @@ func StartPostgresFixture(root string, port uint32) (*PostgresFixture, error) {
 		_ = server.Stop()
 		return nil, fmt.Errorf("testinfra: ping postgres: %w", err)
 	}
-	return &PostgresFixture{DB: db, server: server, root: root}, nil
+	return &PostgresFixture{DB: db, dsn: dsn, server: server, root: root}, nil
+}
+
+// DSN returns the connection string for callers that need the pgx-native
+// driver while sharing the same explicitly-owned embedded PostgreSQL fixture.
+// The value is test-only and contains only the fixture's fixed local account.
+func (f *PostgresFixture) DSN() string {
+	if f == nil {
+		return ""
+	}
+	return f.dsn
 }
 
 // Close releases the shared database and its temporary runtime directory.

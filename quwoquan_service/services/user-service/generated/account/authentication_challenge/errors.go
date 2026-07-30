@@ -21,35 +21,35 @@ var (
 // AppErrorFromOtpExpired returns *AppError for USER.AUTH.otp_expired (user_message from errors.yaml).
 func AppErrorFromOtpExpired(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpExpired.Error()))
-	return rerrors.NewAppError(code, "验证码已过期，请重新获取", debugMessage).WithMetadata("otp_expired", 400).WithRecoveryDirective("retry", "inlineCard", 0)
+	return rerrors.NewAppError(code, "验证码已失效", debugMessage).WithMetadata("otp_expired", 400).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromOtpMismatch returns *AppError for USER.AUTH.otp_mismatch (user_message from errors.yaml).
 func AppErrorFromOtpMismatch(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpMismatch.Error()))
-	return rerrors.NewAppError(code, "验证码错误，请重新输入", debugMessage).WithMetadata("otp_mismatch", 400).WithRecoveryDirective("retry", "inlineCard", 0)
+	return rerrors.NewAppError(code, "验证码不正确", debugMessage).WithMetadata("otp_mismatch", 400).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromOtpAttemptsExceeded returns *AppError for USER.AUTH.otp_attempts_exceeded (user_message from errors.yaml).
 func AppErrorFromOtpAttemptsExceeded(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpAttemptsExceeded.Error()))
-	return rerrors.NewAppError(code, "验证码错误次数过多，请重新获取", debugMessage).WithMetadata("otp_attempts_exceeded", 429).WithRecoveryDirective("retry", "inlineCard", 60)
+	return rerrors.NewAppError(code, "尝试次数较多", debugMessage).WithMetadata("otp_attempts_exceeded", 429).WithRecoveryDirective("retry", "inlineCard", 60)
 }
 
 // AppErrorFromOtpRateLimited returns *AppError for USER.AUTH.otp_rate_limited (user_message from errors.yaml).
 func AppErrorFromOtpRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作过于频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "inlineCard", 60)
+	return rerrors.NewAppError(code, "尝试次数较多", debugMessage).WithMetadata("rate_limited", 429).WithRecoveryDirective("retry", "inlineCard", 60)
 }
 
 // AppErrorFromOtpProviderFailed returns *AppError for USER.AUTH.otp_provider_failed (user_message from errors.yaml).
 func AppErrorFromOtpProviderFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrOtpProviderFailed.Error()))
-	return rerrors.NewAppError(code, "验证码发送失败，请稍后重试", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("retry", "inlineCard", 0)
+	return rerrors.NewAppError(code, "验证码发送失败", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("retry", "inlineCard", 0)
 }
 
 // AppErrorFromChallengeConsumed returns *AppError for USER.AUTH.challenge_consumed (user_message from errors.yaml).
 func AppErrorFromChallengeConsumed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrChallengeConsumed.Error()))
-	return rerrors.NewAppError(code, "验证码已被使用，请重新获取", debugMessage).WithMetadata("challenge_consumed", 400).WithRecoveryDirective("retry", "inlineCard", 0)
+	return rerrors.NewAppError(code, "验证码已失效", debugMessage).WithMetadata("challenge_consumed", 400).WithRecoveryDirective("retry", "inlineCard", 0)
 }

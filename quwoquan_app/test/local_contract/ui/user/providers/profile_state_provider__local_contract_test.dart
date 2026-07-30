@@ -19,13 +19,12 @@ import '../../../../support/cloud_services/repository_mock_reexports.dart';
 
 class _TestUserProfileRepository extends MockUserProfileRepository {
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
-    return SubAccountProfileViewData(
-      subAccountId: userId,
+  Future<PersonaProfileViewData> getUserProfile(String userId) async {
+    return PersonaProfileViewData(
+      personaId: userId,
       ownerUserId: 'owner-1',
-      subjectType: 'subAccount',
+      subjectType: 'persona',
       userHandle: 'user_name',
-      username: 'user_name',
       displayName: '展示名',
       avatarUrl: '',
       backgroundUrl: '',
@@ -83,7 +82,7 @@ class _CountingRelationshipCapabilityQuery
 class _FailingUserProfileRepository extends MockUserProfileRepository {
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
     throw Exception('homepage-bundle 加载失败');
   }
@@ -138,7 +137,7 @@ void main() {
     }
   });
 
-  test('toggleFollow 仅通过 optimistic overlay 更新展示 capability', () async {
+  test('toggleFollow 只更新本地关注意图，不改写服务端 capability', () async {
     final userRepo = _TestUserProfileRepository();
     final container = ProviderContainer(
       overrides: [
@@ -176,7 +175,7 @@ void main() {
           .read(profileNotifierProvider('profile-1'))
           .displayCapability
           ?.relationState,
-      'following',
+      'not_following',
     );
     expect(
       container
@@ -195,7 +194,7 @@ void main() {
     );
   });
 
-  test('shared follow 快照已知时，仅以 optimistic overlay 覆盖展示态', () async {
+  test('shared follow 快照已知时不伪造 capability 动作矩阵', () async {
     final container = ProviderContainer(
       overrides: [
         profileQueryProvider.overrideWith(
@@ -218,7 +217,7 @@ void main() {
 
     final profileState = container.read(profileNotifierProvider('profile-1'));
     expect(profileState.isFollowing, isTrue);
-    expect(profileState.displayCapability?.relationState, 'following');
+    expect(profileState.displayCapability?.relationState, 'not_following');
     expect(profileState.capability?.relationState, 'not_following');
   });
 
@@ -247,7 +246,7 @@ void main() {
 
     final profileState = container.read(profileNotifierProvider('profile-1'));
     expect(profileState.isFollowing, isTrue);
-    expect(profileState.displayCapability?.relationState, 'following');
+    expect(profileState.displayCapability?.relationState, 'not_following');
   });
 
   test('loadProfile 一次聚合 bundle：提供关系能力后不再串行 getCapability', () async {

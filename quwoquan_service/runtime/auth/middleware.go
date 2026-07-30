@@ -24,7 +24,6 @@ const (
 // token principal 重建，防止任何下游从裸 header 构造可信 ActorContext。
 const (
 	clientUserIDHeader    = "X-Client-User-Id"
-	clientSubAccountIDHdr = "X-Client-Sub-Account-Id"
 	clientAccountIDHeader = "X-Client-Account-Id"
 	clientPersonaIDHeader = "X-Client-Persona-Id"
 	clientDeviceActorHdr  = "X-Client-Device-Actor-Id"
@@ -181,7 +180,6 @@ func applyTrustedIdentityHeaders(headers http.Header, actor operation.ActorConte
 		headers.Set(clientAccountIDHeader, actor.AccountID)
 	}
 	if actor.PersonaID != "" {
-		headers.Set(clientSubAccountIDHdr, actor.PersonaID)
 		headers.Set(clientPersonaIDHeader, actor.PersonaID)
 	}
 	if actor.DeviceActorID != "" {
@@ -333,7 +331,6 @@ func bearerToken(r *http.Request) (string, bool) {
 
 func clearClientIdentityHeaders(headers http.Header) {
 	headers.Del(clientUserIDHeader)
-	headers.Del(clientSubAccountIDHdr)
 	headers.Del(clientAccountIDHeader)
 	headers.Del(clientPersonaIDHeader)
 	headers.Del(clientDeviceActorHdr)

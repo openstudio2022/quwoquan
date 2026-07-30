@@ -17,6 +17,7 @@ var (
 	ErrRateLimited                         = errors.New("REALTIME.USER.rate_limited")
 	ErrAccountSecurityAuthorityUnavailable = errors.New("REALTIME.SYSTEM.account_security_authority_unavailable")
 	ErrInternalError                       = errors.New("REALTIME.SYSTEM.internal_error")
+	ErrReadinessUnavailable                = errors.New("REALTIME.SYSTEM.readiness_unavailable")
 )
 
 // AppErrorFromInvalidArgument returns *AppError for REALTIME.USER.invalid_argument (user_message from errors.yaml).
@@ -59,4 +60,10 @@ func AppErrorFromAccountSecurityAuthorityUnavailable(debugMessage string) *rerro
 func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
 	return rerrors.NewAppError(code, "实时服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 3)
+}
+
+// AppErrorFromReadinessUnavailable returns *AppError for REALTIME.SYSTEM.readiness_unavailable (user_message from errors.yaml).
+func AppErrorFromReadinessUnavailable(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrReadinessUnavailable.Error()))
+	return rerrors.NewAppError(code, "实时服务尚未就绪，请稍后重试", debugMessage).WithMetadata("dependency_unavailable", 503).WithRecovery("retry", 1)
 }

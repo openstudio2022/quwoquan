@@ -39,14 +39,6 @@ MANIFESTS = {
     "beta": SHARED / "app_beta_seed_manifest.json",
     "gamma": SHARED / "app_gamma_seed_manifest.json",
 }
-GAMMA_CURATED_MEDIA_BUNDLE = (
-    ROOT
-    / "quwoquan_service/services/content-service/environments/gamma/resources/artifacts/media/gamma_curated_media_bundle.json"
-)
-MEDIA_DELIVERY_MANIFEST = (
-    ROOT
-    / "quwoquan_service/services/content-service/resources/static/media/media_delivery_manifest.json"
-)
 GROUP_RENDER_PACKAGE = "./tools/render_group_avatar"
 GAMMA_CURATED_EXPECTATIONS = {
     "content": {
@@ -130,10 +122,10 @@ def user_map(pool: dict[str, Any]) -> dict[str, dict[str, Any]]:
         user_id = str(item.get("userId") or "").strip()
         if user_id:
             users[user_id] = item
-        sub_account_id = str(item.get("subAccountId") or "").strip()
-        if sub_account_id:
-            users[sub_account_id] = item
-        for ref in item.get("subAccountRefs") or []:
+        persona_id = str(item.get("personaId") or "").strip()
+        if persona_id:
+            users[persona_id] = item
+        for ref in item.get("personaRefs") or []:
             ref_id = str(ref or "").strip()
             if ref_id:
                 users[ref_id] = item
@@ -842,66 +834,6 @@ def verify_gamma_curated_coverage(errors: list[str], gamma_docs: dict[str, dict[
         fail(errors, f"gamma curated chat conversations missing core coverage: {missing_conversations}")
 
 
-def verify_gamma_curated_media_bundle(
-    errors: list[str],
-    bundle: dict[str, Any],
-    gamma_fixture_docs: list[dict[str, Any]],
-    delivery_manifest: dict[str, Any],
-) -> None:
-    if bundle.get("schema") != "gamma-curated-media-bundle":
-        fail(errors, "gamma curated media bundle schema must be gamma-curated-media-bundle")
-    if bundle.get("environment") != "gamma":
-        fail(errors, "gamma curated media bundle environment must be gamma")
-    image_count = int(bundle.get("imageObjectCount") or 0)
-
-    media_objects = bundle.get("mediaObjects")
-    if not isinstance(media_objects, list) or not media_objects:
-        fail(errors, "gamma curated media bundle must declare mediaObjects")
-        return
-
-    object_keys: set[str] = set()
-    actual_image_count = 0
-    for item in media_objects:
-        object_key = str(item.get("objectKey") or "")
-        relative_path = str(item.get("relativePath") or "")
-        expected_hash = str(item.get("sourceHash") or "")
-        if not object_key or object_key in object_keys:
-            fail(errors, f"gamma curated media bundle has duplicate/empty objectKey: {object_key!r}")
-            continue
-        object_keys.add(object_key)
-        path = ROOT / relative_path
-        if not path.is_file():
-            fail(errors, f"gamma curated media bundle file missing: {relative_path}")
-            continue
-        raw = path.read_bytes()
-        actual_hash = sha256_bytes(raw)
-        if expected_hash != actual_hash:
-            fail(errors, f"gamma curated media bundle hash mismatch for {object_key}: expected {expected_hash}, got {actual_hash}")
-        if str(item.get("mimeType") or "").startswith("image/"):
-            actual_image_count += 1
-
-    if image_count != actual_image_count:
-        fail(errors, f"gamma curated imageObjectCount mismatch: expected {actual_image_count}, got {image_count}")
-    if int(bundle.get("totalObjectCount") or 0) != len(media_objects):
-        fail(errors, "gamma curated totalObjectCount must equal mediaObjects length")
-
-    scenario_media_refs: set[str] = set()
-    for doc in gamma_fixture_docs:
-        scenario_media_refs.update(collect_media_refs(doc))
-    delivery_media_refs = {
-        str(item.get("publicSliceKey") or "").strip()
-        for item in delivery_manifest.get("assets") or []
-        if isinstance(item, dict) and str(item.get("publicSliceKey") or "").strip()
-    }
-    expected_media_refs = scenario_media_refs | delivery_media_refs
-    missing = sorted(expected_media_refs - object_keys)
-    if missing:
-        fail(errors, f"gamma curated scenarios reference media outside curated bundle: {missing[:10]}")
-    extra = sorted(object_keys - expected_media_refs)
-    if extra:
-        fail(errors, f"gamma curated media bundle contains unreferenced objects: {extra[:10]}")
-
-
 def verify_entity_scale(
     errors: list[str],
     rules: dict[str, Any],
@@ -968,18 +900,6 @@ def main() -> int:
     verify_circle_fixture(errors, users, pool, circles_by_id, gamma_docs["circle"])
     verify_chat_fixture(errors, users, pool, conversations_by_id, gamma_docs["chat"])
     verify_gamma_curated_coverage(errors, gamma_docs)
-    gamma_bundle = load_json(GAMMA_CURATED_MEDIA_BUNDLE)
-    gamma_fixture_docs = [
-        load_json(ROOT / str(item.get("fixturePath") or ""))
-        for item in manifests["gamma"]["seedRefs"]
-        if str(item.get("fixturePath") or "").strip()
-    ]
-    verify_gamma_curated_media_bundle(
-        errors,
-        gamma_bundle,
-        gamma_fixture_docs,
-        load_json(MEDIA_DELIVERY_MANIFEST),
-    )
     for label, document in gamma_docs.items():
         verify_no_external_media(errors, document, f"gamma_{label}_scenarios")
     if errors:

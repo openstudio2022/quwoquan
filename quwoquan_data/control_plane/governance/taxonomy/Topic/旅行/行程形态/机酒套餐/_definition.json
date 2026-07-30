@@ -2,6 +2,7 @@
   "label": "机酒套餐",
   "labelEn": "Flight+Hotel Package",
   "description": "机票加酒店的打包产品",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

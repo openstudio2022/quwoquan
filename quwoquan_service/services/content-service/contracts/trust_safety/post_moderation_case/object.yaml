@@ -43,6 +43,7 @@ business_rules:
 - 只允许 pending -> reviewed -> approved|rejected 或任意有效态 -> superseded
 - Post 版本或摘要变化后旧 approval 不得用于发布
 lifecycle:
+  state_field: status
   states:
   - pending
   - reviewed

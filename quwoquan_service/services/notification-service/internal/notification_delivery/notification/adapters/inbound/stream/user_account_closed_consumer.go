@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"quwoquan_service/runtime/accountrestriction"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 )
@@ -88,16 +89,27 @@ func (config UserAccountClosedConsumerConfig) withDefaults() UserAccountClosedCo
 }
 
 type UserAccountClosedConsumer struct {
-	transport  DurableMessageTransport
-	projection application.UserAccountClosedProjection
-	failures   UserAccountClosedFailureStore
-	consumer   string
-	config     UserAccountClosedConsumerConfig
-	logger     *slog.Logger
+	transport    DurableMessageTransport
+	projection   application.UserAccountClosedProjection
+	restrictions application.UserAccountRestrictionProjection
+	failures     UserAccountClosedFailureStore
+	consumer     string
+	config       UserAccountClosedConsumerConfig
+	logger       *slog.Logger
 
 	mu                sync.RWMutex
 	lastSuccess       time.Time
 	lastFailureDigest string
+}
+
+func (consumer *UserAccountClosedConsumer) WithUserAccountRestrictionProjection(
+	projection application.UserAccountRestrictionProjection,
+) *UserAccountClosedConsumer {
+	if consumer == nil || projection == nil {
+		panic("notification user account restriction projection is required")
+	}
+	consumer.restrictions = projection
+	return consumer
 }
 
 func NewUserAccountClosedConsumer(
@@ -292,6 +304,49 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		userAccountClosedConsumerTotal.WithLabelValues("held_for_recovery").Inc()
 		return nil
 	}
+	values := durableFieldsToMap(message.Fields)
+	if restrictionEvent, restrictionErr := accountrestriction.Decode(
+		values,
+	); restrictionErr == nil {
+		if consumer.restrictions == nil {
+			return consumer.handleMessageFailure(
+				ctx,
+				message,
+				"projection_unavailable",
+				errors.New(
+					"notification user account restriction projection is not configured",
+				),
+			)
+		}
+		result, err := consumer.restrictions.Apply(ctx, restrictionEvent)
+		if err != nil {
+			return consumer.handleMessageFailure(
+				ctx,
+				message,
+				"restriction_projection",
+				err,
+			)
+		}
+		if ackErr := consumer.ackAndClear(ctx, message.ID); ackErr != nil {
+			return ackErr
+		}
+		outcome := "restriction_applied"
+		if result.Replayed {
+			outcome = "restriction_replayed"
+		}
+		userAccountClosedConsumerTotal.WithLabelValues(outcome).Inc()
+		userAccountClosedCleanupDuration.Observe(
+			time.Since(startedAt).Seconds(),
+		)
+		return nil
+	} else if !errors.Is(restrictionErr, accountrestriction.ErrUnsupportedEvent) {
+		return consumer.handleMessageFailure(
+			ctx,
+			message,
+			"invalid_restriction_event",
+			restrictionErr,
+		)
+	}
 	event, err := decodeNotificationUserAccountClosed(message)
 	if errors.Is(err, errUnsupportedUserAccountEvent) {
 		if ackErr := consumer.ackAndClear(ctx, message.ID); ackErr != nil {
@@ -320,7 +375,15 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		}
 		errorClass = userAccountClosedProjectionErrorClass(err)
 	}
+	return consumer.handleMessageFailure(ctx, message, errorClass, err)
+}
 
+func (consumer *UserAccountClosedConsumer) handleMessageFailure(
+	ctx context.Context,
+	message runtimemessaging.StreamDelivery,
+	errorClass string,
+	err error,
+) error {
 	attempts, recordErr := consumer.failures.RecordUserAccountClosedFailure(
 		ctx,
 		UserAccountEventStream,

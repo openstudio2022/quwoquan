@@ -5,6 +5,349 @@ import json
 _PLATFORM_CONFIG_JSON = r'''{
   "configs": [
     {
+      "default": "X-Edge-Client-IP",
+      "key": "sys.api-edge.edge.trusted_network_header",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.command.limit",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.command.state_failure",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.command.window_seconds",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.operation.content_post_get_feed.limit",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.operation.content_post_get_feed.state_failure",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.operation.content_post_get_feed.window_seconds",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.query.limit",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.query.state_failure",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.query.window_seconds",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.session.limit",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.session.state_failure",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.session.window_seconds",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.redis.admission.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.redis.admission.addrs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "list"
+    },
+    {
+      "default": 500,
+      "key": "sys.api-edge.redis.admission.dial_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.redis.admission.mode",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.redis.admission.password",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": 64,
+      "key": "sys.api-edge.redis.admission.pool_size",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 200,
+      "key": "sys.api-edge.redis.admission.read_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.redis.admission.tls",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": 200,
+      "key": "sys.api-edge.redis.admission.write_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": ":18079",
+      "key": "sys.api-edge.service.http.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://assistant-service:18087",
+      "key": "sys.api-edge.upstreams.assistant",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://chat-service:18081",
+      "key": "sys.api-edge.upstreams.chat",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://circle-service:18082",
+      "key": "sys.api-edge.upstreams.circle",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://content-service:18080",
+      "key": "sys.api-edge.upstreams.content",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://entity-service:18084",
+      "key": "sys.api-edge.upstreams.entity",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://integration-service:18086",
+      "key": "sys.api-edge.upstreams.integration",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://notification-service:18087",
+      "key": "sys.api-edge.upstreams.notification",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://product-ops-service:18086",
+      "key": "sys.api-edge.upstreams.ops",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://platform-ops-service:18088",
+      "key": "sys.api-edge.upstreams.platform_ops",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://realtime-gateway:18090",
+      "key": "sys.api-edge.upstreams.realtime",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://recommendation-service:8000",
+      "key": "sys.api-edge.upstreams.recommendation",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://rtc-service:18083",
+      "key": "sys.api-edge.upstreams.rtc",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://search-service:18095",
+      "key": "sys.api-edge.upstreams.search",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://tag-service:18092",
+      "key": "sys.api-edge.upstreams.tag",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://user-service:18081",
+      "key": "sys.api-edge.upstreams.user",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "http://user-service:18081",
+      "key": "sys.api-edge.user_service.account_security.base_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 500,
+      "key": "sys.api-edge.user_service.account_security.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "key": "sys.assistant-service.account_security_authority.base_url",
       "reload": "restart",
       "rollout": "progressive",
@@ -37,24 +380,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
-    },
-    {
-      "default": "9.9.9",
-      "key": "sys.assistant-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.assistant-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
     },
     {
       "default": "http://content-service:18080",
@@ -91,6 +416,42 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
+    },
+    {
+      "default": false,
+      "key": "sys.assistant-service.model.native_tool_calling",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": "mimo-v2-flash",
+      "key": "sys.assistant-service.model.tier.balanced",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "mimo-v2-flash",
+      "key": "sys.assistant-service.model.tier.fast",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "mimo-v2-flash",
+      "key": "sys.assistant-service.model.tier.reasoning",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": "quwoquan_assistant",
@@ -449,24 +810,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "ui_editable": false
     },
     {
-      "default": "9.9.9",
-      "key": "sys.chat-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.chat-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "default": "quwoquan_chat",
       "key": "sys.chat-service.mongodb.database",
       "reload": "restart",
@@ -646,24 +989,6 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": ":18081",
       "key": "sys.chat-service.service.http.addr",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "1.99.99",
-      "key": "sys.circle-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "1.0.0",
-      "key": "sys.circle-service.config.min_image_version",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -960,24 +1285,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "9.9.9",
-      "key": "sys.content-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.content-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "default": false,
       "key": "sys.content-service.embedding.enabled",
       "reload": "restart",
@@ -1077,6 +1384,105 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "list"
     },
     {
+      "default": 500,
+      "key": "sys.content-service.feed.active_supply_cache_jitter_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 2000,
+      "key": "sys.content-service.feed.active_supply_cache_ttl_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 33554432,
+      "key": "sys.content-service.feed.delivery_page_maximum_live_bytes_per_shard",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 512,
+      "key": "sys.content-service.feed.delivery_page_maximum_live_records_per_shard",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 256,
+      "key": "sys.content-service.feed.delivery_page_quota_shard_count",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 96,
+      "key": "sys.content-service.feed.max_inflight",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 12,
+      "key": "sys.content-service.feed.maximum_recall_sources",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 1,
+      "key": "sys.content-service.feed.maximum_unterminated_calls_per_source",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 134217728,
+      "key": "sys.content-service.feed.ranked_window_maximum_live_bytes_per_shard",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 128,
+      "key": "sys.content-service.feed.ranked_window_maximum_live_records_per_shard",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 256,
+      "key": "sys.content-service.feed.ranked_window_quota_shard_count",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
       "default": "2026-07-09",
       "key": "sys.content-service.ip_location.data_version",
       "reload": "restart",
@@ -1129,6 +1535,15 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "default": false,
+      "key": "sys.content-service.media_processing.hls_cmaf_enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
     },
     {
       "default": 2000,
@@ -1219,15 +1634,6 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "",
-      "key": "sys.content-service.oss.cdn_domain",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "",
       "key": "sys.content-service.oss.cdn_sign_key",
       "reload": "restart",
       "rollout": "progressive",
@@ -1247,6 +1653,15 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": "127.0.0.1:9000",
       "key": "sys.content-service.oss.endpoint",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.content-service.oss.media_delivery_base_url",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -1660,24 +2075,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "ui_editable": false
     },
     {
-      "default": "9.9.9",
-      "key": "sys.entity-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.entity-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "default": "",
       "key": "sys.entity-service.content_service.base_url",
       "reload": "restart",
@@ -2028,17 +2425,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "ui_editable": false
     },
     {
-      "default": 30,
-      "key": "sys.gateway.rate_limit.per_user_rps",
-      "owner": "platform-ops",
-      "reload": "hot",
-      "risk_level": "high",
-      "rollout": "progressive",
-      "scope": "service",
-      "type": "int",
-      "ui_editable": false
-    },
-    {
       "key": "sys.integration-service.account_security_authority.base_url",
       "reload": "restart",
       "rollout": "progressive",
@@ -2053,24 +2439,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
-    },
-    {
-      "default": "9.9.9",
-      "key": "sys.integration-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.integration-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
     },
     {
       "default": "",
@@ -2481,6 +2849,17 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
+      "key": "sys.intersection_text",
+      "key_namespace": true,
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "string",
+      "ui_editable": false
+    },
+    {
       "key": "sys.notification-service.accountSecurityAuthority.baseUrl",
       "reload": "restart",
       "rollout": "progressive",
@@ -2677,24 +3056,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "ui_editable": false
     },
     {
-      "default": "9.9.9",
-      "key": "sys.platform-ops-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.platform-ops-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "key": "sys.platform-ops-service.postgres.dsn",
       "reload": "restart",
       "rollout": "progressive",
@@ -2710,6 +3071,78 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "default": 20,
+      "key": "sys.product-ops-service.account_enforcement.batch_size",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 1000,
+      "key": "sys.product-ops-service.account_enforcement.initial_backoff_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 10000,
+      "key": "sys.product-ops-service.account_enforcement.lease_duration_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 5,
+      "key": "sys.product-ops-service.account_enforcement.max_attempts",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 30000,
+      "key": "sys.product-ops-service.account_enforcement.max_backoff_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 60000,
+      "key": "sys.product-ops-service.account_enforcement.max_pending_age_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 500,
+      "key": "sys.product-ops-service.account_enforcement.poll_interval_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 3000,
+      "key": "sys.product-ops-service.account_enforcement.request_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "key": "sys.product-ops-service.account_security_authority.base_url",
@@ -2847,24 +3280,6 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": "",
       "key": "sys.product-ops-service.app_release.recovery_url",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "9.9.9",
-      "key": "sys.product-ops-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.product-ops-service.config.min_image_version",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3288,24 +3703,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "9.9.9",
-      "key": "sys.recommendation-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.recommendation-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "default": "",
       "key": "sys.recommendation-service.redis.general.addr",
       "reload": "restart",
@@ -3511,24 +3908,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "string"
     },
     {
-      "default": "9.9.9",
-      "key": "sys.rtc-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.rtc-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "key": "sys.rtc-service.livekit.api_key",
       "reload": "restart",
       "rollout": "progressive",
@@ -3666,24 +4045,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
-      "default": "9.9.9",
-      "key": "sys.search-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.search-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
       "default": "http://127.0.0.1:18080",
       "key": "sys.search-service.contentService.baseUrl",
       "reload": "restart",
@@ -3772,6 +4133,42 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "list"
+    },
+    {
+      "default": 50,
+      "key": "sys.search-service.ranking.experiment.controlWeightPct",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": true,
+      "key": "sys.search-service.ranking.experiment.enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": 50,
+      "key": "sys.search-service.ranking.experiment.termHeatWeightPct",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 1.5,
+      "key": "sys.search-service.ranking.termHeatBoost",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "float"
     },
     {
       "default": "",
@@ -3972,24 +4369,6 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": ":18095",
       "key": "sys.search-service.service.http.addr",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "9.9.9",
-      "key": "sys.tag-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.tag-service.config.min_image_version",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4217,24 +4596,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
-    },
-    {
-      "default": "9.9.9",
-      "key": "sys.user-service.config.max_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
-    },
-    {
-      "default": "0.0.1",
-      "key": "sys.user-service.config.min_image_version",
-      "reload": "restart",
-      "rollout": "progressive",
-      "scope": "workload",
-      "sensitive": false,
-      "type": "string"
     },
     {
       "default": 0,
@@ -4502,28 +4863,6 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
-    },
-    {
-      "default": 180,
-      "key": "sys.user.auth.aggregate_metric_retention_days",
-      "owner": "user-identity",
-      "reload": "restart",
-      "risk_level": "medium",
-      "rollout": "progressive",
-      "scope": "environment",
-      "type": "int",
-      "ui_editable": false
-    },
-    {
-      "default": 30,
-      "key": "sys.user.auth.raw_event_retention_days",
-      "owner": "user-identity",
-      "reload": "restart",
-      "risk_level": "high",
-      "rollout": "progressive",
-      "scope": "environment",
-      "type": "int",
-      "ui_editable": false
     },
     {
       "default": 0.1,

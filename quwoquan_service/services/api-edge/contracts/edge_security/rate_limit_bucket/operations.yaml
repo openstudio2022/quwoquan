@@ -1,0 +1,14 @@
+description: >-
+  RateLimitBucket 仅由每个 generated business operation 的 api-edge
+  RateLimitAdmissionFacade 内部消费；真实入口是授权之后、owner proxy 之前的 admission
+  middleware，不公开第二条 admission API，也不复制 ContractGraph operation 表。
+api_routes: []
+runtime_entrypoints:
+- name: SharedAdmission
+  kind: middleware
+  phase: post_authorization_pre_owner_proxy
+  application:
+    kind: session
+    facet: RateLimitAdmissionFacade
+    method: admit
+    session_owner: RateLimitBucket

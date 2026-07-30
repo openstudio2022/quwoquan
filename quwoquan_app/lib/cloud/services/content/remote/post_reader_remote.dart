@@ -32,8 +32,18 @@ final class RemoteContentPostReaderAdapter
   final ContentPostProjectionMapper projectionMapper;
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
-    return _detailPayloadFromSlice(await _getPostSlice(postId));
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    return _detailPayloadFromSlice(
+      await _getPostSlice(
+        postId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      ),
+    );
   }
 
   @override
@@ -74,7 +84,7 @@ final class RemoteContentPostReaderAdapter
   }) async {
     final response = await client.contentPostListUserPosts(
       ContentAuthorPostsQuery(
-        subAccountId: userId,
+        personaId: userId,
         identity: identity,
         type: type,
         visibility: visibility,
@@ -90,11 +100,35 @@ final class RemoteContentPostReaderAdapter
     );
   }
 
-  Future<ContentPostDetailSlice> _getPostSlice(String postId) {
+  Future<ContentPostDetailSlice> _getPostSlice(
+    String postId, {
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    final baseContext = invocationContext(ContentRequestPageIds.getPost);
     return client.contentPostGetPost(
       ContentPostDetailQuery(postId: postId),
-      context: invocationContext(ContentRequestPageIds.getPost),
+      context: CloudOperationInvocationContext(
+        surfaceId: baseContext.surfaceId,
+        clientPageId: baseContext.clientPageId,
+        actor: baseContext.actor,
+        routeId: baseContext.routeId,
+        referralSource: baseContext.referralSource,
+        feedRequestId: baseContext.feedRequestId,
+        shareId: baseContext.shareId,
+        modelId: baseContext.modelId,
+        experimentBucket: baseContext.experimentBucket,
+        idempotencyKey: baseContext.idempotencyKey,
+        deadlineAt: _earliestDeadline(baseContext.deadlineAt, deadlineAt),
+        cancellation: cancellation ?? baseContext.cancellation,
+      ),
     );
+  }
+
+  DateTime? _earliestDeadline(DateTime? left, DateTime? right) {
+    if (left == null) return right;
+    if (right == null) return left;
+    return left.isBefore(right) ? left : right;
   }
 
   ContentPostDetailPayload _detailPayloadFromSlice(
@@ -128,6 +162,14 @@ final class RemoteContentPostReaderAdapter
                 (item) => <String, dynamic>{
                   'kind': item.kind,
                   'url': item.url,
+                  if (item.mediaAssetId != null)
+                    'mediaAssetId': item.mediaAssetId,
+                  if (item.mediaAssetVersion != null)
+                    'mediaAssetVersion': item.mediaAssetVersion,
+                  if (item.hlsCmafMasterManifestUrl != null)
+                    'hlsCmafMasterManifestUrl': item.hlsCmafMasterManifestUrl,
+                  if (item.hlsCmafDescriptorVersion != null)
+                    'hlsCmafDescriptorVersion': item.hlsCmafDescriptorVersion,
                   if (item.coverUrl != null) 'coverUrl': item.coverUrl,
                   if (item.durationMs != null) 'durationMs': item.durationMs,
                   if (item.width != null) 'width': item.width,

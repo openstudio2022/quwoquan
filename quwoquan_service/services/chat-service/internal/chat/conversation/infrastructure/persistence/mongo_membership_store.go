@@ -88,7 +88,10 @@ func (s *MongoChatStore) ListMembers(
 	}
 
 	sortMode := application.NormalizeMemberListSort(string(query.Sort))
-	base := bson.M{"conversationId": conversationId}
+	base := bson.M{
+		"conversationId":    conversationId,
+		"accountRestricted": bson.M{"$ne": true},
+	}
 	if query.Role != "" {
 		base["role"] = query.Role
 	}

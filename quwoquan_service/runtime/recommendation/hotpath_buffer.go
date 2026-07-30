@@ -136,6 +136,13 @@ func (b *BufferedHotPath) GetSessionState(ctx context.Context, userID, sessionID
 	return b.inner.GetSessionState(ctx, userID, sessionID)
 }
 
+func (b *BufferedHotPath) LoadHardExclusions(
+	ctx context.Context,
+	userID string,
+) (FeedbackExclusions, error) {
+	return b.inner.LoadHardExclusions(ctx, userID)
+}
+
 // IsExposed delegates to the inner HotPath.
 func (b *BufferedHotPath) IsExposed(ctx context.Context, userID, sessionID, contentID string) (bool, error) {
 	return b.inner.IsExposed(ctx, userID, sessionID, contentID)

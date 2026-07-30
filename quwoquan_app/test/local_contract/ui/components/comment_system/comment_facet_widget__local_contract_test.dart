@@ -412,7 +412,7 @@ class _AuthenticatedSession extends AuthSessionController {
       accessToken: 'test-token',
       refreshToken: 'test-refresh',
       ownerId: 'test-owner',
-      activeSubAccountId: 'test-persona',
+      activePersonaId: 'test-persona',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',

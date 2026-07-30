@@ -12,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 )
 
 const CollectionName = "media_object_deletion_fences"
@@ -43,13 +45,6 @@ func New(db *mongo.Database) (*Manager, error) {
 	}, nil
 }
 
-func IsContentAddressedObjectKey(key string) bool {
-	key = strings.Trim(strings.TrimSpace(key), "/")
-	return strings.HasPrefix(key, "media/objects/sha256/") &&
-		!strings.Contains(key, "..") &&
-		!strings.ContainsAny(key, "?#\\")
-}
-
 // AllowReference runs inside the MediaAsset commit transaction. It records a
 // new or renewed reference only when no closure worker owns a deletion fence.
 // A client that raced a closure must retry from its durable upload command
@@ -62,7 +57,7 @@ func (manager *Manager) AllowReference(
 		return errors.New("media object fence is not configured")
 	}
 	objectKey = strings.Trim(strings.TrimSpace(objectKey), "/")
-	if !IsContentAddressedObjectKey(objectKey) {
+	if !mediamodel.IsContentAddressedObjectKey(objectKey) {
 		return nil
 	}
 	now := time.Now().UTC()
@@ -133,7 +128,7 @@ func (manager *Manager) ClaimUnreferencedDeletion(
 	}
 	objectKey = strings.Trim(strings.TrimSpace(objectKey), "/")
 	workID = strings.TrimSpace(workID)
-	if !IsContentAddressedObjectKey(objectKey) || workID == "" {
+	if !mediamodel.IsContentAddressedObjectKey(objectKey) || workID == "" {
 		return false, errors.New("media object deletion fence input is invalid")
 	}
 	session, err := manager.db.Client().StartSession()

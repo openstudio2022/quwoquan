@@ -77,7 +77,7 @@ class _ContactListSectionBand extends StatelessWidget {
 class _RelatedFriendRow extends StatelessWidget {
   const _RelatedFriendRow({
     required this.name,
-    required this.username,
+    required this.memberKey,
     required this.avatarUrl,
     required this.selected,
     required this.fgPrimary,
@@ -93,7 +93,7 @@ class _RelatedFriendRow extends StatelessWidget {
   static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
   final String name;
-  final String username;
+  final String memberKey;
   final String avatarUrl;
   final bool selected;
   final Color fgPrimary;
@@ -102,7 +102,7 @@ class _RelatedFriendRow extends StatelessWidget {
   final Color rowBackground;
   final Color dividerColor;
   final VoidCallback? onTap;
-  final VoidCallback onAvatarTap;
+  final VoidCallback? onAvatarTap;
 
   /// 事实交集证据（如认识来源 metFrom）；空则不渲染，locked 提示优先。
   final String subtitle;
@@ -114,7 +114,7 @@ class _RelatedFriendRow extends StatelessWidget {
       minimumSize: Size.zero,
       onPressed: onTap,
       child: Container(
-        key: ValueKey<String>('start-group-candidate-row-$username'),
+        key: ValueKey<String>('start-group-candidate-row-$memberKey'),
         color: rowBackground,
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
         child: Column(
@@ -174,7 +174,7 @@ class _RelatedFriendRow extends StatelessWidget {
                           Text(
                             subtitle.trim(),
                             key: ValueKey<String>(
-                              'start-group-candidate-evidence-$username',
+                              'start-group-candidate-evidence-$memberKey',
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -199,7 +199,7 @@ class _RelatedFriendRow extends StatelessWidget {
               ),
               child: Divider(
                 key: ValueKey<String>(
-                  'start-group-candidate-divider-$username',
+                  'start-group-candidate-divider-$memberKey',
                 ),
                 height: AppSpacing.one,
                 thickness: AppSpacing.hairline,

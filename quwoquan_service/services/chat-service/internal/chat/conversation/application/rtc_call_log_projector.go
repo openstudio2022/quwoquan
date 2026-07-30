@@ -76,7 +76,7 @@ func (s *MessageService) AppendRtcCallLog(
 		Message:       msg,
 		CommandDigest: hex.EncodeToString(digest[:]),
 		Events: []MessageOutboxEvent{{
-			EventID:        messageID + ":v1:" + messageevent.MessageSent,
+			EventID:        messageID + ":" + messageevent.MessageSent,
 			EventType:      messageevent.MessageSent,
 			ConversationID: conversationID,
 			ActorID:        fact.InitiatorID,

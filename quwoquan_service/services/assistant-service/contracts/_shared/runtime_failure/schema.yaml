@@ -9,7 +9,7 @@ fields:
   - { name: kind, type: string, default: '' }
   - { name: nature, type: string, default: '' }
   - { name: messageKey, type: string, default: '' }
-  - { name: recoveryAction, type: string, default: '' }
-  - { name: disruptionLevel, type: string, default: '' }
+  - { name: recoveryAction, type: enum, enum_ref: ToolRecoveryAction, default: '' }
+  - { name: disruptionLevel, type: enum, enum_ref: ToolDisruptionLevel, default: '' }
   - { name: traceId, type: string, default: '' }
   - { name: context, type: map, default: {} }

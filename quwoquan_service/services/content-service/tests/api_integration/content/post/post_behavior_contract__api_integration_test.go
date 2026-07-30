@@ -29,8 +29,9 @@ import (
 	rtoperation "quwoquan_service/runtime/operation"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
+	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/content/post/application/authorimpact"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 )
@@ -254,7 +255,7 @@ func TestGetMyFootprintContract(t *testing.T) {
 	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportReq.Header.Set("X-Client-User-Id", userID)
-	reportReq.Header.Set("X-Client-Sub-Account-Id", userID)
+	reportReq.Header.Set("X-Client-Persona-Id", userID)
 	reportRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(reportRec, reportReq)
 	if reportRec.Code != http.StatusNoContent {
@@ -349,13 +350,13 @@ func TestBehaviorBatchCanonicalWire(t *testing.T) {
 }
 
 // TestBehaviorEventInputDecodesAttributionFields 冻结推荐归因 wire 契约：
-// channelId/rankingVersion/reasonVersion/recallPath/contentVertical/supplySource/
+// channelId/policyDigest/recallPath/contentVertical/supplySource/
 // feedRequestId/referralSource/position/state 与交集分桶字段必须从批量 JSON
 // 正确解析进 BehaviorEventInput（端云 DTO↔struct↔YAML common_fields 对齐，R08）。
 func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 	raw := `{"clientEventId":"evt-attr-001","occurredAt":"2026-07-19T07:00:00Z","contentId":"post_attr_1","action":"impression","state":"impressed",` +
 		`"feedRequestId":"frq_01H","referralSource":"organic_feed","position":7,` +
-		`"channelId":"following","rankingVersion":"rank-v3","reasonVersion":"reason-v2",` +
+		`"channelId":"following","policyDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",` +
 		`"recallPath":"collab_i2i","contentVertical":"travel_photography","supplySource":"data_engineering",` +
 		`"intersectionSourceRef":"shared_city","intersectionClass":"fact","intersectionEvidenceId":"ev_attr_1",` +
 		`"commentLength":42}`
@@ -378,11 +379,8 @@ func TestBehaviorEventInputDecodesAttributionFields(t *testing.T) {
 	if in.ChannelID != "following" {
 		t.Errorf("channelId: want following, got %q", in.ChannelID)
 	}
-	if in.RankingVersion != "rank-v3" {
-		t.Errorf("rankingVersion: want rank-v3, got %q", in.RankingVersion)
-	}
-	if in.ReasonVersion != "reason-v2" {
-		t.Errorf("reasonVersion: want reason-v2, got %q", in.ReasonVersion)
+	if in.PolicyDigest != "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Errorf("policyDigest: got %q", in.PolicyDigest)
 	}
 	if in.RecallPath != "collab_i2i" {
 		t.Errorf("recallPath: want collab_i2i, got %q", in.RecallPath)
@@ -506,7 +504,7 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_wishlist_http_001")
-	req.Header.Set("X-Client-Sub-Account-Id", "user_wishlist_http_001")
+	req.Header.Set("X-Client-Persona-Id", "user_wishlist_http_001")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
@@ -546,7 +544,7 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
+		behaviorapp.WithBehaviorEventStore(behaviorpersistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
 	)
 
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
@@ -590,7 +588,7 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 	})
 
 	payload := fmt.Sprintf(
-		`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","catalogVersion":"v1","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/兴趣/旅行","Audience/用户/兴趣偏好/摄影"]}]}`,
+		`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/兴趣/旅行","Audience/用户/兴趣偏好/摄影"]}]}`,
 		userID,
 		eventID,
 		time.Now().UTC().Format(time.RFC3339Nano),
@@ -599,7 +597,7 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 		req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", userID)
-		req.Header.Set("X-Client-Sub-Account-Id", userID)
+		req.Header.Set("X-Client-Persona-Id", userID)
 		rec := httptest.NewRecorder()
 		testHandler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusNoContent {
@@ -618,18 +616,18 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 	if count != 1 {
 		t.Fatalf("onboarding event replay stored %d facts, want exactly one", count)
 	}
-	var persistedBinding struct {
-		CatalogVersion    string `bson:"catalogVersion"`
-		TaxonomyReleaseID string `bson:"taxonomyReleaseId"`
-	}
+	var persistedBinding bson.M
 	if err := eventColl.FindOne(ctx, bson.M{
 		"userId": userID, "clientEventId": eventID,
 	}).Decode(&persistedBinding); err != nil {
 		t.Fatalf("load persisted onboarding binding: %v", err)
 	}
-	if persistedBinding.CatalogVersion != "v1" ||
-		persistedBinding.TaxonomyReleaseID != "tag-taxonomy-test-001" {
+	if persistedBinding["taxonomyReleaseId"] != "tag-taxonomy-test-001" {
 		t.Fatalf("persisted catalog binding = %+v", persistedBinding)
+	}
+	// Retired catalogVersion must not survive in the raw behavior fact.
+	if _, exists := persistedBinding["catalogVersion"]; exists {
+		t.Fatalf("persisted onboarding fact retained retired catalogVersion: %+v", persistedBinding)
 	}
 
 	var got struct {
@@ -669,7 +667,7 @@ func TestBehaviorBatchInvalidOnboardingCatalogWritesNoFacts(t *testing.T) {
 	payload := fmt.Sprintf(
 		`{"userId":%q,"events":[`+
 			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"click","contentId":"post-preflight-must-not-write"},`+
-			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","catalogVersion":"v1","taxonomyReleaseId":"tag-taxonomy-old-release","tagRefs":["Topic/兴趣/旅行"]}`+
+			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-old-release","tagRefs":["Topic/兴趣/旅行"]}`+
 			`]}`,
 		userID,
 		eventIDs[0],
@@ -680,7 +678,7 @@ func TestBehaviorBatchInvalidOnboardingCatalogWritesNoFacts(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userID)
-	req.Header.Set("X-Client-Sub-Account-Id", userID)
+	req.Header.Set("X-Client-Persona-Id", userID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -725,7 +723,7 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 	payload := fmt.Sprintf(
 		`{"userId":%q,"events":[`+
 			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"click","contentId":"post-preflight-must-not-write"},`+
-			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","catalogVersion":"v1","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/dependency-unavailable"]}`+
+			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/dependency-unavailable"]}`+
 			`]}`,
 		userID,
 		eventIDs[0],
@@ -736,7 +734,7 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userID)
-	req.Header.Set("X-Client-Sub-Account-Id", userID)
+	req.Header.Set("X-Client-Persona-Id", userID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
@@ -767,7 +765,7 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 
 // TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick 验证阶段五七态漏斗在
 // 特征投影中的语义：弱可见 visible 不计入 typeImpressions（served/impressed 双轨的 impressed 侧），
-// 仅真实曝光 impressed 计入；click 计入 typeEngagements（CTR 分子）。同时携带 channelId/rankingVersion
+// 仅真实曝光 impressed 计入；click 计入 typeEngagements（CTR 分子）。同时携带 channelId/policyDigest
 // 归因字段，验证其可随批次贯穿。
 func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.T) {
 	ctx := context.Background()
@@ -804,14 +802,14 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
+		behaviorapp.WithBehaviorEventStore(behaviorpersistence.NewMongoBehaviorEventStore(mongoDB, nilLogger())),
 	)
 
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{ClientEventID: "evt-seven-visible-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: visibleID, Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{ClientEventID: "evt-seven-impressed-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: impressedID, Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
-		{ClientEventID: "evt-seven-click-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: clickID, Action: "click", State: "click", ContentType: "image", ChannelID: "following", RankingVersion: "rank-v3", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-visible-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: visibleID, Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-impressed-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: impressedID, Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-click-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: clickID, Action: "click", State: "click", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
 	})
 	if err != nil {
 		t.Fatalf("process seven-state batch: %v", err)
@@ -966,7 +964,7 @@ func TestGetAuthorImpactReturnsPostBackedBehaviorAggregation(t *testing.T) {
 		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/author-impact", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/author-impact", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

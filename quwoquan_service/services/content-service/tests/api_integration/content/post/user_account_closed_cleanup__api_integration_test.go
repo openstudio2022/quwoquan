@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
 package api_integration
 
 import (
@@ -16,7 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
+	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/mediaobjectfence"
 )
 
@@ -249,10 +250,23 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	mustInsertAccountClosureDocuments(t, db.Collection("post_moderation_case_audit"), []any{
 		bson.M{"_id": "acct-close-moderation-audit", "reviewerId": event.Payload.UserID},
 	})
+	mustInsertAccountClosureDocuments(t, db.Collection("content_user_account_restrictions"), []any{
+		bson.M{
+			"_id": event.AccountID, "subjects": subjects,
+			"restricted": true, "accountVersion": int64(1),
+		},
+	})
+	mustInsertAccountClosureDocuments(t, db.Collection("content_user_account_restriction_inbox"), []any{
+		bson.M{
+			"_id": "acct-close-suspend-event", "accountId": event.AccountID,
+			"accountVersion": int64(1),
+		},
+	})
 
 	store, err := accountclosure.NewMongoStore(
 		db,
 		accountClosureIntegrationDigestor(t),
+		accountClosureIntegrationObjectFences(t, db),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -279,6 +293,86 @@ func TestUserAccountClosedCleanupConvergesAndRejectsEventIDReuse(t *testing.T) {
 	}
 	if result.Replayed {
 		t.Fatal("first UserAccountClosed application was reported as replay")
+	}
+	if count, err := db.Collection("content_user_account_restrictions").CountDocuments(
+		ctx,
+		bson.M{"_id": event.AccountID},
+	); err != nil || count != 0 {
+		t.Fatalf("closed Content restriction state count=%d err=%v", count, err)
+	}
+	if count, err := db.Collection("content_user_account_restriction_inbox").CountDocuments(
+		ctx,
+		bson.M{"accountId": event.AccountID},
+	); err != nil || count != 0 {
+		t.Fatalf("closed Content restriction inbox count=%d err=%v", count, err)
+	}
+	restrictionProjection, err := accountclosure.NewAccountRestrictionProjection(
+		db,
+		store,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restrictionProjection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	lateRestore := contentAccountRestrictionEvent(
+		"acct-close-late-restore-event",
+		"UserRestored",
+		event.AccountID,
+		event.Payload.PersonaIDs[0],
+		event.AccountVersion+1,
+		event.AccountVersion+1,
+		event.OccurredAt.Add(time.Minute),
+	)
+	lateResult, err := restrictionProjection.Apply(ctx, lateRestore)
+	if err != nil || !lateResult.Replayed || !lateResult.Stale ||
+		!lateResult.Terminal || lateResult.Affected != 0 {
+		t.Fatalf("late restore after closure result=%+v err=%v", lateResult, err)
+	}
+	delayedSuspend := contentAccountRestrictionEvent(
+		"acct-close-delayed-suspend-event",
+		"UserSuspended",
+		event.AccountID,
+		event.Payload.PersonaIDs[0],
+		event.AccountVersion,
+		event.AccountVersion,
+		event.OccurredAt.Add(-time.Minute),
+	)
+	delayedResult, err := restrictionProjection.Apply(ctx, delayedSuspend)
+	if err != nil || !delayedResult.Replayed || !delayedResult.Stale ||
+		!delayedResult.Terminal || delayedResult.Affected != 0 {
+		t.Fatalf("delayed suspend after closure result=%+v err=%v", delayedResult, err)
+	}
+	assertAccountClosureCount(
+		t,
+		db,
+		"content_user_account_restrictions",
+		bson.M{},
+		0,
+	)
+	assertAccountClosureCount(
+		t,
+		db,
+		"content_user_account_restriction_inbox",
+		bson.M{},
+		0,
+	)
+	var terminalWatermark bson.M
+	if err := db.Collection("content_user_account_restriction_watermarks").FindOne(
+		ctx,
+		bson.M{"terminal": true, "accountVersion": event.AccountVersion},
+	).Decode(&terminalWatermark); err != nil {
+		t.Fatalf("read Content terminal restriction watermark: %v", err)
+	}
+	encodedWatermark, err := bson.MarshalExtJSON(terminalWatermark, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rawID := range []string{event.AccountID, event.Payload.UserID, event.Payload.PersonaIDs[0]} {
+		if strings.Contains(string(encodedWatermark), rawID) {
+			t.Fatalf("Content terminal watermark retained raw identity %q: %s", rawID, encodedWatermark)
+		}
 	}
 	if got := cache.blockedSubjects(); len(got) != len(subjects) {
 		t.Fatalf("closed-subject guard received %v, want %v", got, subjects)
@@ -552,6 +646,7 @@ func TestUserAccountClosedMediaArtifactCleanupWaitsForReclamation(
 	store, err := accountclosure.NewMongoStore(
 		db,
 		accountClosureIntegrationDigestor(t),
+		accountClosureIntegrationObjectFences(t, db),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -707,6 +802,7 @@ func TestUserAccountClosedSearchFailureLeavesInboxPendingAndRecovers(t *testing.
 	store, err := accountclosure.NewMongoStore(
 		db,
 		accountClosureIntegrationDigestor(t),
+		accountClosureIntegrationObjectFences(t, db),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -913,6 +1009,18 @@ func accountClosureIntegrationDigestor(
 	return digestor
 }
 
+func accountClosureIntegrationObjectFences(
+	t *testing.T,
+	db *mongo.Database,
+) *mediaobjectfence.Manager {
+	t.Helper()
+	manager, err := mediaobjectfence.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manager
+}
+
 func mustInsertAccountClosureDocuments(
 	t *testing.T,
 	collection *mongo.Collection,
@@ -936,6 +1044,7 @@ func TestAccountClosureDeadLetterMarkerRetainsSourceRecoveryState(
 	store, err := accountclosure.NewMongoStore(
 		db,
 		accountClosureIntegrationDigestor(t),
+		accountClosureIntegrationObjectFences(t, db),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1086,6 +1195,9 @@ func cleanupAccountClosureIntegrationData(
 		{accountclosure.MediaArtifactWorkCollection, bson.M{"eventId": event.EventID}},
 		{accountclosure.ClosedSubjectCollection, bson.M{"_id": event.Digest()}},
 		{accountclosure.ClosedSubjectTombstoneCollection, bson.M{}},
+		{"content_user_account_restrictions", bson.M{"_id": event.AccountID}},
+		{"content_user_account_restriction_inbox", bson.M{"accountId": event.AccountID}},
+		{"content_user_account_restriction_watermarks", bson.M{}},
 	}
 	for _, cleanup := range cleanups {
 		_, _ = db.Collection(cleanup.collection).DeleteMany(ctx, cleanup.filter)

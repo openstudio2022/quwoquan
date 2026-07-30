@@ -4,7 +4,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('Chat ConversationMembership typed contract', () {
     test('encodes member query keyset and typed command bodies', () {
-      final query = encodeChatListConversationMembersQuery(
+      final query = encodeChatConversationMembershipListMembersGeneratedRequest(
         ChatListConversationMembersQuery(
           conversationId: 'conversation-1',
           cursor: 'opaque-cursor',
@@ -14,10 +14,9 @@ void main() {
           query: '小趣',
         ),
       );
-      final add = encodeChatAddConversationMembersCommand(
+      final add = encodeChatConversationMembershipAddMembersGeneratedRequest(
         ChatAddConversationMembersCommand(
           conversationId: 'conversation-1',
-          idempotencyKey: 'add-members-1',
           userIds: const <String>['user-2', 'user-3'],
         ),
       );
@@ -42,6 +41,7 @@ void main() {
         'items': <Object?>[
           <String, Object?>{
             'userId': 'user-1',
+            'userHandle': 'xiaoq_public',
             'displayName': '小趣',
             'avatarUrl': 'https://cdn.example/user-1.png',
             'role': 'owner',
@@ -55,6 +55,7 @@ void main() {
       });
 
       expect(page.items.single.userId, 'user-1');
+      expect(page.items.single.userHandle, 'xiaoq_public');
       expect(page.items.single.isCurrentUser, isTrue);
       expect(page.nextCursor, 'next-member-token');
     });

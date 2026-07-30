@@ -11,8 +11,6 @@ class ConversationDto {
   final String? circleId;
   final String? circleGroupId;
   final String originType;
-  final String bindingType;
-  final String lifecyclePolicy;
   final int maxSeq;
   final int memberCount;
   final int maxGroupSize;
@@ -39,8 +37,6 @@ class ConversationDto {
     this.circleId,
     this.circleGroupId,
     this.originType = 'direct_init',
-    this.bindingType = 'none',
-    this.lifecyclePolicy = 'persistent',
     required this.maxSeq,
     required this.memberCount,
     required this.maxGroupSize,
@@ -67,8 +63,6 @@ class ConversationDto {
       circleId: _optionalTypedString(map, 'circleId'),
       circleGroupId: _optionalString(map['circleGroupId']),
       originType: _optionalString(map['originType']) ?? 'direct_init',
-      bindingType: _optionalString(map['bindingType']) ?? 'none',
-      lifecyclePolicy: _optionalString(map['lifecyclePolicy']) ?? 'persistent',
       maxSeq: (map['maxSeq'] as num?)?.toInt() ?? 0,
       memberCount: (map['memberCount'] as num?)?.toInt() ?? 0,
       maxGroupSize: _requiredInt(map, 'maxGroupSize'),
@@ -96,8 +90,6 @@ class ConversationDto {
     if (circleId != null) 'circleId': circleId,
     if (circleGroupId != null) 'circleGroupId': circleGroupId,
     'originType': originType,
-    'bindingType': bindingType,
-    'lifecyclePolicy': lifecyclePolicy,
     'maxSeq': maxSeq,
     'memberCount': memberCount,
     'maxGroupSize': maxGroupSize,

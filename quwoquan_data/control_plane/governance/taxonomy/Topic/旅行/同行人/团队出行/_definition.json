@@ -1,0 +1,13 @@
+{
+  "label": "团队出行",
+  "labelEn": "Group Tour",
+  "description": "十人以上团队或公司团建出行",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

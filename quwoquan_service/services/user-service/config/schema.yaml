@@ -1,19 +1,5 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
-- key: sys.user-service.config.max_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 9.9.9
-- key: sys.user-service.config.min_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0.0.1
 - key: sys.user-service.es.embeddingDims
   type: int
   scope: workload
@@ -221,24 +207,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: :18081
-- key: sys.user.auth.aggregate_metric_retention_days
-  type: int
-  owner: user-identity
-  default: 180
-  scope: environment
-  reload: restart
-  rollout: progressive
-  risk_level: medium
-  ui_editable: false
-- key: sys.user.auth.raw_event_retention_days
-  type: int
-  owner: user-identity
-  default: 30
-  scope: environment
-  reload: restart
-  rollout: progressive
-  risk_level: high
-  ui_editable: false
 - key: sys.user.auth.success_detail_sample_ratio
   type: float
   owner: user-identity

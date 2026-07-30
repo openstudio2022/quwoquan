@@ -1,7 +1,11 @@
 {
   "label": "徒步",
-  "labelEn": "徒步",
-  "description": "徒步 语义定义",
+  "labelEn": "Hiking",
+  "description": "徒步穿越与山野路线体验",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/用户/兴趣偏好/旅行摄影/徒步"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T13:46:32.304929+00:00"
 }

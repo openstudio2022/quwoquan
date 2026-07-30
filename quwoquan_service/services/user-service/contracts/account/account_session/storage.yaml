@@ -65,5 +65,5 @@ tables:
   account_sessions_outbox:
     entity: AccountSession
     role: append_only
-    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+    description: 与 session 状态同事务提交的持久化审计事实；当前未装配 relay，不声明异步 consumer。
 role: authoritative

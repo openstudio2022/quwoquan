@@ -413,17 +413,17 @@ void main() {
                   isPrimary: true,
                 ),
                 IntersectionActionHint(
-                  actionKey: 'join_trip',
+                  actionKey: 'join_gathering',
                   label: '加入同行',
-                  dispatch: 'companion',
+                  dispatch: 'gathering',
                   targetAvailability: 'deferred',
                   target: IntersectionTarget(
                     objectId: 'trip_1',
-                    objectKind: 'trip',
+                    objectKind: 'gathering',
                   ),
                 ),
                 IntersectionActionHint(
-                  actionKey: 'start_voice_room',
+                  actionKey: 'join_topic_room',
                   label: '进语音房',
                   dispatch: 'connect',
                   targetAvailability: 'available',
@@ -456,17 +456,17 @@ void main() {
             connectionSummary: '有可查看的共同证据',
             actionHints: <IntersectionActionHint>[
               IntersectionActionHint(
-                actionKey: 'join_trip',
+                actionKey: 'join_gathering',
                 label: '加入同行',
-                dispatch: 'companion',
+                dispatch: 'gathering',
                 targetAvailability: 'deferred',
                 target: IntersectionTarget(
                   objectId: 'trip_1',
-                  objectKind: 'trip',
+                  objectKind: 'gathering',
                 ),
               ),
               IntersectionActionHint(
-                actionKey: 'start_voice_room',
+                actionKey: 'join_topic_room',
                 label: '进语音房',
                 dispatch: 'connect',
                 targetAvailability: 'available',

@@ -8,9 +8,13 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 全局搜索唯一生产适配器：只调用 search-service canonical generated operation。
 final class RemoteSearchRepository implements SearchRepository {
-  const RemoteSearchRepository({required this.remoteQuery});
+  const RemoteSearchRepository({
+    required this.remoteQuery,
+    required this.sessionIdProvider,
+  });
 
   final CanonicalSearchQueryFacet remoteQuery;
+  final String Function() sessionIdProvider;
 
   @override
   Future<SearchResponse> search(
@@ -36,6 +40,7 @@ final class RemoteSearchRepository implements SearchRepository {
 
     final result = await remoteQuery.search(
       CanonicalSearchQuery(
+        sessionId: sessionIdProvider(),
         query: normalized.query,
         mode: normalized.mode == SearchMode.suggest
             ? CanonicalSearchMode.suggest

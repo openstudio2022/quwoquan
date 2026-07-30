@@ -1,129 +1,153 @@
 description: 助手会话 wire 响应体（与 assistant_conversation 契约字段对齐）
 fields:
-- name: conversationId
-  source: conversationId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: userId
-  source: userId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: state
-  source: state
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: activeTurnId
-  source: activeTurnId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: lastTurnId
-  source: lastTurnId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: summary
-  source: summary
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: conversationId
+    source: conversationId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: userId
+    source: userId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: state
+    source: state
+    type: enum
+    enum_ref: AssistantConversationState
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: activeTurnId
+    source: activeTurnId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: lastTurnId
+    source: lastTurnId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: summary
+    source: summary
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 types:
   AssistantConversationListView:
     description: ListAssistantConversations 响应体（owner 会话 keyset 分页切片）
     fields:
-    - name: items
-      source: items
-      type: '[]AssistantConversation'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: nextCursor
-      source: nextCursor
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 不透明 keyset 游标；空表示无更多数据
+      - name: items
+        source: items
+        type: '[]AssistantConversation'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: nextCursor
+        source: nextCursor
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 不透明 keyset 游标；空表示无更多数据
   AssistantCreateConversationRequest:
     description: CreateAssistantConversation 的唯一公开 command body；clientRequestId 是稳定 intent，不得由服务端随机补齐。
     fields:
-    - name: summary
-      source: summary
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: mask
-      api_exposure: write
-      ops_exposure: drop
-    - name: clientRequestId
-      source: clientRequestId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
+      - name: summary
+        source: summary
+        type: string
+        constraints:
+          - NULLABLE
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: write
+        ops_exposure: drop
+      - name: clientRequestId
+        source: clientRequestId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+  AssistantConversationListQuery:
+    fields:
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+  AssistantConversationByIdQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+enums:
+  AssistantConversationState:
+    values: [active, archived]

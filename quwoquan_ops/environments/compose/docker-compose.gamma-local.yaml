@@ -73,8 +73,7 @@ services:
     networks:
       default:
         aliases:
-          - upload.gamma.quwoquan.com
-          - gamma-upload.localhost
+          - "${QWQ_PUBLIC_UPLOAD_HOST:?QWQ_PUBLIC_UPLOAD_HOST is required}"
     environment:
       MINIO_ROOT_USER: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
       MINIO_ROOT_PASSWORD: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
@@ -103,17 +102,15 @@ services:
       LOCAL_GAMMA_OBJECT_STORAGE_BUCKET: "${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET:?LOCAL_GAMMA_OBJECT_STORAGE_BUCKET is required}"
       LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
       LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET: "${LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET:?LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
+      LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT: "${LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT:?LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT is required}"
     volumes:
-      - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/qwq-object-storage/ca.crt:ro
       - ./object-storage-lifecycle.json:/etc/qwq-object-storage/lifecycle.json:ro
     entrypoint:
       - /bin/sh
       - -ec
       - |
-        install -d -m 0700 /root/.mc/certs/CAs
-        cp /etc/qwq-object-storage/ca.crt /root/.mc/certs/CAs/qwq-gamma-object-storage.crt
         for attempt in $(seq 1 60); do
-          if mc alias set qwq "https://object-storage:9000" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
+          if mc alias set qwq "https://${LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT}" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID" "$LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_SECRET"; then
             mc mb --ignore-existing "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}"
             mc ilm rule import "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}" < /etc/qwq-object-storage/lifecycle.json
             exit 0
@@ -160,32 +157,7 @@ services:
   gamma-proxy:
     image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8.4-alpine@sha256:af32e97399febea808609119bb21544d0265c58a02836576e32a2d082c262c17}"
     depends_on:
-      content-service:
-        condition: service_healthy
-      chat-service:
-        condition: service_healthy
-      user-service:
-        condition: service_healthy
-      assistant-service:
-        condition: service_healthy
-        required: false
-      product-ops-service:
-        condition: service_healthy
-        required: false
-      tag-service:
-        # Gamma fixture 在 Mongo 拓扑可用后才重建 taxonomy snapshot。启动脚本会在
-        # 导入完成后等待 tag-service 的严格投影健康，因此 Caddy 可随进程启动，
-        # 但最终拓扑仍不能在 taxonomy 有效前宣告 ready。
-        condition: service_started
-      search-service:
-        condition: service_healthy
-      entity-service:
-        condition: service_healthy
-      circle-service:
-        condition: service_healthy
-      integration-service:
-        condition: service_healthy
-      notification-service:
+      api-edge:
         condition: service_healthy
     environment:
       LOCAL_GAMMA_HTTP_PORT: "${LOCAL_GAMMA_HTTP_PORT:-19000}"

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/core/links/trusted_endpoint_policy.dart';
 
 enum RecoveryPhase {
   startupChecking,
@@ -55,13 +56,14 @@ final class RecoveryStateMachine {
     required int latestBuild,
     required String updateUrl,
     required String recoveryUrl,
+    required Iterable<String> trustedBaseUrls,
   }) {
     final hasNewerBuild = latestBuild > currentBuild;
     if (_terminalVersionConfirmed ||
         currentBuild <= 0 ||
         latestBuild <= 0 ||
-        !_isTrustedHttps(recoveryUrl) ||
-        (hasNewerBuild && !_isTrustedHttps(updateUrl))) {
+        !isTrustedHttpsUrl(recoveryUrl, trustedBaseUrls) ||
+        (hasNewerBuild && !isTrustedHttpsUrl(updateUrl, trustedBaseUrls))) {
       return false;
     }
     final runtimeContext =
@@ -137,18 +139,5 @@ final class RecoveryStateMachine {
       phase: RecoveryPhase.runtimeVersionChecking,
     );
     return true;
-  }
-
-  static bool _isTrustedHttps(String raw) {
-    final uri = Uri.tryParse(raw.trim());
-    if (uri == null ||
-        uri.scheme.toLowerCase() != 'https' ||
-        uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty) {
-      return false;
-    }
-    final host = uri.host.toLowerCase();
-    return host == 'quwoquan.com' ||
-        host.endsWith('.quwoquan.com');
   }
 }

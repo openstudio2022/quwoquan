@@ -23,8 +23,6 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
   - OPS.SYSTEM.config_storage_read_failed
   privacy:
     request_classification: INTERNAL
@@ -66,8 +64,6 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
   - OPS.USER.config_invalid
   - OPS.SYSTEM.config_storage_read_failed
   privacy:
@@ -115,8 +111,6 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
   - OPS.USER.config_invalid
   - OPS.SYSTEM.config_storage_read_failed
   privacy:
@@ -161,8 +155,6 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
   - OPS.USER.config_invalid
   - OPS.USER.config_snapshot_not_found
   - OPS.SYSTEM.config_storage_read_failed
@@ -208,8 +200,6 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
   - OPS.SYSTEM.config_storage_read_failed
   privacy:
     request_classification: INTERNAL

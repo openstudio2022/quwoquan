@@ -2,6 +2,7 @@
   "label": "00后",
   "labelEn": "Gen Z late",
   "description": "2000-2009年出生",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

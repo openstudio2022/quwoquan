@@ -39,11 +39,7 @@
     },
     "apiBaseUrl": {
       "type": "string",
-      "pattern": "^https?://"
-    },
-    "apiResolveHost": {
-      "type": "string",
-      "minLength": 1
+      "pattern": "^https://"
     },
     "verifiedAt": {
       "type": "string",

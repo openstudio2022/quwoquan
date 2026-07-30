@@ -34,7 +34,7 @@ AuthSessionState patrolAuthenticatedSession(ProviderContainer container) {
   final session = container.read(authSessionControllerProvider);
   if (!session.isAuthenticated ||
       session.ownerId.trim().isEmpty ||
-      session.activeSubAccountId.trim().isEmpty) {
+      session.activePersonaId.trim().isEmpty) {
     throw StateError(
       'Patrol core readback requires an authenticated owner/persona session',
     );

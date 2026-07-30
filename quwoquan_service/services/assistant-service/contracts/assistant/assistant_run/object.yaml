@@ -44,7 +44,7 @@ relationships:
   name: personaActor
   on_delete: retain
   reference_fields:
-  - subAccountId
+  - personaId
   target_object: user.Persona
 - access: named_reader
   cardinality: N:1
@@ -82,6 +82,7 @@ business_rules:
 - tool 调用必须经过 operation allowlist 与目标上下文公开 Facade
 - AssistantLearningFact 与 Turn 均在 Run 聚合边界外独立产生和投影，不嵌入 Run 聚合
 lifecycle:
+  state_field: status
   states:
   - queued
   - running

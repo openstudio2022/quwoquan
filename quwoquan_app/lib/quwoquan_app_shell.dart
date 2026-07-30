@@ -664,7 +664,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           stackTrace: stack.toString(),
         ),
       );
-      _showSafeRecovery();
+      _showSafeRecovery(failure);
     }
   }
 
@@ -733,11 +733,16 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       failureCode: failure.runtimeFailure.code,
       failureSource: failureSource,
     );
-    _showSafeRecovery();
+    _showSafeRecovery(failure);
   }
 
-  void _showSafeRecovery() {
-    unawaited(AppRecoveryNativeBridge().recordFatalStartup());
+  void _showSafeRecovery(BootstrapFailure failure) {
+    unawaited(
+      AppRecoveryNativeBridge().recordFatalStartup(
+        attemptId: AppStartupRuntime.instance.startupAttemptId,
+        failureCode: failure.runtimeFailure.code,
+      ),
+    );
     _welcomeOverlayRemovalTimer?.cancel();
     _welcomeOverlayRemovalTimer = null;
     _startupDeadlineTimer?.cancel();

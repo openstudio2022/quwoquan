@@ -93,7 +93,7 @@ func TestCircleMembershipRealMongoTransactionReplayProjectionAndStream(t *testin
 		t.Fatalf("Persona Circle projection drift: %#v", personaCirclesBody)
 	}
 	personaCircle := personaCircleItems[0].(map[string]any)
-	if personaCircle["circleId"] != "circle-membership" || personaCircle["ownerPersonaId"] != "persona-owner" || personaCircle["state"] != "active" {
+	if personaCircle["circleId"] != "circle-membership" || personaCircle["ownerPersonaId"] != "persona-owner" || personaCircle["status"] != "active" {
 		t.Fatalf("Persona Circle projection leaked storage/aggregate wire names: %#v", personaCircle)
 	}
 	if _, leaked := personaCircle["_id"]; leaked {

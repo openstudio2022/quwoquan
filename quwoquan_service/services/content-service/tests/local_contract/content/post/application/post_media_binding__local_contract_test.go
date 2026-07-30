@@ -24,23 +24,28 @@ func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t
 	}
 	const videoSlice = "media/video/s/asset/mas_video_001/v3/source.mp4"
 	const coverSlice = "media/video/s/asset/mas_video_001/v3/cover.jpg"
+	const hlsMasterSlice = "media/video/s/asset/mas_video_001/v3/hls/master.m3u8"
 	const coverDeliveryReference = coverSlice + "?variant=thumb"
 	assets := map[string]MediaAssetBindingSlice{
 		"mas_video_001": {
-			AssetID:                      "mas_video_001",
-			Ready:                        true,
-			MediaType:                    "video",
-			ContentType:                  "video/mp4",
-			Version:                      3,
-			PublicSliceKey:               videoSlice,
-			VerifiedDurationMs:           12500,
-			VideoWidth:                   720,
-			VideoHeight:                  1280,
-			VideoPublicSliceKey:          videoSlice,
-			CoverPublicSliceKey:          coverSlice,
-			PreviewTrackVersion:          2,
-			PreviewTrackManifestSliceKey: "media/video/s/asset/mas_video_001/v3/storyboard.json",
-			CoverFrameTimeMs:             400,
+			AssetID:                       "mas_video_001",
+			Ready:                         true,
+			MediaType:                     "video",
+			MimeType:                      "video/mp4",
+			Version:                       3,
+			PublicSliceKey:                videoSlice,
+			VerifiedDurationMs:            12500,
+			VideoWidth:                    720,
+			VideoHeight:                   1280,
+			VideoPublicSliceKey:           videoSlice,
+			CoverPublicSliceKey:           coverSlice,
+			PreviewTrackVersion:           2,
+			PreviewTrackManifestSliceKey:  "media/video/s/asset/mas_video_001/v3/storyboard.json",
+			HLSCMAFDescriptorVersion:      1,
+			HLSCMAFDescriptorSliceKey:     "media/video/s/asset/mas_video_001/v3/hls/descriptor.json",
+			HLSCMAFMasterManifestSliceKey: hlsMasterSlice,
+			HLSCMAFRenditionCount:         3,
+			CoverFrameTimeMs:              400,
 		},
 	}
 
@@ -70,7 +75,9 @@ func TestProjectBoundMediaAssetsKeepsPresentationMetadataButReplacesClientURLs(t
 	}
 	if item["mediaAssetId"] != "mas_video_001" || item["mediaAssetVersion"] != int64(3) ||
 		item["previewTrackVersion"] != 2 ||
-		item["previewTrackManifestUrl"] != "media/video/s/asset/mas_video_001/v3/storyboard.json" {
+		item["previewTrackManifestUrl"] != "media/video/s/asset/mas_video_001/v3/storyboard.json" ||
+		item["hlsCmafDescriptorVersion"] != 1 ||
+		item["hlsCmafMasterManifestUrl"] != hlsMasterSlice {
 		t.Fatalf("video identity and preview track must come from the asset: %#v", item)
 	}
 	if _, found := item["unexpected"]; found {

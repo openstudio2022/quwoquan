@@ -3,8 +3,6 @@
 package generated
 
 type OnboardingInterestCatalogPolicy struct {
-	Version                string
-	TaxonomyReleaseID      string
 	MinSelectionCount      int
 	MaxSelectionCount      int
 	DimensionRoots         map[string]string
@@ -14,8 +12,6 @@ type OnboardingInterestCatalogPolicy struct {
 
 func DefaultOnboardingInterestCatalogPolicy() OnboardingInterestCatalogPolicy {
 	return OnboardingInterestCatalogPolicy{
-		Version:           "v1",
-		TaxonomyReleaseID: "tag-taxonomy-20260723-001",
 		MinSelectionCount: 1,
 		MaxSelectionCount: 12,
 		DimensionRoots: map[string]string{

@@ -2,6 +2,7 @@
   "label": "宿舍生活",
   "labelEn": "Dorm Life",
   "description": "关注宿舍、同学与校园居住生活",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

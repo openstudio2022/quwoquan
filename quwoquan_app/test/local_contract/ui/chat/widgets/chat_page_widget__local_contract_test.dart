@@ -130,7 +130,7 @@ base class _EmptyAppMessageFacet
 
   @override
   Future<AppMessage> getAppMessage(GetAppMessageQuery query) async {
-    final slice = await listAppMessages(const ListAppMessagesQuery(limit: 50));
+    final slice = await listAppMessages(ListAppMessagesQuery(limit: 50));
     return slice.items.firstWhere(
       (message) => message.messageId == query.messageId,
     );
@@ -140,7 +140,7 @@ base class _EmptyAppMessageFacet
   Future<AppMessageUnreadCountSlice> getUnreadCount(
     GetAppMessageUnreadCountQuery query,
   ) async {
-    final slice = await listAppMessages(const ListAppMessagesQuery(limit: 50));
+    final slice = await listAppMessages(ListAppMessagesQuery(limit: 50));
     return AppMessageUnreadCountSlice(
       unreadCount: slice.items.where((message) => !message.read).length,
     );
@@ -551,8 +551,8 @@ void main() {
       final greetingInbox = <GreetingRequestRecord>[
         GreetingRequestRecord(
           id: 'greeting_001',
-          requesterSubAccountId: 'user_requester',
-          targetSubAccountId: 'mock_me',
+          requesterPersonaId: 'user_requester',
+          targetPersonaId: 'mock_me',
           requestMessage: '想和你聊聊川西路线',
           status: 'pending',
           source: 'profile',

@@ -22,12 +22,12 @@ fields:
     source: decision
     type: object
     ref: decision
-    default: {}
+    required: true
   - name: messageKind
     source: messageKind
     type: enum
     enum_ref: AssistantMessageKind
-    default: ''
+    required: true
   - name: userMarkdown
     source: userMarkdown
     type: string
@@ -36,7 +36,7 @@ fields:
     source: result
     type: object
     ref: result
-    default: {}
+    required: true
   - name: displayState
     source: displayState
     type: object
@@ -187,11 +187,11 @@ subcontracts:
   decision:
     class_name: AssistantTurnDecisionPayload
     fields:
-      - { name: nextAction, type: enum, enum_ref: AssistantNextAction, default: '' }
+      - { name: nextAction, type: enum, enum_ref: AssistantNextAction, required: true }
       - { name: confidence, type: double, default: 0.0 }
       - { name: reasoning, type: string, default: '' }
       # 编排/LLM 常见扩展键，与 AssistantAnswerPayloadReadView.decisionMap spread 对齐。
-      - { name: problemClass, type: string, default: '' }
+      - { name: problemClass, type: string, enum_ref: ProblemClass, default: general }
   result:
     class_name: AssistantTurnResult
     fields:
@@ -209,8 +209,8 @@ subcontracts:
   tool_call:
     class_name: AssistantTurnToolCall
     fields:
-      - { name: toolName, type: string, default: '' }
-      - { name: arguments, type: map, default: {} }
+      - { name: toolName, type: string, required: true }
+      - { name: arguments, type: map, required: true }
   evidence_item:
     class_name: AssistantTurnEvidenceItem
     fields:

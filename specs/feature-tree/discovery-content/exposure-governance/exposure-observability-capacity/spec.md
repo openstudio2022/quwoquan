@@ -37,8 +37,8 @@
 ### REQ-002 告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复
 
 - 告警阈值与 SLO objective 对齐；无 emitter 的告警必须标注 emitter 前置，不假装已修复。
-- feed 终态使用 `recommendation_feed_terminal_total{request_class,outcome,failure_stage}`；三项 label 均为闭集，禁止写入 user/content/request/source 自由值。
-- `request_class=initial_recommend` 的成功空结果必须为零；canonical failure 按 bounded `failure_stage` 告警。`following` 健康空与 `continuation` 自然结束只计 `outcome=empty`，不伪造为 failure。
+- feed 终态使用 `recommendation_feed_terminal_total{request_class,outcome,empty_reason,failure_stage}`；四项 label 均为闭集，非 empty 终态的 `empty_reason` 固定为 `none`，禁止写入 user/content/request/source 自由值。
+- `request_class=initial_recommend` 的健康空结果计入 `outcome=empty`，并按 canonical empty reason 形成低基数拆分；canonical failure 按 bounded `failure_stage` 告警。发布 readiness 另行对首页与 Premium/视频书非空设置阻断告警，不能把健康空结果误记为服务故障，也不能把成功空态当作供给就绪。
 
 ## 4. 契约引用
 

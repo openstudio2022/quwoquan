@@ -1,4 +1,7 @@
+read_model: PostReadPresentation
 dart_class: PostReadPresentation
+output_path: quwoquan_app/lib/cloud/runtime/generated/content/post_read_presentation.g.dart
+source_entities: [Post]
 fields:
 - name: postId
   source: postId

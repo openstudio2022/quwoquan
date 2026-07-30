@@ -2,6 +2,7 @@
   "label": "成人高考",
   "labelEn": "Adult College Entrance Exam",
   "description": "成人高等学校招生考试",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

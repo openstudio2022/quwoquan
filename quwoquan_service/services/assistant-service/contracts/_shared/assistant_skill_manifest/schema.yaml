@@ -8,6 +8,7 @@ fields:
   - { name: displayName, type: string, required: true }
   - { name: description, type: string, default: '' }
   - { name: domainId, type: string, required: true }
+  - { name: problemClass, type: enum, enum_ref: ProblemClass, default: general }
   - { name: tagRefs, type: list<string>, default: [] }
   - { name: executionTarget, type: string, default: cloud }
   - { name: routingHints, type: list<string>, default: [] }

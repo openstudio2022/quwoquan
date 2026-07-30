@@ -1,9 +1,9 @@
 part of 'app_providers.dart';
 
 const String _clientInteractionStateBoxName = 'client_interaction_state';
-const String _userRelationshipStateStorageKey = 'user_relationship_state_v1';
-const String _postInteractionStateStorageKey = 'post_interaction_state_v1';
-const String _clientStateSyncOutboxStorageKey = 'client_state_sync_outbox_v1';
+const String _userRelationshipStateStorageKey = 'user_relationship_state';
+const String _postInteractionStateStorageKey = 'post_interaction_state';
+const String _clientStateSyncOutboxStorageKey = 'client_state_sync_outbox';
 int _clientInteractionStateEpoch = 0;
 
 Future<Box<String>> _ensureClientInteractionStateBox() async {
@@ -70,29 +70,28 @@ Future<void> clearClientInteractionStateForTerminalAccountClosure() async {
 
 class UserRelationshipState {
   const UserRelationshipState({
-    this.followingSubAccountIds = const <String>{},
-    this.knownSubAccountIds = const <String>{},
+    this.followingPersonaIds = const <String>{},
+    this.knownPersonaIds = const <String>{},
   });
 
-  final Set<String> followingSubAccountIds;
-  final Set<String> knownSubAccountIds;
+  final Set<String> followingPersonaIds;
+  final Set<String> knownPersonaIds;
 
-  bool isFollowing(String subAccountId) {
-    return followingSubAccountIds.contains(subAccountId);
+  bool isFollowing(String personaId) {
+    return followingPersonaIds.contains(personaId);
   }
 
-  bool hasRelationshipStateFor(String subAccountId) {
-    return knownSubAccountIds.contains(subAccountId);
+  bool hasRelationshipStateFor(String personaId) {
+    return knownPersonaIds.contains(personaId);
   }
 
   UserRelationshipState copyWith({
-    Set<String>? followingSubAccountIds,
-    Set<String>? knownSubAccountIds,
+    Set<String>? followingPersonaIds,
+    Set<String>? knownPersonaIds,
   }) {
     return UserRelationshipState(
-      followingSubAccountIds:
-          followingSubAccountIds ?? this.followingSubAccountIds,
-      knownSubAccountIds: knownSubAccountIds ?? this.knownSubAccountIds,
+      followingPersonaIds: followingPersonaIds ?? this.followingPersonaIds,
+      knownPersonaIds: knownPersonaIds ?? this.knownPersonaIds,
     );
   }
 
@@ -105,18 +104,18 @@ class UserRelationshipState {
       return const <String>{};
     }
 
-    final following = readSet('followingSubAccountIds');
-    final known = readSet('knownSubAccountIds');
+    final following = readSet('followingPersonaIds');
+    final known = readSet('knownPersonaIds');
     return UserRelationshipState(
-      followingSubAccountIds: following,
-      knownSubAccountIds: known.isEmpty ? following : known,
+      followingPersonaIds: following,
+      knownPersonaIds: known.isEmpty ? following : known,
     );
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'followingSubAccountIds': followingSubAccountIds.toList(growable: false),
-      'knownSubAccountIds': knownSubAccountIds.toList(growable: false),
+      'followingPersonaIds': followingPersonaIds.toList(growable: false),
+      'knownPersonaIds': knownPersonaIds.toList(growable: false),
     };
   }
 }
@@ -142,28 +141,27 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
   }
 
   void seedFollowing(
-    Iterable<String> subAccountIds, {
-    Iterable<String>? knownSubAccountIds,
+    Iterable<String> personaIds, {
+    Iterable<String>? knownPersonaIds,
   }) {
     state = UserRelationshipState(
-      followingSubAccountIds: Set<String>.from(subAccountIds),
-      knownSubAccountIds: Set<String>.from(knownSubAccountIds ?? subAccountIds),
+      followingPersonaIds: Set<String>.from(personaIds),
+      knownPersonaIds: Set<String>.from(knownPersonaIds ?? personaIds),
     );
     unawaited(_persistState());
   }
 
-  void setFollowing(String subAccountId, bool isFollowing) {
-    final next = Set<String>.from(state.followingSubAccountIds);
-    final nextKnown = Set<String>.from(state.knownSubAccountIds)
-      ..add(subAccountId);
+  void setFollowing(String personaId, bool isFollowing) {
+    final next = Set<String>.from(state.followingPersonaIds);
+    final nextKnown = Set<String>.from(state.knownPersonaIds)..add(personaId);
     if (isFollowing) {
-      next.add(subAccountId);
+      next.add(personaId);
     } else {
-      next.remove(subAccountId);
+      next.remove(personaId);
     }
     state = state.copyWith(
-      followingSubAccountIds: next,
-      knownSubAccountIds: nextKnown,
+      followingPersonaIds: next,
+      knownPersonaIds: nextKnown,
     );
     unawaited(_persistState());
   }
@@ -171,16 +169,16 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
   /// 单一关注意图入口：先更新本地关系快照，再把同一目标态写入持久 outbox。
   /// 页面不得绕过该方法直接调用 PersonaRelationshipCommandWriter。
   Future<void> setFollowingWithSync(
-    String subAccountId, {
+    String personaId, {
     required bool currentFollowing,
     required bool shouldFollow,
     required AppUiSurface sourceSurface,
     bool flushImmediately = true,
   }) async {
-    setFollowing(subAccountId, shouldFollow);
+    setFollowing(personaId, shouldFollow);
     final outbox = ref.read(clientStateSyncOutboxProvider.notifier);
     outbox.enqueueFollow(
-      subAccountId: subAccountId,
+      personaId: personaId,
       currentFollowing: currentFollowing,
       shouldFollow: shouldFollow,
       sourceSurfaceId: sourceSurface.id,
@@ -199,8 +197,8 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
     final effectiveScope = scopeProfileIds.isEmpty
         ? snapshot.followingUsers
         : scopeProfileIds;
-    final nextFollowing = Set<String>.from(state.followingSubAccountIds);
-    final nextKnown = Set<String>.from(state.knownSubAccountIds)
+    final nextFollowing = Set<String>.from(state.followingPersonaIds);
+    final nextKnown = Set<String>.from(state.knownPersonaIds)
       ..addAll(effectiveScope);
     for (final profileId in effectiveScope) {
       if (snapshot.followingUsers.contains(profileId)) {
@@ -210,8 +208,8 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
       }
     }
     state = state.copyWith(
-      followingSubAccountIds: nextFollowing,
-      knownSubAccountIds: nextKnown,
+      followingPersonaIds: nextFollowing,
+      knownPersonaIds: nextKnown,
     );
     unawaited(_persistState());
   }

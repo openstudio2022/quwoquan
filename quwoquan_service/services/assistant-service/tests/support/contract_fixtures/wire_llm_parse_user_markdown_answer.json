@@ -2,5 +2,6 @@
   "contractId": "assistant_turn",
   "userMarkdown": "  hello  ",
   "decision": { "nextAction": "answer" },
+  "messageKind": "answer",
   "result": { "text": " internal " }
 }

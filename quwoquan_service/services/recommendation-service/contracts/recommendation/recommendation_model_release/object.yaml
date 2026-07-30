@@ -1,5 +1,5 @@
 kind: aggregate_root
-description: 场景模型发布的可审计读模型与评分 Reader 根。V1 生命周期命令 deferred：登记/晋升/回滚由 recommendation-service 的 model_registry_cli（含
+description: 场景模型发布的可审计读模型与评分 Reader 根。生命周期命令 deferred：登记/晋升/回滚由 recommendation-service 的 model_registry_cli（含
   promotion gate）与 CI 训练管线写入 rec_model_registry；在线只暴露按已激活发布评分的 named Reader。
 identity:
   fields:
@@ -16,6 +16,7 @@ taggable: false
 vector_enabled: false
 business_rules:
 - release_id_and_model_digest_are_immutable
+- feature_contract_digest_is_canonical_and_immutable
 - one_scenario_has_at_most_one_active_release
 - promotion_and_rollback_pass_registry_promotion_gate
 lifecycle:

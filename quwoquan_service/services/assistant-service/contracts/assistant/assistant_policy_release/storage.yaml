@@ -2,17 +2,12 @@ backend: mongodb
 collections:
   assistant_policy_releases:
     entity: AssistantPolicyRelease
-    description: 不可变 AssistantPolicyRelease；同 policyId 下 releaseVersion 唯一。
+    description: 不可变 AssistantPolicyRelease；同 policyId 下 releaseDigest 是唯一发布身份。
     indexes:
     - name: uq_assistant_policy_release_identity
       keys:
         policyId: 1
-        releaseVersion: 1
-      unique: true
-    - name: uq_assistant_policy_release_digest
-      keys:
-        policyId: 1
-        canonicalDigest: 1
+        releaseDigest: 1
       unique: true
     - name: idx_assistant_policy_release_staged
       keys:
@@ -25,10 +20,10 @@ collections:
     - name: idx_assistant_policy_release_receipt_identity
       keys:
         policyId: 1
-        releaseVersion: 1
+        releaseDigest: 1
   assistant_policy_release_outbox:
     entity: AssistantPolicyRelease
-    description: Stage 审计 outbox；payload 仅含 policy/release/digest 和模板规则计数。
+    description: Stage 审计 outbox；payload 仅含 policy/releaseDigest 和模板规则计数。
     indexes:
     - name: idx_assistant_policy_release_outbox_pending
       keys:

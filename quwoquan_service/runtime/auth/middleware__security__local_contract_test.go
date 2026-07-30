@@ -17,7 +17,6 @@ func TestMiddlewareClearsForgedIdentityWithoutVerifiedToken(t *testing.T) {
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			for _, header := range []string{
 				clientUserIDHeader,
-				clientSubAccountIDHdr,
 				clientAccountIDHeader,
 				clientPersonaIDHeader,
 				clientDeviceActorHdr,
@@ -36,7 +35,6 @@ func TestMiddlewareClearsForgedIdentityWithoutVerifiedToken(t *testing.T) {
 	)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set(clientUserIDHeader, "forged-user")
-	req.Header.Set(clientSubAccountIDHdr, "forged-sub-account")
 	req.Header.Set(clientAccountIDHeader, "forged-account")
 	req.Header.Set(clientPersonaIDHeader, "forged-persona")
 	req.Header.Set(clientDeviceActorHdr, "forged-device")

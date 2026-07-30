@@ -46,7 +46,7 @@ void main() {
 
     test('核心用户头像投影显式暴露 URL 字段与对应版本字段', () {
       const projectionFieldPairs = <String, List<List<String>>>{
-        'quwoquan_service/services/user-service/contracts/account/user_account/projections/sub_account_profile_wire.yaml':
+        'quwoquan_service/services/user-service/contracts/account/user_account/projections/persona_profile_wire.yaml':
             <List<String>>[
               <String>['avatarUrl', 'avatarVersion'],
             ],

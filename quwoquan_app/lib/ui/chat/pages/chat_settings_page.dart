@@ -504,9 +504,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                               );
                             }
                             final m = members[index];
-                            final username = m.userId.isNotEmpty
-                                ? m.userId
-                                : 'user_$index';
+                            final personaId = m.userId.trim();
+                            final userHandle = m.userHandle.trim();
                             // 服务端为强制门（owner 不可移出、admin 仅可移出普通成员）；
                             // UI 侧同源预判避免必败请求。
                             final removable =
@@ -519,19 +518,22 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                               name: m.displayName,
                               avatarUrl: m.avatarUrl,
                               textColor: fgPrimary,
-                              username: username,
                               role: m.role,
                               onTap: removable
                                   ? () => _confirmRemoveMember(
                                       m.userId,
                                       m.displayName,
                                     )
+                                  : userHandle.isEmpty
+                                  ? null
                                   : () => context.push(
                                       AppRoutePaths.userProfile(
-                                        username: username,
+                                        userHandle: userHandle,
                                       ),
                                       extra: UserProfileRouteExtra(
-                                        subAccountId: username,
+                                        personaId: personaId.isEmpty
+                                            ? null
+                                            : personaId,
                                         avatar: m.avatarUrl,
                                         displayName: m.displayName,
                                       ),
@@ -877,7 +879,6 @@ class _MemberAvatar extends StatelessWidget {
     required this.name,
     required this.avatarUrl,
     required this.textColor,
-    required this.username,
     required this.onTap,
     this.role,
   });
@@ -885,8 +886,7 @@ class _MemberAvatar extends StatelessWidget {
   final String name;
   final String avatarUrl;
   final Color textColor;
-  final String username;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final String? role;
 
   static final double _settingsAvatarSize = AppSpacing.avatarUserLg;

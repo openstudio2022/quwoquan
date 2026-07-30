@@ -45,6 +45,39 @@ func validateTelemetryMetadata(
 		if strings.TrimSpace(name) == "" || !allowedExtensionTypes[extension.Type] {
 			return fmt.Errorf("invalid telemetry extension %q type %q", name, extension.Type)
 		}
+		if len(extension.Enum) == 0 {
+			continue
+		}
+		if extension.Type != "string" {
+			return fmt.Errorf(
+				"telemetry extension %s enum requires string type, got %q",
+				name,
+				extension.Type,
+			)
+		}
+		seenValues := map[string]bool{}
+		seenDartNames := map[string]string{}
+		for _, value := range extension.Enum {
+			if strings.TrimSpace(value) == "" || seenValues[value] {
+				return fmt.Errorf(
+					"telemetry extension %s enum values must be non-empty and unique: %q",
+					name,
+					value,
+				)
+			}
+			seenValues[value] = true
+			dartName := toDartValueName(value)
+			if previous, exists := seenDartNames[dartName]; exists {
+				return fmt.Errorf(
+					"telemetry extension %s enum values %q and %q collide as Dart name %s",
+					name,
+					previous,
+					value,
+					dartName,
+				)
+			}
+			seenDartNames[dartName] = value
+		}
 	}
 	for _, field := range catalog.ContextExtensions {
 		if _, ok := catalog.ExtensionFields[field]; !ok {
@@ -128,6 +161,33 @@ func renderAppTelemetryCatalogDart(catalog *telemetryEventCatalogFile) string {
 	b.WriteString("  const AppTelemetryEventDefinition({required this.eventType, required this.logType, required this.requiredExtensions, required this.optionalExtensions, required this.normalSampleRate, required this.slowThresholdMs, required this.internalPriority});\n")
 	b.WriteString("  final String eventType;\n  final String logType;\n  final Set<String> requiredExtensions;\n  final Set<String> optionalExtensions;\n  final double normalSampleRate;\n  final int slowThresholdMs;\n  final String internalPriority;\n")
 	b.WriteString("  Set<String> get allowedExtensions => <String>{...requiredExtensions, ...optionalExtensions};\n}\n\n")
+	enumFieldNames := make([]string, 0)
+	for name, extension := range catalog.ExtensionFields {
+		if len(extension.Enum) > 0 {
+			enumFieldNames = append(enumFieldNames, name)
+		}
+	}
+	sort.Strings(enumFieldNames)
+	for _, name := range enumFieldNames {
+		extension := catalog.ExtensionFields[name]
+		className := telemetryEnumClassName(name)
+		b.WriteString(fmt.Sprintf("abstract final class %s {\n", className))
+		for _, value := range extension.Enum {
+			b.WriteString(fmt.Sprintf(
+				"  static const String %s = %s;\n",
+				toDartValueName(value),
+				dartStringLiteral(value),
+			))
+		}
+		b.WriteString("  static const Set<String> values = <String>{")
+		for i, value := range extension.Enum {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(toDartValueName(value))
+		}
+		b.WriteString("};\n}\n\n")
+	}
 	b.WriteString("class AppTelemetryPayload {\n")
 	b.WriteString("  const AppTelemetryPayload._(this.eventType, this.logType, this.extensions);\n")
 	b.WriteString("  final String eventType;\n  final String logType;\n  final Map<String, Object?> extensions;\n\n")
@@ -199,14 +259,32 @@ func renderAppTelemetryCatalogDart(catalog *telemetryEventCatalogFile) string {
 		b.WriteString(fmt.Sprintf("}, normalSampleRate: %g, slowThresholdMs: %d, internalPriority: '%s'),\n", event.NormalSampleRate, event.SlowThresholdMS, event.InternalPriority))
 	}
 	b.WriteString("  };\n\n")
+	b.WriteString("  static const Map<String, Set<String>> extensionEnumValues = <String, Set<String>>{\n")
+	for _, name := range enumFieldNames {
+		b.WriteString(fmt.Sprintf(
+			"    %s: %s.values,\n",
+			dartStringLiteral(name),
+			telemetryEnumClassName(name),
+		))
+	}
+	b.WriteString("  };\n\n")
 	b.WriteString("  static String? validate(AppTelemetryPayload payload) {\n")
 	b.WriteString("    final definition = events[payload.eventType];\n")
 	b.WriteString("    if (definition == null || definition.logType != payload.logType) return 'unknown_event';\n")
 	b.WriteString("    if (!payload.extensions.keys.every(definition.allowedExtensions.contains)) return 'unknown_extension';\n")
 	b.WriteString("    if (!definition.requiredExtensions.every(payload.extensions.containsKey)) return 'missing_extension';\n")
+	b.WriteString("    for (final extension in payload.extensions.entries) {\n")
+	b.WriteString("      final allowedValues = extensionEnumValues[extension.key];\n")
+	b.WriteString("      if (allowedValues != null && !allowedValues.contains(extension.value)) return 'invalid_extension_value';\n")
+	b.WriteString("    }\n")
 	b.WriteString("    return null;\n  }\n")
 	b.WriteString("}\n")
 	return b.String()
+}
+
+func telemetryEnumClassName(fieldName string) string {
+	valueName := toDartFieldName(fieldName)
+	return "AppTelemetryValue" + strings.ToUpper(valueName[:1]) + valueName[1:]
 }
 
 func dartTelemetryType(kind string, nullable bool) string {

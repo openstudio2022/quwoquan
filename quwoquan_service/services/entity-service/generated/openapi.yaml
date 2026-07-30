@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan entity API
-    version: v1
+    version: canonical
 paths:
     /homepage-claim-requests:
         get:
@@ -17,6 +17,26 @@ paths:
                 reader: HomepageClaimQueueReader
                 slice: HomepageClaimRequestSlice
             parameters:
+                - name: homepageId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: false
@@ -66,7 +86,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/HomepageReview'
+                            $ref: '#/components/schemas/UpdateHomepageReviewCommand'
             responses:
                 "200":
                     description: OK
@@ -132,6 +152,26 @@ paths:
                 reader: HomepageStatusReportQueueReader
                 slice: HomepageStatusReportSlice
             parameters:
+                - name: homepageId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: false
@@ -164,7 +204,7 @@ paths:
                 facet: HomepageQueryFacade
                 method: getDetail
                 reader: HomepageDetailReader
-                slice: HomepageDetailSlice
+                slice: HomepageDetailView
             parameters:
                 - name: homepageId
                   in: path
@@ -177,7 +217,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/Homepage'
+                                $ref: '#/components/schemas/HomepageDetailView'
                 default:
                     description: Runtime failure
                     content:
@@ -215,7 +255,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/HomepageClaimRequest'
+                            $ref: '#/components/schemas/CreateHomepageClaimRequestCommand'
             responses:
                 "200":
                     description: OK
@@ -260,11 +300,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReviewHomepageClaimRequestRequest'
+                            $ref: '#/components/schemas/ReviewHomepageClaimRequestCommand'
             responses:
                 "200":
                     description: OK
@@ -304,11 +344,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateClaimedHomepageBasicsRequest'
+                            $ref: '#/components/schemas/UpdateClaimedHomepageBasicsCommand'
             responses:
                 "200":
                     description: OK
@@ -407,6 +447,31 @@ paths:
                 - name: homepageId
                   in: path
                   required: true
+                  schema:
+                    type: string
+                - name: referralSource
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: feedRequestId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: recommendationTraceId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: experimentBucket
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: rolloutCohort
+                  in: query
+                  required: false
                   schema:
                     type: string
             responses:
@@ -511,6 +576,16 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -554,7 +629,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/HomepageReview'
+                            $ref: '#/components/schemas/CreateHomepageReviewCommand'
             responses:
                 "200":
                     description: OK
@@ -665,7 +740,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/HomepageStatusReport'
+                            $ref: '#/components/schemas/CreateHomepageStatusReportCommand'
             responses:
                 "200":
                     description: OK
@@ -710,11 +785,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ReviewHomepageStatusReportRequest'
+                            $ref: '#/components/schemas/ReviewHomepageStatusReportCommand'
             responses:
                 "200":
                     description: OK
@@ -743,6 +818,31 @@ paths:
                 reader: HomepageSearchReader
                 slice: HomepageCandidateQueueSlice
             parameters:
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: homepageType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: city
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: false
@@ -786,7 +886,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Homepage'
+                            $ref: '#/components/schemas/IntakeHomepageCandidateCommand'
             responses:
                 "204":
                     description: No Content
@@ -861,7 +961,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/Homepage'
+                            $ref: '#/components/schemas/SuggestHomepageCandidateCommand'
             responses:
                 "204":
                     description: No Content
@@ -886,6 +986,36 @@ paths:
                 reader: HomepageSearchReader
                 slice: HomepageSearchSlice
             parameters:
+                - name: query
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: homepageType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: city
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: false
@@ -913,6 +1043,21 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
+        CreateHomepageClaimRequestCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateHomepageClaimRequestCommand
+            x-contract-placeholder: true
+        CreateHomepageReviewCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateHomepageReviewCommand
+            x-contract-placeholder: true
+        CreateHomepageStatusReportCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: CreateHomepageStatusReportCommand
+            x-contract-placeholder: true
         EntityImpactSummary:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -927,6 +1072,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageClaimRequest
+            x-contract-placeholder: true
+        HomepageDetailView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: HomepageDetailView
             x-contract-placeholder: true
         HomepageIntroduction:
             type: object
@@ -963,6 +1113,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: HomepageStatusReport
             x-contract-placeholder: true
+        IntakeHomepageCandidateCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: IntakeHomepageCandidateCommand
+            x-contract-placeholder: true
         ObjectPageBundle:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -973,18 +1128,28 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: PublishHomepageCandidateRequest
             x-contract-placeholder: true
-        ReviewHomepageClaimRequestRequest:
+        ReviewHomepageClaimRequestCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReviewHomepageClaimRequestRequest
+            x-contract-entity: ReviewHomepageClaimRequestCommand
             x-contract-placeholder: true
-        ReviewHomepageStatusReportRequest:
+        ReviewHomepageStatusReportCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReviewHomepageStatusReportRequest
+            x-contract-entity: ReviewHomepageStatusReportCommand
             x-contract-placeholder: true
-        UpdateClaimedHomepageBasicsRequest:
+        SuggestHomepageCandidateCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateClaimedHomepageBasicsRequest
+            x-contract-entity: SuggestHomepageCandidateCommand
+            x-contract-placeholder: true
+        UpdateClaimedHomepageBasicsCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UpdateClaimedHomepageBasicsCommand
+            x-contract-placeholder: true
+        UpdateHomepageReviewCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: UpdateHomepageReviewCommand
             x-contract-placeholder: true

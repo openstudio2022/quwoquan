@@ -19,16 +19,32 @@ from quwoquan_ops.cli.lib.local_environment_auth import prepare_local_environmen
 
 
 class LocalGammaObjectStorageTest(unittest.TestCase):
-    def test_prepares_tls_and_secret_outside_output_and_is_idempotent(self) -> None:
+    def _write_public_certificate(self, deploy_root: Path, target: str) -> None:
+        certificate_root = deploy_root / target / "certificates"
+        certificate_root.mkdir(parents=True)
+        (certificate_root / "fullchain.pem").write_text(
+            f"public-certificate-{target}\n",
+            encoding="utf-8",
+        )
+        (certificate_root / "privkey.pem").write_text(
+            f"private-key-{target}\n",
+            encoding="utf-8",
+        )
+
+    def test_prepares_public_tls_and_secret_outside_output_and_is_idempotent(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             deploy_root = Path(tmp_dir) / "deploy"
+            self._write_public_certificate(deploy_root, "gamma-local")
             with mock.patch.dict(os.environ, {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)}, clear=False):
                 first = prepare_local_gamma_object_storage(edge_port=19130)
                 second = prepare_local_gamma_object_storage(edge_port=19130)
 
             self.assertEqual(first.environment, second.environment)
             self.assertTrue(first.secret_path.is_file())
-            self.assertTrue(first.ca_path.is_file())
+            self.assertTrue(first.certificate_path.is_file())
+            self.assertTrue(first.private_key_path.is_file())
             self.assertTrue((first.work_root / "certificates/object-storage/minio/public.crt").is_file())
             self.assertEqual(stat.S_IMODE(first.secret_path.stat().st_mode), 0o600)
             self.assertEqual(
@@ -36,7 +52,9 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
                 0o600,
             )
             self.assertEqual(first.environment["LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT"], "upload.gamma.quwoquan.com:19130")
-            self.assertEqual(first.host_endpoint, "https://gamma-upload.localhost:19130")
+            self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_CDN_DOMAIN", first.environment)
+            self.assertEqual(first.host_endpoint, "https://upload.gamma.quwoquan.com:19130")
+            self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE", first.environment)
             self.assertNotIn(".qwq_output", str(first.secret_path))
 
     def test_rejects_invalid_edge_port(self) -> None:
@@ -46,6 +64,8 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
     def test_beta_storage_is_target_isolated_from_gamma(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             deploy_root = Path(tmp_dir) / "deploy"
+            self._write_public_certificate(deploy_root, "beta-local")
+            self._write_public_certificate(deploy_root, "gamma-local")
             with mock.patch.dict(
                 os.environ,
                 {"QWQ_DEPLOY_WORK_ROOT": str(deploy_root)},
@@ -63,14 +83,16 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
             )
             self.assertEqual(
                 beta.host_endpoint,
-                "https://beta-upload.localhost:18130",
+                "https://upload.beta.quwoquan.com:18130",
             )
-            self.assertTrue(beta.ca_path.is_file())
+            self.assertTrue(beta.certificate_path.is_file())
 
     def test_concurrent_beta_preparation_keeps_one_valid_tls_tree(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             environment = os.environ.copy()
-            environment["QWQ_DEPLOY_WORK_ROOT"] = str(Path(tmp_dir) / "deploy")
+            deploy_root = Path(tmp_dir) / "deploy"
+            self._write_public_certificate(deploy_root, "beta-local")
+            environment["QWQ_DEPLOY_WORK_ROOT"] = str(deploy_root)
             environment["PYTHONPATH"] = str(ROOT)
             command = [
                 sys.executable,
@@ -109,8 +131,8 @@ class LocalGammaObjectStorageTest(unittest.TestCase):
                 / "certificates"
                 / "object-storage"
             )
-            self.assertTrue((cert_root / "ca.crt").is_file())
             self.assertTrue((cert_root / "minio/public.crt").is_file())
+            self.assertFalse((cert_root / "ca.crt").exists())
 
     def test_prepares_stable_auth_secrets_outside_output(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

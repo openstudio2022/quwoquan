@@ -10,10 +10,7 @@ void main() {
     final presentation = RtcCallLogPresentation.fromCard(_card());
 
     expect(presentation.isVideo, isTrue);
-    expect(
-      presentation.summary,
-      '${CallText.callSummaryDurationPrefix}01:05',
-    );
+    expect(presentation.summary, '${CallText.callSummaryDurationPrefix}01:05');
   });
 
   testWidgets('call log bubble renders semantic CTA and invokes redial', (
@@ -39,6 +36,22 @@ void main() {
       _card(durationMs: 0, endReason: 'no_answer'),
     );
     expect(presentation.summary, CallText.callSummaryNoAnswer);
+  });
+
+  test('missing enum attributes and legacy EndReason aliases fail closed', () {
+    expect(() => RtcCallLogPresentation.fromCard(null), throwsFormatException);
+    for (final legacy in <String>[
+      'completed',
+      'busy',
+      'initiator_hangup',
+      'network_error',
+      'unknown',
+    ]) {
+      expect(
+        () => RtcCallLogPresentation.fromCard(_card(endReason: legacy)),
+        throwsFormatException,
+      );
+    }
   });
 }
 

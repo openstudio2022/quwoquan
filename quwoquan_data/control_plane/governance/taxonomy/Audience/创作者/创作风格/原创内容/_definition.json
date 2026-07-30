@@ -2,6 +2,7 @@
   "label": "原创内容",
   "labelEn": "Original Content",
   "description": "100%原创内容",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

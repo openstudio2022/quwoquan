@@ -6,9 +6,8 @@ import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 enum AppRemoteConfigSource { defaults, diskCache, networkFresh, staleDiskCache }
 
 class AppRemoteConfigSnapshot {
-  const AppRemoteConfigSnapshot({
+  const AppRemoteConfigSnapshot._({
     required this.schema,
-    required this.packageVersion,
     required this.configHash,
     required this.fetchedAt,
     required this.maxAge,
@@ -17,12 +16,10 @@ class AppRemoteConfigSnapshot {
     required this.source,
   });
 
-  static const String fallbackSchema = 'app_remote_config';
-  static const String fallbackPackageVersion = 'embedded-defaults';
+  static const String canonicalSchema = 'app_remote_config';
   static const Duration fallbackMaxAge = Duration(hours: 6);
 
   final String schema;
-  final String packageVersion;
   final String configHash;
   final DateTime fetchedAt;
   final Duration maxAge;
@@ -37,30 +34,24 @@ class AppRemoteConfigSnapshot {
   ContentAppConfigWire get contentWire =>
       ContentAppConfigWire.fromWireRoot(wireRoot);
 
-  AppRemoteConfigSnapshot copyWith({
-    AppRemoteConfigSource? source,
-    ContentAppConfigWireRoot? wireRoot,
-  }) {
-    final nextRoot = wireRoot ?? this.wireRoot;
-    return AppRemoteConfigSnapshot(
-      schema: schema,
-      packageVersion: packageVersion,
+  factory AppRemoteConfigSnapshot.defaults(ContentAppConfigWire wire) {
+    final fetchedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    final root = <String, Object?>{
+      ...wire.wireRoot,
+      'schema': canonicalSchema,
+      'fetchedAt': fetchedAt.toIso8601String(),
+      'maxAgeSec': fallbackMaxAge.inSeconds,
+      'activationPolicy': const <String, String>{
+        'default': 'next_session',
+        'kill_switches': 'immediate',
+      },
+    };
+    final configHash = calculateConfigHash(root);
+    root['configHash'] = configHash;
+    return AppRemoteConfigSnapshot._(
+      schema: canonicalSchema,
       configHash: configHash,
       fetchedAt: fetchedAt,
-      maxAge: maxAge,
-      activationPolicy: activationPolicy,
-      wireRoot: nextRoot,
-      source: source ?? this.source,
-    );
-  }
-
-  factory AppRemoteConfigSnapshot.defaults(ContentAppConfigWire wire) {
-    final root = wire.wireRoot;
-    return AppRemoteConfigSnapshot(
-      schema: fallbackSchema,
-      packageVersion: fallbackPackageVersion,
-      configHash: _hashRoot(root),
-      fetchedAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       maxAge: fallbackMaxAge,
       activationPolicy: const <String, String>{
         'default': 'next_session',
@@ -82,115 +73,93 @@ class AppRemoteConfigSnapshot {
     ContentAppConfigWireRoot root, {
     AppRemoteConfigSource source = AppRemoteConfigSource.networkFresh,
   }) {
-    final metadata = _metadataFromRoot(root);
-    final fetchedAt =
-        _parseDate(metadata['fetchedAt']) ?? DateTime.now().toUtc();
-    final maxAgeSec = _parsePositiveInt(metadata['maxAgeSec']);
-    final hash = (metadata['configHash'] ?? '').toString().trim();
-    return AppRemoteConfigSnapshot(
-      schema: (metadata['schema'] ?? fallbackSchema)
-          .toString()
-          .trim(),
-      packageVersion: (metadata['packageVersion'] ?? fallbackPackageVersion)
-          .toString()
-          .trim(),
-      configHash: hash.isEmpty ? _hashRoot(root) : hash,
+    if (root.containsKey('packageVersion')) {
+      throw const FormatException('packageVersion is retired');
+    }
+    final schema = _requiredString(root, 'schema');
+    if (schema != canonicalSchema) {
+      throw FormatException('unsupported app config schema: $schema');
+    }
+    final rawFetchedAt = root['fetchedAt'];
+    final fetchedAt = rawFetchedAt is String
+        ? DateTime.tryParse(rawFetchedAt)?.toUtc()
+        : null;
+    if (fetchedAt == null) {
+      throw const FormatException('invalid fetchedAt');
+    }
+    final maxAgeSec = root['maxAgeSec'];
+    if (maxAgeSec is! int || maxAgeSec <= 0) {
+      throw const FormatException('invalid maxAgeSec');
+    }
+    final configHash = _requiredString(root, 'configHash');
+    final expectedHash = calculateConfigHash(root);
+    if (!_sha256Pattern.hasMatch(configHash) || configHash != expectedHash) {
+      throw const FormatException('configHash mismatch');
+    }
+    return AppRemoteConfigSnapshot._(
+      schema: schema,
+      configHash: configHash,
       fetchedAt: fetchedAt,
-      maxAge: Duration(seconds: maxAgeSec ?? fallbackMaxAge.inSeconds),
-      activationPolicy: _parseActivationPolicy(metadata['activationPolicy']),
-      wireRoot: root,
+      maxAge: Duration(seconds: maxAgeSec),
+      activationPolicy: _parseActivationPolicy(root['activationPolicy']),
+      wireRoot: Map<String, Object?>.from(root),
       source: source,
     );
   }
 
   Map<String, dynamic> toPersistedMap() {
-    return <String, dynamic>{
-      'schema': schema,
-      'packageVersion': packageVersion,
-      'configHash': configHash,
-      'fetchedAt': fetchedAt.toUtc().toIso8601String(),
-      'maxAgeSec': maxAge.inSeconds,
-      'activationPolicy': activationPolicy,
-      'wireRoot': wireRoot,
-    };
+    return Map<String, dynamic>.from(wireRoot);
   }
 
   factory AppRemoteConfigSnapshot.fromPersistedMap(
     Map<String, dynamic> map, {
     AppRemoteConfigSource source = AppRemoteConfigSource.diskCache,
   }) {
-    final root = (map['wireRoot'] as Map?)?.cast<String, Object?>();
-    if (root == null || root.isEmpty) {
-      throw const FormatException('missing wireRoot');
-    }
-    return AppRemoteConfigSnapshot(
-      schema: (map['schema'] ?? fallbackSchema)
-          .toString()
-          .trim(),
-      packageVersion: (map['packageVersion'] ?? fallbackPackageVersion)
-          .toString()
-          .trim(),
-      configHash: (map['configHash'] ?? '').toString().trim().isEmpty
-          ? _hashRoot(root)
-          : (map['configHash'] ?? '').toString().trim(),
-      fetchedAt: _parseDate(map['fetchedAt']) ?? DateTime.now().toUtc(),
-      maxAge: Duration(
-        seconds:
-            _parsePositiveInt(map['maxAgeSec']) ?? fallbackMaxAge.inSeconds,
-      ),
-      activationPolicy: _parseActivationPolicy(map['activationPolicy']),
-      wireRoot: root,
+    return AppRemoteConfigSnapshot.fromRoot(
+      Map<String, Object?>.from(map),
       source: source,
     );
   }
 
-  static Map<String, Object?> _metadataFromRoot(ContentAppConfigWireRoot root) {
-    final bootstrap = (root['app_bootstrap'] as Map?)?.cast<String, Object?>();
-    if (bootstrap != null) {
-      return <String, Object?>{
-        ...bootstrap,
-        if (root['schema'] != null)
-          'schema': root['schema'],
-        if (root['packageVersion'] != null)
-          'packageVersion': root['packageVersion'],
-        if (root['configHash'] != null) 'configHash': root['configHash'],
-      };
+  static final RegExp _sha256Pattern = RegExp(r'^sha256:[0-9a-f]{64}$');
+
+  static String _requiredString(ContentAppConfigWireRoot root, String key) {
+    final value = root[key];
+    if (value is! String || value.isEmpty || value != value.trim()) {
+      throw FormatException('missing $key');
     }
-    return root;
+    return value;
   }
 
   static Map<String, String> _parseActivationPolicy(Object? raw) {
     if (raw is! Map) {
-      return const <String, String>{
-        'default': 'next_session',
-        'kill_switches': 'immediate',
-      };
+      throw const FormatException('invalid activationPolicy');
     }
     final result = <String, String>{};
     raw.forEach((key, value) {
-      result[key.toString()] = value.toString();
+      if (key is! String ||
+          key.isEmpty ||
+          key != key.trim() ||
+          value is! String ||
+          value.isEmpty ||
+          value != value.trim()) {
+        throw const FormatException('invalid activationPolicy entry');
+      }
+      result[key] = value;
     });
+    if (!result.containsKey('default')) {
+      throw const FormatException('missing activationPolicy.default');
+    }
     return result;
   }
 
-  static DateTime? _parseDate(Object? raw) {
-    if (raw == null) return null;
-    return DateTime.tryParse(raw.toString())?.toUtc();
-  }
-
-  static int? _parsePositiveInt(Object? raw) {
-    final parsed = switch (raw) {
-      final int value => value,
-      final num value => value.toInt(),
-      final String value => int.tryParse(value.trim()),
-      _ => null,
+  static String calculateConfigHash(ContentAppConfigWireRoot root) {
+    final canonicalRoot = <String, Object?>{
+      for (final entry in root.entries)
+        if (entry.key != 'configHash' && entry.key != 'fetchedAt')
+          entry.key: entry.value,
     };
-    if (parsed == null || parsed <= 0) return null;
-    return parsed;
-  }
-
-  static String _hashRoot(ContentAppConfigWireRoot root) {
-    final payload = jsonEncode(_normalizeJson(root));
+    final payload = jsonEncode(_normalizeJson(canonicalRoot));
     return 'sha256:${sha256.convert(utf8.encode(payload))}';
   }
 

@@ -21,6 +21,8 @@ var metadataSchemaByFilename = map[string]string{
 	"operations.yaml": "operations.schema.json",
 	"storage.yaml":    "storage.schema.json",
 	"events.yaml":     "events.schema.json",
+	"errors.yaml":     "errors.schema.json",
+	"privacy.yaml":    "privacy.schema.json",
 }
 
 // MetadataSchemas 使用仓库内唯一 JSON Schema 校验商用 metadata 文档。

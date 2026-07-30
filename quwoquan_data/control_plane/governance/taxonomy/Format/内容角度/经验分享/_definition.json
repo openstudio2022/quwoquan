@@ -2,6 +2,7 @@
   "label": "经验分享",
   "labelEn": "Experience Sharing",
   "description": "个人经验总结与心得分享的内容视角",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

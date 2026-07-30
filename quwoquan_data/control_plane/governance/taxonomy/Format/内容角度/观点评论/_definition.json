@@ -2,6 +2,7 @@
   "label": "观点评论",
   "labelEn": "Opinion & Commentary",
   "description": "发表观点与深度评论的内容视角（区别于UGC评论区'评论'概念）",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

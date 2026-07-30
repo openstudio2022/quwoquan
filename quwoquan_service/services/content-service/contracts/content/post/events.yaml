@@ -120,6 +120,7 @@ events:
   - assistant-service
   - entity-service
   channel: transactional_outbox
+  payload_entity: Post
   payload_fields:
   - postId
   - authorId
@@ -156,18 +157,6 @@ events:
   - contentIdentity
   - status
   - deletedAt
-- name: ContentViewed
-  description: 内容浏览
-  producer: content-service
-  consumers:
-  - recommendation-engine
-  channel: direct
-  payload_fields:
-  - postId
-  - userId
-  - dwellMs
-  - sessionId
-  recommend_impact: hot_path_signal
 - name: PostPrivacyRedacted
   description: 隐私删除第一阶段完成，个人字段已脱敏
   producer: content-service
@@ -179,6 +168,7 @@ events:
   - circle-service
   - platform-ops
   channel: transactional_outbox
+  payload_entity: Post
   payload_fields:
   - postId
   - postVersion
@@ -195,6 +185,7 @@ events:
   - circle-service
   - platform-ops
   channel: transactional_outbox
+  payload_entity: Post
   payload_fields:
   - postId
   - purgedAt
@@ -209,6 +200,7 @@ events:
   - circle-service
   - platform-ops
   channel: transactional_outbox
+  payload_entity: Post
   payload_fields:
   - postId
   - postVersion
@@ -216,12 +208,3 @@ events:
   - idempotencyKey
   - signatureKeyId
   - importedAt
-- name: PostTombstoned
-  description: 内容墓碑写入完成
-  producer: content-service
-  consumers: []
-  channel: transactional_outbox
-  payload_fields:
-  - postId
-  - deletedAt
-  - reason

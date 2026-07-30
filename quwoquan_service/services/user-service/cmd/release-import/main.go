@@ -4,5 +4,5 @@ package main
 import releaseimport "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/releaseimport"
 
 func main() {
-	releaseimport.Run()
+	releaseimport.Run(newCreatorPersonaMaterializer)
 }

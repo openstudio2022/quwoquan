@@ -292,6 +292,80 @@ def test_reliabletask_fleet__projects_terminal_worker_failure__reliability__loca
     assert stored.state is QueueJobState.DEAD
     assert stored.attempt == job.max_attempts
     assert stored.last_issue is not None
+    assert "failureCode=RELIABLETASK.WORKER.handler_failed" in stored.last_issue.message
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+
+
+def test_failed_publish_receipt_is_a_batch_gate_not_environment_unavailability(
+    monkeypatch,
+) -> None:
+    shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
+    fixture = ExecutionFixtureBuilder(EXECUTION_ID)
+    fixture.build()
+    ctx = ExecutionContext(
+        execution_id=EXECUTION_ID,
+        entity_ids=("测试实体甲",),
+        spec=fixture.spec(),
+        managed=True,
+        runtime=RuntimeEnvironment.LOCAL,
+    )
+    job = enqueue_ref_job(
+        EXECUTION_ID,
+        OBJECT_REF,
+        "publish",
+        mutex_key=OBJECT_REF,
+        queue_backend=QueueBackend.RELIABLE_TASK,
+        meta={
+            "contentType": ContentType.HOMEPAGE.value,
+            "carrier": ContentType.HOMEPAGE.value,
+            "entityRef": OBJECT_REF,
+            "sourceRevision": "sha256:" + ("d" * 64),
+            "contentObjectDir": "entities/地点/景区/测试实体甲",
+        },
+    )
+
+    def run_fleet(_execution_id, _stage, *, workers, completion_grace_seconds):
+        assert workers == ctx.max_workers
+        assert completion_grace_seconds > 0
+        stored = _read_job(EXECUTION_ID, job.job_id)
+        _write_job(
+            stored.with_timing(
+                QueueTimelineEvent.SUCCEEDED,
+                at="2026-07-28T00:00:00Z",
+                state=QueueJobState.SUCCEEDED,
+                lease=QueueLease(),
+            )
+        )
+        return ReliableTaskFleetReport(
+            total=1,
+            succeeded=1,
+            outcomes=(
+                ReliableTaskFleetOutcome(
+                    job_id=job.job_id,
+                    status="succeeded",
+                    attempts=1,
+                ),
+            ),
+            passed=False,
+            accepted_content_throughput_status=(
+                "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH"
+            ),
+        )
+
+    from content.execution import reliabletask_fleet
+
+    monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
+    result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
+        ctx,
+        ExecutionStage.PUBLISH,
+    )
+
+    assert result is not None
+    assert result.status is ReliableTaskDispatchStatus.BLOCKED
+    assert len(result.issues) == 1
+    assert result.issues[0].code.value == "DATA.CONTRACT.INVALID"
+    assert "passed=false" in result.issues[0].message
+    assert "fleet unavailable" not in result.issues[0].message
     shutil.rmtree(execution_root(EXECUTION_ID), ignore_errors=True)
 
 

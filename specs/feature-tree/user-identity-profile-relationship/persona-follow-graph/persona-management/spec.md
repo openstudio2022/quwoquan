@@ -90,7 +90,7 @@
 - WHEN 用户浏览分身列表与 quota。
 - WHEN 用户编辑辅助分身的 userHandle/phone/email 等字段并保存。
 - WHEN 用户应用同步建议，或切换当前分身。
-- THEN 页面展示 quota、items 与 activeContext，且当前分身标识与 activeContext.subAccountId 一致。
+- THEN 页面展示 quota、items 与 activeContext，且当前分身标识与 activeContext.personaId 一致。
 - THEN 保存后管理摘要回显最新字段，分身停止继承 owner 对应字段。
 - THEN 出现 sync suggestion 时，应用后返回 appliedCount 并刷新管理摘要。
 - THEN persona item 与 active persona context 中的 avatarUrl/avatarVersion 显式可消费，端侧头像缓存键稳定。

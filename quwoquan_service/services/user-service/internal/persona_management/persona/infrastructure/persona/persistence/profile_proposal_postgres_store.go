@@ -39,7 +39,7 @@ func (s *ProfileProposalPostgresStore) CurrentVersion(
 	err := s.pool.QueryRow(ctx, `
 SELECT version, status
 FROM personas
-WHERE sub_account_id=$1`, strings.TrimSpace(personaID)).Scan(&version, &status)
+WHERE persona_id=$1`, strings.TrimSpace(personaID)).Scan(&version, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, personamodel.ErrNotFound
 	}
@@ -85,7 +85,7 @@ SELECT display_name, bio, avatar_media_asset_id, COALESCE(avatar_url,''),
        background_media_asset_id, COALESCE(background_url,''),
        is_private, isolation_level, purpose_hint, version, status
 FROM personas
-WHERE sub_account_id=$1
+WHERE persona_id=$1
 FOR UPDATE`, command.PersonaID).Scan(
 		&before.DisplayName,
 		&before.Bio,
@@ -134,7 +134,7 @@ UPDATE personas SET
   purpose_hint=CASE WHEN $15 THEN $16 ELSE purpose_hint END,
   version=$2,
   updated_at=$17
-WHERE sub_account_id=$1 AND version=$18`,
+WHERE persona_id=$1 AND version=$18`,
 		command.PersonaID,
 		after.Version,
 		changes.DisplayName != nil,
@@ -247,7 +247,7 @@ SELECT display_name, bio, avatar_media_asset_id, COALESCE(avatar_url,''),
        background_media_asset_id, COALESCE(background_url,''),
        is_private, isolation_level, purpose_hint, version, status
 FROM personas
-WHERE sub_account_id=$1
+WHERE persona_id=$1
 FOR UPDATE`, command.PersonaID).Scan(
 		&before.DisplayName,
 		&before.Bio,
@@ -298,7 +298,7 @@ UPDATE personas SET
   purpose_hint=$10,
   version=$11,
   updated_at=$12
-WHERE sub_account_id=$1 AND version=$13`,
+WHERE persona_id=$1 AND version=$13`,
 		command.PersonaID,
 		after.DisplayName,
 		after.Bio,

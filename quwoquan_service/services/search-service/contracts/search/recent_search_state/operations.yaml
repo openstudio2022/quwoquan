@@ -6,320 +6,323 @@ description: 'RecentSearchState 对象专属 packet。最近搜索是搜索体�
 
   并发由服务端内部 version CAS + Idempotency-Key receipt 承载。
 
-  '
+'
 commercial_defaults:
   status: blocked
   block_reason: search-service 对象专属 Store/transport 与 App typed port 装配中；beta/gamma 环境证据未取得
   gap_id: SEARCH_RECENT_STATE_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 api_routes:
-- method: GET
-  path: /search/recent
-  operation: ListRecentSearches
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: query
-    facet: RecentSearchQueryFacade
-    method: listRecentSearches
-    reader: ListRecentSearchesReader
-    slice: ListRecentSearchesSlice
-  authorization:
-    principal: persona
-    ownership_policy: owner_persona
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - SEARCH.SYSTEM.recent_storage_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: PII
-    log_policy: metadata_only
-  telemetry:
-    metric: search_recent_list
-    trace: true
-    attributes:
-    - scope
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 获取当前 Persona 的有界最近搜索状态（按最近使用倒序）
-  query_params:
-  - scope
-  response_entity: RecentSearchEntryView
-  client_contract:
-    dart_import: ../search/recent_search_contracts.dart
-    request_type: ListRecentSearchesQuery
-    response_type: RecentSearchEntrySlice
-    request_encoder: encodeListRecentSearchesQuery
-    response_decoder: decodeRecentSearchEntrySlice
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /search/recent
-  operation: UpsertRecentSearch
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: RecentSearchCommandFacade
-    method: upsertRecentSearch
-    aggregate_owner: RecentSearchState
-    mutation_target: RecentSearchState
-    invariant_target: RecentSearchState
-  authorization:
-    principal: persona
-    ownership_policy: owner_persona
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - SEARCH.USER.invalid_argument
-  - SEARCH.USER.recent_version_conflict
-  - SEARCH.USER.recent_idempotency_conflict
-  - SEARCH.SYSTEM.recent_storage_failed
-  privacy:
-    request_classification: PII
-    response_classification: PII
-    log_policy: metadata_only
-  telemetry:
-    metric: search_recent_upsert
-    trace: true
-    attributes:
-    - scope
-    - outcome
-    - replayed
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: '记录或提升一条最近搜索。entryId 由服务端从语义键派生并返回；同语义键重复
+  - method: GET
+    path: /search/recent
+    operation: ListRecentSearches
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: query
+      facet: RecentSearchQueryFacade
+      method: listRecentSearches
+      reader: ListRecentSearchesReader
+      slice: ListRecentSearchesSlice
+    authorization:
+      principal: persona
+      ownership_policy: owner_persona
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - SEARCH.SYSTEM.recent_storage_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: search_recent_list
+      trace: true
+      attributes:
+        - scope
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 获取当前 Persona 的有界最近搜索状态（按最近使用倒序）
+    request_bindings:
+      query:
+        - name: scope
+          field: scope
+          required: false
+    response_entity: RecentSearchEntryView
+    client_contract:
+      dart_import: ../search/recent_search_contracts.dart
+      response_type: RecentSearchEntrySlice
+      response_decoder: decodeRecentSearchEntrySlice
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ListRecentSearchesQuery
+    request_body_kind: none
+  - method: POST
+    path: /search/recent
+    operation: UpsertRecentSearch
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: RecentSearchCommandFacade
+      method: upsertRecentSearch
+      aggregate_owner: RecentSearchState
+      mutation_target: RecentSearchState
+      invariant_target: RecentSearchState
+    authorization:
+      principal: persona
+      ownership_policy: owner_persona
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.invalid_argument
+      - SEARCH.USER.recent_version_conflict
+      - SEARCH.USER.recent_idempotency_conflict
+      - SEARCH.SYSTEM.recent_storage_failed
+    privacy:
+      request_classification: PII
+      response_classification: PII
+      log_policy: metadata_only
+    telemetry:
+      metric: search_recent_upsert
+      trace: true
+      attributes:
+        - scope
+        - outcome
+        - replayed
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: '记录或提升一条最近搜索。entryId 由服务端从语义键派生并返回；同语义键重复
 
-    提交为命名 set 操作，服务端内部 CAS 有限重放，公开请求不携带版本字段。
+      提交为命名 set 操作，服务端内部 CAS 有限重放，公开请求不携带版本字段。
 
-    '
-  request_entity: RecentSearchEntryView
-  request_fields:
-  - query
-  - scope
-  - facet
-  response_entity: RecentSearchEntryView
-  client_contract:
-    dart_import: ../search/recent_search_contracts.dart
-    request_type: UpsertRecentSearchCommand
-    response_type: RecentSearchEntry
-    request_encoder: encodeUpsertRecentSearchCommand
-    response_decoder: decodeRecentSearchEntry
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: DELETE
-  path: /search/recent/{entryId}
-  operation: DeleteRecentSearch
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: RecentSearchCommandFacade
-    method: deleteRecentSearch
-    aggregate_owner: RecentSearchState
-    mutation_target: RecentSearchState
-    invariant_target: RecentSearchState
-  authorization:
-    principal: persona
-    ownership_policy: owner_persona
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - SEARCH.USER.recent_entry_not_found
-  - SEARCH.USER.recent_version_conflict
-  - SEARCH.USER.recent_idempotency_conflict
-  - SEARCH.SYSTEM.recent_storage_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: search_recent_delete
-    trace: true
-    attributes:
-    - outcome
-    - replayed
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 删除单条最近搜索记录；目标已不存在时按 no-op receipt 重放安全处理
-  client_contract:
-    dart_import: ../search/recent_search_contracts.dart
-    request_type: DeleteRecentSearchCommand
-    response_type: void
-    request_encoder: encodeDeleteRecentSearchCommand
-    response_decoder: decodeRecentSearchAck
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: DELETE
-  path: /search/recent
-  operation: ClearRecentSearches
-  actor: persona
-  commercial:
-    status: ready
-  application:
-    kind: command
-    facet: RecentSearchCommandFacade
-    method: clearRecentSearches
-    aggregate_owner: RecentSearchState
-    mutation_target: RecentSearchState
-    invariant_target: RecentSearchState
-  authorization:
-    principal: persona
-    ownership_policy: owner_persona
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - SEARCH.USER.recent_version_conflict
-  - SEARCH.USER.recent_idempotency_conflict
-  - SEARCH.SYSTEM.recent_storage_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: search_recent_clear
-    trace: true
-    attributes:
-    - scope
-    - outcome
-    - replayed
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  description: 清空当前 Persona 最近搜索记录（可按 scope 收窄）；已清空时 no-op receipt 重放安全
-  query_params:
-  - scope
-  client_contract:
-    dart_import: ../search/recent_search_contracts.dart
-    request_type: ClearRecentSearchesCommand
-    response_type: void
-    request_encoder: encodeClearRecentSearchesCommand
-    response_decoder: decodeRecentSearchAck
-  security:
-    auth_mode: required
-    principal: persona
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: POST
-  path: /internal/search/account-closure/dead-letters:recover
-  operation: RecoverSearchAccountClosureDeadLetter
-  actor: none
-  headers:
-  - Idempotency-Key
-  application:
-    kind: command
-    facet: RecentSearchAccountClosureRecoveryCommandFacet
-    method: recoverAccountClosureDeadLetter
-    aggregate_owner: RecentSearchState
-    mutation_target: RecentSearchState
-    invariant_target: RecentSearchState
-  authorization:
-    principal: operator
-    scopes:
-    - ops.account_closure.write
-    permissions:
-    - search.account_closure.recover
-    ownership_policy: service_owned_projection_delivery
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - SEARCH.USER.invalid_argument
-  - SEARCH.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: search_account_closure_dead_letter_recover
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  request_entity: SearchAccountClosureDeadLetterRecoveryRequest
-  response_entity: SearchAccountClosureDeadLetterRecoveryAccepted
-  success_status: 202
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-  description: operator 只释放 Search 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
+'
+    request_entity: UpsertRecentSearchCommand
+    response_entity: RecentSearchEntryView
+    client_contract:
+      dart_import: ../search/recent_search_contracts.dart
+      response_type: RecentSearchEntry
+      response_decoder: decodeRecentSearchEntry
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: object
+  - method: DELETE
+    path: /search/recent/{entryId}
+    operation: DeleteRecentSearch
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: RecentSearchCommandFacade
+      method: deleteRecentSearch
+      aggregate_owner: RecentSearchState
+      mutation_target: RecentSearchState
+      invariant_target: RecentSearchState
+    authorization:
+      principal: persona
+      ownership_policy: owner_persona
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.recent_entry_not_found
+      - SEARCH.USER.recent_version_conflict
+      - SEARCH.USER.recent_idempotency_conflict
+      - SEARCH.SYSTEM.recent_storage_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: search_recent_delete
+      trace: true
+      attributes:
+        - outcome
+        - replayed
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_bindings:
+      path:
+        - name: entryId
+          field: entryId
+    description: 删除单条最近搜索记录；目标已不存在时按 no-op receipt 重放安全处理
+    client_contract:
+      dart_import: ../search/recent_search_contracts.dart
+      response_type: void
+      response_decoder: decodeRecentSearchAck
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: DeleteRecentSearchCommand
+    request_body_kind: none
+  - method: DELETE
+    path: /search/recent
+    operation: ClearRecentSearches
+    actor: persona
+    commercial:
+      status: ready
+    application:
+      kind: command
+      facet: RecentSearchCommandFacade
+      method: clearRecentSearches
+      aggregate_owner: RecentSearchState
+      mutation_target: RecentSearchState
+      invariant_target: RecentSearchState
+    authorization:
+      principal: persona
+      ownership_policy: owner_persona
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.recent_version_conflict
+      - SEARCH.USER.recent_idempotency_conflict
+      - SEARCH.SYSTEM.recent_storage_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: search_recent_clear
+      trace: true
+      attributes:
+        - scope
+        - outcome
+        - replayed
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 清空当前 Persona 最近搜索记录（可按 scope 收窄）；已清空时 no-op receipt 重放安全
+    request_bindings:
+      query:
+        - name: scope
+          field: scope
+          required: false
+    client_contract:
+      dart_import: ../search/recent_search_contracts.dart
+      response_type: void
+      response_decoder: decodeRecentSearchAck
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ClearRecentSearchesCommand
+    request_body_kind: none
+  - method: POST
+    path: /internal/search/account-closure/dead-letters:recover
+    operation: RecoverSearchAccountClosureDeadLetter
+    actor: none
+    application:
+      kind: command
+      facet: RecentSearchAccountClosureRecoveryCommandFacet
+      method: recoverAccountClosureDeadLetter
+      aggregate_owner: RecentSearchState
+      mutation_target: RecentSearchState
+      invariant_target: RecentSearchState
+    authorization:
+      principal: operator
+      scopes:
+        - ops.account_closure.write
+      permissions:
+        - search.account_closure.recover
+      ownership_policy: service_owned_projection_delivery
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - SEARCH.USER.invalid_argument
+      - SEARCH.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: search_account_closure_dead_letter_recover
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_entity: SearchAccountClosureDeadLetterRecoveryRequest
+    response_entity: SearchAccountClosureDeadLetterRecoveryAccepted
+    success_status: 202
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+    description: operator 只释放 Search 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
 consumers:
-- name: app
-  capabilities:
-  - list_recent_searches
-  - upsert_recent_search
-  - delete_recent_search
-  - clear_recent_searches
+  - name: app
+    capabilities:
+      - list_recent_searches
+      - upsert_recent_search
+      - delete_recent_search
+      - clear_recent_searches
 contract_test:
   mock_strategy:
     app_side:
       mock_target: search-service API
       scenarios:
-      - name: recent_list_after_upsert
-        route: GET /search/recent
-        assertions:
-        - status_200
-        - entries_ordered_by_recency
-      - name: recent_upsert_dedupes_semantic_key
-        route: POST /search/recent
-        assertions:
-        - status_200
-        - same_semantic_key_single_entry
+        - name: recent_list_after_upsert
+          route: GET /search/recent
+          assertions:
+            - status_200
+            - entries_ordered_by_recency
+        - name: recent_upsert_dedupes_semantic_key
+          route: POST /search/recent
+          assertions:
+            - status_200
+            - same_semantic_key_single_entry
     service_side:
       description: 真实 Mongo（testcontainers）验证 CAS、bounded entries、receipt 重放
       real_engines:
         mongodb: testcontainers (mongo:7)
       scenarios:
-      - name: recent_upsert_cas_and_receipt
-        command: UpsertRecentSearch(replay same Idempotency-Key)
-        assertions:
-        - 同语义键重复 upsert 只保留一条 entry 并提升顺序
-        - 相同 Idempotency-Key 重放返回首次结果
-        - entries 数量不超过上限，最旧条目被淘汰
+        - name: recent_upsert_cas_and_receipt
+          command: UpsertRecentSearch(replay same Idempotency-Key)
+          assertions:
+            - 同语义键重复 upsert 只保留一条 entry 并提升顺序
+            - 相同 Idempotency-Key 重放返回首次结果
+            - entries 数量不超过上限，最旧条目被淘汰

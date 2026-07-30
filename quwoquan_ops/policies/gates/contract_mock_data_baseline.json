@@ -4,7 +4,6 @@
     "reason": "direct test references to production mock data may only decrease",
     "expires_when": "all token counts reach zero"
   },
-  "version": 1,
   "description": "测试侧直接引用端侧 mock data 类的迁移基线。只允许减少，不允许新增。",
   "scope": "quwoquan_app/test/**/*.dart",
   "tokens": {

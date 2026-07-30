@@ -77,6 +77,9 @@ var collections = []string{
 	"circle_group_chat_sync_failures",
 	"chat_user_account_closed_inbox",
 	"chat_user_account_closed_failures",
+	"chat_user_account_restrictions",
+	"chat_user_account_restriction_inbox",
+	"chat_user_account_restriction_watermarks",
 	"message_receipts",
 	"reliable_task_outbox",
 	"reliable_async_task",
@@ -154,8 +157,9 @@ func (testProfileResolver) ResolveMany(ctx context.Context, userIDs []string) (m
 	out := make(map[string]application.ProfileSnapshot, len(userIDs))
 	for _, id := range userIDs {
 		out[id] = application.ProfileSnapshot{
+			UserHandle:    "handle_" + id,
 			DisplayName:   "Display_" + id,
-			AvatarURL:     "https://test.avatar/" + id,
+			AvatarURL:     fmt.Sprintf("media/avatar/s/archived-avatar/user/%s/v1/avatar.png", id),
 			AvatarAssetID: "ua_" + id,
 			AvatarVersion: 1,
 			Bio:           "Bio_" + id,

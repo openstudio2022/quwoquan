@@ -42,7 +42,7 @@ type IOAccessLog struct {
 	SessionID         string `json:"-"`
 	Src               string `json:"-"`
 	UserID            string `json:"-"`
-	SubAccountID      string `json:"-"`
+	PersonaID         string `json:"-"`
 	PageID            string `json:"-"`
 	DevicePlatform    string `json:"-"`
 	AppVersion        string `json:"-"`

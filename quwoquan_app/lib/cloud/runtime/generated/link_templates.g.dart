@@ -101,22 +101,22 @@ class AppLinkTemplates {
 
   static const String userRouteId = 'userProfile';
   static const Map<String, String> userNavigationParamBindings = <String, String>{
-    'username': 'username',
+    'userHandle': 'userHandle',
   };
 
-  static String userWebPath(String username) {
-    final usernameNorm = username.trim();
-    if (usernameNorm.isEmpty) return '';
-    return _fillPathTemplate('u/{username}', <String, String>{
-      'username': usernameNorm,
+  static String userWebPath(String userHandle) {
+    final userHandleNorm = userHandle.trim();
+    if (userHandleNorm.isEmpty) return '';
+    return _fillPathTemplate('u/{userHandle}', <String, String>{
+      'userHandle': userHandleNorm,
     });
   }
 
-  static String userAppDeepLink(String username) {
-    final usernameNorm = username.trim();
-    if (usernameNorm.isEmpty) return '';
-    final path = _fillPathTemplate('{username}', <String, String>{
-      'username': usernameNorm,
+  static String userAppDeepLink(String userHandle) {
+    final userHandleNorm = userHandle.trim();
+    if (userHandleNorm.isEmpty) return '';
+    final path = _fillPathTemplate('{userHandle}', <String, String>{
+      'userHandle': userHandleNorm,
     });
     return Uri(scheme: 'quwoquan', host: 'user', path: '/$path').toString();
   }
@@ -156,7 +156,7 @@ class AppLinkTemplates {
       case 'entity.homepage':
         return _fillRoutePathTemplate('/homepages/{id}', <String, String>{'id': id});
       case 'user.profile':
-        return _fillRoutePathTemplate('/user/{username}', <String, String>{'username': id});
+        return _fillRoutePathTemplate('/user/{userHandle}', <String, String>{'userHandle': id});
       default:
         return '';
     }

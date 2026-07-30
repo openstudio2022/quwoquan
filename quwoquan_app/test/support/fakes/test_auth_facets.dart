@@ -14,8 +14,8 @@ class TestAuthFacets
         CredentialBindingQuery {
   static final String ownerId =
       AlphaFixtureUserResolver.currentUserVariantUserId;
-  static final String subAccountId =
-      AlphaFixtureUserResolver.currentUserVariantSubAccountId;
+  static final String personaId =
+      AlphaFixtureUserResolver.currentUserVariantPersonaId;
 
   @override
   Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
@@ -66,22 +66,28 @@ class TestAuthFacets
   }
 
   @override
-  Future<AuthSessionGrant> loginWithWechat(
+  Future<FederatedLoginOutcome> loginWithWechat(
     LoginWithWechatCommand command,
   ) async {
-    return loginGrant(identityOrigin: 'wechat');
+    return FederatedLoginOutcome.authenticated(
+      loginGrant(identityOrigin: 'wechat'),
+    );
   }
 
   @override
-  Future<AuthSessionGrant> loginWithAlipay(
+  Future<FederatedLoginOutcome> loginWithAlipay(
     LoginWithAlipayCommand command,
   ) async {
-    return loginGrant(identityOrigin: 'alipay');
+    return FederatedLoginOutcome.authenticated(
+      loginGrant(identityOrigin: 'alipay'),
+    );
   }
 
   @override
-  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command) async {
-    return loginGrant(identityOrigin: 'qq');
+  Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) async {
+    return FederatedLoginOutcome.authenticated(
+      loginGrant(identityOrigin: 'qq'),
+    );
   }
 
   @override
@@ -114,6 +120,13 @@ class TestAuthFacets
       idempotentReplay: false,
       displayLabel: command.displayLabel ?? _maskPhone(command.phone),
     );
+  }
+
+  @override
+  Future<AuthSessionGrant> completeFederatedPhoneBinding(
+    CompleteFederatedPhoneBindingCommand command,
+  ) async {
+    return loginGrant(identityOrigin: 'wechat');
   }
 
   @override
@@ -164,8 +177,8 @@ class TestAuthFacets
       accessToken: 'test_access_token',
       refreshToken: 'test_refresh_token',
       ownerId: ownerId,
-      activeSub: ActivePersonaEnvelope(subAccountId: subAccountId),
-      subAccountCount: 1,
+      activePersona: ActivePersonaEnvelope(personaId: personaId),
+      personaCount: 1,
       accountState: identityOrigin == 'anonymous_device'
           ? 'anonymous'
           : 'active',

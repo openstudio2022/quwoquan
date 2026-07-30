@@ -11,11 +11,11 @@ func TestStore_BaselineFallback(t *testing.T) {
 	if s.Current() == nil {
 		t.Fatal("Current must never be nil")
 	}
-	if s.Current().PolicyVersion != BaselinePolicyVersion {
-		t.Fatalf("seeded version = %q, want baseline %q", s.Current().PolicyVersion, BaselinePolicyVersion)
-	}
 	if s.EffectiveHash() == "" {
 		t.Fatal("effective hash should be set after seed")
+	}
+	if s.Current().effectiveHash != s.EffectiveHash() {
+		t.Fatalf("policy digest %q != store digest %q", s.Current().effectiveHash, s.EffectiveHash())
 	}
 }
 
@@ -30,8 +30,8 @@ func TestStore_ApplyHotSwap(t *testing.T) {
 	if hash == before {
 		t.Fatal("hash should change after applying a different policy")
 	}
-	if s.Current().PolicyVersion != "test-v1" {
-		t.Fatalf("current version = %q, want test-v1", s.Current().PolicyVersion)
+	if s.Current().effectiveHash != hash {
+		t.Fatalf("current policy digest = %q, want %q", s.Current().effectiveHash, hash)
 	}
 }
 
@@ -45,8 +45,6 @@ func TestStore_ApplyInvalidKeepsLastGood(t *testing.T) {
 	// A structurally invalid candidate (defaultPreset not in weightPresets)
 	// must be rejected and the last-good policy retained.
 	bad := `
-version: 1
-policyVersion: broken
 defaultPreset: missing
 weightPresets:
   control: { tagRelevance: 1.0 }
@@ -62,8 +60,8 @@ scorer:
 	if hash != good {
 		t.Fatalf("hash changed on rejected apply: %q != %q", hash, good)
 	}
-	if s.Current().PolicyVersion != "test-v1" {
-		t.Fatalf("last-good not retained: version = %q", s.Current().PolicyVersion)
+	if s.Current().effectiveHash != good {
+		t.Fatalf("last-good digest not retained: %q != %q", s.Current().effectiveHash, good)
 	}
 }
 
@@ -74,18 +72,19 @@ func TestStore_ApplyFile(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	s := NewStoreFromBaseline()
-	if _, err := s.ApplyFile(path); err != nil {
+	hash, err := s.ApplyFile(path)
+	if err != nil {
 		t.Fatalf("apply file: %v", err)
 	}
-	if s.Current().PolicyVersion != "test-v1" {
-		t.Fatalf("version = %q", s.Current().PolicyVersion)
+	if s.Current().effectiveHash != hash {
+		t.Fatalf("policy digest = %q, want %q", s.Current().effectiveHash, hash)
 	}
 
 	// Missing file keeps last-good.
 	if _, err := s.ApplyFile(filepath.Join(dir, "nope.yaml")); err == nil {
 		t.Fatal("expected error for missing file")
 	}
-	if s.Current().PolicyVersion != "test-v1" {
+	if s.Current().effectiveHash != hash {
 		t.Fatal("last-good not retained after missing file")
 	}
 }

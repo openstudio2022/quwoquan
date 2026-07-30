@@ -17,8 +17,6 @@ var (
 	ErrQqAuthFailed               = errors.New("USER.AUTH.qq_auth_failed")
 	ErrSocialProviderCancelled    = errors.New("USER.AUTH.social_provider_cancelled")
 	ErrSocialProviderUnavailable  = errors.New("USER.AUTH.social_provider_unavailable")
-	ErrAppleAuthFailed            = errors.New("USER.AUTH.apple_auth_failed")
-	ErrPasskeyAuthFailed          = errors.New("USER.AUTH.passkey_auth_failed")
 	ErrCarrierUnavailable         = errors.New("USER.AUTH.carrier_unavailable")
 	ErrCarrierTokenInvalid        = errors.New("USER.AUTH.carrier_token_invalid")
 	ErrCarrierProviderTimeout     = errors.New("USER.AUTH.carrier_provider_timeout")
@@ -45,19 +43,19 @@ func AppErrorFromTokenExpired(debugMessage string) *rerrors.AppError {
 // AppErrorFromWechatAuthFailed returns *AppError for USER.AUTH.wechat_auth_failed (user_message from errors.yaml).
 func AppErrorFromWechatAuthFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrWechatAuthFailed.Error()))
-	return rerrors.NewAppError(code, "微信授权失败，请重试", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "授权未完成", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromAlipayAuthFailed returns *AppError for USER.AUTH.alipay_auth_failed (user_message from errors.yaml).
 func AppErrorFromAlipayAuthFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAlipayAuthFailed.Error()))
-	return rerrors.NewAppError(code, "支付宝授权失败，请重试", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "授权未完成", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromQqAuthFailed returns *AppError for USER.AUTH.qq_auth_failed (user_message from errors.yaml).
 func AppErrorFromQqAuthFailed(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrQqAuthFailed.Error()))
-	return rerrors.NewAppError(code, "QQ 授权失败，请重试", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "授权未完成", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromSocialProviderCancelled returns *AppError for USER.AUTH.social_provider_cancelled (user_message from errors.yaml).
@@ -69,19 +67,7 @@ func AppErrorFromSocialProviderCancelled(debugMessage string) *rerrors.AppError 
 // AppErrorFromSocialProviderUnavailable returns *AppError for USER.AUTH.social_provider_unavailable (user_message from errors.yaml).
 func AppErrorFromSocialProviderUnavailable(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSocialProviderUnavailable.Error()))
-	return rerrors.NewAppError(code, "第三方登录暂不可用，请使用其他方式登录", debugMessage).WithMetadata("third_party_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
-}
-
-// AppErrorFromAppleAuthFailed returns *AppError for USER.AUTH.apple_auth_failed (user_message from errors.yaml).
-func AppErrorFromAppleAuthFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrAppleAuthFailed.Error()))
-	return rerrors.NewAppError(code, "Apple 登录失败，请重试", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
-}
-
-// AppErrorFromPasskeyAuthFailed returns *AppError for USER.AUTH.passkey_auth_failed (user_message from errors.yaml).
-func AppErrorFromPasskeyAuthFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPasskeyAuthFailed.Error()))
-	return rerrors.NewAppError(code, "Passkey 登录失败，请重试或改用其他方式", debugMessage).WithMetadata("third_party_failure", 502).WithRecoveryDirective("fallback", "inlineCard", 0)
+	return rerrors.NewAppError(code, "授权未完成", debugMessage).WithMetadata("third_party_unavailable", 503).WithRecoveryDirective("fallback", "inlineCard", 0)
 }
 
 // AppErrorFromCarrierUnavailable returns *AppError for USER.AUTH.carrier_unavailable (user_message from errors.yaml).

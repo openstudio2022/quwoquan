@@ -52,7 +52,6 @@ export 'input/customizable_chat_input_bar.dart';
 export 'media/video/viewer/video_media_viewer.dart';
 export 'media/video/player/video_player_widget.dart';
 export 'media/shared/toolbar/media_viewer_toolbar.dart';
-export 'media/shared/viewer/media_assistant_panel.dart';
 export 'media/shared/viewer/media_caption_widgets.dart';
 
 // ==================== 用户相关组件 ====================

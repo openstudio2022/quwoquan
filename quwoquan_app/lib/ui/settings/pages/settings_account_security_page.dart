@@ -34,7 +34,7 @@ class _SettingsAccountSecurityPageState
   void _reload() {
     _credentials = ref
         .read(credentialBindingQueryProvider)
-        .listCredentials(const ListCredentialsQuery());
+        .listCredentials(ListCredentialsQuery());
   }
 
   @override
@@ -173,7 +173,7 @@ class _SettingsAccountSecurityPageState
     try {
       await ref
           .read(accountLifecycleCommandWriterProvider)
-          .closeAccount(const CloseAccountCommand());
+          .closeAccount(CloseAccountCommand());
     } catch (error) {
       if (!mounted) return;
       setState(() {

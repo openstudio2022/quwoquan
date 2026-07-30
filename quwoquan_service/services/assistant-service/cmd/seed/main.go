@@ -18,7 +18,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/environmentseed"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimewiring"
@@ -142,11 +142,11 @@ func run(parent context.Context, options commandOptions) error {
 			err,
 		)
 	}
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		deps.ConsentStore,
 		router.Scene("general"),
-		application.WithLearningProjectionReader(learningProjector),
-		application.WithSkillSubscriptionStore(deps.SubscriptionStore),
+		orchestration.WithLearningProjectionReader(learningProjector),
+		orchestration.WithSkillSubscriptionStore(deps.SubscriptionStore),
 	)
 	result, err := environmentseed.Apply(ctx, service, plan)
 	if err != nil {

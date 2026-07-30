@@ -175,9 +175,14 @@ def _project_fleet_outcomes(
             # controller resume must continue that durable queue, not turn a
             # recoverable wait into a false terminal failure.
             continue
+        failure_code = str(getattr(outcome, "failure_code", "")).strip()
+        failure_detail = f" (failureCode={failure_code})" if failure_code else ""
         issue = job.issue(
             QueueFailureKind.EXECUTION,
-            message="ReliableTask fleet exhausted the job retry policy",
+            message=(
+                "ReliableTask fleet exhausted the job retry policy"
+                f"{failure_detail}"
+            ),
             recovery=_failure_recovery(queue_stage),
         )
         record_reliabletask_failure(
@@ -227,6 +232,23 @@ def _dispatch_fleet(
         queue_stage,
         outcomes=report.outcomes,
     )
+    all_remote_jobs_terminal = all(
+        str(getattr(outcome, "status", "")) in {"succeeded", "dead"}
+        for outcome in report.outcomes
+    )
+    if (
+        queue_stage is QueueJobStage.PUBLISH
+        and not report.passed
+        and all_remote_jobs_terminal
+    ):
+        issues += (
+            _contract_issue(
+                stage,
+                "ReliableTask publish batch gate failed: passed=false, "
+                "acceptedContentThroughputStatus="
+                f"{report.accepted_content_throughput_status}",
+            ),
+        )
     # 对象级质量失败由过采候选池吸收；批次级问题（receipt 与声明作业不一致、
     # fleet 不可用）不属于任何对象，永远不可被配额吸收。未知问题码按批次级处理，
     # 宁可阻断也不静默放行。

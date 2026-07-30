@@ -9,7 +9,6 @@ import (
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
@@ -20,6 +19,8 @@ import (
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	"quwoquan_service/services/content-service/internal/content/content_account_closure_workflow/infrastructure/accountclosure"
+	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	outboundshareinfra "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/persistence"
@@ -28,17 +29,19 @@ import (
 	importerapp "quwoquan_service/services/content-service/internal/content/post/application/importer"
 	intersectionapp "quwoquan_service/services/content-service/internal/content/post/application/intersection"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
 	accountsecurity "quwoquan_service/services/content-service/internal/content/post/infrastructure/accountsecurity"
 	profileinteractioninfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/content/profile_interaction/persistence"
 	postgovernance "quwoquan_service/services/content-service/internal/content/post/infrastructure/governance"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/intersectionmetrics"
 	learninginfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/learning"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/mediaobjectfence"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/placeindex"
 	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/searchindex"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/sharedtags"
+	taxonomyvalidationinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/taxonomyvalidation"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
 	profileinteractionreadapp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/application"
 	filtercatalogapp "quwoquan_service/services/content-service/internal/media/filter_catalog_release/application"
@@ -64,20 +67,23 @@ func main() {
 		log.Fatalf("content-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("content-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
+		log.Fatalf("content-service config identity failed: %v", err)
 	}
 	if err := preflightConfig(cfg, appEnv); err != nil {
 		log.Fatalf("content-service config preflight failed: %v", err)
 	}
-	controlplane.StartReleaseConfigAttestation(
-		serviceName, appEnv, configRoot, configVersion, imageVersion,
-	)
+	logFeedQuotaPolicies(cfg.Feed)
+	startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
 		log.Fatalf("content-service access token config invalid: %v", err)
+	}
+	feedCursorCodec, err := feedapp.NewFeedCursorCodec(accessTokenConfig.Secret)
+	if err != nil {
+		log.Fatalf("content-service feed cursor codec init failed: %v", err)
 	}
 	accountSecurityAuthority, err := accountsecurity.NewAuthority(
 		accessTokenConfig,
@@ -141,6 +147,7 @@ func main() {
 		router,
 		subjectClosureGuard,
 		logger,
+		cfg.Feed,
 	)
 	defer bufferedWriter.Stop()
 
@@ -177,9 +184,15 @@ func main() {
 	var accountClosureStore *accountclosure.MongoStore
 	var accountClosureSearch *accountclosure.SearchIndexerDeleter
 	var accountClosureCache *accountclosure.RedisPersonalDataCacheCleaner
+	var accountRestrictionProjection contentAccountRestrictionProjection
 	var recDB *mongo.Database
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
+		rtrec.WithRecallSourceMaximumCount(cfg.Feed.MaximumRecallSources),
+		rtrec.WithRecallSourceMaxInflight(
+			cfg.Feed.MaximumUnterminatedCallsPerSource,
+		),
+		rtrec.WithRecallGlobalMaxInflight(cfg.Feed.MaxInflight),
 		rtrec.WithLogger(logger),
 	}
 	var learningSink runtimelearning.Sink
@@ -249,7 +262,17 @@ func main() {
 		}
 		store = mongoStore
 		postQueryReader = persistence.NewMongoPostQueryReader(db.Collection(collName))
-		activeSupplyReader = persistence.NewMongoActiveSupplyReader(db, appEnv)
+		activeSupplyReader = persistence.NewMongoActiveSupplyReader(
+			db,
+			appEnv,
+			persistence.WithActiveSupplyCachePolicy(
+				time.Duration(cfg.Feed.ActiveSupplyCacheTTLMS)*time.Millisecond,
+				time.Duration(cfg.Feed.ActiveSupplyCacheJitterMS)*time.Millisecond,
+			),
+			persistence.WithPremiumPlayableSupplyReader(
+				recinfra.NewMongoPremiumPoolCandidateReader(db),
+			),
+		)
 		outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
 		if err := outboundShareSink.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service OutboundShareFact indexes init failed: %v", err)
@@ -531,6 +554,9 @@ func main() {
 
 		// In-process projectors: discovery feed + recommendation features.
 		discoveryProjector := recinfra.NewDiscoveryFeedProjector(db)
+		if err := discoveryProjector.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service DiscoveryFeed indexes init failed: %v", err)
+		}
 		// Rule-based segment SSOT, loaded from segments.yaml (env-overridable
 		// path). Population definitions stay a separate SSOT from policy.yaml
 		// (scoring strategy); the engine reads resolved memberships from
@@ -544,11 +570,35 @@ func main() {
 			log.Printf("WARN: load segment definitions from %s: %v (segment membership disabled)", segmentsPath, segErr)
 		}
 		interestAgg := recinfra.NewInterestProfileAggregator(db, recinfra.DefaultInterestProfileConfig(), eventPub, recinfra.WithSegments(segDefs))
-		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter), recinfra.WithInterestAggregator(interestAgg))
+		projectorOpts := []recinfra.RecommendFeatureProjectorOption{
+			recinfra.WithEntityPropagation(entityPropagation),
+			recinfra.WithSignalProcessor(bufferedWriter),
+			recinfra.WithInterestAggregator(interestAgg),
+		}
+		// Cross-axis concept bridge (sameAsRefs). Without it an interest declared
+		// on the audience axis contributes zero weight to topic-axis content.
+		// A bridge is an enrichment, so an unavailable tag-service degrades
+		// affinity to single-axis propagation instead of failing startup.
+		sameAsResolver, sameAsErr := taxonomyvalidationinfra.NewHTTPSameAsResolver(
+			cfg.TagService.URL,
+			time.Duration(cfg.TagService.TimeoutMs)*time.Millisecond,
+		)
+		if sameAsErr != nil {
+			log.Printf("WARN: tag same-as resolver unavailable: %v (cross-axis tag affinity disabled)", sameAsErr)
+		} else {
+			projectorOpts = append(projectorOpts, recinfra.WithSameAsResolver(sameAsResolver))
+		}
+		recommendProjector := recinfra.NewRecommendFeatureProjector(db, projectorOpts...)
 		if err := recommendProjector.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service recommend feature projection startup failed: %v", err)
 		}
-		featureStore := recinfra.NewFeatureStore(db)
+		// 事实交集快照读模型：一份实例同时供交集读穿透、排序特征（真实边权）
+		// 与交集召回通道消费，保证「viewer ↔ 对象」这条边只有一个真相源。
+		viewerIntersectionStore := recinfra.NewMongoViewerIntersectionStore(db, logger)
+		featureStore := recinfra.NewFeatureStore(
+			db,
+			recinfra.WithViewerIntersectionEdges(viewerIntersectionStore),
+		)
 		tagFeedbackProjector, err := recinfra.NewTagFeedbackFeatureProjector(
 			db,
 			featureStore.Invalidate,
@@ -631,15 +681,30 @@ func main() {
 			placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
 			log.Printf("content-service search index projector enabled (es endpoints=%d index=%s, place objects on)", len(cfg.ES.Endpoints), searchBuilt.Client.IndexName())
 		}
+		accountClosureObjectFences, err := mediaobjectfence.New(db)
+		if err != nil {
+			log.Fatalf("content-service media object deletion fence assembly failed: %v", err)
+		}
 		accountClosureStore, err = accountclosure.NewMongoStore(
 			db,
 			accountClosureSubjectDigestor,
+			accountClosureObjectFences,
 		)
 		if err != nil {
 			log.Fatalf("content-service UserAccountClosed store assembly failed: %v", err)
 		}
 		if err := accountClosureStore.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service UserAccountClosed indexes init failed: %v", err)
+		}
+		accountRestrictionProjection, err = newContentAccountRestrictionProjection(
+			db,
+			accountClosureStore,
+		)
+		if err != nil {
+			log.Fatalf("content-service account restriction projection assembly failed: %v", err)
+		}
+		if err := accountRestrictionProjection.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("content-service account restriction projection indexes failed: %v", err)
 		}
 		accountClosureSearch, err = accountclosure.NewSearchIndexerDeleter(
 			searchBuilt.Indexer,
@@ -794,18 +859,69 @@ func main() {
 		// 事实交集读穿透：MongoIntersectionSource（请求期 compute）外包一层
 		// rm_viewer_object_intersection 读模型，使 summary/list/feed 热路径零图谱计算，
 		// 仅在缺失/分维度保鲜过期时回算并回写（WP-2）。
+		// identity 维度供给：共享标签读走 tag-service object_tag_index 倒排投影。
+		// tag-service 不可达时 identity 交集整类缺席（不产出、不伪造空交集），
+		// 其余维度不受影响，因此按 warn-and-degrade 装配而非 fail-fast。
+		intersectionSourceOpts := []recinfra.MongoIntersectionSourceOption{}
+		sharedTagCredentials, sharedTagCredErr := rtauth.NewHS256ServiceAuthorizationProvider(
+			accessTokenConfig,
+			serviceName,
+			[]string{"tag.tag_node_view.read"},
+		)
+		if sharedTagCredErr != nil {
+			log.Printf(
+				"WARN: shared tag credential unavailable: %v (identity intersections disabled)",
+				sharedTagCredErr,
+			)
+		} else {
+			sharedTagReader, sharedTagErr := sharedtags.NewHTTPSharedTagReader(
+				cfg.TagService.URL,
+				time.Duration(cfg.TagService.TimeoutMs)*time.Millisecond,
+				sharedTagCredentials,
+			)
+			if sharedTagErr != nil {
+				log.Printf(
+					"WARN: shared tag reader unavailable: %v (identity intersections disabled)",
+					sharedTagErr,
+				)
+			} else {
+				intersectionSourceOpts = append(
+					intersectionSourceOpts,
+					recinfra.WithSharedTagReader(sharedTagReader),
+				)
+				log.Printf("content-service identity intersection supply enabled via tag-service shared-tags")
+			}
+		}
 		intersectionCompute := recinfra.NewMongoIntersectionSource(
 			socialProvider,
 			recinfra.NewMongoEntityTagIndex(db),
 			socialCandidateDB,
+			intersectionSourceOpts...,
 		)
 		intersectionReadModel := recinfra.NewReadModelIntersectionSource(
 			intersectionCompute,
-			recinfra.NewMongoViewerIntersectionStore(db, logger),
+			viewerIntersectionStore,
 			intersectionPolicy.FreshnessTTLDaysByDimension,
 		)
+		// 交集召回通道：交集不再只是排后附着的解释，物化边本身就能带来供给。
+		// 强度仍由 featureStore 的边权特征在排序期注入，通道只负责取候选。
+		if intersectionRecallRollbackDisabled() {
+			log.Printf("content-service intersection recall disabled by disable_intersection_recall_source rollback flag")
+		} else {
+			mongoCandidateSources = append(
+				mongoCandidateSources,
+				recinfra.NewIntersectionEdgeRecallSource(db, viewerIntersectionStore),
+			)
+			log.Printf(
+				"content-service intersection recall enabled recall_path=%s",
+				recinfra.IntersectionRecallPath,
+			)
+		}
 		intersectionOpts := []intersectionapp.IntersectionServiceOption{
 			intersectionapp.WithIntersectionSource(intersectionReadModel),
+			// 冷启动稀释闸门探针直连 compute 源（读模型只缓存 viewer 维结果，
+			// 不承载语料级供给统计）。
+			intersectionapp.WithIntersectionSupplyProbe(intersectionCompute),
 			intersectionapp.WithIntersectionMetrics(intersectionmetrics.New()),
 			// 已读水位耐久兜底：Redis 退化为加速缓存，Redis flush/宕机后读位不丢、写降级不阻断主请求。
 			intersectionapp.WithIntersectionWatermarkStore(recinfra.NewMongoWatermarkStore(db, logger)),
@@ -833,12 +949,15 @@ func main() {
 			log.Printf("WARN: content-service object relation edge indexes init failed: %v", err)
 		}
 		go edgeMaterializer.Run(ctx, 6*time.Hour)
-		log.Printf("content-service object relation edge materializer enabled interval=6h edges=semantic_co_mention,tag_overlap,geo_proximity")
-		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
+		log.Printf("content-service object relation edge materializer enabled interval=6h edges=%s,%s,%s",
+			recinfra.SemanticCoMentionEdgeType,
+			recinfra.TagOverlapEdgeType,
+			recinfra.GeoProximityEdgeType)
+		behaviorEventStore = behaviorpersistence.NewMongoBehaviorEventStore(db, logger)
 		// N0-3 服务端权威信号 sink：like/comment/report 事实 → HotPath +
 		// rm_behavior_events + learning。relay 在 FeedbackRecorder 注入后启动。
 		authoritativeSignalSink = recinfra.NewAuthoritativeSignalSink(db, bufferedWriter, behaviorEventStore)
-		mongoWishlistStore := persistence.NewMongoWishlistEventStore(db, logger)
+		mongoWishlistStore := behaviorpersistence.NewMongoWishlistEventStore(db, logger)
 		wishlistEventStore = mongoWishlistStore
 		wishlistStateReader = mongoWishlistStore
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
@@ -914,6 +1033,7 @@ func main() {
 		accountClosureCache,
 		accountClosureSearch,
 		mediaRuntime.mediaObjectGateway,
+		accountRestrictionProjection,
 	)
 	if err != nil {
 		log.Fatalf("content-service UserAccountClosed runtime assembly failed: %v", err)
@@ -921,7 +1041,10 @@ func main() {
 
 	source := recinfra.NewPostProjectionSource(store, store)
 	rawCandidateSources := recommendationCandidateSources(mongoCandidateSources, source)
-	candidateSources := applyRecommendationCandidateGates(rawCandidateSources)
+	candidateSources := applyRecommendationCandidateGates(
+		rawCandidateSources,
+		accountRestrictionProjection,
+	)
 
 	recOpts = composeRecommendationModelScorer(cfg, appEnv, logger, recOpts)
 
@@ -947,6 +1070,8 @@ func main() {
 		postStore:                 store,
 		postQueryReader:           postQueryReader,
 		activeSupplyReader:        activeSupplyReader,
+		feedCursorCodec:           feedCursorCodec,
+		feedRuntimeConfig:         cfg.Feed,
 		viewerBlockReader:         viewerBlockReader,
 		reactionStore:             reactionStore,
 		reactionService:           reactionServiceCore,
@@ -988,6 +1113,7 @@ func main() {
 		addr,
 		instanceID,
 		handler,
+		cfg.Feed,
 		healthChecker,
 		accessTokenConfig,
 		accountSecurityAuthority,
@@ -995,7 +1121,13 @@ func main() {
 		runtimeLogging.processLogger,
 		runtimeLogging.exceptionLogger,
 	)
-	log.Printf("content-service listening on %s (rate_limit=1000/s)", addr)
+	log.Printf(
+		"content-service listening on %s (feed_owner_max_inflight=%d recall_sources_maximum=%d recall_unterminated_per_source=%d)",
+		addr,
+		cfg.Feed.MaxInflight,
+		cfg.Feed.MaximumRecallSources,
+		cfg.Feed.MaximumUnterminatedCallsPerSource,
+	)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("content-service: %v", err)
 	}

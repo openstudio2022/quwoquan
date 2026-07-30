@@ -17,7 +17,7 @@ final chatRepositoryCompositionProvider = Provider<ChatRepository>((ref) {
     final accountId = resolvedOwnerUserId.isNotEmpty
         ? resolvedOwnerUserId
         : ownerUserId.trim();
-    final personaId = persona?.subAccountId.trim() ?? '';
+    final personaId = persona?.personaId.trim() ?? '';
     return CloudOperationInvocationContext(
       surfaceId: surface.id,
       routeId: surface.routeId,
@@ -195,7 +195,7 @@ final chatMessageCommandWriterProvider = Provider<ChatMessageCommandWriter>((
     invocationContext: (clientPageId, idempotencyKey) {
       final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
       final persona = ref.read(activePersonaContextProvider).asData?.value;
-      final personaId = persona?.subAccountId.trim() ?? '';
+      final personaId = persona?.personaId.trim() ?? '';
       return CloudOperationInvocationContext(
         surfaceId: AppUiSurfaces.chatDetail.id,
         clientPageId: clientPageId,
@@ -215,7 +215,7 @@ final chatMessageCommandWriterProvider = Provider<ChatMessageCommandWriter>((
 final realtimeConnectionManagerProvider =
     NotifierProvider<RealtimeConnectionNotifier, TransportState>(
       () => RealtimeConnectionNotifier(
-        currentUserIdResolver: (ref) => ref.watch(currentUserIdProvider).trim(),
+        currentUserIdResolver: (ref) => ref.read(currentUserIdProvider).trim(),
       ),
     );
 
@@ -310,7 +310,7 @@ final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
   return RemoteUserSyncRepository(
     httpClient: ref.watch(cloudHttpClientProvider),
     mergeRequestContext: (base) async {
-      return CloudRequestHeaders.withOwnerSubAccountContext(
+      return CloudRequestHeaders.withOwnerPersonaContext(
         base,
         ownerUserId: ownerUserId,
       );
@@ -475,6 +475,7 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
   return HybridSearchRepository(
     RemoteSearchRepository(
       remoteQuery: ref.watch(_canonicalSearchQueryProvider),
+      sessionIdProvider: () => ref.read(feedSessionProvider.notifier).sessionId,
     ),
     ref.watch(localChatSearchStoreProvider),
     ref.watch(localChatSearchSyncProvider),

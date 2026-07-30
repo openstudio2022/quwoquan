@@ -133,7 +133,6 @@ func StreamValues(signal signalapplication.Signal) (map[string]string, error) {
 		"normalizedQuery":  normalizedQuery,
 		"relatedTerms":     related,
 		"engagedObjectIds": engagedObjects,
-		"rankingVersion":   strings.TrimSpace(signal.RankingVersion),
 		"experimentBucket": strings.TrimSpace(signal.ExperimentBucket),
 		"resultCount":      strconv.Itoa(signal.ResultCount),
 		"createdAt":        createdAt.UTC().Format(time.RFC3339Nano),

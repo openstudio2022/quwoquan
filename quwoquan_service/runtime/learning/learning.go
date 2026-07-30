@@ -29,7 +29,6 @@ type Scorecard struct {
 	RunID       string
 	Score       float64
 	Comment     string
-	Version     string
 }
 
 type Recorder interface {

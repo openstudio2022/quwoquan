@@ -49,6 +49,10 @@ func TestOtpCodeSealerRoundTripAndRejectsTamperBindingExpiryAndUnknownKey(t *tes
 	if strings.Contains(reference, "18013813909") || strings.Contains(reference, "123456") {
 		t.Fatal("sealed reference leaked plaintext")
 	}
+	// Retired otpref.v1. envelopes must be rejected by both generation and parsing.
+	if !strings.HasPrefix(reference, "otpref.k1.") || strings.Contains(reference, "otpref.v1.") {
+		t.Fatalf("reference must use the sole stable envelope: %q", reference)
+	}
 	secret, err := sealer.Open(reference, binding)
 	if err != nil {
 		t.Fatal(err)
@@ -78,5 +82,9 @@ func TestOtpCodeSealerRoundTripAndRejectsTamperBindingExpiryAndUnknownKey(t *tes
 	unknownVersion := strings.Replace(reference, ".k1.", ".k2.", 1)
 	if _, err := sealer.Open(unknownVersion, binding); !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("unknown key error = %v", err)
+	}
+	retiredEnvelope := strings.Replace(reference, "otpref.", "otpref.v1.", 1)
+	if _, err := sealer.Open(retiredEnvelope, binding); !errors.Is(err, ErrInvalidReference) {
+		t.Fatalf("retired version envelope error = %v", err)
 	}
 }

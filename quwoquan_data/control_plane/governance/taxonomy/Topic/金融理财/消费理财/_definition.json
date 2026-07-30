@@ -2,6 +2,7 @@
   "label": "消费理财",
   "labelEn": "Consumer Finance",
   "description": "日常消费理财技巧",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

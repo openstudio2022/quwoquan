@@ -19,19 +19,19 @@ final _authorImpactCacheProvider = Provider<TtlCache<AuthorImpactSummary>>(
 );
 
 /// 摘要读取的主体与实际触发 surface；两者共同决定 generated operation 的调用上下文。
-typedef AuthorImpactRequest = ({String subAccountId, AppUiSurface surface});
+typedef AuthorImpactRequest = ({String personaId, AppUiSurface surface});
 
 final authorImpactProvider = FutureProvider.autoDispose
     .family<AuthorImpactSummary, AuthorImpactRequest>((ref, request) async {
       final cache = ref.read(_authorImpactCacheProvider);
-      final cacheKey = '${request.surface.id}:${request.subAccountId}';
+      final cacheKey = '${request.surface.id}:${request.personaId}';
       final hit = cache.readFresh(cacheKey, _authorImpactCacheTtl);
       if (hit != null) {
         return hit.value;
       }
       final summary = await ref
           .watch(authorImpactQueryProvider(request.surface))
-          .getAuthorImpact(request.subAccountId);
+          .getAuthorImpact(request.personaId);
       cache.write(cacheKey, summary);
       return summary;
     });

@@ -22,6 +22,18 @@ def tag(*args, **kwargs):
 def tags_list(*args, **kwargs):
     return _WRITERS["tags_list"](*args, **kwargs)
 
+
+from governance.taxonomy.bootstrap_tags_topic_lodging import (
+    configure_writers as _configure_topic_lodging,
+    gen_topic_lodging,
+)
+
+
+def configure_writers(**writers):  # noqa: F811 - 覆盖上方定义，串联住宿子模块
+    _WRITERS.update(writers)
+    _configure_topic_lodging(**writers)
+
+
 def gen_topic_verticals_part1():
     # 1. 自然风光（仅自然审美现象；具体地形实例见 Entity/地点/自然景观）
     tag("Topic/自然风光", "自然风光", "Nature & Scenery", "自然审美与天象类景观主题，侧重观感与现象而非行政区划")
@@ -186,12 +198,13 @@ def gen_topic_verticals_part1():
     # 3.5 用餐场合（在何种场合订这家店/这道菜；与 Topic/场景/社交场景 形成 IS-A 关系）
     dim("Topic/美食餐饮/用餐场合", "用餐场合", "Dining Occasion",
         "用餐的社交与事务场合；限定为餐饮维度的场景细化",
-        max_depth=2, expected_size=9)
+        max_depth=2, expected_size=8)
     tags_list("Topic/美食餐饮/用餐场合", [
         ("约会用餐", "Date Dining", "情侣约会用餐场景"),
         ("家庭聚餐", "Family Gathering", "家庭多人聚餐"),
         ("商务宴请", "Business Dining", "商务接待与宴请"),
-        ("朋友聚会", "Friend Gathering", "朋友休闲聚餐"),
+        # 刻意不生成「朋友聚会」：唯一真相源是 Topic/场景/社交场景/朋友聚会；
+        # 餐饮侧要表达朋友聚餐用「家庭聚餐」以外的场合标签 + 场景标签组合。
         ("独自用餐", "Solo Dining", "一人食与独食体验"),
         ("亲子用餐", "Family with Kids", "带小朋友用餐"),
         ("宴席婚庆", "Banquet & Wedding", "婚宴寿宴升学宴"),
@@ -280,179 +293,11 @@ def gen_topic_verticals_part1():
         ("有机食材", "Organic Ingredients", "有机认证食材"),
     ])
 
-    # 3b. 住宿（8 维正交：业态/价位/主题/设施/房型/区位/认证/预订特征；独立于 Topic/旅行/住宿 话题角度）
-    tag("Topic/住宿", "住宿", "Accommodation",
-        "住宿全维度标签体系：业态×价位×主题×设施×房型×区位×认证×预订，八维正交")
+    # 3b. 住宿（八维正交，实现见 bootstrap_tags_topic_lodging）
+    gen_topic_lodging()
 
-    # 3b.1 业态
-    dim("Topic/住宿/业态", "业态", "Accommodation Type",
-        "住宿经营业态分类",
-        max_depth=3, expected_size=25)
-    tag("Topic/住宿/业态/星级酒店", "星级酒店", "Star-rated Hotel", "按星级评定的标准酒店")
-    tags_list("Topic/住宿/业态/星级酒店", [
-        ("一星酒店", "1-Star Hotel", "一星级酒店"),
-        ("二星酒店", "2-Star Hotel", "二星级酒店"),
-        ("三星酒店", "3-Star Hotel", "三星级酒店"),
-        ("四星酒店", "4-Star Hotel", "四星级酒店"),
-        ("五星酒店", "5-Star Hotel", "五星级酒店"),
-    ])
-    tags_list("Topic/住宿/业态", [
-        ("经济连锁", "Budget Chain", "经济型连锁酒店"),
-        ("商务酒店", "Business Hotel", "面向商旅的酒店"),
-        ("度假酒店", "Resort Hotel", "度假型酒店"),
-        ("精品酒店", "Boutique Hotel", "设计感精品酒店"),
-        ("设计酒店", "Design Hotel", "建筑师设计酒店"),
-        ("酒店式公寓", "Serviced Apartment", "含酒店服务的长租型公寓"),
-        ("青旅", "Hostel", "青年旅舍"),
-        ("客栈", "Inn", "传统客栈"),
-        ("民宿", "Homestay", "非标住宿"),
-        ("农家乐", "Farmhouse", "农家住宿体验"),
-        ("营地", "Campsite", "帐篷露营场地"),
-        ("胶囊酒店", "Capsule Hotel", "胶囊型迷你住宿"),
-    ])
-    tag("Topic/住宿/业态/度假短租", "度假短租", "Vacation Rental", "按日/周整租的短租住宿（Vrbo型）")
-    tags_list("Topic/住宿/业态/度假短租", [
-        ("整租公寓", "Rental Apartment", "整套公寓短期出租"),
-        ("整租别墅", "Rental Villa", "整栋别墅短期出租"),
-        ("整租民居", "Rental House", "整套民居短期出租"),
-    ])
-    tag("Topic/住宿/业态/特色住宿", "特色住宿", "Unique Stay", "非传统特色住宿类型")
-    tags_list("Topic/住宿/业态/特色住宿", [
-        ("树屋酒店", "Treehouse Hotel", "树上住宿体验"),
-        ("船屋酒店", "Houseboat Hotel", "水上船屋住宿"),
-        ("集装箱酒店", "Container Hotel", "集装箱改造住宿"),
-        ("帐篷酒店", "Glamping", "豪华帐篷露营"),
-        ("冰屋酒店", "Ice Hotel", "冰雪建筑住宿"),
-        ("洞穴酒店", "Cave Hotel", "洞穴或窑洞住宿"),
-    ])
-
-    # 3b.2 价位档次
-    dim("Topic/住宿/价位档次", "价位档次", "Price Tier",
-        "住宿价格区间分级",
-        max_depth=2, expected_size=5)
-    tags_list("Topic/住宿/价位档次", [
-        ("经济型", "Budget", "经济型住宿 ¥"),
-        ("中端型", "Mid-range", "中端住宿 ¥¥"),
-        ("高端型", "Upscale", "高端住宿 ¥¥¥"),
-        ("奢华型", "Luxury", "奢华住宿 ¥¥¥¥"),
-        ("超奢华型", "Ultra Luxury", "超奢华住宿 ¥¥¥¥¥"),
-    ])
-
-    # 3b.3 主题
-    dim("Topic/住宿/主题", "主题", "Stay Theme",
-        "住宿的主题与特色定位",
-        max_depth=2, expected_size=13)
-    tags_list("Topic/住宿/主题", [
-        ("亲子主题", "Family-friendly", "适合亲子家庭的住宿"),
-        ("情侣浪漫", "Romantic", "适合情侣蜜月的住宿"),
-        ("宠物友好", "Pet-friendly", "允许携带宠物的住宿"),
-        ("温泉主题", "Hot Spring", "含温泉设施的住宿"),
-        ("滑雪主题", "Ski-in/Ski-out", "靠近滑雪场的住宿"),
-        ("亲水主题", "Waterfront", "临海/临湖/临江住宿"),
-        ("康养主题", "Wellness", "以健康养生为主题的住宿"),
-        ("商务主题", "Business", "面向商旅的住宿"),
-        ("文化体验", "Cultural", "传统文化沉浸式住宿"),
-        ("生态田园", "Eco & Rural", "乡村生态体验住宿"),
-        ("自驾友好", "Driver-friendly", "便于自驾停车的住宿"),
-        ("女性安心", "Women-safe", "女性安全友好的住宿"),
-        ("单人友好", "Solo-friendly", "适合独自旅行者的住宿"),
-    ])
-
-    # 3b.4 设施服务
-    dim("Topic/住宿/设施服务", "设施服务", "Amenities",
-        "住宿的设施与服务配置",
-        max_depth=2, expected_size=15)
-    tags_list("Topic/住宿/设施服务", [
-        ("泳池", "Swimming Pool", "含泳池设施"),
-        ("健身房", "Gym", "含健身房设施"),
-        ("SPA", "SPA", "含 SPA 水疗设施"),
-        ("酒店餐厅", "Hotel Restaurant", "含餐厅设施"),
-        ("酒店酒吧", "Hotel Bar", "含酒吧设施"),
-        ("停车场", "Parking", "含停车设施"),
-        ("洗衣服务", "Laundry", "含洗衣服务"),
-        ("机场接送", "Airport Transfer", "含机场接送服务"),
-        ("儿童设施", "Kids Facilities", "含儿童游乐设施"),
-        ("无障碍", "Accessible", "含无障碍设施"),
-        ("含早餐", "Breakfast Included", "房价含早餐"),
-        ("行政酒廊", "Executive Lounge", "含行政楼层酒廊"),
-        ("24h前台", "24h Front Desk", "全天候前台服务"),
-        ("会议室", "Meeting Room", "含会议设施"),
-        ("免费WiFi", "Free WiFi", "含免费无线网络"),
-    ])
-
-    # 3b.5 房型
-    dim("Topic/住宿/房型", "房型", "Room Type",
-        "客房的物理类型",
-        max_depth=2, expected_size=12)
-    tags_list("Topic/住宿/房型", [
-        ("单人间", "Single Room", "单人入住标准间"),
-        ("双床房", "Twin Room", "两张单人床客房"),
-        ("大床房", "King/Queen Room", "一张大床客房"),
-        ("家庭房", "Family Room", "可容纳家庭的客房"),
-        ("亲子房", "Kids-themed Room", "儿童主题客房"),
-        ("套房", "Suite", "客厅卧室分离套房"),
-        ("复式套房", "Duplex Suite", "上下两层的复式套房"),
-        ("Loft", "Loft", "挑高阁楼式客房"),
-        ("海景房", "Ocean View", "可见海景的客房"),
-        ("山景房", "Mountain View", "可见山景的客房"),
-        ("园景房", "Garden View", "可见花园的客房"),
-        ("城景房", "City View", "可见城市景观的客房"),
-    ])
-
-    # 3b.6 区位
-    dim("Topic/住宿/区位", "区位", "Location Type",
-        "住宿的地理区位类型",
-        max_depth=2, expected_size=13)
-    tags_list("Topic/住宿/区位", [
-        ("市中心", "City Center", "城市中心区域"),
-        ("机场近", "Near Airport", "邻近机场"),
-        ("高铁近", "Near HSR Station", "邻近高铁站"),
-        ("地铁旁", "Near Metro", "邻近地铁站"),
-        ("景区内", "In Scenic Area", "位于景区内部"),
-        ("景区附近", "Near Scenic Area", "邻近景区"),
-        ("商圈", "Shopping District", "位于商业区"),
-        ("CBD", "CBD", "位于中央商务区"),
-        ("滨海", "Seaside", "海滨位置"),
-        ("山中", "Mountain", "山区位置"),
-        ("村镇", "Village & Town", "乡镇位置"),
-        ("温泉度假区", "Hot Spring Resort Area", "温泉度假区域"),
-        ("滑雪场", "Ski Resort Area", "滑雪场区域"),
-    ])
-
-    # 3b.7 认证评级
-    dim("Topic/住宿/认证评级", "认证评级", "Stay Certification",
-        "住宿权威评级与认证体系",
-        max_depth=3, expected_size=12)
-    tag("Topic/住宿/认证评级/米其林之钥", "米其林之钥", "MICHELIN Key", "米其林奢华酒店评级体系（2024）")
-    tags_list("Topic/住宿/认证评级/米其林之钥", [
-        ("一钥", "1 Key", "米其林之钥一钥酒店"),
-        ("二钥", "2 Keys", "米其林之钥二钥酒店"),
-        ("三钥", "3 Keys", "米其林之钥三钥酒店"),
-    ])
-    tags_list("Topic/住宿/认证评级", [
-        ("携程必住榜", "Ctrip Must-stay List", "携程必住榜上榜酒店"),
-        ("金枕头奖", "Golden Pillow Award", "去哪儿金枕头奖"),
-        ("Travelers Choice", "Travelers Choice", "猫途鹰旅行者之选"),
-        ("最佳新酒店", "Best New Hotel", "年度最佳新开业酒店"),
-        ("金钻五星", "National 5-Star", "国家文旅部五星标准"),
-        ("甲级民宿", "Grade-A Homestay", "国家甲级民宿认证"),
-    ])
-
-    # 3b.8 预订特征
-    dim("Topic/住宿/预订特征", "预订特征", "Booking Feature",
-        "住宿预订相关的特征标签",
-        max_depth=2, expected_size=7)
-    tags_list("Topic/住宿/预订特征", [
-        ("即时确认", "Instant Book", "即时确认预订", ["闪订"]),
-        ("免费取消", "Free Cancellation", "可免费取消的预订"),
-        ("价保", "Price Match", "最低价保证"),
-        ("含早", "Breakfast Included", "房价含早餐的预订"),
-        ("含三餐", "All Meals", "含早中晚三餐"),
-        ("限时优惠", "Flash Deal", "限时特价优惠"),
-        ("会员专享", "Members Only", "会员专享价格与权益"),
-    ])
-
-    # 4. 旅行（7 子维度：旅行主题/玩法/出行方式/行程形态/旅行时长/住宿/旅行筹备）
+    # 4. 旅行（9 子维度：旅行主题/玩法/出行方式/行程形态/旅行时长/旅行筹备
+    #          + 预算档次/同行人/体能强度）
     tag("Topic/旅行", "旅行", "Travel", "旅行出行完整体验：去哪儿/怎么去/玩什么/住哪儿/吃什么/出片，七子维度正交覆盖")
 
     # 4.1 旅行主题（本次旅行的整体定位/气质，宏观体验；14 项）
@@ -493,12 +338,14 @@ def gen_topic_verticals_part1():
         ("文创探店", "Creative Shop", "探访文创园区与设计师店铺"),
         ("温泉泡汤", "Hot Spring", "温泉浸泡与汤池体验"),
         ("SPA美容", "SPA & Wellness", "水疗按摩与美容放松体验"),
-        ("滑雪滑冰", "Skiing & Skating", "冰雪运动体验"),
-        ("潜水浮潜", "Diving & Snorkeling", "水下潜水与浮潜体验"),
+        # 刻意不生成「滑雪滑冰」「瑜伽冥想」：它们的唯一真相源分别是
+        # Topic/运动/极限运动/滑雪滑冰 与 Topic/健康养生/瑜伽冥想；
+        # 也不生成「潜水浮潜」：同维度已有「潜水」，同轴重名必然产生孤儿（R14）。
+        ("潜水", "Diving", "水下潜水与浮潜体验"),
+        ("徒步", "Hiking", "徒步穿越与山野路线体验"),
         ("跳伞极限", "Skydiving & Extreme", "跳伞蹦极等极限体验"),
         ("冲浪水上", "Surfing & Water Sports", "冲浪划船等水上运动体验"),
         ("热气球", "Hot Air Balloon", "热气球升空观景体验"),
-        ("瑜伽冥想", "Yoga & Meditation", "旅行中的身心灵修习体验"),
         ("烹饪课", "Cooking Class", "当地美食烹饪学习体验"),
         ("手作工坊", "Workshop", "手工艺制作体验活动"),
         ("农场体验", "Farm Experience", "田园采摘与农牧体验"),
@@ -558,27 +405,57 @@ def gen_topic_verticals_part1():
         ("跨境多国", "Multi-country", "跨越多个国家的长途旅行"),
     ])
 
-    # 4.6 住宿（内容讲住宿的哪个话题；15 项；与 Entity/地点/住宿 10 类扁平实体骨架正交）
-    dim("Topic/旅行/住宿", "住宿", "Accommodation Topic",
-        "内容围绕住宿的话题角度（讲什么）；与 Entity/地点/住宿（实体是什么）、Format/内容角度（怎么讲）正交",
-        max_depth=2, expected_size=15)
-    tags_list("Topic/旅行/住宿", [
-        ("住宿攻略", "Accommodation Guide", "住宿选择与预订的攻略类内容"),
-        ("酒店体验", "Hotel Experience", "酒店入住体验分享"),
-        ("民宿体验", "Homestay Experience", "民宿入住体验分享"),
-        ("商旅住宿", "Business Travel Stay", "商业差旅住宿相关内容"),
-        ("出差住宿", "Business Trip Stay", "具体出差场景下的住宿内容"),
-        ("川西住宿", "West Sichuan Stay", "川西地区住宿专题"),
-        ("高原住宿", "Plateau Stay", "高原地区住宿注意事项与选择"),
-        ("度假住宿", "Vacation Stay", "度假场景下的住宿选择"),
-        ("温泉住宿", "Hot Spring Stay", "温泉住宿体验与推荐"),
-        ("亲子住宿", "Family Stay", "亲子家庭住宿选择"),
-        ("情侣住宿", "Couple Stay", "情侣蜜月住宿推荐"),
-        ("青旅住宿", "Hostel Stay", "青年旅舍住宿体验"),
-        ("特色住宿", "Unique Stay", "树屋船屋帐篷等非传统住宿体验"),
-        ("住宿避雷", "Stay Pitfall", "住宿踩坑与避雷经验"),
-        ("住宿比价", "Stay Price Comparison", "住宿比价与省钱技巧"),
-    ])
+    # 4.6 三个筛选轴：预算档次 / 同行人 / 体能强度
+    #
+    # 这里刻意不再有「住宿」子维度：住宿的唯一真相源是 Topic/住宿，
+    # 旅行侧维护第二棵住宿树会让召回、交集句和聚合页只能任选其一，其余成为孤儿（R14）。
+    # 「住宿攻略」「住宿避雷」是叙述角度，归 Format/内容角度；
+    # 「川西住宿」「高原住宿」是住宿 × 地理的组合，不做成单独标签。
+    #
+    # 三个轴都由创作侧打标 chip 采集、进入召回过滤与交集，因此满足标签价值四门测试。
+    # 刻意不做「出入境难度」「季节窗口」：那是目的地的客观属性，应挂实体
+    # structuredFacts，做成内容标签后创作者不会选、系统也无从采集，必然成为孤儿。
+    _TRAVEL_FACET_CHANNEL = "creator_chip"
+    _TRAVEL_FACET_CONSUMERS = ["recall", "intersection"]
+
+    dim("Topic/旅行/预算档次", "预算档次", "Budget Tier",
+        "单人单日综合花费档次，用于按预算筛选行程与内容",
+        max_depth=2, expected_size=5)
+    tags_list("Topic/旅行/预算档次", [
+        ("穷游", "Shoestring", "极致压缩住宿与交通成本，人均单日花费处于最低档"),
+        ("经济", "Budget", "以性价比为先，住经济型住宿、以公共交通为主"),
+        ("舒适", "Comfort", "住宿与餐饮达到舒适标准，适度使用打车与门票"),
+        ("轻奢", "Premium", "选择精品住宿与特色体验，愿为品质付溢价"),
+        ("高端定制", "Luxury Bespoke", "私导、包车、高端住宿与定制行程"),
+    ], collection_channel=_TRAVEL_FACET_CHANNEL,
+        consumed_by=_TRAVEL_FACET_CONSUMERS)
+
+    # 与旅行主题正交：主题说「去做什么」，同行人说「和谁去」。
+    # 两轴用词刻意不同名（主题侧「亲子游」vs 本轴「家庭带娃」），避免同轴重名。
+    dim("Topic/旅行/同行人", "同行人", "Travel Party",
+        "出行的人群构成；与旅行主题正交：主题=去做什么，同行人=和谁去",
+        max_depth=2, expected_size=7)
+    tags_list("Topic/旅行/同行人", [
+        ("独自出行", "Solo", "一人出行，关注安全、社交与单人友好设施"),
+        ("情侣同行", "Couple", "两人情侣出行，关注私密性与纪念性体验"),
+        ("家庭带娃", "Family With Kids", "携未成年子女出行，关注亲子设施与节奏"),
+        ("携长辈", "With Elders", "携长辈出行，关注无障碍、海拔与体力强度"),
+        ("朋友结伴", "With Friends", "同龄朋友结伴出行，关注多人房型与共同玩法"),
+        ("携宠出行", "With Pets", "携宠物出行，关注宠物友好住宿与交通规则"),
+        ("团队出行", "Group Tour", "十人以上团队或公司团建出行"),
+    ], collection_channel=_TRAVEL_FACET_CHANNEL,
+        consumed_by=_TRAVEL_FACET_CONSUMERS)
+
+    dim("Topic/旅行/体能强度", "体能强度", "Physical Intensity",
+        "行程对体能的要求档次，用于避免把高强度线路推给低体能意愿用户",
+        max_depth=2, expected_size=4)
+    tags_list("Topic/旅行/体能强度", [
+        ("轻松休闲", "Leisurely", "以乘车观光与短距步行为主，日均步行低于 5 公里"),
+        ("中等强度", "Moderate", "含较长时间步行或缓坡徒步，日均步行 5-15 公里"),
+        ("高强度", "Strenuous", "含长距离徒步、连续爬升或高海拔活动"),
+        ("专业级", "Expert", "需要技术装备与专项训练，如技术攀登、洞穴、深潜"),
+    ], collection_channel=_TRAVEL_FACET_CHANNEL,
+        consumed_by=_TRAVEL_FACET_CONSUMERS)
 
     # 4.7 旅行筹备（行前/行中/行后准备主题；9 项；与 Format/内容角度/攻略 正交）
     dim("Topic/旅行/旅行筹备", "旅行筹备", "Trip Preparation",

@@ -74,8 +74,8 @@ DOMAIN_TESTS = {
         "targetStore": "postgres+mongodb:user_test",
         "insertedCount": 98,
         "verifiedEndpoints": [
-            "/user/{subAccountId}",
-            "/user/sub-accounts/{subAccountId}/homepage-bundle",
+            "/user/{personaId}",
+            "/user/personas/{personaId}/homepage-bundle",
         ],
     },
     # entity 域收敛到与 gamma 同一 promote→ship→import 通道（homepages 权威集合），
@@ -157,7 +157,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--gateway-base-url",
-        default="http://127.0.0.1:18080",
+        required=True,
         help="Local gateway URL recorded for app beta RemoteRepository evidence.",
     )
     parser.add_argument(

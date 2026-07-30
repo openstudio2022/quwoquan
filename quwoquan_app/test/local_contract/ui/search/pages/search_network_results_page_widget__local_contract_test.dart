@@ -27,7 +27,7 @@ class _FakeXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(
@@ -44,7 +44,7 @@ class _ThrowingXiaoquSearchFacet implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     throw CloudErrorMapper.fromException(
@@ -943,7 +943,11 @@ final class _UnavailableContentPostDetailReader
   final ContentErrorCode errorCode;
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     throw CloudErrorMapper.fromStatusCode(
       errorCode.httpStatus,
       body:

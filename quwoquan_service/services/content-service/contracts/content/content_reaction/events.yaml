@@ -1,44 +1,34 @@
 events:
 - name: ContentReactionSet
-  description: actor 对 Post 建立 like 或对 Comment 建立 like/dislike 关系。payload 自包含通知接收者（targetAuthorId），消费者不得跨服务反查写模型。
+  description: actor 对 Post 建立 like 或对 Comment 建立 like/dislike 关系的版本化事实。
   producer: content-service
   consumers:
-  - recommendation-engine
-  - notification-service
-  - post-counter-projector
-  - discovery-feed-projector
-  - profile-interaction-activity-projector
-  channel: event_store
-  payload_fields:
-  - reactionId
-  - version
-  - targetKind
-  - targetId
-  - targetAuthorId
-  - actorDimension
-  - actorId
-  - reaction
-  - occurredAt
-  - idempotencyKey
+  - content-reaction-runtime-events
+  - content-reaction-profile-interaction
+  - content-reaction-lifecycle-stream
+  - content-reaction-post-like-count
+  - content-reaction-discovery-like-count
+  - content-reaction-recommend-like-count
+  - content-reaction-comment-hot-score
+  - content-reaction-recommend-signal
+  channel: transactional_outbox
+  payload_entity: ContentReactionChangedPayload
+  payload_shape: exact
+  payload_fields: [reactionId, version, targetKind, targetId, targetAuthorId, actorDimension, actorId, reaction, occurredAt, idempotencyKey]
   recommend_impact: hot_path_signal
 - name: ContentReactionCleared
-  description: actor 将自身互动关系变更为 none
+  description: actor 将自身互动关系迁移为 none 的版本化事实；不制造新的通知或正向推荐信号。
   producer: content-service
   consumers:
-  - recommendation-engine
-  - notification-service
-  - post-counter-projector
-  - discovery-feed-projector
-  - profile-interaction-activity-projector
-  channel: event_store
-  payload_fields:
-  - reactionId
-  - version
-  - targetKind
-  - targetId
-  - actorDimension
-  - actorId
-  - reaction
-  - occurredAt
-  - idempotencyKey
+  - content-reaction-runtime-events
+  - content-reaction-profile-interaction
+  - content-reaction-lifecycle-stream
+  - content-reaction-post-like-count
+  - content-reaction-discovery-like-count
+  - content-reaction-recommend-like-count
+  - content-reaction-comment-hot-score
+  channel: transactional_outbox
+  payload_entity: ContentReactionChangedPayload
+  payload_shape: exact
+  payload_fields: [reactionId, version, targetKind, targetId, targetAuthorId, actorDimension, actorId, reaction, occurredAt, idempotencyKey]
   recommend_impact: hot_path_signal

@@ -12,20 +12,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.circle-service.config.max_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 1.99.99
-- key: sys.circle-service.config.min_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 1.0.0
 - key: sys.circle-service.es.embeddingDims
   type: int
   scope: workload

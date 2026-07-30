@@ -1,15 +1,18 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
 package api_integration
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/runtime/accountrestriction"
 	"quwoquan_service/services/search-service/internal/search/search_query/application"
 	"quwoquan_service/services/search-service/internal/search/search_query/infrastructure/accountclosure"
 )
@@ -78,6 +81,29 @@ func TestUserAccountClosedProjectionDeletesPrivateSearchStateAndRejectsConflict(
 	}
 	now := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
 	insertSearchClosureFixtures(t, now)
+	restrictionProjection, err :=
+		accountclosure.NewMongoAccountRestrictionProjection(mongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restrictionProjection.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	suspension := accountrestriction.Event{
+		EventID:        "search-account-suspended-event",
+		EventName:      accountrestriction.UserSuspendedEventName,
+		AccountID:      "account-closed",
+		AccountVersion: 6,
+		UserID:         "account-closed",
+		PersonaIDs:     []string{"persona-closed"},
+		AccountState:   "suspended",
+		AuthEpoch:      6,
+		DecisionRef:    "decision-suspend-before-close",
+		OccurredAt:     now.Add(-time.Minute),
+	}
+	if _, err := restrictionProjection.Apply(ctx, suspension); err != nil {
+		t.Fatalf("seed reversible account restriction: %v", err)
+	}
 	event := application.UserAccountClosedEvent{
 		EventID:        "search-account-closed-event",
 		AccountVersion: 7,
@@ -108,6 +134,8 @@ func TestUserAccountClosedProjectionDeletesPrivateSearchStateAndRejectsConflict(
 		{"search_feedback_command_receipts", bson.M{"viewerId": "persona-closed"}, 0},
 		{"search_feedback_command_receipts", bson.M{"searchRequestId": "request-closed"}, 0},
 		{"rm_search_term_heat", bson.M{"normalizedTerm": "私密检索词"}, 0},
+		{"search_user_account_restrictions", bson.M{}, 0},
+		{"search_user_account_restriction_inbox", bson.M{}, 0},
 		{"recent_search_states", bson.M{"personaId": "persona-active"}, 1},
 		{"recent_search_receipts", bson.M{"personaId": "persona-active"}, 1},
 		{"search_queries", bson.M{"viewerId": "persona-active"}, 1},
@@ -127,6 +155,58 @@ func TestUserAccountClosedProjectionDeletesPrivateSearchStateAndRejectsConflict(
 				got,
 				assertion.want,
 			)
+		}
+	}
+	lateRestore := suspension
+	lateRestore.EventID = "search-account-restore-after-close-event"
+	lateRestore.EventName = accountrestriction.UserRestoredEventName
+	lateRestore.AccountVersion = 8
+	lateRestore.AccountState = "active"
+	lateRestore.AuthEpoch = 8
+	lateRestore.DecisionRef = "decision-restore-after-close"
+	lateRestore.OccurredAt = now.Add(time.Minute)
+	if late, err := restrictionProjection.Apply(ctx, lateRestore); err != nil ||
+		!late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("late Search restore after closure: result=%+v err=%v", late, err)
+	}
+	delayedSuspend := suspension
+	delayedSuspend.EventID = "search-account-delayed-suspend-event"
+	delayedSuspend.AccountVersion = 5
+	delayedSuspend.AuthEpoch = 5
+	delayedSuspend.DecisionRef = "decision-delayed-suspend-after-close"
+	delayedSuspend.OccurredAt = now.Add(-2 * time.Minute)
+	if late, err := restrictionProjection.Apply(ctx, delayedSuspend); err != nil ||
+		!late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("delayed Search suspend after closure: result=%+v err=%v", late, err)
+	}
+	if count := countSearchClosureDocuments(
+		t,
+		"search_user_account_restrictions",
+		bson.M{},
+	); count != 0 {
+		t.Fatalf("late events recreated Search restriction state=%d", count)
+	}
+	if count := countSearchClosureDocuments(
+		t,
+		"search_user_account_restriction_inbox",
+		bson.M{},
+	); count != 0 {
+		t.Fatalf("late events recreated Search restriction inbox=%d", count)
+	}
+	var terminalWatermark bson.M
+	if err := mongoDB.Collection("search_user_account_restriction_watermarks").FindOne(
+		ctx,
+		bson.M{"terminal": true, "accountVersion": int64(7)},
+	).Decode(&terminalWatermark); err != nil {
+		t.Fatalf("read Search terminal restriction watermark: %v", err)
+	}
+	encodedWatermark, err := bson.MarshalExtJSON(terminalWatermark, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rawID := range []string{"account-closed", "persona-closed"} {
+		if strings.Contains(string(encodedWatermark), rawID) {
+			t.Fatalf("Search terminal watermark retained raw identity %q: %s", rawID, encodedWatermark)
 		}
 	}
 	var inbox bson.M

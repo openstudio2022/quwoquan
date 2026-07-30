@@ -47,6 +47,7 @@ business_rules:
 - rolling_back 可在响应丢失或进程重启后续作；Persona 已有后续版本时终止回滚并恢复 applied
 - rolled_back、rejected 与 expired 为终态，重复命令返回同一 receipt
 lifecycle:
+  state_field: status
   states:
   - pending
   - confirmed

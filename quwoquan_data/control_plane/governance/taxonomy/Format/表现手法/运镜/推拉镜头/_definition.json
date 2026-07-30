@@ -2,6 +2,7 @@
   "label": "推拉镜头",
   "labelEn": "Push & Pull",
   "description": "前后推拉运动镜头",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -2,6 +2,8 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+
 class RuntimeFailureWire {
   const RuntimeFailureWire({
     this.code = "",
@@ -9,8 +11,8 @@ class RuntimeFailureWire {
     this.kind = "",
     this.nature = "",
     this.messageKey = "",
-    this.recoveryAction = "",
-    this.disruptionLevel = "",
+    this.recoveryAction = ToolRecoveryAction.unknown,
+    this.disruptionLevel = ToolDisruptionLevel.unknown,
     this.traceId = "",
     this.context = const <String, dynamic>{},
   });
@@ -20,8 +22,8 @@ class RuntimeFailureWire {
   final String kind;
   final String nature;
   final String messageKey;
-  final String recoveryAction;
-  final String disruptionLevel;
+  final ToolRecoveryAction recoveryAction;
+  final ToolDisruptionLevel disruptionLevel;
   final String traceId;
   final Map<String, dynamic> context;
 
@@ -31,8 +33,8 @@ class RuntimeFailureWire {
         'kind': kind,
         'nature': nature,
         'messageKey': messageKey,
-        'recoveryAction': recoveryAction,
-        'disruptionLevel': disruptionLevel,
+        'recoveryAction': recoveryAction.wireName,
+        'disruptionLevel': disruptionLevel.wireName,
         'traceId': traceId,
         'context': context,
       };
@@ -44,8 +46,8 @@ class RuntimeFailureWire {
       kind: (json['kind'] as String?)?.trim() ?? "",
       nature: (json['nature'] as String?)?.trim() ?? "",
       messageKey: (json['messageKey'] as String?)?.trim() ?? "",
-      recoveryAction: (json['recoveryAction'] as String?)?.trim() ?? "",
-      disruptionLevel: (json['disruptionLevel'] as String?)?.trim() ?? "",
+      recoveryAction: parseToolRecoveryAction((json['recoveryAction'] as String?)?.trim() ?? ""),
+      disruptionLevel: parseToolDisruptionLevel((json['disruptionLevel'] as String?)?.trim() ?? ""),
       traceId: (json['traceId'] as String?)?.trim() ?? "",
       context: (json['context'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{},
     );

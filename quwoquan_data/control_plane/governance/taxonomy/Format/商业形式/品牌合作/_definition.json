@@ -2,6 +2,7 @@
   "label": "品牌合作",
   "labelEn": "Brand Collaboration",
   "description": "与品牌合作产出内容",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

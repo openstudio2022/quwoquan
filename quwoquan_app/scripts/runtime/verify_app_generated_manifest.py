@@ -32,6 +32,7 @@ ALLOWED_PREFIXES = (
     "lib/cloud/rtc/generated/",
     "lib/cloud/user/generated/",
     "packages/quwoquan_cloud_contracts/lib/src/generated/",
+    "packages/quwoquan_cloud_contracts/lib/src/rtc/",
 )
 GENERATOR_ROOT = SERVICE / "tools/codegen_app_metadata"
 

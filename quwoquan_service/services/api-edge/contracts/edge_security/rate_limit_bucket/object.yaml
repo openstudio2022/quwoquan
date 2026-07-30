@@ -1,0 +1,19 @@
+kind: runtime_session
+description: >-
+  统一业务 HTTP 入口按 environment、可信 subject 与 generated ContractGraph operation
+  形成的 TTL admission session；所有 api-edge 副本与 prod stable/gray stage 共享同一
+  Redis 原子状态。它只在请求进入时由 RateLimitAdmissionFacade 消费，不是可独立管理的
+  业务聚合，也不公开第二条 admission HTTP API。
+identity:
+  fields: [bucketKeyDigest]
+  version_source: session
+access:
+  commands: session_facade
+  queries: named_reader
+  cross_context: public_contract_only
+relationships: []
+local_identity_reasons:
+  canonicalOperationId: generated ContractGraph operation ID 是授权与限流共同使用的协议标识，不是业务对象外键
+capabilities: [admission]
+taggable: false
+vector_enabled: false

@@ -1,6 +1,8 @@
 """Unified content source registry and prompt guidance."""
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Iterable, Mapping
 import yaml
 
@@ -28,6 +30,20 @@ def load_content_source_registry() -> dict[str, Any]:
     return data
 
 
+def content_source_catalog_digest(
+    data: Mapping[str, Any] | None = None,
+) -> str:
+    """Return the immutable identity of the complete canonical catalog."""
+    catalog = data if data is not None else load_content_source_registry()
+    canonical = json.dumps(
+        catalog,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
+
+
 def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
@@ -51,6 +67,91 @@ def _homepage_lane_policy(data: Mapping[str, Any]) -> Mapping[str, Any]:
     lane_policies = data.get("lanePolicies") if isinstance(data.get("lanePolicies"), dict) else {}
     policy = lane_policies.get("homepage")
     return policy if isinstance(policy, Mapping) else {}
+
+
+STRUCTURED_FACTS_POLICY_REVISION = "audited-official-structured-facts"
+STRUCTURED_FACTS_FIELDS = (
+    "openingHours",
+    "ticketPriceRange",
+    "recommendedDurationMinutes",
+    "bestSeasonTagRefs",
+    "altitudeMeters",
+    "officialWebsite",
+)
+STRUCTURED_FACTS_SOURCE_CLASSES = (
+    "encyclopedia",
+    "official_site",
+    "government_tourism",
+)
+
+
+def homepage_structured_facts_policy() -> dict[str, Any]:
+    """结构化事实准入策略的唯一投影。
+
+    正文底稿仍锁在三百科闭集；结构化事实额外接受官网与政府/文旅门户，
+    因为营业时间、票价、时长、海拔与官网这类单值事实由官方站点第一手发布，
+    百科词条在这些字段上最不及时。
+    """
+    policy = _homepage_lane_policy(load_content_source_registry()).get("structuredFactsPolicy")
+    return dict(policy) if isinstance(policy, Mapping) else {}
+
+
+def _structured_facts_policy_issues(
+    data: Mapping[str, Any],
+    homepage_policy: Mapping[str, Any],
+) -> list[str]:
+    prefix = "lanePolicies.homepage.structuredFactsPolicy"
+    policy = homepage_policy.get("structuredFactsPolicy")
+    if not isinstance(policy, Mapping):
+        return [f"{prefix}: missing"]
+    issues: list[str] = []
+    if str(policy.get("revision") or "") != STRUCTURED_FACTS_POLICY_REVISION:
+        issues.append(f"{prefix}.revision must be {STRUCTURED_FACTS_POLICY_REVISION}")
+    fields = tuple(str(item).strip() for item in _as_list(policy.get("fields")))
+    if fields != STRUCTURED_FACTS_FIELDS:
+        issues.append(f"{prefix}.fields must be the ordered closed set {list(STRUCTURED_FACTS_FIELDS)}")
+    classes = tuple(str(item).strip() for item in _as_list(policy.get("allowedSourceClasses")))
+    if classes != STRUCTURED_FACTS_SOURCE_CLASSES:
+        issues.append(
+            f"{prefix}.allowedSourceClasses must be {list(STRUCTURED_FACTS_SOURCE_CLASSES)}"
+        )
+    minimum = policy.get("minIndependentSources")
+    if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 1:
+        issues.append(f"{prefix}.minIndependentSources must be a positive integer")
+    if policy.get("requiresFactSourceProvenance") is not True:
+        issues.append(f"{prefix}.requiresFactSourceProvenance must be true")
+    if policy.get("narrativeBodyRemainsEncyclopediaOnly") is not True:
+        issues.append(
+            f"{prefix}.narrativeBodyRemainsEncyclopediaOnly must stay true; "
+            "widening structured facts must not widen the narrative source set"
+        )
+    prompt_facts = policy.get("promptFacts")
+    if not isinstance(prompt_facts, list) or not all(str(item).strip() for item in prompt_facts):
+        issues.append(f"{prefix}.promptFacts must be a non-empty string list")
+
+    # 放开的来源必须显式声明 structuredFactsRole，且仍不得进入任何 lane。
+    declared_evidence = {
+        str(row.get("sourceClass") or "").strip()
+        for _, row in _registry_sources(data)
+        if str(row.get("structuredFactsRole") or "").strip() == "audited_evidence"
+    }
+    for source_class in ("official_site", "government_tourism"):
+        if source_class not in declared_evidence:
+            issues.append(
+                f"{prefix}: sourceClass {source_class} must declare structuredFactsRole=audited_evidence"
+            )
+    for scope, row in _registry_sources(data):
+        if str(row.get("structuredFactsRole") or "").strip() != "audited_evidence":
+            continue
+        if str(row.get("sourceClass") or "").strip() not in STRUCTURED_FACTS_SOURCE_CLASSES:
+            issues.append(
+                f"{scope}.{row.get('sourceId')}: structuredFactsRole requires an allowed sourceClass"
+            )
+        if _as_list(row.get("lanes")):
+            issues.append(
+                f"{scope}.{row.get('sourceId')}: structured-facts evidence must not join a content lane"
+            )
+    return issues
 
 
 def _homepage_primary_rows(data: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -181,15 +282,19 @@ def homepage_source_can_seed_base_draft(
     )
 
 
-def verify_content_source_registry() -> list[str]:
-    try:
-        data = load_content_source_registry()
-    except Exception as exc:  # noqa: BLE001
-        return [f"content source registry invalid: {exc}"]
+def verify_content_source_registry(
+    data: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """校验 registry。data 只用于测试注入一份被改坏的副本。"""
+    if data is None:
+        try:
+            data = load_content_source_registry()
+        except Exception as exc:  # noqa: BLE001
+            return [f"content source registry invalid: {exc}"]
 
     issues: list[str] = []
-    if data.get("version") != 2:
-        issues.append("content source registry version must be 2")
+    if "version" in data:
+        issues.append("content source registry must not declare a parallel version")
     allowed = data.get("allowedValues") if isinstance(data.get("allowedValues"), dict) else {}
     allowed_lanes = {str(item) for item in _as_list(allowed.get("lanes"))}
     allowed_roles = {str(item) for item in _as_list(allowed.get("defaultRoles"))}
@@ -272,10 +377,13 @@ def verify_content_source_registry() -> list[str]:
             issues.append(
                 f"lanePolicies.homepage.primarySources.{kind}: generic_html is forbidden"
             )
+    issues.extend(_structured_facts_policy_issues(data, homepage_policy))
     signals = data.get("sourceTierSignals") if isinstance(data.get("sourceTierSignals"), dict) else {}
     if not signals:
         issues.append("sourceTierSignals: missing (作品判定来源专业度先验真相源)")
     else:
+        if "version" in signals:
+            issues.append("sourceTierSignals must not declare a parallel version")
         default = signals.get("default") if isinstance(signals.get("default"), dict) else {}
         by_class = signals.get("bySourceClass") if isinstance(signals.get("bySourceClass"), dict) else {}
         if not default:
@@ -342,7 +450,7 @@ def build_content_source_guidance(vertical: str = "travel") -> dict[str, Any]:
     data = load_content_source_registry()
     guidance: dict[str, Any] = {
         "schema": data.get("schema"),
-        "version": data.get("version"),
+        "catalogDigest": content_source_catalog_digest(data),
         "vertical": vertical,
         "lanePolicies": data.get("lanePolicies") or {},
         "lanes": {},

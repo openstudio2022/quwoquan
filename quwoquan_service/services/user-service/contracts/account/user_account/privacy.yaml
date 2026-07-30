@@ -1,21 +1,16 @@
-aggregate: UserProfile
+aggregate: UserAccount
 app_log_policy:
 - app_log: drop
   classification: PII
   description: 手机号不记录任何日志
   field: phone
-- app_log: mask
-  classification: PII
-  description: 仅记录邮箱域名，如 ***@gmail.com
-  field: email
-  mask_strategy: email_domain_only
 - app_log: drop
   classification: PII
   description: 生日不记录日志
-  field: birthday
+  field: birthDate
 - app_log: mask
   classification: PII
-  field: location
+  field: region
   mask_strategy: city_level_only
 - app_log: drop_if_gt_100chars
   classification: PUBLIC
@@ -24,15 +19,15 @@ data_lifecycle:
   deletion_cascade:
   - entity: Persona
     strategy: hard_delete
-  - entity: UserAuth
+  - entity: CredentialBinding
     strategy: hard_delete
-  - entity: UserDevice
+  - entity: DeviceRegistration
     strategy: hard_delete
   - entity: UserSettings
     strategy: hard_delete
   deletion_on_user_request: true
   retention_days: 3650
-description: 'UserProfile 实体隐私与安全策略。
+description: 'UserAccount 账号与只读公开资料投影的隐私与安全策略。
 
   补充 fields.yaml classification 的端侧实现细节和 GDPR 数据生命周期。
 
@@ -44,10 +39,7 @@ field_visibility:
   field: phone
   visibility:
   - user-service-internal
-- field: email
-  visibility:
-  - user-service-internal
-- field: birthday
+- field: birthDate
   visibility:
   - self
   - user-service-internal

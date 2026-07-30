@@ -2,6 +2,7 @@
   "label": "展会",
   "labelEn": "Exhibition",
   "description": "行业展览或博览会",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

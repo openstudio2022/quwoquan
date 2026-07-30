@@ -43,6 +43,7 @@ business_rules:
 - 同一 schedule window 只能产生一次触发事件
 - paused 可恢复，archived 为终态
 lifecycle:
+  state_field: status
   states:
   - active
   - paused

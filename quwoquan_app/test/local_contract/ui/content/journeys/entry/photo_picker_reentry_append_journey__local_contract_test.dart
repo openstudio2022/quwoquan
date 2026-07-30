@@ -36,7 +36,7 @@ class _AuthedSessionStore implements AuthSessionStore {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -76,7 +76,7 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> softLogout() async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 }
 
 class _AuthenticatedSessionController extends AuthSessionController {
@@ -86,7 +86,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',

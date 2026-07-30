@@ -8,7 +8,6 @@ imports:
   - package:quwoquan_app/assistant/contracts/runtime_enums.dart
   - package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart
 fields:
-  - { name: machineEnvelope, type: string, default: '' }
   - { name: displayMarkdown, type: string, default: '' }
   - { name: displayPlainText, type: string, default: '' }
   - { name: displayState, type: object, ref: display_state, default: {} }
@@ -117,14 +116,14 @@ subcontracts:
     fields:
       - { name: evidenceId, type: string, required: true }
       - { name: domainId, type: string, default: '' }
-      - { name: dimension, type: string, default: '' }
+      - { name: dimension, type: enum, enum_ref: SearchPlanDimension, default: '' }
       - { name: dimensionLabel, type: string, default: '' }
       - { name: searchPlanId, type: string, default: '' }
       - { name: title, type: string, default: '' }
       - { name: destination, type: object, ref: CitationDestination, required: true }
       - { name: source, type: string, default: '' }
       - { name: sourceHost, type: string, default: '' }
-      - { name: sourceTier, type: string, default: '' }
+      - { name: sourceTier, type: enum, enum_ref: EvidenceSourceTier, default: '' }
       - { name: freshnessHours, type: int, default: 0 }
       - { name: authorityScore, type: double, default: 0.0 }
       - { name: relevanceScore, type: double, default: 0.0 }

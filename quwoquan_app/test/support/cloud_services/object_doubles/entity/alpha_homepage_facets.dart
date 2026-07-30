@@ -263,7 +263,7 @@ final class AlphaHomepageFacet
           ? current.location
           : _geoPointToStructuredObject(command.location!),
       ownerUserId: current.ownerUserId,
-      ownerSubAccountId: current.ownerSubAccountId,
+      ownerPersonaId: current.ownerPersonaId,
       viewerFollowsHomepage: current.viewerFollowsHomepage,
       followerCount: current.followerCount,
       averageRating: current.averageRating,
@@ -392,7 +392,7 @@ HomepageDetailProjection _detailFromFixture(Map<String, Object?> row) {
         ? null
         : _structuredObject(_optionalObject(row['geo'])!),
     ownerUserId: _optionalText(row['ownerUserId']),
-    ownerSubAccountId: _optionalText(row['ownerSubAccountId']),
+    ownerPersonaId: _optionalText(row['ownerPersonaId']),
     viewerFollowsHomepage: row['viewerFollowsHomepage'] == true,
     followerCount: _optionalInt(row['followerCount']) ?? 0,
     averageRating: _optionalDouble(row['averageRating']),

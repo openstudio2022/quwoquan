@@ -1,0 +1,12 @@
+{
+  "label": "香港岛",
+  "labelEn": "Hong Kong Island",
+  "description": "中环、湾仔与太平山所在",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

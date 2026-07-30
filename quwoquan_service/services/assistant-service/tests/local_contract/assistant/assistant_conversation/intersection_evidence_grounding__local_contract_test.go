@@ -3,11 +3,12 @@ package local_contract
 
 import (
 	"context"
+	prompting "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/prompting"
 	"strings"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
@@ -42,11 +43,11 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 			VerifiedAt:     time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 		}},
 	}
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		nil,
-		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
-		application.WithIntersectionEvidenceReader(reader),
+		orchestration.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		orchestration.WithIntersectionEvidenceReader(reader),
 		testFrozenPolicyOption(),
 	)
 	conversation, err := service.CreateConversation(
@@ -89,7 +90,7 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 		turn.IntersectionEvidence[0].ObjectID != "post-server" {
 		t.Fatalf("turn must persist only reader facts, got %#v", turn.IntersectionEvidence)
 	}
-	prompt := application.FormatAuthorizedIntersectionEvidenceForPrompt(
+	prompt := prompting.FormatAuthorizedIntersectionEvidenceForPrompt(
 		turn.IntersectionEvidence,
 	)
 	if !strings.Contains(prompt, "服务端核验的共同学校事实") ||
@@ -100,13 +101,13 @@ func TestCreateTurnAuthorizesIntersectionEvidenceBeforePersistence(t *testing.T)
 
 func TestCreateTurnFailsClosedForMissingIntersectionEvidence(t *testing.T) {
 	reader := &migratedIntersectionEvidenceGroundingRecordingIntersectionEvidenceReader{
-		err: application.ErrIntersectionEvidenceNotFound,
+		err: orchestration.ErrIntersectionEvidenceNotFound,
 	}
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		nil,
-		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
-		application.WithIntersectionEvidenceReader(reader),
+		orchestration.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		orchestration.WithIntersectionEvidenceReader(reader),
 		testFrozenPolicyOption(),
 	)
 	conversation, err := service.CreateConversation(

@@ -6,5 +6,4 @@ const (
 	GreetingRequestReplied   = "GreetingRequestReplied"
 	GreetingRequestIgnored   = "GreetingRequestIgnored"
 	GreetingRequestCancelled = "GreetingRequestCancelled"
-	GreetingRequestExpired   = "GreetingRequestExpired"
 )

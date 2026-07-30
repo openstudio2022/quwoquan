@@ -7,20 +7,20 @@ const ExternalProviderBindingOwner = "user-service"
 const ExternalProviderBindingObject = "user.account.user_account"
 
 type ExternalProviderBinding struct {
-	State string
-	AdapterID string
-	EndpointRef string
+	State                   string
+	AdapterID               string
+	EndpointRef             string
 	EndpointEnvironmentKeys map[string]string
-	SecretEnvironmentKeys []string
-	TimeoutMilliseconds int
-	RequiredRedisScenes []string
+	SecretEnvironmentKeys   []string
+	TimeoutMilliseconds     int
+	RequiredRedisScenes     []string
 }
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"identity.carrier.one_tap": {
-			State: "enabled",
-			AdapterID: "ext.auth.carrier_one_tap_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.auth.carrier_one_tap_protocol_fixture",
 			EndpointRef: "environment_binding:identity.one_tap_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
@@ -30,18 +30,17 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"identity.social.login": {
-			State: "enabled",
-			AdapterID: "ext.auth.federated_identity_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.auth.federated_identity_protocol_fixture",
 			EndpointRef: "environment_binding:identity.social_fixture",
 			EndpointEnvironmentKeys: map[string]string{
-				"alipay_token": "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
+				"alipay_token":     "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
 				"alipay_user_info": "IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL",
-				"qq_user_info": "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
-				"wechat_token": "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
+				"qq_user_info":     "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
+				"wechat_token":     "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
 				"wechat_user_info": "IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL",
 			},
 			SecretEnvironmentKeys: []string{
@@ -54,18 +53,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport_fixture",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport_fixture",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -74,8 +70,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"beta": {
 		"identity.carrier.one_tap": {
-			State: "enabled",
-			AdapterID: "ext.auth.carrier_one_tap_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.auth.carrier_one_tap_protocol_fixture",
 			EndpointRef: "environment_binding:identity.one_tap_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
@@ -85,18 +81,17 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"identity.social.login": {
-			State: "enabled",
-			AdapterID: "ext.auth.federated_identity_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.auth.federated_identity_protocol_fixture",
 			EndpointRef: "environment_binding:identity.social_fixture",
 			EndpointEnvironmentKeys: map[string]string{
-				"alipay_token": "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
+				"alipay_token":     "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
 				"alipay_user_info": "IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL",
-				"qq_user_info": "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
-				"wechat_token": "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
+				"qq_user_info":     "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
+				"wechat_token":     "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
 				"wechat_user_info": "IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL",
 			},
 			SecretEnvironmentKeys: []string{
@@ -109,18 +104,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -129,8 +121,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"gamma": {
 		"identity.carrier.one_tap": {
-			State: "enabled",
-			AdapterID: "ext.auth.carrier_one_tap_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.auth.carrier_one_tap_protocol_fixture",
 			EndpointRef: "environment_binding:identity.one_tap_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "IDENTITY_ONE_TAP_FIXTURE_ENDPOINT",
@@ -140,18 +132,17 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"IDENTITY_ONE_TAP_FIXTURE_ACCESS_KEY_SECRET",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"identity.social.login": {
-			State: "enabled",
-			AdapterID: "ext.auth.federated_identity_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.auth.federated_identity_protocol_fixture",
 			EndpointRef: "environment_binding:identity.social_fixture",
 			EndpointEnvironmentKeys: map[string]string{
-				"alipay_token": "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
+				"alipay_token":     "IDENTITY_SOCIAL_FIXTURE_ALIPAY_TOKEN_URL",
 				"alipay_user_info": "IDENTITY_SOCIAL_FIXTURE_ALIPAY_USER_INFO_URL",
-				"qq_user_info": "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
-				"wechat_token": "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
+				"qq_user_info":     "IDENTITY_SOCIAL_FIXTURE_QQ_USER_INFO_URL",
+				"wechat_token":     "IDENTITY_SOCIAL_FIXTURE_WECHAT_TOKEN_URL",
 				"wechat_user_info": "IDENTITY_SOCIAL_FIXTURE_WECHAT_USER_INFO_URL",
 			},
 			SecretEnvironmentKeys: []string{
@@ -164,18 +155,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"IDENTITY_SOCIAL_FIXTURE_QQ_APP_ID",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -184,8 +172,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"prod": {
 		"identity.carrier.one_tap": {
-			State: "enabled",
-			AdapterID: "ext.auth.carrier_one_tap",
+			State:       "enabled",
+			AdapterID:   "ext.auth.carrier_one_tap",
 			EndpointRef: "environment_binding:identity.one_tap",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "ALIYUN_DYPNS_ENDPOINT",
@@ -195,18 +183,17 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"ALIYUN_DYPNS_ACCESS_KEY_SECRET",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"identity.social.login": {
-			State: "enabled",
-			AdapterID: "ext.auth.federated_identity",
+			State:       "enabled",
+			AdapterID:   "ext.auth.federated_identity",
 			EndpointRef: "environment_binding:identity.social",
 			EndpointEnvironmentKeys: map[string]string{
-				"alipay_token": "ALIPAY_OAUTH_TOKEN_URL",
+				"alipay_token":     "ALIPAY_OAUTH_TOKEN_URL",
 				"alipay_user_info": "ALIPAY_OAUTH_USER_INFO_URL",
-				"qq_user_info": "QQ_OAUTH_USER_INFO_URL",
-				"wechat_token": "WECHAT_OAUTH_TOKEN_URL",
+				"qq_user_info":     "QQ_OAUTH_USER_INFO_URL",
+				"wechat_token":     "WECHAT_OAUTH_TOKEN_URL",
 				"wechat_user_info": "WECHAT_OAUTH_USER_INFO_URL",
 			},
 			SecretEnvironmentKeys: []string{
@@ -219,18 +206,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"QQ_OAUTH_APP_ID",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -241,7 +225,9 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 
 func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {
 	byCapability, ok := ExternalProviderBindings[environment]
-	if !ok { return ExternalProviderBinding{}, false }
+	if !ok {
+		return ExternalProviderBinding{}, false
+	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }

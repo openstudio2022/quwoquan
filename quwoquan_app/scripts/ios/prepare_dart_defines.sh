@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Xcode 直接构建不会经过 `flutter run --dart-define=...`。这里从同一环境包生成
-# 端点定义，再与 Flutter 自身的版本定义合并，禁止静默产出缺端点安装包。
+# Xcode phase 只验证 canonical launcher 传入的同一份 handoff。
+# 裸 `flutter run` 无法保证 resident compiler 在 Hot Restart 时保留 defines，
+# 因此必须在安装前失败，禁止 Xcode 临时合成第二份配置。
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EXISTING_RUNTIME_ENV="$(
@@ -20,64 +21,27 @@ for encoded in filter(None, sys.argv[1].strip().split(",")):
         break
 PY
 )"
-ENV_NAME="${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-}}"
-LAUNCH_MODE="${QWQ_APP_LAUNCH_MODE:-xcode_build}"
-DIRECT_ALPHA_HANDOFF_APPLIED=0
-DIRECT_ALPHA_RUNTIME_DEFINES_JSON=""
-
-if [[ -z "$ENV_NAME" ]]; then
-  if [[ "${CONFIGURATION:-}" == "Debug" ]] && \
-    { [[ "${EFFECTIVE_PLATFORM_NAME:-}" == *"iphonesimulator"* ]] || \
-      [[ "${PLATFORM_NAME:-}" == "iphonesimulator" ]]; }; then
-    DIRECT_ALPHA_HANDOFF_JSON="$(
-      python3 "$APP_DIR/scripts/device/build_launcher_handoff.py" \
-        --env alpha \
-        --target alpha-local \
-        --launch-mode canonical_launcher \
-        --app-instance-id xcode-direct-alpha \
-        --app-instance-namespace xcode-direct-alpha
-    )" || {
-      echo "[ios-dart-defines] FAIL: canonical Alpha launcher handoff could not be built." >&2
-      exit 2
-    }
-    DIRECT_ALPHA_EXPORTS="$(
-      python3 - "$DIRECT_ALPHA_HANDOFF_JSON" <<'PY'
-import json
-import shlex
+EXISTING_LAUNCH_MODE="$(
+  python3 - "${DART_DEFINES:-}" <<'PY'
+import base64
 import sys
 
-handoff = json.loads(sys.argv[1])
-values = {
-    "QWQ_APP_RUNTIME_ENV": handoff["environment"],
-    "QWQ_APP_LAUNCH_MODE": handoff["launchMode"],
-    "QWQ_LAUNCH_TARGET": handoff["target"],
-    "QWQ_DART_DEFINES_DIGEST": handoff["dartDefinesDigest"],
-    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": handoff["runtimeConfigDigest"],
-    "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": handoff[
-        "effectiveLaunchManifestDigest"
-    ],
-    "DIRECT_ALPHA_RUNTIME_DEFINES_JSON": json.dumps(
-        handoff["dartDefines"],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ),
-}
-for key, value in values.items():
-    print(f"export {key}={shlex.quote(str(value))}")
+for encoded in filter(None, sys.argv[1].strip().split(",")):
+    try:
+        decoded = base64.b64decode(encoded).decode("utf-8")
+    except Exception:
+        continue
+    if decoded.startswith("QWQ_APP_LAUNCH_MODE="):
+        print(decoded.split("=", 1)[1].strip())
+        break
 PY
-    )" || {
-      echo "[ios-dart-defines] FAIL: canonical Alpha launcher handoff is invalid." >&2
-      exit 2
-    }
-    eval "$DIRECT_ALPHA_EXPORTS"
-    ENV_NAME="$QWQ_APP_RUNTIME_ENV"
-    LAUNCH_MODE="$QWQ_APP_LAUNCH_MODE"
-    DIRECT_ALPHA_HANDOFF_APPLIED=1
-    echo "[ios-dart-defines] using canonical Alpha handoff for direct iOS Debug." >&2
-  else
-    echo "[ios-dart-defines] FAIL: explicit QWQ_APP_RUNTIME_ENV or DART_DEFINES APP_RUNTIME_ENV is required outside direct iOS Simulator Debug." >&2
-    exit 2
-  fi
+)"
+ENV_NAME="${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-}}"
+LAUNCH_MODE="${QWQ_APP_LAUNCH_MODE:-${EXISTING_LAUNCH_MODE:-}}"
+
+if [[ -z "$ENV_NAME" ]]; then
+  echo "[ios-dart-defines] GATE_BLOCK: canonical runtime handoff is required; use ./run.sh -d <device>." >&2
+  exit 2
 fi
 
 if [[ -n "${QWQ_APP_RUNTIME_ENV:-}" \
@@ -95,21 +59,21 @@ case "$ENV_NAME" in
     ;;
 esac
 
-if [[ "$DIRECT_ALPHA_HANDOFF_APPLIED" == "1" ]]; then
-  RUNTIME_DEFINES_JSON="$DIRECT_ALPHA_RUNTIME_DEFINES_JSON"
-else
-  RUNTIME_DEFINES_JSON="$(
-    python3 "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
-      --env "$ENV_NAME" \
-      --format json \
-      --launch-mode "$LAUNCH_MODE"
-  )"
+if [[ -z "$LAUNCH_MODE" ]]; then
+  echo "[ios-dart-defines] GATE_BLOCK: canonical launch mode is required; use ./run.sh -d <device>." >&2
+  exit 2
 fi
+
+RUNTIME_DEFINES_JSON="$(
+  python3 "$APP_DIR/scripts/env/print_app_env_dart_defines.py" \
+    --env "$ENV_NAME" \
+    --format json \
+    --launch-mode "$LAUNCH_MODE"
+)"
 
 python3 - \
   "$RUNTIME_DEFINES_JSON" \
-  "${DART_DEFINES:-}" \
-  "$DIRECT_ALPHA_HANDOFF_APPLIED" <<'PY'
+  "${DART_DEFINES:-}" <<'PY'
 import base64
 import json
 import os
@@ -213,6 +177,7 @@ if target_build_dir and resources_folder:
                 "launchMode": runtime_defines.get("QWQ_APP_LAUNCH_MODE", ""),
                 "recoveryBaseURL": merged["CLOUD_GATEWAY_BASE_URL"],
                 "publicWebURL": merged["PUBLIC_WEB_BASE_URL"],
+                "appDownloadBaseURL": merged["APP_DOWNLOAD_BASE_URL"],
             },
             stream,
             sort_keys=True,
@@ -233,7 +198,3 @@ print(
 print("export DART_DEFINES=" + shlex.quote(",".join(encoded_defines)))
 print("export QWQ_IOS_DART_DEFINES_READY=1")
 PY
-
-if [[ "$DIRECT_ALPHA_HANDOFF_APPLIED" == "1" ]]; then
-  printf 'export FLUTTER_TARGET=%q\n' "$APP_DIR/lib/main_prod.dart"
-fi

@@ -2,13 +2,13 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ProfileQrResolveWireDto {
-  final String subAccountId;
+  final String personaId;
   final String userHandle;
   final String publicProfileUrl;
   final String scanStatus;
 
   ProfileQrResolveWireDto({
-    this.subAccountId = '',
+    this.personaId = '',
     this.userHandle = '',
     this.publicProfileUrl = '',
     this.scanStatus = 'accepted',
@@ -16,7 +16,7 @@ class ProfileQrResolveWireDto {
 
   factory ProfileQrResolveWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileQrResolveWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? '',
+      personaId: m['personaId']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? '',
       publicProfileUrl: m['publicProfileUrl']?.toString() ?? '',
       scanStatus: m['scanStatus']?.toString() ?? 'accepted',
@@ -25,7 +25,7 @@ class ProfileQrResolveWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'userHandle': userHandle,
       'publicProfileUrl': publicProfileUrl,
       'scanStatus': scanStatus,
@@ -33,13 +33,13 @@ class ProfileQrResolveWireDto {
   }
 
   ProfileQrResolveWireDto copyWith({
-    String? subAccountId,
+    String? personaId,
     String? userHandle,
     String? publicProfileUrl,
     String? scanStatus,
   }) {
     return ProfileQrResolveWireDto(
-      subAccountId: subAccountId ?? this.subAccountId,
+      personaId: personaId ?? this.personaId,
       userHandle: userHandle ?? this.userHandle,
       publicProfileUrl: publicProfileUrl ?? this.publicProfileUrl,
       scanStatus: scanStatus ?? this.scanStatus,

@@ -1,3 +1,12 @@
 {
-  "assets": []
+  "assets": [
+    {
+      "assetId": "creator-avatar-qwq_creator_self_drive_guide_001-39ee12d63d3640eb",
+      "kind": "avatar",
+      "sha256": "sha256:39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6",
+      "objectKey": "media/objects/sha256/39/ee/39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6.webp",
+      "bytes": 238874,
+      "mimeType": "image/webp"
+    }
+  ]
 }

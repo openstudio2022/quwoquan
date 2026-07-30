@@ -1,5 +1,7 @@
 {
-  "contractId": "fixture_contract_v1",
+  "contractId": "assistant_turn",
+  "decision": { "nextAction": "answer" },
   "messageKind": "answer",
-  "userMarkdown": ""
+  "userMarkdown": "",
+  "result": {}
 }

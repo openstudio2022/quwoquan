@@ -38,7 +38,7 @@ void main() {
       );
       cache = ConversationCacheService();
       currentContext = ActivePersonaContextViewData.fallback(
-        subAccountId: 'user_owner',
+        personaId: 'user_owner',
         ownerUserId: 'user_owner',
         subjectType: 'owner',
         displayName: '主账号',
@@ -69,10 +69,10 @@ void main() {
       expect(repo.listContactsCalls, equals(1));
 
       currentContext = ActivePersonaContextViewData.fallback(
-        subAccountId: 'sub_001',
+        personaId: 'sub_001',
         ownerUserId: 'user_owner',
-        subjectType: 'sub_account',
-        displayName: '子账号',
+        subjectType: 'persona',
+        displayName: 'Persona',
         avatarUrl: '',
         contextVersion: 2,
       );
@@ -82,7 +82,7 @@ void main() {
 
       final ownerNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          subAccountId: 'user_owner',
+          personaId: 'user_owner',
           ownerUserId: 'user_owner',
           subjectType: 'owner',
           displayName: '主账号',
@@ -461,6 +461,7 @@ class _PagedContactsChatRepository extends MockChatRepository {
           100,
           (index) => ChatContactRowDto(
             userId: 'friend-$index',
+            userHandle: 'friend_handle_$index',
             displayName: 'friend $index',
             avatarUrl: '',
             bio: '',
@@ -477,6 +478,7 @@ class _PagedContactsChatRepository extends MockChatRepository {
         items: <ChatContactRowDto>[
           ChatContactRowDto(
             userId: 'survivor-contact',
+            userHandle: 'survivor_handle',
             displayName: 'survivor',
             avatarUrl: '',
             bio: '',

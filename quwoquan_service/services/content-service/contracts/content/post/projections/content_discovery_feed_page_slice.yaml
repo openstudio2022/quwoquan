@@ -1,0 +1,46 @@
+read_model: ContentDiscoveryFeedPageSlice
+description: '首页发现流唯一响应 envelope。items 与 objectCards 均为已完成展示投影，
+
+  outcome/emptyReason 明确区分内容页与合法空页；分页只使用绑定当前 feed 会话的
+
+  nextCursor/previousCursor，不暴露兼容 cursor。
+
+  '
+source_entities:
+- Post
+- MediaAsset
+- Homepage
+source_projections:
+- ContentPostProjection
+- FeedObjectCard
+consumers:
+- app
+client_projection:
+  dart_class: ContentDiscoveryFeedPageSlice
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_reader_models.dart
+fields:
+- name: items
+  type: '[]ContentPostProjection'
+- name: outcome
+  type: enum
+  enum_ref: ContentFeedOutcome
+- name: emptyReason
+  type: enum
+  enum_ref: ContentFeedEmptyReason
+  nullable: true
+- name: nextCursor
+  type: string
+  nullable: true
+- name: previousCursor
+  type: string
+  nullable: true
+- name: paginationExpiresAt
+  type: timestamp
+  nullable: true
+- name: feedRequestId
+  type: string
+- name: policyDigest
+  type: string
+  nullable: true
+- name: objectCards
+  type: '[]FeedObjectCard'

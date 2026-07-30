@@ -7,7 +7,7 @@ events:
   payload_entity: Persona
   payload_fields:
   - userId
-  - subAccountId
+  - personaId
 - name: PersonaUpdated
   producer: user-service
   consumers:
@@ -16,7 +16,7 @@ events:
   payload_entity: Persona
   payload_fields:
   - userId
-  - subAccountId
+  - personaId
 - name: PersonaRetired
   producer: user-service
   consumers:
@@ -25,7 +25,7 @@ events:
   payload_entity: Persona
   payload_fields:
   - userId
-  - subAccountId
+  - personaId
 - name: PersonaActivated
   producer: user-service
   consumers:
@@ -34,4 +34,4 @@ events:
   payload_entity: Persona
   payload_fields:
   - userId
-  - subAccountId
+  - personaId

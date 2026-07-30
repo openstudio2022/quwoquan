@@ -1,7 +1,8 @@
 {
   "label": "事件",
   "labelEn": "Event",
-  "description": "可指称事实事件",
+  "description": "具有发生性、进程性和时间节点的现实或线上事件主题",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

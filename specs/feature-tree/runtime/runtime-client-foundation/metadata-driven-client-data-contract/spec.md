@@ -84,9 +84,9 @@
 <a id="open-003"></a>
 ### OPEN-003 四环境 Remote composition 与 release-bound UAT
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Alpha runner、mock package 与 Patrol fixture override 的删除实现，四环境 artifact/UAT 也尚无 transitive dependency attestation 和同一 canonical release 的精确读回证据。
+- 影响或价值：仍缺四环境 artifact 的 transitive dependency attestation，以及绑定同一 canonical release 的精确 API/UI 读回 CaseResult。仓内 Alpha runner、aggregate mock package 与 Patrol 业务 Provider 注入已退役，并由 `verify-production-data-source-single-path` fail-closed。
 - 完成判定：`GWT-001` 由四环境 Remote artifact、Mock/fixture 可达数为零、release-bound API/UI CaseResult 与 required non-skipped CI 直接证明。
 - 依赖：环境 topology、canonical release activation 与 App core readback。

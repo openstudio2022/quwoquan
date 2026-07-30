@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -39,12 +40,13 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "video_playback_canary_work_id": "fixture_video_001",
             "patrol_install_id": "",
             "account_closure_disposable_ack": False,
+            "persisted_device_session": False,
             "test_auth_token": "local-gamma-token",
             "test_refresh_token": "local-gamma-refresh",
             "release_uat_cases": "",
             "release_uat_cases_b64": "",
             "current_owner_id": "fixture_owner_current",
-            "current_sub_account_id": "fixture_user_current",
+            "current_persona_id": "fixture_user_current",
             "target": (
                 "test/user_acceptance/patrol/environment/"
                 "video_playback_canary__user_acceptance_test.dart"
@@ -56,6 +58,24 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "report": ".qwq_output/env/repo/runs/device-matrix/environment-smoke/report.json",
         }
         values.update(overrides)
+        target_name = smoke._local_target_for_environment_alias(
+            str(values["env_name"])
+        )
+        public_bases = smoke.get_target(
+            smoke.load_environment_topology(),
+            target_name,
+        )["publicBases"]
+        for argument, role in (
+            ("gateway_base_url", "api"),
+            ("product_ops_base_url", "productOps"),
+            ("media_avatar_base_url", "mediaAvatar"),
+            ("media_image_base_url", "mediaImage"),
+            ("media_video_base_url", "mediaVideo"),
+            ("media_upload_base_url", "mediaUpload"),
+            ("rtc_media_connection_url", "rtc"),
+        ):
+            if argument not in overrides:
+                values[argument] = public_bases[role]
         return argparse.Namespace(**values)
 
     def test_patrol_build_workspace_rejects_overlapping_runners(self) -> None:
@@ -93,6 +113,90 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 "test/user_acceptance/patrol/environment/"
                 "video_playback_canary__user_acceptance_test.dart"
             ),
+        )
+
+    def test_runtime_recovery_evidence_is_exact_and_privacy_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            log_path = Path(temporary_dir) / "patrol.log"
+            log_path.write_text(
+                "QWQ_RUNTIME_RECOVERY_EVIDENCE "
+                + json.dumps(
+                    {
+                        "authenticatedBefore": True,
+                        "authenticatedAfter": True,
+                        "sameOwner": True,
+                        "samePersona": True,
+                        "homeRestored": True,
+                        "secondFaultNoReentry": True,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            evidence = smoke._read_runtime_recovery_evidence(log_path)
+            self.assertTrue(all(evidence.values()))
+
+            log_path.write_text(
+                'QWQ_RUNTIME_RECOVERY_EVIDENCE {"sameOwner":true}\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(smoke._read_runtime_recovery_evidence(log_path), {})
+
+    def test_runtime_recovery_requires_persisted_session_without_injected_identity(self) -> None:
+        target = smoke.RUNTIME_RECOVERY_TARGET
+        with self.assertRaisesRegex(
+            ValueError,
+            "requires --persisted-device-session",
+        ):
+            smoke._prepare_execution_session(
+                self._args(
+                    target=target,
+                    test_auth_token="",
+                    test_refresh_token="",
+                    current_owner_id="",
+                    current_persona_id="",
+                )
+            )
+
+        args = self._args(
+            target=target,
+            persisted_device_session=True,
+            test_auth_token="",
+            test_refresh_token="",
+            current_owner_id="",
+            current_persona_id="",
+        )
+        self.assertEqual(
+            smoke._prepare_execution_session(args),
+            "persisted_device_session",
+        )
+        with self.assertRaisesRegex(ValueError, "forbids injected auth"):
+            smoke._prepare_execution_session(
+                self._args(
+                    target=target,
+                    persisted_device_session=True,
+                )
+            )
+
+    def test_runtime_recovery_requires_dual_physical_device_matrix(self) -> None:
+        args = self._args(
+            target=smoke.RUNTIME_RECOVERY_TARGET,
+            persisted_device_session=True,
+        )
+        with self.assertRaisesRegex(RuntimeError, "physical Android"):
+            smoke._validate_runtime_recovery_device_matrix(
+                args,
+                [
+                    {"targetPlatform": "android-arm64", "emulator": False},
+                    {"targetPlatform": "ios", "emulator": True},
+                ],
+            )
+        smoke._validate_runtime_recovery_device_matrix(
+            args,
+            [
+                {"targetPlatform": "android-arm64", "emulator": False},
+                {"targetPlatform": "ios", "emulator": False},
+            ],
         )
 
     def test_native_video_evidence_only_accepts_patrol_log_marker(self) -> None:
@@ -160,11 +264,15 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         payload = json.loads(scenarios.read_text(encoding="utf-8"))
         posts = payload["seedSets"]["content_discovery_core"]["posts"]
-        canary_posts = [item for item in posts if item.get("postId") == "v1"]
+        canary_posts = [
+            item
+            for item in posts
+            if item.get("postId") == "video_tokyo_midnight"
+        ]
         self.assertEqual(
             len(canary_posts),
             1,
-            "fixture video coverage requires the v1 scenario object",
+            "fixture video coverage requires the canonical Tokyo midnight video object",
         )
         canary = canary_posts[0]
         self.assertEqual(canary.get("contentType"), "video")
@@ -198,9 +306,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertEqual(actual["gatewayBaseUrl"], "https://api.gamma.quwoquan.com:19000")
         self.assertEqual(actual["productOpsBaseUrl"], "https://ops.gamma.quwoquan.com:19010")
-        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
-        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
-        self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/avatar")
+        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/image")
+        self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/video")
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
         self.assertNotIn("mediaBaseUrl", actual)
 
@@ -212,9 +320,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertEqual(actual["gatewayBaseUrl"], "https://api.gamma.quwoquan.com:19000")
         self.assertEqual(actual["productOpsBaseUrl"], "https://ops.gamma.quwoquan.com:19010")
-        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
-        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
-        self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100")
+        self.assertEqual(actual["mediaAvatarBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/avatar")
+        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/image")
+        self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/video")
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
 
     def test_ios_build_restores_canonical_public_transport_authority(self) -> None:
@@ -270,7 +378,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             return merged["CLOUD_GATEWAY_BASE_URL"]
 
         self.assertEqual(
-            resolved_gateway("https://gamma-api.localhost:19000"),
+            resolved_gateway("https://legacy.invalid:19000"),
             "https://api.gamma.quwoquan.com:19000",
         )
         self.assertEqual(
@@ -285,9 +393,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             api_contract_env="prod",
             gateway_base_url="https://api.quwoquan.com",
             product_ops_base_url="https://ops.quwoquan.com",
-            media_avatar_base_url="https://cdn.quwoquan.com",
-            media_image_base_url="https://cdn.quwoquan.com",
-            media_video_base_url="https://cdn.quwoquan.com",
+            media_avatar_base_url="https://cdn.quwoquan.com/media/avatar",
+            media_image_base_url="https://cdn.quwoquan.com/media/image",
+            media_video_base_url="https://cdn.quwoquan.com/media/video",
             media_upload_base_url="https://upload.quwoquan.com",
         )
         device = {"targetPlatform": "ios", "emulator": True}
@@ -296,7 +404,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertEqual(actual["gatewayBaseUrl"], "https://api.quwoquan.com")
         self.assertEqual(actual["productOpsBaseUrl"], "https://ops.quwoquan.com")
-        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.quwoquan.com")
+        self.assertEqual(actual["mediaImageBaseUrl"], "https://cdn.quwoquan.com/media/image")
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.quwoquan.com")
         self.assertNotIn("mediaBaseUrl", actual)
 
@@ -307,7 +415,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             test_auth_token="",
             test_refresh_token="",
             current_owner_id="",
-            current_sub_account_id="",
+            current_persona_id="",
         )
         source = smoke._prepare_execution_session(args)
 
@@ -315,7 +423,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(args.test_auth_token, "")
         self.assertEqual(args.test_refresh_token, "")
         self.assertEqual(smoke._resolved_owner_id(args), "")
-        self.assertEqual(smoke._resolved_sub_account_id(args), "")
+        self.assertEqual(smoke._resolved_persona_id(args), "")
         self.assertEqual(smoke._missing_required_args(args), [])
         command = smoke.patrol_command(
             {
@@ -338,7 +446,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             command,
         )
         self.assertIn(
-            "--dart-define=APP_LEGAL_BASE_URL=https://api.gamma.quwoquan.com:19000/legal",
+            "--dart-define=APP_LEGAL_BASE_URL=https://gamma.quwoquan.com:19000/legal",
             command,
         )
         self.assertNotIn("--dart-define-from-file=", command)
@@ -350,14 +458,14 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             api_contract_env="beta",
             gateway_base_url="https://api.beta.quwoquan.com:18000",
             product_ops_base_url="https://ops.beta.quwoquan.com:18010",
-            media_avatar_base_url="https://cdn.beta.quwoquan.com:18100",
-            media_image_base_url="https://cdn.beta.quwoquan.com:18100",
-            media_video_base_url="https://cdn.beta.quwoquan.com:18100",
+            media_avatar_base_url="https://cdn.beta.quwoquan.com:18100/media/avatar",
+            media_image_base_url="https://cdn.beta.quwoquan.com:18100/media/image",
+            media_video_base_url="https://cdn.beta.quwoquan.com:18100/media/video",
             media_upload_base_url="https://upload.beta.quwoquan.com:18100",
             test_auth_token="",
             test_refresh_token="",
             current_owner_id="",
-            current_sub_account_id="",
+            current_persona_id="",
         )
 
         source = smoke._prepare_execution_session(args)
@@ -384,29 +492,23 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "gamma-local",
         )
 
-    def test_stackctl_resolves_every_local_public_target_to_loopback(self) -> None:
+    def test_stackctl_uses_canonical_public_hosts_without_host_rewrite(self) -> None:
         topology = stackctl.load_environment_topology()
-        for target_name in ("alpha-local", "beta-local", "gamma-local", "prod-sim"):
+        expected_hosts = {
+            "alpha-local": "cdn.alpha.quwoquan.com",
+            "beta-local": "cdn.beta.quwoquan.com",
+            "gamma-local": "cdn.gamma.quwoquan.com",
+            "prod-sim": "cdn.sim.quwoquan.com",
+            "prod-hosted": "cdn.quwoquan.com",
+        }
+        for target_name, expected_host in expected_hosts.items():
             target = stackctl.get_target(topology, target_name)
             media_video_url = target["publicBases"]["mediaVideo"]
-            self.assertEqual(
-                stackctl._local_public_connect_host(
-                    topology,
-                    target_name,
-                    media_video_url,
-                ),
-                "127.0.0.1",
-            )
-
-        hosted = stackctl.get_target(topology, "prod-hosted")
-        self.assertEqual(
-            stackctl._local_public_connect_host(
-                topology,
-                "prod-hosted",
-                hosted["publicBases"]["mediaVideo"],
-            ),
-            "",
-        )
+            parsed = urlsplit(media_video_url)
+            self.assertEqual(parsed.scheme, "https")
+            self.assertEqual(parsed.hostname, expected_host)
+            self.assertNotIn("resolveHost", target)
+            self.assertNotIn("connectHost", target)
 
     def test_patrol_command_includes_canonical_public_hosts_and_current_user(self) -> None:
         args = self._args()
@@ -427,9 +529,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertIn("--dart-define=CLOUD_GATEWAY_BASE_URL=https://api.gamma.quwoquan.com:19000", joined)
         self.assertIn("--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=https://ops.gamma.quwoquan.com:19010", joined)
-        self.assertIn("--dart-define=MEDIA_AVATAR_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100", joined)
-        self.assertIn("--dart-define=MEDIA_IMAGE_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100", joined)
-        self.assertIn("--dart-define=MEDIA_VIDEO_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100", joined)
+        self.assertIn("--dart-define=MEDIA_AVATAR_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100/media/avatar", joined)
+        self.assertIn("--dart-define=MEDIA_IMAGE_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100/media/image", joined)
+        self.assertIn("--dart-define=MEDIA_VIDEO_CDN_BASE_URL=https://cdn.gamma.quwoquan.com:19100/media/video", joined)
         self.assertIn("--dart-define=MEDIA_UPLOAD_BASE_URL=https://upload.gamma.quwoquan.com:19130", joined)
         self.assertIn(
             "--dart-define=RTC_MEDIA_CONNECTION_URL=wss://rtc.gamma.quwoquan.com:19000",
@@ -448,7 +550,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             joined,
         )
         self.assertNotIn("--dart-define=APP_CURRENT_OWNER_ID=", joined)
-        self.assertNotIn("--dart-define=APP_CURRENT_SUB_ACCOUNT_ID=", joined)
+        self.assertNotIn("--dart-define=APP_CURRENT_PERSONA_ID=", joined)
         self.assertNotIn("--dart-define-from-file=", joined)
         self.assertNotIn("local-gamma-token", joined)
         self.assertNotIn("local-gamma-refresh", joined)
@@ -570,7 +672,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                     test_auth_token="",
                     test_refresh_token="",
                     current_owner_id="",
-                    current_sub_account_id="",
+                    current_persona_id="",
                 )
                 command = smoke.patrol_command(
                     {
@@ -713,7 +815,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             test_auth_token="",
             test_refresh_token="",
             current_owner_id="",
-            current_sub_account_id="",
+            current_persona_id="",
         )
         device = {"id": "android-1", "targetPlatform": "android-arm64", "emulator": True}
 
@@ -932,12 +1034,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "schema": "search-remote-api-uat-report-v1",
+                        "schema": "search-remote-api-uat-report",
                         "status": "passed",
                         "cases": {
                             "searchAndFeedbackRoundtrip": {
                                 "evidence": {
-                                    "schema": "search-remote-api-evidence-v1",
+                                    "schema": "search-remote-api-evidence",
                                     "status": "passed",
                                     "searchRequestId": "search.req.1",
                                     "events": [
@@ -974,7 +1076,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                             },
                             "tagFilterPositiveAndNegative": {
                                 "evidence": {
-                                    "schema": "search-tag-filter-remote-evidence-v1",
+                                    "schema": "search-tag-filter-remote-evidence",
                                     "status": "passed",
                                     "positiveHitCount": 1,
                                     "negativeHitCount": 0,
@@ -1093,7 +1195,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 '{"TEST_AUTH_TOKEN": "remote-access", '
                 '"TEST_REFRESH_TOKEN": "remote-refresh", '
                 '"APP_CURRENT_OWNER_ID": "fixture_owner_current", '
-                '"APP_CURRENT_SUB_ACCOUNT_ID": "fixture_user_current", '
+                '"APP_CURRENT_PERSONA_ID": "fixture_user_current", '
                 '"APP_CURRENT_USER_ID": "fixture_user_current"}\n',
             )
         finally:
@@ -1146,7 +1248,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         args.test_auth_token = ""
         args.test_refresh_token = ""
         args.current_owner_id = ""
-        args.current_sub_account_id = ""
+        args.current_persona_id = ""
         self.assertEqual(
             smoke._prepare_execution_session(args),
             "unauthenticated_auth_entry",
@@ -1168,12 +1270,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             test_auth_token="remote-access",
             test_refresh_token="remote-refresh",
             current_owner_id="",
-            current_sub_account_id="",
+            current_persona_id="",
         )
 
         self.assertEqual(
             smoke._missing_required_args(args),
-            ["current_owner_id", "current_sub_account_id"],
+            ["current_owner_id", "current_persona_id"],
         )
 
     def test_release_bound_homepage_uat_does_not_require_video_canary(self) -> None:
@@ -1243,7 +1345,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             report = json.loads((root / "report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "passed")
             self.assertNotIn("currentOwnerId", report)
-            self.assertNotIn("currentSubAccountId", report)
+            self.assertNotIn("currentPersonaId", report)
             self.assertTrue(report["hasCurrentOwnerIdentity"])
             self.assertTrue(report["hasCurrentPersonaIdentity"])
             self.assertEqual(report["runs"][0]["evidence"]["localTlsTrust"]["reason"], "not-required")
@@ -1432,7 +1534,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             (ROOT / "quwoquan_ops/cli/lib/local_target_tls.py").exists(),
         )
 
-    def test_beta_starts_backing_services_before_assistant(self) -> None:
+    def test_beta_uses_one_immutable_release_consumer_backend(self) -> None:
         beta_manual = (
             ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
         ).read_text(encoding="utf-8")
@@ -1458,34 +1560,27 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 "entity-service",
             )
         )
-        beta_gateway = (
-            ROOT
-            / "quwoquan_ops"
-            / "tests"
-            / "acceptance"
-            / "user_acceptance"
-            / "service_ops"
-            / "assistant-service"
-            / "smoke"
-            / "dev_assistant_beta_gateway.py"
-        ).read_text(encoding="utf-8")
-        backing_ready = beta_manual.index(
-            "real beta content data plane must be ready before beta services start",
+        data_plane = beta_manual.index("beta_manual_ensure_data_plane || return 1")
+        media_runtime = beta_manual.index(
+            "beta_manual_start_release_media_runtime || return 1",
+            data_plane,
         )
-        assistant_start = beta_manual.index(
-            'echo "[app-beta-manual] starting assistant-service beta',
+        entity_runtime = beta_manual.index(
+            "beta_manual_start_entity_service || return 1",
+            media_runtime,
         )
-
-        self.assertLess(backing_ready, assistant_start)
+        public_ingress = beta_manual.index(
+            "beta_manual_start_tls_proxy || return 1",
+            entity_runtime,
+        )
+        self.assertLess(data_plane, media_runtime)
+        self.assertLess(media_runtime, entity_runtime)
+        self.assertLess(entity_runtime, public_ingress)
         for token in (
             "docker-compose.beta-backing.yaml",
             "quwoquan-beta-backing",
             'mongodb://127.0.0.1:${BETA_MONGO_PORT}/?directConnection=true',
             '127.0.0.1:${BETA_REDIS_PORT}',
-            'MONGODB_URI="$CHAT_MONGO_URI"',
-            'MONGODB_DATABASE="quwoquan_assistant"',
-            'REDIS_GENERAL_ADDR="$CHAT_REDIS_ADDR"',
-            'REDIS_REC_ADDR="$CHAT_REDIS_ADDR"',
             'ENTITY_REDIS_ADDR="127.0.0.1:${BETA_REDIS_PORT}"',
             "export CONTENT_PORT",
             "export BETA_POSTGRES_PORT BETA_MONGO_PORT BETA_REDIS_PORT",
@@ -1493,21 +1588,29 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "BETA_SERVICE_CONFIG_ROOT",
             "recommendation-service",
             "content-service",
-            'mkdir -p "$(dirname "$CHAT_SEED_LOG")"',
-            'python3 "$BETA_MANUAL_RUNTIME_LOG_PROCESS"',
-            '--event "chat-seed"',
-            'CIRCLE_SERVICE_BASE_URL="$INTERNAL_GATEWAY_BASE_URL"',
-            'CONTENT_SERVICE_BASE_URL="$INTERNAL_GATEWAY_BASE_URL"',
             'https://${PUBLIC_API_HOST}:${GATEWAY_PORT}',
-            'https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}',
             'https://${PUBLIC_IMAGE_HOST}:${MEDIA_PORT}',
             '-p "${GATEWAY_PORT}:${GATEWAY_PORT}"',
-            '-p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}"',
             '-p "${MEDIA_PORT}:${MEDIA_PORT}"',
+            "ship apply is the only writer of this directory",
+            "respond 404",
         ):
             self.assertIn(token, beta_manual)
         self.assertNotIn("LOCAL_GAMMA_", beta_manual)
-        self.assertNotIn(') >"$CHAT_SEED_LOG" 2>&1', beta_manual)
+        for retired in (
+            "contracts/metadata/_shared/test_fixtures",
+            "dev_assistant_beta_gateway.py",
+            "beta_manual_start_fixture_gateway",
+            "beta_manual_start_notification_service",
+            "go run ./cmd/seed-fixture",
+            "go run ./services/user-service/cmd/seed",
+            "fixture_user_current",
+            "START_ASSISTANT",
+            "CONTENT_RELEASE_ONLY",
+            "CHAT_SEED_LOG",
+            "BETA_FIXTURE_GATEWAY_PORT",
+        ):
+            self.assertNotIn(retired, beta_manual)
         self.assertIn("BETA_MONGO_PORT", beta_backing_compose)
         self.assertIn("BETA_REDIS_PORT", beta_backing_compose)
         self.assertIn("object-storage:", beta_backing_compose)
@@ -1568,56 +1671,19 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             beta_manual,
         )
         self.assertIn("--write-report-account-backfill", beta_manual)
-        self.assertIn('NOTIFICATION_SERVICE_ADDR=":${BETA_NOTIFICATION_PORT}"', beta_manual)
         self.assertIn(
-            "@content_report path /content/reports /content/reports/* /content/users/me/reports",
+            "recommendation_policy.yaml",
             beta_manual,
         )
-        self.assertIn(
-            "recommendation_policy_object_cards_v1.yaml",
-            beta_manual,
-        )
-        self.assertIn("@notification_app_messages", beta_manual)
-        self.assertIn("BETA_FIXTURE_GATEWAY_PORT", beta_manual)
-        self.assertIn('if path == "/user/sync":', beta_gateway)
-        self.assertNotIn(
-            'path.startswith("/chat") or path == "/user/sync"',
-            beta_gateway,
-        )
-        self.assertIn("--skip-assistant", beta_manual)
-        self.assertIn('if [[ "$START_ASSISTANT" == "1" ]]; then', beta_manual)
-        self.assertIn(
-            'if [[ "$WORKLOAD" == "content-release" ]]; then',
-            beta_stack,
-        )
-        self.assertIn("APP_BETA_CMD+=(--content-release)", beta_stack)
+        self.assertEqual(beta_stack.count("APP_BETA_CMD+=(--content-release)"), 1)
         self.assertIn("beta_manual_start_content_release_stack", beta_manual)
-        self.assertIn('if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then', beta_manual)
-        self.assertIn("--content-upstream-port \"$CONTENT_PORT\"", beta_manual)
-        self.assertIn("beta_manual_start_notification_service", beta_manual)
         self.assertIn(
-            "for service in content-service entity-service notification-service recommendation-service",
+            "for service in content-service entity-service recommendation-service user-service",
             beta_manual,
         )
-        self.assertEqual(
-            beta_manual.count('\n      CONFIG_ROOT="$BETA_SERVICE_CONFIG_ROOT"'),
-            2,
-        )
-        self.assertLess(
-            beta_manual.index('if [[ "$CONTENT_RELEASE_ONLY" == "1" ]]; then'),
-            beta_manual.index('beta_manual_ensure_port_available "$CHAT_PORT"'),
-        )
-        self.assertNotIn("_rewrite_media_urls", beta_gateway)
-        self.assertNotIn("_join_media_base", beta_gateway)
-        self.assertIn(
-            'if path.startswith("/content/") and self.content_upstream_port > 0:',
-            beta_gateway,
-        )
-        self.assertIn('parser.add_argument("--content-upstream-port", type=int, default=0)', beta_gateway)
-        self.assertIn(
-            "canonical publicSliceKey",
-            beta_gateway,
-        )
+        self.assertIn("@content_release path /content /content/* /config/app", beta_manual)
+        self.assertIn("@homepage_release path /homepages /homepages/*", beta_manual)
+        self.assertIn("@creator_profile_release path /auth /auth/* /user /user/* /users /users/*", beta_manual)
 
     def test_search_dependency_is_owned_by_gamma_overlay_not_content_base(self) -> None:
         content_compose = (
@@ -1649,7 +1715,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             'public_domain_tls.py" paths',
             'https://${PUBLIC_API_HOST}:${API_EDGE_PORT}',
             'https://${PUBLIC_PRODUCT_OPS_HOST}:${PRODUCT_OPS_PORT}',
-            'https://${PUBLIC_MEDIA_HOSTS[0]}:${MEDIA_EDGE_PORT}',
+            'https://${PUBLIC_CDN_HOST}:${MEDIA_EDGE_PORT}',
             "$QWQ_PUBLIC_TLS_CERT_FILE:/etc/caddy/tls/fullchain.pem:ro",
             '-p "${API_EDGE_PORT}:${API_EDGE_PORT}"',
             '-p "${PRODUCT_OPS_PORT}:${PRODUCT_OPS_PORT}"',
@@ -1697,7 +1763,11 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
         ).read_text(encoding="utf-8")
         self.assertIn('public_domain_tls.py" paths', gamma_start)
-        self.assertIn("--target gamma-local", gamma_start)
+        self.assertIn('--target "$QWQ_LOCAL_RELEASE_TARGET"', gamma_start)
+        self.assertIn(
+            'QWQ_LOCAL_RELEASE_TARGET="${QWQ_LOCAL_RELEASE_TARGET:-${QWQ_LOCAL_RELEASE_ENV}-local}"',
+            gamma_start,
+        )
         self.assertIn(
             'CONTENT_EMBEDDING_ENDPOINT: "${QWQ_COMPOSE_EMBEDDING_ENDPOINT:-}"',
             compose,
@@ -1716,24 +1786,27 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("--write-report-account-backfill", gamma_start)
 
     def test_video_range_mime_preflight_precedes_patrol(self) -> None:
-        with mock.patch.object(stackctl, "_local_target_runtime_ready", return_value=True):
-            commands = stackctl._selected_profile_commands(
-                "gamma",
-                "gamma-local",
-                VerificationProfile.RELEASE,
-                Path("/tmp/gamma-report"),
-            )
+        commands = stackctl._selected_profile_commands(
+            "gamma",
+            "gamma-local",
+            VerificationProfile.RELEASE,
+            Path("/tmp/gamma-report"),
+        )
 
         names = [item["name"] for item in commands]
-        preflight_index = names.index("gamma-local-video-range-mime-preflight")
-        media_surface_index = names.index("seeded-media-surface")
+        preflight_index = names.index("gamma-local-release-video-canary-preflight")
         patrol_index = names.index("gamma-local-environment-page-smoke")
         search_patrol_index = names.index("gamma-local-search-remote-patrol")
-        self.assertLess(preflight_index, media_surface_index)
-        self.assertLess(media_surface_index, patrol_index)
+        self.assertLess(preflight_index, patrol_index)
         self.assertLess(patrol_index, search_patrol_index)
         self.assertTrue(commands[preflight_index]["stopOnFailure"])
-        self.assertTrue(commands[media_surface_index]["stopOnFailure"])
+        self.assertTrue(
+            any(
+                "verify_video_playback_canary.py" in value
+                for value in commands[preflight_index]["argv"]
+            ),
+        )
+        self.assertNotIn("seeded-media-surface", names)
 
         search_patrol = commands[search_patrol_index]
         self.assertEqual(
@@ -1766,6 +1839,20 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         self.assertTrue(command["stopOnFailure"])
 
+    def test_prod_sim_is_not_part_of_the_local_release_profile(self) -> None:
+        readiness_path = Path(
+            "/tmp/prod-runs/data-release/release-a/verify-a/release-readiness.json"
+        )
+        commands = stackctl._selected_profile_commands(
+            "prod",
+            "prod-sim",
+            VerificationProfile.RELEASE,
+            Path("/tmp/prod-report"),
+            data_readiness_path=readiness_path,
+        )
+
+        self.assertNotIn("prod-sim-up", {item["name"] for item in commands})
+
     def test_prod_playback_canary_rejects_fixture_identity(self) -> None:
         args = self._args(
             env_name="prod-sim",
@@ -1792,13 +1879,35 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             health_report.write_text(
                 json.dumps(
                     {
-                        "checks": [
-                            {
-                                "name": "media-public-content-video-primary",
-                                "statusCode": 206,
-                                "contentType": "video/mp4",
-                            },
-                        ],
+                        "schema": "quwoquan_ops.release_video_delivery_evidence",
+                        "status": "passed",
+                        "target": "gamma-local",
+                        "release": {
+                            "releaseId": "release-20260716",
+                            "sourceOwner": "qwq_data",
+                            "manifestDigest": f"sha256:{'1' * 64}",
+                            "mediaManifestDigest": f"sha256:{'2' * 64}",
+                            "importRunId": "import-gamma-20260716",
+                            "verifyRunId": "verify-gamma-20260716",
+                            "readinessReceiptRef": (
+                                "env/gamma/runs/data-release/release-20260716/"
+                                "verify-gamma-20260716/release-readiness.json"
+                            ),
+                        },
+                        "video": {
+                            "postId": "release-post-20260716",
+                            "assetId": "asset-release-20260716",
+                            "assetVersion": 7,
+                            "publicSliceKey": (
+                                "media/video/s/asset/asset-release-20260716/"
+                                "v7/source.mp4"
+                            ),
+                            "expectedHash": f"sha256:{'3' * 64}",
+                        },
+                        "delivery": {
+                            "rangeStatus": 206,
+                            "mimeType": "video/mp4",
+                        },
                     },
                 ),
                 encoding="utf-8",
@@ -1842,11 +1951,6 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             with mock.patch.dict(
                 os.environ,
                 {
-                    "VIDEO_PLAYBACK_CANARY_WORK_ID": "release-post-20260716",
-                    "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY": "media/video/release-20260716/source.mp4",
-                    "VIDEO_PLAYBACK_CANARY_ASSET_ID": "asset-release-20260716",
-                    "VIDEO_PLAYBACK_CANARY_ASSET_VERSION": "7",
-                    "VIDEO_PLAYBACK_CANARY_PROBE_HASH": "sha256:release-probe",
                     "VIDEO_PLAYBACK_QOE_READBACK_PATH": "qoe.json",
                     "VIDEO_PLAYBACK_PERFETTO_TRACE_PATH": "perfetto.trace",
                     "VIDEO_PLAYBACK_PERFETTO_SUMMARY_PATH": "perfetto-summary.json",
@@ -1857,7 +1961,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                     target_name="gamma-local",
                     steps=[
                         {
-                            "name": "gamma-local-video-range-mime-preflight",
+                            "name": "gamma-local-release-video-canary-preflight",
                             "reportPath": str(health_report),
                         },
                         {
@@ -1870,6 +1974,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 )
 
         self.assertEqual(evidence["status"], "passed")
+        self.assertEqual(evidence["release"]["releaseId"], "release-20260716")
+        self.assertEqual(evidence["release"]["importRunId"], "import-gamma-20260716")
+        self.assertEqual(evidence["media"]["assetId"], "asset-release-20260716")
+        self.assertEqual(evidence["media"]["assetVersion"], 7)
+        self.assertEqual(evidence["media"]["probeHash"], f"sha256:{'3' * 64}")
+        self.assertEqual(evidence["post"]["postId"], "release-post-20260716")
         self.assertEqual(evidence["environment"]["target"], "gamma-local")
         self.assertEqual(evidence["serviceEvidence"]["videoRange"]["statusCode"], 206)
         self.assertTrue(evidence["uiEvidence"]["stageRendered"])
@@ -1891,13 +2001,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             health_report.write_text(
                 json.dumps(
                     {
-                        "checks": [
-                            {
-                                "name": "media-public-content-video-primary",
-                                "statusCode": 206,
-                                "contentType": "video/mp4",
-                            },
-                        ],
+                        "rangeStatus": 206,
+                        "contentType": "video/mp4",
                     },
                 ),
                 encoding="utf-8",
@@ -1930,7 +2035,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 target_name="gamma-local",
                 steps=[
                     {
-                        "name": "gamma-local-video-range-mime-preflight",
+                        "name": "gamma-local-release-video-canary-preflight",
                         "reportPath": str(health_report),
                     },
                     {
@@ -1960,13 +2065,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             health_report.write_text(
                 json.dumps(
                     {
-                        "checks": [
-                            {
-                                "name": "media-public-content-video-primary",
-                                "statusCode": 206,
-                                "contentType": "video/mp4",
-                            },
-                        ],
+                        "rangeStatus": 206,
+                        "contentType": "video/mp4",
                     },
                 ),
                 encoding="utf-8",
@@ -1993,7 +2093,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 target_name="gamma-local",
                 steps=[
                     {
-                        "name": "gamma-local-video-range-mime-preflight",
+                        "name": "gamma-local-release-video-canary-preflight",
                         "reportPath": str(health_report),
                     },
                     {
@@ -2042,7 +2142,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                     "GAMMA_CANARY_WORK_ID": "fixture_video_001",
                     "TEST_REFRESH_TOKEN": "host-refresh-must-not-leak",
                     "APP_CURRENT_OWNER_ID": "host-owner-must-not-leak",
-                    "APP_CURRENT_SUB_ACCOUNT_ID": "host-persona-must-not-leak",
+                    "APP_CURRENT_PERSONA_ID": "host-persona-must-not-leak",
                 },
                 clear=False,
             ),
@@ -2079,6 +2179,50 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             argv[argv.index("--target") + 1],
             "test/user_acceptance/patrol/environment/video_playback_canary__user_acceptance_test.dart",
         )
+        self.assertNotIn("env", command)
+
+    def test_stackctl_runtime_recovery_uses_persisted_device_session_only(self) -> None:
+        target = {
+            "env": "gamma",
+            "publicBases": {
+                "api": "https://api.gamma.quwoquan.com:19000",
+                "productOps": "https://ops.gamma.quwoquan.com:19010",
+                "rtc": "wss://rtc.gamma.quwoquan.com:19000",
+                "mediaAvatar": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaImage": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaVideo": "https://cdn.gamma.quwoquan.com:19100",
+                "mediaUpload": "https://upload.gamma.quwoquan.com:19130",
+            },
+        }
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.dict(
+                os.environ,
+                {
+                    "TEST_AUTH_TOKEN": "must-not-be-used",
+                    "TEST_REFRESH_TOKEN": "must-not-be-used",
+                    "APP_CURRENT_OWNER_ID": "must-not-be-used",
+                    "APP_CURRENT_PERSONA_ID": "must-not-be-used",
+                },
+                clear=False,
+            ),
+        ):
+            command = stackctl._environment_page_smoke_profile_command(
+                "gamma",
+                "gamma-local",
+                Path("/tmp/gamma-report"),
+                suite_name="runtime-recovery-patrol",
+                patrol_target=stackctl.RUNTIME_RECOVERY_UAT_TEST_TARGET,
+                persisted_device_session=True,
+            )
+
+        self.assertIsNotNone(command)
+        self.assertEqual(
+            command["argv"][command["argv"].index("--target") + 1],
+            stackctl.RUNTIME_RECOVERY_UAT_TEST_TARGET,
+        )
+        self.assertIn("--persisted-device-session", command["argv"])
         self.assertNotIn("env", command)
 
     def test_gamma_release_profile_binds_search_remote_api_evidence(self) -> None:
@@ -2190,7 +2334,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
 
         self.assertIn("content-service", roles)
         self.assertIn("notification-service", roles)
-        self.assertIn("fixture-gateway", roles)
+        self.assertNotIn("fixture-gateway", roles)
 
     def test_beta_content_release_readiness_excludes_full_workload_planes(self) -> None:
         roles = set(
@@ -2259,7 +2403,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 {
                     "TEST_REFRESH_TOKEN": "secret-refresh",
                     "APP_CURRENT_OWNER_ID": "owner-real",
-                    "APP_CURRENT_SUB_ACCOUNT_ID": "persona-real",
+                    "APP_CURRENT_PERSONA_ID": "persona-real",
                 },
                 clear=False,
             ),
@@ -2279,7 +2423,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 "TEST_AUTH_TOKEN": "secret-access",
                 "TEST_REFRESH_TOKEN": "secret-refresh",
                 "APP_CURRENT_OWNER_ID": "owner-real",
-                "APP_CURRENT_SUB_ACCOUNT_ID": "persona-real",
+                "APP_CURRENT_PERSONA_ID": "persona-real",
             },
         )
 

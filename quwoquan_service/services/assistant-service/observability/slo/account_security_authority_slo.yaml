@@ -1,4 +1,3 @@
-version: 1
 service: assistant-service
 domain: assistant
 capability: account-security-authority

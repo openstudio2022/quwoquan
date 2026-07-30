@@ -8,12 +8,12 @@ import (
 
 // seedHomepageOwner 建立 owner profile + persona(handle)，并写入身份域计数真相，
 // 供 homepage-bundle 聚合断言。
-func seedHomepageOwner(t *testing.T, userID, subAccountID, handle, displayName, isolationLevel string) {
+func seedHomepageOwner(t *testing.T, userID, personaID, handle, displayName, isolationLevel string) {
 	t.Helper()
 	createTestProfile(t, userID, displayName)
-	createTestPersonaFull(t, "persona_"+subAccountID, userID, subAccountID, displayName, isolationLevel, true, true)
+	createTestPersonaFull(t, "persona_"+personaID, userID, personaID, displayName, isolationLevel, true, true)
 	if _, err := pgPool.Exec(context.Background(),
-		`UPDATE personas SET user_handle = $1 WHERE sub_account_id = $2`, handle, subAccountID); err != nil {
+		`UPDATE personas SET user_handle = $1 WHERE persona_id = $2`, handle, personaID); err != nil {
 		t.Fatalf("seed user_handle: %v", err)
 	}
 	if _, err := pgPool.Exec(context.Background(),
@@ -27,7 +27,7 @@ func TestHomepageBundle_OwnerViewAggregatesIdentityTruth(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	seedHomepageOwner(t, "owner_hb_self", "sa_hb_self", "hb_self", "本人主页", "open")
 
-	rec := doRequest(t, http.MethodGet, "/user/sub-accounts/hb_self/homepage-bundle", "",
+	rec := doRequest(t, http.MethodGet, "/user/personas/hb_self/homepage-bundle", "",
 		authHeadersForPersona("owner_hb_self", "sa_hb_self"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("homepage-bundle owner: expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -35,8 +35,8 @@ func TestHomepageBundle_OwnerViewAggregatesIdentityTruth(t *testing.T) {
 	body := parseJSON(t, rec)
 
 	profile, ok := body["profile"].(map[string]any)
-	if !ok || profile["subAccountId"] != "sa_hb_self" {
-		t.Fatalf("expected profile.subAccountId=sa_hb_self, got %#v", body["profile"])
+	if !ok || profile["personaId"] != "sa_hb_self" {
+		t.Fatalf("expected profile.personaId=sa_hb_self, got %#v", body["profile"])
 	}
 
 	stats, ok := body["stats"].(map[string]any)
@@ -85,30 +85,30 @@ func TestHomepageBundle_ProfileCarriesBackgroundAndNicknameCustomized(t *testing
 	seedHomepageOwner(t, "owner_hb_profile", "sa_hb_profile", "hb_profile", "主页封面分身", "open")
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE user_profiles SET nickname_customized = true WHERE user_id = $1`,
-		"owner_hb_profile",
+		`UPDATE personas SET nickname_customized = true WHERE persona_id = $1`,
+		"sa_hb_profile",
 	); err != nil {
 		t.Fatalf("seed homepage bundle nickname_customized: %v", err)
 	}
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		`UPDATE personas SET avatar_url = $1, avatar_version = $2 WHERE persona_id = $3`,
 		"https://cdn.example.com/homepage-bundle-avatar.png",
 		5,
-		"owner_hb_profile",
+		"sa_hb_profile",
 	); err != nil {
 		t.Fatalf("seed homepage bundle avatar version: %v", err)
 	}
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE personas SET background_url = $1 WHERE sub_account_id = $2`,
+		`UPDATE personas SET background_url = $1 WHERE persona_id = $2`,
 		"https://cdn.example.com/homepage-bundle-cover.png",
 		"sa_hb_profile",
 	); err != nil {
 		t.Fatalf("seed homepage bundle background: %v", err)
 	}
 
-	rec := doRequest(t, http.MethodGet, "/user/sub-accounts/hb_profile/homepage-bundle", "",
+	rec := doRequest(t, http.MethodGet, "/user/personas/hb_profile/homepage-bundle", "",
 		authHeadersForPersona("owner_hb_profile", "sa_hb_profile"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("homepage-bundle owner profile fields: expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -137,7 +137,7 @@ func TestHomepageBundle_GuestViewOmitsRelationshipCapability(t *testing.T) {
 	seedHomepageOwner(t, "owner_hb_guest", "sa_hb_guest", "hb_guest", "游客可见主页", "open")
 
 	// 无鉴权头 = 游客态。
-	rec := doRequest(t, http.MethodGet, "/user/sub-accounts/hb_guest/homepage-bundle", "", nil)
+	rec := doRequest(t, http.MethodGet, "/user/personas/hb_guest/homepage-bundle", "", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("homepage-bundle guest: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -168,7 +168,7 @@ func TestHomepageBundle_StrangerViewExposesRelationToTarget(t *testing.T) {
 	createTestProfile(t, "owner_hb_viewer", "陌生访客")
 	createTestPersonaFull(t, "persona_hb_viewer", "owner_hb_viewer", "sa_hb_viewer", "陌生访客", "open", true, true)
 
-	rec := doRequest(t, http.MethodGet, "/user/sub-accounts/hb_target/homepage-bundle", "",
+	rec := doRequest(t, http.MethodGet, "/user/personas/hb_target/homepage-bundle", "",
 		authHeadersForPersona("owner_hb_viewer", "sa_hb_viewer"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("homepage-bundle stranger: expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -203,7 +203,7 @@ func TestHomepageBundle_StrictPersonaReturnsNotFound(t *testing.T) {
 	seedHomepageOwner(t, "owner_hb_strict", "sa_hb_strict", "hb_strict", "严格隔离主页", "strict")
 	seedHomepageOwner(t, "owner_hb_viewer2", "sa_hb_viewer2", "hb_viewer2", "访问者主页", "open")
 
-	rec := doRequest(t, http.MethodGet, "/user/sub-accounts/hb_strict/homepage-bundle", "",
+	rec := doRequest(t, http.MethodGet, "/user/personas/hb_strict/homepage-bundle", "",
 		authHeadersForPersona("owner_hb_viewer2", "sa_hb_viewer2"))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("strict persona homepage-bundle should 404, got %d: %s", rec.Code, rec.Body.String())
@@ -216,7 +216,7 @@ func TestHomepageBundle_DoesNotLeakContentDomainFacts(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	seedHomepageOwner(t, "owner_hb_redline", "sa_hb_redline", "hb_redline", "红线主页", "open")
 
-	rec := doRequest(t, http.MethodGet, "/user/sub-accounts/hb_redline/homepage-bundle", "",
+	rec := doRequest(t, http.MethodGet, "/user/personas/hb_redline/homepage-bundle", "",
 		authHeadersForPersona("owner_hb_redline", "sa_hb_redline"))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("homepage-bundle: expected 200, got %d: %s", rec.Code, rec.Body.String())

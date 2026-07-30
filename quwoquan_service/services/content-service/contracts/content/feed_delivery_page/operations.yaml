@@ -1,0 +1,12 @@
+commercial_defaults:
+  status: blocked
+  block_reason: candidate release device and product-ops readback evidence remains open
+  gap_id: CONTENT_FEED_DELIVERY_PAGE_COMMERCIAL_EVIDENCE
+  target_story: streaming-feed-performance
+description: FeedDeliveryPage 不暴露独立 transport，只由 Post.GetFeed 经 application port append/load
+api_routes: []
+consumers:
+- name: content.Post.GetFeed
+  capabilities:
+  - append_delivered_page
+  - replay_previous_page

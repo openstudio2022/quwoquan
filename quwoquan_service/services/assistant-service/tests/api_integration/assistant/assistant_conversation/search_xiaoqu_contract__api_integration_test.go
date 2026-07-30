@@ -11,7 +11,7 @@ import (
 
 	rtsearch "quwoquan_service/runtime/search"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
 )
 
@@ -59,7 +59,6 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 			],
 			"provenance": {
 				"provider": "search-service",
-				"indexVersion": "integration",
 				"generatedAt": "2026-07-20T10:00:00Z"
 			}
 		}`))
@@ -73,13 +72,13 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 		t.Fatalf("new canonical search reader: %v", err)
 	}
 	service := newIntegrationAssistantService(
-		application.WithXiaoquSearchReader(searchReader),
+		orchestration.WithXiaoquSearchReader(searchReader),
 	)
 	handler := assistanthttp.NewHandler(service).Routes()
 
 	payload, err := json.Marshal(map[string]any{
 		"userQuery":        "四川露营攻略",
-		"searchIntensity":  "balanced",
+		"searchIntensity":  "medium",
 		"sourceSurfaceId":  "assistant_dialog",
 		"fromGlobalSearch": true,
 	})
@@ -109,8 +108,8 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	if got := stringField(result, "queryEcho"); got != "四川露营攻略" {
 		t.Fatalf("queryEcho=%q, want 四川露营攻略", got)
 	}
-	if got := stringField(result, "searchIntensity"); got != "balanced" {
-		t.Fatalf("searchIntensity=%q, want balanced", got)
+	if got := stringField(result, "searchIntensity"); got != "medium" {
+		t.Fatalf("searchIntensity=%q, want medium", got)
 	}
 
 	rawCitations, ok := result["citations"].([]any)

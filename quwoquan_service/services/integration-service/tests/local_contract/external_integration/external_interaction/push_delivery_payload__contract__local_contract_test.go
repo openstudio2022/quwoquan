@@ -8,7 +8,7 @@ import (
 
 	rerrors "quwoquan_service/runtime/errors"
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/generated/external_integration/push_delivery"
+	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
 	"quwoquan_service/services/integration-service/internal/external_integration/external_interaction/application"
 )
 
@@ -96,8 +96,8 @@ func TestPushDeliverySubmitRejectsInvalidTypedPayload(t *testing.T) {
 			_, submitErr := service.Submit(context.Background(), request)
 			var appErr *rerrors.AppError
 			if !errors.As(submitErr, &appErr) ||
-				appErr.Code.String() != generated.ErrPushDeliveryInvalidRequest.Error() {
-				t.Fatalf("expected typed push invalid error, got %T %v", submitErr, submitErr)
+				appErr.Code.String() != externalgenerated.ErrInvalidExternalRequest.Error() {
+				t.Fatalf("expected object-local external interaction invalid error, got %T %v", submitErr, submitErr)
 			}
 		})
 	}

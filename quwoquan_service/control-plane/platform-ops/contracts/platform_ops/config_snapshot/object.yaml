@@ -25,8 +25,3 @@ business_rules:
 - resolve 的 sys.* 有效值 = 服务 schema 默认值叠加所选环境 config.yaml 覆盖。
 - 快照必须携带来源文件与 sha256，供实例 ACK 漂移核对。
 - 运行实例只读取所属服务 package 的单一 config.yaml；config version 由该文件 sha256 派生。
-lifecycle:
-  states:
-  - published
-  transitions: []
-  notes: 快照无独立生命周期；生命周期由不可变服务 package 管理（发布/回滚）。

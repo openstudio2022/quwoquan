@@ -5,14 +5,12 @@ enum InterestOnboardingStatus { unseen, skipped, pending, submitted }
 
 final class InterestOnboardingDraft {
   const InterestOnboardingDraft({
-    required this.catalogVersion,
     required this.taxonomyReleaseId,
     required this.clientEventId,
     required this.tagRefs,
     required this.status,
   });
 
-  final String catalogVersion;
   final String taxonomyReleaseId;
   final String clientEventId;
   final List<String> tagRefs;
@@ -21,13 +19,11 @@ final class InterestOnboardingDraft {
   bool get hasSelection => tagRefs.isNotEmpty;
 
   InterestOnboardingDraft copyWith({
-    String? catalogVersion,
     String? taxonomyReleaseId,
     String? clientEventId,
     List<String>? tagRefs,
     InterestOnboardingStatus? status,
   }) => InterestOnboardingDraft(
-    catalogVersion: catalogVersion ?? this.catalogVersion,
     taxonomyReleaseId: taxonomyReleaseId ?? this.taxonomyReleaseId,
     clientEventId: clientEventId ?? this.clientEventId,
     tagRefs: tagRefs ?? this.tagRefs,
@@ -35,7 +31,6 @@ final class InterestOnboardingDraft {
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'catalogVersion': catalogVersion,
     'taxonomyReleaseId': taxonomyReleaseId,
     'clientEventId': clientEventId,
     'tagRefs': tagRefs,
@@ -44,27 +39,43 @@ final class InterestOnboardingDraft {
 
   static InterestOnboardingDraft? tryParse(Object? raw) {
     if (raw is! Map) return null;
-    final version = (raw['catalogVersion'] ?? '').toString().trim();
-    final taxonomyReleaseId = (raw['taxonomyReleaseId'] ?? '')
-        .toString()
-        .trim();
-    final eventID = (raw['clientEventId'] ?? '').toString().trim();
-    final status = InterestOnboardingStatus.values.where(
-      (candidate) => candidate.name == (raw['status'] ?? '').toString().trim(),
-    );
-    if (version.isEmpty ||
-        taxonomyReleaseId.isEmpty ||
-        eventID.isEmpty ||
-        status.isEmpty) {
+    const canonicalKeys = <String>{
+      'taxonomyReleaseId',
+      'clientEventId',
+      'tagRefs',
+      'status',
+    };
+    // 本地草稿严格只认当前单轨形状；携带旧 catalogVersion
+    // 或任何未知字段的存量输入直接 fail-closed，不双读或升级。
+    if (raw.keys.any((key) => key is! String || !canonicalKeys.contains(key))) {
       return null;
     }
-    final tags = (raw['tagRefs'] as List? ?? const <Object?>[])
-        .map((item) => item.toString().trim())
+    final rawTaxonomyReleaseId = raw['taxonomyReleaseId'];
+    final rawEventID = raw['clientEventId'];
+    final rawStatus = raw['status'];
+    final rawTags = raw['tagRefs'];
+    if (rawTaxonomyReleaseId is! String ||
+        rawEventID is! String ||
+        rawStatus is! String ||
+        rawTags is! List ||
+        rawTags.any((tagRef) => tagRef is! String)) {
+      return null;
+    }
+    final taxonomyReleaseId = rawTaxonomyReleaseId.trim();
+    final eventID = rawEventID.trim();
+    final status = InterestOnboardingStatus.values.where(
+      (candidate) => candidate.name == rawStatus.trim(),
+    );
+    if (taxonomyReleaseId.isEmpty || eventID.isEmpty || status.isEmpty) {
+      return null;
+    }
+    final tags = rawTags
+        .cast<String>()
+        .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toSet()
         .toList(growable: false);
     return InterestOnboardingDraft(
-      catalogVersion: version,
       taxonomyReleaseId: taxonomyReleaseId,
       clientEventId: eventID,
       tagRefs: tags,
@@ -82,7 +93,6 @@ abstract interface class InterestOnboardingDraftStore {
 abstract interface class ConfirmedOnboardingInterestWriter {
   Future<void> submit({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   });
@@ -102,23 +112,21 @@ final class InterestOnboardingCoordinator {
   Future<InterestOnboardingDraft?> load() => _draftStore.read();
 
   Future<InterestOnboardingDraft> select({
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required Iterable<String> tagRefs,
     InterestOnboardingDraft? previous,
   }) async {
+    final canonicalReleaseID = _requiredTaxonomyReleaseID(taxonomyReleaseId);
     final tags = tagRefs
         .map((tagRef) => tagRef.trim())
         .where((tagRef) => tagRef.isNotEmpty)
         .toSet()
         .toList(growable: false);
     final reuseID =
-        previous?.catalogVersion == catalogVersion &&
-        previous?.taxonomyReleaseId == taxonomyReleaseId &&
+        previous?.taxonomyReleaseId == canonicalReleaseID &&
         previous?.clientEventId.trim().isNotEmpty == true;
     final draft = InterestOnboardingDraft(
-      catalogVersion: catalogVersion,
-      taxonomyReleaseId: taxonomyReleaseId,
+      taxonomyReleaseId: canonicalReleaseID,
       clientEventId: reuseID ? previous!.clientEventId : _newClientEventId(),
       tagRefs: tags,
       status: InterestOnboardingStatus.unseen,
@@ -128,13 +136,12 @@ final class InterestOnboardingCoordinator {
   }
 
   Future<InterestOnboardingDraft> skip({
-    required String catalogVersion,
     required String taxonomyReleaseId,
     InterestOnboardingDraft? previous,
   }) async {
+    final canonicalReleaseID = _requiredTaxonomyReleaseID(taxonomyReleaseId);
     final draft = InterestOnboardingDraft(
-      catalogVersion: catalogVersion,
-      taxonomyReleaseId: taxonomyReleaseId,
+      taxonomyReleaseId: canonicalReleaseID,
       clientEventId: previous?.clientEventId.trim().isNotEmpty == true
           ? previous!.clientEventId
           : _newClientEventId(),
@@ -154,7 +161,6 @@ final class InterestOnboardingCoordinator {
     try {
       await _writer.submit(
         clientEventId: pending.clientEventId,
-        catalogVersion: pending.catalogVersion,
         taxonomyReleaseId: pending.taxonomyReleaseId,
         tagRefs: pending.tagRefs,
       );
@@ -170,4 +176,12 @@ final class InterestOnboardingCoordinator {
   }
 
   static String _newClientEventId() => 'onboarding:${_uuid.v4()}';
+
+  static String _requiredTaxonomyReleaseID(String value) {
+    final canonical = value.trim();
+    if (canonical.isEmpty) {
+      throw ArgumentError.value(value, 'taxonomyReleaseId', 'is required');
+    }
+    return canonical;
+  }
 }

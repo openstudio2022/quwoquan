@@ -32,7 +32,7 @@ void main() {
   );
 
   test('LeaveCircle is a server-owned state transition without If-Match', () {
-    final payload = encodeLeaveCircleMembershipCommand(
+    final payload = encodeCircleCircleMembershipLeaveCircleGeneratedRequest(
       LeaveCircleMembershipCommand(circleId: 'circle-1'),
     );
 
@@ -194,7 +194,7 @@ void main() {
   );
 
   test('CircleGroup only uses If-Match for multi-writer snapshot updates', () {
-    final update = encodeUpdateCircleGroupCommand(
+    final update = encodeCircleCircleGroupUpdateCircleGroupGeneratedRequest(
       UpdateCircleGroupCommand(
         circleId: 'circle-1',
         groupId: 'group-1',
@@ -205,7 +205,7 @@ void main() {
     expect(update.headers, <String, String>{'If-Match': '"7"'});
     expect(update.body, <String, Object?>{'name': '更新名称'});
 
-    final archive = encodeArchiveCircleGroupCommand(
+    final archive = encodeCircleCircleGroupArchiveCircleGroupGeneratedRequest(
       ArchiveCircleGroupCommand(circleId: 'circle-1', groupId: 'group-1'),
     );
     expect(archive.headers, isEmpty);

@@ -16,9 +16,9 @@ type SyncConfig struct {
 	// dev gives near-immediate "edit yaml -> takes effect" behavior.
 	Interval time.Duration
 	// OnReload（可选）在每次 reload 尝试后回调（N1-2 观测挂点：成功传
-	// (policyVersion, nil)，失败传 ("", err)）。recpolicy 不反向依赖
+	// (policyDigest, nil)，失败传 ("", err)）。recpolicy 不反向依赖
 	// recommendation 指标包，经装配回调解耦。
-	OnReload func(version string, err error)
+	OnReload func(digest string, err error)
 }
 
 // StartSyncLoop reloads the policy file on a ticker, applying it through the
@@ -65,13 +65,12 @@ func StartSyncLoop(ctx context.Context, store *Store, logger *slog.Logger, cfg S
 		}
 		lastMod = info.ModTime()
 		if cfg.OnReload != nil {
-			cfg.OnReload(store.Current().PolicyVersion, nil)
+			cfg.OnReload(hash, nil)
 		}
 		logger.Info("recpolicy.sync.applied",
 			slog.String("reason", reason),
 			slog.String("path", cfg.Path),
-			slog.String("policyVersion", store.Current().PolicyVersion),
-			slog.String("effectiveHash", hash))
+			slog.String("policyDigest", hash))
 	}
 
 	reload("startup")

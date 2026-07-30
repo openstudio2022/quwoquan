@@ -5,7 +5,7 @@ import hashlib
 from pathlib import Path
 from typing import Any, Mapping
 
-from core.image_deduplication import perceptual_hash_distance
+from core.image_deduplication import perceptual_hash, perceptual_hash_distance
 from core.image_safety import NEAR_DUP_HAMMING
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
@@ -25,20 +25,42 @@ from content.release.canonical.object_transaction_lock import (
 )
 
 
-def _image_identities(manifest: Mapping[str, Any]) -> tuple[tuple[str, str, str], ...]:
+def _image_identities(
+    manifest: Mapping[str, Any],
+    *,
+    asset_root: Path | None = None,
+) -> tuple[tuple[str, str, str], ...]:
     rows: list[tuple[str, str, str]] = []
+    image_post = str(manifest.get("contentType") or "").strip() == "image"
     for raw in manifest.get("assets") or []:
         if not isinstance(raw, Mapping):
             continue
         kind = str(raw.get("kind") or "").strip()
         mime = str(raw.get("mimeType") or "").strip().lower()
-        if kind != "image" and not mime.startswith("image/"):
+        if not image_post and kind != "image" and not mime.startswith("image/"):
             continue
+        perceptual = str(raw.get("perceptualHash") or "").strip().lower()
+        if not perceptual and asset_root is not None:
+            object_key = Path(str(raw.get("objectKey") or "").strip())
+            if (
+                not object_key.parts
+                or object_key.is_absolute()
+                or ".." in object_key.parts
+            ):
+                raise ObjectTransactionError(
+                    "legacy canonical image objectKey is missing or unsafe"
+                )
+            asset = asset_root / object_key
+            if not asset.is_file():
+                raise ObjectTransactionError(
+                    f"legacy canonical image asset is missing: {object_key.as_posix()}"
+                )
+            perceptual = perceptual_hash(asset)
         rows.append(
             (
                 str(raw.get("assetId") or "").strip() or "<unnamed-image>",
                 str(raw.get("sha256") or "").strip().lower(),
-                str(raw.get("perceptualHash") or "").strip().lower(),
+                perceptual,
             )
         )
     return tuple(rows)
@@ -73,7 +95,10 @@ def _assert_cross_publish_image_unique(
         existing_ref = manifest_path.parent.relative_to(PUBLISH_ROOT).as_posix()
         accepted.extend(
             (existing_ref, asset_id, digest, perceptual)
-            for asset_id, digest, perceptual in _image_identities(existing)
+            for asset_id, digest, perceptual in _image_identities(
+                existing,
+                asset_root=PUBLISH_ROOT,
+            )
         )
 
     for index, (asset_id, digest, perceptual) in enumerate(candidates):

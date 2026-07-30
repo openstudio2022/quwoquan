@@ -2,6 +2,7 @@
   "label": "看演出",
   "labelEn": "Live Performance",
   "description": "现场演出与表演观赏体验",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

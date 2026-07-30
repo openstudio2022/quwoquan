@@ -8,7 +8,7 @@
 
 ## 2. 领域模型与所有权
 
-- authoritative ownership：拥有 `UserAccount`、`SubAccount/Persona`、资料快照、关注与拉黑关系、设备端点、用户设置和账号生命周期的写入决定权。
+- authoritative ownership：拥有 `UserAccount`、`Persona`、资料快照、关注与拉黑关系、设备端点、用户设置和账号生命周期的写入决定权。
 - write boundary：只能通过本领域公开 command 修改其拥有事实。
 - 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
 - 非本域对象：不复制 metadata 中的字段、path、错误码和 wire 语义。
@@ -26,7 +26,7 @@
 
 ## 4. 架构与数据流
 
-- [`auth-profile-snapshot`](./auth-profile-snapshot/spec.md)：认证、refresh token、owner/subAccount 快照与凭证管理的能力级 SIT 验收。
+- [`auth-profile-snapshot`](./auth-profile-snapshot/spec.md)：认证、refresh token、OwnerAccount/Persona 快照与凭证管理的能力级 SIT 验收。
 - [`onboarding-and-identity-entry`](./onboarding-and-identity-entry/spec.md)：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
 - [`persona-follow-graph`](./persona-follow-graph/spec.md)：本能力统一分身生命周期、公开身份、关系隔离与跨域透传。
 - [`profile-homepage-redesign`](./profile-homepage-redesign/spec.md)：统一个人主页的信息架构、状态模型与跨页面互动一致性。

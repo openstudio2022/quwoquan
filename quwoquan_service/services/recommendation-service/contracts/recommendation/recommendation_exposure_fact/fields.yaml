@@ -64,12 +64,12 @@ fields:
   - NOT_NULL
   description: 本次命中的评分轨道（rule/model，AB 分桶结果）
   role: append_only_fact
-- name: modelVersion
-  source: context.modelVersion
+- name: modelChannel
+  source: context.modelChannel
   type: string
   constraints:
   - NULLABLE
-  description: model 分桶时的 champion/challenger 轨道；rule 分桶为空
+  description: model 分桶时请求的 champion/challenger 发布通道；它不是模型内容身份，rule 分桶为空
   role: append_only_fact
 - name: modelReleaseId
   source: context.modelReleaseId

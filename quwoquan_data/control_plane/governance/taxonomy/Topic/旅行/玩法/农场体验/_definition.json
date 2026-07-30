@@ -2,6 +2,7 @@
   "label": "农场体验",
   "labelEn": "Farm Experience",
   "description": "田园采摘与农牧体验",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

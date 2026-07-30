@@ -2,6 +2,7 @@
   "label": "Live House",
   "labelEn": "Live House",
   "description": "小型现场音乐演出场馆",
-  "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "axisRole": "entityType",
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
 }

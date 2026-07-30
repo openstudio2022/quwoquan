@@ -28,7 +28,14 @@
 ## 4. Story
 
 
-- [`session-preference-memory-control`](./session-preference-memory-control/spec.md)：服务与 App local_contract 通过。
+- [`session-preference-memory-control`](./session-preference-memory-control/spec.md)：结构化文风偏好的即时注入、可见、遗忘与撤销恢复。
+- [`native-tool-calling-model-routing`](./native-tool-calling-model-routing/spec.md)：以提供方原生工具调用协议选择工具，并按运行阶段与问题类型路由模型档位及降级。
+- [`tool-fabric-runtime`](./tool-fabric-runtime/spec.md)：统一执行工具的时限、重试、循环检测与失败恢复，并保证策略允许工具真实可用。
+- [`skill-progressive-disclosure-routing`](./skill-progressive-disclosure-routing/spec.md)：在策略允许集合内选择领域技能，并按需加载技能提示正文。
+- [`planner-aggregation-orchestration`](./planner-aggregation-orchestration/spec.md)：决定下一步动作含向用户反问，统一单技能与多技能编排并裁决答案边界。
+- [`context-assembly-slot-filling`](./context-assembly-slot-filling/spec.md)：运行前装配授权后的上下文与槽位状态，并以统一渠道声明约束公开场合记忆边界。
+- [`long-term-memory-compaction`](./long-term-memory-compaction/spec.md)：记录可撤销的事实型长期记忆，并以滚动摘要压缩长会话历史。
+- [`trajectory-replay-evaluation-gate`](./trajectory-replay-evaluation-gate/spec.md)：以覆盖全部技能的可重复轨迹回放阻断工具、澄清、引用和答案边界的静默回归。
 
 ## 5. 能力要求
 
@@ -71,8 +78,8 @@
 <a id="open-001"></a>
 ### OPEN-001 world class trinity experience baseline 能力 SIT
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：以统一 Agent 主线、Skill 中心、Markdown-first 输出、可解释折叠过程与偏好事实回注提供一致的小趣体验。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`block`
+- 影响或价值：`SIT-001` 已由 local contract、API integration 与 user acceptance 三层真实测试直接 `spec_ref`；gamma-local 仍需受保护的 DNS-01 账号与令牌完成公开 TLS 装配，缺失时不得绕过门禁启动环境或把未执行旅程包装为通过。
+- 完成判定：受控环境注入 gamma-local DNS-01 输入后，通过 `stackctl up/health/inspect` 建立完整第一方拓扑，并执行 assistant API integration 与真实 Remote user acceptance 旅程。

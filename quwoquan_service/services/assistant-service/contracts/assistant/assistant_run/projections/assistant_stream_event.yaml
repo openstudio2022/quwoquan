@@ -6,8 +6,20 @@ description: 'Assistant Run 的流式事件是由独立共享 wire contract 承�
   '
 source_entities:
 - AssistantRun
+fields:
+- {name: schema}
+- {name: eventId}
+- {name: conversationId}
+- {name: turnId}
+- {name: seq}
+- {name: eventType}
+- {name: traceId}
+- {name: payload}
+- {name: runtimeFailure}
+- {name: createdAt}
 consumers:
 - app
 client_projection:
   dart_class: AssistantStreamEventWire
-  external_dart_path: assistant/generated/contracts/assistant_stream_event.g.dart
+  output_path: assistant/generated/contracts/assistant_stream_event.g.dart
+  external_dart_path: quwoquan_app/lib/assistant/generated/contracts/assistant_stream_event.g.dart

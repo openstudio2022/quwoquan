@@ -75,6 +75,20 @@ fields:
   ops_exposure: read
   role: projection
 types:
+  ReportConfigInstanceRequest:
+    description: 运行实例上报配置 ACK 的唯一请求实体；instanceId 仅取 path，主体身份与 desiredHash 由控制面校验或回填。
+    fields:
+    - {name: instanceId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: environment, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: cluster, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: service, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: configVersion, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: imageVersion, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: releaseManifestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: desiredHash, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: effectiveHash, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: source, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: lastError, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: write}
   ConfigInstanceReport:
     description: 单个实例对当前候选版本和有效配置的 ACK。
     fields:
@@ -95,5 +109,5 @@ types:
   ConfigInstanceReportSlice:
     description: 当前候选版本的实例 ACK 与漂移汇总。
     fields:
-    - {name: items, type: array, constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: items, type: '[]ConfigInstanceReport', constraints: [NOT_NULL], classification: INTERNAL, log_policy: redacted, api_exposure: drop, ops_exposure: read}
     - {name: summary, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}

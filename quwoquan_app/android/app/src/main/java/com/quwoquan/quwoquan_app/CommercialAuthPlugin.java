@@ -246,6 +246,8 @@ public final class CommercialAuthPlugin {
               Base64.encodeToString(
                   ticket.toString().getBytes(StandardCharsets.UTF_8),
                   Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+          // Frozen provider ticket prefix; `_v1` is the sole accepted byte shape,
+          // not a negotiable multi-version envelope.
           result.success(ticketPayload("qq", "qq_mobile_v1." + encoded));
         }
 

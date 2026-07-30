@@ -92,65 +92,70 @@ final class RemoteChatConversationCommandWriter
 
   @override
   Future<ChatConversation> createConversation(
-    ChatCreateConversationCommand command,
-  ) {
+    ChatCreateConversationCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationCreateConversation(
       command,
       context: invocationContext(
         ChatRequestPageIds.createConversation,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatConversation> updateConversationTitle(
-    ChatUpdateConversationTitleCommand command,
-  ) {
+    ChatUpdateConversationTitleCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationUpdateConversationTitle(
       command,
       context: invocationContext(
         ChatRequestPageIds.updateConversationTitle,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatCommandAck> dissolveConversation(
-    ChatDissolveConversationCommand command,
-  ) {
+    ChatDissolveConversationCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationDissolveConversation(
       command,
       context: invocationContext(
         ChatRequestPageIds.dissolveConversation,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatConversation> updateAnnouncement(
-    ChatUpdateAnnouncementCommand command,
-  ) {
+    ChatUpdateAnnouncementCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationUpdateAnnouncement(
       command,
       context: invocationContext(
         ChatRequestPageIds.updateAnnouncement,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }
 
   @override
   Future<ChatConversation> updateGroupGovernanceSettings(
-    ChatUpdateGroupGovernanceSettingsCommand command,
-  ) {
+    ChatUpdateGroupGovernanceSettingsCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationUpdateGroupGovernanceSettings(
       command,
       context: invocationContext(
         ChatRequestPageIds.updateGroupGovernanceSettings,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }

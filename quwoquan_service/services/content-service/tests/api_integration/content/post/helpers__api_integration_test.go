@@ -26,7 +26,7 @@ func submitPublishedPost(t *testing.T, payload string) map[string]any {
 func submitPublishedPostWithAuthor(t *testing.T, authorID string, payload string) map[string]any {
 	t.Helper()
 	if strings.TrimSpace(authorID) == "" {
-		authorID = identity.AnonymousFallbackSubAccountID
+		authorID = identity.AnonymousFallbackPersonaID
 	}
 	payload = completePublicationFixturePrerequisites(t, authorID, payload)
 	req := newPostPublicationRequestForTest(t, authorID, payload)
@@ -46,7 +46,7 @@ func submitPublishedPostWithAuthor(t *testing.T, authorID string, payload string
 	drainPostOutbox(t)
 	readReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
 	readReq.Header.Set("X-Client-User-Id", authorID)
-	readReq.Header.Set("X-Client-Sub-Account-Id", authorID)
+	readReq.Header.Set("X-Client-Persona-Id", authorID)
 	readRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(readRec, readReq)
 	if readRec.Code != http.StatusOK {
@@ -66,7 +66,7 @@ func newPostPublicationRequestForTest(
 ) *http.Request {
 	t.Helper()
 	if strings.TrimSpace(authorID) == "" {
-		authorID = identity.AnonymousFallbackSubAccountID
+		authorID = identity.AnonymousFallbackPersonaID
 	}
 	var body map[string]any
 	if err := json.Unmarshal([]byte(payload), &body); err != nil {
@@ -88,7 +88,7 @@ func newPostPublicationRequestForTest(
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", authorID)
-	req.Header.Set("X-Client-Sub-Account-Id", authorID)
+	req.Header.Set("X-Client-Persona-Id", authorID)
 	req.Header.Set("Idempotency-Key", publishIntentID)
 	req.Header.Set("X-Request-Id", fmt.Sprintf("api-integration-%s", publishIntentID))
 	return req
@@ -169,7 +169,7 @@ func createReadyPublicationMediaAsset(
 	digest := fmt.Sprintf("sha256:%064x", sequence)
 	initBody, err := json.Marshal(map[string]any{
 		"mediaType":      mediaType,
-		"contentType":    contentType,
+		"mimeType":       contentType,
 		"fileSize":       128,
 		"expectedSha256": digest,
 	})
@@ -183,7 +183,7 @@ func createReadyPublicationMediaAsset(
 	)
 	initRequest.Header.Set("Content-Type", "application/json")
 	initRequest.Header.Set("X-Client-User-Id", ownerID)
-	initRequest.Header.Set("X-Client-Sub-Account-Id", ownerID)
+	initRequest.Header.Set("X-Client-Persona-Id", ownerID)
 	initRequest.Header.Set("Idempotency-Key", fmt.Sprintf("media-init-%d", sequence))
 	initResponse := httptest.NewRecorder()
 	testHandler.ServeHTTP(initResponse, initRequest)
@@ -208,7 +208,7 @@ func createReadyPublicationMediaAsset(
 	)
 	completeRequest.Header.Set("Content-Type", "application/json")
 	completeRequest.Header.Set("X-Client-User-Id", ownerID)
-	completeRequest.Header.Set("X-Client-Sub-Account-Id", ownerID)
+	completeRequest.Header.Set("X-Client-Persona-Id", ownerID)
 	completeRequest.Header.Set(
 		"Idempotency-Key",
 		fmt.Sprintf("media-complete-%d", sequence),
@@ -277,10 +277,10 @@ func createReadyPublicationMediaAsset(
 			"/internal/content/media/"+assetID+":processing-result",
 			fmt.Sprintf(`{
 				"processingStatus":"ready",
-				"processorProfile":"content_image_normalization_v1",
+				"processorProfile":"content_image_normalization",
 				"imageWidth":540,
 				"imageHeight":960,
-				"imageDeliveryContentType":"image/jpeg",
+				"imageDeliveryMimeType":"image/jpeg",
 				"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
 				"imagePublicSliceKey":%q,
 				"imageDominantColor":"#1A2B3C",
@@ -333,7 +333,7 @@ func TestNormalizePublicationPayloadAddsTypedArticleContract(t *testing.T) {
 	t.Parallel()
 	normalized := completePublicationFixturePrerequisites(
 		t,
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 		`{"contentType":"article","title":"Contract article","body":"Body"}`,
 	)
 	var payload map[string]any

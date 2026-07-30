@@ -2,6 +2,7 @@
   "label": "餐厅探店",
   "labelEn": "Restaurant Visit",
   "description": "探访餐厅进行评测",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

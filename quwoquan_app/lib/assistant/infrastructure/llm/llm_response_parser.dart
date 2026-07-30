@@ -4,108 +4,31 @@ import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 
 /// LLM 响应统一解析器。
 ///
-/// 职责：从 raw text 中提取并解析 JSON，支持多种模型输出格式。
-/// 所有 JSON 解析逻辑集中于此，其他文件禁止直接 `jsonDecode` LLM 输出。
+/// 只接收完整 canonical `assistant_turn` JSON；任何 fence、前后缀、旧字段或
+/// 非 canonical shape 均 fail-closed。
 class LlmResponseParser {
   LlmResponseParser._();
 
-  static final _fencePattern = RegExp(
-    r'```(?:json)?\s*\n?([\s\S]*?)\n?```',
-    multiLine: true,
-  );
-  static final _thinkPattern = RegExp(
-    r'<think>[\s\S]*?</think>',
-    multiLine: true,
-  );
-  static final _thinkTagPattern = RegExp(r'</?think>', multiLine: true);
-
-  /// 从 LLM raw text 中提取 JSON 并解析为 [LlmParseResult]。
-  ///
-  /// 策略链（优先级递减）：
-  /// 1. ```json``` fence 提取
-  /// 2. 去除 think 标签 + 全文 strip → 直接 jsonDecode
-  /// 3. 括号深度块扫描 → 优先选含 `decision` 的块
-  /// 4. 全部失败 → 返回 unparsed 结果
+  /// 将完整响应解析为 typed [AssistantTurnOutput]。
   static LlmParseResult parse(String rawText) {
     final text = rawText.trim();
     if (text.isEmpty) {
       return LlmParseResult.unparsed(raw: rawText, reason: 'empty_input');
     }
-
-    // Strategy 1: fence
-    final fenceMatch = _fencePattern.firstMatch(text);
-    if (fenceMatch != null) {
-      final content = fenceMatch.group(1)?.trim() ?? '';
-      if (content.isNotEmpty) {
-        final result = _tryDecodeAsModelOutput(content);
-        if (result != null) {
-          return LlmParseResult.parsed(json: result, raw: rawText);
-        }
-        final sliced = _sliceFirstJsonObject(content);
-        if (sliced != null) {
-          final result2 = _tryDecodeAsModelOutput(sliced);
-          if (result2 != null) {
-            return LlmParseResult.parsed(json: result2, raw: rawText);
-          }
-        }
-      }
+    final turn = _tryDecodeCanonicalTurn(text);
+    if (turn != null) {
+      return LlmParseResult.parsed(turn: turn, raw: rawText);
     }
-
-    // Strategy 2: strip fence + think tags → direct parse
-    final cleaned = text
-        .replaceAll(RegExp(r'```json\s*', multiLine: true), '')
-        .replaceAll(RegExp(r'```\s*', multiLine: true), '')
-        .replaceAll(_thinkPattern, '')
-        .replaceAll(_thinkTagPattern, '')
-        .trim();
-    final direct = _tryDecodeAsModelOutput(cleaned);
-    if (direct != null) {
-      return LlmParseResult.parsed(json: direct, raw: rawText);
-    }
-
-    // Strategy 3: bracket-depth block scan
-    final blocks = _extractTopLevelJsonBlocks(cleaned);
-    Map<String, dynamic>? best;
-    for (final block in blocks) {
-      final decoded = _tryDecodeMap(block);
-      if (decoded == null) continue;
-      best ??= decoded;
-      if (decoded.containsKey('decision')) {
-        return LlmParseResult.parsed(json: decoded, raw: rawText);
-      }
-      if (decoded.containsKey('userMarkdown')) {
-        return LlmParseResult.parsed(json: decoded, raw: rawText);
-      }
-    }
-    if (best != null) {
-      return LlmParseResult.parsed(json: best, raw: rawText);
-    }
-
-    return LlmParseResult.unparsed(raw: rawText, reason: 'no_valid_json');
+    return LlmParseResult.unparsed(
+      raw: rawText,
+      reason: 'invalid_assistant_turn',
+    );
   }
 
-  /// 从模型输出 JSON 中提取 `userMarkdown`（快速路径，不做完整解析）。
-  static String? extractUserMarkdown(String rawText) {
-    final result = parse(rawText);
-    if (!result.ok) return null;
-    final um = result.explicitUserMarkdown;
-    if (um.isNotEmpty) return um;
-    return null;
-  }
-
-  /// 识别 canonical assistant_turn JSON：返回原始解码 Map，不做兼容拆包。
-  static Map<String, dynamic>? _tryDecodeAsModelOutput(String text) {
+  static AssistantTurnOutput? _tryDecodeCanonicalTurn(String text) {
     final decoded = _tryDecodeMap(text);
     if (decoded == null) return null;
-
-    if (decoded.containsKey('decision')) return decoded;
-
-    final contractId = (decoded['contractId'] as String?)?.trim() ?? '';
-    if (contractId == 'assistant_turn') return decoded;
-
-    if (decoded.containsKey('userMarkdown')) return decoded;
-
-    return decoded;
+    return tryParseAssistantTurnOutput(decoded);
   }
 
   static Map<String, dynamic>? _tryDecodeMap(String text) {
@@ -117,82 +40,21 @@ class LlmResponseParser {
     }
     return null;
   }
-
-  static String? _sliceFirstJsonObject(String text) {
-    final start = text.indexOf('{');
-    final end = text.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      return text.substring(start, end + 1);
-    }
-    return null;
-  }
-
-  static List<String> _extractTopLevelJsonBlocks(String text) {
-    final blocks = <String>[];
-    int depth = 0;
-    int start = -1;
-    for (int i = 0; i < text.length; i++) {
-      final ch = text[i];
-      if (ch == '{') {
-        if (depth == 0) start = i;
-        depth++;
-      } else if (ch == '}') {
-        if (depth > 0) {
-          depth--;
-          if (depth == 0 && start >= 0) {
-            blocks.add(text.substring(start, i + 1));
-            start = -1;
-          }
-        }
-      }
-    }
-    return blocks;
-  }
-}
-
-/// 解析成功后对 canonical assistant JSON 的只读投影（便于收窄调用方对 `Map` 的依赖）。
-class LlmAssistantOutputJsonView {
-  const LlmAssistantOutputJsonView(this._json);
-
-  final Map<String, dynamic> _json;
-
-  String get explicitUserMarkdown {
-    final um = (_json['userMarkdown'] as String?)?.trim() ?? '';
-    if (um.isNotEmpty) return um;
-    return '';
-  }
-
-  String get resultText {
-    final result = _json['result'];
-    if (result is Map) {
-      return (result['text'] as String?)?.trim() ?? '';
-    }
-    if (result is String) return result.trim();
-    return '';
-  }
-
-  String get nextAction {
-    final decision = _json['decision'];
-    if (decision is Map) {
-      return (decision['nextAction'] as String?)?.trim() ?? '';
-    }
-    return '';
-  }
 }
 
 /// LLM 响应解析结果。
 class LlmParseResult {
   const LlmParseResult._({
     required this.ok,
-    this.json,
+    this.turn,
     required this.raw,
     this.failReason,
   });
 
   factory LlmParseResult.parsed({
-    required Map<String, dynamic> json,
+    required AssistantTurnOutput turn,
     required String raw,
-  }) => LlmParseResult._(ok: true, json: json, raw: raw);
+  }) => LlmParseResult._(ok: true, turn: turn, raw: raw);
 
   factory LlmParseResult.unparsed({
     required String raw,
@@ -200,87 +62,7 @@ class LlmParseResult {
   }) => LlmParseResult._(ok: false, raw: raw, failReason: reason);
 
   final bool ok;
-  final Map<String, dynamic>? json;
+  final AssistantTurnOutput? turn;
   final String raw;
   final String? failReason;
-
-  /// 从解析结果中提取显式 userMarkdown。
-  /// 不再回退到 `result.text`，避免把内部结果文本误当成用户可见回答。
-  String get userMarkdown => explicitUserMarkdown;
-
-  /// 仅提取显式用户轨 Markdown，不回退到 result.text。
-  String get explicitUserMarkdown {
-    if (!ok || json == null) return '';
-    return LlmAssistantOutputJsonView(json!).explicitUserMarkdown;
-  }
-
-  /// 兼容 canonical result.text / result 字符串。
-  String get resultText {
-    if (!ok || json == null) return '';
-    return LlmAssistantOutputJsonView(json!).resultText;
-  }
-
-  /// 从解析结果中提取 decision.nextAction
-  String get nextAction {
-    if (!ok || json == null) return '';
-    return LlmAssistantOutputJsonView(json!).nextAction;
-  }
-
-  /// 解析成功后的结构化投影（与 [json] 同源）。
-  LlmAssistantOutputJsonView? get assistantOutputView {
-    if (!ok || json == null) return null;
-    return LlmAssistantOutputJsonView(json!);
-  }
-
-  /// 根 JSON 满足 `assistant_turn` 契约时返回 metadata 生成类型，否则 `null`（与 [tryParseAssistantTurnOutput] 一致）。
-  AssistantTurnOutput? tryAssistantTurnOutput() {
-    if (!ok || json == null) return null;
-    return tryParseAssistantTurnOutput(json!);
-  }
-
-  /// 是否为非最终答案（tool_call / ask_user 等中间态）
-  bool get isIntermediateAction {
-    final action = nextAction;
-    return action.isNotEmpty && action != 'answer';
-  }
-}
-
-/// 引擎元数据（模型不输出，由引擎注入）。
-class EngineResponseMeta {
-  const EngineResponseMeta({
-    this.contractId = 'assistant_turn',
-    this.domainId = '',
-    this.stateId = '',
-    this.detectedEvent = '',
-    this.phaseAwareLoaded = const <String>[],
-    this.promptTokens = 0,
-    this.completionTokens = 0,
-    this.latencyMs = 0,
-    this.modelId = '',
-    this.timestamp,
-  });
-
-  final String contractId;
-  final String domainId;
-  final String stateId;
-  final String detectedEvent;
-  final List<String> phaseAwareLoaded;
-  final int promptTokens;
-  final int completionTokens;
-  final int latencyMs;
-  final String modelId;
-  final DateTime? timestamp;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'contractId': contractId,
-    'domainId': domainId,
-    'stateId': stateId,
-    'detectedEvent': detectedEvent,
-    'phaseAwareLoaded': phaseAwareLoaded,
-    'promptTokens': promptTokens,
-    'completionTokens': completionTokens,
-    'latencyMs': latencyMs,
-    'modelId': modelId,
-    'timestamp': (timestamp ?? DateTime.now()).toIso8601String(),
-  };
 }

@@ -1,0 +1,14 @@
+{
+  "label": "白天漫射光",
+  "labelEn": "Daylight",
+  "description": "太阳高度角在 6° 与 60° 之间",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

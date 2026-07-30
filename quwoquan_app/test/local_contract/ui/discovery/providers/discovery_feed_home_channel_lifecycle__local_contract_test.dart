@@ -1,0 +1,96 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-005
+
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CloudOperationCancellationSignal;
+
+void main() {
+  test('远端首页频道变更只回收已移除频道并取消请求，不误删 discovery tab', () async {
+    final recommend = ContentUIConfig.homeChannels.firstWhere(
+      (channel) => channel.id == 'recommend',
+    );
+    final travel = ContentUIConfig.homeChannels.firstWhere(
+      (channel) => channel.id == 'travel',
+    );
+    final query = _PendingDiscoveryFeedQuery();
+    final container = ProviderContainer(
+      overrides: <Override>[
+        contentDiscoveryFeedQueryProvider.overrideWithValue(query),
+        homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[
+          recommend,
+          travel,
+        ]),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(discoveryFeedMapProvider.notifier);
+    notifier.state = <String, AsyncValue<DiscoveryFeedState>>{
+      'travel': const AsyncData(DiscoveryFeedState()),
+      'photo': const AsyncData(DiscoveryFeedState()),
+    };
+
+    final removedLoad = notifier.load('recommend', force: true);
+    await container.pump();
+    expect(query.cancellation?.isCancelled, isFalse);
+    expect(
+      container.read(discoveryFeedMapProvider).containsKey('recommend'),
+      isTrue,
+    );
+
+    container.updateOverrides(<Override>[
+      contentDiscoveryFeedQueryProvider.overrideWithValue(query),
+      homeChannelsProvider.overrideWithValue(<HomeChannelConfig>[travel]),
+    ]);
+    await container.pump();
+
+    final afterChurn = container.read(discoveryFeedMapProvider);
+    expect(query.cancellation?.isCancelled, isTrue);
+    expect(afterChurn.containsKey('recommend'), isFalse);
+    expect(afterChurn.containsKey('travel'), isTrue);
+    expect(afterChurn.containsKey('photo'), isTrue);
+
+    query.completeLate();
+    await removedLoad;
+    expect(
+      container.read(discoveryFeedMapProvider).containsKey('recommend'),
+      isFalse,
+    );
+  });
+}
+
+final class _PendingDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
+  final Completer<DiscoveryFeedPage> _pending = Completer<DiscoveryFeedPage>();
+  CloudOperationCancellationSignal? cancellation;
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    this.cancellation = cancellation;
+    return _pending.future;
+  }
+
+  void completeLate() {
+    _pending.complete(const DiscoveryFeedPage(items: []));
+  }
+}

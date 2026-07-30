@@ -156,23 +156,23 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     PostBaseDto post,
     ActivePersonaContextViewData? activePersonaContext,
   ) {
-    final postSubAccountId = post.subAccountId.trim();
-    if (postSubAccountId.isEmpty) {
+    final postPersonaId = post.personaId.trim();
+    if (postPersonaId.isEmpty) {
       return false;
     }
-    final personaSubAccountId = activePersonaContext?.subAccountId.trim() ?? '';
-    if (personaSubAccountId.isNotEmpty) {
-      return personaSubAccountId == postSubAccountId;
+    final personaPersonaId = activePersonaContext?.personaId.trim() ?? '';
+    if (personaPersonaId.isNotEmpty) {
+      return personaPersonaId == postPersonaId;
     }
-    final sessionSubAccountId = ref
+    final sessionPersonaId = ref
         .read(authSessionControllerProvider)
-        .activeSubAccountId
+        .activePersonaId
         .trim();
-    if (sessionSubAccountId.isNotEmpty) {
-      return sessionSubAccountId == postSubAccountId;
+    if (sessionPersonaId.isNotEmpty) {
+      return sessionPersonaId == postPersonaId;
     }
     final currentUserId = ref.read(currentUserIdProvider).trim();
-    return currentUserId.isNotEmpty && currentUserId == postSubAccountId;
+    return currentUserId.isNotEmpty && currentUserId == postPersonaId;
   }
 
   Future<void> _deleteCurrentPost(
@@ -188,8 +188,10 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       final confirmed = await showAppActionSheet<bool>(
         context,
         title: ChatText.messageActionDelete,
-        message: ProfileText.profileSubAccountDeleteConfirmTemplate
-            .replaceFirst('%s', displayName),
+        message: ProfileText.profilePersonaDeleteConfirmTemplate.replaceFirst(
+          '%s',
+          displayName,
+        ),
         sections: const [
           AppActionSheetSection<bool>(
             items: [
@@ -222,11 +224,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         }
         _setMountedState(() {
           _commentSplitPostId = null;
-          _hydratedRawPostsById.remove(post.id);
-          _workItemCache.remove(post.id);
-          _failedArticleHydrationIds.remove(post.id);
-          _failedArticleHydrationErrorsById.remove(post.id);
-          _hydratingArticleIds.remove(post.id);
+          _postStateWindow.remove(post.id);
+          _articleHydrationAdmission.cancelPost(post.id);
         });
         _dismissViewer();
       } catch (error) {
@@ -397,12 +396,26 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       if (grant.mediaId != mediaId) {
         throw StateError('original access grant media id mismatch');
       }
-      if (!mounted) {
+      final access = WorksViewerOriginalImageAccess(
+        url: grant.originalUrl.toString(),
+        expiresAt: grant.expiresAt,
+      );
+      if (!access.isUsableAt(DateTime.now())) {
+        throw StateError('original access grant already expired');
+      }
+      if (!mounted || !_postStateWindow.contains(post.id)) {
         return;
       }
       _setMountedState(() {
-        (_originalImageUrlsByPostId[post.id] ??= <int, String>{})[imageIndex] =
-            grant.originalUrl.toString();
+        _rememberPostLocalState(post.id);
+        final entries = _originalImageUrlsByPostId[post.id] ??=
+            <int, WorksViewerOriginalImageAccess>{};
+        entries.remove(imageIndex);
+        entries[imageIndex] = access;
+        while (entries.length >
+            _WorksImmersiveViewerState._maxOriginalImageAccessEntriesPerPost) {
+          entries.remove(entries.keys.first);
+        }
       });
       AppToast.show(context, MediaText.imageOriginalLoaded);
     } catch (error) {
@@ -505,8 +518,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           .read(
             personaRelationshipBlockWriterProvider(AppUiSurfaces.workBrowser),
           )
-          .blockUser(BlockUserCommand(targetSubAccountId: post.authorId));
-      final feedSession = ref.read(feedSessionProvider.notifier);
+          .blockUser(BlockUserCommand(targetPersonaId: post.authorId));
+      final attribution = _feedAttributionForPost(post);
       ref
           .read(contentBehaviorTrackerProvider)
           .trackHideAuthor(
@@ -514,10 +527,9 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
             authorId: post.authorId,
             contentType: post.type,
             referralSource: widget.referralSource,
-            feedRequestId: _effectiveFeedRequestId(),
+            feedRequestId: attribution.feedRequestId,
             channelId: _immersiveChannelId(),
-            rankingVersion: feedSession.currentRankingVersion,
-            reasonVersion: feedSession.currentReasonVersion,
+            policyDigest: attribution.policyDigest,
             recallPath: post.recallPath,
             contentVertical: post.contentVertical,
             supplySource: post.supplySource,
@@ -583,7 +595,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   Future<void> _applyBlockKeyword(PostBaseDto post, String keyword) async {
     try {
       await ref.read(blockedKeywordWriterProvider).add(keyword);
-      final feedSession = ref.read(feedSessionProvider.notifier);
+      final attribution = _feedAttributionForPost(post);
       ref
           .read(contentBehaviorTrackerProvider)
           .trackHideContentType(
@@ -591,10 +603,9 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
             contentType: post.type,
             authorId: post.authorId,
             referralSource: widget.referralSource,
-            feedRequestId: _effectiveFeedRequestId(),
+            feedRequestId: attribution.feedRequestId,
             channelId: _immersiveChannelId(),
-            rankingVersion: feedSession.currentRankingVersion,
-            reasonVersion: feedSession.currentReasonVersion,
+            policyDigest: attribution.policyDigest,
             recallPath: post.recallPath,
             contentVertical: post.contentVertical,
             supplySource: post.supplySource,
@@ -698,6 +709,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
             : null,
         onReadingOptionChanged: isArticle
             ? (id) => _setMountedState(() {
+                _rememberPostLocalState(post.id);
                 if (id == 'system') {
                   _articlePaperThemeOverrides.remove(post.id);
                 } else {
@@ -717,7 +729,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           enableIdentityTemplate: enableIdentityTemplate,
         ),
         onNotInterested: () {
-          final feedSession = ref.read(feedSessionProvider.notifier);
+          final attribution = _feedAttributionForPost(post);
           final previousPage = _currentPage;
           ref
               .read(contentBehaviorTrackerProvider)
@@ -726,10 +738,9 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
                 contentType: post.type,
                 authorId: post.authorId,
                 referralSource: widget.referralSource,
-                feedRequestId: _effectiveFeedRequestId(),
+                feedRequestId: attribution.feedRequestId,
                 channelId: _immersiveChannelId(),
-                rankingVersion: feedSession.currentRankingVersion,
-                reasonVersion: feedSession.currentReasonVersion,
+                policyDigest: attribution.policyDigest,
                 recallPath: post.recallPath,
                 contentVertical: post.contentVertical,
                 supplySource: post.supplySource,
@@ -747,10 +758,9 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
                     contentType: post.type,
                     authorId: post.authorId,
                     referralSource: widget.referralSource,
-                    feedRequestId: _effectiveFeedRequestId(),
+                    feedRequestId: attribution.feedRequestId,
                     channelId: _immersiveChannelId(),
-                    rankingVersion: feedSession.currentRankingVersion,
-                    reasonVersion: feedSession.currentReasonVersion,
+                    policyDigest: attribution.policyDigest,
                     recallPath: post.recallPath,
                     contentVertical: post.contentVertical,
                     supplySource: post.supplySource,

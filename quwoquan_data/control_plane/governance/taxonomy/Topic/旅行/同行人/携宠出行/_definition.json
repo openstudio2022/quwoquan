@@ -1,0 +1,13 @@
+{
+  "label": "携宠出行",
+  "labelEn": "With Pets",
+  "description": "携宠物出行，关注宠物友好住宿与交通规则",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

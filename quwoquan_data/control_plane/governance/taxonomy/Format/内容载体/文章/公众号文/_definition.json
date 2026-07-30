@@ -2,6 +2,7 @@
   "label": "公众号文",
   "labelEn": "WeChat Article",
   "description": "微信公众号推文",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -2,6 +2,7 @@
   "label": "直播切片",
   "labelEn": "Livestream Clip",
   "description": "精选直播片段重新剪辑",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

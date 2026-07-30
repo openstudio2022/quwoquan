@@ -1,0 +1,120 @@
+description: 暂停账号正式申诉入口与最小认领事实
+fields:
+- name: intakeRef
+  source: intakeRef
+  type: string
+  constraints: [PK, NOT_NULL]
+  classification: SENSITIVE
+  log_policy: mask
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: accountId
+  source: accountId
+  type: string
+  constraints: [NOT_NULL]
+  classification: SECRET
+  log_policy: drop
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+  reference: true
+- name: suspensionAuthEpoch
+  source: suspensionAuthEpoch
+  type: int64
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: drop
+  role: authoritative_state
+- name: status
+  source: status
+  type: enum
+  enum_ref: AccountAppealIntakeStatus
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: submittedAt
+  source: submittedAt
+  type: timestamp
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: claimedCaseId
+  source: claimedCaseId
+  type: string
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: claimedAt
+  source: claimedAt
+  type: timestamp
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+- name: deleteAfter
+  source: deleteAfter
+  type: timestamp
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: read
+  ops_exposure: read
+  role: authoritative_state
+- name: version
+  source: version
+  type: int64
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: metadata_only
+  api_exposure: drop
+  ops_exposure: read
+  role: authoritative_state
+enums:
+  AccountAppealIntakeStatus:
+    values: [submitted, claimed]
+types:
+  IssueAccountAppealCredentialCommand:
+    fields:
+    - {name: phone, type: string, constraints: [NOT_BLANK], classification: PII, log_policy: drop}
+    - {name: otpCode, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop}
+    - {name: challengeId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: mask}
+  AccountAppealCredentialIssueResult:
+    fields:
+    - {name: appealCredential, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop}
+    - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only}
+  SubmitAccountAppealIntakeCommand:
+    fields:
+    - {name: appealCredential, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop}
+  AccountAppealIntakeSubmissionResult:
+    fields:
+    - {name: intakeRef, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: mask}
+    - {name: submittedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only}
+    - {name: deleteAfter, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only}
+    - {name: idempotentReplay, type: boolean, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow}
+  ClaimAccountAppealIntakeCommand:
+    fields:
+    - {name: intakeRef, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: mask}
+    - {name: accountId, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop}
+    - {name: caseId, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: metadata_only}
+  AccountAppealIntakeClaimResult:
+    fields:
+    - {name: intakeRef, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: mask}
+    - {name: accountId, type: string, constraints: [NOT_BLANK], classification: SECRET, log_policy: drop}
+    - {name: caseId, type: string, constraints: [NOT_BLANK], classification: INTERNAL, log_policy: metadata_only}
+    - {name: status, type: enum, enum_ref: AccountAppealIntakeStatus, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only}
+    - {name: claimedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only}
+    - {name: idempotentReplay, type: boolean, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow}

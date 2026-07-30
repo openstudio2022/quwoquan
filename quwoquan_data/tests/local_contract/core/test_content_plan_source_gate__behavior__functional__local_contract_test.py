@@ -519,7 +519,7 @@ def test_content_plan_allows_text_only_article_base_source_without_source_assets
     issues = cp.validate_content_plan(EXECUTION_ID, spec)
     assert issues == []
 
-def test_content_plan_accepts_audited_travel_asset_without_license_fields():
+def test_content_plan_rejects_travel_asset_without_required_rights_fields():
     entity = "九寨沟"
     ref = f"{entity}_planning_consultation"
     title = "九寨沟行前怎么安排"
@@ -609,7 +609,7 @@ def test_content_plan_accepts_audited_travel_asset_without_license_fields():
 
     issues = cp.validate_content_plan(EXECUTION_ID, spec)
 
-    assert not any("missing rights fields" in issue for issue in issues), issues
+    assert any("missing rights fields" in issue for issue in issues), issues
 
 def test_content_plan_allows_asset_over_assessment_budget_below_publish_budget():
     entity = "九寨沟"

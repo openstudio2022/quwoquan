@@ -2,6 +2,7 @@
   "label": "大V",
   "labelEn": "Mega Influencer",
   "description": "粉丝100万-500万",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

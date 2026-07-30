@@ -34,11 +34,12 @@ class ReleaseGovernanceContractTest(unittest.TestCase):
             receipt = verify_release_governance(
                 repository="example/quwoquan",
                 git_sha="abc123",
-                manifest_digest="sha256:" + ("a" * 64),
+                artifact_digest="sha256:" + ("a" * 64),
                 token="token",
             )
         self.assertEqual(receipt["pullRequest"], 42)
         self.assertEqual(receipt["approvers"], ["reviewer"])
+        self.assertEqual(receipt["artifactDigest"], "sha256:" + ("a" * 64))
         self.assertGreaterEqual(len(receipt["distinctPrincipals"]), 2)
 
     def test_direct_push_and_author_self_approval_fail_closed(self) -> None:
@@ -50,7 +51,7 @@ class ReleaseGovernanceContractTest(unittest.TestCase):
                 verify_release_governance(
                     repository="example/quwoquan",
                     git_sha="direct",
-                    manifest_digest="sha256:" + ("a" * 64),
+                    artifact_digest="sha256:" + ("a" * 64),
                     token="token",
                 )
 
@@ -81,7 +82,7 @@ class ReleaseGovernanceContractTest(unittest.TestCase):
                 verify_release_governance(
                     repository="example/quwoquan",
                     git_sha="self",
-                    manifest_digest="sha256:" + ("b" * 64),
+                    artifact_digest="sha256:" + ("b" * 64),
                     token="token",
                 )
 

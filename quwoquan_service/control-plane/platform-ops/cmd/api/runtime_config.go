@@ -11,9 +11,7 @@ import (
 
 type platformRuntimeConfig struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 	Service struct {
 		Name string `yaml:"name"`

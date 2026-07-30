@@ -1,0 +1,12 @@
+{
+  "label": "科隆岛",
+  "labelEn": "Coron",
+  "description": "沉船潜水与湖泊景观",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

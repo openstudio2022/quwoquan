@@ -37,6 +37,14 @@
       "eventType": "completed"
     }
   ],
+  "expectations": {
+    "selectedSkillId": "general_qa",
+    "selectedDomainId": "assistant",
+    "expectedToolNames": [],
+    "expectedClarificationSlotIds": [],
+    "expectedReferenceUrls": [],
+    "finalAnswerMode": "full"
+  },
   "expectedRunResponse": {
     "conversationId": "acv_replay_direct",
     "turnId": "atn_replay_direct",

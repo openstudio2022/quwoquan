@@ -1,7 +1,6 @@
 // spec_ref: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md#gwt-001
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_facets.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
@@ -105,7 +104,10 @@ void main() {
       expect(value.chips.single.label, '服务端找资料');
       expect(value.suggestionLines, <String>['服务端建议']);
       expect(value.suggestedActions.single.actionId, 'server_action');
-      expect(repo.lastContextSnapshot?.pageType, 'article');
+      expect(
+        repo.lastContextSnapshot?.pageType,
+        AssistantPageContextType.article,
+      );
       expect(repo.lastContextSnapshot?.pageObjects, hasLength(1));
       expect(
         repo.lastContextSnapshot?.userActions?.single.action,

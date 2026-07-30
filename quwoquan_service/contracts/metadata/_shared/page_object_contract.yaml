@@ -322,10 +322,10 @@ pages:
     surface_ids: [chatDetail]
     experience_owner: chat
     data_owners: [chat, user]
-    object_ids: [chat.conversation, user.user_account]
+    object_ids: [chat.conversation, user.user_account, user.persona_relationship]
     query_slices:
       - chat.conversation.projection.chat_message_client
-      - user.user_account.projection.relationship_capability_wire
+      - user.persona_relationship.projection.relationship_capability_wire
     typed_presentation: [ChatMessageDto, RelationshipCapabilityDto]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -1421,11 +1421,11 @@ pages:
     surface_ids: [addContactConfirm]
     experience_owner: user
     data_owners: [user]
-    object_ids: [user.user_account]
+    object_ids: [user.user_account, user.persona_relationship]
     query_slices:
-      - user.user_account.projection.sub_account_profile_wire
-      - user.user_account.projection.relationship_capability_wire
-    typed_presentation: [SubAccountProfileViewData, RelationshipCapabilityDto]
+      - user.user_account.projection.persona_profile_wire
+      - user.persona_relationship.projection.relationship_capability_wire
+    typed_presentation: [PersonaProfileViewData, RelationshipCapabilityDto]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
     telemetry_descriptor: { event_namespace: page.user.contact_confirm, lifecycle: [enter, exit, follow, failure] }
@@ -1439,10 +1439,10 @@ pages:
     surface_ids: [addContactSearch]
     experience_owner: user
     data_owners: [user]
-    object_ids: [user.user_account]
+    object_ids: [user.user_account, user.persona_relationship]
     query_slices:
       - user.user_account.projection.social_relation_search_item_wire
-      - user.user_account.projection.relationship_capability_wire
+      - user.persona_relationship.projection.relationship_capability_wire
     typed_presentation: [SocialRelationSearchItemView, RelationshipCapabilityDto]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
@@ -1683,10 +1683,10 @@ pages:
     surface_ids: [addContactPhone]
     experience_owner: user
     data_owners: [user]
-    object_ids: [user.contact_discovery_record, user.user_account]
+    object_ids: [user.contact_discovery_record, user.user_account, user.persona_relationship]
     query_slices:
       - user.contact_discovery_record.projection.contact_discovery_match_wire
-      - user.user_account.projection.relationship_capability_wire
+      - user.persona_relationship.projection.relationship_capability_wire
     typed_presentation: [ContactDiscoveryMatchWireDto, RelationshipCapabilityDto]
     auth_requirement: required
     capability_requirements: { all_of: [contacts], any_of: [] }

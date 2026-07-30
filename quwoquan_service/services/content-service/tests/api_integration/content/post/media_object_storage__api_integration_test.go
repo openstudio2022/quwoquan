@@ -11,6 +11,9 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -68,18 +71,24 @@ func TestMediaObjectGatewayUsesRealS3CompatibleObjectLifecycle(t *testing.T) {
 	payload := bytes.Repeat([]byte{0x5a}, 128)
 	digest := sha256.Sum256(payload)
 	digestHex := "sha256:" + hex.EncodeToString(digest[:])
-	gateway, err := sessionstorage.NewGateway(sessionstorage.Config{
-		Bucket: bucket,
-	}, runtimemedia.NewS3PresignClient(runtimemedia.OSSConfig{
+	presigner := runtimemedia.NewS3PresignClient(runtimemedia.ObjectStorageConfig{
 		Endpoint: baseEndpoint, Bucket: bucket, Region: region,
 		AccessKeyID: accessKey, AccessKeySecret: secretKey,
-	}))
+	})
+	uploadAuthority, trustedPresigner := newTLSPresignedUploadAuthority(
+		t,
+		baseEndpoint,
+		presigner,
+	)
+	gateway, err := sessionstorage.NewGateway(sessionstorage.Config{
+		Bucket: bucket, UploadBaseURL: uploadAuthority.URL,
+	}, trustedPresigner)
 	if err != nil {
 		t.Fatalf("build media object gateway: %v", err)
 	}
 	grant, err := gateway.PrepareUpload(ctx, sessionapp.PrepareUploadParams{
 		SessionID: "media-real-s3-1", OwnerID: "persona-real-s3", MediaType: "image",
-		ContentType: "image/jpeg", FileSize: int64(len(payload)), ExpectedSHA256: digestHex,
+		MimeType: "image/jpeg", FileSize: int64(len(payload)), ExpectedSHA256: digestHex,
 		ExpiresAt: time.Now().UTC().Add(5 * time.Minute),
 	})
 	if err != nil {
@@ -92,7 +101,7 @@ func TestMediaObjectGatewayUsesRealS3CompatibleObjectLifecycle(t *testing.T) {
 	request.Header.Set("Content-Type", "image/jpeg")
 	request.Header.Set("X-Amz-Checksum-Sha256", base64.StdEncoding.EncodeToString(digest[:]))
 	request.Header.Set("X-Amz-Meta-Sha256", digestHex)
-	response, err := http.DefaultClient.Do(request)
+	response, err := uploadAuthority.Client().Do(request)
 	if err != nil {
 		t.Fatalf("PUT bytes through real presigned URL: %v", err)
 	}
@@ -104,7 +113,7 @@ func TestMediaObjectGatewayUsesRealS3CompatibleObjectLifecycle(t *testing.T) {
 
 	completed, err := gateway.CompleteUpload(ctx, sessionapp.CompleteUploadParams{
 		ObjectKey: grant.ObjectKey, ExpectedSHA256: digestHex, MediaType: "image",
-		ContentType: "image/jpeg", FileSize: int64(len(payload)),
+		MimeType: "image/jpeg", FileSize: int64(len(payload)),
 	})
 	if err != nil {
 		t.Fatalf("verify and promote real uploaded object: %v", err)
@@ -136,4 +145,107 @@ func TestMediaObjectGatewayUsesRealS3CompatibleObjectLifecycle(t *testing.T) {
 			t.Fatalf("unexpected source lookup failure after promotion: %v", err)
 		}
 	}
+}
+
+type tlsAuthorityPresignClient struct {
+	delegate  runtimemedia.PresignClient
+	authority *url.URL
+}
+
+func newTLSPresignedUploadAuthority(
+	t *testing.T,
+	objectStoreURL string,
+	delegate runtimemedia.PresignClient,
+) (*httptest.Server, runtimemedia.PresignClient) {
+	t.Helper()
+	target, err := url.Parse(objectStoreURL)
+	if err != nil {
+		t.Fatalf("parse object store URL: %v", err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	direct := proxy.Director
+	proxy.Director = func(request *http.Request) {
+		direct(request)
+		// The S3 signature was calculated for the MinIO authority. The public
+		// grant remains HTTPS, while the test-only reverse proxy preserves that
+		// signed Host header on its private hop to the real dependency.
+		request.Host = target.Host
+	}
+	server := httptest.NewTLSServer(proxy)
+	t.Cleanup(server.Close)
+	authority, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse TLS upload authority: %v", err)
+	}
+	return server, &tlsAuthorityPresignClient{
+		delegate:  delegate,
+		authority: authority,
+	}
+}
+
+func (client *tlsAuthorityPresignClient) PresignPutObject(
+	ctx context.Context,
+	bucket string,
+	key string,
+	constraints runtimemedia.PutObjectConstraints,
+	ttl time.Duration,
+) (string, error) {
+	signedURL, err := client.delegate.PresignPutObject(
+		ctx,
+		bucket,
+		key,
+		constraints,
+		ttl,
+	)
+	if err != nil {
+		return "", err
+	}
+	parsed, err := url.Parse(signedURL)
+	if err != nil {
+		return "", err
+	}
+	parsed.Scheme = client.authority.Scheme
+	parsed.Host = client.authority.Host
+	return parsed.String(), nil
+}
+
+func (client *tlsAuthorityPresignClient) StatObject(
+	ctx context.Context,
+	bucket string,
+	key string,
+) (*runtimemedia.ObjectInfo, error) {
+	return client.delegate.StatObject(ctx, bucket, key)
+}
+
+func (client *tlsAuthorityPresignClient) PromoteObject(
+	ctx context.Context,
+	bucket string,
+	sourceKey string,
+	targetKey string,
+	metadata map[string]string,
+) error {
+	return client.delegate.PromoteObject(
+		ctx,
+		bucket,
+		sourceKey,
+		targetKey,
+		metadata,
+	)
+}
+
+func (client *tlsAuthorityPresignClient) CopyObject(
+	ctx context.Context,
+	bucket string,
+	sourceKey string,
+	targetKey string,
+) error {
+	return client.delegate.CopyObject(ctx, bucket, sourceKey, targetKey)
+}
+
+func (client *tlsAuthorityPresignClient) DeleteObject(
+	ctx context.Context,
+	bucket string,
+	key string,
+) error {
+	return client.delegate.DeleteObject(ctx, bucket, key)
 }

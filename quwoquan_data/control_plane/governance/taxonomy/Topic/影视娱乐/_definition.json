@@ -2,6 +2,7 @@
   "label": "影视娱乐",
   "labelEn": "Entertainment & Media",
   "description": "影视综艺音乐娱乐内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

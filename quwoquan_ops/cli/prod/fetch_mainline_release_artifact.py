@@ -16,9 +16,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.prod.registry_transport import run_with_bounded_retry
+from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
+    STATUSES,
+    validate_manifest,
+    validate_manifest_files,
+)
 
 
 IMMUTABLE_REF = re.compile(r"ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}")
+FETCHABLE_STATUSES = STATUSES - {"build-input"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,15 +92,34 @@ def fetch(
                     f"release artifact extraction failed: "
                     f"{copy.stderr.strip() or copy.stdout.strip()}"
                 )
-            if not staged.joinpath("manifest.json").is_file():
+            manifest_path = staged / "manifest.json"
+            if not manifest_path.is_file():
                 raise RuntimeError("release artifact does not contain manifest.json")
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if not isinstance(manifest, dict):
+                    raise ValueError("manifest root must be an object")
+                validate_manifest(
+                    manifest,
+                    allowed_statuses=FETCHABLE_STATUSES,
+                )
+                validate_manifest_files(staged, manifest)
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                raise RuntimeError(
+                    f"release artifact contains invalid canonical evidence: {error}"
+                ) from error
             if output_dir.exists():
                 shutil.rmtree(output_dir)
             output_dir.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(staged, output_dir)
         finally:
             run(["docker", "rm", "-f", container_id])
-    return {"ref": ref, "manifest": str(output_dir / "manifest.json")}
+    return {
+        "ref": ref,
+        "manifest": str(output_dir / "manifest.json"),
+        "candidateId": str(manifest["candidateId"]),
+        "artifactDigest": str(manifest["artifactDigest"]),
+    }
 
 
 def discover(

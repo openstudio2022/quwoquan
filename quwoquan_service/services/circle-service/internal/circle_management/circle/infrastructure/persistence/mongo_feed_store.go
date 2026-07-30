@@ -58,7 +58,10 @@ func (s *MongoFeedStore) listPostsForCircleIDs(
 		query.Limit = 200
 	}
 
-	postFilter := bson.M{"status": "published"}
+	postFilter := bson.M{
+		"status":            "published",
+		"accountRestricted": bson.M{"$ne": true},
+	}
 	if identity := strings.TrimSpace(query.Identity); identity != "" {
 		postFilter["contentIdentity"] = identity
 	}

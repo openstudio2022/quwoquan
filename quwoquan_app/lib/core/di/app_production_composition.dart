@@ -45,6 +45,7 @@ import 'package:quwoquan_app/cloud/remote/user/profile_update_proposal/profile_u
 import 'package:quwoquan_app/cloud/remote/user/subject_follow/subject_follow_remote.dart';
 import 'package:quwoquan_app/cloud/remote/user/user_settings/user_settings_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/comment_facets_remote.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/footprint_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reaction_facets_remote.dart';
@@ -176,15 +177,22 @@ final class AppProductionComposition {
 
   static AppProductionContentFacets contentFacets({
     required CloudHttpClient httpClient,
+    required GeneratedCloudOperationClient client,
+    required ContentDiscoveryFeedInvocationContextFactory invocationContext,
     required Future<List<String>> Function() blockedKeywordsLoader,
     required PostObjectCacheService postCache,
     required ContentQuerySnapshotStore querySnapshotStore,
     required UserProfileCacheService userProfileCache,
     required CacheTelemetrySink telemetrySink,
   }) {
-    final remote = RemoteContentRepository(
-      httpClient: httpClient,
+    final discoveryFeed = RemoteContentDiscoveryFeedQuery(
+      client: client,
+      invocationContext: invocationContext,
       blockedKeywordsLoader: blockedKeywordsLoader,
+    );
+    final remote = RemoteContentRepository(
+      discoveryFeedQuery: discoveryFeed,
+      httpClient: httpClient,
     );
     final cached = CachedContentRepository(
       readDelegate: remote,

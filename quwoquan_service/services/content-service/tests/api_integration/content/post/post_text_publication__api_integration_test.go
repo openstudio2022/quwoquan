@@ -264,7 +264,7 @@ func TestTextPublicationSafetyAndModerationRoundTripThroughHTTP(t *testing.T) {
 					fmt.Sprintf("review-text-safety-%d", index),
 				),
 				moderationapp.ReviewPostModerationCaseCommand{
-					CaseID: caseSlice.ID, ReviewerID: reviewerID,
+					PostID: postID, CaseID: caseSlice.ID, ReviewerID: reviewerID,
 				},
 			); err != nil {
 				t.Fatalf("review moderation case: %v", err)
@@ -275,6 +275,7 @@ func TestTextPublicationSafetyAndModerationRoundTripThroughHTTP(t *testing.T) {
 					fmt.Sprintf("decide-text-safety-%d", index),
 				),
 				moderationapp.DecidePostModerationCaseCommand{
+					PostID:         postID,
 					CaseID:         caseSlice.ID,
 					ReviewerID:     reviewerID,
 					Decision:       testCase.terminalDecision,
@@ -450,7 +451,7 @@ func authenticatedPublicationRequest(
 		request = httptest.NewRequest(method, path, body)
 	}
 	request.Header.Set("X-Client-User-Id", personaID)
-	request.Header.Set("X-Client-Sub-Account-Id", personaID)
+	request.Header.Set("X-Client-Persona-Id", personaID)
 	principal := rtauth.Principal{
 		Claims: rtauth.Claims{Subject: personaID, Persona: personaID},
 		Actor: rtoperation.ActorContext{

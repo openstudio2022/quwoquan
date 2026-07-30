@@ -129,8 +129,7 @@ void main() {
       expect(full.type, 'group');
       expect(full.circleId, isNull);
       expect(full.circleGroupId, isNull);
-      expect(full.bindingType, 'none');
-      expect(full.lifecyclePolicy, 'persistent');
+      expect(full.originType, 'ad_hoc_group');
     });
 
     test('getConversation 返回指定会话', () async {

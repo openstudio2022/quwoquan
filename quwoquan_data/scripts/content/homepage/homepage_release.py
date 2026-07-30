@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 import yaml
 from core.io import read_json, write_assistant_task, write_json
 from content.execution.identity import parse_execution_id
@@ -33,6 +33,7 @@ from core.paths import (
     execution_data,
 )
 from governance.coverage.entity_extract import entity_ref, require_domain_etype
+from governance.coverage.master_list import leaf_coordinates
 from content.source.source_unit import resolve_entity_object_dir
 from content.homepage.homepage_introduction import (
     _normalize_homepage_manifest_assets,
@@ -391,6 +392,11 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         geo_fields["geoTagRefs"] = geo_tag_refs
     if entity_aliases:
         geo_fields["aliases"] = entity_aliases
+    # coordinates 是 Homepage.location（2dsphere / filters.near）的唯一上游；
+    # 只透传主清单已给出的真实坐标，缺失即留空，不按行政区中心推断。
+    coordinates = leaf_coordinates(dict(payload))
+    if coordinates is not None:
+        geo_fields["coordinates"] = coordinates
     try:
         primary_source, source_urls, primary_evidence_ref, source_catalog_sha = (
             _materialize_homepage_source_catalog(

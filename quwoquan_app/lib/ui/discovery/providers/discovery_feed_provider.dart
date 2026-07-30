@@ -13,6 +13,7 @@ import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/services/app_request_wait_controller.dart';
+import 'package:quwoquan_app/ui/discovery/models/discovery_feed_resident_page_window.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -26,14 +27,61 @@ CloudException _normalizeDiscoveryFeedError(Object error) {
   );
 }
 
-/// 推荐首屏成功响应却没有任何可展示内容时的本地一致性失败。
+void _requireSamePolicyDigest({
+  required String? accepted,
+  required String? incoming,
+}) {
+  _requireCanonicalPolicyDigest(accepted);
+  _requireCanonicalPolicyDigest(incoming);
+  if (accepted != incoming) {
+    throw const FormatException(
+      'continuation policyDigest must match the accepted feed window',
+    );
+  }
+}
+
+void _requireCanonicalPolicyDigest(String? policyDigest) {
+  if (policyDigest != null && !isCanonicalSha256Digest(policyDigest)) {
+    throw const FormatException(
+      'policyDigest must be a canonical SHA-256 digest',
+    );
+  }
+}
+
+bool _isCanonicalInitialEmptyPage(String channelId, DiscoveryFeedPage page) {
+  if (!page.isCanonicalEmpty) {
+    return false;
+  }
+  return switch (page.emptyReason!) {
+    ContentDiscoveryFeedEmptyReason.followingEmpty => channelId == 'following',
+    ContentDiscoveryFeedEmptyReason.noActiveRelease ||
+    ContentDiscoveryFeedEmptyReason.noEligibleContent =>
+      channelId != 'following',
+    ContentDiscoveryFeedEmptyReason.continuationEnd => false,
+  };
+}
+
+void _requireCanonicalContinuationPage(DiscoveryFeedPage page) {
+  final valid = page.items.isEmpty
+      ? page.outcome == ContentDiscoveryFeedOutcome.empty &&
+            page.emptyReason == ContentDiscoveryFeedEmptyReason.continuationEnd
+      : page.outcome == ContentDiscoveryFeedOutcome.content &&
+            page.emptyReason == null;
+  if (!valid) {
+    throw const FormatException(
+      'Continuation feed page has an invalid outcome envelope',
+    );
+  }
+}
+
+/// 首屏响应未满足 canonical content/empty envelope 时的本地协议失败。
 ///
-/// 该失败由 App 根据响应不变量判定，不填充 status/request/trace 等服务端 wire 字段。
-/// `following` 的合法空态和分页 continuation end 不会调用此构造器。
-RuntimeFailure discoveryFeedInitialEmptyPageFailure(String channelId) {
+/// 健康空内容必须携带合法的 `outcome=empty + emptyReason`，不会进入此分支；
+/// `following` 的合法空态和分页 continuation end 同样不会调用此构造器。
+RuntimeFailure discoveryFeedInitialPageProtocolFailure(String channelId) {
   return RuntimeFailure(
     code: ContentErrorCode.requiredDependencyUnavailable.code,
-    semanticReason: 'discovery_feed_initial_page_empty',
+    semanticReason: 'discovery_feed_initial_page_protocol_violation',
     origin: RuntimeFailureOrigin.localClient,
     kind: RuntimeFailureKind.unavailable,
     nature: RuntimeFailureNature.transient,
@@ -53,6 +101,18 @@ RuntimeFailure discoveryFeedInitialEmptyPageFailure(String channelId) {
   );
 }
 
+final class DiscoveryFeedLocalPostRemoval {
+  const DiscoveryFeedLocalPostRemoval({
+    required this.post,
+    required this.visibleIndex,
+    this.residentPlacement,
+  });
+
+  final PostBaseDto post;
+  final int visibleIndex;
+  final DiscoveryFeedVisiblePostPlacement? residentPlacement;
+}
+
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
   static const Object _unset = Object();
@@ -63,11 +123,21 @@ class DiscoveryFeedState {
     this.seenItemIds = const [],
     this.nextCursor,
     this.feedRequestId,
+    this.policyDigest,
+    this.emptyReason,
+    this.canRestorePreviousPage = false,
+    this.hasBufferedNextPage = false,
+    this.residentPageCount = 0,
+    this.retainedPageCount = 0,
     this.isLoading = false,
+    this.isRefreshing = false,
+    this.isAppending = false,
+    this.isPrepending = false,
     this.isSlow = false,
     this.blockingError,
     this.staleDataError,
     this.appendError,
+    this.prependError,
   });
 
   final List<PostBaseDto> items;
@@ -80,14 +150,37 @@ class DiscoveryFeedState {
 
   /// 服务端权威下发的归因 id（frq_ 前缀）；分页回显、行为事件透传。
   final String? feedRequestId;
+
+  /// 当前 feed window 的唯一推荐策略摘要；来源未提供时为 null。
+  final String? policyDigest;
+
+  /// 服务端确认本次查询健康完成但无内容时的 canonical 原因。
+  final ContentDiscoveryFeedEmptyReason? emptyReason;
+
+  /// 当前 resident deque 两侧仍可从同一有界内存窗口恢复的页边界。
+  final bool canRestorePreviousPage;
+  final bool hasBufferedNextPage;
+  final int residentPageCount;
+  final int retainedPageCount;
+
+  /// 兼容存量 UI 的等待信号：首屏阻塞加载或分页时为 true。
+  ///
+  /// 保留正文的后台刷新只由 [isRefreshing] 表达，避免存量 UI
+  /// 误显示底部分页 loading。
   final bool isLoading;
+  final bool isRefreshing;
+  final bool isAppending;
+  final bool isPrepending;
   final bool isSlow;
   final Object? blockingError;
   final Object? staleDataError;
   final Object? appendError;
+  final Object? prependError;
 
-  bool get hasMore => nextCursor != null && nextCursor!.isNotEmpty;
-  Object? get rawError => blockingError ?? staleDataError ?? appendError;
+  bool get hasMore =>
+      hasBufferedNextPage || (nextCursor != null && nextCursor!.isNotEmpty);
+  Object? get rawError =>
+      blockingError ?? staleDataError ?? appendError ?? prependError;
   String? get error => errorMessage;
   String? get errorMessage {
     final currentError = rawError;
@@ -110,11 +203,21 @@ class DiscoveryFeedState {
     List<String>? seenItemIds,
     Object? nextCursor = _unset,
     Object? feedRequestId = _unset,
+    Object? policyDigest = _unset,
+    Object? emptyReason = _unset,
+    bool? canRestorePreviousPage,
+    bool? hasBufferedNextPage,
+    int? residentPageCount,
+    int? retainedPageCount,
     bool? isLoading,
+    bool? isRefreshing,
+    bool? isAppending,
+    bool? isPrepending,
     bool? isSlow,
     Object? blockingError = _unset,
     Object? staleDataError = _unset,
     Object? appendError = _unset,
+    Object? prependError = _unset,
   }) {
     return DiscoveryFeedState(
       items: items ?? this.items,
@@ -126,7 +229,21 @@ class DiscoveryFeedState {
       feedRequestId: identical(feedRequestId, _unset)
           ? this.feedRequestId
           : feedRequestId as String?,
+      policyDigest: identical(policyDigest, _unset)
+          ? this.policyDigest
+          : policyDigest as String?,
+      emptyReason: identical(emptyReason, _unset)
+          ? this.emptyReason
+          : emptyReason as ContentDiscoveryFeedEmptyReason?,
+      canRestorePreviousPage:
+          canRestorePreviousPage ?? this.canRestorePreviousPage,
+      hasBufferedNextPage: hasBufferedNextPage ?? this.hasBufferedNextPage,
+      residentPageCount: residentPageCount ?? this.residentPageCount,
+      retainedPageCount: retainedPageCount ?? this.retainedPageCount,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      isAppending: isAppending ?? this.isAppending,
+      isPrepending: isPrepending ?? this.isPrepending,
       isSlow: isSlow ?? this.isSlow,
       blockingError: identical(blockingError, _unset)
           ? this.blockingError
@@ -137,6 +254,9 @@ class DiscoveryFeedState {
       appendError: identical(appendError, _unset)
           ? this.appendError
           : appendError,
+      prependError: identical(prependError, _unset)
+          ? this.prependError
+          : prependError,
     );
   }
 }
@@ -209,6 +329,23 @@ class DiscoveryFeedMapNotifier
     extends Notifier<Map<String, AsyncValue<DiscoveryFeedState>>> {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    ref.listen(homeChannelsProvider, (previous, next) {
+      if (previous == null) {
+        return;
+      }
+      final nextHomeChannelIds = next
+          .map((channel) => channel.id.trim())
+          .where((channelId) => channelId.isNotEmpty)
+          .toSet();
+      final removedHomeChannelIds = previous
+          .map((channel) => channel.id.trim())
+          .where(
+            (channelId) =>
+                channelId.isNotEmpty && !nextHomeChannelIds.contains(channelId),
+          )
+          .toSet();
+      _reclaimRemovedHomeChannels(removedHomeChannelIds);
+    });
     ref.listen<int>(contentPublicationEpochProvider, (previous, next) {
       if (previous == null || previous == next) {
         return;
@@ -219,16 +356,51 @@ class DiscoveryFeedMapNotifier
       }
     });
     ref.onDispose(() {
-      for (final controller in _waitControllers.values) {
+      for (final controller in _refreshWaitControllers.values) {
         controller.dispose();
       }
-      _waitControllers.clear();
+      for (final controller in _appendWaitControllers.values) {
+        controller.dispose();
+      }
+      for (final controller in _prependWaitControllers.values) {
+        controller.dispose();
+      }
+      _refreshWaitControllers.clear();
+      _appendWaitControllers.clear();
+      _prependWaitControllers.clear();
+      _residentPageWindows.clear();
     });
     return {};
   }
 
-  final Map<String, AppRequestWaitController> _waitControllers =
+  final Map<String, AppRequestWaitController> _refreshWaitControllers =
       <String, AppRequestWaitController>{};
+  final Map<String, AppRequestWaitController> _appendWaitControllers =
+      <String, AppRequestWaitController>{};
+  final Map<String, AppRequestWaitController> _prependWaitControllers =
+      <String, AppRequestWaitController>{};
+  final Map<String, DiscoveryFeedResidentPageWindow> _residentPageWindows =
+      <String, DiscoveryFeedResidentPageWindow>{};
+
+  /// 只回收旧首页配置中消失的频道；不得扫描 [state] 删除非首页 discovery tab。
+  void _reclaimRemovedHomeChannels(Set<String> removedHomeChannelIds) {
+    if (removedHomeChannelIds.isEmpty) {
+      return;
+    }
+    for (final channelId in removedHomeChannelIds) {
+      _refreshWaitControllers.remove(channelId)?.dispose();
+      _appendWaitControllers.remove(channelId)?.dispose();
+      _prependWaitControllers.remove(channelId)?.dispose();
+      _residentPageWindows.remove(channelId);
+    }
+    if (!removedHomeChannelIds.any(state.containsKey)) {
+      return;
+    }
+    final retained = Map<String, AsyncValue<DiscoveryFeedState>>.from(
+      state,
+    )..removeWhere((channelId, _) => removedHomeChannelIds.contains(channelId));
+    state = retained;
+  }
 
   /// 解析取数查询：首页频道以 [homeChannelsProvider]（端默认 + 远程覆盖）的 feed_query 为真相源；
   /// 非首页频道（发现 tab photo/video/...）回退 [toDiscoveryFeedQuery]。
@@ -261,6 +433,70 @@ class DiscoveryFeedMapNotifier
     return toDiscoveryFeedQuery(channelId);
   }
 
+  DiscoveryFeedResidentPageWindow _createInitialResidentPageWindow(
+    DiscoveryFeedPage page,
+  ) {
+    return DiscoveryFeedResidentPageWindow.initial(
+      DiscoveryFeedResidentPage.fromEnvelope(incomingCursor: null, page: page),
+    );
+  }
+
+  DiscoveryFeedState _withResidentPageWindow(
+    DiscoveryFeedState value,
+    DiscoveryFeedResidentPageWindow window,
+  ) {
+    return value.copyWith(
+      items: window.visibleItems,
+      objectCards: window.visibleObjectCards,
+      nextCursor: window.nextCursor,
+      canRestorePreviousPage: window.canRestorePreviousPage,
+      hasBufferedNextPage: window.canRestoreNextPage,
+      residentPageCount: window.residentPages.length,
+      retainedPageCount: window.retainedPageCount,
+    );
+  }
+
+  List<String> _boundedSeenItemIds(
+    Iterable<String> current,
+    Iterable<String> appended,
+  ) {
+    final ids = <String>{};
+    for (final rawId in <String>[...current, ...appended]) {
+      final postId = rawId.trim();
+      if (postId.isEmpty) {
+        continue;
+      }
+      // 重复出现视为最近再次观察，移动到 LRU 尾部。
+      ids.remove(postId);
+      ids.add(postId);
+      while (ids.length > homeFeedSeenItemLimit) {
+        ids.remove(ids.first);
+      }
+    }
+    return List<String>.unmodifiable(ids);
+  }
+
+  ({
+    int leadingPages,
+    int residentPages,
+    int trailingPages,
+    int retainedPages,
+    int retainedItems,
+  })?
+  residentPageWindowDiagnostics(String channelId) {
+    final window = _residentPageWindows[channelId.trim()];
+    if (window == null) {
+      return null;
+    }
+    return (
+      leadingPages: window.leadingPages.length,
+      residentPages: window.residentPages.length,
+      trailingPages: window.trailingPages.length,
+      retainedPages: window.retainedPageCount,
+      retainedItems: window.retainedItemCount,
+    );
+  }
+
   Future<void> load(String channelId, {bool force = false}) async {
     final currentValue = state[channelId]?.value;
     if (!force && currentValue != null && currentValue.items.isNotEmpty) {
@@ -270,11 +506,14 @@ class DiscoveryFeedMapNotifier
     final query = _resolveQuery(channelId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
-    final controller = _waitControllers.putIfAbsent(
+    // 刷新拥有更新的窗口语义：先终止旧分页，再开始新的
+    // refresh generation。两者使用独立 controller，分页不能反向取消刷新。
+    _appendWaitControllers[channelId]?.cancel();
+    _prependWaitControllers[channelId]?.cancel();
+    final controller = _refreshWaitControllers.putIfAbsent(
       channelId,
       AppRequestWaitController.new,
     );
-    controller.cancel();
     final cancellation = CloudOperationCancellationSignal();
     late final int generation;
     generation = controller.start(
@@ -299,6 +538,8 @@ class DiscoveryFeedMapNotifier
           channelId: AsyncData(
             value.copyWith(
               isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
               isSlow: false,
               blockingError: value.items.isEmpty ? error : null,
               staleDataError: value.items.isNotEmpty ? error : null,
@@ -323,9 +564,12 @@ class DiscoveryFeedMapNotifier
       channelId: AsyncData(
         (currentValue ?? const DiscoveryFeedState()).copyWith(
           isLoading: currentValue?.items.isEmpty ?? true,
+          isRefreshing: true,
+          isAppending: false,
           isSlow: false,
           blockingError: null,
           staleDataError: null,
+          appendError: null,
         ),
       ),
     };
@@ -354,119 +598,45 @@ class DiscoveryFeedMapNotifier
         ),
       );
       if (!controller.isCurrent(generation)) return;
-      final hasRetainedItems = currentValue?.items.isNotEmpty ?? false;
-      final hasInitialEmptyProtocolViolation =
-          channelId != 'following' &&
-          page.items.isEmpty &&
-          page.cacheFallbackError == null;
-      if (hasInitialEmptyProtocolViolation) {
-        final error = discoveryFeedInitialEmptyPageFailure(channelId);
-        developer.log(
-          'Initial discovery feed page contained no displayable items.',
-          name: 'DiscoveryFeed',
-          error: error,
-        );
-        state = {
-          ...state,
-          channelId: AsyncData(
-            hasRetainedItems
-                ? currentValue!.copyWith(
-                    isLoading: false,
-                    isSlow: false,
-                    blockingError: null,
-                    staleDataError: error,
-                    appendError: null,
-                  )
-                : DiscoveryFeedState(
-                    blockingError: error,
-                    isLoading: false,
-                    isSlow: false,
-                  ),
-          ),
-        };
-        _recordPageState(
+      final revalidation = page.revalidation;
+      if (revalidation != null) {
+        _applyInitialPage(
           channelId,
-          phase: hasRetainedItems ? 'cacheFallback' : 'blockingFailure',
-          source: hasRetainedItems ? 'retained' : 'localConsistency',
-          error: error,
-          copyKey: hasRetainedItems ? 'homeCacheFallback' : null,
-          hasCache: hasRetainedItems,
-          itemCount: hasRetainedItems ? currentValue!.items.length : 0,
-          requestId: hasRetainedItems ? currentValue!.feedRequestId : null,
+          page,
+          keepRefreshing: true,
+          isStaleSnapshot: true,
         );
-        controller.complete(generation);
-        return;
+        final revalidatedPage = await revalidation;
+        if (!controller.isCurrent(generation)) return;
+        _applyInitialPage(
+          channelId,
+          revalidatedPage,
+          keepRefreshing: false,
+          isStaleSnapshot: false,
+        );
+      } else {
+        _applyInitialPage(
+          channelId,
+          page,
+          keepRefreshing: false,
+          isStaleSnapshot: false,
+        );
       }
-      // 采纳服务端下发的归因 id，使后续曝光/点击/打开复用同一 feedRequestId。
-      feedSession.adoptServerFeedRequestId(
-        page.feedRequestId,
-        rankingVersion: page.rankingVersion,
-        reasonVersion: page.reasonVersion,
-      );
-      ref
-          .read(postInteractionStateProvider.notifier)
-          .applyConfirmedPosts(page.items);
-      final seen = page.items
-          .map((item) => item.id)
-          .where((id) => id.isNotEmpty)
-          .toList(growable: false);
-      final fallbackError = page.cacheFallbackError == null
-          ? null
-          : _normalizeDiscoveryFeedError(page.cacheFallbackError!);
-      final hasDisplayableCache = page.items.isNotEmpty;
-      state = {
-        ...state,
-        channelId: AsyncData(
-          DiscoveryFeedState(
-            items: page.items,
-            objectCards: page.objectCards,
-            seenItemIds: seen,
-            nextCursor: page.nextCursor,
-            feedRequestId: page.feedRequestId,
-            blockingError: fallbackError != null && !hasDisplayableCache
-                ? fallbackError
-                : null,
-            staleDataError: fallbackError != null && hasDisplayableCache
-                ? fallbackError
-                : null,
-            isLoading: false,
-            isSlow: false,
-          ),
-        ),
-      };
-      final phase = fallbackError == null
-          ? 'onlineSuccess'
-          : hasDisplayableCache
-          ? 'cacheFallback'
-          : 'blockingFailure';
-      _recordPageState(
-        channelId,
-        phase: phase,
-        source: fallbackError != null && hasDisplayableCache
-            ? 'cache'
-            : 'online',
-        error: fallbackError,
-        copyKey: fallbackError != null && hasDisplayableCache
-            ? 'homeCacheFallback'
-            : null,
-        hasCache: fallbackError != null && hasDisplayableCache,
-        cacheAgeMs: page.cacheAgeMs,
-        itemCount: page.items.length,
-        requestId: page.feedRequestId,
-      );
       controller.complete(generation);
     } catch (e, st) {
       if (!controller.isCurrent(generation)) return;
       final error = _normalizeDiscoveryFeedError(e);
+      final latestValue = state[channelId]?.value ?? currentValue;
       if (error.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
         state = {
           ...state,
           channelId: AsyncData(
-            (currentValue ?? const DiscoveryFeedState()).copyWith(
+            (latestValue ?? const DiscoveryFeedState()).copyWith(
               isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
               isSlow: false,
               blockingError: null,
-              staleDataError: null,
             ),
           ),
         };
@@ -478,12 +648,14 @@ class DiscoveryFeedMapNotifier
         error: error,
         stackTrace: st,
       );
-      if (currentValue != null && currentValue.items.isNotEmpty) {
+      if (latestValue != null && latestValue.items.isNotEmpty) {
         state = {
           ...state,
           channelId: AsyncData(
-            currentValue.copyWith(
+            latestValue.copyWith(
               isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
               isSlow: false,
               staleDataError: error,
               blockingError: null,
@@ -497,17 +669,23 @@ class DiscoveryFeedMapNotifier
           error: error,
           copyKey: 'homeCacheFallback',
           hasCache: true,
-          itemCount: currentValue.items.length,
-          requestId: currentValue.feedRequestId,
+          itemCount: latestValue.items.length,
+          requestId: latestValue.feedRequestId,
         );
         return;
       }
       state = {
         ...state,
         channelId: AsyncData(
-          DiscoveryFeedState(blockingError: error, isLoading: false),
+          DiscoveryFeedState(
+            blockingError: error,
+            isLoading: false,
+            isRefreshing: false,
+            isAppending: false,
+          ),
         ),
       };
+      _residentPageWindows.remove(channelId);
       _recordPageState(
         channelId,
         phase: 'blockingFailure',
@@ -521,20 +699,171 @@ class DiscoveryFeedMapNotifier
     }
   }
 
+  void _applyInitialPage(
+    String channelId,
+    DiscoveryFeedPage page, {
+    required bool keepRefreshing,
+    required bool isStaleSnapshot,
+  }) {
+    final retainedValue = state[channelId]?.value;
+    final hasRetainedItems = retainedValue?.items.isNotEmpty ?? false;
+    final hasInitialPageProtocolViolation =
+        !isStaleSnapshot &&
+        page.cacheFallbackError == null &&
+        ((page.items.isEmpty &&
+                !_isCanonicalInitialEmptyPage(channelId, page)) ||
+            (page.items.isNotEmpty &&
+                (page.outcome != ContentDiscoveryFeedOutcome.content ||
+                    page.emptyReason != null)));
+    if (hasInitialPageProtocolViolation) {
+      final error = discoveryFeedInitialPageProtocolFailure(channelId);
+      developer.log(
+        'Initial discovery feed page contained no displayable items.',
+        name: 'DiscoveryFeed',
+        error: error,
+      );
+      state = {
+        ...state,
+        channelId: AsyncData(
+          hasRetainedItems
+              ? retainedValue!.copyWith(
+                  isLoading: false,
+                  isRefreshing: false,
+                  isAppending: false,
+                  isSlow: false,
+                  blockingError: null,
+                  staleDataError: error,
+                  appendError: null,
+                )
+              : DiscoveryFeedState(
+                  blockingError: error,
+                  isLoading: false,
+                  isRefreshing: false,
+                  isAppending: false,
+                  isSlow: false,
+                ),
+        ),
+      };
+      if (!hasRetainedItems) {
+        _residentPageWindows.remove(channelId);
+      }
+      _recordPageState(
+        channelId,
+        phase: hasRetainedItems ? 'cacheFallback' : 'blockingFailure',
+        source: hasRetainedItems ? 'retained' : 'localConsistency',
+        error: error,
+        copyKey: hasRetainedItems ? 'homeCacheFallback' : null,
+        hasCache: hasRetainedItems,
+        itemCount: hasRetainedItems ? retainedValue!.items.length : 0,
+        requestId: hasRetainedItems ? retainedValue!.feedRequestId : null,
+      );
+      return;
+    }
+    // 先验证单页内存预算；超限必须在任何归因/互动副作用前 fail-closed。
+    _requireCanonicalPolicyDigest(page.policyDigest);
+    final residentWindow = _createInitialResidentPageWindow(page);
+    // 采纳服务端下发的归因 id，使后续曝光/点击/打开复用同一 feedRequestId。
+    ref
+        .read(feedSessionProvider.notifier)
+        .adoptServerFeedRequestId(page.feedRequestId);
+    ref
+        .read(postInteractionStateProvider.notifier)
+        .applyConfirmedPosts(page.items);
+    final seen = _boundedSeenItemIds(
+      const <String>[],
+      residentWindow.visibleItems.map((item) => item.id),
+    );
+    final fallbackError = page.cacheFallbackError == null
+        ? null
+        : _normalizeDiscoveryFeedError(page.cacheFallbackError!);
+    final hasDisplayableCache = page.items.isNotEmpty;
+    _residentPageWindows[channelId] = residentWindow;
+    state = {
+      ...state,
+      channelId: AsyncData(
+        DiscoveryFeedState(
+          items: residentWindow.visibleItems,
+          objectCards: residentWindow.visibleObjectCards,
+          seenItemIds: seen,
+          nextCursor: residentWindow.nextCursor,
+          feedRequestId: page.feedRequestId,
+          policyDigest: page.policyDigest,
+          emptyReason: page.emptyReason,
+          canRestorePreviousPage: residentWindow.canRestorePreviousPage,
+          hasBufferedNextPage: residentWindow.canRestoreNextPage,
+          residentPageCount: residentWindow.residentPages.length,
+          retainedPageCount: residentWindow.retainedPageCount,
+          blockingError: fallbackError != null && !hasDisplayableCache
+              ? fallbackError
+              : null,
+          staleDataError: fallbackError != null && hasDisplayableCache
+              ? fallbackError
+              : null,
+          isLoading: keepRefreshing && !hasDisplayableCache,
+          isRefreshing: keepRefreshing,
+          isAppending: false,
+          isSlow: false,
+        ),
+      ),
+    };
+    final phase = isStaleSnapshot
+        ? 'cacheFallback'
+        : fallbackError == null
+        ? 'onlineSuccess'
+        : hasDisplayableCache
+        ? 'cacheFallback'
+        : 'blockingFailure';
+    _recordPageState(
+      channelId,
+      phase: phase,
+      source: isStaleSnapshot || (fallbackError != null && hasDisplayableCache)
+          ? 'cache'
+          : 'online',
+      error: fallbackError,
+      copyKey: fallbackError != null && hasDisplayableCache
+          ? 'homeCacheFallback'
+          : null,
+      hasCache:
+          isStaleSnapshot || (fallbackError != null && hasDisplayableCache),
+      cacheAgeMs: page.cacheAgeMs,
+      itemCount: page.items.length,
+      requestId: page.feedRequestId,
+    );
+  }
+
   Future<void> appendNextPage(String channelId) async {
     final current = state[channelId];
     final value = current?.value;
     if (value == null ||
-        value.nextCursor == null ||
-        value.nextCursor!.isEmpty ||
-        value.isLoading) {
+        value.isLoading ||
+        value.isRefreshing ||
+        value.isAppending ||
+        value.isPrepending) {
       return;
     }
-    final controller = _waitControllers.putIfAbsent(
+    if (value.hasBufferedNextPage && _restoreBufferedNextPage(channelId)) {
+      return;
+    }
+    // `DiscoveryFeedState.nextCursor` is a render snapshot. A long-idle page
+    // can cross the server cursor expiry without another provider rebuild, so
+    // every Remote continuation must re-read the live bounded-window truth.
+    // This prevents an avoidable invalid-cursor request and clears the stale
+    // affordance immediately when the user reaches the boundary.
+    final residentWindow = _residentPageWindows[channelId];
+    final incomingCursor = residentWindow?.nextCursor;
+    if (incomingCursor == null || incomingCursor.isEmpty) {
+      if (residentWindow != null && (value.nextCursor?.isNotEmpty ?? false)) {
+        state = {
+          ...state,
+          channelId: AsyncData(_withResidentPageWindow(value, residentWindow)),
+        };
+      }
+      return;
+    }
+    final controller = _appendWaitControllers.putIfAbsent(
       channelId,
       AppRequestWaitController.new,
     );
-    controller.cancel();
     final cancellation = CloudOperationCancellationSignal();
     late final int generation;
     generation = controller.start(
@@ -549,6 +878,7 @@ class DiscoveryFeedMapNotifier
           channelId: AsyncData(
             latest.copyWith(
               isLoading: false,
+              isAppending: false,
               appendError: _normalizeDiscoveryFeedError(
                 TimeoutException(
                   'Home pagination exceeded the 6 second budget.',
@@ -575,6 +905,8 @@ class DiscoveryFeedMapNotifier
       channelId: AsyncData(
         value.copyWith(
           isLoading: true,
+          isRefreshing: false,
+          isAppending: true,
           appendError: null,
           staleDataError: null,
         ),
@@ -600,7 +932,7 @@ class DiscoveryFeedMapNotifier
         type: query.type,
         sort: kFeedSortRecommend,
         limit: 20,
-        cursor: value.nextCursor,
+        cursor: incomingCursor,
         sessionId: sessionId,
         feedRequestId: value.feedRequestId,
         cancellation: cancellation,
@@ -609,45 +941,90 @@ class DiscoveryFeedMapNotifier
         ),
       );
       if (!controller.isCurrent(generation)) return;
-      feedSession.adoptServerFeedRequestId(
-        page.feedRequestId,
-        rankingVersion: page.rankingVersion,
-        reasonVersion: page.reasonVersion,
+      _requireCanonicalContinuationPage(page);
+      final currentResidentWindow = _residentPageWindows[channelId];
+      if (currentResidentWindow == null) {
+        throw StateError(
+          'missing resident page window for loaded channel $channelId',
+        );
+      }
+      _requireSamePolicyDigest(
+        accepted: value.policyDigest,
+        incoming: page.policyDigest,
       );
+      // Remote forward navigation can legitimately revisit a page that was
+      // previously viewed and then evicted during a deep backslide. Suppress
+      // only identities still retained in the bounded deque; the historical
+      // seen LRU is observability state, not a second pagination truth source.
+      final retained = currentResidentWindow.retainedPostIds;
+      final dedupedNew = page.items
+          .where((item) => !retained.contains(item.id.trim()))
+          .toList(growable: false);
+      final nextWindow = currentResidentWindow.appendRemotePage(
+        DiscoveryFeedResidentPage.fromEnvelope(
+          incomingCursor: incomingCursor,
+          page: page,
+          visibleItems: dedupedNew,
+        ),
+      );
+      // 单页预算与 deque 不变量通过后才采纳服务端归因；超预算响应必须在
+      // feed session / interaction projection 等任何业务副作用前 fail-closed。
+      feedSession.adoptServerFeedRequestId(page.feedRequestId);
       ref
           .read(postInteractionStateProvider.notifier)
-          .applyConfirmedPosts(page.items);
-      final seen = value.seenItemIds.toSet();
-      final dedupedNew = page.items
-          .where((item) => !seen.contains(item.id))
-          .toList(growable: false);
-      final merged = <PostBaseDto>[...value.items, ...dedupedNew];
-      final mergedSeen = <String>[
-        ...value.seenItemIds,
-        ...dedupedNew.map((e) => e.id),
-      ];
+          .applyConfirmedPosts(dedupedNew);
+      final mergedSeen = _boundedSeenItemIds(
+        value.seenItemIds,
+        dedupedNew.map((item) => item.id),
+      );
+      final fallbackError = page.cacheFallbackError == null
+          ? null
+          : _normalizeDiscoveryFeedError(page.cacheFallbackError!);
+      _residentPageWindows[channelId] = nextWindow;
       state = {
         ...state,
         channelId: AsyncData(
-          value.copyWith(
-            items: merged,
-            seenItemIds: mergedSeen,
-            nextCursor: page.nextCursor,
-            feedRequestId: page.feedRequestId ?? value.feedRequestId,
-            isLoading: false,
-            appendError: null,
-            staleDataError: null,
+          _withResidentPageWindow(
+            value.copyWith(
+              seenItemIds: mergedSeen,
+              feedRequestId: page.feedRequestId ?? value.feedRequestId,
+              policyDigest: page.policyDigest,
+              isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
+              // 非首屏 QuerySnapshot 在远端失败时仍可提供可见续页，但它是
+              // stale/offline fallback，不得包装成 online success。保留 append
+              // 恢复入口，用户可在网络恢复后重试同一 continuation。
+              appendError: fallbackError,
+              staleDataError: null,
+            ),
+            nextWindow,
           ),
         ),
       };
       _recordAppend(
         channelId,
-        result: 'success',
+        result: fallbackError == null ? 'success' : 'cacheFallback',
         cursorPresent: true,
         hasMore: page.nextCursor?.isNotEmpty ?? false,
         itemCountBefore: value.items.length,
-        itemCountAfter: merged.length,
+        itemCountAfter: nextWindow.visibleItems.length,
+        error: fallbackError,
+        copyKey: fallbackError == null ? null : 'appendFailedRetry',
       );
+      if (fallbackError != null) {
+        _recordPageState(
+          channelId,
+          phase: 'cacheFallback',
+          source: 'cache',
+          error: fallbackError,
+          copyKey: 'appendFailedRetry',
+          hasCache: true,
+          cacheAgeMs: page.cacheAgeMs,
+          itemCount: nextWindow.visibleItems.length,
+          requestId: page.feedRequestId ?? value.feedRequestId,
+        );
+      }
       controller.complete(generation);
     } catch (e, st) {
       if (!controller.isCurrent(generation)) return;
@@ -655,7 +1032,9 @@ class DiscoveryFeedMapNotifier
       if (error.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
         state = {
           ...state,
-          channelId: AsyncData(value.copyWith(isLoading: false)),
+          channelId: AsyncData(
+            value.copyWith(isLoading: false, isAppending: false),
+          ),
         };
         return;
       }
@@ -668,7 +1047,11 @@ class DiscoveryFeedMapNotifier
       state = {
         ...state,
         channelId: AsyncData(
-          value.copyWith(isLoading: false, appendError: error),
+          value.copyWith(
+            isLoading: false,
+            isAppending: false,
+            appendError: error,
+          ),
         ),
       };
       _recordAppend(
@@ -684,6 +1067,268 @@ class DiscoveryFeedMapNotifier
     } finally {
       controller.complete(generation);
     }
+  }
+
+  /// 从同一有界 resident window 向前恢复一个已加载完整页。
+  ///
+  /// 该操作不发 Remote 请求、不解析 cursor；Widget 必须先保存可见 Post 锚点，
+  /// items 变化后再以 stable identity 做 geometry 校正。
+  bool restorePreviousPage(String channelId) {
+    final normalized = channelId.trim();
+    final value = state[normalized]?.value;
+    final currentWindow = _residentPageWindows[normalized];
+    if (value == null ||
+        currentWindow == null ||
+        value.isLoading ||
+        value.isRefreshing ||
+        value.isAppending ||
+        value.isPrepending) {
+      return false;
+    }
+    final restored = currentWindow.restorePreviousPage();
+    if (restored == null) {
+      return false;
+    }
+    _residentPageWindows[normalized] = restored;
+    state = {
+      ...state,
+      normalized: AsyncData(
+        _withResidentPageWindow(
+          value.copyWith(
+            isLoading: false,
+            isRefreshing: false,
+            isAppending: false,
+          ),
+          restored,
+        ),
+      ),
+    };
+    return true;
+  }
+
+  /// 先从内存窗口恢复；内存前页耗尽后，使用服务端稳定 previous cursor 回取
+  /// 已交付页。回取只按当前 retained Post 去重，不能用历史 seen 集合误删已被
+  /// 有界窗口淘汰、现在需要重新展示的 Post。
+  Future<bool> prependPreviousPage(String channelId) async {
+    final normalized = channelId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (restorePreviousPage(normalized)) {
+      return true;
+    }
+    final initialValue = state[normalized]?.value;
+    final initialWindow = _residentPageWindows[normalized];
+    final initialCursor = initialWindow?.previousCursor;
+    if (initialValue == null ||
+        initialWindow == null ||
+        initialCursor == null ||
+        initialCursor.isEmpty ||
+        initialValue.isLoading ||
+        initialValue.isRefreshing ||
+        initialValue.isAppending ||
+        initialValue.isPrepending) {
+      return false;
+    }
+    var window = initialWindow;
+    String? cursor = initialCursor;
+
+    final controller = _prependWaitControllers.putIfAbsent(
+      normalized,
+      AppRequestWaitController.new,
+    );
+    final cancellation = CloudOperationCancellationSignal();
+    late final int generation;
+    generation = controller.start(
+      mode: AppRequestWaitMode.foreground,
+      showSlowHint: false,
+      cancellation: cancellation,
+      onTimeout: (_) {
+        final latest = state[normalized]?.value;
+        if (latest == null) return;
+        state = {
+          ...state,
+          normalized: AsyncData(
+            latest.copyWith(
+              isPrepending: false,
+              prependError: _normalizeDiscoveryFeedError(
+                TimeoutException(
+                  'Home previous-page recovery exceeded the 6 second budget.',
+                ),
+              ),
+            ),
+          ),
+        };
+      },
+    );
+    state = {
+      ...state,
+      normalized: AsyncData(
+        initialValue.copyWith(isPrepending: true, prependError: null),
+      ),
+    };
+
+    final repo = ref.read(contentDiscoveryFeedQueryProvider);
+    final query = _resolveQuery(normalized);
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    final sessionId = feedSession.sessionId;
+    final deadlineAt = DateTime.now().add(
+      AppRequestWaitTimings.foregroundReadDeadline,
+    );
+    final confirmed = <PostBaseDto>[];
+    Object? fallbackError;
+    try {
+      // 已交付页可能因内容删除/权限变化而收缩为空；最多跨过四个空页，避免
+      // 一次顶部手势形成无界网络循环。
+      for (var attempt = 0; attempt < 4; attempt += 1) {
+        final page = await repo.listDiscoveryFeedPage(
+          category: query.category,
+          channelId: query.channel,
+          identity: query.identity,
+          type: query.type,
+          sort: kFeedSortRecommend,
+          limit: homeFeedPageItemLimit,
+          cursor: cursor,
+          sessionId: sessionId,
+          feedRequestId: initialValue.feedRequestId,
+          cancellation: cancellation,
+          deadlineAt: deadlineAt,
+        );
+        if (!controller.isCurrent(generation)) return false;
+        _requireCanonicalContinuationPage(page);
+        _requireSamePolicyDigest(
+          accepted: initialValue.policyDigest,
+          incoming: page.policyDigest,
+        );
+        final retained = window.retainedPostIds;
+        final visible = page.items
+            .where((item) => !retained.contains(item.id.trim()))
+            .toList(growable: false);
+        final deliveredPage = DiscoveryFeedResidentPage.fromEnvelope(
+          incomingCursor: cursor,
+          page: page,
+          visibleItems: visible,
+        );
+        if (visible.isNotEmpty) {
+          window = window.prependRemotePage(deliveredPage);
+          confirmed.addAll(visible);
+        }
+        feedSession.adoptServerFeedRequestId(page.feedRequestId);
+        fallbackError = page.cacheFallbackError;
+        cursor = page.previousCursor?.trim();
+        if (visible.isNotEmpty || cursor == null || cursor.isEmpty) {
+          break;
+        }
+      }
+      if (!controller.isCurrent(generation)) return false;
+      if (confirmed.isEmpty) {
+        // Persist the advanced/exhausted remote boundary on the first visible
+        // page without inserting zero-item pages into the resident deque.
+        window = window.withRemotePreviousCursor(cursor);
+      }
+      if (confirmed.isNotEmpty) {
+        ref
+            .read(postInteractionStateProvider.notifier)
+            .applyConfirmedPosts(confirmed);
+      }
+      final normalizedFallback = fallbackError == null
+          ? null
+          : _normalizeDiscoveryFeedError(fallbackError);
+      _residentPageWindows[normalized] = window;
+      state = {
+        ...state,
+        normalized: AsyncData(
+          _withResidentPageWindow(
+            initialValue.copyWith(
+              seenItemIds: _boundedSeenItemIds(
+                initialValue.seenItemIds,
+                confirmed.map((item) => item.id),
+              ),
+              isLoading: false,
+              isRefreshing: false,
+              isAppending: false,
+              isPrepending: false,
+              prependError: normalizedFallback,
+              staleDataError: null,
+            ),
+            window,
+          ),
+        ),
+      };
+      _recordPreviousPage(
+        normalized,
+        result: normalizedFallback == null ? 'success' : 'cacheFallback',
+        itemCountBefore: initialValue.items.length,
+        itemCountAfter: window.visibleItems.length,
+        error: normalizedFallback,
+      );
+      controller.complete(generation);
+      return confirmed.isNotEmpty;
+    } catch (error, stackTrace) {
+      if (!controller.isCurrent(generation)) return false;
+      final normalizedError = _normalizeDiscoveryFeedError(error);
+      if (normalizedError.runtimeFailure.kind == RuntimeFailureKind.cancelled) {
+        state = {
+          ...state,
+          normalized: AsyncData(initialValue.copyWith(isPrepending: false)),
+        };
+        return false;
+      }
+      developer.log(
+        'prepend error: $normalizedError',
+        name: 'DiscoveryFeed',
+        error: normalizedError,
+        stackTrace: stackTrace,
+      );
+      state = {
+        ...state,
+        normalized: AsyncData(
+          initialValue.copyWith(
+            isPrepending: false,
+            prependError: normalizedError,
+          ),
+        ),
+      };
+      _recordPreviousPage(
+        normalized,
+        result: 'failure',
+        itemCountBefore: initialValue.items.length,
+        itemCountAfter: initialValue.items.length,
+        error: normalizedError,
+      );
+      return false;
+    } finally {
+      controller.complete(generation);
+    }
+  }
+
+  bool _restoreBufferedNextPage(String channelId) {
+    final normalized = channelId.trim();
+    final value = state[normalized]?.value;
+    final currentWindow = _residentPageWindows[normalized];
+    if (value == null || currentWindow == null) {
+      return false;
+    }
+    final restored = currentWindow.restoreNextPage();
+    if (restored == null) {
+      return false;
+    }
+    _residentPageWindows[normalized] = restored;
+    state = {
+      ...state,
+      normalized: AsyncData(
+        _withResidentPageWindow(
+          value.copyWith(
+            isLoading: false,
+            isRefreshing: false,
+            isAppending: false,
+            appendError: null,
+          ),
+          restored,
+        ),
+      ),
+    };
+    return true;
   }
 
   void _recordPageState(
@@ -741,14 +1386,34 @@ class DiscoveryFeedMapNotifier
         );
   }
 
-  Map<String, ({PostBaseDto post, int index})> removePostLocally(
-    String postId,
-  ) {
+  void _recordPreviousPage(
+    String channelId, {
+    required String result,
+    required int itemCountBefore,
+    required int itemCountAfter,
+    Object? error,
+  }) {
+    ref
+        .read(pageLifecycleObservabilityProvider)
+        .recordAppend(
+          pageName: 'home:$channelId:previous',
+          result: result,
+          cursorPresent: true,
+          hasMore:
+              _residentPageWindows[channelId]?.canRestorePreviousPage ?? false,
+          itemCountBefore: itemCountBefore,
+          itemCountAfter: itemCountAfter,
+          error: error,
+          copyKey: error == null ? null : 'appendFailedRetry',
+        );
+  }
+
+  Map<String, DiscoveryFeedLocalPostRemoval> removePostLocally(String postId) {
     final normalized = postId.trim();
     if (normalized.isEmpty) {
-      return const <String, ({PostBaseDto post, int index})>{};
+      return const <String, DiscoveryFeedLocalPostRemoval>{};
     }
-    final removed = <String, ({PostBaseDto post, int index})>{};
+    final removed = <String, DiscoveryFeedLocalPostRemoval>{};
     final next = <String, AsyncValue<DiscoveryFeedState>>{};
     for (final entry in state.entries) {
       final value = entry.value.value;
@@ -759,10 +1424,12 @@ class DiscoveryFeedMapNotifier
       final removedIndex = value.items.indexWhere(
         (item) => item.id == normalized,
       );
+      final residentWindow = _residentPageWindows[entry.key];
       if (removedIndex >= 0) {
-        removed[entry.key] = (
+        removed[entry.key] = DiscoveryFeedLocalPostRemoval(
           post: value.items[removedIndex],
-          index: removedIndex,
+          visibleIndex: removedIndex,
+          residentPlacement: residentWindow?.visiblePostPlacement(normalized),
         );
       }
       final filteredItems = value.items
@@ -771,6 +1438,17 @@ class DiscoveryFeedMapNotifier
       final filteredSeen = value.seenItemIds
           .where((id) => id != normalized)
           .toList(growable: false);
+      if (residentWindow != null) {
+        final nextWindow = residentWindow.removePost(normalized);
+        _residentPageWindows[entry.key] = nextWindow;
+        next[entry.key] = AsyncData(
+          _withResidentPageWindow(
+            value.copyWith(seenItemIds: filteredSeen),
+            nextWindow,
+          ),
+        );
+        continue;
+      }
       next[entry.key] = AsyncData(
         value.copyWith(items: filteredItems, seenItemIds: filteredSeen),
       );
@@ -779,9 +1457,7 @@ class DiscoveryFeedMapNotifier
     return removed;
   }
 
-  void restorePostsLocally(
-    Map<String, ({PostBaseDto post, int index})> removed,
-  ) {
+  void restorePostsLocally(Map<String, DiscoveryFeedLocalPostRemoval> removed) {
     if (removed.isEmpty) return;
     final next = Map<String, AsyncValue<DiscoveryFeedState>>.from(state);
     for (final entry in removed.entries) {
@@ -791,19 +1467,99 @@ class DiscoveryFeedMapNotifier
         continue;
       }
       final items = List<PostBaseDto>.from(current.items);
-      final index = entry.value.index.clamp(0, items.length).toInt();
+      final index = entry.value.visibleIndex.clamp(0, items.length).toInt();
+      final residentWindow = _residentPageWindows[entry.key];
+      if (residentWindow != null) {
+        final placement = entry.value.residentPlacement;
+        if (placement == null) {
+          continue;
+        }
+        final nextWindow = residentWindow.restoreVisiblePost(
+          placement: placement,
+          post: entry.value.post,
+        );
+        if (identical(nextWindow, residentWindow)) {
+          continue;
+        }
+        _residentPageWindows[entry.key] = nextWindow;
+        next[entry.key] = AsyncData(
+          _withResidentPageWindow(
+            current.copyWith(
+              seenItemIds: _boundedSeenItemIds(current.seenItemIds, <String>[
+                entry.value.post.id,
+              ]),
+            ),
+            nextWindow,
+          ),
+        );
+        continue;
+      }
       items.insert(index, entry.value.post);
       next[entry.key] = AsyncData(
         current.copyWith(
           items: items,
-          seenItemIds: <String>{
-            ...current.seenItemIds,
+          seenItemIds: _boundedSeenItemIds(current.seenItemIds, <String>[
             entry.value.post.id,
-          }.toList(growable: false),
+          ]),
         ),
       );
     }
     state = next;
+  }
+
+  /// 频道离开可见 surface 时终止该频道自己的 refresh/append generation。
+  ///
+  /// 已有内容仍保留，供锚点恢复；空的半成品状态移除，下一次进入会重新加载。
+  /// resident deque 已把可见 Post 约束在四个完整页；在服务端尚无 previous
+  /// boundary cursor 前，频道离开时禁止进一步裁掉这些页，否则无法从
+  /// QuerySnapshot 精确恢复远端排序与回滑位置。
+  void deactivateChannel(String channelId) {
+    final normalized = channelId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    cancelChannelRequests(normalized);
+
+    final current = state[normalized];
+    final value = current?.value;
+    if (value == null || value.items.isEmpty) {
+      _residentPageWindows.remove(normalized);
+      if (state.containsKey(normalized)) {
+        final next = Map<String, AsyncValue<DiscoveryFeedState>>.from(state)
+          ..remove(normalized);
+        state = next;
+      }
+      return;
+    }
+    state = {
+      ...state,
+      normalized: AsyncData(
+        value.copyWith(
+          isLoading: false,
+          isRefreshing: false,
+          isAppending: false,
+          isPrepending: false,
+          isSlow: false,
+        ),
+      ),
+    };
+  }
+
+  /// 仅撤销目标频道的在途 generation，不发布新的 Provider 状态。
+  ///
+  /// Widget `dispose` 处于 element tree finalization，Riverpod 禁止在该阶段
+  /// 写入状态；完整的频道切换仍调用 [deactivateChannel]，页面销毁只调用本方法。
+  void cancelChannelRequests(String channelId) {
+    final normalized = channelId.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    final refresh = _refreshWaitControllers.remove(normalized);
+    final append = _appendWaitControllers.remove(normalized);
+    final prepend = _prependWaitControllers.remove(normalized);
+    refresh?.dispose();
+    append?.dispose();
+    prepend?.dispose();
   }
 }
 

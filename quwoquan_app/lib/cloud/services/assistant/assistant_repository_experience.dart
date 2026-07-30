@@ -201,45 +201,14 @@ mixin _RemoteAssistantExperience on _RemoteAssistantRepositoryBase
   }
 
   @override
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+  Future<List<AssistantSkillCatalogItemProjection>> listSkillCatalog({
     int limit = kAssistantSkillCatalogDefaultLimit,
   }) async {
-    const path = AssistantApiMetadata.listSkillsPath;
-    try {
-      final uri = _assistantGetUri(path, {'limit': '$limit'});
-      final response = await _httpClient.get(
-        uri,
-        headers: _headersForPersonalAssistantDialog(
-          operationId: AssistantApiMetadata.listSkillsOperation,
-          clientPageId: AssistantRequestPageIds.listSkills,
-        ),
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw CloudErrorMapper.fromStatusCode(
-          response.statusCode,
-          body: response.body,
-          requestPath: path,
-        );
-      }
-      final decoded = response.body.trim().isEmpty
-          ? <String, dynamic>{}
-          : jsonDecode(response.body);
-      final rows = _decodeItemsMap(
-        decoded,
-        context: _personalAssistantDialogContext(
-          operationId: AssistantApiMetadata.listSkillsOperation,
-        ),
-      );
-      return rows
-          .map(AssistantSkillCatalogItemView.fromJson)
-          .where((row) => row.skillId.isNotEmpty)
-          .take(limit)
-          .toList(growable: false);
-    } on CloudException {
-      rethrow;
-    } catch (error) {
-      throw CloudErrorMapper.fromException(error, requestPath: path);
-    }
+    final catalog = await _skillCatalog.listSkills(limit: limit);
+    return catalog.items
+        .where((row) => row.skillId.isNotEmpty)
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override

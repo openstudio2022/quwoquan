@@ -2,6 +2,7 @@
   "label": "港式菜",
   "labelEn": "Hong Kong Style",
   "description": "港式茶餐厅与融合菜",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -1,4 +1,4 @@
-dart_class: ArticleDetailWireKeys
+wire_keys_class: ArticleDetailWireKeys
 description: 文章详情顶层 wire Map 扩展键名 SSOT
 keys:
 - const_name: isOfficial

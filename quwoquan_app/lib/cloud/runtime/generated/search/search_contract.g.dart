@@ -177,7 +177,7 @@ class RetrieveToolContract {
   static const List<String> matchConditions = <String>['ids', 'names', 'terms'];
   static const List<String> filterFields = <String>['tags', 'timeRange', 'near'];
   static const List<String> pageFields = <String>['limit', 'cursor'];
-  static const List<String> responseFields = <String>['hits', 'citations', 'facets', 'degradeSignals', 'provenance', 'relatedTerms', 'rankingVersion', 'experimentBucket', 'requestId'];
+  static const List<String> responseFields = <String>['hits', 'citations', 'facets', 'degradeSignals', 'provenance', 'relatedTerms', 'experimentBucket', 'requestId'];
   static const List<String> hitFields = <String>['target', 'objectId', 'title', 'snippet', 'score', 'matchedTerms', 'matchedTags', 'evidence', 'payload', 'connectionState', 'intersectionReason', 'rankReasons', 'rankPosition', 'coverWidth', 'coverHeight', 'geo', 'distanceKm', 'placeName'];
   static const List<String> forbiddenFields = <String>['type', 'relation', 'anchors', 'kind', 'mode', 'strategy', 'purpose', 'visibility', 'fields', 'where', 'query', 'objectTypes', 'contentTypes', 'tags', 'timeRange'];
 }

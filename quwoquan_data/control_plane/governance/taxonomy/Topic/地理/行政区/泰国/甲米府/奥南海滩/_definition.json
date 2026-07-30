@@ -1,0 +1,12 @@
+{
+  "label": "奥南海滩",
+  "labelEn": "Ao Nang",
+  "description": "海滩度假与跳岛出发地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

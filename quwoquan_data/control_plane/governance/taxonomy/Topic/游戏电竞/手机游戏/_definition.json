@@ -2,6 +2,7 @@
   "label": "手机游戏",
   "labelEn": "Mobile Gaming",
   "description": "手游攻略与推荐",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

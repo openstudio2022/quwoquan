@@ -12,7 +12,6 @@ import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_ke
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.dart';
-import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 import '../object_scenario_seed_reader.dart';
 
@@ -61,7 +60,7 @@ class AlphaIntersectionRepository
       tallies.add(
         IntersectionDimensionTally(
           dimension: dimension,
-          label: DiscoveryFeedText.intersectionDimensionShortLabel(dimension),
+          label: _fixtureDimensionLabel(dimension),
           count: items.length,
           newCount: newCount,
           strengthenedCount: strengthenedCount,
@@ -427,7 +426,7 @@ class AlphaIntersectionRepository
         .map(
           (entry) => IntersectionDimensionTally(
             dimension: entry.key,
-            label: DiscoveryFeedText.intersectionDimensionShortLabel(entry.key),
+            label: _fixtureDimensionLabel(entry.key),
             count: entry.value,
           ),
         )
@@ -453,13 +452,13 @@ class AlphaIntersectionRepository
   ) {
     final sourceRef = points.first.sourceRef.trim();
     final key =
-        IntersectionKindMetadata.of(sourceRef)?.primaryActionKey ??
+        _fixturePrimaryActionKeys[sourceRef] ??
         IntersectionActionKeys.askAssistant;
     final metadata = IntersectionActionKeyMeta.of(key);
     return <IntersectionActionHint>[
       IntersectionActionHint(
         actionKey: key,
-        label: DiscoveryFeedText.intersectionActionLabel(key),
+        label: _fixtureActionLabel(key),
         target: reason.actionTargetId.trim().isEmpty
             ? null
             : IntersectionTarget(
@@ -504,3 +503,80 @@ final class _BriefStatement {
   final String text;
   final List<IntersectionTextSpan> spans;
 }
+
+/// 替身自持的展示文案：模拟云侧按注册表渲染后下发的 `tally.label` / `hint.label`。
+/// 端侧 production 树不得再有同名表——那是本轮要消灭的第二真相源。
+const Map<String, String> _fixtureDimensionLabels = <String, String>{
+  'identity': '身份',
+  'location': '地点',
+  'content': '内容',
+  'relationship': '关系',
+  'interest': '兴趣',
+};
+
+String _fixtureDimensionLabel(String dimension) =>
+    _fixtureDimensionLabels[dimension.trim()] ?? dimension;
+
+const Map<String, String> _fixtureActionLabels = <String, String>{
+  'follow_person': '关注',
+  'greet_person': '打招呼',
+  'message_person': '发消息',
+  'view_shared_people': '查看共同关注',
+  'join_circle': '加入圈子',
+  'open_discussion': '进入讨论',
+  'open_content': '查看内容',
+  'open_object': '进入主页',
+  'follow_object': '关注对象',
+  'open_route': '查看路线',
+  'create_followup': '写续篇',
+  'ask_assistant': '解释这条交集',
+  'join_topic_room': '进话题群',
+  'start_gathering': '发起结伴',
+  'join_gathering': '加入同行',
+  'meet_nearby': '附近碰头',
+  'express_interest': '打个招呼',
+  'view_official_deals': '看官方优惠',
+  'book_ticket': '订门票',
+  'book_hotel': '订住宿',
+};
+
+String _fixtureActionLabel(String actionKey) =>
+    _fixtureActionLabels[actionKey.trim()] ?? _fixtureActionLabels['ask_assistant']!;
+
+/// 替身自持的 kind → 主行动映射：模拟云侧按注册表 `actionHintsByKind` 选出的首个
+/// actionKey。端侧 production 树不再编译逐 kind 行动表——那份表在线上随 reason 下发。
+const Map<String, String> _fixturePrimaryActionKeys = <String, String>{
+  'sharedFollowees': 'follow_person',
+  'commonFollower': 'follow_person',
+  'commonContact': 'greet_person',
+  'sameSchool': 'greet_person',
+  'sameDepartment': 'greet_person',
+  'sameMajor': 'greet_person',
+  'sameCohort': 'greet_person',
+  'alumni': 'greet_person',
+  'sameCompany': 'message_person',
+  'sameTeam': 'message_person',
+  'sameIndustry': 'message_person',
+  'sharedCircle': 'join_circle',
+  'sharedDiscussion': 'open_discussion',
+  'coMemberCircle': 'join_circle',
+  'coCommented': 'open_content',
+  'coSharedContent': 'open_content',
+  'coCreatedContent': 'open_content',
+  'coLiked': 'open_content',
+  'coVisitedEntity': 'open_object',
+  'sharedEntityAttention': 'open_object',
+  'coWishlistedEntity': 'start_gathering',
+  'sharedTagSample': 'open_object',
+  'followeeInObject': 'join_circle',
+  'followeeVisited': 'open_object',
+  'followeeViewedObject': 'open_object',
+  'followeeViewing': 'open_content',
+  'alumniHere': 'open_object',
+  'colleagueHere': 'open_object',
+  'followeeDiscussedThis': 'open_discussion',
+  'coPresentHere': 'meet_nearby',
+  'nearbyAffinity': 'meet_nearby',
+  'coPlannedTrip': 'join_gathering',
+  'wantToMeetSameInterest': 'express_interest',
+};

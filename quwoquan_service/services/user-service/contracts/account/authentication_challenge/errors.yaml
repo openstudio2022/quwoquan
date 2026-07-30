@@ -11,6 +11,13 @@ errors:
 - code: USER.AUTH.otp_expired
   kind: AUTH
   reason: otp_expired
+  emitted_by:
+  - surface: http
+    operations:
+    - user.account_session.LoginWithPhone
+    - user.account_appeal_intake.IssueAccountAppealCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
   recovery:
     action: retry
@@ -24,6 +31,13 @@ errors:
 - code: USER.AUTH.otp_mismatch
   kind: AUTH
   reason: otp_mismatch
+  emitted_by:
+  - surface: http
+    operations:
+    - user.account_session.LoginWithPhone
+    - user.account_appeal_intake.IssueAccountAppealCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
   recovery:
     action: retry
@@ -37,6 +51,13 @@ errors:
 - code: USER.AUTH.otp_attempts_exceeded
   kind: AUTH
   reason: otp_attempts_exceeded
+  emitted_by:
+  - surface: http
+    operations:
+    - user.account_session.LoginWithPhone
+    - user.account_appeal_intake.IssueAccountAppealCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 429
   recovery:
     action: retry
@@ -51,6 +72,10 @@ errors:
 - code: USER.AUTH.otp_rate_limited
   kind: AUTH
   reason: rate_limited
+  emitted_by:
+  - surface: http
+    operations:
+    - SendOtp
   http_status: 429
   recovery:
     action: retry
@@ -65,6 +90,10 @@ errors:
 - code: USER.AUTH.otp_provider_failed
   kind: AUTH
   reason: third_party_failure
+  emitted_by:
+  - surface: http
+    operations:
+    - SendOtp
   http_status: 502
   recovery:
     action: retry
@@ -78,6 +107,12 @@ errors:
 - code: USER.AUTH.challenge_consumed
   kind: AUTH
   reason: challenge_consumed
+  emitted_by:
+  - surface: http
+    operations:
+    - user.account_appeal_intake.IssueAccountAppealCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
   recovery:
     action: retry

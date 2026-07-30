@@ -24,12 +24,14 @@ capabilities:
 - expiring
 - idempotent_commands
 business_rules:
-- purpose、channel、destinationHash 与 secretRef 创建后不可变
+- purpose、channel、destinationHash、secretRef 与内部 bindingTicketRef 创建后不可变
 - secret 明文不得进入 aggregate、日志、事件或 API 响应
 - verify attempt 有界，超过上限或 expiresAt 后立即失效
 - completed、expired 与 locked 为终态；成功消费在 challenge 行内记录结果指纹，同一凭据重复验证返回同一结果
 - 发送冷却与配额由服务端强制，challenge 创建按 idempotency key 去重
+- 用于社交首登 completion 的 bind_phone challenge 必须引用创建时已验证的 pending binding ticket，completion 只能消费同一 ticket 引用的 challenge；已登录账号自行绑定手机号的 challenge 不伪造 ticket
 lifecycle:
+  state_field: status
   states:
   - pending
   - completed

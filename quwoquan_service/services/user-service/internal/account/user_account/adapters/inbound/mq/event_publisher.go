@@ -159,7 +159,7 @@ func (p *EventPublisher) PublishGreetingEvent(
 		return fmt.Errorf("greeting event publisher is unavailable")
 	}
 	if event.EventID == "" || event.EventName == "" || event.GreetingID == "" ||
-		event.RequesterSubAccountID == "" || event.TargetSubAccountID == "" ||
+		event.RequesterPersonaID == "" || event.TargetPersonaID == "" ||
 		event.OccurredAt.IsZero() {
 		return fmt.Errorf("invalid greeting event")
 	}
@@ -167,8 +167,8 @@ func (p *EventPublisher) PublishGreetingEvent(
 		"eventId":                      event.EventID,
 		"eventName":                    event.EventName,
 		"id":                           event.GreetingID,
-		"requesterSubAccountId":        event.RequesterSubAccountID,
-		"targetSubAccountId":           event.TargetSubAccountID,
+		"requesterPersonaId":           event.RequesterPersonaID,
+		"targetPersonaId":              event.TargetPersonaID,
 		"targetAllowsStrangerGreeting": strconv.FormatBool(event.TargetAllowsStrangerGreeting),
 		"occurredAt":                   event.OccurredAt.UTC().Format(time.RFC3339Nano),
 	}

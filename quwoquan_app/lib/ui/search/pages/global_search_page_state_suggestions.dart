@@ -191,7 +191,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
       case SearchSuggestionEntryKind.contact:
         final contact = entry.cast<ContactSearchSuggestion>();
         if (contact.conversationId.isEmpty) {
-          _openUserProfile(contact.contactId);
+          _openUserProfile(contact.userHandle);
         } else {
           _openConversation(contact.conversationId);
         }
@@ -209,7 +209,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
         _openNetworkResults(location.name, initialTabId: 'all');
       case SearchSuggestionEntryKind.followedPerson:
         final person = entry.cast<SocialRelationSearchItemView>();
-        _openUserProfile(person.subAccountId);
+        _openUserProfile(person.userHandle);
       case SearchSuggestionEntryKind.network:
         final network = entry.cast<NetworkSearchSuggestion>();
         if (network.isHomepagePreview) {
@@ -257,7 +257,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
           ),
           onTap: () {
             if (contact.conversationId.isEmpty) {
-              _openUserProfile(contact.contactId);
+              _openUserProfile(contact.userHandle);
             } else {
               _openConversation(contact.conversationId);
             }
@@ -364,7 +364,7 @@ extension _GlobalSearchPageStateSuggestions on _GlobalSearchPageState {
               color: fgSecondary,
             ),
           ),
-          onTap: () => _openUserProfile(person.subAccountId),
+          onTap: () => _openUserProfile(person.userHandle),
         );
       case SearchSuggestionEntryKind.network:
         return _KeywordSuggestionRow(

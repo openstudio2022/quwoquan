@@ -68,37 +68,29 @@ void main() {
       expect(UserErrorCode.userNotFound.code, 'USER.USER.not_found');
       expect(UserErrorCode.unauthorized.code, 'USER.USER.unauthorized');
       expect(UserErrorCode.forbidden.code, 'USER.USER.forbidden');
-      expect(UserErrorCode.nicknameTaken.code, 'USER.USER.nickname_taken');
       expect(UserErrorCode.invalidArgument.code, 'USER.USER.invalid_argument');
-      expect(UserErrorCode.rateLimited.code, 'USER.USER.rate_limited');
       expect(
         UserErrorCode.invalidCallRingtone.code,
         'USER.SETTING.invalid_call_ringtone',
       );
       expect(UserErrorCode.otpExpired.code, 'USER.AUTH.otp_expired');
+      expect(UserErrorCode.personaNotFound.code, 'USER.PERSONA.not_found');
       expect(
-        UserErrorCode.subAccountNotFound.code,
-        'USER.SUB_ACCOUNT.not_found',
+        UserErrorCode.retiredPersonaGuard.code,
+        'USER.PERSONA.retired_guard',
       );
       expect(
-        UserErrorCode.retiredSubAccountGuard.code,
-        'USER.SUB_ACCOUNT.retired_guard',
+        UserErrorCode.primaryPersonaGuard.code,
+        'USER.PERSONA.primary_guard',
       );
       expect(
-        UserErrorCode.primarySubAccountGuard.code,
-        'USER.SUB_ACCOUNT.primary_guard',
+        UserErrorCode.activePersonaGuard.code,
+        'USER.PERSONA.active_guard',
       );
+      expect(UserErrorCode.lastPersona.code, 'USER.PERSONA.last_persona');
       expect(
-        UserErrorCode.activeSubAccountGuard.code,
-        'USER.SUB_ACCOUNT.active_guard',
-      );
-      expect(
-        UserErrorCode.lastSubAccount.code,
-        'USER.SUB_ACCOUNT.last_sub_account',
-      );
-      expect(
-        UserErrorCode.subAccountHandleTaken.code,
-        'USER.SUB_ACCOUNT.handle_taken',
+        UserErrorCode.personaHandleTaken.code,
+        'USER.PERSONA.handle_taken',
       );
       expect(UserErrorCode.internalError.code, 'USER.SYSTEM.internal_error');
     });
@@ -107,10 +99,6 @@ void main() {
       expect(
         UserErrorCode.fromCode('USER.USER.not_found'),
         UserErrorCode.userNotFound,
-      );
-      expect(
-        UserErrorCode.fromCode('USER.USER.nickname_taken'),
-        UserErrorCode.nicknameTaken,
       );
       expect(
         UserErrorCode.fromCode('USER.GREETING.already_contact'),
@@ -135,17 +123,15 @@ void main() {
       expect(UserErrorCode.userNotFound.httpStatus, 404);
       expect(UserErrorCode.unauthorized.httpStatus, 401);
       expect(UserErrorCode.forbidden.httpStatus, 403);
-      expect(UserErrorCode.nicknameTaken.httpStatus, 409);
       expect(UserErrorCode.invalidArgument.httpStatus, 400);
-      expect(UserErrorCode.rateLimited.httpStatus, 429);
       expect(UserErrorCode.invalidCallRingtone.httpStatus, 400);
       expect(UserErrorCode.otpExpired.httpStatus, 400);
-      expect(UserErrorCode.subAccountNotFound.httpStatus, 404);
-      expect(UserErrorCode.retiredSubAccountGuard.httpStatus, 400);
-      expect(UserErrorCode.primarySubAccountGuard.httpStatus, 400);
-      expect(UserErrorCode.activeSubAccountGuard.httpStatus, 400);
-      expect(UserErrorCode.lastSubAccount.httpStatus, 400);
-      expect(UserErrorCode.subAccountHandleTaken.httpStatus, 409);
+      expect(UserErrorCode.personaNotFound.httpStatus, 404);
+      expect(UserErrorCode.retiredPersonaGuard.httpStatus, 400);
+      expect(UserErrorCode.primaryPersonaGuard.httpStatus, 400);
+      expect(UserErrorCode.activePersonaGuard.httpStatus, 400);
+      expect(UserErrorCode.lastPersona.httpStatus, 400);
+      expect(UserErrorCode.personaHandleTaken.httpStatus, 409);
       expect(UserErrorCode.internalError.httpStatus, 500);
     });
   });
@@ -173,25 +159,11 @@ void main() {
       );
       expect(UserErrorCode.userNotFound.defaultMessage, '用户不存在');
       expect(UserErrorCode.unauthorized.defaultMessage, '请先登录');
-      expect(UserErrorCode.nicknameTaken.defaultMessage, contains('昵称'));
-      expect(UserErrorCode.rateLimited.defaultMessage, contains('频繁'));
-      expect(
-        UserErrorCode.retiredSubAccountGuard.defaultMessage,
-        contains('退役'),
-      );
-      expect(
-        UserErrorCode.primarySubAccountGuard.defaultMessage,
-        contains('主分身'),
-      );
-      expect(
-        UserErrorCode.activeSubAccountGuard.defaultMessage,
-        contains('切换'),
-      );
-      expect(UserErrorCode.lastSubAccount.defaultMessage, contains('最后一个账号'));
-      expect(
-        UserErrorCode.subAccountHandleTaken.defaultMessage,
-        contains('分身号'),
-      );
+      expect(UserErrorCode.retiredPersonaGuard.defaultMessage, contains('退役'));
+      expect(UserErrorCode.primaryPersonaGuard.defaultMessage, contains('主分身'));
+      expect(UserErrorCode.activePersonaGuard.defaultMessage, contains('切换'));
+      expect(UserErrorCode.lastPersona.defaultMessage, contains('最后一个账号'));
+      expect(UserErrorCode.personaHandleTaken.defaultMessage, contains('分身号'));
     });
   });
 }

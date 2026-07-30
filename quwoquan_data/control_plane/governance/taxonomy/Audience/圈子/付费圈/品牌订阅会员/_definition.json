@@ -2,6 +2,7 @@
   "label": "品牌订阅会员",
   "labelEn": "Subscription Club",
   "description": "品牌订阅制会员群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

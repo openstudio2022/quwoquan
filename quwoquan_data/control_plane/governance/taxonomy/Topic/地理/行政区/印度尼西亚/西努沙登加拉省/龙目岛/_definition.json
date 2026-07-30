@@ -1,0 +1,12 @@
+{
+  "label": "龙目岛",
+  "labelEn": "Lombok",
+  "description": "海滩与林贾尼火山门户",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

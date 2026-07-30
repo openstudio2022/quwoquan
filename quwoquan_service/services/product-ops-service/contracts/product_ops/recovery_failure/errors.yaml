@@ -2,6 +2,8 @@ errors:
 - code: OPS.USER.recovery_failure_invalid
   kind: VALIDATION
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ReportRecoveryFailure]}
   message_key: opsRecoveryFailureInvalid
   default_message: 异常记录无效
   recovery:
@@ -10,6 +12,8 @@ errors:
 - code: OPS.SYSTEM.recovery_failure_unavailable
   kind: UNAVAILABLE
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [ReportRecoveryFailure]}
   message_key: opsRecoveryFailureUnavailable
   default_message: 异常记录暂未接收
   recovery:

@@ -208,7 +208,7 @@ func chatConversationFromFixture(fc chatFixtureConversation) *model.Conversation
 		LastMessagePreview: fc.LastMessagePreview,
 		LastMessageTime:    lastMessageTime,
 		MessageCount:       fc.MessageCount,
-		Status:             fc.Status,
+		Status:             model.ConversationStatus(fc.Status),
 		CreatedAt:          createdAt,
 		UpdatedAt:          updatedAt,
 	}

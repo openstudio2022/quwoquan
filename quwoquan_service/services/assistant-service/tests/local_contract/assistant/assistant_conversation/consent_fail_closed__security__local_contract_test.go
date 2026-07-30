@@ -3,7 +3,7 @@ package local_contract
 
 import (
 	"context"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"testing"
 
 	rtredis "quwoquan_service/runtime/redis"

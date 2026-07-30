@@ -2,6 +2,7 @@
   "label": "管理层",
   "labelEn": "Management",
   "description": "担任管理职务",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

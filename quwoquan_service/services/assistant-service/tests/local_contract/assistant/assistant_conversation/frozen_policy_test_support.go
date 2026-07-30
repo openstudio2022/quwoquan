@@ -4,13 +4,16 @@ import (
 	"context"
 	"strings"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
-func testFrozenPolicyOption() application.AssistantServiceOption {
-	return application.WithFrozenPolicyResolver(
-		application.FrozenPolicyResolverFunc(
+const testPolicyReleaseDigest = "e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d"
+
+func testFrozenPolicyOption() orchestration.AssistantServiceOption {
+	return orchestration.WithFrozenPolicyResolver(
+		ports.FrozenPolicyResolverFunc(
 			func(
 				_ context.Context,
 				policyID string,
@@ -44,7 +47,7 @@ func testFrozenPolicySelection(
 	}
 	return assistant.AssistantFrozenPolicySelection{
 		PolicyID:        policyID,
-		ReleaseVersion:  "test-release-v1",
+		ReleaseDigest:   testPolicyReleaseDigest,
 		Cohort:          "control",
 		RolloutRevision: 1,
 		RuleID:          "test-default",
@@ -54,7 +57,7 @@ func testFrozenPolicySelection(
 			DomainID:        domainID,
 			PromptPolicy:    "test frozen policy prompt",
 			AllowedTools:    []string{},
-			SearchIntensity: "balanced",
+			SearchIntensity: "medium",
 		},
 	}
 }

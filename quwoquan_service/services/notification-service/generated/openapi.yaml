@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan notification API
-    version: v1
+    version: canonical
 paths:
     /app-messages:
         get:
@@ -17,6 +17,26 @@ paths:
                 reader: AppMessageInboxReader
                 slice: AppMessageInboxSlice
             parameters:
+                - name: type
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: read
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
                 - name: Idempotency-Key
                   in: header
                   required: false
@@ -94,12 +114,6 @@ paths:
                   required: true
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/AckAppMessageRequest'
             responses:
                 "204":
                     description: No Content
@@ -128,12 +142,6 @@ paths:
                   required: true
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ReadAppMessageRequest'
             responses:
                 "204":
                     description: No Content
@@ -191,7 +199,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -302,6 +310,17 @@ paths:
                 method: listDeadLetters
                 reader: NotificationDeliveryJobDeadLetterReader
                 slice: NotificationDeliveryJobDeadLetterSlice
+            parameters:
+                - name: eventType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -329,6 +348,12 @@ paths:
                 method: getIncomingCallTimeline
                 reader: IncomingCallDeliveryTimelineReader
                 slice: IncomingCallDeliveryTimeline
+            parameters:
+                - name: callId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -415,11 +440,6 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        AckAppMessageRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AckAppMessageRequest
-            x-contract-placeholder: true
         AckIncomingCallPresentationCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -500,11 +520,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: NotificationDeliveryJobMetricsSnapshot
-            x-contract-placeholder: true
-        ReadAppMessageRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReadAppMessageRequest
             x-contract-placeholder: true
         RecoverNotificationDeliveryJobRequest:
             type: object

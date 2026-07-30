@@ -1,41 +1,5 @@
 import '../operation_request_payload.dart';
-
-/// RecentSearchState 对象级 typed 契约（search 域）。
-/// entryId 由服务端从语义键（scope+facet+normalized query）派生，
-/// 客户端不生成、不提交条目标识以外的版本信息。
-
-final class ListRecentSearchesQuery {
-  ListRecentSearchesQuery({String? scope}) : scope = _optional(scope);
-
-  final String? scope;
-}
-
-final class UpsertRecentSearchCommand {
-  UpsertRecentSearchCommand({
-    required String query,
-    required String scope,
-    String? facet,
-  }) : query = _required(query, 'query'),
-       scope = _required(scope, 'scope'),
-       facet = _optional(facet);
-
-  final String query;
-  final String scope;
-  final String? facet;
-}
-
-final class DeleteRecentSearchCommand {
-  DeleteRecentSearchCommand({required String entryId})
-    : entryId = _required(entryId, 'entryId');
-
-  final String entryId;
-}
-
-final class ClearRecentSearchesCommand {
-  ClearRecentSearchesCommand({String? scope}) : scope = _optional(scope);
-
-  final String? scope;
-}
+part '../generated/requests/search/recent_search_contracts.requests.g.dart';
 
 final class RecentSearchEntry {
   const RecentSearchEntry({
@@ -72,34 +36,6 @@ abstract interface class RecentSearchCommandWriter {
   Future<void> deleteRecentSearch(DeleteRecentSearchCommand command);
   Future<void> clearRecentSearches(ClearRecentSearchesCommand command);
 }
-
-CloudOperationRequestPayload encodeListRecentSearchesQuery(
-  ListRecentSearchesQuery query,
-) => CloudOperationRequestPayload(
-  queryParameters: <String, String>{'scope': ?query.scope},
-);
-
-CloudOperationRequestPayload encodeUpsertRecentSearchCommand(
-  UpsertRecentSearchCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'query': command.query,
-    'scope': command.scope,
-    'facet': ?command.facet,
-  },
-);
-
-CloudOperationRequestPayload encodeDeleteRecentSearchCommand(
-  DeleteRecentSearchCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'entryId': command.entryId},
-);
-
-CloudOperationRequestPayload encodeClearRecentSearchesCommand(
-  ClearRecentSearchesCommand command,
-) => CloudOperationRequestPayload(
-  queryParameters: <String, String>{'scope': ?command.scope},
-);
 
 RecentSearchEntry decodeRecentSearchEntry(Object? value) {
   if (value is! Map) {
@@ -141,12 +77,6 @@ String _string(Map<String, Object?> map, String key) {
     throw FormatException('$key must be a non-empty string');
   }
   return value.trim();
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }
 
 String? _optional(String? value) {

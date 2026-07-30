@@ -6,6 +6,8 @@ errors:
   kind: USER
   reason: config_invalid
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ResolveEffectiveConfig, ResolveEffectiveConfigForInstance, GetConfigSnapshot]}
   recovery_action: surface
   dart_const: configInvalid
   go_const: ErrConfigInvalid
@@ -16,6 +18,8 @@ errors:
   kind: USER
   reason: config_snapshot_not_found
   http_status: 404
+  emitted_by:
+  - {surface: http, operations: [GetConfigSnapshot]}
   recovery_action: refresh
   dart_const: configSnapshotNotFound
   go_const: ErrConfigSnapshotNotFound
@@ -26,6 +30,8 @@ errors:
   kind: SYSTEM
   reason: config_storage_read_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [ListServiceConfigs, ResolveEffectiveConfig, ResolveEffectiveConfigForInstance, GetConfigSnapshot, ListConfigDomains]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: configStorageReadFailed

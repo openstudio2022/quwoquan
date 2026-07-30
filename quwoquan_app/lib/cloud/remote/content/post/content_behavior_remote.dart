@@ -16,7 +16,7 @@ final class RemoteContentBehaviorCommandAdapter
 
   @override
   Future<void> reportBehaviors(ReportContentBehaviorsCommand command) {
-    return client.contentPostReportBehaviors(
+    return client.contentContentBehaviorFactReportBehaviors(
       command,
       context: invocationContext(ContentRequestPageIds.reportBehaviors),
     );

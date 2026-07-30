@@ -34,6 +34,17 @@ def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def source_section(source: str, start: str, end: str) -> str | None:
+    start_index = source.find(start)
+    if start_index < 0:
+        return None
+    content_start = start_index + len(start)
+    end_index = source.find(end, content_start)
+    if end_index < 0:
+        return None
+    return source[content_start:end_index]
+
+
 def main() -> int:
     issues: list[str] = []
 
@@ -97,8 +108,8 @@ def main() -> int:
     if prod_hosted.get("mediaUploadBaseUrl") != "https://upload.quwoquan.com":
         issues.append("prod android launch must keep canonical upload.quwoquan.com media upload base")
     gamma_web = resolve_app_endpoint_overrides("gamma", "web", topology=topology)
-    if gamma_web["gatewayBaseUrl"] != "https://api.gamma.quwoquan.com:19000":
-        issues.append("gamma web must map gateway to secure gamma env domain")
+    if gamma_web["gatewayBaseUrl"] != "https://gamma.quwoquan.com:19000/api":
+        issues.append("gamma web must use the public origin same-origin /api proxy")
     if gamma_web.get("legalBaseUrl") != "https://gamma.quwoquan.com:19000/legal":
         issues.append("gamma web must keep canonical public legal authority")
 
@@ -111,6 +122,9 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     beta_stack = (
         ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+    ).read_text(encoding="utf-8")
+    alpha_content_release = (
+        ROOT / "quwoquan_ops/cli/alpha/content_release_runtime.py"
     ).read_text(encoding="utf-8")
     beta_stop = (
         ROOT / "quwoquan_app/scripts/device/stop_app_beta_manual.sh"
@@ -146,6 +160,14 @@ def main() -> int:
     prod_sim = (
         ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
     ).read_text(encoding="utf-8")
+    for label, source in {
+        "alpha content release": alpha_content_release,
+        "beta manual": beta_manual,
+        "gamma Caddyfile": local_gamma_caddyfile,
+        "prod-sim": prod_sim,
+    }.items():
+        if "path /api/*" not in source or "uri @web_api strip_prefix /api" not in source:
+            issues.append(f"{label} must route browser API calls through same-origin /api")
 
     expected_default_paths = {
         deployment_render_root("gamma-local"):
@@ -260,8 +282,13 @@ def main() -> int:
     )
     if 'certificate_export_dir(TARGET) / "root.crt"' in alpha_script:
         issues.append("alpha Remote content-release must not export a private Caddy root")
-    if '"legal-static"' not in alpha_script:
-        issues.append("alpha Remote content-release must package legal-static before serving /legal")
+    if (
+        "legal_static_deployment_package_dir" not in alpha_script
+        or "Alpha legal-static package is incomplete" not in alpha_script
+    ):
+        issues.append(
+            "alpha Remote content-release must fail closed on an incomplete legal-static package"
+        )
     if '"  handle /legal/* {"' not in alpha_script:
         issues.append("alpha local stack must health-check legal-static stable URL")
     if "quwoquan_cloud_mock" in alpha_script or "test_fixtures" in alpha_script:
@@ -278,27 +305,19 @@ def main() -> int:
         or "Bundle Local HTTPS Trust Root" in ios_project
     ):
         issues.append("iOS project must rely on system public CA without trust injection phases")
-    if (
-        "build_launcher_handoff.py" not in ios_prepare_defines
-        or '--target alpha-local' not in ios_prepare_defines
-        or '--launch-mode canonical_launcher' not in ios_prepare_defines
+    for retired in (
+        "DIRECT_ALPHA_HANDOFF",
+        "xcode-direct-alpha",
+        "export FLUTTER_TARGET=",
     ):
+        if retired in ios_prepare_defines:
+            issues.append(
+                "iOS Xcode phase must not synthesize a bare flutter run fallback; "
+                f"retired token: {retired}"
+            )
+    if "use ./run.sh -d <device>" not in ios_prepare_defines:
         issues.append(
-            "plain iOS Simulator Debug must consume the canonical Alpha launcher handoff"
-        )
-    if (
-        '${CONFIGURATION:-}" == "Debug"' not in ios_prepare_defines
-        or "outside direct iOS Simulator Debug" not in ios_prepare_defines
-    ):
-        issues.append(
-            "iOS direct Alpha fallback must stay limited to Simulator Debug"
-        )
-    if (
-        "export FLUTTER_TARGET=" not in ios_prepare_defines
-        or "lib/main_prod.dart" not in ios_prepare_defines
-    ):
-        issues.append(
-            "plain iOS Simulator Debug must compile the canonical production entrypoint"
+            "iOS bare build failure must point to the canonical run.sh launcher"
         )
     if "PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS" not in stackctl_source:
         issues.append(
@@ -316,14 +335,18 @@ def main() -> int:
         issues.append("legal document page must not regress to charset-dependent WebView loadRequest")
     if 'legal_static_deployment_package_dir("beta")' not in beta_manual:
         issues.append("beta manual stack must mount the canonical legal-static deployment package")
-    if 'stackctl.py" package --env beta --kind legal-static' not in beta_manual:
-        issues.append("beta manual stack must package legal-static before starting its TLS gateway")
+    if "GATE_BLOCK: beta legal-static package is missing user-agreement" not in beta_manual:
+        issues.append(
+            "beta manual stack must fail closed on an incomplete legal-static package before starting its TLS gateway"
+        )
     if 'handle /legal/manifest.json {' not in beta_manual or 'handle /legal/* {' not in beta_manual:
         issues.append("beta TLS gateway must serve legal manifest and documents before proxying business routes")
     if '-v "$BETA_LEGAL_STATIC_ROOT:/srv/legal:ro"' not in beta_manual:
         issues.append("beta TLS gateway must mount legal-static under /srv/legal")
-    if '--legal-base-url "$GATEWAY_BASE_URL/legal"' not in beta_manual:
-        issues.append("beta app launch must inject its TLS gateway legal-static base URL")
+    if "start_app_instance.sh" in beta_manual:
+        issues.append(
+            "beta environment assembly must not launch App; release-bound App execution is a separate matrix stage"
+        )
     if (
         "beta_manual_verify_legal_document" not in beta_manual
         or '"趣我圈用户协议"' not in beta_manual
@@ -332,7 +355,7 @@ def main() -> int:
         issues.append("beta manual startup must verify UTF-8 agreement and privacy-policy content")
     if 'legal_static_deployment_package_dir(' not in prod_sim or '"prod"' not in prod_sim:
         issues.append("prod-sim must mount the canonical prod legal-static deployment package")
-    if 'stackctl.py" package --env prod --kind legal-static' not in prod_sim:
+    if "[prod-sim] FAIL: legal-static package missing user-agreement" not in prod_sim:
         issues.append("prod-sim must gate startup on a valid prod legal-static package")
     if 'handle /legal/manifest.json {' not in prod_sim or 'handle /legal/* {' not in prod_sim:
         issues.append("prod-sim TLS gateway must serve legal manifest and documents before proxying business routes")
@@ -344,47 +367,122 @@ def main() -> int:
         or '"趣我圈隐私政策"' not in prod_sim
     ):
         issues.append("prod-sim startup must verify UTF-8 agreement and privacy-policy content")
+    first_party_direct_proxy = re.compile(
+        r"reverse_proxy\s+(?:assistant|chat|circle|content|entity|integration|"
+        r"notification|platform-ops|product-ops|recommendation|rtc|search|tag|user)-service(?::\d+)?\b"
+    )
+    for label, source in {
+        "gamma Caddyfile": local_gamma_caddyfile,
+        "prod renderer": prod_plane_renderer,
+    }.items():
+        edge_snippet = source_section(source, "(business_api_edge) {", "\n}\n")
+        if source.count("(business_api_edge) {") != 1 or edge_snippet is None:
+            issues.append(f"{label} must define exactly one business api-edge ingress")
+        else:
+            if (
+                "reverse_proxy api-edge:18079" not in edge_snippet
+                or "header_up X-Edge-Client-IP {remote_host}" not in edge_snippet
+            ):
+                issues.append(
+                    f"{label} business ingress must proxy only to api-edge and overwrite the edge client identity"
+                )
+        if first_party_direct_proxy.search(source):
+            issues.append(
+                f"{label} must not duplicate operation ownership by proxying directly to a first-party service"
+            )
+        if "@api_user" in source or "@pub_user" in source:
+            issues.append(
+                f"{label} must not retain path-owned user-service ingress matchers"
+            )
+
+    gamma_public_gateway = source_section(
+        local_gamma_caddyfile,
+        "https://{$QWQ_PUBLIC_API_HOST}",
+        "\n\nhttps://{$QWQ_PUBLIC_RTC_HOST}",
+    )
+    if (
+        gamma_public_gateway is None
+        or "uri @web_api strip_prefix /api" not in gamma_public_gateway
+        or "handle {\n\t\timport business_api_edge\n\t}" not in gamma_public_gateway
+    ):
+        issues.append(
+            "gamma public API/Web gateway must send its complete business fallback through api-edge"
+        )
+    gamma_direct_http = source_section(local_gamma_caddyfile, "\n:80 {", "\n}")
+    if (
+        gamma_direct_http is None
+        or "handle {\n\t\timport business_api_edge\n\t}" not in gamma_direct_http
+    ):
+        issues.append(
+            "gamma direct HTTP gateway must send its complete business fallback through api-edge"
+        )
+
+    prod_api_gateway = source_section(
+        prod_plane_renderer,
+        "api.sim.quwoquan.com {",
+        "\n\nops.sim.quwoquan.com {",
+    )
+    if (
+        prod_api_gateway is None
+        or "\\thandle {\n\\t\\timport business_api_edge\n\\t}"
+        not in prod_api_gateway
+    ):
+        issues.append(
+            "prod API gateway template must send its complete business fallback through api-edge"
+        )
+    prod_web_gateway = source_section(
+        prod_plane_renderer, 'web_site = f"""', '"""'
+    )
+    if prod_web_gateway is not None:
+        prod_web_gateway = prod_web_gateway.replace("{{", "{").replace("}}", "}")
+    if (
+        prod_web_gateway is None
+        or "\\thandle_path /api/* {\n\\t\\timport business_api_edge\n\\t}"
+        not in prod_web_gateway
+        or "\\thandle /ops/app-recovery/version {\n\\t\\timport business_api_edge\n\\t}"
+        not in prod_web_gateway
+    ):
+        issues.append(
+            "prod public-Web business routes must enter through the same api-edge ingress"
+        )
+
     for label, source in {"gamma Caddyfile": local_gamma_caddyfile}.items():
-        if "@api_user path /auth* /owner* /user* /me /me/*" not in source:
-            issues.append(f"{label} must route auth and owner APIs to user-service")
-        if "@pub_user path /auth* /owner* /user* /me /me/*" not in source:
-            issues.append(f"{label} must expose auth and owner APIs on the public gateway")
         if 'handle /legal/manifest.json {' not in source:
             issues.append(f"{label} must preserve JSON content type for the legal manifest")
         if 'Content-Type "text/html; charset=utf-8"' not in source:
             issues.append(f"{label} must declare UTF-8 for extensionless legal documents")
-    if prod_plane_renderer.count('handle /legal/manifest.json {') != 2:
-        issues.append("prod renderer must preserve JSON content type for both legal route surfaces")
+    if prod_plane_renderer.count('handle /legal/manifest.json {') != 3:
+        issues.append("prod renderer must preserve JSON content type for all legal route surfaces")
     prod_legal_blocks = re.findall(
         r"handle /legal/\* \{.*?\n\\t\}",
         prod_plane_renderer,
         re.DOTALL,
     )
-    if len(prod_legal_blocks) != 2 or any(
+    if len(prod_legal_blocks) != 3 or any(
         'Content-Type "text/html; charset=utf-8"' not in block
         for block in prod_legal_blocks
     ):
-        issues.append("prod renderer must declare UTF-8 for both extensionless legal route surfaces")
-    if prod_plane_renderer.count(
-        "@api_user path /auth* /owner* /user* /me /me/*"
-    ) != 1 or prod_plane_renderer.count(
-        "@pub_user path /auth* /owner* /user* /me /me/*"
-    ) != 1:
-        issues.append("prod renderer must route auth and owner APIs to user-service on both gateway surfaces")
-    if 'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"' not in gamma_script:
-        issues.append("gamma rendered deployment config must use the system deployment work root")
+        issues.append("prod renderer must declare UTF-8 for all extensionless legal route surfaces")
+    if 'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/rendered"' not in gamma_script:
+        issues.append(
+            "local release rendered deployment config must use the target-scoped system deployment work root"
+        )
     if 'LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"' not in gamma_script:
         issues.append("gamma launcher must mount the single Ops-owned Caddyfile source")
     if "prepare_caddyfile" in gamma_script or "MEDIA_ORIGIN_BASE_URL" in gamma_script:
         issues.append("gamma launcher must not generate a second Caddyfile or launch a media origin")
     if 'handle /healthz {\n\t\trespond "ok" 200\n\t}' not in local_gamma_caddyfile:
         issues.append("gamma media edge must expose a direct /healthz endpoint")
-    if 'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/gamma/local/gamma-local/process"' not in gamma_script:
-        issues.append("gamma pid/env/status must live under output local/process")
+    if 'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/${QWQ_LOCAL_RELEASE_ENV}/local/${QWQ_LOCAL_RELEASE_TARGET}/process"' not in gamma_script:
+        issues.append(
+            "local release runtime state must use the environment/target-scoped output process root"
+        )
+    if 'LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"' not in gamma_script:
+        issues.append("local release status receipt must live under its process root")
     for marker, message in (
         (
-            'export LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE=',
-            "gamma launcher must resolve the Notification image explicitly",
+            'image_key="LOCAL_GAMMA_${service_key}_IMAGE"',
+            "gamma launcher must resolve every discovered first-party image explicitly",
         ),
         (
             'notification-service \\\n',
@@ -407,8 +505,15 @@ def main() -> int:
         issues.append("Notification compose fragment must publish the canonical port")
     if 'LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"' not in gamma_script:
         issues.append("gamma Caddy certificate state must use its named deployment volume")
-    if '/data/caddy/pki/authorities/local/root.crt' not in gamma_script:
-        issues.append("gamma launcher must export the public root CA into the deployment work root")
+    if "/data/caddy/pki/authorities/local/root.crt" in gamma_script:
+        issues.append("gamma launcher must not export a private Caddy root CA")
+    if (
+        "QWQ_PUBLIC_TLS_CERT_FILE" not in gamma_script
+        or "QWQ_PUBLIC_TLS_KEY_FILE" not in gamma_script
+        or "QWQ_PUBLIC_TLS_CERT_FILE" not in gamma_compose
+        or "QWQ_PUBLIC_TLS_KEY_FILE" not in gamma_compose
+    ):
+        issues.append("gamma launcher and compose must mount DNS-01 public certificates")
     if '${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data' not in gamma_compose:
         issues.append("gamma compose must bind Caddy data to a named volume")
     if '${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config' not in gamma_compose:

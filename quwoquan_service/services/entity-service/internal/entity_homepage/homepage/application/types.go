@@ -5,6 +5,7 @@ import (
 	"time"
 
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
+	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
 )
 
 type GeoPoint = homepagemodel.GeoPoint
@@ -14,6 +15,12 @@ type ReviewSummary = homepagemodel.ReviewSummary
 type ContentPreview = homepagemodel.ContentPreview
 type QuestionPreview = homepagemodel.QuestionPreview
 type RelatedGroup = homepagemodel.RelatedGroup
+type StructuredFacts = homepagemodel.StructuredFacts
+
+type ViewerFollowSlice struct {
+	ViewerFollowsHomepage bool `json:"viewerFollowsHomepage"`
+	FollowerCount         int  `json:"followerCount"`
+}
 
 type View struct {
 	ID                   string              `json:"homepageId"`
@@ -36,9 +43,8 @@ type View struct {
 	City                 string              `json:"city,omitempty"`
 	Location             *GeoPoint           `json:"location,omitempty"`
 	OwnerUserID          string              `json:"ownerUserId,omitempty"`
-	OwnerSubAccountID    string              `json:"ownerSubAccountId,omitempty"`
-	ViewerFollows        bool                `json:"viewerFollowsHomepage"`
-	FollowerCount        int                 `json:"followerCount"`
+	OwnerPersonaID       string              `json:"ownerPersonaId,omitempty"`
+	ViewerFollow         ViewerFollowSlice   `json:"viewerFollow"`
 	Verified             bool                `json:"verified"`
 	EstablishedYear      *int                `json:"establishedYear,omitempty"`
 	AverageRating        *float64            `json:"averageRating,omitempty"`
@@ -51,6 +57,7 @@ type View struct {
 	AssistantContext     json.RawMessage     `json:"assistantContext,omitempty"`
 	IntroductionMarkdown string              `json:"introductionMarkdown,omitempty"`
 	IntroductionAssets   []IntroductionAsset `json:"introductionAssets,omitempty"`
+	StructuredFacts      *StructuredFacts    `json:"structuredFacts,omitempty"`
 	PrimarySource        *Source             `json:"primarySource,omitempty"`
 	SourceURLs           []string            `json:"sourceUrls"`
 	CreatedAt            time.Time           `json:"createdAt"`
@@ -159,26 +166,35 @@ func ViewFromSnapshot(snapshot homepagemodel.Snapshot) View {
 		City:                 snapshot.City,
 		Location:             cloneGeo(snapshot.Location),
 		OwnerUserID:          snapshot.OwnerUserID,
-		OwnerSubAccountID:    snapshot.OwnerSubAccountID,
+		OwnerPersonaID:       snapshot.OwnerPersonaID,
 		Verified:             snapshot.Verified,
 		EstablishedYear:      cloneInt(snapshot.EstablishedYear),
-		AverageRating:        cloneFloat(snapshot.AverageRating),
-		RatingCount:          snapshot.RatingCount,
-		ReviewSummary:        cloneReviewSummary(snapshot.ReviewSummary),
-		AssistantContext:     append(json.RawMessage(nil), snapshot.AssistantContext...),
 		IntroductionMarkdown: snapshot.IntroductionMarkdown,
 		IntroductionAssets:   append([]IntroductionAsset{}, snapshot.IntroductionAssets...),
+		StructuredFacts:      snapshot.StructuredFacts.Clone(),
 		PrimarySource:        cloneSource(snapshot.PrimarySource),
 		CreatedAt:            snapshot.CreatedAt,
 		UpdatedAt:            snapshot.UpdatedAt,
 		PublishedAt:          cloneTime(snapshot.PublishedAt),
 		OfflineAt:            cloneTime(snapshot.OfflineAt),
-		ContentPreview:       emptyIfNil(snapshot.ContentPreview),
-		QuestionPreview:      emptyIfNil(snapshot.QuestionPreview),
-		RelatedGroups:        emptyIfNil(snapshot.RelatedGroups),
-		RelationEdges:        emptyRawIfNil(snapshot.RelationEdges),
+		ContentPreview:       []ContentPreview{},
+		QuestionPreview:      []QuestionPreview{},
+		RelatedGroups:        []RelatedGroup{},
+		RelationEdges:        []json.RawMessage{},
 		SourceURLs:           emptyStringsIfNil(snapshot.SourceURLs),
 	}
+}
+
+func ApplyDetailProjection(view View, projection homepageports.DetailProjection) View {
+	view.AverageRating = cloneFloat(projection.AverageRating)
+	view.RatingCount = projection.RatingCount
+	view.ReviewSummary = cloneReviewSummary(projection.ReviewSummary)
+	view.ContentPreview = emptyIfNil(projection.ContentPreview)
+	view.QuestionPreview = emptyIfNil(projection.QuestionPreview)
+	view.RelatedGroups = emptyIfNil(projection.RelatedGroups)
+	view.RelationEdges = emptyRawIfNil(projection.RelationEdges)
+	view.AssistantContext = append(json.RawMessage(nil), projection.AssistantContext...)
+	return view
 }
 
 func cloneStrings(values []string) []string { return append([]string(nil), values...) }

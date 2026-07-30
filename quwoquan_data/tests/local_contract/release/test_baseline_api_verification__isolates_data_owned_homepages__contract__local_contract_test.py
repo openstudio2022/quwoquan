@@ -23,17 +23,21 @@ class _PublicApiClient:
         self,
         path: str,
         *,
+        page_id: str,
         query: dict[str, str] | None = None,
     ) -> PublicApiResponse:
         if path == "homepages/search":
+            assert page_id == "entity.homepage.search"
             assert query == {"status": "published", "limit": "1"}
             return PublicApiResponse(
                 status=200,
                 payload={"items": [{"homepageId": "fixture-homepage", "title": "保留主页"}]},
             )
         if path == "homepages/homepage-old":
+            assert page_id == "entity.homepage.detail"
             return PublicApiResponse(status=410, payload={"code": "ENTITY.USER.homepage_offline"})
         if path == "homepages/fixture-homepage":
+            assert page_id == "entity.homepage.detail"
             return PublicApiResponse(
                 status=200,
                 payload={"homepageId": "fixture-homepage", "title": "保留主页"},
@@ -75,9 +79,7 @@ def test_empty_baseline_verifies_offlined_and_preserved_homepages(
         run_id="verify",
         importer_report_path=import_report,
         output_path=output,
-        api_base_url="https://gamma-api.test",
-        insecure_tls=True,
-        resolve_host="127.0.0.1",
+        api_base_url="https://api.gamma.example.invalid",
     )
 
     payload = read_json(output)
@@ -99,12 +101,14 @@ def test_empty_baseline_allows_a_clean_environment_without_a_witness(
             self,
             path: str,
             *,
+            page_id: str,
             query: dict[str, str] | None = None,
         ) -> PublicApiResponse:
             if path == "homepages/search":
+                assert page_id == "entity.homepage.search"
                 assert query == {"status": "published", "limit": "1"}
                 return PublicApiResponse(status=200, payload={"items": []})
-            return super().get_json(path, query=query)
+            return super().get_json(path, page_id=page_id, query=query)
 
     import_report = tmp_path / "env/alpha/runs/data-release/baseline-release/import/homepage-import.json"
     output = tmp_path / "env/alpha/runs/data-release/baseline-release/verify/baseline-api-verification.json"
@@ -121,9 +125,7 @@ def test_empty_baseline_allows_a_clean_environment_without_a_witness(
         run_id="verify",
         importer_report_path=import_report,
         output_path=output,
-        api_base_url="https://alpha-api.test",
-        insecure_tls=True,
-        resolve_host="127.0.0.1",
+        api_base_url="https://api.alpha.example.invalid",
     )
 
     assert read_json(output)["preserved"] is None

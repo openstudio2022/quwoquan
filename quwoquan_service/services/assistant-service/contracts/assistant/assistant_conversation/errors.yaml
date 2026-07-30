@@ -10,6 +10,12 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations:
+    - GetAssistantConversation
+    - assistant.assistant_run.ListConversationTurns
+    - assistant.assistant_run.StartAssistantRun
   recovery_action: surface
   dart_const: conversationNotFound
   go_const: ErrConversationNotFound
@@ -21,6 +27,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantConversation, ListAssistantConversations]
   recovery_action: surface
   dart_const: conversationInvalidArgument
   go_const: ErrConversationInvalidArgument
@@ -32,6 +41,9 @@ errors:
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantConversation]
   recovery_action: refresh
   dart_const: conversationIdempotencyConflict
   go_const: ErrConversationIdempotencyConflict
@@ -43,6 +55,9 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [CreateAssistantConversation, ListAssistantConversations, GetAssistantConversation]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: conversationStorageUnavailable

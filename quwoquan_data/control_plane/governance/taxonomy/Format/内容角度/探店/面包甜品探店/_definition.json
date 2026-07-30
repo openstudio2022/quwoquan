@@ -2,6 +2,7 @@
   "label": "面包甜品探店",
   "labelEn": "Bakery Visit",
   "description": "探访面包甜品店",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

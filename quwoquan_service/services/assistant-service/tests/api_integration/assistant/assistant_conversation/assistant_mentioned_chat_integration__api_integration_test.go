@@ -10,10 +10,11 @@ import (
 
 	"quwoquan_service/generated/serviceclients"
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
+	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 )
 
 func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T) {
@@ -99,14 +100,14 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 		t.Fatal(err)
 	}
 	service := newIntegrationAssistantService(
-		application.WithAgentLoop(application.NewAgentLoop(
+		orchestration.WithAgentLoop(orchestration.NewAgentLoop(
 			integrationChatMentionSkillRuntime{},
-			application.ReactRuntime{
-				Model: application.DeterministicModelProvider{},
+			orchestration.ReactRuntime{
+				Model: modeldouble.DeterministicModelProvider{},
 			},
 			nil,
 		)),
-		application.WithChatGroundingClient(chatGrounding),
+		orchestration.WithChatGroundingClient(chatGrounding),
 	)
 	consumer := messaging.NewAssistantMentionedConsumerWithTransport(
 		newIntegrationMessageTransport(),
@@ -197,8 +198,8 @@ type integrationChatMentionSkillRuntime struct{}
 func (integrationChatMentionSkillRuntime) SelectSkill(
 	context.Context,
 	assistant.AssistantTurn,
-) (application.SkillSelection, error) {
-	return application.SkillSelection{
+) (orchestration.SkillSelection, error) {
+	return orchestration.SkillSelection{
 		SkillID:  "general",
 		DomainID: "assistant",
 	}, nil

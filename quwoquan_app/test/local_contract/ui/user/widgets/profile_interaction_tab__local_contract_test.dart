@@ -171,7 +171,7 @@ Widget _interactionTabActionsApp(
       if (chatRepository != null)
         activePersonaContextProvider.overrideWith(
           (ref) async => ActivePersonaContextViewData.fallback(
-            subAccountId: 'profile_owner_persona',
+            personaId: 'profile_owner_persona',
             ownerUserId: 'profile_owner',
             displayName: '主页测试分身',
             avatarUrl: '',
@@ -278,11 +278,11 @@ Widget _interactionTabRouterApp(
       ),
       GoRoute(
         path: AppRoutePaths.userProfilePathTemplate.replaceAll(
-          '{username}',
-          ':username',
+          '{userHandle}',
+          ':userHandle',
         ),
         builder: (context, state) =>
-            Text('用户页:${state.pathParameters['username'] ?? ''}'),
+            Text('用户页:${state.pathParameters['userHandle'] ?? ''}'),
       ),
       GoRoute(
         path: AppRoutePaths.workBrowserPathTemplate.replaceAll(
@@ -375,7 +375,7 @@ ProfileInteractionActivityViewData _interaction({
   required String primaryText,
   required List<String> filterKeys,
   String direction = 'received',
-  String displaySubAccountId = 'u_display',
+  String displayPersonaId = 'u_display',
   String displayName = '林清越',
   String displayAvatarUrl = '',
   String targetContentType = 'contract_target',
@@ -397,14 +397,14 @@ ProfileInteractionActivityViewData _interaction({
     commentKind: commentKind,
     commentId: commentId,
     parentCommentId: parentCommentId,
-    actorSubAccountId: 'u_actor',
+    actorPersonaId: 'u_actor',
     actorDisplayName: '互动用户',
     actorAvatarUrl: '',
-    targetSubAccountId: 'profile_owner',
+    targetPersonaId: 'profile_owner',
     targetContentId: 'post_$id',
     targetContentType: targetContentType,
     targetContentSummary: '旧字段不应作为主句',
-    displaySubAccountId: displaySubAccountId,
+    displayPersonaId: displayPersonaId,
     displayName: displayName,
     displayAvatarUrl: displayAvatarUrl,
     displayUserRouteId: AppLinkTemplates.userRouteId,
@@ -438,21 +438,21 @@ ContentProfileInteractionActivity _contentActivityFromView(
     commentId: view.commentId,
     parentCommentId: view.parentCommentId,
     viewerReaction: view.viewerReaction,
-    actorSubAccountId: view.actorSubAccountId,
+    actorPersonaId: view.actorPersonaId,
     actorDisplayName: view.actorDisplayName,
     actorAvatarUrl: view.actorAvatarUrl,
     actorAvatarVersion: view.actorAvatarVersion,
-    counterpartSubAccountId: view.counterpartSubAccountId,
+    counterpartPersonaId: view.counterpartPersonaId,
     counterpartDisplayName: view.counterpartDisplayName,
     counterpartAvatarUrl: view.counterpartAvatarUrl,
-    targetSubAccountId: view.targetSubAccountId,
+    targetPersonaId: view.targetPersonaId,
     targetContentId: view.targetContentId,
     targetContentType: view.targetContentType,
     targetContentSummary: view.targetContentSummary,
     targetKind: view.targetKind,
     targetAvailability: view.targetAvailability,
     targetReplyCount: view.targetReplyCount,
-    displaySubAccountId: view.displaySubAccountId,
+    displayPersonaId: view.displayPersonaId,
     displayName: view.displayName,
     displayAvatarUrl: view.displayAvatarUrl,
     displayAvatarVersion: view.displayAvatarVersion,
@@ -934,7 +934,7 @@ void main() {
               id: 'clickable',
               primaryText: '可点击主句',
               filterKeys: const <String>['likes'],
-              displaySubAccountId: 'u_target',
+              displayPersonaId: 'u_target',
               displayName: '可点击用户',
               previewMediaKind: 'text',
               previewText: '可点击预览',
@@ -1250,7 +1250,7 @@ void main() {
               id: 'like',
               primaryText: '赞了你的记录',
               filterKeys: const <String>['likes'],
-              displaySubAccountId: 'u_liker',
+              displayPersonaId: 'u_liker',
               previewMediaKind: 'image',
               previewImageUrl: 'media/content/test/image.jpg',
             ),
@@ -1299,7 +1299,7 @@ void main() {
               id: 'like',
               primaryText: '赞了你的记录',
               filterKeys: const <String>['likes'],
-              displaySubAccountId: 'u_liker',
+              displayPersonaId: 'u_liker',
               previewMediaKind: 'image',
               previewImageUrl: 'media/content/test/image.jpg',
             ),
@@ -1317,10 +1317,7 @@ void main() {
     await tester.tap(find.byKey(thankKey));
     await _pumpFrames(tester);
 
-    expect(
-      find.text(ProfileText.profileInteractionThanked),
-      findsOneWidget,
-    );
+    expect(find.text(ProfileText.profileInteractionThanked), findsOneWidget);
     expect(
       find.descendant(
         of: find.byKey(thankKey),

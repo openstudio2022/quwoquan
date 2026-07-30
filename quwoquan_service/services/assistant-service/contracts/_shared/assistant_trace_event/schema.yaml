@@ -14,6 +14,7 @@ fields:
   - { name: eventType, type: string, required: true }
   - { name: seq, type: int, required: true }
   - { name: status, type: string, default: '' }
+  - { name: visibility, type: enum, enum_ref: TraceVisibility, default: user_visible }
   - { name: summary, type: string, default: '' }
   - { name: payload, type: map, default: {} }
   - { name: runtimeFailure, type: object, ref: RuntimeFailureWire }

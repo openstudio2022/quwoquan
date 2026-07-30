@@ -313,8 +313,9 @@ func renderAppRoutePathsDart(routes []appRouteDef) string {
 		}
 		identifier := route.ID
 		params := extractPathParams(route.Path)
+		queryParams := route.queryBindingNames()
 		segment := routeSegment(route.Path)
-		if len(params) == 0 && len(route.QueryParams) == 0 {
+		if len(params) == 0 && len(queryParams) == 0 {
 			b.WriteString(fmt.Sprintf("  static const String %s = '%s';\n", identifier, route.Path))
 		} else {
 			b.WriteString(fmt.Sprintf("  static const String %sPathTemplate = '%s';\n", identifier, route.Path))
@@ -323,7 +324,7 @@ func renderAppRoutePathsDart(routes []appRouteDef) string {
 			for _, param := range params {
 				args = append(args, fmt.Sprintf("required String %s", param))
 			}
-			for _, query := range route.QueryParams {
+			for _, query := range queryParams {
 				args = append(args, fmt.Sprintf("String? %s", query))
 			}
 			b.WriteString(strings.Join(args, ", "))
@@ -333,7 +334,7 @@ func renderAppRoutePathsDart(routes []appRouteDef) string {
 				b.WriteString(fmt.Sprintf("      '%s': %s,\n", param, param))
 			}
 			b.WriteString("    }, <String, String?>{\n")
-			for _, query := range route.QueryParams {
+			for _, query := range queryParams {
 				b.WriteString(fmt.Sprintf("      '%s': %s,\n", query, query))
 			}
 			b.WriteString("    });\n")

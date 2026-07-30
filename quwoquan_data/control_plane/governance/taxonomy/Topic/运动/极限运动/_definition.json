@@ -2,6 +2,7 @@
   "label": "极限运动",
   "labelEn": "Extreme Sports",
   "description": "高风险与技巧型极限项目",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

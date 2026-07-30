@@ -14,7 +14,6 @@ import (
 	"unicode/utf8"
 
 	"quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
-	visitapplication "quwoquan_service/services/product-ops-service/internal/product_ops/visit_record/application"
 )
 
 var (
@@ -22,11 +21,6 @@ var (
 	ErrBatchInProgress   = errors.New("event batch is still in progress")
 	ErrInvalidEventQuery = errors.New("invalid event query")
 )
-
-type VisitInput = visitapplication.VisitInput
-type VisitRecord = visitapplication.VisitRecord
-type VisitStatsQuery = visitapplication.VisitStatsQuery
-type VisitStats = visitapplication.VisitStats
 
 // EventRecordInput 是 /ops/events 唯一 wire shape。它直接由 event_catalog.yaml
 // 生成，保证严格 JSON 解码、验证和 SLS 投影不会遗漏已登记的扩展字段。
@@ -154,8 +148,6 @@ type StartupDiagnosticRecord struct {
 	Sequence, PhaseDurationMS, ElapsedMS                                                  int
 }
 
-type VisitTelemetryStore = visitapplication.Store
-
 type EventLogStore interface {
 	PutEventBatch(context.Context, string, []EventRecord) error
 	HasEventBatch(context.Context, string, int) (bool, error)
@@ -194,67 +186,48 @@ type PageExperienceStat struct {
 	RuntimeErrors int64   `json:"runtimeErrors"`
 }
 
-type EventBatchLedger = visitapplication.Ledger
-type BatchLedgerState = visitapplication.LedgerState
+type BatchLedgerState string
+
+type EventBatchLedger interface {
+	Begin(context.Context, string, int) (BatchLedgerState, error)
+	MarkAccepted(context.Context, string, int) error
+}
 
 const (
-	BatchLedgerNew      = visitapplication.LedgerNew
-	BatchLedgerPending  = visitapplication.LedgerPending
-	BatchLedgerAccepted = visitapplication.LedgerAccepted
+	BatchLedgerNew      BatchLedgerState = "new"
+	BatchLedgerPending  BatchLedgerState = "pending"
+	BatchLedgerAccepted BatchLedgerState = "accepted"
 )
 
 type TelemetryService struct {
-	visits        VisitTelemetryStore
-	events        EventLogStore
-	ledger        EventBatchLedger
-	visitsUseCase *visitapplication.Service
-	rtcMediaQoe   RtcMediaQoeSummaryReader
-	now           func() time.Time
+	events      EventLogStore
+	ledger      EventBatchLedger
+	rtcMediaQoe RtcMediaQoeSummaryReader
+	now         func() time.Time
 }
 
 func NewTelemetryService(
-	visits VisitTelemetryStore,
 	events EventLogStore,
 	ledger EventBatchLedger,
 ) *TelemetryService {
-	return NewTelemetryServiceWithStores(visits, events, ledger)
+	return NewTelemetryServiceWithStores(events, ledger)
 }
 
-func NewTelemetryServiceWithStores(visits VisitTelemetryStore, events EventLogStore, ledger EventBatchLedger) *TelemetryService {
-	return &TelemetryService{visits: visits, events: events, ledger: ledger, visitsUseCase: visitapplication.NewService(visits, ledger), now: time.Now}
+func NewTelemetryServiceWithStores(
+	events EventLogStore,
+	ledger EventBatchLedger,
+) *TelemetryService {
+	return &TelemetryService{events: events, ledger: ledger, now: time.Now}
 }
 
 func NewTelemetryServiceWithStoresAndRtcMediaQoeReader(
-	visits VisitTelemetryStore,
 	events EventLogStore,
 	ledger EventBatchLedger,
 	rtcMediaQoe RtcMediaQoeSummaryReader,
 ) *TelemetryService {
-	service := NewTelemetryServiceWithStores(visits, events, ledger)
+	service := NewTelemetryServiceWithStores(events, ledger)
 	service.rtcMediaQoe = rtcMediaQoe
 	return service
-}
-
-// VisitCommandResult 携带访问计数状态与幂等重放标志。
-type VisitCommandResult = visitapplication.CommandResult
-
-// ErrVisitIdempotencyKeyRequired：RecordVisit 声明 idempotency: required，
-// 缺 Idempotency-Key 属调用方契约违规。
-var ErrVisitIdempotencyKeyRequired = visitapplication.ErrIdempotencyKeyRequired
-
-// RecordVisit 推进访问计数状态。idempotencyKey 是调用方稳定的业务重放身份，
-// 经两阶段台账（pending→accepted，复用 telemetry batch ledger，count 恒为 1）
-// 保证相同 actor + key 的重放回读当前状态而不重复累加。
-func (s *TelemetryService) RecordVisit(
-	ctx context.Context,
-	input VisitInput,
-	idempotencyKey string,
-) (VisitCommandResult, error) {
-	return s.visitsUseCase.RecordVisit(ctx, input, idempotencyKey)
-}
-
-func (s *TelemetryService) GetVisitStats(ctx context.Context, query VisitStatsQuery) (VisitStats, error) {
-	return s.visitsUseCase.GetVisitStats(ctx, query)
 }
 
 func (s *TelemetryService) ReportEventBatch(ctx context.Context, batchKey string, inputs []EventRecordInput) (EventBatchAck, error) {

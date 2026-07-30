@@ -13,9 +13,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	generated "quwoquan_service/services/notification-service/generated/notification_delivery/notification"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification/domain"
-	generated "quwoquan_service/services/notification-service/generated/notification_delivery/notification"
 )
 
 const appMessageRetention = 90 * 24 * time.Hour
@@ -141,7 +141,10 @@ func (s *MongoAppMessageStore) ListInbox(
 	ctx context.Context,
 	query application.AppMessageInboxQuery,
 ) (notification.AppMessageInboxSlice, error) {
-	filter := bson.M{"userId": query.UserID}
+	filter := bson.M{
+		"userId":            query.UserID,
+		"accountRestricted": bson.M{"$ne": true},
+	}
 	if query.MessageType != "" {
 		filter["messageType"] = query.MessageType
 	}

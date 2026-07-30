@@ -1,0 +1,12 @@
+{
+  "label": "德累斯顿",
+  "labelEn": "Dresden",
+  "description": "易北河畔巴洛克名城",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

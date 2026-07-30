@@ -1,5 +1,5 @@
 read_model: AssistantLearningProjection
-description: 单一 AssistantLearningFact 流按 appendSequence 构建的 owner-scoped 脱敏聚合；带 definition version、receipt、watermark 和 CAS revision，可清空后确定性重建。
+description: 单一 AssistantLearningFact 流按 appendSequence 构建的 owner-scoped 脱敏聚合；canonical definition 以严格 SHA-256 digest 标识，generationId 仅标识一次原子重建，带 receipt、watermark 和 CAS revision，可从事实确定性重建。
 storage_backend: mongodb
 collection: rm_assistant_learning_projection
 source_entities:
@@ -15,7 +15,7 @@ fields:
   type: string
 - name: personaId
   type: string
-- name: definitionVersion
+- name: definitionDigest
   type: string
 - name: generationId
   type: string

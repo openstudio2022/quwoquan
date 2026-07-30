@@ -4,6 +4,8 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   static const Duration _staleRestoreRefreshThreshold = Duration(hours: 12);
   static const Duration _foregroundAuthCheckThreshold = Duration(hours: 24);
   static const Duration _startupRestoreReadBudget = Duration(seconds: 2);
+  static const Duration _proactiveAccessTokenRefreshLead = Duration(minutes: 2);
+  static const Duration _proactiveRefreshRetryCooldown = Duration(seconds: 30);
 
   bool _restoreStarted = false;
   Future<void>? _restoreInFlight;
@@ -12,6 +14,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
   void Function()? _cancelPendingStartupRestore;
   Object? _lastTrustedSessionFailure;
   StackTrace? _lastTrustedSessionFailureStack;
+  DateTime? _lastProactiveRefreshAttemptAt;
   int _explicitLoginGeneration = 0;
   Future<void> _sessionMutationTail = Future<void>.value();
 
@@ -89,7 +92,11 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       await restore;
     }
     if (state.hasTrustedSession) {
-      return state.accessToken;
+      await _refreshAccessTokenBeforeExpiryIfNeeded();
+      final token = state.accessToken.trim();
+      if (state.hasTrustedSession && token.isNotEmpty) {
+        return token;
+      }
     }
     final previousFailure = _takeTrustedSessionFailure();
     if (previousFailure != null) {
@@ -198,7 +205,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     if (result.accessToken.trim().isEmpty ||
         result.refreshToken.trim().isEmpty ||
         result.ownerId.trim().isEmpty ||
-        (result.activeSub?.subAccountId.trim() ?? '').isEmpty) {
+        (result.activePersona?.personaId.trim() ?? '').isEmpty) {
       throw StateError('anonymous login returned an incomplete session grant');
     }
   }
@@ -332,16 +339,15 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       accessToken: accessToken,
       refreshToken: refreshToken,
       ownerId: current.ownerId.isNotEmpty ? current.ownerId : stored.ownerId,
-      activeSubAccountId: current.activeSubAccountId.isNotEmpty
-          ? current.activeSubAccountId
-          : stored.activeSubAccountId,
+      activePersonaId: current.activePersonaId.isNotEmpty
+          ? current.activePersonaId
+          : stored.activePersonaId,
       accountState: current.accountState.isNotEmpty
           ? current.accountState
           : stored.accountState,
       identityOrigin: current.identityOrigin.isNotEmpty
           ? current.identityOrigin
           : stored.identityOrigin,
-      trustedGuestSession: current.isAnonymousSession,
       installId: stored.installId,
       rememberedLoginMethod: stored.rememberedLoginMethod,
       rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
@@ -359,18 +365,33 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     if (!current.hasTrustedSession || current.refreshToken.trim().isEmpty) {
       return false;
     }
-    if (!force && _refreshInFlight != null) {
-      return _awaitRefresh(_refreshInFlight!, abortTrigger: abortTrigger);
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      // refresh token 每次换发都会 rotation。即使调用方要求 force，也必须加入
+      // 已在执行的请求，禁止同一旧 token 并发换发导致 lineage 被误判为重放。
+      return _awaitRefresh(inFlight, abortTrigger: abortTrigger);
     }
-    final future = _performRefresh(abortTrigger: abortTrigger);
+    // A caller may stop waiting, but it must never cancel or retire the shared
+    // refresh itself: the refresh token rotates once server-side. Clearing the
+    // singleflight slot before that request settles would let a later caller
+    // replay the old token concurrently.
+    final future = _performRefresh();
     _refreshInFlight = future;
-    try {
-      return await _awaitRefresh(future, abortTrigger: abortTrigger);
-    } finally {
-      if (identical(_refreshInFlight, future)) {
-        _refreshInFlight = null;
-      }
-    }
+    unawaited(
+      future.then<void>(
+        (_) {
+          if (identical(_refreshInFlight, future)) {
+            _refreshInFlight = null;
+          }
+        },
+        onError: (Object _, StackTrace _) {
+          if (identical(_refreshInFlight, future)) {
+            _refreshInFlight = null;
+          }
+        },
+      ),
+    );
+    return _awaitRefresh(future, abortTrigger: abortTrigger);
   }
 
   Future<bool> refreshIfSessionLooksStale() async {
@@ -379,6 +400,35 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       return false;
     }
     return refreshSessionIfNeeded(force: true);
+  }
+
+  Future<void> _refreshAccessTokenBeforeExpiryIfNeeded() async {
+    final current = state;
+    if (!current.hasTrustedSession || current.refreshToken.trim().isEmpty) {
+      return;
+    }
+    final expiry = _accessTokenExpiryForScheduling(current.accessToken);
+    if (expiry == null) {
+      // 无法解析的 token 不用于客户端授权或过期推断；服务端仍是有效性的唯一裁判。
+      return;
+    }
+    final now = DateTime.now().toUtc();
+    if (expiry.isAfter(now.add(_proactiveAccessTokenRefreshLead))) {
+      return;
+    }
+
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final lastAttempt = _lastProactiveRefreshAttemptAt;
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _proactiveRefreshRetryCooldown) {
+      return;
+    }
+    _lastProactiveRefreshAttemptAt = now;
+    await refreshSessionIfNeeded(force: true);
   }
 
   Future<void> markForegroundAuthCheck() async {
@@ -453,9 +503,6 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
-  /// 兼容旧调用：等价于彻底退出。新代码应显式使用 softLogout / hardLogout。
-  Future<void> clearForLogout() => hardLogout();
-
   Future<void> clearForExpiredSession() async {
     await _store.clearSession(manualLogout: false);
     final stored = await _store.read();
@@ -496,6 +543,103 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
+  /// Applies a canonical account-state failure observed on a generated
+  /// Gateway request to the local session.
+  ///
+  /// The request's bearer is mandatory: an old request may complete after an
+  /// approved restore and a new login, and that late response must not clear
+  /// the newer session. Serialization with login/session writes closes the
+  /// remaining race between the token comparison and secure-storage cleanup.
+  Future<void> handleAuthoritativeSessionFailure(
+    CloudException failure, {
+    required String presentedAccessToken,
+  }) {
+    return _runSessionMutation<void>(() async {
+      final requestToken = presentedAccessToken.trim();
+      final current = state;
+      if (requestToken.isEmpty || current.accessToken.trim() != requestToken) {
+        return;
+      }
+      final suspended = failure.code == UserErrorCode.accountSuspended.code;
+      final closed = failure.code == UserErrorCode.accountDeleted.code;
+      if (!suspended && !closed) {
+        return;
+      }
+
+      if (closed) {
+        await _saveTerminalCleanupReceipt(current);
+      }
+      StoredAuthSession? stored;
+      try {
+        await _store.clearSession(manualLogout: closed);
+        stored = await _store.read();
+      } catch (error, stackTrace) {
+        // The in-memory authority must still fail closed. A later launch will
+        // present the stale bearer to the server again and retry canonical
+        // cleanup; no raw failure reaches the restricted surface.
+        developer.log(
+          'authoritative account-state session cleanup failed',
+          name: 'AuthSessionController',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      if (!ref.mounted || state.accessToken.trim() != requestToken) {
+        return;
+      }
+      final safeInstallId = stored?.installId ?? current.installId;
+      _syncDeviceActorId(safeInstallId);
+      state = AuthSessionState(
+        status: AuthSessionStatus.guest,
+        promptReason: suspended
+            ? AuthPromptReason.accountSuspended
+            : AuthPromptReason.accountClosed,
+        installId: safeInstallId,
+        rememberedLoginMethod: suspended
+            ? (stored?.rememberedLoginMethod ?? current.rememberedLoginMethod)
+            : AuthRememberedLoginMethod.unknown,
+        rememberedLoginMaskedIdentifier: suspended
+            ? (stored?.rememberedLoginMaskedIdentifier ??
+                  current.rememberedLoginMaskedIdentifier)
+            : '',
+        rememberedDisplayName: suspended
+            ? (stored?.rememberedDisplayName ?? current.rememberedDisplayName)
+            : '',
+        rememberedAvatarUrl: suspended
+            ? (stored?.rememberedAvatarUrl ?? current.rememberedAvatarUrl)
+            : '',
+        rememberedNicknameCustomized: suspended
+            ? (stored?.rememberedNicknameCustomized ??
+                  current.rememberedNicknameCustomized)
+            : false,
+        errorMessage: runtimeErrorDisplayMessage(failure),
+      );
+    });
+  }
+
+  /// Acknowledges the safe account-restriction explanation before routing to
+  /// the public home. This only clears the presentation signal; all bearer and
+  /// refresh credentials remain physically cleared.
+  void acknowledgeAccountRestrictionNotice() {
+    if (state.promptReason != AuthPromptReason.accountSuspended) {
+      return;
+    }
+    state = state.copyWith(promptReason: () => null, errorMessage: () => null);
+    unawaited(
+      _store.markLaunchPromptDismissed().catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        developer.log(
+          'account restriction notice acknowledgement persistence failed',
+          name: 'AuthSessionController',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }),
+    );
+  }
+
   /// 服务端确认账号 closed 时清除全部凭据，并保留终态信号供本地隐私清理恢复器消费。
   Future<void> clearForClosedAccount({required String errorMessage}) async {
     await _store.clearSession(manualLogout: true);
@@ -511,29 +655,42 @@ class AuthSessionController extends Notifier<AuthSessionState> {
     );
   }
 
-  Future<void> updateActiveSubAccount(String subAccountId) async {
-    await _store.updateActiveSubAccount(subAccountId);
-    state = state.copyWith(activeSubAccountId: subAccountId.trim());
+  Future<void> updateActivePersona(String personaId) async {
+    await _store.updateActivePersona(personaId);
+    state = state.copyWith(activePersonaId: personaId.trim());
   }
 
-  Future<bool> _performRefresh({Future<void>? abortTrigger}) async {
+  Future<bool> _performRefresh() async {
     final current = state;
     final refreshToken = current.refreshToken.trim();
     if (!current.hasTrustedSession || refreshToken.isEmpty) {
       return false;
     }
     try {
-      final result = await _awaitRefreshResult(
-        ref
-            .read(accountSessionLifecycleCommandWriterProvider)
-            .refreshToken(RefreshTokenCommand(refreshToken: refreshToken)),
-        abortTrigger: abortTrigger,
-      );
+      final result = await ref
+          .read(accountSessionLifecycleCommandWriterProvider)
+          .refreshToken(RefreshTokenCommand(refreshToken: refreshToken));
+      if (!ref.mounted ||
+          !state.hasTrustedSession ||
+          state.refreshToken.trim() != refreshToken ||
+          state.ownerId != current.ownerId) {
+        // Logout, account replacement, or another authoritative session
+        // mutation won while the network request was in flight. Its state is
+        // newer than this grant, so the late result must not resurrect it.
+        return false;
+      }
       await applyRefreshGrant(result);
       return true;
     } catch (e) {
       if (e is http.RequestAbortedException ||
           e is CloudOperationCancelledException) {
+        return false;
+      }
+      if (!ref.mounted ||
+          state.refreshToken.trim() != refreshToken ||
+          state.ownerId != current.ownerId) {
+        // A newer login/logout/session mutation already won. A delayed error
+        // from the old refresh lineage cannot demote the newer session.
         return false;
       }
       if (_isAccountDeletedFailure(e)) {
@@ -566,21 +723,6 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       state = state.copyWith(errorMessage: () => runtimeErrorDisplayMessage(e));
       return false;
     }
-  }
-
-  Future<TokenRefreshGrant> _awaitRefreshResult(
-    Future<TokenRefreshGrant> refresh, {
-    Future<void>? abortTrigger,
-  }) {
-    if (abortTrigger == null) {
-      return refresh;
-    }
-    return Future.any<TokenRefreshGrant>(<Future<TokenRefreshGrant>>[
-      refresh,
-      abortTrigger.then<TokenRefreshGrant>(
-        (_) => throw const CloudOperationCancelledException(),
-      ),
-    ]);
   }
 
   Future<bool> _awaitRefresh(
@@ -629,7 +771,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
           .save(
             TerminalAccountCleanupReceipt(
               accountId: session.ownerId,
-              personaId: session.activeSubAccountId,
+              personaId: session.activePersonaId,
               installId: session.installId,
             ),
           );
@@ -656,7 +798,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -678,10 +820,9 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
-      trustedGuestSession: stored.isAnonymousSession,
       installId: stored.installId,
       rememberedLoginMethod: stored.rememberedLoginMethod,
       rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
@@ -788,4 +929,36 @@ class AuthSessionController extends Notifier<AuthSessionState> {
 
 final class _AuthSessionRestoreCancelled implements Exception {
   const _AuthSessionRestoreCancelled();
+}
+
+/// 只读取 JWT `exp` 作为主动刷新调度提示；不验证签名，也绝不据此授予权限。
+DateTime? _accessTokenExpiryForScheduling(String token) {
+  try {
+    final segments = token.trim().split('.');
+    if (segments.length != 3 || segments[1].isEmpty) {
+      return null;
+    }
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(segments[1]))),
+    );
+    if (payload is! Map<String, dynamic>) {
+      return null;
+    }
+    final rawExpiry = payload['exp'];
+    final expirySeconds = switch (rawExpiry) {
+      int value => value,
+      num value => value.toInt(),
+      String value => int.tryParse(value),
+      _ => null,
+    };
+    if (expirySeconds == null || expirySeconds <= 0) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(
+      expirySeconds * Duration.millisecondsPerSecond,
+      isUtc: true,
+    );
+  } catch (_) {
+    return null;
+  }
 }

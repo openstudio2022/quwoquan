@@ -1,0 +1,15 @@
+{
+  "label": "莫兰迪灰调",
+  "labelEn": "Morandi Muted",
+  "description": "整体降饱和的灰调低对比配色",
+  "axisRole": "contentFormat",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

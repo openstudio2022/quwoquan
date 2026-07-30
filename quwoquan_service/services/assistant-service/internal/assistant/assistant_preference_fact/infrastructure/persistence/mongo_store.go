@@ -81,11 +81,13 @@ func (s *MongoStore) upsert(
 	}
 	update := bson.M{
 		"$set": bson.M{
-			"value":          strings.TrimSpace(input.Value),
-			"sourceType":     input.SourceType,
-			"status":         preferencemodel.StatusActive,
-			"conversationId": strings.TrimSpace(input.ConversationID),
-			"updatedAt":      input.Now.UTC(),
+			"value":                strings.TrimSpace(input.Value),
+			"sourceType":           input.SourceType,
+			"sourceConversationId": strings.TrimSpace(input.SourceConversationID),
+			"confirmedAt":          input.ConfirmedAt,
+			"status":               preferencemodel.StatusActive,
+			"conversationId":       strings.TrimSpace(input.ConversationID),
+			"updatedAt":            input.Now.UTC(),
 		},
 		"$setOnInsert": bson.M{
 			"_id":       strings.TrimSpace(input.PreferenceID),

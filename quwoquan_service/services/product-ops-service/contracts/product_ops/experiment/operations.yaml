@@ -29,9 +29,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
-  - OPS.SYSTEM.storage_read_failed
+  - OPS.SYSTEM.experiment_storage_read_failed
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL
@@ -56,20 +54,24 @@ api_routes:
     method: listExperiments
     reader: ExperimentCatalogReader
     slice: ExperimentCatalogSlice
-  description: 读取实验聚合目录和当前策略版本统计。
+  description: 读取实验聚合目录和当前 experimentRevision 统计。
 - method: POST
   path: /control-plane/product/experiments/{experimentId}:rollout
   operation: UpdateExperimentRollout
   actor: account
   security:
     auth_mode: required
-  headers:
-  - If-Match
-  - Idempotency-Key
   concurrency:
     version_precondition: if_match
   request_entity: UpdateExperimentRolloutRequest
   request_body_kind: object
+  request_bindings:
+    path:
+    - name: experimentId
+      field: experimentId
+    header:
+    - name: If-Match
+      field: expectedVersion
   response_entity: UpdateExperimentRolloutResult
   authorization:
     principal: operator
@@ -83,14 +85,12 @@ api_routes:
     max_attempts: 2
     idempotency: required
   error_codes:
-  - OPS.USER.unauthorized
-  - OPS.USER.forbidden
-  - OPS.USER.invalid_argument
+  - OPS.USER.experiment_invalid_argument
   - OPS.USER.experiment_not_found
   - OPS.USER.version_conflict
   - OPS.USER.idempotency_conflict
-  - OPS.SYSTEM.storage_read_failed
-  - OPS.SYSTEM.storage_write_failed
+  - OPS.SYSTEM.experiment_storage_read_failed
+  - OPS.SYSTEM.experiment_storage_write_failed
   privacy:
     request_classification: INTERNAL
     response_classification: INTERNAL

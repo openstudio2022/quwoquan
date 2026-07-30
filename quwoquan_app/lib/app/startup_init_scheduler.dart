@@ -35,16 +35,32 @@ final class StartupInitScheduler {
   bool _firstFrameHandled = false;
   bool _welcomeWindowStarted = false;
   bool _authInitializationStarted = false;
+  bool _authNetworkPrerequisiteSatisfied = false;
+  bool _welcomeCompleted = false;
   bool _shellServicesStarted = false;
   bool _disposed = false;
   Timer? _startupPrerequisiteTimer;
   Future<void>? _postFirstFrameTask;
   Future<void>? _authNetworkPrerequisite;
+  void Function()? _stopRealtimeConnection;
 
   void dispose() {
     _disposed = true;
     _startupPrerequisiteTimer?.cancel();
     _startupPrerequisiteTimer = null;
+    final stopRealtimeConnection = _stopRealtimeConnection;
+    _stopRealtimeConnection = null;
+    if (stopRealtimeConnection != null) {
+      try {
+        stopRealtimeConnection();
+      } catch (error, stack) {
+        logException(
+          source: 'startup_realtime_dispose',
+          exceptionText: error.toString(),
+          stackText: stack.toString(),
+        );
+      }
+    }
   }
 
   void onFirstFrame({
@@ -102,10 +118,10 @@ final class StartupInitScheduler {
 
   /// 欢迎动效结束、进入主壳前启动：实时连接与业务队列预热。
   void onWelcomeCompleted() {
-    if (_disposed || _shellServicesStarted) {
+    if (_disposed || _welcomeCompleted) {
       return;
     }
-    _shellServicesStarted = true;
+    _welcomeCompleted = true;
     AppStartupRuntime.instance.markWelcomeCompleted();
     AppStartupRuntime.instance.bindProductTelemetry(
       ref.read(appTelemetryReporterProvider),
@@ -113,8 +129,25 @@ final class StartupInitScheduler {
     _bestEffort('startup_runtime_diagnostics', () {
       ref.read(runtimeDiagnosticsProvider).install();
     });
+    _startShellServicesIfReady();
+  }
+
+  /// Remote 服务必须与认证恢复共用同一个 HTTPS trust 前置门。
+  ///
+  /// 安全 Shell 和本地诊断可以先交付；若 debug trust 前置任务仍 pending、失败或
+  /// 超时，实时连接、业务队列和预热都不得绕过它触发认证网络访问。
+  void _startShellServicesIfReady() {
+    if (_disposed ||
+        _shellServicesStarted ||
+        !_welcomeCompleted ||
+        !_authNetworkPrerequisiteSatisfied) {
+      return;
+    }
+    _shellServicesStarted = true;
     _bestEffort('startup_realtime_foreground', () {
-      ref.read(realtimeConnectionManagerProvider.notifier).onAppForeground();
+      final realtime = ref.read(realtimeConnectionManagerProvider.notifier);
+      realtime.onAppForeground();
+      _stopRealtimeConnection = realtime.onAppBackground;
     });
     _bestEffort('startup_post_publication_queue', () {
       ref.read(postPublicationIntentQueueProvider);
@@ -147,7 +180,9 @@ final class StartupInitScheduler {
     _authInitializationStarted = true;
     final prerequisites = _authNetworkPrerequisite;
     if (prerequisites == null) {
+      _authNetworkPrerequisiteSatisfied = true;
       _startAuthInitialization();
+      _startShellServicesIfReady();
       return;
     }
     _startupPrerequisiteTimer?.cancel();
@@ -168,7 +203,9 @@ final class StartupInitScheduler {
       prerequisites.then(
         (_) {
           _finishStartupPrerequisiteObservation();
+          _authNetworkPrerequisiteSatisfied = true;
           _startAuthInitialization();
+          _startShellServicesIfReady();
         },
         onError: (Object error, StackTrace stack) {
           _finishStartupPrerequisiteObservation();

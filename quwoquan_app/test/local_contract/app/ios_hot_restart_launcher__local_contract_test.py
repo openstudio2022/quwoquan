@@ -17,7 +17,7 @@ from verify_ios_hot_restart import (
 
 
 PREFLIGHT = APP_DIR / "scripts/device/verify_flutter_run_defines.py"
-LAUNCHER = APP_DIR / "scripts/device/start_app_instance.sh"
+LAUNCHER = APP_DIR / "run.sh"
 HOT_RESTART = APP_DIR / "scripts/device/verify_ios_hot_restart.py"
 
 
@@ -65,23 +65,22 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2)
         self.assertIn("before flutter build/run", result.stderr)
-        self.assertIn("start_app_instance.sh", result.stderr)
+        self.assertIn("run.sh", result.stderr)
 
     def test_canonical_launcher_preflights_and_marks_compile_time_launch_mode(self) -> None:
         source = LAUNCHER.read_text(encoding="utf-8")
         self.assertIn("verify_flutter_run_defines.py", source)
         self.assertIn("--launch-mode canonical_launcher", source)
         self.assertIn("--dart-define", source)
-        self.assertIn('export QWQ_APP_LAUNCH_MODE="canonical_launcher"', source)
-        self.assertIn('os.open("/dev/tty", os.O_RDWR)', source)
-        self.assertIn(
-            "QWQ_APP_INSTANCE_PRESERVE_TTY",
-            HOT_RESTART.read_text(encoding="utf-8"),
-        )
+        self.assertIn('export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"', source)
+        self.assertNotIn('stackctl.py" up', source)
+        self.assertNotIn('stackctl.py" health', source)
+        self.assertIn('stackctl.py" status', source)
+        self.assertIn("diagnostic only", source)
 
     def test_hot_restart_smoke_uses_canonical_launcher_and_one_R_command(self) -> None:
         source = HOT_RESTART.read_text(encoding="utf-8")
-        self.assertIn("start_app_instance.sh", source)
+        self.assertIn('APP_DIR / "run.sh"', source)
         self.assertIn('os.write(master_fd, b"R")', source)
         self.assertIn("extract_dart_startup_attempts", source)
         self.assertIn("nativeDidFinishLaunchingCount", source)

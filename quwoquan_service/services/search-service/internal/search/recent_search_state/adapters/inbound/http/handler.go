@@ -12,7 +12,7 @@ import (
 )
 
 // RecentSearchHandler 承载 RecentSearchState 的 4 条 canonical 路由。
-// actor 为网关注入的 persona（X-Client-Sub-Account-Id / X-Client-User-Id），
+// actor 为网关注入的 persona（X-Client-Persona-Id / X-Client-User-Id），
 // auth_mode required：缺失身份返回结构化 401。
 type RecentSearchHandler struct {
 	facade   *recentsearch.Facade
@@ -175,10 +175,10 @@ func (h *RecentSearchHandler) observe(operation, status string, started time.Tim
 	})
 }
 
-// requiredPersona 提取网关注入的 persona 身份；sub-account 优先（persona 语义），
+// requiredPersona 提取网关注入的 persona 身份；persona 优先（persona 语义），
 // 回退 user id。缺失时按 auth_mode=required 返回结构化 401。
 func requiredPersona(w http.ResponseWriter, r *http.Request, requestID string) (string, bool) {
-	personaID := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
+	personaID := strings.TrimSpace(r.Header.Get("X-Client-Persona-Id"))
 	if personaID == "" {
 		personaID = strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
 	}

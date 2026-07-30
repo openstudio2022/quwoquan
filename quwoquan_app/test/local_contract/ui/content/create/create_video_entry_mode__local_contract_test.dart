@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../support/cloud_services/content_facet_overrides.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/fakes/test_auth_facets.dart';
 
 void main() {
   setUp(() {
@@ -105,6 +107,7 @@ Widget _buildHarness({
   CreateMediaPickerLauncher? mediaPickerLauncher,
   CreateCameraPageBuilder? cameraPageBuilder,
 }) {
+  final authFacets = TestAuthFacets();
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
@@ -112,6 +115,17 @@ Widget _buildHarness({
       ...mockContentFacetOverrides(MockContentRepository()),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      accountSessionLifecycleCommandWriterProvider.overrideWithValue(
+        authFacets,
+      ),
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          personaId: 'user_001',
+          ownerUserId: 'user_001',
+          displayName: '测试用户',
+          avatarUrl: '',
+        ),
+      ),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -145,7 +159,7 @@ class _AuthedSessionStore implements AuthSessionStore {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -185,7 +199,7 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> softLogout() async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 }
 
 class _AuthWarmup extends ConsumerWidget {

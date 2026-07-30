@@ -10,7 +10,6 @@ import http.client
 import json
 import os
 import socket
-import ssl
 import sys
 import time
 import traceback
@@ -70,13 +69,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--env",
-        default=os.environ.get("API_CONTRACT_ENV")
-        or os.environ.get("APP_RUNTIME_ENV")
-        or "gamma",
+        choices=("alpha", "beta", "gamma", "prod"),
+        required=True,
     )
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("GAMMA_BASE_URL", "http://127.0.0.1:18080"),
+        required=True,
     )
     parser.add_argument(
         "--test-auth-token",
@@ -199,9 +197,8 @@ def request_json(
         ),
         method=method,
     )
-    ctx = ssl._create_unverified_context()
     try:
-        with urllib.request.urlopen(req, timeout=timeout_seconds, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
             payload = resp.read()
             content_type = str(resp.headers.get("Content-Type", "")).lower()
             if payload and "json" not in content_type:
@@ -268,9 +265,8 @@ def healthz_ok(base_url: str, test_auth_token: str, timeout_seconds: int) -> boo
         },
         method="GET",
     )
-    ctx = ssl._create_unverified_context()
     try:
-        with urllib.request.urlopen(req, timeout=timeout_seconds, context=ctx) as resp:
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
             return 200 <= int(resp.status) < 300
     except Exception:  # noqa: BLE001
         return False
@@ -292,7 +288,6 @@ def open_http_connection(
             host,
             port,
             timeout=timeout_seconds,
-            context=ssl._create_unverified_context(),
         )
     else:
         connection = http.client.HTTPConnection(host, port, timeout=timeout_seconds)

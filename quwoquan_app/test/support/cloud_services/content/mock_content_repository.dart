@@ -231,8 +231,8 @@ class MockContentRepository
       items: pageItems,
       nextCursor: nextCursor,
       feedRequestId: resolvedFeedRequestId,
-      rankingVersion: 'rec-mock',
-      reasonVersion: 'reason-mock',
+      policyDigest:
+          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       // N2-4 objectCards 同构：首刷（无 cursor）+ 频道推荐主链路注入实体主页卡，
       // 形状与云侧 resolveObjectCards（everyN 锚点 + entity_homepage）一致，
       // 使 Widget 层混排/埋点契约可在 local_contract 验证。
@@ -324,7 +324,15 @@ class MockContentRepository
   }
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    throwIfCloudOperationInterrupted(
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
     if (_deletedPostIds.contains(postId)) {
       _throwMockContentDeleted(postId);
     }
@@ -401,29 +409,6 @@ class MockContentRepository
       );
     }
     _deletedPostIds.add(postId);
-  }
-
-  @override
-  Future<PostBaseDto> updatePostSettings({
-    required String postId,
-    required UpdatePostSettingsRequestWire body,
-  }) async {
-    return _mockPostDto(postId, payloadMerge: body.toWire());
-  }
-
-  @override
-  Future<PostBaseDto> promotePostToWork({
-    required String postId,
-    required PromotePostToWorkRequestWire body,
-  }) async {
-    return _mockPostDto(
-      postId,
-      payloadMerge: {
-        ...body.toWire(),
-        'identity': 'work',
-        'status': 'published',
-      },
-    );
   }
 
   @override
@@ -543,7 +528,7 @@ extension _MockContentPosts on MockContentRepository {
           'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
       'createdAt': '2025-12-20T10:00:00Z',
     };
-    if (suffix.startsWith('v')) {
+    if (suffix == 'video') {
       return _mockPostWire(
         trimmed,
         payloadMerge: <String, dynamic>{
@@ -551,7 +536,7 @@ extension _MockContentPosts on MockContentRepository {
           'type': 'video',
           'body': '森林的呼吸',
           'videoUrl':
-              'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+              'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
           'thumbnailUrl':
               'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
           'width': 720,
@@ -649,13 +634,13 @@ extension _MockContentPosts on MockContentRepository {
         },
       ),
       _mockPostDto(
-        '${authorId}_v1',
+        '${authorId}_video',
         payloadMerge: <String, dynamic>{
           ...base,
           'type': 'video',
           'body': '森林的呼吸',
           'videoUrl':
-              'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+              'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
           'thumbnailUrl':
               'media/image/s/mock/seed/p_1646034296147-d8ed3aace9a4/v1/image.jpg',
           'width': 720,

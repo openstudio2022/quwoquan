@@ -34,7 +34,7 @@ func TestMediaUploadCompletionRollsBackSessionWhenAssetCreationFails(t *testing.
 	session, err := sessionmodel.Create(sessionmodel.CreateParams{
 		ID: "mus-atomic", OwnerID: "persona-atomic",
 		ObjectKey: "uploads/persona-atomic/mus-atomic.jpg",
-		MediaType: "image", ContentType: "image/jpeg", FileSize: 128,
+		MediaType: "image", MimeType: "image/jpeg", FileSize: 128,
 		ExpectedSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		ExpiresAt:      now.Add(15 * time.Minute), Now: now,
 	})
@@ -68,7 +68,7 @@ func TestMediaUploadCompletionRollsBackSessionWhenAssetCreationFails(t *testing.
 			SourceSessionID: "mus-atomic",
 			ObjectKey:       "media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpe",
 			SHA256:          "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			MediaType:       "image", ContentType: "image/jpeg", FileSize: 128,
+			MediaType:       "image", MimeType: "image/jpeg", FileSize: 128,
 			AccessPolicy: "owner_only", ProcessingStatus: "processing",
 			CoverStrategy: "first_frame", CreatedAt: now.Add(time.Minute),
 			UpdatedAt: now.Add(time.Minute),

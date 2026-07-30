@@ -2,6 +2,7 @@
   "label": "朝圣礼佛",
   "labelEn": "Pilgrimage",
   "description": "以宗教朝圣为目的的旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

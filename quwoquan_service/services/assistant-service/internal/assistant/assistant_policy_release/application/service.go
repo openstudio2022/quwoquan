@@ -17,7 +17,7 @@ type Store interface {
 	Get(
 		ctx context.Context,
 		policyID string,
-		releaseVersion string,
+		releaseDigest string,
 	) (model.Release, bool, error)
 }
 
@@ -65,7 +65,7 @@ func (service *Service) Stage(
 func (service *Service) Get(
 	ctx context.Context,
 	policyID string,
-	releaseVersion string,
+	releaseDigest string,
 ) (model.Release, bool, error) {
 	if service == nil || service.store == nil {
 		return model.Release{}, false, model.ErrStorageUnavailable
@@ -73,6 +73,6 @@ func (service *Service) Get(
 	return service.store.Get(
 		ctx,
 		strings.TrimSpace(policyID),
-		strings.TrimSpace(releaseVersion),
+		strings.TrimSpace(releaseDigest),
 	)
 }

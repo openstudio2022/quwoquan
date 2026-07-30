@@ -83,6 +83,10 @@ def _assert_canonical_runtime_track() -> None:
         "quwoquan_service/services/search-service/"
         "internal/search/search_query/application/experiments.go"
     )
+    search_main_path = "quwoquan_service/services/search-service/cmd/api/main.go"
+    search_config_path = (
+        "quwoquan_service/services/search-service/config/schema.yaml"
+    )
     search_signal_path = (
         "quwoquan_service/services/search-service/"
         "internal/search/recommendation_signal_fact/infrastructure/"
@@ -93,14 +97,61 @@ def _assert_canonical_runtime_track() -> None:
     recpolicy = _read(recpolicy_path)
     rec_engine = _read(rec_engine_path)
     search = _read(search_path)
+    search_main = _read(search_main_path)
+    search_config = _read(search_config_path)
     search_signal = _read(search_signal_path)
 
     _require(runtime, "func AssignBucket(", runtime_path)
+    _require(runtime, "PolicyDigest", runtime_path)
+    _require(runtime, '"sha256:"', runtime_path)
     _require(recpolicy, "runtimeexperiments.AssignBucket(", recpolicy_path)
     _require(rec_engine, "ResolveBucketOr(recpolicy.ExpScoringWeights", rec_engine_path)
     _require(rec_engine, "ExperimentBucket:   scoringBucket", rec_engine_path)
     _require(search, "runtimeexperiments.NewHashResolver()", search_path)
     _require(search_signal, '"experimentBucket"', search_signal_path)
+
+    for fragment in (
+        "StaticResolver",
+        "runtime-static-v1",
+        'PolicyVersion string',
+        'PolicyVersion:',
+        '"not-found"',
+    ):
+        if fragment in runtime:
+            raise AssertionError(
+                f"{runtime_path}: manual runtime experiment identity or sentinel "
+                f"remains via {fragment!r}"
+            )
+    for fragment in ("PolicyVersion", "policyVersion", "len(buckets) == 0"):
+        if fragment in search:
+            raise AssertionError(
+                f"{search_path}: search experiment compatibility fallback remains "
+                f"via {fragment!r}"
+            )
+    for source, text in (
+        (search_main_path, search_main),
+        (search_config_path, search_config),
+    ):
+        if "policyVersion" in text or "PolicyVersion" in text:
+            raise AssertionError(
+                f"{source}: manual runtime assignment policy version remains"
+            )
+    for key in (
+        "sys.search-service.ranking.experiment.enabled",
+        "sys.search-service.ranking.experiment.controlWeightPct",
+        "sys.search-service.ranking.experiment.termHeatWeightPct",
+    ):
+        _require(search_config, key, search_config_path)
+
+    # Product Ops 只冻结 Experiment 聚合的并发修订序号；它不是独立 policy
+    # 内容身份，也不导入 runtime hot path。
+    assignment_fields_path = (
+        "quwoquan_service/services/product-ops-service/contracts/product_ops/"
+        "experiment_assignment_fact/fields.yaml"
+    )
+    assignment_fields = _read(assignment_fields_path)
+    _require(assignment_fields, "- name: experimentRevision", assignment_fields_path)
+    _require(assignment_fields, "- POSITIVE", assignment_fields_path)
 
     forbidden_runtime_fragments = (
         "GetExperimentAssignment",
@@ -136,8 +187,8 @@ def main() -> int:
         print(f"[experiment-single-track] FAIL: {exc}", file=sys.stderr)
         return 1
     print(
-        "[experiment-single-track] PASS: runtime hash bucket + actual traffic facts "
-        "are canonical; unbound Product Ops control-plane remains frozen"
+        "[experiment-single-track] PASS: runtime assignment policy uses one "
+        "content digest and fails closed; Product Ops immutable facts remain frozen"
     )
     return 0
 

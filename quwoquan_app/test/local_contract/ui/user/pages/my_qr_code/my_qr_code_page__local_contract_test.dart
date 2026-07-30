@@ -11,7 +11,6 @@ const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://quwoquan.com/u/current',
   qrPayload: 'https://quwoquan.com/u/current?qr=fixture',
   qrTokenId: 'fixture-qr',
-  styleVersion: 'v1',
   avatarUrl: '',
   displayName: '当前用户',
   region: '杭州',

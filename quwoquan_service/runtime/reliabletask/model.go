@@ -20,6 +20,7 @@ const (
 	NotificationStatusSucceeded  = "succeeded"
 	NotificationStatusRetryWait  = "retry_wait"
 	NotificationStatusDead       = "dead"
+	NotificationStatusCancelled  = "cancelled"
 
 	RecipientStatusPending   = "pending"
 	RecipientStatusDelivered = "delivered"
@@ -158,6 +159,8 @@ type NotificationOutboxRecord struct {
 	CreatedAt             time.Time         `bson:"createdAt" json:"createdAt"`
 	UpdatedAt             time.Time         `bson:"updatedAt" json:"updatedAt"`
 	LastFailure           *RuntimeFailure   `bson:"lastFailure,omitempty" json:"lastFailure,omitempty"`
+	AccountRestricted     bool              `bson:"accountRestricted,omitempty" json:"-"`
+	RestrictionSuppressed bool              `bson:"restrictionSuppressed,omitempty" json:"-"`
 }
 
 type NotificationDeliveryLedgerRecord struct {

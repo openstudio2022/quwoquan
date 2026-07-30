@@ -1,12 +1,16 @@
 """WorksClassifier 红绿契约 + 行为测试（作品 vs 随记判定）。
 
-T1 契约：verdict 结构/枚举/thresholdsVersion 与 schema 对齐。
+T1 契约：verdict 结构/枚举/policyDigest 与 schema 对齐。
 T2 行为：专业长文→work/article、社交碎片→moment、探针/推广→abandoned、
         图片集合→work/image、图不足→abandoned、权利受阻→abandoned。
 """
 from __future__ import annotations
 
-from content.post.image.works_classifier import classify_works, load_works_classification_config
+from content.post.image.works_classifier import (
+    classify_works,
+    load_works_classification_config,
+    works_classification_policy_digest,
+)
 
 _AUTHORITATIVE = """# 九寨沟旅游全攻略
 
@@ -151,7 +155,7 @@ def test_verdict_conforms_contract():
     assert v["schema"] == "quwoquan_data.works_classification"
     assert v["decision"] in _VALID_DECISIONS
     assert v["sourceTier"] in _VALID_TIERS
-    assert v["thresholdsVersion"] == int(cfg["version"])
+    assert v["policyDigest"] == works_classification_policy_digest(cfg)
     assert isinstance(v["reasons"], list) and v["reasons"]
     sig = v["signals"]
     for key in ("sourceClass", "sourceQualityTier", "sourceQualityScore", "worksAffinity"):

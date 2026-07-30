@@ -36,15 +36,62 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('旅行'), findsOneWidget);
-    await tester.tap(find.text('旅行'));
+    final option = find.byKey(
+      const ValueKey<String>('interest-onboarding-option-Topic/兴趣/旅行'),
+    );
+    final unselectedColor = tester.widget<CupertinoButton>(option).color;
+    await tester.tap(option);
     await tester.pump();
+    expect(
+      tester.widget<CupertinoButton>(option).color,
+      isNot(unselectedColor),
+    );
     await tester.tap(find.text(ProfileText.interestOnboardingSubmit));
     await tester.pumpAndSettle();
 
-    expect(writer.submittedTagRefs, <String>['Topic/兴趣/旅行']);
+    expect(
+      writer.submittedTagRefs,
+      <String>['Topic/兴趣/旅行'],
+      reason: tester
+          .widgetList<Text>(find.byType(Text))
+          .map((widget) => widget.data)
+          .whereType<String>()
+          .join(' | '),
+    );
     expect(query.parentRequests, contains('Topic/兴趣'));
     expect(store.draft?.status, InterestOnboardingStatus.submitted);
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('提交回显云侧目录下发的 taxonomyReleaseId，而非编译常量', (tester) async {
+    final writer = _RecordingWriter();
+    final query = _TagCatalogQuery(releaseId: 'tag-taxonomy-live-20990101-007');
+    final router = _router();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+          tagCatalogQueryProvider.overrideWithValue(query),
+          interestOnboardingCoordinatorProvider.overrideWithValue(
+            InterestOnboardingCoordinator(
+              draftStore: _MemoryDraftStore(),
+              writer: writer,
+            ),
+          ),
+        ],
+        child: CupertinoApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('旅行'));
+    await tester.tap(find.text(ProfileText.interestOnboardingSubmit));
+    await tester.pumpAndSettle();
+
+    expect(writer.taxonomyReleaseIds, <String>[
+      'tag-taxonomy-live-20990101-007',
+    ]);
   });
 
   testWidgets('标签读取失败时呈现重试，重试后恢复真实目录项', (tester) async {
@@ -197,8 +244,9 @@ final class _AuthenticatedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'token',
+    refreshToken: 'refresh-token',
     ownerId: 'owner_1',
-    activeSubAccountId: 'persona_1',
+    activePersonaId: 'persona_1',
   );
 }
 
@@ -211,8 +259,9 @@ final class _GuestSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'token',
+      refreshToken: 'refresh-token',
       ownerId: 'owner_1',
-      activeSubAccountId: 'persona_1',
+      activePersonaId: 'persona_1',
     );
   }
 }
@@ -232,23 +281,29 @@ final class _MemoryDraftStore implements InterestOnboardingDraftStore {
 final class _RecordingWriter implements ConfirmedOnboardingInterestWriter {
   List<String> submittedTagRefs = const <String>[];
   final List<String> clientEventIds = <String>[];
+  final List<String> taxonomyReleaseIds = <String>[];
 
   @override
   Future<void> submit({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
     clientEventIds.add(clientEventId);
+    taxonomyReleaseIds.add(taxonomyReleaseId);
     submittedTagRefs = List<String>.unmodifiable(tagRefs);
   }
 }
 
 final class _TagCatalogQuery implements TagCatalogQuery {
-  _TagCatalogQuery({this.shouldFail = false});
+  _TagCatalogQuery({this.shouldFail = false, this.releaseId = _defaultRelease});
+
+  /// 刻意与任何编译期常量不同：提交必须回显本次目录的发布号，
+  /// 这样发一个新 tag 发布不需要重发端。
+  static const String _defaultRelease = 'tag-taxonomy-published-after-build';
 
   bool shouldFail;
+  final String releaseId;
   final List<String> parentRequests = <String>[];
 
   @override
@@ -321,7 +376,7 @@ final class _TagCatalogQuery implements TagCatalogQuery {
       parentTagRef: parentTagRef,
       depth: tagRef.split('/').length - 1,
       hasChildren: hasChildren,
-      releaseId: 'tag-taxonomy-20260723-001',
+      releaseId: releaseId,
       lifecycleStatus: 'active',
     );
   }

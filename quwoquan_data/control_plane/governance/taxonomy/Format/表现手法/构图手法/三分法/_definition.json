@@ -2,6 +2,7 @@
   "label": "三分法",
   "labelEn": "Rule of Thirds",
   "description": "将画面分为九宫格在交叉点放置主体",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

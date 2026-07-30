@@ -98,14 +98,14 @@ class AppRoutePaths {
   }
   static const String circleStatsSegment = 'stats';
 
-  static const String userProfilePathTemplate = '/user/{username}';
-  static String userProfile({required String username}) {
+  static const String userProfilePathTemplate = '/user/{userHandle}';
+  static String userProfile({required String userHandle}) {
     return _buildPath(userProfilePathTemplate, <String, String>{
-      'username': username,
+      'userHandle': userHandle,
     }, <String, String?>{
     });
   }
-  static const String userProfileSegment = '{username}';
+  static const String userProfileSegment = '{userHandle}';
 
   static const String workBrowserPathTemplate = '/works/browser/{workId}';
   static String workBrowser({required String workId, String? filter, String? source, String? index, String? sourceTheme, String? openComments, String? commentEntrySource, String? targetCommentId, String? targetParentCommentId, String? targetReplyId, String? replyToCommentId}) {

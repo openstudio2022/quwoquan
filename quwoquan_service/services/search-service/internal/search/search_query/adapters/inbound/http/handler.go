@@ -23,6 +23,8 @@ const moduleSearch = rterrors.Module("SEARCH")
 // Mongo never leaks goroutines or holds resources after the response is served.
 const queryLogTimeout = 5 * time.Second
 
+const SearchSessionIDHeader = "X-Session-Id"
+
 // maxRequestBodyBytes caps the search/feedback request body. Search payloads are
 // small (query + a handful of filters); a bounded reader rejects oversized
 // bodies cheaply instead of letting them consume memory under load.
@@ -169,15 +171,18 @@ type searchRequestWire struct {
 }
 
 // searchResponseWire embeds the unified RetrieveResponse and adds the commercial
-// envelope fields (requestId/rankingVersion/experimentBucket/relatedTerms)
+// envelope fields (requestId/experimentBucket/relatedTerms)
 // declared in metadata. Per-hit rankReasons/rankPosition ride on the embedded
 // RetrieveHit (single-sourced in runtime/search).
 type searchResponseWire struct {
-	rtsearch.RetrieveResponse
-	RequestID        string   `json:"requestId"`
-	RankingVersion   string   `json:"rankingVersion"`
-	ExperimentBucket string   `json:"experimentBucket,omitempty"`
-	RelatedTerms     []string `json:"relatedTerms,omitempty"`
+	Hits             []canonicalSearchHitWire `json:"hits"`
+	Citations        []rtsearch.Citation      `json:"citations"`
+	Facets           []rtsearch.Facet         `json:"facets,omitempty"`
+	DegradeSignals   []rtsearch.DegradeSignal `json:"degradeSignals,omitempty"`
+	Provenance       rtsearch.Provenance      `json:"provenance"`
+	RequestID        string                   `json:"requestId"`
+	ExperimentBucket string                   `json:"experimentBucket,omitempty"`
+	RelatedTerms     []string                 `json:"relatedTerms,omitempty"`
 }
 
 func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +199,19 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewer := viewerFrom(r)
+	experimentSubjectKey, err := SubjectKeyFor(viewer, r)
+	if err != nil {
+		writeErr(
+			w,
+			requestID,
+			rterrors.NewInvalidArgument(
+				moduleSearch,
+				"匿名搜索需要有效的会话标识。",
+				err.Error(),
+			),
+		)
+		return
+	}
 	// Canonical normalization (single source: runtime/search.Analyze) so the
 	// query log, heat mining and ranking all key off the same normalized term.
 	normalizedQuery := rtsearch.Analyze(body.Query, nil).Normalized
@@ -224,7 +242,28 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ranked := h.decorator.Decorate(r.Context(), resp, normalizedQuery, subjectKeyFor(viewer, r, requestID))
+	ranked, err := h.decorator.Decorate(
+		r.Context(),
+		resp,
+		normalizedQuery,
+		experimentSubjectKey,
+	)
+	if err != nil {
+		h.observeSearch(application.SearchObservation{
+			Mode: body.Mode, Bucket: application.BucketControl,
+			Seconds: time.Since(start).Seconds(), Err: true,
+		})
+		writeErr(
+			w,
+			requestID,
+			rterrors.NewUnavailable(
+				moduleSearch,
+				"搜索暂时不可用，请稍后再试。",
+				"experiment assignment: "+err.Error(),
+			),
+		)
+		return
+	}
 	resp.Hits = ranked.Hits
 	if h.intersections != nil {
 		resp = h.intersections.Attach(r.Context(), viewerPersonaIDFrom(r), resp)
@@ -242,9 +281,12 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, searchResponseWire{
-		RetrieveResponse: resp,
+		Hits:             canonicalSearchHits(resp.Hits),
+		Citations:        resp.Citations,
+		Facets:           resp.Facets,
+		DegradeSignals:   resp.DegradeSignals,
+		Provenance:       resp.Provenance,
 		RequestID:        requestID,
-		RankingVersion:   ranked.RankingVersion,
 		ExperimentBucket: ranked.ExperimentBucket,
 		RelatedTerms:     ranked.RelatedTerms,
 	})
@@ -254,12 +296,11 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	h.logQueryAsync(r, application.QueryLog{
 		SearchRequestID:  requestID,
 		Query:            normalizedQuery,
-		SessionID:        strings.TrimSpace(r.Header.Get("X-Session-Id")),
+		SessionID:        strings.TrimSpace(r.Header.Get(SearchSessionIDHeader)),
 		Mode:             body.Mode,
 		ViewerID:         viewer.UserID,
 		ObjectTypes:      body.ObjectTypes,
 		ResultCount:      len(resp.Hits),
-		RankingVersion:   ranked.RankingVersion,
 		ExperimentBucket: ranked.ExperimentBucket,
 		RelatedTerms:     ranked.RelatedTerms,
 	})
@@ -279,22 +320,18 @@ func (h *Handler) observeSearch(observation application.SearchObservation) {
 	}
 }
 
-// subjectKeyFor returns the STABLE AB bucketing key: the logged-in viewer id
-// (sticky per user), else a client session id (sticky per session). When neither
-// exists it returns "" — NOT the per-request id. Bucketing on a per-request id
-// would re-roll the experiment arm on every keystroke, so the same query would
-// jump between control and term_heat (different result order each time). With ""
-// the assignment is forced to control (see Experiments.Assign), so identity-less
-// anonymous traffic gets stable, repeatable results; App/Gateway must inject a
-// stable X-Session-Id for anonymous users to participate in the experiment.
-func subjectKeyFor(viewer rtsearch.Viewer, r *http.Request, _ string) string {
+// SubjectKeyFor returns the canonical stable AB assignment unit: logged-in
+// viewer identity first, otherwise the anonymous session identity declared by
+// the SearchQuery contract. Request IDs are intentionally excluded because they
+// would re-roll the experiment arm on every keystroke.
+func SubjectKeyFor(viewer rtsearch.Viewer, r *http.Request) (string, error) {
 	if id := strings.TrimSpace(viewer.UserID); id != "" {
-		return id
+		return id, nil
 	}
-	if sid := strings.TrimSpace(r.Header.Get("X-Session-Id")); sid != "" {
-		return sid
+	if sessionID := strings.TrimSpace(r.Header.Get(SearchSessionIDHeader)); sessionID != "" {
+		return sessionID, nil
 	}
-	return ""
+	return "", fmt.Errorf("anonymous search requires a non-empty %s header", SearchSessionIDHeader)
 }
 
 func parseTimeRange(body searchRequestWire) *rtsearch.TimeRange {

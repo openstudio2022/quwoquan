@@ -20,6 +20,12 @@ import (
 
 func writeImportFixtureFile(t *testing.T, path, content string) {
 	t.Helper()
+	if strings.Contains(filepath.ToSlash(path), "/posts/") &&
+		strings.HasSuffix(path, "manifest.json") &&
+		strings.Contains(content, `"contentType"`) &&
+		!strings.Contains(content, `"contentIdentity"`) {
+		content = strings.Replace(content, "{", `{"contentIdentity":"work",`, 1)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +87,7 @@ func testDB(t *testing.T) (*mongo.Database, func()) {
 
 func samplePosts() []PostDoc {
 	return []PostDoc{
-		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
+		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentIdentity: "work", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
 			EntityRefs: []string{"地点/景区/甲居藏寨"}, NormalizedEntityRefs: []string{"entity:景区:甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
 			IntersectionHints: []IntersectionHintDoc{
 				{Dimension: "content", Source: "entityRef", ActionType: "view_object", ActionTargetID: "entity:景区:甲居藏寨"},
@@ -106,7 +112,7 @@ func samplePosts() []PostDoc {
 			CreatedAt:    time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
 			UpdatedAt:    time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
 			PublishedAt:  time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
-		{PostRef: "posts/article/攻略/色达攻略/1", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
+		{PostRef: "posts/article/攻略/色达攻略/1", ContentIdentity: "work", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
 			EntityRefs: []string{"地点/景区/色达"}, NormalizedEntityRefs: []string{"entity:景区:色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
 			CreatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
 			UpdatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
@@ -163,6 +169,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		ID                   string                   `bson:"_id"`
 		PostID               string                   `bson:"postId"`
 		PostRef              string                   `bson:"postRef"`
+		ContentIdentity      string                   `bson:"contentIdentity"`
 		Title                string                   `bson:"title"`
 		Angle                string                   `bson:"angle"`
 		EntityRefs           []string                 `bson:"entityRefs"`
@@ -193,6 +200,9 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if got.ID != RuntimePostID("posts/article/体验/甲居藏寨体验/1") || got.PostID != got.ID || got.PostRef != "posts/article/体验/甲居藏寨体验/1" {
 		t.Fatalf("post identity must use route-safe runtime id and preserve postRef, got %+v", got)
+	}
+	if got.ContentIdentity != "work" {
+		t.Fatalf("canonical imported post must persist contentIdentity=work, got %+v", got)
 	}
 	if strings.Contains(got.ID, "/") {
 		t.Fatalf("runtime post id must be path-segment safe, got %q", got.ID)
@@ -244,6 +254,43 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if !got.PublishedAt.Equal(time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)) {
 		t.Fatalf("publishedAt must come from manifest fact: %+v", got.PublishedAt)
+	}
+}
+
+func TestMongoReleaseStatePersistsImmutableManifestBinding(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	counts := bson.M{
+		"postsUpserted": int64(3), "entitiesUpserted": int64(1), "feedUpserted": int64(3),
+	}
+	opts := ImportOptions{
+		ReleaseID: "rel_pilot_002", ManifestDigest: manifestDigest,
+		Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data",
+	}
+	if err := UpsertReleaseState(ctx, db.Collection("data_release_state"), "alpha", opts, now, counts); err != nil {
+		t.Fatalf("UpsertReleaseState: %v", err)
+	}
+	var state struct {
+		ManifestDigest string `bson:"manifestDigest"`
+		Readback       struct {
+			Status string `bson:"status"`
+			Counts struct {
+				Posts          int64 `bson:"posts"`
+				DiscoveryPosts int64 `bson:"discoveryPosts"`
+			} `bson:"counts"`
+		} `bson:"readback"`
+	}
+	if err := db.Collection("data_release_state").FindOne(ctx, bson.M{
+		"environment": "alpha", "activeReleaseId": "rel_pilot_002",
+	}).Decode(&state); err != nil {
+		t.Fatalf("read data release state: %v", err)
+	}
+	if state.ManifestDigest != manifestDigest || state.Readback.Status != "content_imported" ||
+		state.Readback.Counts.Posts != 3 || state.Readback.Counts.DiscoveryPosts != 3 {
+		t.Fatalf("immutable release state mismatch: %+v", state)
 	}
 }
 
@@ -572,6 +619,7 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	var item struct {
 		PostId                   string                `bson:"postId"`
 		PostRef                  string                `bson:"postRef"`
+		ContentIdentity          string                `bson:"contentIdentity"`
 		Status                   string                `bson:"status"`
 		Visibility               string                `bson:"visibility"`
 		TagRefs                  []string              `bson:"tagRefs"`
@@ -596,6 +644,9 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	if item.PostRef != "posts/article/体验/甲居藏寨体验/1" || strings.Contains(item.PostId, "/") {
 		t.Fatalf("feed identity must be route-safe and preserve postRef: %+v", item)
+	}
+	if item.ContentIdentity != "work" {
+		t.Fatalf("feed projection must preserve canonical contentIdentity=work: %+v", item)
 	}
 	if item.Status != "published" || item.Visibility != "public" {
 		t.Fatalf("feed item must be discoverable (published/public): %+v", item)

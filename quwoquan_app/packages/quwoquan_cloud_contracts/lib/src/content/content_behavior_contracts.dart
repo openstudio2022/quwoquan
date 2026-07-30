@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/content/content_behavior_contracts.requests.g.dart';
 
 /// Single wire event for `POST /content/behaviors`.
 final class ContentBehaviorEventWire {
@@ -32,29 +33,14 @@ final class ContentBehaviorEventWire {
   }
 }
 
-/// Batch behavior report command for `content.post.ReportBehaviors`.
-final class ReportContentBehaviorsCommand {
-  ReportContentBehaviorsCommand({
-    required List<ContentBehaviorEventWire> events,
-  }) : events = List<ContentBehaviorEventWire>.unmodifiable(events);
 
-  final List<ContentBehaviorEventWire> events;
-}
 
-CloudOperationRequestPayload encodeReportContentBehaviorsCommand(
-  ReportContentBehaviorsCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'events': command.events
-        .map((event) => event.toWireMap())
-        .toList(growable: false),
-  },
-);
+
 
 void decodeEmptyContentBehaviorsResponse(Object? value) {
   if (value != null) {
     throw const FormatException(
-      'content.post.ReportBehaviors response must be empty',
+      'content.content_behavior_fact.ReportBehaviors response must be empty',
     );
   }
 }

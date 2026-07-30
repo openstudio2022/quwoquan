@@ -12,7 +12,7 @@
     "actor",
     "occurredAt",
     "status",
-    "version"
+    "candidateRevision"
   ],
   "properties": {
     "auditId": {
@@ -48,7 +48,7 @@
         "offline"
       ]
     },
-    "version": {
+    "candidateRevision": {
       "type": "integer",
       "minimum": 1
     },

@@ -9,15 +9,15 @@ import (
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 )
 
 type migratedAssistantMentionedConsumerMentionHandlerSpy struct {
-	events []application.AssistantMentionedEvent
+	events []orchestration.AssistantMentionedEvent
 	err    error
 }
 
-func (s *migratedAssistantMentionedConsumerMentionHandlerSpy) HandleAssistantMentioned(_ context.Context, evt application.AssistantMentionedEvent) error {
+func (s *migratedAssistantMentionedConsumerMentionHandlerSpy) HandleAssistantMentioned(_ context.Context, evt orchestration.AssistantMentionedEvent) error {
 	s.events = append(s.events, evt)
 	return s.err
 }

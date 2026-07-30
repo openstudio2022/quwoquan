@@ -3,12 +3,13 @@ package local_contract
 
 import (
 	"encoding/json"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/streaming"
 	"strings"
 	"testing"
 
 	rtfailures "quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/streaming"
-	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	orchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 )
 
@@ -24,9 +25,9 @@ func TestProjectAssistantRunTerminalSnapshotUsesTypedTerminalFacts(t *testing.T)
 		Snippet: "公开摘要",
 	}
 	process := assistant.AssistantRunVisibleProcess{
-		ProcessID:              "evidence-review:1",
+		ProcessID:              "assessing:1",
 		Scope:                  "skill",
-		Stage:                  "evidence_review",
+		Stage:                  "assessing",
 		Status:                 "completed",
 		Order:                  4,
 		Summary:                "已核对可信资料",
@@ -40,33 +41,33 @@ func TestProjectAssistantRunTerminalSnapshotUsesTypedTerminalFacts(t *testing.T)
 	events := []streaming.Envelope{
 		{
 			Seq:       3,
-			EventType: string(application.AssistantStreamEventProcessCommit),
+			EventType: string(assistantstreaming.AssistantStreamEventProcessCommit),
 			Payload:   map[string]any{"process": process},
 		},
 		{
 			Seq:       1,
-			EventType: string(application.AssistantStreamEventAnswerDelta),
+			EventType: string(assistantstreaming.AssistantStreamEventAnswerDelta),
 			Payload:   map[string]any{"text": "草稿"},
 		},
 		{
 			Seq:       4,
-			EventType: string(application.AssistantStreamEventCompleted),
+			EventType: string(assistantstreaming.AssistantStreamEventCompleted),
 			Payload:   map[string]any{"finalAnswer": "最终回答"},
 		},
 		{
 			Seq:       2,
-			EventType: string(application.AssistantStreamEventProcessAppend),
+			EventType: string(assistantstreaming.AssistantStreamEventProcessAppend),
 			Payload: map[string]any{"process": assistant.AssistantRunVisibleProcess{
-				ProcessID: "evidence-review:1",
+				ProcessID: "assessing:1",
 				Scope:     "skill",
-				Stage:     "evidence_review",
+				Stage:     "assessing",
 				Status:    "active",
 				Order:     4,
 			}},
 		},
 	}
 
-	snapshot := application.ProjectAssistantRunTerminalSnapshot(events, nil)
+	snapshot := orchestration.ProjectAssistantRunTerminalSnapshot(events, nil)
 
 	if snapshot.AnswerText != "最终回答" {
 		t.Fatalf("answer=%q want final answer", snapshot.AnswerText)
@@ -92,10 +93,10 @@ func TestProjectAssistantRunTerminalFailureDropsInternalMaterial(t *testing.T) {
 			{Key: "providerCredential", Value: "must-not-leak"},
 		}},
 	}
-	snapshot := application.ProjectAssistantRunTerminalSnapshot([]streaming.Envelope{
+	snapshot := orchestration.ProjectAssistantRunTerminalSnapshot([]streaming.Envelope{
 		{
 			Seq:            1,
-			EventType:      string(application.AssistantStreamEventFailed),
+			EventType:      string(assistantstreaming.AssistantStreamEventFailed),
 			Payload:        map[string]any{"providerDiagnostic": "must-not-leak"},
 			RuntimeFailure: &failure,
 		},

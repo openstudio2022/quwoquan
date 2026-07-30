@@ -27,20 +27,6 @@ configs:
   rollout: progressive
   risk_level: medium
   ui_editable: true
-- key: sys.recommendation-service.config.max_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 9.9.9
-- key: sys.recommendation-service.config.min_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0.0.1
 - key: sys.recommendation-service.redis.general.addr
   type: string
   scope: workload

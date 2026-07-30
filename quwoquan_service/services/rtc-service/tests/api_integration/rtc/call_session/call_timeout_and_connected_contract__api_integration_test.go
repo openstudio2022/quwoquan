@@ -185,7 +185,7 @@ func TestRingTimeoutSweep_NoAnswerEndsCall(t *testing.T) {
 
 func TestRingTimeoutSweep_GroupUsesLongerThreshold(t *testing.T) {
 	cleanAll(t)
-	payload := `{"callType":"video","circleId":"circle_group_001","inviteeIds":["user_g1","user_g2"]}`
+	payload := `{"callType":"video","circleId":"circle_group_001","inviteeIds":["user_g1","user_g2"],"maxParticipants":32}`
 	resp := doPost(t, "/rtc/calls", payload, "user_timeout_010", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 

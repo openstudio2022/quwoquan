@@ -7,7 +7,7 @@ import "time"
 // 不创建可登录账号，也不复制作品正文。
 type CreatorRuntimeProfile struct {
 	CreatorID             string                 `json:"creatorId" bson:"creatorId"`
-	SubAccountID          string                 `json:"subAccountId" bson:"subAccountId"`
+	PersonaID             string                 `json:"personaId" bson:"personaId"`
 	Handle                string                 `json:"handle" bson:"handle"`
 	DisplayName           string                 `json:"displayName" bson:"displayName"`
 	Headline              string                 `json:"headline" bson:"headline"`

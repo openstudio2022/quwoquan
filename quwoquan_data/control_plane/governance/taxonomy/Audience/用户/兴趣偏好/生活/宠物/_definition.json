@@ -2,6 +2,10 @@
   "label": "宠物",
   "labelEn": "Pets",
   "description": "喜欢宠物陪伴与宠物生活",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/宠物动物"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

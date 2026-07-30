@@ -30,6 +30,7 @@ fields:
   type: enum
   enum_ref: SkillSubscriptionStatus
   default: active
+  strict: true
 - name: searchQueryPlan
   type: object
   ref: search_query_plan

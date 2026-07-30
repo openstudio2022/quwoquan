@@ -3,7 +3,7 @@
 
 class ActivePersonaContextWireDto {
   final String ownerUserId;
-  final String subAccountId;
+  final String personaId;
   final String subjectType;
   final String displayName;
   final String avatarUrl;
@@ -19,7 +19,7 @@ class ActivePersonaContextWireDto {
 
   ActivePersonaContextWireDto({
     this.ownerUserId = '',
-    this.subAccountId = '',
+    this.personaId = '',
     this.subjectType = '',
     this.displayName = '',
     this.avatarUrl = '',
@@ -37,7 +37,7 @@ class ActivePersonaContextWireDto {
   factory ActivePersonaContextWireDto.fromMap(Map<String, dynamic> m) {
     return ActivePersonaContextWireDto(
       ownerUserId: m['ownerUserId']?.toString() ?? '',
-      subAccountId: m['subAccountId']?.toString() ?? '',
+      personaId: m['personaId']?.toString() ?? '',
       subjectType: m['subjectType']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
@@ -56,7 +56,7 @@ class ActivePersonaContextWireDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'ownerUserId': ownerUserId,
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'subjectType': subjectType,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -74,7 +74,7 @@ class ActivePersonaContextWireDto {
 
   ActivePersonaContextWireDto copyWith({
     String? ownerUserId,
-    String? subAccountId,
+    String? personaId,
     String? subjectType,
     String? displayName,
     String? avatarUrl,
@@ -90,7 +90,7 @@ class ActivePersonaContextWireDto {
   }) {
     return ActivePersonaContextWireDto(
       ownerUserId: ownerUserId ?? this.ownerUserId,
-      subAccountId: subAccountId ?? this.subAccountId,
+      personaId: personaId ?? this.personaId,
       subjectType: subjectType ?? this.subjectType,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,

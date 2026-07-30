@@ -2,6 +2,7 @@
   "label": "问题答疑",
   "labelEn": "Q&A Tutorial",
   "description": "常见问题解答",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

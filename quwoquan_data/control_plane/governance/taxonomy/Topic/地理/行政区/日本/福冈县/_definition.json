@@ -1,0 +1,12 @@
+{
+  "label": "福冈县",
+  "labelEn": "Fukuoka Prefecture",
+  "description": "九州门户与拉面文化中心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -2,6 +2,7 @@
   "label": "数据工程师",
   "labelEn": "Data Engineer",
   "description": "负责数据管道、数仓与数据基础设施",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

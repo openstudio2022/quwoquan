@@ -12,7 +12,7 @@
 
 ### In Scope
 
-- main 后单一受控 promotion 主链、OCI 制品归档与不可提升预验证
+- main 后单一受控 promotion 主链、OCI `ReleaseEvidenceManifest` 归档与不可提升预验证
 - prod-hosted ACK single-cluster + modular-monolith-first + 独立 Deployment + 托管数据面
 - Strangler split-ready 拆分与契约不变
 - gamma-local 与 prod-hosted 工作负载图谱同构
@@ -46,11 +46,11 @@
 <a id="req-001"></a>
 ### REQ-001 deliver deploy prod pipeline 能力 SIT
 
-- `main` 入库后只生成带 digest 的 OCI release artifact。
+- `main` 入库后自动启动候选 DAG，生成带 canonical candidate digest 的 OCI `ReleaseEvidenceManifest` 并完成 Alpha/Beta/Gamma 阻断验证；push 不得静默执行正式 Prod apply。
 - 第一方容器预验证由显式 `stackctl deploy --mode prevalidate` 在独立 namespace 执行，不属于正式 rollout。
-- 正式 promotion 只能由人工 dispatch 绑定成功的 main Service Pipeline run，按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 固定顺序执行。gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
+- 正式 promotion 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(gray-initial -> carry-on -> full)`。
 - `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- `prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得自动启动该链路。
+- `gray-initial -> carry-on -> full` 之间的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
 
 <a id="req-002"></a>
 ### REQ-002 ACK 集群部署形态（modular-monolith-first + split-ready）SIT
@@ -65,14 +65,20 @@
 ### REQ-003 统一验证 profile：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`
 
 - **统一验证 profile**：`quwoquan_ops/environments/gamma/validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
-- **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`；发布输入为 GHCR OCI digest，Actions Artifact 只保留短期失败诊断且不得作为阶段传递。
-- 真实远端复验：仓库不定义 `gamma-hosted` 环境；云侧真实集成、nightly 与发布前高置信度回归统一在 prod `gray-initial` rollout stage 完成。
+- **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md`；发布输入为 GHCR OCI `ReleaseEvidenceManifest` 的 candidate digest，Actions Artifact 只保留短期失败诊断且不得作为阶段传递。
+- 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `gray-initial` rollout stage 承接。
 - `03/04/05` 名称与 required-check 语义必须保持稳定。
 - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
 - `alpha-local` 阶段必须完成环境包、启动与 `stackctl health --scope full`，并落证据产物。
 - `beta-local` 阶段必须完成 `stackctl up/health/inspect` 与 self-hosted beta 设备矩阵，通过后才能进入 gamma。
-- `prod checks` 或 `prod full` 失败时，workflow 必须自动回滚到上一稳定 `image/config` 并恢复 ready 状态。
-- 主链耗时摘要必须落关键路径统计，并以 `critical_path_seconds <= 900` 作为硬门禁。
+- `gamma-local` 阶段必须完成 package、up、full health、release verify 与 inspect，并以同一候选摘要回执阻断 Prod。
+- Prod 在一个保留 production approval 的事务 job 内只拉取、验签、解包一次，再执行 `5% -> 25% -> 100%`；任一阶段失败由 `stackctl` 自动回滚到上一稳定候选并恢复 ready 状态。
+- dry-run 保持只读：只验证 `gray-initial` 及全部前置门禁，不伪造 carry-on/full ledger 状态，也不得形成正式发布成功事实。
+- `CiTimingSummary` 的 600/1800 秒预算只读取 GitHub workflow `created_at -> candidate/prod completed_at` 的官方日历时长；job DAG 仅保留为 `machineCriticalPath` 诊断。App matrix 必须计入四个 shard 的真实最长时长，不允许用静态/串行阶段近似。
+- mainline `CiTimingSummary` 必须作为 `ghcr.io/.../ci-timing-summary@sha256:...` 精确 OCI 证据发布，并按 candidate digest 与 workflow run 写入独立、append-only 的 hosted timing authority；写后必须从 hosted 索引查询并逐字段匹配。未初始化、不可达、写入失败或回读漂移均保持 `GATE_BLOCK`，Actions Artifact 只允许作为可丢失诊断副本。
+- production approval 的请求、批准与等待时长只能来自绑定 repository、workflow run、head SHA 与 `production` environment 的显式 durable review event。Deployment/Deployment Status 的 `pending/queued/in_progress` 只表示部署或作业状态，不能替代 reviewer decision，也不得与 runner/concurrency queue 混算。
+- 任一 job `created_at`、queue、候选、Prod 回执或显式 review event 证据缺失时状态必须为 `historical_incomplete` 并保持 `GATE_BLOCK`，不得用 `started_at` 替代、填零或进入 10/30 分钟 SLO 达成统计。
+- 主链软目标为 600 秒、硬门为 1800 秒；从 workflow 创建起达到 1500 秒时停止后续晋级，为自动回滚与 ready 恢复预留 300 秒。
 
 ## 6. 契约与依赖
 
@@ -88,11 +94,12 @@
 
 - GIVEN 执行“deliver deploy prod pipeline 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“deliver deploy prod pipeline 能力”对应动作。
-- THEN `main` 入库后生成可验证 OCI release artifact，只有显式受控动作才能发起正式 promotion。
+- THEN `main` 入库后自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境；只有精确 SHA 的人工 dispatch、显式非 dry-run 与 production approval 同时成立时才能发起正式 Prod promotion。
 - THEN 第一方 prevalidate 不写正式 rollout、ledger 或 receipt。
-- THEN 正式 promotion 按 `alpha-local -> beta-local -> prod-hosted(gray-initial -> carry-on -> full)` 执行。gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
+- THEN 同一候选在隔离运行面并行执行 Alpha、Beta、Gamma，按 `alpha -> beta -> gamma` 聚合准入后，才执行 `prod-hosted(gray-initial -> carry-on -> full)`。
 - THEN `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- THEN `prod initial -> prod checks -> prod full` 之间的健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
+- THEN Prod 三个 rollout stage 在一个受审批事务中复用一次制品物化与治理校验，健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
+- THEN 权威计时包含 runner 排队与矩阵长尾，600 秒软目标、1800 秒硬门和 1500 秒晋级截止均可验证。
 
 <a id="sit-002"></a>
 ### SIT-002 ACK 集群部署形态（modular-monolith-first + split-ready）SIT
@@ -114,7 +121,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：`main` 入库后由单一 promotion workflow 执行；gamma 只用于本地左移验证，远端复验由 prod `gray-initial` 承接。
+- 目标：`main` 入库后由单一受控 promotion workflow 执行，Gamma-local 作为阻断阶段，远端复验由 prod `gray-initial` 承接。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>

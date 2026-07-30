@@ -1,9 +1,6 @@
 package graph_test
 
 import (
-	"os"
-	"path/filepath"
-	"regexp"
 	"slices"
 	"testing"
 
@@ -28,6 +25,21 @@ func TestCallerVersionPreconditionIsLimitedToSnapshotOverwriteOperations(
 	for _, operation := range graph.Build(catalog).Operations {
 		if operation.Concurrency.VersionPrecondition == ast.VersionPreconditionIfMatch {
 			got = append(got, operation.ID)
+			found := false
+			if operation.RequestBindings != nil {
+				for _, binding := range operation.RequestBindings.Header {
+					if binding.Name == "If-Match" &&
+						binding.Field == "expectedVersion" {
+						found = true
+					}
+				}
+			}
+			if !found {
+				t.Errorf(
+					"%s must bind generated request field expectedVersion exclusively to If-Match",
+					operation.ID,
+				)
+			}
 		}
 	}
 	slices.Sort(got)
@@ -40,39 +52,4 @@ func TestCallerVersionPreconditionIsLimitedToSnapshotOverwriteOperations(
 		t.Fatalf("caller version preconditions = %v, want %v", got, want)
 	}
 
-	callerVersionField := regexp.MustCompile(
-		`(?mi)(?:name:\s*expected[a-z0-9_]*version|request_fields:\s*\[[^\]]*expected[a-z0-9_]*version)`,
-	)
-	var bodyVersionFiles []string
-	if err := filepath.WalkDir(
-		metadataDir,
-		func(path string, entry os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
-				return nil
-			}
-			content, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			if callerVersionField.Match(content) {
-				relative, relativeErr := filepath.Rel(metadataDir, path)
-				if relativeErr != nil {
-					return relativeErr
-				}
-				bodyVersionFiles = append(bodyVersionFiles, relative)
-			}
-			return nil
-		},
-	); err != nil {
-		t.Fatalf("scan service contracts: %v", err)
-	}
-	if len(bodyVersionFiles) != 0 {
-		t.Fatalf(
-			"public request contracts must use typed concurrency instead of caller version fields: %v",
-			bodyVersionFiles,
-		)
-	}
 }

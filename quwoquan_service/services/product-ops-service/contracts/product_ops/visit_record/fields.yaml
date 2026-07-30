@@ -11,7 +11,8 @@ fields:
   role: authoritative_state
 - name: targetType
   source: targetType
-  type: string
+  type: enum
+  enum_ref: VisitTargetType
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -41,8 +42,8 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
-- name: lastSeenAt
-  source: lastSeenAt
+- name: occurredAt
+  source: occurredAt
   type: timestamp
   constraints:
   - NOT_NULL
@@ -50,36 +51,8 @@ fields:
   log_policy: allow
   api_exposure: drop
   ops_exposure: read
+  description: 最近一次真实访问的服务端时间；同时是 TTL 与排序的唯一时间字段
   role: authoritative_state
-- name: sessionId
-  source: sessionId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: 超前
-  role: authoritative_state
-- name: source
-  source: source
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  description: feed/search/share/notification（超前）
-  role: authoritative_state
-- name: timestamp
-  source: timestamp
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
+enums:
+  VisitTargetType:
+    values: [page, post, circle, user]

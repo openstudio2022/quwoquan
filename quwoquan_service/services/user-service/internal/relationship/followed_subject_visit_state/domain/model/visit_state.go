@@ -10,11 +10,14 @@ import (
 
 var ErrInvalidCommand = errors.New("followed subject visit: invalid command")
 
-// subjectTypes 与 metadata FollowingSubjectType 枚举同源（user/circle/homepage）。
+// subjectTypes 与 canonical FollowSubjectKind 保持完全一致。任何可进入
+// following_subjects 的关注对象都必须能推进访问水位，否则 location 会形成
+// “关注成功但红点永不消失”的静默断链。persona 取代旧 user wire 值。
 var subjectTypes = map[string]struct{}{
-	"user":     {},
+	"persona":  {},
 	"circle":   {},
 	"homepage": {},
+	"location": {},
 }
 
 type MarkVisitedCommand struct {

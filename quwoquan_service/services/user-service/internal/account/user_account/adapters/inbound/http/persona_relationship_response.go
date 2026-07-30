@@ -11,23 +11,23 @@ import (
 // It prevents pair identifiers, versions, and bidirectional storage state from
 // leaking through the query endpoint.
 type relationshipViewResponse struct {
-	ViewerSubAccountID string `json:"viewerSubAccountId"`
-	TargetSubAccountID string `json:"targetSubAccountId"`
-	RelationState      string `json:"relationState"`
-	IsBlocked          bool   `json:"isBlocked"`
-	IsBlockedBy        bool   `json:"isBlockedBy"`
+	ViewerPersonaID string `json:"viewerPersonaId"`
+	TargetPersonaID string `json:"targetPersonaId"`
+	RelationState   string `json:"relationState"`
+	IsBlocked       bool   `json:"isBlocked"`
+	IsBlockedBy     bool   `json:"isBlockedBy"`
 }
 
 func newRelationshipViewResponse(
-	viewerSubAccountID, targetSubAccountID string,
+	viewerPersonaID, targetPersonaID string,
 	state relmodel.RelationshipState,
 ) relationshipViewResponse {
 	return relationshipViewResponse{
-		ViewerSubAccountID: viewerSubAccountID,
-		TargetSubAccountID: targetSubAccountID,
-		RelationState:      state.RelationState(viewerSubAccountID, targetSubAccountID),
-		IsBlocked:          state.IsBlocked,
-		IsBlockedBy:        state.IsBlockedBy,
+		ViewerPersonaID: viewerPersonaID,
+		TargetPersonaID: targetPersonaID,
+		RelationState:   state.RelationState(viewerPersonaID, targetPersonaID),
+		IsBlocked:       state.IsBlocked,
+		IsBlockedBy:     state.IsBlockedBy,
 	}
 }
 
@@ -35,19 +35,19 @@ func newRelationshipViewResponse(
 // list is an actor-local view and must not expose the internal pair identity or
 // the opposite direction's follow state.
 type blockedListItemResponse struct {
-	TargetSubAccountID string    `json:"targetSubAccountId"`
-	DisplayName        string    `json:"displayName"`
-	UserHandle         string    `json:"userHandle"`
-	AvatarURL          string    `json:"avatarUrl"`
-	BlockedAt          time.Time `json:"blockedAt"`
+	TargetPersonaID string    `json:"targetPersonaId"`
+	DisplayName     string    `json:"displayName"`
+	UserHandle      string    `json:"userHandle"`
+	AvatarURL       string    `json:"avatarUrl"`
+	BlockedAt       time.Time `json:"blockedAt"`
 }
 
 func newBlockedListItemResponse(item relports.BlockedListItem) blockedListItemResponse {
 	return blockedListItemResponse{
-		TargetSubAccountID: item.TargetSubAccountID,
-		DisplayName:        item.DisplayName,
-		UserHandle:         item.UserHandle,
-		AvatarURL:          item.AvatarURL,
-		BlockedAt:          item.BlockedAt.UTC(),
+		TargetPersonaID: item.TargetPersonaID,
+		DisplayName:     item.DisplayName,
+		UserHandle:      item.UserHandle,
+		AvatarURL:       item.AvatarURL,
+		BlockedAt:       item.BlockedAt.UTC(),
 	}
 }

@@ -1,10 +1,12 @@
 package application
 
 import (
+	"encoding/json"
 	"time"
 
 	"quwoquan_service/runtime/contractfixture"
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
+	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
 )
 
 type entityFixtureScenarioPack struct {
@@ -28,9 +30,14 @@ type entityFixtureHomepageSeed struct {
 	OwnerID           string                          `json:"ownerId"`
 	CategoryTags      []string                        `json:"categoryTags"`
 	Geo               *entityFixtureGeo               `json:"geo"`
+	AverageRating     *float64                        `json:"averageRating"`
+	RatingCount       int                             `json:"ratingCount"`
+	ReviewSummary     *homepagemodel.ReviewSummary    `json:"reviewSummary"`
 	ContentPreview    []homepagemodel.ContentPreview  `json:"contentPreview"`
 	QuestionPreview   []homepagemodel.QuestionPreview `json:"questionPreview"`
 	RelatedGroups     []homepagemodel.RelatedGroup    `json:"relatedGroups"`
+	RelationEdges     []json.RawMessage               `json:"relationEdges"`
+	AssistantContext  json.RawMessage                 `json:"assistantContext"`
 	Introduction      *entityFixtureIntroduction      `json:"introduction"`
 }
 
@@ -91,9 +98,6 @@ func LoadHomepageFixtureSnapshots() ([]homepagemodel.Snapshot, error) {
 			Address:            fixture.Address,
 			City:               fixture.City,
 			OwnerUserID:        fixture.OwnerID,
-			ContentPreview:     fixture.ContentPreview,
-			QuestionPreview:    fixture.QuestionPreview,
-			RelatedGroups:      fixture.RelatedGroups,
 			CreatedAt:          createdAt,
 			UpdatedAt:          updatedAt,
 		}
@@ -113,4 +117,38 @@ func LoadHomepageFixtureSnapshots() ([]homepagemodel.Snapshot, error) {
 		snapshots = append(snapshots, aggregate.Snapshot())
 	}
 	return snapshots, nil
+}
+
+// LoadHomepageFixtureDetailProjections 与 LoadHomepageFixtureSnapshots 分开
+// 返回读投影，确保 fixture 也不会把跨对象字段塞回 Homepage 写聚合。
+func LoadHomepageFixtureDetailProjections() ([]homepageports.DetailProjection, error) {
+	pack, err := contractfixture.LoadRepositoryJSON[entityFixtureScenarioPack](
+		"quwoquan_service/services/entity-service/tests/support/contract_fixtures/scenarios/entity_scenarios.json",
+	)
+	if err != nil {
+		return nil, err
+	}
+	updatedAt := time.Now().UTC().Add(-2 * time.Hour)
+	projections := make([]homepageports.DetailProjection, 0, len(pack.SeedSets.EntityHomepageCore.Homepages))
+	for _, fixture := range pack.SeedSets.EntityHomepageCore.Homepages {
+		// 与写聚合 fixture 使用同一准入条件；否则已被聚合模型拒绝的旧类型
+		// 仍会生成孤儿读投影，并在 SeedDetailProjection 时伪造父对象。
+		if fixture.HomepageID == "" || fixture.Title == "" ||
+			!homepagemodel.ValidHomepageType(fixture.HomepageType) {
+			continue
+		}
+		projections = append(projections, homepageports.DetailProjection{
+			HomepageID:       fixture.HomepageID,
+			AverageRating:    fixture.AverageRating,
+			RatingCount:      fixture.RatingCount,
+			ReviewSummary:    fixture.ReviewSummary,
+			ContentPreview:   fixture.ContentPreview,
+			QuestionPreview:  fixture.QuestionPreview,
+			RelatedGroups:    fixture.RelatedGroups,
+			RelationEdges:    fixture.RelationEdges,
+			AssistantContext: fixture.AssistantContext,
+			UpdatedAt:        updatedAt,
+		})
+	}
+	return projections, nil
 }

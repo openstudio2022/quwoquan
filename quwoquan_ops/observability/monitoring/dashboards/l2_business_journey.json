@@ -57,7 +57,7 @@
         "description": "HTTP 层请求速率。推荐「空结果」业务率由 recommendation.RecordPipelineResult 写入 EmptyFeedResults（当前未暴露为 Prometheus counter）；若后续导出 rec_pipeline_empty_feed_total 或等价指标，可另开面板展示 empty/total。",
         "targets": [
           {
-            "expr": "sum(rate(http_server_requests_total{route=~\".*v1/content/feed\"}[5m])) by (status)",
+            "expr": "sum(rate(http_server_requests_total{route=\"/content/feed\"}[5m])) by (status)",
             "legendFormat": "{{ status }}"
           }
         ]

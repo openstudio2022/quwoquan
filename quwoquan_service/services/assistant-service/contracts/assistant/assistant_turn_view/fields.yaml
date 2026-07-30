@@ -113,7 +113,7 @@ fields:
   role: projection
 - name: createdAt
   source: createdAt
-  type: string
+  type: timestamp
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -123,7 +123,7 @@ fields:
   role: projection
 - name: completedAt
   source: completedAt
-  type: string
+  type: timestamp
   constraints:
   - NOT_NULL
   classification: PUBLIC

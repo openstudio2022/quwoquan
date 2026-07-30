@@ -58,7 +58,7 @@ class ImpactTimeline extends ConsumerWidget {
                 action.type == UiErrorActionType.resubmit) {
               ref.invalidate(
                 authorImpactProvider((
-                  subAccountId: ref.read(currentUserIdProvider),
+                  personaId: ref.read(currentUserIdProvider),
                   surface: AppUiSurfaces.myIntersections,
                 )),
               );
@@ -163,12 +163,12 @@ class ImpactTimeline extends ConsumerWidget {
   AuthorImpactEvidenceFetcher _evidenceFetcher(
     WidgetRef ref,
     AuthorImpactItem item,
-    String subAccountId,
+    String personaId,
   ) {
     return ({String cursor = ''}) => ref
         .read(authorImpactQueryProvider(AppUiSurfaces.myIntersections))
         .listAuthorImpactEvidence(
-          subAccountId: subAccountId,
+          personaId: personaId,
           impactId: item.impactId,
           evidenceSnapshotId: item.evidenceSnapshotId,
           cursor: cursor,
@@ -180,14 +180,14 @@ class ImpactTimeline extends ConsumerWidget {
     WidgetRef ref,
     IntersectionTargetNavigator navigator,
     AuthorImpactItem item,
-    String subAccountId,
+    String personaId,
   ) {
     AuthorImpactEvidence.showEvidence(
       context,
       navigator: navigator,
       item: item,
       isMine: true,
-      fetchEvidence: _evidenceFetcher(ref, item, subAccountId),
+      fetchEvidence: _evidenceFetcher(ref, item, personaId),
     );
   }
 
@@ -196,7 +196,7 @@ class ImpactTimeline extends ConsumerWidget {
     WidgetRef ref,
     IntersectionTargetNavigator navigator,
     AuthorImpactItem item,
-    String subAccountId,
+    String personaId,
     IntersectionTextSpan span,
   ) {
     AuthorImpactEvidence.onSpanTap(
@@ -205,7 +205,7 @@ class ImpactTimeline extends ConsumerWidget {
       item: item,
       span: span,
       isMine: true,
-      fetchEvidence: _evidenceFetcher(ref, item, subAccountId),
+      fetchEvidence: _evidenceFetcher(ref, item, personaId),
     );
   }
 }

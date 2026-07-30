@@ -11,9 +11,10 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	catalogmodel "quwoquan_service/services/assistant-service/internal/assistant/skill_catalog/domain/model"
 )
 
-const SkillPersonalContentAccess = "personal_content_access"
+const SkillPersonalContentAccess = catalogmodel.PersonalContentAccessSkillID
 
 type Store interface {
 	ListActiveConsents(context.Context, string) ([]assistant.SkillConsent, error)

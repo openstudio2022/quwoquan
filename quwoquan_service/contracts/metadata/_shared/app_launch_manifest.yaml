@@ -1,0 +1,117 @@
+schema_id: app_launch_manifest
+description: Android、iOS、App 与 Ops 共同消费的启动清单、launcher handoff 和摘要协议；runtime 拥有组合语义，各平台不得复制字段或摘要规则。
+owner: runtime
+
+digest_contract:
+  algorithm: sha256
+  input_encoding: utf-8
+  canonical_json:
+    sort_keys: true
+    ensure_ascii: false
+    separators: [",", ":"]
+  identity_format: "sha256:<64-lowercase-hex>"
+
+target_environment:
+  alpha-local: alpha
+  beta-local: beta
+  gamma-local: gamma
+  prod-sim: prod
+  prod-hosted: prod
+
+local_transport_targets:
+  - alpha-local
+  - beta-local
+  - gamma-local
+  - prod-sim
+
+schemas:
+  app_effective_launch_manifest:
+    schema_value: app-effective-launch-manifest
+    additional_fields: false
+    required_fields:
+      - schema
+      - environment
+      - target
+      - entrypoint
+      - launchMode
+      - dartDefinesDigest
+      - runtimeConfigDigest
+      - recoveryBaseUrl
+      - publicWebBaseUrl
+      - appDownloadBaseUrl
+      - requiresLocalTransport
+      - transport
+    fields:
+      schema: { type: string, const: app-effective-launch-manifest }
+      environment: { type: string, allowed_values: [alpha, beta, gamma, prod] }
+      target: { type: string, allowed_values: [alpha-local, beta-local, gamma-local, prod-sim, prod-hosted] }
+      entrypoint: { type: string, const: lib/main_prod.dart }
+      launchMode: { type: string, min_length: 1 }
+      dartDefinesDigest: { type: string, format: sha256_identity }
+      runtimeConfigDigest: { type: string, format: sha256_identity }
+      recoveryBaseUrl: { type: string, format: https_origin }
+      publicWebBaseUrl: { type: string, format: https_origin }
+      appDownloadBaseUrl: { type: string, format: https_url_no_query_fragment_credentials }
+      requiresLocalTransport: { type: boolean }
+      transport:
+        type: object
+        additional_fields: false
+        required_fields:
+          - required
+          - reverseExpectedPorts
+          - reverseActualPorts
+          - reverseReceiptDigest
+          - consumerLeaseId
+        fields:
+          required: { type: boolean }
+          reverseExpectedPorts: { type: string }
+          reverseActualPorts: { type: string }
+          reverseReceiptDigest: { type: string }
+          consumerLeaseId: { type: string }
+    constraints:
+      - target 必须映射到 target_environment 中声明的 environment。
+      - requiresLocalTransport 必须等于 target 是否属于 local_transport_targets；它表达目标拓扑，不表示当前 handoff 已附带 transport receipt。
+      - transport.required=true 只允许 local_transport_targets，且端口集合必须相等，receipt digest 与 consumer lease ID 必须是 sha256 identity。
+      - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
+      - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
+      - recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。
+
+  app_launcher_handoff:
+    schema_value: app-launcher-handoff
+    additional_fields: false
+    required_fields:
+      - schema
+      - environment
+      - target
+      - entrypoint
+      - launchMode
+      - dartDefinesDigest
+      - runtimeConfigDigest
+      - recoveryBaseUrl
+      - publicWebBaseUrl
+      - appDownloadBaseUrl
+      - requiresLocalTransport
+      - transport
+      - dartDefines
+      - effectiveLaunchManifest
+      - effectiveLaunchManifestDigest
+    fields:
+      schema: { type: string, const: app-launcher-handoff }
+      environment: { type: string, source: app_effective_launch_manifest.environment }
+      target: { type: string, source: app_effective_launch_manifest.target }
+      entrypoint: { type: string, source: app_effective_launch_manifest.entrypoint }
+      launchMode: { type: string, source: app_effective_launch_manifest.launchMode }
+      dartDefinesDigest: { type: string, source: app_effective_launch_manifest.dartDefinesDigest }
+      runtimeConfigDigest: { type: string, source: app_effective_launch_manifest.runtimeConfigDigest }
+      recoveryBaseUrl: { type: string, source: app_effective_launch_manifest.recoveryBaseUrl }
+      publicWebBaseUrl: { type: string, source: app_effective_launch_manifest.publicWebBaseUrl }
+      appDownloadBaseUrl: { type: string, source: app_effective_launch_manifest.appDownloadBaseUrl }
+      requiresLocalTransport: { type: boolean, source: app_effective_launch_manifest.requiresLocalTransport }
+      transport: { type: object, source: app_effective_launch_manifest.transport }
+      dartDefines: { type: object, value_type: string }
+      effectiveLaunchManifest: { type: object, schema_ref: app_effective_launch_manifest }
+      effectiveLaunchManifestDigest: { type: string, format: sha256_identity }
+    constraints:
+      - 顶层 launch identity 字段必须与 effectiveLaunchManifest 完全一致。
+      - effectiveLaunchManifestDigest 必须是 digest_contract 对 effectiveLaunchManifest canonical JSON 的摘要。
+      - dartDefinesDigest 必须是 digest_contract 对规范化 string-only dartDefines 的摘要。

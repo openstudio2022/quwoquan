@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	generated "quwoquan_service/services/circle-service/generated/circle_management/circle_membership"
 	membershipmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/domain/model"
 	membershipports "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/domain/ports"
 )
@@ -137,7 +138,7 @@ func (facade *CommandFacade) requireModerator(ctx context.Context, circle member
 		actorMembership.Role == membershipmodel.CircleMemberRoleAdmin {
 		return nil
 	}
-	return generated.AppErrorFromPermissionDenied("Circle membership approval requires owner or admin")
+	return circleerrors.AppErrorFromPermissionDenied("Circle membership approval requires owner or admin")
 }
 
 func (facade *CommandFacade) Leave(ctx context.Context, command LeaveCommand) (CommandResult, error) {
@@ -192,10 +193,10 @@ func (facade *CommandFacade) requireActiveCircle(ctx context.Context, circleID s
 		return membershipports.CirclePolicySlice{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
 	}
 	if !found {
-		return membershipports.CirclePolicySlice{}, generated.AppErrorFromCircleNotFound("CircleMembership target Circle not found")
+		return membershipports.CirclePolicySlice{}, circleerrors.AppErrorFromCircleNotFound("CircleMembership target Circle not found")
 	}
 	if circle.State != "active" {
-		return membershipports.CirclePolicySlice{}, generated.AppErrorFromInvalidArgument("CircleMembership target Circle is not active")
+		return membershipports.CirclePolicySlice{}, circleerrors.AppErrorFromInvalidArgument("CircleMembership target Circle is not active")
 	}
 	return circle, nil
 }
@@ -238,7 +239,7 @@ func (facade *CommandFacade) commit(ctx context.Context, current operation.Conte
 func trustedMembershipContext(ctx context.Context) (operation.Context, string, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil || strings.TrimSpace(current.IdempotencyKey) == "" {
-		return operation.Context{}, "", generated.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
+		return operation.Context{}, "", circleerrors.AppErrorFromInvalidArgument("trusted persona and Idempotency-Key are required")
 	}
 	return current, strings.TrimSpace(current.Actor.PersonaID), nil
 }
@@ -287,7 +288,7 @@ func mapMembershipCommitError(err error) error {
 	case errors.Is(err, membershipmodel.ErrStateConflict):
 		return generated.AppErrorFromMembershipStateConflict(err.Error())
 	case errors.Is(err, membershipmodel.ErrInvalidChange):
-		return generated.AppErrorFromInvalidArgument(err.Error())
+		return circleerrors.AppErrorFromInvalidArgument(err.Error())
 	default:
 		return generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
 	}
@@ -352,7 +353,7 @@ func (facade *QueryFacade) ListCircleMemberships(ctx context.Context, circleID s
 func (facade *QueryFacade) ListPendingCircleMemberships(ctx context.Context, circleID string, limit int, cursor string) (MembershipPageResult, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil {
-		return MembershipPageResult{}, generated.AppErrorFromInvalidArgument("trusted persona is required")
+		return MembershipPageResult{}, circleerrors.AppErrorFromInvalidArgument("trusted persona is required")
 	}
 	actorID := strings.TrimSpace(current.Actor.PersonaID)
 	trimmedCircleID := strings.TrimSpace(circleID)
@@ -361,7 +362,7 @@ func (facade *QueryFacade) ListPendingCircleMemberships(ctx context.Context, cir
 		return MembershipPageResult{}, generated.AppErrorFromMembershipStorageWriteFailed(err.Error())
 	}
 	if !found {
-		return MembershipPageResult{}, generated.AppErrorFromCircleNotFound("CircleMembership target Circle not found")
+		return MembershipPageResult{}, circleerrors.AppErrorFromCircleNotFound("CircleMembership target Circle not found")
 	}
 	moderator := actorID == circle.OwnerPersonaID
 	if !moderator {
@@ -373,7 +374,7 @@ func (facade *QueryFacade) ListPendingCircleMemberships(ctx context.Context, cir
 			actorMembership.Role == membershipmodel.CircleMemberRoleAdmin
 	}
 	if !moderator {
-		return MembershipPageResult{}, generated.AppErrorFromPermissionDenied("Circle pending membership queue requires owner or admin")
+		return MembershipPageResult{}, circleerrors.AppErrorFromPermissionDenied("Circle pending membership queue requires owner or admin")
 	}
 	slice, err := facade.memberships.ListPendingCircleMemberships(ctx, trimmedCircleID, limit, cursor)
 	if err != nil {
@@ -389,7 +390,7 @@ func (facade *QueryFacade) ListPendingCircleMemberships(ctx context.Context, cir
 func (facade *QueryFacade) GetMyCircleMembership(ctx context.Context, circleID string) (MembershipSlice, error) {
 	current, ok := operation.FromContext(ctx)
 	if !ok || current.Actor.Validate(operation.ActorPersona) != nil {
-		return MembershipSlice{}, generated.AppErrorFromInvalidArgument("trusted persona is required")
+		return MembershipSlice{}, circleerrors.AppErrorFromInvalidArgument("trusted persona is required")
 	}
 	membership, found, err := facade.memberships.ReadCircleMembership(
 		ctx, strings.TrimSpace(circleID), strings.TrimSpace(current.Actor.PersonaID),
@@ -439,7 +440,7 @@ func (facade *QueryFacade) ListPersonaCircles(
 ) (PersonaCirclePageResult, error) {
 	personaID = strings.TrimSpace(personaID)
 	if personaID == "" {
-		return PersonaCirclePageResult{}, generated.AppErrorFromInvalidArgument(
+		return PersonaCirclePageResult{}, circleerrors.AppErrorFromInvalidArgument(
 			"personaId is required",
 		)
 	}

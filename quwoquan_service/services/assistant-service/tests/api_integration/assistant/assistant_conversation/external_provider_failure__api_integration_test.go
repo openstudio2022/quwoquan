@@ -10,9 +10,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
+	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
+	"quwoquan_service/services/assistant-service/tests/support/promptassets"
 )
 
 func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testing.T) {
@@ -20,24 +23,25 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 	registry := toolpkg.BaseRegistry()
 	registry.Register(
 		toolpkg.WebSearchMetadata(),
-		application.NewExternalWebSearchHandler(
+		orchestration.NewExternalWebSearchHandler(
 			nil,
 			apiUnavailableWeatherProvider{},
 			nil,
 		),
 	)
-	model := application.DeterministicModelProvider{}
-	loop := application.NewAgentLoop(
+	model := modeldouble.DeterministicModelProvider{}
+	loop := orchestration.NewAgentLoop(
 		apiWeatherSkillRuntime{},
-		application.ReactRuntime{
+		orchestration.ReactRuntime{
 			Model: model,
-			Tools: application.DefaultToolCoordinator{Registry: registry},
+			Tools: orchestration.DefaultToolCoordinator{Registry: registry},
 		},
 		nil,
 	)
+	loop.PromptAssets = promptassets.MustResolver(t)
 	handler := assistanthttp.NewHandler(
 		newIntegrationAssistantService(
-			application.WithAgentLoop(loop),
+			orchestration.WithAgentLoop(loop),
 			weatherFrozenPolicyOption(),
 		),
 	).Routes()
@@ -131,7 +135,7 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 	}
 	restarted := assistanthttp.NewHandler(
 		newIntegrationAssistantService(
-			application.WithAgentLoop(loop),
+			orchestration.WithAgentLoop(loop),
 			weatherFrozenPolicyOption(),
 		),
 	).Routes()
@@ -157,9 +161,9 @@ func TestExternalProviderFailureApiIntegrationUsesStructuredRuntimeCode(t *testi
 	assertNoExternalProviderMaterial(t, replayedFailure.Body.String())
 }
 
-func weatherFrozenPolicyOption() application.AssistantServiceOption {
-	return application.WithFrozenPolicyResolver(
-		application.FrozenPolicyResolverFunc(
+func weatherFrozenPolicyOption() orchestration.AssistantServiceOption {
+	return orchestration.WithFrozenPolicyResolver(
+		ports.FrozenPolicyResolverFunc(
 			func(
 				_ context.Context,
 				policyID string,
@@ -169,7 +173,7 @@ func weatherFrozenPolicyOption() application.AssistantServiceOption {
 			) (assistant.AssistantFrozenPolicySelection, error) {
 				return assistant.AssistantFrozenPolicySelection{
 					PolicyID:        policyID,
-					ReleaseVersion:  "test-weather-release",
+					ReleaseDigest:   integrationPolicyReleaseDigest,
 					Cohort:          "control",
 					RolloutRevision: 1,
 					RuleID:          "test-weather",
@@ -179,7 +183,7 @@ func weatherFrozenPolicyOption() application.AssistantServiceOption {
 						DomainID:        "weather",
 						PromptPolicy:    "weather provider failure test",
 						AllowedTools:    []string{"web_search"},
-						SearchIntensity: "balanced",
+						SearchIntensity: "medium",
 					},
 				}, nil
 			},
@@ -210,8 +214,8 @@ type apiWeatherSkillRuntime struct{}
 func (apiWeatherSkillRuntime) SelectSkill(
 	context.Context,
 	assistant.AssistantTurn,
-) (application.SkillSelection, error) {
-	return application.SkillSelection{
+) (orchestration.SkillSelection, error) {
+	return orchestration.SkillSelection{
 		SkillID:    "weather",
 		DomainID:   "weather",
 		ToolPolicy: []string{"web_search"},
@@ -222,10 +226,10 @@ type apiUnavailableWeatherProvider struct{}
 
 func (apiUnavailableWeatherProvider) Lookup(
 	context.Context,
-	application.ExternalSearchRequest,
-) (application.ExternalSearchResult, error) {
-	return application.ExternalSearchResult{}, application.ProviderFailure{
+	ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
+	return ports.ExternalSearchResult{}, ports.ProviderFailure{
 		Capability: "weather",
-		Reason:     application.ProviderFailureUnavailable,
+		Reason:     ports.ProviderFailureUnavailable,
 	}
 }

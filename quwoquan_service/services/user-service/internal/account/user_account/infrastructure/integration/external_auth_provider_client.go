@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -12,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -404,19 +406,26 @@ func (c *HTTPFederatedIdentityVerifier) exchangeQq(
 
 func parseQqMobileTicket(ticket string) (accessToken string, openID string, err error) {
 	ticket = strings.TrimSpace(ticket)
+	// Frozen first-party/provider boundary prefix. `_v1` is the sole canonical
+	// byte sequence and is not a multi-version negotiation envelope.
 	const prefix = "qq_mobile_v1."
-	if strings.HasPrefix(ticket, prefix) {
-		raw, decodeErr := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(ticket, prefix))
-		if decodeErr != nil {
-			return "", "", errors.New("qq authorization ticket invalid")
-		}
-		ticket = string(raw)
+	if !strings.HasPrefix(ticket, prefix) {
+		return "", "", errors.New("qq authorization ticket invalid")
+	}
+	raw, decodeErr := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(ticket, prefix))
+	if decodeErr != nil {
+		return "", "", errors.New("qq authorization ticket invalid")
 	}
 	var payload struct {
 		AccessToken string `json:"accessToken"`
 		OpenID      string `json:"openId"`
 	}
-	if json.Unmarshal([]byte(ticket), &payload) != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&payload) != nil {
+		return "", "", errors.New("qq authorization ticket invalid")
+	}
+	if decodeErr = decoder.Decode(&struct{}{}); decodeErr != io.EOF {
 		return "", "", errors.New("qq authorization ticket invalid")
 	}
 	accessToken = strings.TrimSpace(payload.AccessToken)

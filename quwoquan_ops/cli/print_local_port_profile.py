@@ -47,7 +47,6 @@ ENV_EXPORTS = {
         "BETA_ENTITY_PORT": "entity-service",
         "BETA_REC_MODEL_PORT": "recommendation-service",
         "BETA_NOTIFICATION_PORT": "notification-service",
-        "BETA_FIXTURE_GATEWAY_PORT": "fixture-gateway",
         "BETA_POSTGRES_PORT": "postgres",
         "BETA_MONGO_PORT": "mongodb",
         "BETA_REDIS_PORT": "redis",

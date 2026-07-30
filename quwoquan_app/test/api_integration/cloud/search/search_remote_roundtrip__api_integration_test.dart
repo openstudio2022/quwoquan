@@ -30,14 +30,12 @@ const _definedAccessToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _definedEvidencePath = String.fromEnvironment(
   'SEARCH_REMOTE_EVIDENCE_PATH',
 );
-final _accessToken =
-    _definedAccessToken.trim().isNotEmpty
-        ? _definedAccessToken
-        : Platform.environment['TEST_AUTH_TOKEN']?.trim() ?? '';
-final _evidencePath =
-    _definedEvidencePath.trim().isNotEmpty
-        ? _definedEvidencePath
-        : Platform.environment['SEARCH_REMOTE_EVIDENCE_PATH']?.trim() ?? '';
+final _accessToken = _definedAccessToken.trim().isNotEmpty
+    ? _definedAccessToken
+    : Platform.environment['TEST_AUTH_TOKEN']?.trim() ?? '';
+final _evidencePath = _definedEvidencePath.trim().isNotEmpty
+    ? _definedEvidencePath
+    : Platform.environment['SEARCH_REMOTE_EVIDENCE_PATH']?.trim() ?? '';
 
 final class _GammaSearchClientContext implements CloudClientContextProvider {
   const _GammaSearchClientContext();
@@ -90,7 +88,10 @@ void main() {
           ),
         ),
       );
-      final repository = RemoteSearchRepository(remoteQuery: remote);
+      final repository = RemoteSearchRepository(
+        remoteQuery: remote,
+        sessionIdProvider: () => 'search-session',
+      );
 
       final response = await repository.search(
         const SearchRequest(
@@ -167,10 +168,7 @@ void main() {
       final feedbackAcks = await Future.wait<SearchFeedbackAck>(
         feedbackCommands.map(feedback.reportSearchFeedback),
       );
-      expect(
-        feedbackAcks.every((ack) => ack.accepted),
-        isTrue,
-      );
+      expect(feedbackAcks.every((ack) => ack.accepted), isTrue);
       expect(telemetry.events, hasLength(4));
       expect(telemetry.events.every((event) => event.succeeded), isTrue);
       expect(
@@ -181,36 +179,32 @@ void main() {
         ),
         isTrue,
       );
-      await _writeRemoteEvidence(
-        <String, Object?>{
-          'schema': 'search-remote-api-evidence-v1',
-          'status': 'passed',
-          'searchRequestId': response.searchRequestId,
-          'events':
-              telemetry.events
-                  .map(
-                    (event) => <String, Object?>{
-                      'operationId': event.canonicalOperationId,
-                      'requestId': event.requestId,
-                      'traceId': event.traceId,
-                      'succeeded': event.succeeded,
-                    },
-                  )
-                  .toList(growable: false),
-          'feedbackEvents':
-              feedbackCommands
-                  .map(
-                    (command) => <String, Object?>{
-                      'eventType': command.eventType.wireValue,
-                      'objectId': command.objectId,
-                      'target': command.target,
-                      'rankPosition': command.rankPosition,
-                      'dwellMs': command.dwellMs,
-                    },
-                  )
-                  .toList(growable: false),
-        },
-      );
+      await _writeRemoteEvidence(<String, Object?>{
+        'schema': 'search-remote-api-evidence',
+        'status': 'passed',
+        'searchRequestId': response.searchRequestId,
+        'events': telemetry.events
+            .map(
+              (event) => <String, Object?>{
+                'operationId': event.canonicalOperationId,
+                'requestId': event.requestId,
+                'traceId': event.traceId,
+                'succeeded': event.succeeded,
+              },
+            )
+            .toList(growable: false),
+        'feedbackEvents': feedbackCommands
+            .map(
+              (command) => <String, Object?>{
+                'eventType': command.eventType.wireValue,
+                'objectId': command.objectId,
+                'target': command.target,
+                'rankPosition': command.rankPosition,
+                'dwellMs': command.dwellMs,
+              },
+            )
+            .toList(growable: false),
+      });
     },
   );
 }
@@ -234,7 +228,8 @@ Future<void> _writeRemoteEvidence(Map<String, Object?> evidence) async {
   await output.writeAsString('${jsonEncode(evidence)}\n');
 }
 
-CloudHttpClient _buildGammaHttpClient() => CloudHttpClient();
+CloudHttpClient _buildGammaHttpClient() =>
+    CloudHttpClient(authTokenProvider: _StaticTokenProvider(_accessToken));
 
 final class _StaticTokenProvider implements CloudAuthTokenProvider {
   const _StaticTokenProvider(this._token);

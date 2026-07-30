@@ -2,6 +2,17 @@
   "label": "人像摄影",
   "labelEn": "Portrait Photography",
   "description": "以人物肖像为主题的摄影创作",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/用户/兴趣偏好/旅行摄影/人像"
+  ],
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
 }

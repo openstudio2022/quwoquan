@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,17 @@ var (
 	telemetryIngestDuration   *prometheus.HistogramVec
 	telemetryLogstoreDuration *prometheus.HistogramVec
 	appExperienceEventTotal   *prometheus.CounterVec
+	appFrameSamplesTotal      *prometheus.CounterVec
+	appJankyFramesTotal       *prometheus.CounterVec
+	appFrameWorstDuration     *prometheus.HistogramVec
+	videoPlaybackEvents       *prometheus.CounterVec
+	videoPlaybackReady        *prometheus.HistogramVec
+	videoPlaybackEffective    *prometheus.CounterVec
+	videoPlaybackRebuffer     *prometheus.CounterVec
+	loginFunnelEvents         *prometheus.CounterVec
+	loginOperationEvents      *prometheus.CounterVec
+	loginOperationDuration    *prometheus.HistogramVec
+	loginStateDwell           *prometheus.HistogramVec
 	contentPublicationEvents  *prometheus.CounterVec
 	contentPublishVisible     *prometheus.HistogramVec
 	articleReaderEvents       *prometheus.CounterVec
@@ -49,6 +61,54 @@ func registerTelemetryMetrics() {
 			Name: "ops_app_experience_events_total",
 			Help: "Accepted App experience facts used by ANR, jank, error, and startup SLOs.",
 		}, []string{"event_type", "result"})
+		appFrameSamplesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_app_frame_samples_total",
+			Help: "Accepted frame samples used as the App jank-rate denominator.",
+		}, []string{"page_name"})
+		appJankyFramesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_app_janky_frames_total",
+			Help: "Accepted janky frames used as the App jank-rate numerator.",
+		}, []string{"page_name"})
+		appFrameWorstDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_app_frame_batch_worst_duration_seconds",
+			Help:    "Worst frame duration reported by each complete App frame batch.",
+			Buckets: []float64{0.008, 0.016, 0.024, 0.032, 0.05, 0.075, 0.1, 0.2, 0.5, 1},
+		}, []string{"page_name"})
+		videoPlaybackEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_video_playback_events_total",
+			Help: "Accepted video playback QoE terminal facts by bounded result.",
+		}, []string{"page_name", "result"})
+		videoPlaybackReady = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_video_playback_ready_duration_seconds",
+			Help:    "Client-observed video preparation duration through player ready.",
+			Buckets: []float64{0.1, 0.25, 0.5, 0.8, 1.2, 2, 3, 4, 6, 10},
+		}, []string{"page_name", "result"})
+		videoPlaybackEffective = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_video_playback_effective_seconds_total",
+			Help: "Accepted effective video playback time used as the rebuffer-ratio denominator.",
+		}, []string{"page_name"})
+		videoPlaybackRebuffer = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_video_playback_rebuffer_seconds_total",
+			Help: "Accepted video rebuffer time used as the rebuffer-ratio numerator.",
+		}, []string{"page_name"})
+		loginFunnelEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_login_funnel_events_total",
+			Help: "Accepted login lifecycle facts using bounded UX dimensions.",
+		}, []string{"action", "result", "step", "provider"})
+		loginOperationEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "ops_login_operation_events_total",
+			Help: "Accepted login operation outcomes using bounded failure dimensions.",
+		}, []string{"operation", "result", "failure_kind"})
+		loginOperationDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_login_operation_duration_seconds",
+			Help:    "Client-observed login operation latency.",
+			Buckets: []float64{0.05, 0.1, 0.25, 0.5, 0.8, 1.2, 2, 3, 5, 10, 15, 30, 60},
+		}, []string{"operation", "result"})
+		loginStateDwell = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "ops_login_state_dwell_seconds",
+			Help:    "Client-observed time spent in a login step before transition or stall detection.",
+			Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 90, 120, 300},
+		}, []string{"step", "result"})
 		contentPublicationEvents = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "ops_content_publication_events_total",
 			Help: "Accepted content-publication funnel facts by bounded stage and outcome.",
@@ -92,6 +152,17 @@ func registerTelemetryMetrics() {
 		registerCollector(&telemetryIngestDuration)
 		registerCollector(&telemetryLogstoreDuration)
 		registerCollector(&appExperienceEventTotal)
+		registerCollector(&appFrameSamplesTotal)
+		registerCollector(&appJankyFramesTotal)
+		registerCollector(&appFrameWorstDuration)
+		registerCollector(&videoPlaybackEvents)
+		registerCollector(&videoPlaybackReady)
+		registerCollector(&videoPlaybackEffective)
+		registerCollector(&videoPlaybackRebuffer)
+		registerCollector(&loginFunnelEvents)
+		registerCollector(&loginOperationEvents)
+		registerCollector(&loginOperationDuration)
+		registerCollector(&loginStateDwell)
 		registerCollector(&contentPublicationEvents)
 		registerCollector(&contentPublishVisible)
 		registerCollector(&articleReaderEvents)
@@ -132,6 +203,68 @@ func recordAppExperienceEvents(records []application.EventRecordInput) {
 				result = *record.Result
 			}
 			appExperienceEventTotal.WithLabelValues(record.EventType, result).Inc()
+			if record.EventType == "app_frame_jank_outcome" &&
+				record.SampledFrames != nil && *record.SampledFrames > 0 &&
+				record.JankyFrames != nil && *record.JankyFrames >= 0 &&
+				record.WorstFrameMS != nil && *record.WorstFrameMS >= 0 {
+				pageName := boundedAppExperiencePage(record.PageName)
+				appFrameSamplesTotal.WithLabelValues(pageName).Add(
+					float64(*record.SampledFrames),
+				)
+				// Add(0) intentionally creates the time series for clean batches;
+				// absence must never stand in for a zero-jank numerator.
+				appJankyFramesTotal.WithLabelValues(pageName).Add(
+					float64(*record.JankyFrames),
+				)
+				appFrameWorstDuration.WithLabelValues(pageName).Observe(
+					float64(*record.WorstFrameMS) / 1000,
+				)
+			}
+		case "login_funnel":
+			action := boundedLoginAction(telemetryString(record.Action, "unknown"))
+			result := boundedLoginResult(telemetryString(record.Result, "unknown"))
+			step := boundedLoginStep(telemetryString(record.Step, "unknown"))
+			provider := boundedLoginProvider(telemetryString(record.Provider, "none"))
+			loginFunnelEvents.WithLabelValues(action, result, step, provider).Inc()
+			if action == "login_state_changed" && record.DurationMS != nil && *record.DurationMS >= 0 {
+				loginStateDwell.WithLabelValues(step, result).Observe(
+					float64(*record.DurationMS) / 1000,
+				)
+			}
+		case "login_operation":
+			operation := boundedLoginOperation(
+				telemetryString(record.OperationID, "unknown"),
+			)
+			result := boundedLoginResult(telemetryString(record.Result, "unknown"))
+			failureKind := boundedLoginFailureKind(
+				telemetryString(record.FailureKind, "none"),
+			)
+			loginOperationEvents.WithLabelValues(operation, result, failureKind).Inc()
+			if record.DurationMS != nil && *record.DurationMS >= 0 {
+				loginOperationDuration.WithLabelValues(operation, result).Observe(
+					float64(*record.DurationMS) / 1000,
+				)
+			}
+		case "video_playback_qoe":
+			pageName := boundedAppExperiencePage(record.PageName)
+			result := boundedPlaybackResult(telemetryString(record.Result, "observed"))
+			videoPlaybackEvents.WithLabelValues(pageName, result).Inc()
+			if record.ReadyMS != nil && *record.ReadyMS >= 0 {
+				videoPlaybackReady.WithLabelValues(pageName, result).Observe(
+					float64(*record.ReadyMS) / 1000,
+				)
+			}
+			if record.EffectivePlaybackMS != nil && *record.EffectivePlaybackMS >= 0 {
+				videoPlaybackEffective.WithLabelValues(pageName).Add(
+					float64(*record.EffectivePlaybackMS) / 1000,
+				)
+			}
+			if record.RebufferMS != nil && *record.RebufferMS >= 0 {
+				// Add(0) preserves clean playback batches as a real numerator sample.
+				videoPlaybackRebuffer.WithLabelValues(pageName).Add(
+					float64(*record.RebufferMS) / 1000,
+				)
+			}
 		case "content_publication":
 			stage := telemetryString(record.PublicationStage, "unknown")
 			contentType := telemetryString(record.ContentType, "unknown")
@@ -186,6 +319,99 @@ func telemetryString(value *string, fallback string) string {
 		return fallback
 	}
 	return *value
+}
+
+func boundedAppExperiencePage(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch {
+	case normalized == "home", strings.HasPrefix(normalized, "home:"),
+		strings.HasPrefix(normalized, "home_"):
+		return "home"
+	case strings.Contains(normalized, "works_immersive"),
+		strings.Contains(normalized, "video_book"):
+		return "video_book"
+	default:
+		return "other"
+	}
+}
+
+func boundedPlaybackResult(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "ok", "success", "ready", "completed":
+		return "success"
+	case "failure", "failed", "error", "timeout":
+		return "failure"
+	case "cancelled", "canceled":
+		return "cancelled"
+	default:
+		return "observed"
+	}
+}
+
+func boundedLoginAction(value string) string {
+	switch value {
+	case "login_flow_exposed", "login_state_changed", "login_action_clicked",
+		"login_consent_changed", "login_consent_sheet", "login_otp_send",
+		"login_otp_verify", "login_otp_resend_available",
+		"login_otp_countdown_recalculated", "login_social_authorization",
+		"login_phone_binding", "login_terminal":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func boundedLoginResult(value string) string {
+	switch value {
+	case "exposed", "success", "failure", "started", "shown", "cancelled",
+		"accepted", "required", "available", "resumed", "dismissed",
+		"binding_required", "stalled", "duplicate_suppressed":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func boundedLoginStep(value string) string {
+	switch value {
+	case "resolving", "oneTap", "phoneEntry", "otp", "socialAuthorizing",
+		"socialFailed", "socialPhoneEntry", "socialPhoneOtp", "blocked",
+		"completing":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func boundedLoginProvider(value string) string {
+	switch value {
+	case "none", "wechat", "qq", "alipay":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func boundedLoginOperation(value string) string {
+	switch value {
+	case "resolve_login_entry", "refresh_remembered_session", "login_one_tap",
+		"send_otp", "verify_login_otp", "complete_federated_phone_binding",
+		"login_social_wechat", "login_social_qq", "login_social_alipay":
+		return value
+	default:
+		return "other"
+	}
+}
+
+func boundedLoginFailureKind(value string) string {
+	switch value {
+	case "none", "network", "timeout", "unavailable", "server", "validation",
+		"invalidInput", "cancelled", "conflict", "unauthorized", "notFound",
+		"rateLimited":
+		return value
+	default:
+		return "other"
+	}
 }
 
 type instrumentedEventLogStore struct {

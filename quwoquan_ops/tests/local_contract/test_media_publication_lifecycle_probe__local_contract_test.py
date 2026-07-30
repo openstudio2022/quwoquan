@@ -34,8 +34,6 @@ SPEC.loader.exec_module(probe)
 
 
 class _PublicationClient:
-    resolve_host = "127.0.0.1"
-
     def __init__(self) -> None:
         self.publication_bodies: list[dict[str, object]] = []
 
@@ -73,8 +71,6 @@ class _PublicationClient:
 
 
 class _CoverClient:
-    resolve_host = "127.0.0.1"
-
     def __init__(self) -> None:
         self.calls = 0
 
@@ -296,8 +292,7 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
         ) as open_session:
             actual = probe_support.media_viewer_session(
                 environment="beta",
-                base_url="https://beta-api.example",
-                resolve_host="127.0.0.1",
+                base_url="https://api.beta.example.invalid",
                 target_name="beta-local",
                 subject="fixture_user_friend",
             )
@@ -322,8 +317,7 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
         ) as open_session:
             actual = probe_support.moderation_operator_session(
                 environment="beta",
-                base_url="https://beta-api.example",
-                resolve_host="127.0.0.1",
+                base_url="https://api.beta.example.invalid",
                 target_name="beta-local",
             )
 
@@ -337,7 +331,7 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
             "fixture_content_moderation_operator",
         )
 
-    def test_probe_client_ignores_machine_proxy_for_resolved_target(self) -> None:
+    def test_probe_client_ignores_machine_proxy_for_system_resolved_target(self) -> None:
         class Handler(http.server.BaseHTTPRequestHandler):
             def do_GET(self) -> None:
                 body = b'{"status":"ok"}'
@@ -355,8 +349,7 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
         thread.start()
         try:
             client = probe_support.ProbeClient(
-                f"http://probe-target.invalid:{server.server_port}",
-                "127.0.0.1",
+                f"http://127.0.0.1:{server.server_port}",
                 probe_support.LocalAcceptanceSession(
                     owner_id="owner",
                     persona_id="persona",
@@ -403,8 +396,7 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
         thread.start()
         try:
             client = probe_support.ProbeClient(
-                f"http://probe-target.invalid:{server.server_port}",
-                "127.0.0.1",
+                f"http://127.0.0.1:{server.server_port}",
                 probe_support.LocalAcceptanceSession(
                     owner_id="owner",
                     persona_id="persona",

@@ -1,0 +1,14 @@
+{
+  "label": "镜头类型",
+  "labelEn": "Lens Type",
+  "description": "由 lensModel 文本特征判定的镜头类别",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:24:06.598276+00:00",
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
+}

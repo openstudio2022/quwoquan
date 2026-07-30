@@ -7,6 +7,7 @@ import sys
 
 import cv2
 import numpy as np
+import pytest
 
 
 DATA_ROOT = next(
@@ -35,6 +36,7 @@ from content.source.sourced_video_admission import (  # noqa: E402
     scan_sourced_video_watermark,
 )
 from content.source.sourced_video_unit import (  # noqa: E402
+    _commercial_source_use_mode,
     write_admitted_sourced_video_unit,
 )
 from core.image_safety import ImageVerdict  # noqa: E402
@@ -163,23 +165,23 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
         object_ref="/entity/地点/景区/西湖",
         source_unit={
             "ordinal": 1,
-            "sourceId": "toutiao_video",
-            "sourceKind": "toutiao",
+            "sourceId": "wikimedia_commons_video",
+            "sourceKind": "tourism_video_site",
             "title": "西湖航拍",
             "relevance": "展示西湖水域和苏堤的真实旅行视角",
         },
         source_video_path=source,
         original_creator_name="山海旅行者",
-        platform="头条",
-        source_post_url="https://www.toutiao.com/video/123456",
+        platform="Wikimedia Commons",
+        source_post_url="https://commons.wikimedia.org/wiki/File:West_Lake.webm",
         original_asset_url="https://example.com/direct/source.mp4",
-        attribution_text="原创：山海旅行者 · 来源：头条",
-        rights_basis="risk_accepted_attribution_only",
-        commercial_authorization_status="not_verified",
-        publication_admission="risk_accepted_attribution_only",
-        authorization_proof_url=None,
-        terms_url="https://www.toutiao.com/user/terms",
-        risk_acceptance_id="RA-VIDEO-CANARY-001",
+        attribution_text="山海旅行者 · Wikimedia Commons · CC BY-SA 4.0",
+        rights_basis="CC BY-SA 4.0",
+        commercial_authorization_status="verified",
+        publication_admission="commercial_release",
+        authorization_proof_url="https://commons.wikimedia.org/wiki/File:West_Lake.webm",
+        terms_url="https://creativecommons.org/licenses/by-sa/4.0/",
+        risk_acceptance_id=None,
         audio_rights_status="no_audio",
         audio_authorization_proof_url=None,
         model_release_status="not_required",
@@ -189,6 +191,11 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     payload = json.loads(evidence_path.read_text(encoding="utf-8"))
     evidence, admission_issues = SourcedVideoEvidence.from_mapping(payload)
     assert admission_issues == ()
+    source_meta = json.loads(
+        (evidence_path.parent / "meta.json").read_text(encoding="utf-8")
+    )
+    assert source_meta["sourceUseMode"] == "licensed_adaptation"
+    assert source_meta["rightsMode"] == "attribution_no_watermark"
     asset_index = json.loads(
         (evidence_path.parent / "assets/index.json").read_text(encoding="utf-8")
     )
@@ -251,7 +258,7 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
         for asset in manifest["assets"]
     )
     assert manifest["sourceAttribution"]["originalCreatorName"] == "山海旅行者"
-    assert manifest["sourceAttribution"]["platform"] == "头条"
+    assert manifest["sourceAttribution"]["platform"] == "Wikimedia Commons"
     assert (output / "assets" / "video.mp4").stat().st_size > 0
     assert (output / "assets" / "poster.webp").stat().st_size > 0
     provenance = json.loads(
@@ -259,3 +266,23 @@ def test_sourced_video_runs_from_source_unit_to_delivery_package(
     )
     assert provenance["renderStrategy"] == "sourced_video_transcode"
     assert provenance["outputAudioStatus"] == "none"
+
+
+def test_risk_only_sourced_video_cannot_claim_licensed_adaptation() -> None:
+    with pytest.raises(ValueError, match="risk-only sourced video"):
+        _commercial_source_use_mode(
+            publication_admission="risk_accepted_attribution_only",
+            commercial_authorization_status="not_verified",
+            rights_basis="risk_accepted_attribution_only",
+            authorization_proof_url=None,
+        )
+
+
+def test_unknown_video_rights_basis_cannot_claim_licensed_adaptation() -> None:
+    with pytest.raises(ValueError, match="licensed rights basis"):
+        _commercial_source_use_mode(
+            publication_admission="commercial_release",
+            commercial_authorization_status="verified",
+            rights_basis="unknown",
+            authorization_proof_url="https://rights.example/video",
+        )

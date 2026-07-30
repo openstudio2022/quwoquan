@@ -2,6 +2,7 @@
   "label": "公众号用户",
   "labelEn": "WeChat User",
   "description": "主要使用微信公众号",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

@@ -1,0 +1,14 @@
+{
+  "label": "中长焦",
+  "labelEn": "Short Telephoto",
+  "description": "70 <= focalLengthMm < 135",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:30:11.970796+00:00",
+  "updatedAt": "2026-07-28T14:30:11.970796+00:00"
+}

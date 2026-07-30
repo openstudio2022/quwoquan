@@ -2,6 +2,7 @@
   "label": "性能测评",
   "labelEn": "Performance Test",
   "description": "性能参数专项测评",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -3,11 +3,9 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
-import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
-import 'package:quwoquan_app/ui/assistant/models/assistant_structured_run_response_read_view.dart';
 
 /// 将时间轴行编码为与 [resolvePersistedAssistantDisplayState] 等协议解析器兼容的扁平 Map。
 ///
@@ -106,22 +104,10 @@ AssistantJourney resolveAssistantJourneyFromMessage(
   return resolvePersistedAssistantJourneyForDisplay(message);
 }
 
-AssistantJourney resolveAssistantJourneyFromResponse(
-  AssistantRunResponse response,
-) {
-  return resolveAssistantJourneyFromRunResponse(response);
-}
-
 List<ProcessTimelineFrame> resolveAssistantProcessTimelineFromMessage(
   Map<String, dynamic> message,
 ) {
   return resolvePersistedAssistantVisibleProcessTimeline(message);
-}
-
-List<ProcessTimelineFrame> resolveAssistantProcessTimelineFromResponse(
-  AssistantRunResponse response,
-) {
-  return resolveAssistantVisibleProcessTimelineFromRunResponse(response);
 }
 
 RetrievalProcessingSnapshot resolveAssistantRetrievalProcessingFromMessage(
@@ -132,13 +118,6 @@ RetrievalProcessingSnapshot resolveAssistantRetrievalProcessingFromMessage(
   if (direct != null && direct.isNotEmpty) {
     return RetrievalProcessingSnapshot.fromJson(direct);
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  final nested = (runArtifacts?[assistantRetrievalProcessingField] as Map?)
-      ?.cast<String, dynamic>();
-  if (nested != null && nested.isNotEmpty) {
-    return RetrievalProcessingSnapshot.fromJson(nested);
-  }
   return const RetrievalProcessingSnapshot();
 }
 
@@ -148,13 +127,6 @@ resolveAssistantUnderstandingSnapshotFromMessage(Map<String, dynamic> message) {
       ?.cast<String, dynamic>();
   if (direct != null && direct.isNotEmpty) {
     return parseRunArtifactsUnderstandingSnapshotFromMap(direct);
-  }
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  final nested = (runArtifacts?[assistantUnderstandingSnapshotField] as Map?)
-      ?.cast<String, dynamic>();
-  if (nested != null && nested.isNotEmpty) {
-    return parseRunArtifactsUnderstandingSnapshotFromMap(nested);
   }
   return const RunArtifactsUnderstandingSnapshot();
 }
@@ -167,33 +139,5 @@ RunArtifactsAnswerProcessing resolveAssistantAnswerProcessingFromMessage(
   if (direct != null && direct.isNotEmpty) {
     return RunArtifactsAnswerProcessing.fromJson(direct);
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  final nested = (runArtifacts?[assistantAnswerProcessingField] as Map?)
-      ?.cast<String, dynamic>();
-  if (nested != null && nested.isNotEmpty) {
-    return RunArtifactsAnswerProcessing.fromJson(nested);
-  }
   return const RunArtifactsAnswerProcessing();
-}
-
-RetrievalProcessingSnapshot resolveAssistantRetrievalProcessingFromResponse(
-  AssistantRunResponse response,
-) {
-  final direct = AssistantStructuredRunResponseReadView(
-    response.structuredResponse,
-  ).retrievalProcessingMap;
-  if (direct.isNotEmpty) {
-    return RetrievalProcessingSnapshot.fromJson(direct);
-  }
-  return response.runArtifacts?.retrievalProcessing ??
-      const RetrievalProcessingSnapshot();
-}
-
-String resolveAssistantFollowupPrompt(Map<String, dynamic> message) {
-  return resolveAssistantFollowupPromptFromMessage(message);
-}
-
-List<String> resolveAssistantActionHints(Map<String, dynamic> message) {
-  return resolveAssistantActionHintsFromMessage(message);
 }

@@ -2,6 +2,7 @@
   "label": "产品避雷",
   "labelEn": "Product Warning",
   "description": "提醒劣质产品",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -5,7 +5,7 @@ groups:
     rules:
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/sub-accounts/[^/]+/interactions/[^/]+/read-facts$"})
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/personas/[^/]+/interactions/[^/]+/read-facts$"})
         labels:
           service: "content-service"
           operation: "content.profile_interaction_read_fact.UpdateProfileInteractionState"
@@ -15,7 +15,7 @@ groups:
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/sub-accounts/[^/]+/interactions/[^/]+/read-facts$"})
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/personas/[^/]+/interactions/[^/]+/read-facts$"})
         labels:
           service: "content-service"
           operation: "content.profile_interaction_read_fact.UpdateProfileInteractionState"

@@ -1,4 +1,5 @@
 """qwq-data governance — auditable data governance candidate operations."""
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +20,27 @@ def handle_governance(args: argparse.Namespace) -> None:
         if args.creators_command == "list":
             for creator_id in sorted(registry.creators):
                 print(creator_id)
+            return
+        if args.creators_command == "avatar":
+            from governance.creators.avatar import (
+                CreatorAvatarError,
+                materialize_creator_avatar,
+            )
+
+            try:
+                result = materialize_creator_avatar(
+                    creator_ref=args.creator_ref,
+                    source_object_ref=args.source_object_ref,
+                    source_asset_id=args.source_asset_id,
+                    confirm_non_identifiable_person=(
+                        args.confirm_non_identifiable_person
+                    ),
+                )
+            except CreatorAvatarError as exc:
+                raise SystemExit(
+                    f"[governance creators avatar] GATE_BLOCK: {exc}"
+                ) from exc
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return
         issues = validate_creators(registry)
         if issues:
@@ -91,10 +113,28 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     from governance.coverage.handler import register_coverage_parser
     from governance.taxonomy.handler import register_taxonomy_parser
 
-    creators = sub.add_parser("creators", help="Validate or list repository-owned creator profiles")
+    creators = sub.add_parser(
+        "creators", help="Validate or list repository-owned creator profiles"
+    )
     creators_sub = creators.add_subparsers(dest="creators_command", required=True)
     creators_sub.add_parser("validate")
     creators_sub.add_parser("list")
+    creator_avatar = creators_sub.add_parser(
+        "avatar",
+        help="Materialize one creator avatar from canonical publish rights evidence",
+    )
+    creator_avatar.add_argument("--creator-ref", required=True)
+    creator_avatar.add_argument(
+        "--source-object-ref",
+        required=True,
+        help="Canonical publish-relative entities/** or posts/** object",
+    )
+    creator_avatar.add_argument("--source-asset-id", required=True)
+    creator_avatar.add_argument(
+        "--confirm-non-identifiable-person",
+        action="store_true",
+        help="Attest that the selected source crop depicts no identifiable person",
+    )
     register_taxonomy_parser(sub)
     register_coverage_parser(sub)
 
@@ -114,7 +154,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
             help="逗号分隔 assetId；缺省处理 profile 全集",
         )
 
-    review = sub.add_parser("review-candidates", help="Apply or list isolated governance candidate reviews")
+    review = sub.add_parser(
+        "review-candidates", help="Apply or list isolated governance candidate reviews"
+    )
     review.add_argument("--root")
     action = review.add_mutually_exclusive_group(required=True)
     action.add_argument("--reviews")

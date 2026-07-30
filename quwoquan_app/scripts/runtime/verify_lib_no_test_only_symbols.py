@@ -16,7 +16,7 @@ PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bContractFixtureRuntimeLoader\b"), "ContractFixtureRuntimeLoader"),
     (re.compile(r"\bPrefabUserResolver\b"), "PrefabUserResolver"),
     (re.compile(r"\bPrefabUserMetadata\b"), "PrefabUserMetadata"),
-    (re.compile(r"\bkMockCurrent(?:Owner|SubAccount)Id\b"), "mock session identity"),
+    (re.compile(r"\bkMockCurrent(?:Owner|Persona)Id\b"), "mock session identity"),
 ]
 RETIRED_FIXTURE_PATHS = (
     "cloud/runtime/contract_fixture_runtime_loader.dart",

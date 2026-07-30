@@ -1,0 +1,12 @@
+{
+  "label": "箱根町",
+  "labelEn": "Hakone",
+  "description": "温泉与富士山展望胜地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

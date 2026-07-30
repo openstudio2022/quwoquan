@@ -2,6 +2,7 @@
   "label": "打卡地",
   "labelEn": "Check-in Spot",
   "description": "网红打卡地标与城市地标",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

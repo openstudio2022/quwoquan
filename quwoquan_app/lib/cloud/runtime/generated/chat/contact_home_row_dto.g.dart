@@ -6,6 +6,7 @@ class ContactHomeRowDto {
   final String kind;
   final String objectId;
   final String userId;
+  final String userHandle;
   final String conversationId;
   final String circleId;
   final String circleGroupId;
@@ -28,6 +29,7 @@ class ContactHomeRowDto {
     this.kind = 'user',
     this.objectId = '',
     this.userId = '',
+    this.userHandle = '',
     this.conversationId = '',
     this.circleId = '',
     this.circleGroupId = '',
@@ -52,6 +54,7 @@ class ContactHomeRowDto {
       kind: m['kind']?.toString() ?? 'user',
       objectId: m['objectId']?.toString() ?? '',
       userId: m['userId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
       conversationId: m['conversationId']?.toString() ?? '',
       circleId: m['circleId']?.toString() ?? '',
       circleGroupId: m['circleGroupId']?.toString() ?? '',
@@ -77,6 +80,7 @@ class ContactHomeRowDto {
       'kind': kind,
       'objectId': objectId,
       'userId': userId,
+      'userHandle': userHandle,
       'conversationId': conversationId,
       'circleId': circleId,
       'circleGroupId': circleGroupId,
@@ -101,6 +105,7 @@ class ContactHomeRowDto {
     String? kind,
     String? objectId,
     String? userId,
+    String? userHandle,
     String? conversationId,
     String? circleId,
     String? circleGroupId,
@@ -123,6 +128,7 @@ class ContactHomeRowDto {
       kind: kind ?? this.kind,
       objectId: objectId ?? this.objectId,
       userId: userId ?? this.userId,
+      userHandle: userHandle ?? this.userHandle,
       conversationId: conversationId ?? this.conversationId,
       circleId: circleId ?? this.circleId,
       circleGroupId: circleGroupId ?? this.circleGroupId,

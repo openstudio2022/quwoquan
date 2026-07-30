@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -19,7 +20,10 @@ const (
 	AssetKindAvatarGroup AssetKind = "avatar_group"
 )
 
-var canonicalSliceSegment = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+var (
+	canonicalSliceSegment     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	publicSliceVersionSegment = regexp.MustCompile(`^v([1-9][0-9]*)$`)
+)
 
 // DeliveryReference is the only public-safe media projection. Object storage
 // keys are deliberately absent: consumers receive a stable slice key and the
@@ -30,31 +34,6 @@ type DeliveryReference struct {
 	Version        int64     `json:"version"`
 	PublicSliceKey string    `json:"publicSliceKey"`
 	DeliveryURI    string    `json:"deliveryUri"`
-}
-
-// AssetRef is runtime-media's internal state. It may carry the storage key
-// while a write is in progress, but it must never be JSON-serialized across a
-// service or UI boundary. Use DeliveryReference for those boundaries.
-type AssetRef struct {
-	AssetID        string    `json:"-"`
-	AssetKind      AssetKind `json:"-"`
-	OwnerType      string    `json:"-"`
-	OwnerID        string    `json:"-"`
-	Version        int64     `json:"-"`
-	ObjectKey      string    `json:"-"`
-	PublicSliceKey string    `json:"-"`
-	DeliveryURI    string    `json:"-"`
-}
-
-// DeliveryReference projects the public-safe form of an internal asset.
-func (ref AssetRef) DeliveryReference() DeliveryReference {
-	return DeliveryReference{
-		AssetID:        ref.AssetID,
-		AssetKind:      ref.AssetKind,
-		Version:        ref.Version,
-		PublicSliceKey: ref.PublicSliceKey,
-		DeliveryURI:    ref.DeliveryURI,
-	}
 }
 
 // NormalizeMediaCDNBase accepts only a complete HTTPS delivery endpoint and
@@ -71,50 +50,52 @@ func NormalizeMediaCDNBase(raw string) string {
 		parsed.Fragment != "" {
 		return ""
 	}
+	basePath := strings.Trim(parsed.Path, "/")
+	if basePath != "" {
+		for _, segment := range strings.Split(basePath, "/") {
+			if !canonicalSliceSegment.MatchString(segment) {
+				return ""
+			}
+		}
+	}
 	return strings.TrimRight(parsed.String(), "/")
 }
 
-// BuildPublicMediaURL builds a delivery URI from an injected HTTPS endpoint
-// and a canonical public slice key. It does not accept CAS/object-storage keys,
-// rewrite paths, infer media types, or fall back to another endpoint.
+// BuildPublicMediaURL builds the query-free delivery URI for one immutable,
+// path-versioned public slice. The path version is the only cache identity;
+// redundant version queries and mismatched versions are rejected.
 func BuildPublicMediaURL(cdnBaseURL, publicSliceKey string, version int64) string {
 	base := NormalizeMediaCDNBase(cdnBaseURL)
 	key := normalizePublicSliceKey(publicSliceKey)
-	if base == "" || key == "" {
+	pathVersion, versioned := publicSliceVersion(key)
+	if base == "" || key == "" || !versioned || version <= 0 ||
+		version != pathVersion {
 		return ""
 	}
 	parsedBase, _ := url.Parse(base)
 	basePath := strings.Trim(parsedBase.Path, "/")
 	relativeKey := key
-	if basePath != "" && strings.HasPrefix(key, basePath+"/") {
+	if basePath != "" {
+		if !strings.HasPrefix(key, basePath+"/") {
+			return ""
+		}
 		relativeKey = strings.TrimPrefix(key, basePath+"/")
 	}
-	deliveryURI := fmt.Sprintf("%s/%s", base, relativeKey)
-	if version > 0 {
-		deliveryURI = fmt.Sprintf("%s?v=%d", deliveryURI, version)
-	}
-	return deliveryURI
-}
-
-// BuildAssetURL is retained as a source-compatible wrapper. It intentionally
-// does not invent an HTTPS scheme for a bare host; callers must inject a fully
-// validated endpoint through configuration.
-func BuildAssetURL(cdnBaseURL, publicSliceKey string, version int64) string {
-	return BuildPublicMediaURL(cdnBaseURL, publicSliceKey, version)
+	return fmt.Sprintf("%s/%s", base, relativeKey)
 }
 
 // BuildAvatarPublicSliceKey derives the stable public path for a generated
 // group-avatar leaf. The storage adapter is responsible for mapping this
 // public slice to any CAS object key it uses internally.
 func BuildAvatarPublicSliceKey(ownerType, ownerID string, version int64, sourceHash string) string {
+	if version <= 0 {
+		return ""
+	}
 	cleanOwnerType := cleanSliceIdentity(ownerType, "unknown")
 	cleanOwnerID := cleanSliceIdentity(ownerID, "unknown")
 	cleanHash := cleanSliceIdentity(sourceHash, "default")
 	if len(cleanHash) > 16 {
 		cleanHash = cleanHash[:16]
-	}
-	if version <= 0 {
-		version = 1
 	}
 	return fmt.Sprintf(
 		"media/avatar/s/%s/%s/v%d/%s.png",
@@ -123,12 +104,6 @@ func BuildAvatarPublicSliceKey(ownerType, ownerID string, version int64, sourceH
 		version,
 		cleanHash,
 	)
-}
-
-// BuildAvatarObjectKey is kept for storage-adapter compatibility. It returns
-// the public slice identity; callers must not expose it as a CAS key.
-func BuildAvatarObjectKey(ownerType, ownerID string, version int64, sourceHash string) string {
-	return BuildAvatarPublicSliceKey(ownerType, ownerID, version, sourceHash)
 }
 
 // BuildContentMediaPublicSliceKey derives the stable public delivery identity
@@ -143,11 +118,8 @@ func BuildContentMediaPublicSliceKey(
 ) string {
 	root := contentMediaPublicRoot(mediaType)
 	cleanAssetID := cleanContentAssetIdentity(assetID)
-	if root == "" || cleanAssetID == "" {
+	if root == "" || cleanAssetID == "" || version <= 0 {
 		return ""
-	}
-	if version <= 0 {
-		version = 1
 	}
 	return fmt.Sprintf(
 		"media/%s/s/asset/%s/v%d/source%s",
@@ -218,26 +190,23 @@ func contentMediaPublicExtension(contentType string) string {
 	return ".bin"
 }
 
-func BuildAvatarGroupAssetRef(
+func BuildAvatarGroupDeliveryReference(
 	conversationID string,
 	assetID string,
 	version int64,
 	sourceHash string,
 	cdnBaseURL string,
-) AssetRef {
+) DeliveryReference {
 	publicSliceKey := BuildAvatarPublicSliceKey(
 		"conversation",
 		conversationID,
 		version,
 		sourceHash,
 	)
-	return AssetRef{
+	return DeliveryReference{
 		AssetID:        strings.TrimSpace(assetID),
 		AssetKind:      AssetKindAvatarGroup,
-		OwnerType:      "conversation",
-		OwnerID:        strings.TrimSpace(conversationID),
 		Version:        version,
-		ObjectKey:      publicSliceKey,
 		PublicSliceKey: publicSliceKey,
 		DeliveryURI:    BuildPublicMediaURL(cdnBaseURL, publicSliceKey, version),
 	}
@@ -271,4 +240,37 @@ func normalizePublicSliceKey(raw string) string {
 		}
 	}
 	return value
+}
+
+func publicSliceVersion(publicSliceKey string) (int64, bool) {
+	version := int64(0)
+	found := false
+	for _, segment := range strings.Split(publicSliceKey, "/") {
+		match := publicSliceVersionSegment.FindStringSubmatch(segment)
+		if match == nil {
+			continue
+		}
+		if found {
+			return 0, false
+		}
+		parsed, err := strconv.ParseInt(match[1], 10, 64)
+		if err != nil || parsed <= 0 {
+			return 0, false
+		}
+		version = parsed
+		found = true
+	}
+	return version, found
+}
+
+// PublicSliceVersion returns the single positive version encoded in a
+// canonical public-slice path. Callers that only receive a slice key must use
+// this value when invoking BuildPublicMediaURL; zero is never an unspecified
+// or compatibility version.
+func PublicSliceVersion(publicSliceKey string) (int64, bool) {
+	key := normalizePublicSliceKey(publicSliceKey)
+	if key == "" {
+		return 0, false
+	}
+	return publicSliceVersion(key)
 }

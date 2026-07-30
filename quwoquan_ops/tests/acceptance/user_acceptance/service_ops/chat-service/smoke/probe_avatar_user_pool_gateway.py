@@ -33,7 +33,7 @@ READY_TIMEOUT_SECONDS = 20
 READY_PROBE_TIMEOUT_SECONDS = 2
 READY_POLL_SECONDS = 0.2
 PROCESS_SHUTDOWN_TIMEOUT_SECONDS = 5
-CORE_PNG_COVER_KEY = "media/image/s/archived-image/post/fixture_photo_001/cover.png"
+CORE_PNG_COVER_KEY = "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
 CANONICAL_COVER_PREFIXES = ("media/image/s/", "media/video/s/")
 
 

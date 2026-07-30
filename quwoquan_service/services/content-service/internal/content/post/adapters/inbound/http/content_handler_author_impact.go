@@ -26,12 +26,12 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 		)
 		return
 	}
-	authorID := strings.TrimSpace(r.PathValue("subAccountId"))
+	authorID := strings.TrimSpace(r.PathValue("personaId"))
 	if authorID == "" {
-		authorID = authorImpactPathSubAccountID(r.URL.Path)
+		authorID = authorImpactPathPersonaID(r.URL.Path)
 	}
 	if authorID == "" {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing subAccountId path segment"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing personaId path segment"))
 		return
 	}
 	limit := int64(12)
@@ -57,8 +57,8 @@ func (h *ContentHandler) handleGetAuthorImpact(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, summary)
 }
 
-func authorImpactPathSubAccountID(path string) string {
-	const prefix = "/content/sub-accounts/"
+func authorImpactPathPersonaID(path string) string {
+	const prefix = "/content/personas/"
 	const suffix = "/author-impact"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		return ""
@@ -74,9 +74,9 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
-	authorID := authorImpactEvidencePathSubAccountID(r.URL.Path)
+	authorID := authorImpactEvidencePathPersonaID(r.URL.Path)
 	if authorID == "" {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing subAccountId path segment"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid author id", "missing personaId path segment"))
 		return
 	}
 	q := r.URL.Query()
@@ -141,8 +141,8 @@ func (h *ContentHandler) handleListAuthorImpactEvidence(w http.ResponseWriter, r
 	writeJSON(w, http.StatusOK, page)
 }
 
-func authorImpactEvidencePathSubAccountID(path string) string {
-	const prefix = "/content/sub-accounts/"
+func authorImpactEvidencePathPersonaID(path string) string {
+	const prefix = "/content/personas/"
 	const suffix = "/author-impact/evidence"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		return ""

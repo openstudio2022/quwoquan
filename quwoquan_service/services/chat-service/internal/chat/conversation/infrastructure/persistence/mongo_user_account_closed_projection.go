@@ -61,6 +61,8 @@ type MongoUserAccountClosedProjection struct {
 	reliableAsyncTasks     *mongo.Collection
 	notificationOutbox     *mongo.Collection
 	notificationLedger     *mongo.Collection
+	restrictionStates      *mongo.Collection
+	restrictionInbox       *mongo.Collection
 	inbox                  *mongo.Collection
 	failures               *mongo.Collection
 	redis                  rtredis.Client
@@ -93,6 +95,8 @@ func NewMongoUserAccountClosedProjection(
 		reliableAsyncTasks:     db.Collection("reliable_async_task"),
 		notificationOutbox:     db.Collection("notification_outbox"),
 		notificationLedger:     db.Collection("notification_delivery_ledger"),
+		restrictionStates:      db.Collection("chat_user_account_restrictions"),
+		restrictionInbox:       db.Collection("chat_user_account_restriction_inbox"),
 		inbox:                  db.Collection(userAccountClosedInboxCollection),
 		failures:               db.Collection(userAccountClosedFailureCollection),
 		redis:                  redis,
@@ -212,6 +216,9 @@ func (p *MongoUserAccountClosedProjection) projectClosedAccount(
 	ctx context.Context,
 	event application.UserAccountClosedEvent,
 ) ([]string, error) {
+	if err := finalizeChatAccountRestrictionClosure(ctx, p.db, event); err != nil {
+		return nil, err
+	}
 	subjects := event.SubjectIDs()
 	affected := map[string]struct{}{}
 	for _, query := range []struct {
@@ -431,6 +438,21 @@ func (p *MongoUserAccountClosedProjection) projectClosedAccount(
 		bson.M{"userId": bson.M{"$in": subjects}},
 	); err != nil {
 		return nil, fmt.Errorf("delete closed chat receipts: %w", err)
+	}
+	if _, err := p.restrictionStates.DeleteMany(
+		ctx,
+		bson.M{"$or": bson.A{
+			bson.M{"_id": event.AccountID},
+			bson.M{"subjects": bson.M{"$in": subjects}},
+		}},
+	); err != nil {
+		return nil, fmt.Errorf("delete closed chat account restriction state: %w", err)
+	}
+	if _, err := p.restrictionInbox.DeleteMany(
+		ctx,
+		bson.M{"accountId": event.AccountID},
+	); err != nil {
+		return nil, fmt.Errorf("delete closed chat account restriction inbox: %w", err)
 	}
 
 	affectedIDs := sortedSetValues(affected)

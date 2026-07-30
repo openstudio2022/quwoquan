@@ -2,6 +2,7 @@
   "label": "科技",
   "labelEn": "Technology",
   "description": "科技、AI、数码、编程、产品与创业兴趣",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

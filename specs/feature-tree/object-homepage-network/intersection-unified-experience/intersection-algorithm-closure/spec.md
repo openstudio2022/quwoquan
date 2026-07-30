@@ -47,8 +47,14 @@
 - 至少三个 §5.4 标准 kind 必须生成可读的主谓宾交集句，并保留可追踪事实来源。
 
 <a id="req-004"></a>
-### REQ-004 旅行 travel_photography 垂类三元组实例化 + 去桥接 codegen + hydration/打动真算 GWT（林墨 WS-ACC，§22.10/§23.4）
+### REQ-004 垂类扩展契约实例化（零新 kind），以 travel_photography 为第一个实例
 
+- 新增垂类只允许注册 `vertical` 值 + `objectKind`（必须映射到已有 homepage 类型或已有对象且 `routeId` 真实存在）+ 一棵 taxonomy 子树 + 一个事实生产者；禁止新增 kind、dimension、actionKey，禁止端侧出现任何垂类分支。契约与四条禁令登记在 `intersection_kind_registry.yaml` 的 `verticalExtensionContract`，由 `verify_intersection_kind_registry.py` 阻断。
+- `travel_photography` 按该契约实例化且**零新 kind**：同地到访复用 `coVisitedEntity` / `followeeVisited`（生产者 = `post.visitedAt` + `geoTagRef`），同器材复用 `sharedEntityAttention`（器材注册为 `gear` homepage 对象），参数与光线只进推荐特征与内容标签并登记在 `recommendationOnlyFacts`，不产出交集句。
+- 不可导航事实不得升格为交集：`objectKind=tag` 只有 `count` 角色且 `routeId` 为空，焦段 / 光线窗口 / 曝光参数做成交集句会产出不可导航主对象。
+- `objectType`（开放词汇，每个垂类主页一个值）到 `objectKind`（闭集）的翻译只有一个真相源：`intersection_kind_registry.yaml` 的 `objectTypeBindings`；维度与兜底称谓由 `objectKinds[].dimension` / `.label` 声明。三者经 codegen 落成服务端 `generated.Intersection*` 查表与端侧 `intersectionObjectKindForObjectType`，服务端与端侧一律不得再写 `objectType` switch，也不得从 `objectId` 子串或 fixture 前缀反推类型。新增垂类只改注册表并重跑 codegen，不发 Go/Dart 版本。
+- 未登记 `objectType` 查表落空串并降级为不可导航，禁止缺省当成人物；`HomepageType` 全集必须有 binding，由 `verify_homepage_type_contract.py` 阻断，结构与查表一致性由 `verify_intersection_kind_registry.py` 阻断。
+- 同一批端侧断言在换垂类后无需改端侧代码：`IntersectionTargetNavigator` 只按 `actionKeyMeta.dispatch` / `targetAvailability` 分发。
 - Dart 验收必须直接覆盖 6 种 `objectKind`、7 种 lifecycle、落点、实名代表人与 span 单通道不变量。
 - Go 测试必须直接覆盖 vertical、lifecycle 与 travel-impact 真算；端云门禁必须证明不存在桥接 registry。
 
@@ -90,3 +96,21 @@
 - 准出影响：`track`
 - 影响或价值：尚缺少能够证明“交集算法闭环（Feature / Ranking / Explain / Event）”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 travel_photography 三条腿只有器材一条建成，且作品画面无交集表达
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 `intersection_kind_registry.yaml` 的 33 个 kind 中 16 个 `active`，
+ 按 `objectKind` 分为 person 12、place 3、circle 1，**没有任何 kind 表达「作品画面相同」**
+ （例如两人都拍过雪山日照金山）。这意味着 REQ-004 声明的 travel_photography 三条腿里，
+ 「作品」这一条在引擎侧尚不存在表达形式。
+ place 三条腿 `coVisitedEntity` / `sharedEntityAttention` / `coWishlistedEntity` 虽为 `active`，
+ 但 `coldStartSupply` 要求 `post_declared_visit` 至少 5 个不同对象，而 canonical 三篇内容
+ 全部没有 `visitedAt`、`geoTagRef`、`locationName`，供给为 0，阈值不可能达成。
+ 唯一具备已建成采集通道的是器材腿（`exif` 覆盖 40 个节点、`gear` objectKind 已有 binding），
+ 但器材是否继续作为主线属产品取舍，未决前不得据此扩建。
+- 完成判定：作品画面维度在注册表中有 `active` kind 且供给达标，place 三条腿的
+ `post_declared_visit` 供给非零；器材腿去留由 AppRoot 竞品定位一次性裁决后落规格

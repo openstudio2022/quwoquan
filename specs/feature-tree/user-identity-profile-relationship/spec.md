@@ -10,7 +10,7 @@
 
 ### 本领域拥有
 
-- 拥有 `UserAccount`、`SubAccount/Persona`、资料快照、关注与拉黑关系、设备端点、用户设置和账号生命周期的写入决定权。
+- 拥有 `UserAccount`、`Persona`、资料快照、关注与拉黑关系、设备端点、用户设置和账号生命周期的写入决定权。
 - 只能通过本领域公开 command 修改其拥有事实。
 
 ### 本领域不拥有
@@ -78,13 +78,8 @@
   - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `circle-community` 继续处理。
   - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
 - [`JNY-011 / SCN-027`](../spec.md#scn-027)
-  - 本领域负责：在“附近同趣·结伴同行·线下局”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
+  - 本领域负责：在“结伴同行与线下相聚”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
   - 进入条件：`recommendation-platform` 已交付其公开结果。
-  - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `chat-conversation` 继续处理。
-  - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
-- [`JNY-011 / SCN-028`](../spec.md#scn-028)
-  - 本领域负责：在“派生称谓与联系人标签驱动连接”中，维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果。
-  - 进入条件：用户发起“派生称谓与联系人标签驱动连接”且身份、输入与权限前置成立。
   - 交付给下游的结果：维护 UserAccount、Persona、Profile、Follow/Block 与隐私事实，并公开身份和关系结果，供 `chat-conversation` 继续处理。
   - 不负责：不拥有内容、圈子、会话、主页聚合或推荐事实。
 - [`JNY-012 / SCN-010`](../spec.md#scn-010)
@@ -95,7 +90,7 @@
 
 ## 4. 业务能力
 
-- [`auth-profile-snapshot`](./auth-profile-snapshot/spec.md)：认证、refresh token、owner/subAccount 快照与凭证管理的能力级 SIT 验收。
+- [`auth-profile-snapshot`](./auth-profile-snapshot/spec.md)：认证、refresh token、OwnerAccount/Persona 快照与凭证管理的能力级 SIT 验收。
 - [`onboarding-and-identity-entry`](./onboarding-and-identity-entry/spec.md)：负责从欢迎页、冷启动、未登录入口、登录中断恢复到登录后落点的完整身份进入链路。
 - [`persona-follow-graph`](./persona-follow-graph/spec.md)：本能力统一分身生命周期、公开身份、关系隔离与跨域透传。
 - [`profile-homepage-redesign`](./profile-homepage-redesign/spec.md)：统一个人主页的信息架构、状态模型与跨页面互动一致性。
@@ -110,18 +105,18 @@
 - 领域边界、上下游依赖、工程映射和服务治理清晰。
 
 <a id="req-002"></a>
-### REQ-002 平台缺少一个统一的身份基线去承载多方式登录、子账号切换、强隔离关系网络、通讯录发现、邀请归因与用户生命周期经营
+### REQ-002 平台缺少一个统一的身份基线去承载多方式登录、Persona 切换、强隔离关系网络、通讯录发现、邀请归因与用户生命周期经营
 
-- 平台缺少一个统一的身份基线去承载多方式登录、子账号切换、强隔离关系网络、通讯录发现、邀请归因与用户生命周期经营。
+- 平台缺少一个统一的身份基线去承载多方式登录、Persona 切换、强隔离关系网络、通讯录发现、邀请归因与用户生命周期经营。
 - 提供从欢迎页到登录后身份建立的统一入口流程，支持手机号、微信、Apple 并行登录。
 - 欢迎页（`welcome_screen.dart`）作为登录前后入口，必须归于本 L1。
-- 多个 `SubAccount` 允许共享同一 `OwnerAccount` 与登录态容器，但对外不可见关联。
-- 通讯录匹配归 `OwnerAccount`；一旦转为好友、圈子、群或社交关系，必须落到具体 `SubAccount`。
-- 子账号切换必须可追踪并透传到推荐、聊天、评论、圈子、助手、通知等下游上下文。
+- 多个 `Persona` 允许共享同一 `OwnerAccount` 与登录态容器，但对外不可见关联。
+- 通讯录匹配归 `OwnerAccount`；一旦转为好友、圈子、群或社交关系，必须落到具体 `Persona`。
+- Persona 切换必须可追踪并透传到推荐、聊天、评论、圈子、助手、通知等下游上下文。
 - API path、operation、decoder context、route、surface、请求头上下文必须以 metadata 为唯一真相源。
-- 子账号切换后，评论、发帖、聊天、圈子、好友、邀请主体必须立即一致切换。
-- 登录、验证码、欢迎页落点、子账号创建、资料编辑、关系建立与邀请操作失败后必须可重试并恢复上下文。
-- 外部默认不可推断两个 `SubAccount` 归属于同一 `OwnerAccount`。
+- Persona 切换后，评论、发帖、聊天、圈子、好友、邀请主体必须立即一致切换。
+- 登录、验证码、欢迎页落点、Persona 创建、资料编辑、关系建立与邀请操作失败后必须可重试并恢复上下文。
+- 外部默认不可推断两个 `Persona` 归属于同一 `OwnerAccount`。
 
 ## 6. 领域验收
 

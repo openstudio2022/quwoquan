@@ -18,8 +18,4 @@ business_rules:
 - 公众 iOS 不提供原生更新地址，恢复地址只能是趣我圈官方 PWA；受控 Ad Hoc 地址不得进入公众版本接口
 - Android updateUrl 只能是趣我圈官网 HTTPS 下载端点，APK URL 只能属于官方 CDN 白名单
 - Android latest 指针只能在生产签名、包名、Build、证书摘要、文件大小和 SHA-256 全部验证后切换
-lifecycle:
-  states:
-  - published
-  transitions: []
-  notes: 发布配置没有在线写路径；版本变更仅由新的环境发布包原子替换，回滚即切回经验证的上一发布包。
+- 发布配置没有在线写路径；版本变更仅由新的环境发布包原子替换，回滚即切回经验证的上一发布包

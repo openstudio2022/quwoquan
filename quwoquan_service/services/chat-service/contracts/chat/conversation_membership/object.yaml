@@ -57,9 +57,11 @@ business_rules:
 - Assistant 成员必须绑定有效 skill consent，移除不删除历史消息
 - membership 变化只发布事件，不直接写 Conversation memberCount 投影
 lifecycle:
-  states:
-  - active
+  state_model: row_presence
+  active_condition: membership row exists
+  terminal_outcomes:
   - left
   - removed
+  terminal_persistence: row is deleted after the corresponding domain event is committed
   optimistic_concurrency: version
   idempotency: command_receipt

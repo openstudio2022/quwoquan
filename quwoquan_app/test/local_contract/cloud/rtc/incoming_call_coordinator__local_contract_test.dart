@@ -85,11 +85,11 @@ void main() {
   });
 
   test('迟到原生 Push 仅允许 initiated/ringing 状态继续展示', () {
-    expect(isIncomingPresentationActiveStatus('initiated'), isTrue);
-    expect(isIncomingPresentationActiveStatus('ringing'), isTrue);
-    expect(isIncomingPresentationActiveStatus('connecting'), isFalse);
-    expect(isIncomingPresentationActiveStatus('in_call'), isFalse);
-    expect(isIncomingPresentationActiveStatus('ended'), isFalse);
+    expect(isIncomingPresentationActiveStatus(CallStatus.initiated), isTrue);
+    expect(isIncomingPresentationActiveStatus(CallStatus.ringing), isTrue);
+    expect(isIncomingPresentationActiveStatus(CallStatus.connecting), isFalse);
+    expect(isIncomingPresentationActiveStatus(CallStatus.inCall), isFalse);
+    expect(isIncomingPresentationActiveStatus(CallStatus.ended), isFalse);
   });
 
   test('已结束通话的迟到原生 Push 会关闭 CallKit 且不发送展示 ACK', () async {
@@ -120,7 +120,7 @@ void main() {
         callKitServiceProvider.overrideWithValue(_RecordingCallKitService()),
         rtcCallQueryProvider.overrideWith(
           (ref, surface) =>
-              const _FixedCallQuery(callId: callId, status: 'ended'),
+              const _FixedCallQuery(callId: callId, status: CallStatus.ended),
         ),
         pushEndpointGatewayProvider.overrideWithValue(
           _EmptyPushEndpointGateway(),
@@ -336,7 +336,7 @@ final class _FixedCallQuery implements CallQuery {
   const _FixedCallQuery({required this.callId, required this.status});
 
   final String callId;
-  final String status;
+  final CallStatus status;
 
   @override
   Future<CallSessionDto> getCall(RtcGetCallQuery query) async {

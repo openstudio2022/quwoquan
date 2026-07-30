@@ -21,29 +21,16 @@ def _load_setup_module():
     return module
 
 
-def test_delivery_gate_bootstrap_uses_verified_sdk_without_actions_toolchain_cache() -> None:
+def test_delivery_gate_bootstrap_uses_pinned_cached_toolchains() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
 
-    assert "subosito/flutter-action@" not in workflow
-    assert "Cache Flutter SDK" not in workflow
-    assert "steps.flutter.outputs.cache_path }}\n            ~/.pub-cache" not in workflow
-    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in workflow
+    assert "subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2" in workflow
     assert "quwoquan_app/.flutter-version" in workflow
-    assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in workflow
-    assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in workflow
-    assert "flutter pub get --enforce-lockfile" in workflow
+    assert "flutter-version: ${{ steps.flutter_version.outputs.value }}" in workflow
+    assert "cache: true" in workflow
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
-    assert "QWQ_DEPLOY_WORK_ROOT: ${{ runner.temp }}/quwoquan-deploy" in workflow
-    assert "actions/setup-python@" not in workflow
-    assert 'venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/service-python"' in workflow
-    assert 'venv_root="${RUNNER_TEMP}/quwoquan-delivery-gate/${GITHUB_RUN_ID}/data-python"' in workflow
-    assert 'echo "$venv_root/bin" >> "$GITHUB_PATH"' in workflow
-    service_job = workflow.split("  quwoquan_service:", 1)[1].split(
-        "  search_contract_smoke:", 1
-    )[0]
-    assert 'python_bin="$(command -v python3)"' in service_job
-    assert "(3, 12) <= sys.version_info[:2] < (3, 14)" in service_job
-    assert "python3 -m pip install -r quwoquan_service/services/recommendation-service" in workflow
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
+    assert "pip install -r quwoquan_data/requirements.txt" in workflow
 
 
 def test_delivery_gate_has_bounded_jobs() -> None:
@@ -52,15 +39,17 @@ def test_delivery_gate_has_bounded_jobs() -> None:
     )
 
     expected_timeouts = {
-        "topology_regression": 15,
-        "quwoquan_service": 45,
-        "search_contract_smoke": 20,
-        "quwoquan_app": 45,
-        "quwoquan_app_tests_ui": 45,
-        "quwoquan_app_tests_runtime": 45,
-        "quwoquan_data": 45,
-        "ops_portal": 25,
-        "delivery_gate_summary": 15,
+        "topology_regression": 10,
+        "quwoquan_service": 10,
+        "search_contract_smoke": 10,
+        "quwoquan_app_static": 10,
+        "quwoquan_app_tests": 10,
+        "quwoquan_app_serial": 10,
+        "quwoquan_app": 10,
+        "quwoquan_data": 10,
+        "ops_portal": 10,
+        "release_evidence": 10,
+        "delivery_gate_summary": 5,
     }
     for job, minutes in expected_timeouts.items():
         job_start = workflow.index(f"  {job}:\n")
@@ -76,43 +65,34 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     gate = (ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
 
-    assert "quwoquan_app_tests_ui:" in workflow
-    assert "quwoquan_app_tests_runtime:" in workflow
-    ui_job = workflow.split("  quwoquan_app_tests_ui:", 1)[1].split(
-        "  quwoquan_app_tests_runtime:", 1
-    )[0]
-    runtime_job = workflow.split("  quwoquan_app_tests_runtime:", 1)[1].split(
-        "  quwoquan_data:", 1
-    )[0]
-    assert "runs-on: [self-hosted, macOS, ARM64]" in ui_job
-    assert "runs-on: ubuntu-latest" not in workflow
-    assert "needs: [topology_regression, quwoquan_app_tests_runtime]" in ui_job
-    assert "needs.quwoquan_app_tests_runtime.result == 'success'" in ui_job
-    assert "needs: [topology_regression, quwoquan_service]" in runtime_job
-    assert "needs.quwoquan_service.result == 'success'" in runtime_job
-    assert "needs.quwoquan_service.result == 'skipped'" in runtime_job
-    assert "QWQ_APP_GATE_PHASE: static" in workflow
-    assert "QWQ_APP_TEST_SHARD: ui" in workflow
-    assert "QWQ_APP_TEST_SHARD: runtime" in workflow
-    assert 'local app_gate_phase="${QWQ_APP_GATE_PHASE:-all}"' in gate
-    assert 'local app_test_shard="${QWQ_APP_TEST_SHARD:-all}"' in gate
-    assert 'if [[ "$scope" != "app" || "${QWQ_APP_GATE_PHASE:-all}" != "tests" ]]' in gate
-    assert "run_global" in gate
-    assert 'flutter_test_targets=("test/local_contract/")' in gate
-    assert "test/local_contract/ui/" in gate
-    for runtime_root in ("app", "cloud", "core", "quality"):
-        assert f'"test/local_contract/{runtime_root}/"' in gate
+    assert "quwoquan_app_static:" in workflow
+    assert "quwoquan_app_tests:" in workflow
+    assert "quwoquan_app_serial:" in workflow
+    assert "shard_index: [0, 1, 2, 3]" in workflow
+    assert 'FLUTTER_TEST_TOTAL_SHARDS: "4"' in workflow
+    assert "FLUTTER_TEST_SHARD_INDEX: ${{ matrix.shard_index }}" in workflow
+    assert "GATE_APP_PHASE: static" in workflow
+    assert "GATE_APP_PHASE: tests" in workflow
+    assert "GATE_APP_PHASE: serial" in workflow
+    assert 'local app_phase="${GATE_APP_PHASE:-all}"' in gate
+    assert 'run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}"' in gate
 
 
-def test_pr_control_jobs_do_not_consume_github_hosted_actions_minutes() -> None:
+def test_delivery_gate_parallelizes_safe_checks_on_hosted_runners() -> None:
+    delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "runs-on: ubuntu-latest" in delivery
+    assert "timeout-minutes: 10" in delivery
+    assert "runs-on: macos-latest" not in delivery
+
+
+def test_environment_writing_jobs_stay_on_controlled_runners() -> None:
     for workflow_path in (
-        ROOT / ".github/workflows/delivery-gate.yml",
         ROOT / ".github/workflows/pre-release-gate.yml",
-        ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml",
         ROOT / ".github/workflows/artifact-lifecycle.yml",
     ):
         workflow = workflow_path.read_text(encoding="utf-8")
-        assert "runs-on: ubuntu-latest" not in workflow
         assert "runs-on: macos-latest" not in workflow
         assert "runs-on: [self-hosted, macOS, ARM64]" in workflow
 
@@ -122,8 +102,8 @@ def test_contract_metadata_bootstrap_creates_cache_parent_before_mktemp() -> Non
         ROOT / "quwoquan_service/scripts/contract/verify_contract_metadata.sh"
     ).read_text(encoding="utf-8")
 
-    mkdir_index = script.index('mkdir -p "$CONTRACT_VIEW_PARENT"')
-    mktemp_index = script.index('mktemp -d "${CONTRACT_VIEW_PARENT}/cache-verify.XXXXXX"')
+    mkdir_index = script.index('mkdir -p "$CONTRACT_VIEW_CACHE"')
+    mktemp_index = script.index('mktemp -d "${CONTRACT_VIEW_CACHE}/verify.XXXXXX"')
     assert mkdir_index < mktemp_index
 
 

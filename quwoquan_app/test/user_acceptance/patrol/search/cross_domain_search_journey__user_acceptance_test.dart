@@ -16,7 +16,7 @@
 ///     --dart-define=API_CONTRACT_ENV=gamma \
 ///     --dart-define=RUN_T4_PATROL=true \
 ///     --dart-define=QWQ_PATROL_SESSION_MODE=gamma_local_anonymous_runtime \
-///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://gamma-api.localhost:19000
+///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://api.gamma.quwoquan.com:19000
 library;
 
 import 'package:flutter/foundation.dart';

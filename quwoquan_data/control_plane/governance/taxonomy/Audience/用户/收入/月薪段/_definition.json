@@ -2,6 +2,7 @@
   "label": "月薪段",
   "labelEn": "Monthly Salary Range",
   "description": "按月薪划分的收入段",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

@@ -310,6 +310,7 @@ def render_video_work_package(request: VideoRenderRequest) -> Path:
         "vertical": identity.vertical,
         "topicId": request.topic_id,
         "contentType": "video",
+        "contentIdentity": "work",
         "carrier": "video",
         "title": request.title,
         "caption": request.caption,

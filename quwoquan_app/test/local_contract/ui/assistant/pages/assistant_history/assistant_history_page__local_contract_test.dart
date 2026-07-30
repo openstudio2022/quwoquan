@@ -113,7 +113,7 @@ void main() {
       ),
     );
 
-    final snapshot = await loader.load(subAccountId: 'persona_assistant_uat');
+    final snapshot = await loader.load(personaId: 'persona_assistant_uat');
     final assistantRows = snapshot!.transcript
         .whereType<AssistantAnswerTranscriptRow>()
         .toList(growable: false);
@@ -357,7 +357,8 @@ Future<AssistantHistorySnapshot> _buildHistorySnapshot() async {
               AssistantRunVisibleProcessView(
                 processId: 'evidence-review:1',
                 scope: 'skill',
-                stage: 'evidence_review',
+                stage: 'assessing',
+                actionCode: 'assess_evidence',
                 status: 'completed',
                 order: 4,
                 summary: '已核对可信资料',
@@ -386,7 +387,7 @@ Future<AssistantHistorySnapshot> _buildHistorySnapshot() async {
       ],
     ),
   );
-  final snapshot = await loader.load(subAccountId: 'persona_assistant_uat');
+  final snapshot = await loader.load(personaId: 'persona_assistant_uat');
   return snapshot!;
 }
 
@@ -439,7 +440,7 @@ Future<ProviderContainer> _pumpDialogPage(
         assistantHistoryLoaderProvider.overrideWithValue(historyLoader),
         activePersonaContextProvider.overrideWith(
           (ref) async => ActivePersonaContextViewData.fallback(
-            subAccountId: 'persona_assistant_uat',
+            personaId: 'persona_assistant_uat',
             ownerUserId: 'user_assistant_uat',
             displayName: '私助验收用户',
             avatarUrl: '',
@@ -544,7 +545,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_assistant_uat',
-    activeSubAccountId: 'persona_assistant_uat',
+    activePersonaId: 'persona_assistant_uat',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -561,7 +562,7 @@ class _RecordingHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   }) async {
     loadCount += 1;
@@ -689,17 +690,17 @@ class _RecordingAssistantRunFacet implements AssistantConversationRunFacet {
 class _RecordingLearningFactAppendFacet
     implements AssistantLearningFactAppendFacet {
   @override
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AppendAssistantLearningFactRequest request,
+  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+    required AssistantLearningFactAppendCommand request,
   }) async {
-    return AssistantLearningFactReceipt(
+    return AssistantLearningFactAppendReceipt(
       eventId: request.eventId,
-      eventVersion: request.eventVersion,
       accepted: true,
       deduplicated: false,
       appendSequence: 1,
-      payloadDigest: 'uat_recording',
-      recordedAt: DateTime.now().toUtc().toIso8601String(),
+      payloadDigest:
+          '0000000000000000000000000000000000000000000000000000000000000000',
+      recordedAt: DateTime.now().toUtc(),
     );
   }
 }

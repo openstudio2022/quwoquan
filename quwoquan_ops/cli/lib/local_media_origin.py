@@ -13,6 +13,7 @@ import argparse
 import json
 import mimetypes
 import posixpath
+import re
 import urllib.parse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,6 +24,13 @@ _CONVERSATION_AVATAR_ALIASES = {
     "conv_002": _DEFAULT_GROUP_AVATAR,
     "conv_006": _PHOTO_GROUP_AVATAR,
 }
+_PUBLIC_VERSIONED_SLICE_PATH = re.compile(
+    r"^/media/(?:avatar|image|video|background|attachment)/s/"
+    r"(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$"
+)
+_PUBLIC_IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+_PUBLIC_CORS_ALLOW_ORIGIN = "*"
+_PUBLIC_CACHE_KEY_HEADER = "X-QWQ-Media-Cache-Key"
 
 
 class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
@@ -31,6 +39,46 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
     # alpha / prod-sim 的 mock 会话使用会话头像占位路径，需要 alias 到群组合成
     # 头像；gamma-local 用真实 curated 资产，关闭。
     conversation_avatar_alias_enabled = False
+
+    def send_response(self, code: int, message: str | None = None) -> None:
+        self._response_status = code
+        self._cache_control_sent = False
+        self._cors_allow_origin_sent = False
+        self._public_cache_key_sent = False
+        super().send_response(code, message)
+
+    def send_header(self, keyword: str, value: str) -> None:
+        normalized = keyword.lower()
+        if normalized == "cache-control":
+            self._cache_control_sent = True
+        elif normalized == "access-control-allow-origin":
+            self._cors_allow_origin_sent = True
+        elif normalized == _PUBLIC_CACHE_KEY_HEADER.lower():
+            self._public_cache_key_sent = True
+        super().send_header(keyword, value)
+
+    def end_headers(self) -> None:
+        parsed = urllib.parse.urlsplit(self.path)
+        path = parsed.path or "/"
+        if path.startswith("/media/"):
+            if not getattr(self, "_cors_allow_origin_sent", False):
+                self.send_header("Access-Control-Allow-Origin", _PUBLIC_CORS_ALLOW_ORIGIN)
+                self.send_header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "*")
+                self.send_header("Cross-Origin-Resource-Policy", "cross-origin")
+            if not getattr(self, "_cache_control_sent", False):
+                self.send_header(
+                    "Cache-Control",
+                    self._cache_control_for_request(self.path) or "no-store",
+                )
+            cache_identity = self._cache_identity_for_request(self.path)
+            if (
+                cache_identity is not None
+                and getattr(self, "_response_status", None) in {200, 206}
+                and not getattr(self, "_public_cache_key_sent", False)
+            ):
+                self.send_header(_PUBLIC_CACHE_KEY_HEADER, cache_identity)
+        super().end_headers()
 
     def do_GET(self) -> None:
         path = urllib.parse.urlsplit(self.path).path or "/"
@@ -121,6 +169,34 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
         if include_body:
             self.wfile.write(payload)
 
+    @staticmethod
+    def _cache_control_for_path(path: str) -> str | None:
+        normalized = urllib.parse.unquote(path or "/")
+        if _PUBLIC_VERSIONED_SLICE_PATH.fullmatch(normalized):
+            return _PUBLIC_IMMUTABLE_CACHE_CONTROL
+        if normalized.startswith("/media/"):
+            return "no-store"
+        return None
+
+    @classmethod
+    def _cache_control_for_request(cls, raw_target: str) -> str | None:
+        parsed = urllib.parse.urlsplit(raw_target)
+        path = urllib.parse.unquote(parsed.path or "/")
+        path_policy = cls._cache_control_for_path(path)
+        if path_policy != _PUBLIC_IMMUTABLE_CACHE_CONTROL:
+            return path_policy
+        # The versioned public path is the sole cache identity. Any query,
+        # including a redundant matching version, is outside that single track
+        # and must not be admitted to long-lived shared caches.
+        return _PUBLIC_IMMUTABLE_CACHE_CONTROL if parsed.query == "" else "no-store"
+
+    @classmethod
+    def _cache_identity_for_request(cls, raw_target: str) -> str | None:
+        if cls._cache_control_for_request(raw_target) != _PUBLIC_IMMUTABLE_CACHE_CONTROL:
+            return None
+        path = urllib.parse.unquote(urllib.parse.urlsplit(raw_target).path or "/")
+        return path
+
     def _serve_byte_range(self, *, include_body: bool) -> bool:
         range_header = self.headers.get("Range")
         if not range_header:
@@ -144,7 +220,6 @@ class LocalMediaOriginHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(length))
-        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         if include_body:
             with file_path.open("rb") as handle:

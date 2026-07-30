@@ -1,7 +1,7 @@
 // Package model 包含 Homepage 主档聚合。
 //
-// Homepage 只拥有 candidate -> published -> offline 生命周期、主档、认领结果与
-// HomepageReview 摘要投影。关注关系属于 user.SubjectFollow，本聚合不保存关注明细。
+// Homepage 只拥有 candidate -> published -> offline 生命周期、主档与认领结果。
+// 评价摘要、内容预览、关系边和关注状态均是独立读投影，不进入本聚合。
 package model
 
 import (
@@ -34,6 +34,15 @@ const (
 type GeoPoint struct {
 	Latitude  float64 `json:"latitude" bson:"latitude"`
 	Longitude float64 `json:"longitude" bson:"longitude"`
+}
+
+// InRange 判定坐标是否落在 WGS84 合法域内。0,0 是几内亚湾公海，对旅游实体而言
+// 只可能来自缺省值，因此按非法处理，避免「未知位置」被 2dsphere 当成真实点召回。
+func (g GeoPoint) InRange() bool {
+	if g.Latitude < -90 || g.Latitude > 90 || g.Longitude < -180 || g.Longitude > 180 {
+		return false
+	}
+	return g.Latitude != 0 || g.Longitude != 0
 }
 
 type IntroductionAsset struct {
@@ -112,19 +121,12 @@ type Snapshot struct {
 	City                 string
 	Location             *GeoPoint
 	OwnerUserID          string
-	OwnerSubAccountID    string
+	OwnerPersonaID       string
 	Verified             bool
 	EstablishedYear      *int
-	AverageRating        *float64
-	RatingCount          int
-	ReviewSummary        *ReviewSummary
-	ContentPreview       []ContentPreview
-	QuestionPreview      []QuestionPreview
-	RelatedGroups        []RelatedGroup
-	RelationEdges        []json.RawMessage
-	AssistantContext     json.RawMessage
 	IntroductionMarkdown string
 	IntroductionAssets   []IntroductionAsset
+	StructuredFacts      *StructuredFacts
 	PrimarySource        *Source
 	SourceURLs           []string
 	CreatedAt            time.Time
@@ -152,6 +154,7 @@ type IntakeParams struct {
 	Location             *GeoPoint
 	IntroductionMarkdown string
 	IntroductionAssets   []IntroductionAsset
+	StructuredFacts      *StructuredFacts
 	PrimarySource        *Source
 	SourceURLs           []string
 	PublishImmediately   bool
@@ -175,8 +178,10 @@ type ImportedProjection struct {
 	Title                string
 	HomepageType         string
 	City                 string
+	Location             *GeoPoint
 	IntroductionMarkdown string
 	IntroductionAssets   []IntroductionAsset
+	StructuredFacts      *StructuredFacts
 	PrimarySource        *Source
 	SourceURLs           []string
 	CategoryTags         []string
@@ -207,19 +212,13 @@ type Homepage struct {
 	city                 string
 	location             *GeoPoint
 	ownerUserID          string
-	ownerSubAccountID    string
+	ownerPersonaID       string
 	verified             bool
 	establishedYear      *int
-	averageRating        *float64
-	ratingCount          int
-	reviewSummary        *ReviewSummary
-	contentPreview       []ContentPreview
-	questionPreview      []QuestionPreview
-	relatedGroups        []RelatedGroup
-	relationEdges        []json.RawMessage
-	assistantContext     json.RawMessage
 	introductionMarkdown string
 	introductionAssets   []IntroductionAsset
+	structuredFacts      *StructuredFacts
+	droppedFactFields    []string
 	primarySource        *Source
 	sourceURLs           []string
 	createdAt            time.Time
@@ -276,6 +275,7 @@ func Intake(params IntakeParams) (*Homepage, error) {
 		updatedAt:            now,
 		publishedAt:          publishedAt,
 	}
+	homepage.structuredFacts, homepage.droppedFactFields = SanitizeStructuredFacts(params.StructuredFacts)
 	if homepage.coverURL == "" {
 		homepage.coverURL = coverFromAssets(homepage.introductionAssets)
 	}
@@ -307,17 +307,9 @@ func Restore(snapshot Snapshot) (*Homepage, error) {
 		city:                 strings.TrimSpace(snapshot.City),
 		location:             cloneGeo(snapshot.Location),
 		ownerUserID:          strings.TrimSpace(snapshot.OwnerUserID),
-		ownerSubAccountID:    strings.TrimSpace(snapshot.OwnerSubAccountID),
+		ownerPersonaID:       strings.TrimSpace(snapshot.OwnerPersonaID),
 		verified:             snapshot.Verified,
 		establishedYear:      cloneInt(snapshot.EstablishedYear),
-		averageRating:        cloneFloat(snapshot.AverageRating),
-		ratingCount:          snapshot.RatingCount,
-		reviewSummary:        cloneReviewSummary(snapshot.ReviewSummary),
-		contentPreview:       slices.Clone(snapshot.ContentPreview),
-		questionPreview:      slices.Clone(snapshot.QuestionPreview),
-		relatedGroups:        slices.Clone(snapshot.RelatedGroups),
-		relationEdges:        cloneRawSlice(snapshot.RelationEdges),
-		assistantContext:     slices.Clone(snapshot.AssistantContext),
 		introductionMarkdown: strings.TrimSpace(snapshot.IntroductionMarkdown),
 		introductionAssets:   cloneAssets(snapshot.IntroductionAssets),
 		primarySource:        cloneSource(snapshot.PrimarySource),
@@ -330,6 +322,9 @@ func Restore(snapshot Snapshot) (*Homepage, error) {
 	if homepage.claimStatus == "" {
 		homepage.claimStatus = "unclaimed"
 	}
+	// 存量文档可能早于留证要求写入，或被旁路直改过，因此读回时重跑一次收敛，
+	// 保证「无 factSource 的字段不可见」在任何持久化状态下都成立。
+	homepage.structuredFacts, homepage.droppedFactFields = SanitizeStructuredFacts(snapshot.StructuredFacts)
 	if err := homepage.validate(); err != nil {
 		return nil, err
 	}
@@ -383,18 +378,18 @@ func (h *Homepage) UpdateClaimedBasics(changes BasicChanges) error {
 	return h.advance(changes.Now)
 }
 
-func (h *Homepage) ApplyClaimApproved(ownerUserID, ownerSubAccountID string, approved bool, now time.Time) error {
+func (h *Homepage) ApplyClaimApproved(ownerUserID, ownerPersonaID string, approved bool, now time.Time) error {
 	if h == nil {
 		return ErrInvalidHomepage
 	}
 	if approved {
 		h.claimStatus = "claimed"
 		h.ownerUserID = strings.TrimSpace(ownerUserID)
-		h.ownerSubAccountID = strings.TrimSpace(ownerSubAccountID)
+		h.ownerPersonaID = strings.TrimSpace(ownerPersonaID)
 	} else {
 		h.claimStatus = "rejected"
 		h.ownerUserID = ""
-		h.ownerSubAccountID = ""
+		h.ownerPersonaID = ""
 	}
 	return h.advance(now)
 }
@@ -429,20 +424,6 @@ func (h *Homepage) ApplyOffline(now time.Time) error {
 	return h.advance(offlineAt)
 }
 
-func (h *Homepage) ApplyReviewSummary(average *float64, count int, tags []string, now time.Time) error {
-	if h == nil || count < 0 {
-		return ErrInvalidHomepage
-	}
-	h.averageRating = cloneFloat(average)
-	h.ratingCount = count
-	h.reviewSummary = &ReviewSummary{
-		AverageRating: cloneFloat(average),
-		RatingCount:   count,
-		HighlightTags: cloneStrings(tags),
-	}
-	return h.advance(now)
-}
-
 // ApplyImportedProjection 更新来源拥有的投影字段，不覆盖已认领方维护的主档字段。
 func (h *Homepage) ApplyImportedProjection(projection ImportedProjection) error {
 	if h == nil {
@@ -454,6 +435,7 @@ func (h *Homepage) ApplyImportedProjection(projection ImportedProjection) error 
 	}
 	h.introductionMarkdown = strings.TrimSpace(projection.IntroductionMarkdown)
 	h.introductionAssets = cloneAssets(projection.IntroductionAssets)
+	h.structuredFacts, h.droppedFactFields = SanitizeStructuredFacts(projection.StructuredFacts)
 	h.primarySource = cloneSource(projection.PrimarySource)
 	h.sourceURLs = cloneStrings(projection.SourceURLs)
 	if len(projection.CategoryTags) > 0 {
@@ -465,6 +447,11 @@ func (h *Homepage) ApplyImportedProjection(projection ImportedProjection) error 
 		}
 		if city := strings.TrimSpace(projection.City); city != "" {
 			h.city = city
+		}
+		// 坐标只由数据发布线提供；认领后由商家在 UpdateClaimedBasics 里维护，
+		// 因此与 title/city 同处 claimStatus != claimed 分支。
+		if projection.Location != nil {
+			h.location = cloneGeo(projection.Location)
 		}
 		if cover := coverFromAssets(h.introductionAssets); cover != "" {
 			h.coverURL = cover
@@ -508,6 +495,11 @@ func (h *Homepage) validate() error {
 	if h.sourceOwner == "" != (h.sourceEntityRef == "") {
 		return ErrInvalidHomepage
 	}
+	// location 是 NULLABLE，但一旦存在必须是可被 2dsphere 索引的合法坐标；
+	// 越界坐标会在 Mongo 建键时才失败，聚合层先拦住更容易归因。
+	if h.location != nil && !h.location.InRange() {
+		return ErrInvalidHomepage
+	}
 	return nil
 }
 
@@ -530,6 +522,22 @@ func (h *Homepage) Status() Status {
 		return ""
 	}
 	return h.status
+}
+
+// StructuredFactsView 返回已收敛的事实投影，nil 表示无可展示事实。
+func (h *Homepage) StructuredFactsView() *StructuredFacts {
+	if h == nil {
+		return nil
+	}
+	return cloneStructuredFacts(h.structuredFacts)
+}
+
+// DroppedStructuredFactFields 返回最近一次收敛丢弃的字段与原因，供导入流水线落日志。
+func (h *Homepage) DroppedStructuredFactFields() []string {
+	if h == nil {
+		return nil
+	}
+	return cloneStrings(h.droppedFactFields)
 }
 
 func (h *Homepage) Snapshot() Snapshot {
@@ -557,19 +565,12 @@ func (h *Homepage) Snapshot() Snapshot {
 		City:                 h.city,
 		Location:             cloneGeo(h.location),
 		OwnerUserID:          h.ownerUserID,
-		OwnerSubAccountID:    h.ownerSubAccountID,
+		OwnerPersonaID:       h.ownerPersonaID,
 		Verified:             h.verified,
 		EstablishedYear:      cloneInt(h.establishedYear),
-		AverageRating:        cloneFloat(h.averageRating),
-		RatingCount:          h.ratingCount,
-		ReviewSummary:        cloneReviewSummary(h.reviewSummary),
-		ContentPreview:       slices.Clone(h.contentPreview),
-		QuestionPreview:      slices.Clone(h.questionPreview),
-		RelatedGroups:        slices.Clone(h.relatedGroups),
-		RelationEdges:        cloneRawSlice(h.relationEdges),
-		AssistantContext:     slices.Clone(h.assistantContext),
 		IntroductionMarkdown: h.introductionMarkdown,
 		IntroductionAssets:   cloneAssets(h.introductionAssets),
+		StructuredFacts:      cloneStructuredFacts(h.structuredFacts),
 		PrimarySource:        cloneSource(h.primarySource),
 		SourceURLs:           cloneStrings(h.sourceURLs),
 		CreatedAt:            h.createdAt,
@@ -600,15 +601,32 @@ func CanonicalEntityID(homepageType, title string) string {
 	return "entity:" + kind + ":" + slug
 }
 
-func ValidHomepageType(value string) bool {
-	switch strings.TrimSpace(value) {
-	case "vehicle", "hotel", "restaurant", "sight", "university", "travel_photo",
-		"museum", "heritage_site", "ancient_town", "religious_site",
-		"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
-		return true
-	default:
-		return false
+// homepageTypes 与 _shared/types.yaml 的 HomepageType 同集，由
+// verify_homepage_type_contract.py 守住两侧一致；新增取值必须同时出现在这里，
+// 否则该类型会在 Intake 阶段被判定为非法而无法建立主页。
+var homepageTypes = []string{
+	"vehicle", "hotel", "restaurant", "sight", "university", "travel_photo",
+	"museum", "heritage_site", "ancient_town", "religious_site",
+	"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park",
+	"transport_hub", "city", "route", "photo_spot", "gear",
+}
+
+var homepageTypeSet = func() map[string]struct{} {
+	set := make(map[string]struct{}, len(homepageTypes))
+	for _, value := range homepageTypes {
+		set[value] = struct{}{}
 	}
+	return set
+}()
+
+// HomepageTypes 返回闭集副本，供校验与装配读取，不暴露内部切片。
+func HomepageTypes() []string {
+	return append([]string(nil), homepageTypes...)
+}
+
+func ValidHomepageType(value string) bool {
+	_, ok := homepageTypeSet[strings.TrimSpace(value)]
+	return ok
 }
 
 func NormalizeLookupAlias(value string) string {
@@ -656,7 +674,9 @@ func canonicalSlug(value string) string {
 	return strings.Trim(builder.String(), "_")
 }
 
-func resolveObjectPageTemplate(homepageType, explicit string) string {
+// ObjectPageTemplate 是主页类型到对象页模板的唯一映射。route 停留在 standard，
+// 因为它是多站点序列而非单一地点，套用以单张封面为主的 travel_photo 会错位。
+func ObjectPageTemplate(homepageType, explicit string) string {
 	if value := strings.TrimSpace(explicit); value != "" {
 		return value
 	}
@@ -664,11 +684,16 @@ func resolveObjectPageTemplate(homepageType, explicit string) string {
 	case "university":
 		return "campus"
 	case "travel_photo", "sight", "museum", "heritage_site", "ancient_town",
-		"religious_site", "check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
+		"religious_site", "check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park",
+		"transport_hub", "city", "photo_spot":
 		return "travel_photo"
 	default:
 		return "standard"
 	}
+}
+
+func resolveObjectPageTemplate(homepageType, explicit string) string {
+	return ObjectPageTemplate(homepageType, explicit)
 }
 
 func coverFromAssets(assets []IntroductionAsset) string {

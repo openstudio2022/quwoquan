@@ -91,16 +91,6 @@ fields:
   description: click 信号中由用户真实点击的对象 ID；query 信号必须为空
   role: append_only_fact
   reference: true
-- name: rankingVersion
-  source: rankingVersion
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: none
-  ops_exposure: read
-  role: append_only_fact
 - name: experimentBucket
   source: experimentBucket
   type: string

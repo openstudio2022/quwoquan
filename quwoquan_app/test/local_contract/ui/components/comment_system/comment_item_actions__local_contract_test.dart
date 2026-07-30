@@ -39,10 +39,7 @@ void main() {
     await tester.tap(find.text(ContentText.commentDeleteAction).last);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(ContentText.commentDeleteConfirmTitle),
-      findsOneWidget,
-    );
+    expect(find.text(ContentText.commentDeleteConfirmTitle), findsOneWidget);
     expect(comments.deleteCalls, 0);
     await tester.tap(find.text(FoundationText.cancel));
     await tester.pumpAndSettle();
@@ -86,10 +83,7 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.trash));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(ContentText.commentDeleteConfirmTitle),
-      findsOneWidget,
-    );
+    expect(find.text(ContentText.commentDeleteConfirmTitle), findsOneWidget);
     expect(comments.deleteCalls, 0);
     await tester.tap(find.text(ContentText.commentDeleteAction).last);
     await tester.pumpAndSettle();
@@ -172,7 +166,7 @@ class _AuthenticatedSession extends AuthSessionController {
       accessToken: 'test-token',
       refreshToken: 'test-refresh',
       ownerId: 'test-owner',
-      activeSubAccountId: 'test-persona',
+      activePersonaId: 'test-persona',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',

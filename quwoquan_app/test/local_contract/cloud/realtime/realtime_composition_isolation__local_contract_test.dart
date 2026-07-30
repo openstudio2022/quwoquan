@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 import '../../../support/fixtures/chat/fixture_realtime_connection_delegate.dart';
@@ -11,6 +12,7 @@ void main() {
     var delegateBuildCount = 0;
     final container = ProviderContainer(
       overrides: [
+        authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
         realtimeConnectionManagerProvider.overrideWith(
           () => RealtimeConnectionNotifier(
             delegateFactory:
@@ -49,4 +51,48 @@ void main() {
       TransportState.active,
     );
   });
+
+  test('guest foreground never starts bearer-required realtime transport', () {
+    final container = ProviderContainer(
+      overrides: [
+        realtimeConnectionManagerProvider.overrideWith(
+          () => RealtimeConnectionNotifier(
+            delegateFactory:
+                ({
+                  required ref,
+                  required onStateChanged,
+                  required currentUserIdResolver,
+                }) => FixtureRealtimeConnectionDelegate(
+                  read: ref.read,
+                  invalidate: ref.invalidate,
+                  onStateChanged: onStateChanged,
+                ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(realtimeConnectionManagerProvider.notifier);
+    notifier.onAppForeground();
+    notifier.onEnterConversation('conversation-must-not-connect');
+
+    expect(
+      container.read(realtimeConnectionManagerProvider),
+      TransportState.disconnected,
+    );
+  });
+}
+
+class _AuthenticatedSession extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'realtime-test-token',
+    refreshToken: 'realtime-test-refresh-token',
+    ownerId: 'realtime-test-owner',
+    activePersonaId: 'realtime-test-persona',
+    accountState: 'active',
+    installId: 'realtime-test-install',
+  );
 }

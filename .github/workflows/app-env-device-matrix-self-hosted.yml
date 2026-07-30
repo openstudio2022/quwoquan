@@ -1,7 +1,6 @@
-# Self-hosted：统一设备矩阵入口（PR 主门禁 / workflow_call 复用 / 手动调试）。
-# 固定到本机 macOS self-hosted runner，并通过 flutter devices --machine 动态发现当前可见的 Android/iOS 模拟器与真机。
-# 发现到的每台设备都会执行；只要总设备数 >= 1 即可进入矩阵，不再依赖固定 device id。
-# PR 默认 pr_light profile（alpha/beta, allow_missing）；显式或 nightly 调用时可传 nightly_full / manual_full。
+# Self-hosted mobile validation: one host-bound Beta stack, two explicit device jobs,
+# one receipt aggregator, then one standalone teardown. Formal Beta consumes the
+# same exact OCI candidate as Alpha/Gamma and never enters the source-build path.
 name: 05. App Env Device Matrix
 
 permissions:
@@ -28,7 +27,7 @@ on:
           - release_candidate
           - mainline_auto_prod
       env_json:
-        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]（留空则按 profile 决定）'
+        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]'
         required: false
         default: ''
       allow_missing_platforms:
@@ -36,16 +35,8 @@ on:
         required: false
         default: ''
         type: string
-      gamma_base_url:
-        description: 可选覆盖 gamma 网关（默认从 topology 的 gamma-local.publicBases.api 解析）
-        required: false
-        default: ''
-      media_base_url:
-        description: 可选覆盖媒体 CDN base（chat-avatar 矩阵使用）
-        required: false
-        default: ''
       matrix_kind:
-        description: assistant / chat-avatar / environment-smoke / app-core-readback / media-publication / user-profile / account-closure / JSON 数组（留空则按 profile 决定）
+        description: assistant / chat-avatar / environment-smoke / app-core-readback / media-publication / user-profile / account-closure / JSON 数组
         required: false
         default: ''
       account_closure_disposable_ack:
@@ -54,13 +45,11 @@ on:
         default: false
         type: boolean
       account_closure_prod_platform:
-        description: 'Prod 一次性注销证据设备平台（每次只允许一个设备）'
+        description: 'Prod 一次性注销证据设备平台'
         required: false
         default: ios
         type: choice
-        options:
-          - ios
-          - android
+        options: [ios, android]
       account_closure_prod_device_id:
         description: 'Prod 一次性注销证据的唯一 Flutter device id'
         required: false
@@ -87,18 +76,8 @@ on:
         required: false
         type: string
         default: ''
-      gamma_base_url:
-        description: '可选覆盖 gamma 网关（默认走 topology 的 gamma-local.publicBases.api）'
-        required: false
-        type: string
-        default: ''
-      media_base_url:
-        description: '可选覆盖媒体 CDN base'
-        required: false
-        type: string
-        default: ''
       matrix_kind:
-        description: 'assistant / chat-avatar / environment-smoke / app-core-readback / media-publication / user-profile / account-closure / JSON array (overrides profile default)'
+        description: 'Matrix kind or JSON array (overrides profile default)'
         required: false
         type: string
         default: ''
@@ -117,859 +96,609 @@ on:
         required: false
         type: string
         default: ''
+      release_evidence_ref:
+        description: Exact immutable candidate-ready ReleaseEvidenceManifest OCI ref
+        required: false
+        type: string
+        default: ''
+      candidate_digest:
+        description: Stable candidateId required by mainline_auto_prod
+        required: false
+        type: string
+        default: ''
+      artifact_digest:
+        description: ReleaseEvidenceManifest snapshot artifactDigest
+        required: false
+        type: string
+        default: ''
+      producer_workflow_run_id:
+        description: ReleaseEvidenceManifest source.workflowRunId
+        required: false
+        type: string
+        default: ''
+      source_git_sha:
+        description: Exact ReleaseEvidenceManifest source.gitSha
+        required: false
+        type: string
+        default: ''
     outputs:
       discover_duration_seconds:
-        description: 发现设备阶段耗时
-        value: ${{ jobs.discover_devices.outputs.duration_seconds }}
+        description: Host/profile prerequisite duration
+        value: ${{ jobs.beta_stack.outputs.duration_seconds }}
       mobile_duration_seconds:
-        description: 设备矩阵阶段耗时
+        description: Dual-platform aggregation duration
         value: ${{ jobs.mobile_matrix.outputs.duration_seconds }}
       android_result:
-        description: Android 矩阵结果
+        description: Android matrix result
         value: ${{ jobs.mobile_matrix.outputs.android_result }}
       ios_result:
-        description: iOS 矩阵结果
+        description: iOS matrix result
         value: ${{ jobs.mobile_matrix.outputs.ios_result }}
       allow_missing_platforms:
-        description: 当前 profile 是否允许缺席平台
-        value: ${{ jobs.discover_devices.outputs.allow_missing_platforms }}
+        description: Whether the selected profile allows a missing platform
+        value: ${{ jobs.beta_stack.outputs.allow_missing_platforms }}
       has_android:
-        description: 是否发现 Android 设备
-        value: ${{ jobs.discover_devices.outputs.has_android }}
+        description: Android is a required dedicated runner capability
+        value: ${{ jobs.beta_stack.outputs.has_android }}
       has_ios:
-        description: 是否发现 iOS 设备
-        value: ${{ jobs.discover_devices.outputs.has_ios }}
-      critical_path_seconds:
-        description: discover + mobile 的关键路径时长
-        value: ${{ jobs.app_env_device_matrix_summary.outputs.critical_path_seconds }}
+        description: iOS is a required dedicated runner capability
+        value: ${{ jobs.beta_stack.outputs.has_ios }}
+      machine_critical_path_seconds:
+        description: Official GitHub DAG diagnostic duration
+        value: ${{ jobs.app_env_device_matrix_summary.outputs.machine_critical_path_seconds }}
       summary_result:
-        description: 汇总 gate 结果
+        description: Summary gate result
         value: ${{ jobs.app_env_device_matrix_summary.outputs.summary_result }}
+      receipt_ref:
+        description: Exact immutable Beta environment evidence OCI ref
+        value: ${{ jobs.mobile_matrix.outputs.receipt_ref }}
+      receipt_digest:
+        description: Beta environment evidence OCI transport digest
+        value: ${{ jobs.mobile_matrix.outputs.receipt_digest }}
 
 concurrency:
-  group: app-env-device-matrix-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: app-env-device-matrix-beta-stack
+  cancel-in-progress: false
 
 jobs:
-  discover_devices:
-    name: Discover mobile devices (self-hosted)
+  beta_stack:
+    name: Prepare one Beta stack prerequisite
     if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      packages: read
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      profile: ${{ steps.discover.outputs.profile }}
-      env_json: ${{ steps.discover.outputs.env_json }}
-      allow_missing_platforms: ${{ steps.discover.outputs.allow_missing_platforms }}
-      matrix_kind: ${{ steps.discover.outputs.matrix_kind }}
-      artifact_key: ${{ steps.discover.outputs.artifact_key }}
-      gamma_base_url: ${{ steps.discover.outputs.gamma_base_url }}
-      media_base_url: ${{ steps.discover.outputs.media_base_url }}
-      has_android: ${{ steps.discover.outputs.has_android }}
-      has_ios: ${{ steps.discover.outputs.has_ios }}
-      android_count: ${{ steps.discover.outputs.android_count }}
-      ios_count: ${{ steps.discover.outputs.ios_count }}
-      device_summary: ${{ steps.discover.outputs.device_summary }}
+      profile: ${{ steps.defaults.outputs.profile }}
+      env_json: ${{ steps.defaults.outputs.env_json }}
+      allow_missing_platforms: ${{ steps.defaults.outputs.allow_missing_platforms }}
+      matrix_kind: ${{ steps.defaults.outputs.matrix_kind }}
+      artifact_key: ${{ steps.defaults.outputs.artifact_key }}
+      has_android: ${{ steps.defaults.outputs.has_android }}
+      has_ios: ${{ steps.defaults.outputs.has_ios }}
+      host_digest: ${{ steps.host.outputs.host_digest }}
+      stack_ref: ${{ steps.stack_ref.outputs.ref }}
+      stack_digest: ${{ steps.stack_bundle.outputs.digest }}
+      formal_runtime_started: ${{ steps.formal_runtime.outputs.started }}
+    env:
+      STACK_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/stack
+      STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: "0"
     steps:
       - id: start
-        name: Start timer
+        name: Start prerequisite timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
-      - name: 解析当前触发下的矩阵默认值（按 validation_profile 分层）
-        id: discover_defaults
+          ref: ${{ inputs.source_git_sha || inputs.checkout_ref || github.sha }}
+          path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/stack
+          clean: false
+          persist-credentials: false
+      - id: defaults
+        name: Resolve validation profile without discovering devices centrally
+        working-directory: ${{ env.STACK_REPO_DIR }}
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_PROFILE: ${{ inputs.validation_profile }}
           INPUT_ENV_JSON: ${{ inputs.env_json }}
-          INPUT_ALLOW_MISSING_PLATFORMS: ${{ inputs.allow_missing_platforms }}
+          INPUT_ALLOW_MISSING: ${{ inputs.allow_missing_platforms }}
           INPUT_MATRIX_KIND: ${{ inputs.matrix_kind }}
-          INPUT_GAMMA_BASE_URL: ${{ inputs.gamma_base_url }}
-          INPUT_MEDIA_BASE_URL: ${{ inputs.media_base_url }}
         run: |
+          set -euo pipefail
           PROFILE="${INPUT_PROFILE:-pr_light}"
-          if [ "${EVENT_NAME}" = "pull_request" ]; then
-            PROFILE="pr_light"
-          fi
+          if [ "$EVENT_NAME" = "pull_request" ]; then PROFILE="pr_light"; fi
+          PROFILE_JSON="$RUNNER_TEMP/mobile-profile-${{ github.run_id }}-${{ github.run_attempt }}.json"
           python3 quwoquan_ops/ci/resolve_gamma_validation_profile.py \
-            --profile "${PROFILE}" \
-            --github-output "$GITHUB_OUTPUT" >/tmp/app-env-device-matrix-profile.json
-          DEFAULT_ENV_JSON="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
-          print(json.dumps(payload.get('device_envs') or [], ensure_ascii=False))
-          PY
-          )"
-          DEFAULT_ALLOW_MISSING="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
-          print('true' if bool(payload.get('allow_missing_platforms', False)) else 'false')
-          PY
-          )"
-          DEFAULT_MATRIX_KIND="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
-          print(str(payload.get('default_matrix_kind', '') or 'assistant'))
-          PY
-          )"
-          DEFAULT_MATRIX_KINDS_JSON="$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          payload = json.loads(Path('/tmp/app-env-device-matrix-profile.json').read_text(encoding='utf-8'))
-          print(json.dumps(payload.get('matrix_kinds') or ['assistant'], ensure_ascii=False))
-          PY
-          )"
-          DEFAULT_GAMMA_BASE_URL="$(python3 - <<'PY'
-          from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
-
-          topology = load_environment_topology()
-          public_bases = get_target(topology, 'gamma-local').get('publicBases') or {}
-          print(str(public_bases.get('api', '')).rstrip('/'))
-          PY
-          )"
-          ENV_JSON="${INPUT_ENV_JSON:-${DEFAULT_ENV_JSON}}"
-          ALLOW_MISSING="${INPUT_ALLOW_MISSING_PLATFORMS:-${DEFAULT_ALLOW_MISSING}}"
-          MATRIX_KIND="${INPUT_MATRIX_KIND:-${DEFAULT_MATRIX_KINDS_JSON}}"
-          ARTIFACT_KEY="$(MATRIX_KIND_VALUE="${MATRIX_KIND}" python3 - <<'PY'
-          import json
-          import os
-          import re
-
-          raw = (os.environ.get('MATRIX_KIND_VALUE') or '').strip()
-          if not raw:
-              print('assistant')
-              raise SystemExit(0)
-          if raw.startswith('['):
-              items = [str(item).strip() for item in json.loads(raw) if str(item).strip()]
-          else:
-              items = [item.strip() for item in raw.split(',') if item.strip()]
-          if len(items) != 1:
-              print('multi-kind')
-              raise SystemExit(0)
-          print(re.sub(r'[^a-zA-Z0-9._-]+', '-', items[0]) or 'assistant')
-          PY
-          )"
-          echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
-          echo "env_json=${ENV_JSON}" >> "$GITHUB_OUTPUT"
-          echo "allow_missing_platforms=${ALLOW_MISSING}" >> "$GITHUB_OUTPUT"
-          echo "matrix_kind=${MATRIX_KIND}" >> "$GITHUB_OUTPUT"
-          echo "artifact_key=${ARTIFACT_KEY}" >> "$GITHUB_OUTPUT"
-          echo "gamma_base_url=${INPUT_GAMMA_BASE_URL:-${DEFAULT_GAMMA_BASE_URL}}" >> "$GITHUB_OUTPUT"
-          echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
-      - name: 校验 self-hosted macOS runner
+            --profile "$PROFILE" \
+            --github-output "$RUNNER_TEMP/profile-output" > "$PROFILE_JSON"
+          DEFAULT_ENV_JSON="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["device_envs"], separators=(",",":")))' "$PROFILE_JSON")"
+          DEFAULT_ALLOW="$(python3 -c 'import json,sys; print("true" if json.load(open(sys.argv[1])).get("allow_missing_platforms") else "false")' "$PROFILE_JSON")"
+          DEFAULT_KINDS="$(python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1])).get("matrix_kinds") or ["assistant"], separators=(",",":")))' "$PROFILE_JSON")"
+          ENV_JSON="${INPUT_ENV_JSON:-$DEFAULT_ENV_JSON}"
+          ALLOW_MISSING="${INPUT_ALLOW_MISSING:-$DEFAULT_ALLOW}"
+          MATRIX_KIND="${INPUT_MATRIX_KIND:-$DEFAULT_KINDS}"
+          ARTIFACT_KEY="$(MATRIX_KIND_VALUE="$MATRIX_KIND" python3 -c 'import json,os,re; raw=os.environ["MATRIX_KIND_VALUE"].strip(); items=json.loads(raw) if raw.startswith("[") else raw.split(","); print(re.sub(r"[^a-zA-Z0-9._-]+", "-", str(items[0]).strip()) if len(items)==1 else "multi-kind")')"
+          {
+            echo "profile=$PROFILE"
+            echo "env_json=$ENV_JSON"
+            echo "allow_missing_platforms=$ALLOW_MISSING"
+            echo "matrix_kind=$MATRIX_KIND"
+            echo "artifact_key=$ARTIFACT_KEY"
+            echo "has_android=true"
+            echo "has_ios=true"
+          } >> "$GITHUB_OUTPUT"
+      - id: host
+        name: Bind the stack prerequisite to one physical Mac
+        working-directory: ${{ env.STACK_REPO_DIR }}
+        run: python3 quwoquan_ops/ci/device_runner_lease.py host --github-output "$GITHUB_OUTPUT"
+      - name: Login immutable candidate registry
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize and bind exact mainline candidate
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        working-directory: ${{ env.STACK_REPO_DIR }}
+        env:
+          EXPECTED_RELEASE_REF: ${{ inputs.release_evidence_ref }}
+          EXPECTED_CANDIDATE: ${{ inputs.candidate_digest }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+          EXPECTED_WORKFLOW_RUN_ID: ${{ inputs.producer_workflow_run_id }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_git_sha }}
         run: |
-          if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::05 已统一要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
-            exit 2
-          fi
-      - name: Install Flutter (PATH)
+          set -euo pipefail
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/beta-stack/release-evidence-manifest"
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "$EXPECTED_RELEASE_REF" \
+            --output-dir "$ROOT"
+          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
+            --manifest "$ROOT/manifest.json" \
+            --expected-candidate "$EXPECTED_CANDIDATE" \
+            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
+            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
+            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
+            --expected-repository "${{ github.repository }}" \
+            --expected-release-ref "$EXPECTED_RELEASE_REF"
+          echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
+      - id: formal_runtime
+        name: Run immutable Beta formal runtime
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        working-directory: ${{ env.STACK_REPO_DIR }}
         run: |
-          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
-          flutter --version
-      - name: 发现当前 Mac 可见移动设备
-        id: discover
+          set -euo pipefail
+          ROOT="$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime"
+          mkdir -p "$ROOT"
+          echo "started=true" >> "$GITHUB_OUTPUT"
+          python3 quwoquan_ops/cli/stackctl.py package \
+            --env beta \
+            --include-services \
+            --report-dir "$ROOT/package"
+          cp "$ROOT/package/report.json" "$ROOT/package.json"
+          python3 quwoquan_ops/cli/stackctl.py up \
+            --target beta-local \
+            --formal-release \
+            --release-manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
+            --skip-build \
+            --skip-app \
+            --report-dir "$ROOT/up"
+          cp "$ROOT/up/report.json" "$ROOT/up.json"
+          python3 quwoquan_ops/cli/stackctl.py health \
+            --target beta-local \
+            --scope full \
+            --report-dir "$ROOT/health"
+          cp "$ROOT/health/report.json" "$ROOT/health.json"
+          python3 quwoquan_ops/cli/stackctl.py verify \
+            --env beta \
+            --target beta-local \
+            --kind all \
+            --profile release \
+            --reuse-package \
+            --report-dir "$ROOT/verify"
+          cp "$ROOT/verify/report.json" "$ROOT/verify.json"
+      - name: Seal immutable Beta stack evidence
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        working-directory: ${{ env.STACK_REPO_DIR }}
         run: |
-          python3 - "$RUNNER_TEMP/mobile-devices.json" "$GITHUB_OUTPUT" <<'PY'
-          import json
-          import subprocess
-          import sys
-          from pathlib import Path
-
-          output_json, output_path = sys.argv[1], sys.argv[2]
-          result = subprocess.run(
-              ["flutter", "devices", "--machine"],
-              cwd=str(Path.home()),
-              text=True,
-              capture_output=True,
-              check=False,
-          )
-          if result.returncode != 0:
-              sys.stderr.write("flutter devices --machine failed:\n")
-              sys.stderr.write((result.stdout or "") + (result.stderr or ""))
-              raise SystemExit(result.returncode)
-          raw = result.stdout or ""
-          start = raw.find("[")
-          end = raw.rfind("]")
-          if start < 0 or end < start:
-              sys.stderr.write("flutter devices output missing JSON array\n")
-              raise SystemExit(2)
-          devices = json.loads(raw[start : end + 1])
-          filtered = []
-          for device in devices:
-              target = str(device.get("targetPlatform", "")).lower()
-              if target != "ios" and not target.startswith("android"):
-                  continue
-              device_id = str(device.get("id", "")).strip()
-              if not device_id:
-                  continue
-              filtered.append(
-                  {
-                      "id": device_id,
-                      "name": str(device.get("name", "")),
-                      "targetPlatform": str(device.get("targetPlatform", "")),
-                      "sdk": str(device.get("sdk", "")),
-                      "emulator": bool(device.get("emulator", False)),
-                      "ephemeral": bool(device.get("ephemeral", False)),
-                  }
-              )
-          data = {
-              "deviceCount": len(filtered),
-              "android": [
-                  item
-                  for item in filtered
-                  if str(item.get("targetPlatform", "")).lower().startswith("android")
-              ],
-              "ios": [
-                  item
-                  for item in filtered
-                  if str(item.get("targetPlatform", "")).lower() == "ios"
-              ],
-              "devices": filtered,
-          }
-          Path(output_json).write_text(
-              json.dumps(data, ensure_ascii=False, indent=2) + "\n",
-              encoding="utf-8",
-          )
-          android = data.get("android") or []
-          ios = data.get("ios") or []
-          env_json = """${{ steps.discover_defaults.outputs.env_json }}"""
-          matrix_kind = """${{ steps.discover_defaults.outputs.matrix_kind }}"""
-          artifact_key = """${{ steps.discover_defaults.outputs.artifact_key }}"""
-          gamma_base_url = """${{ steps.discover_defaults.outputs.gamma_base_url }}"""
-          media_base_url = """${{ steps.discover_defaults.outputs.media_base_url }}"""
-
-          def fmt(items):
-              return ", ".join(f'{item["name"]}({item["id"]})' for item in items)
-
-          summary_parts = []
-          if android:
-              summary_parts.append(f'android[{len(android)}]: {fmt(android)}')
-          if ios:
-              summary_parts.append(f'ios[{len(ios)}]: {fmt(ios)}')
-          summary = "；".join(summary_parts) if summary_parts else "未发现 iOS/Android 设备"
-
-          with open(output_path, "a", encoding="utf-8") as fh:
-              print('profile=${{ steps.discover_defaults.outputs.profile }}', file=fh)
-              print(f'env_json={env_json}', file=fh)
-              print(
-                  'allow_missing_platforms=${{ steps.discover_defaults.outputs.allow_missing_platforms }}',
-                  file=fh,
-              )
-              print(f'matrix_kind={matrix_kind}', file=fh)
-              print(f'artifact_key={artifact_key}', file=fh)
-              print(f'gamma_base_url={gamma_base_url}', file=fh)
-              print(f'media_base_url={media_base_url}', file=fh)
-              print(f'has_android={"true" if android else "false"}', file=fh)
-              print(f'has_ios={"true" if ios else "false"}', file=fh)
-              print(f'android_count={len(android)}', file=fh)
-              print(f'ios_count={len(ios)}', file=fh)
-              print("device_summary<<EOF", file=fh)
-              print(summary, file=fh)
-              print("EOF", file=fh)
-
-          print(f"::notice::self-hosted mobile devices => {summary}")
-          PY
-          python3 - "$RUNNER_TEMP/mobile-devices.json" <<'PY'
-          import json
-          import sys
-          data = json.load(open(sys.argv[1], encoding="utf-8"))
-          if int(data.get("deviceCount", 0)) == 0:
-              raise SystemExit(2)
-          PY
+          python3 quwoquan_ops/ci/render_beta_device_evidence.py stack \
+            --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
+            --host-digest "${{ steps.host.outputs.host_digest }}" \
+            --stack-evidence "package=$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime/package.json" \
+            --stack-evidence "up=$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime/up.json" \
+            --stack-evidence "health=$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime/health.json" \
+            --stack-evidence "verify=$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime/verify.json" \
+            --bundle-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/stack-evidence"
+      - name: Setup Buildx for Beta stack evidence
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
+      - id: stack_bundle
+        name: Publish immutable Beta stack evidence OCI
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/stack-evidence
+          file: ${{ env.STACK_REPO_DIR }}/quwoquan_ops/ci/app_candidate_evidence.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/beta-stack-evidence:${{ github.run_id }}-${{ github.run_attempt }}
+          sbom: true
+          provenance: mode=max
+      - id: stack_ref
+        name: Record producer-returned exact stack evidence ref
+        if: ${{ steps.defaults.outputs.profile == 'mainline_auto_prod' }}
+        run: echo "ref=ghcr.io/${{ github.repository }}/beta-stack-evidence@${{ steps.stack_bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
       - id: finish
         if: always()
-        name: Finish timer
-        run: |
-          started_at="${{ steps.start.outputs.started_at }}"
-          if [ -n "${started_at}" ]; then
-            echo "duration_seconds=$(( $(date +%s) - started_at ))" >> "$GITHUB_OUTPUT"
-          else
-            echo "duration_seconds=0" >> "$GITHUB_OUTPUT"
-          fi
+        name: Finish prerequisite timer
+        run: echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  android_device_matrix:
+    name: Android device matrix
+    needs: beta_stack
+    if: ${{ needs.beta_stack.result == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/beta-device-platform.yml
+    with:
+      platform: android
+      checkout_ref: ${{ inputs.source_git_sha || inputs.checkout_ref || github.sha }}
+      validation_profile: ${{ needs.beta_stack.outputs.profile }}
+      env_json: ${{ needs.beta_stack.outputs.env_json }}
+      matrix_kind: ${{ needs.beta_stack.outputs.matrix_kind }}
+      expected_host_digest: ${{ needs.beta_stack.outputs.host_digest }}
+      release_evidence_ref: ${{ inputs.release_evidence_ref }}
+      candidate_digest: ${{ inputs.candidate_digest }}
+      artifact_digest: ${{ inputs.artifact_digest }}
+      producer_workflow_run_id: ${{ inputs.producer_workflow_run_id }}
+      source_git_sha: ${{ inputs.source_git_sha }}
+      event_name: ${{ github.event_name }}
+      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack }}
+      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform }}
+      account_closure_prod_device_id: ${{ inputs.account_closure_prod_device_id }}
+    secrets: inherit
+
+  ios_device_matrix:
+    name: iOS device matrix
+    needs: beta_stack
+    if: ${{ needs.beta_stack.result == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/beta-device-platform.yml
+    with:
+      platform: ios
+      checkout_ref: ${{ inputs.source_git_sha || inputs.checkout_ref || github.sha }}
+      validation_profile: ${{ needs.beta_stack.outputs.profile }}
+      env_json: ${{ needs.beta_stack.outputs.env_json }}
+      matrix_kind: ${{ needs.beta_stack.outputs.matrix_kind }}
+      expected_host_digest: ${{ needs.beta_stack.outputs.host_digest }}
+      release_evidence_ref: ${{ inputs.release_evidence_ref }}
+      candidate_digest: ${{ inputs.candidate_digest }}
+      artifact_digest: ${{ inputs.artifact_digest }}
+      producer_workflow_run_id: ${{ inputs.producer_workflow_run_id }}
+      source_git_sha: ${{ inputs.source_git_sha }}
+      event_name: ${{ github.event_name }}
+      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack }}
+      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform }}
+      account_closure_prod_device_id: ${{ inputs.account_closure_prod_device_id }}
+    secrets: inherit
 
   mobile_matrix:
-    name: Mobile matrix (self-hosted)
-    needs: [discover_devices]
-    if: ${{ needs.discover_devices.outputs.has_android == 'true' || needs.discover_devices.outputs.has_ios == 'true' }}
-    runs-on: [self-hosted, macOS]
-    environment:
-      name: ${{ contains(needs.discover_devices.outputs.env_json, '"prod"') && 'production' || 'device-matrix' }}
-    timeout-minutes: 120
+    name: Aggregate mobile matrix evidence
+    needs: [beta_stack, android_device_matrix, ios_device_matrix]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      contents: read
+      packages: write
+    env:
+      AGGREGATE_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/aggregate
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
-      android_result: ${{ steps.run_matrix.outputs.android_result }}
-      ios_result: ${{ steps.run_matrix.outputs.ios_result }}
-    env:
-      GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
-      ALPHA_TEST_AUTH_TOKEN: ${{ secrets.ALPHA_TEST_AUTH_TOKEN }}
-      BETA_TEST_AUTH_TOKEN: ${{ secrets.BETA_TEST_AUTH_TOKEN }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-      PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
-      PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN: ${{ secrets.PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN }}
-      PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN: ${{ secrets.PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN }}
-      PROD_ACCOUNT_CLOSURE_OWNER_ID: ${{ secrets.PROD_ACCOUNT_CLOSURE_OWNER_ID }}
-      PROD_ACCOUNT_CLOSURE_PERSONA_ID: ${{ secrets.PROD_ACCOUNT_CLOSURE_PERSONA_ID }}
-      VIDEO_PLAYBACK_CANARY_WORK_ID: ${{ vars.VIDEO_PLAYBACK_CANARY_WORK_ID }}
-      ASSISTANT_MODEL_PROVIDER: deterministic
-      ALLOW_DETERMINISTIC_BETA: "1"
-      ASSISTANT_MATRIX_ALL_DEVICES: "1"
-      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
+      android_result: ${{ steps.results.outputs.android_result }}
+      ios_result: ${{ steps.results.outputs.ios_result }}
+      receipt_ref: ${{ steps.receipt_ref.outputs.ref }}
+      receipt_digest: ${{ steps.receipt_bundle.outputs.digest }}
     steps:
       - id: start
-        name: Start timer
+        name: Start aggregation timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 准备缓存工作树
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.source_git_sha || inputs.checkout_ref || github.sha }}
+          path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/aggregate
+          clean: false
+          persist-credentials: false
+      - id: results
+        name: Project explicit Android and iOS job results
         env:
-          GH_TOKEN: ${{ github.token }}
+          ANDROID: ${{ needs.android_device_matrix.result }}
+          IOS: ${{ needs.ios_device_matrix.result }}
+        run: |
+          echo "android_result=$ANDROID" >> "$GITHUB_OUTPUT"
+          echo "ios_result=$IOS" >> "$GITHUB_OUTPUT"
+      - name: Require successful direct-bound dual-platform evidence
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        env:
+          STACK_RESULT: ${{ needs.beta_stack.result }}
+          ANDROID_RESULT: ${{ needs.android_device_matrix.result }}
+          IOS_RESULT: ${{ needs.ios_device_matrix.result }}
+          STACK_REF: ${{ needs.beta_stack.outputs.stack_ref }}
+          STACK_DIGEST: ${{ needs.beta_stack.outputs.stack_digest }}
+          ANDROID_REF: ${{ needs.android_device_matrix.outputs.evidence_ref }}
+          ANDROID_DIGEST: ${{ needs.android_device_matrix.outputs.evidence_digest }}
+          IOS_REF: ${{ needs.ios_device_matrix.outputs.evidence_ref }}
+          IOS_DIGEST: ${{ needs.ios_device_matrix.outputs.evidence_digest }}
         run: |
           set -euo pipefail
-          CACHE_ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mobile-matrix/cache"
-          REPO_DIR="${CACHE_ROOT}/checkout"
-          AUTH_HEADER="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64)"
-          mkdir -p "${CACHE_ROOT}"
-          rm -rf "${REPO_DIR}"
-          git init "${REPO_DIR}"
-          git -C "${REPO_DIR}" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -C "${REPO_DIR}" config --local gc.auto 0
-          git -C "${REPO_DIR}" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${AUTH_HEADER}"
-          git -C "${REPO_DIR}" fetch --depth=1 origin "${GITHUB_SHA}"
-          git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
-          git -C "${REPO_DIR}" sparse-checkout init --cone
-          git -C "${REPO_DIR}" sparse-checkout set quwoquan_ops quwoquan_app quwoquan_service specs docs
-          git -C "${REPO_DIR}" read-tree -mu HEAD
-          git -C "${REPO_DIR}" clean -ffdx
-          test -f "${REPO_DIR}/quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/run_assistant_device_matrix_ci.py"
-          rm -rf "${GITHUB_WORKSPACE}/repo"
-          ln -s "${REPO_DIR}" "${GITHUB_WORKSPACE}/repo"
-      - name: 记录发现结果
-        run: |
-          echo "Android devices: ${{ needs.discover_devices.outputs.android_count }}"
-          echo "iOS devices: ${{ needs.discover_devices.outputs.ios_count }}"
-          echo "${{ needs.discover_devices.outputs.device_summary }}"
-      - name: 校验 self-hosted macOS runner
-        run: |
-          if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::05 已统一要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+          if [ "$STACK_RESULT" != success ] || [ "$ANDROID_RESULT" != success ] || [ "$IOS_RESULT" != success ]; then
+            echo "::error::GATE_BLOCK: Beta receipt requires one immutable stack and successful independent Android/iOS jobs"
             exit 2
           fi
-      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-        with:
-          go-version-file: quwoquan_service/go.mod
-          cache: false
-      - name: Install Flutter (PATH)
-        run: |
-          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
-          command -v adb >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 adb 并在 PATH 中"; exit 2; }
-          command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
-          flutter --version
-      - name: 安装 Flutter 依赖
-        working-directory: ${{ github.workspace }}/repo/quwoquan_app
-        run: flutter pub get
-      - name: 构建四环境 Android package-only 启动矩阵
-        working-directory: ${{ github.workspace }}/repo/quwoquan_app
-        run: |
-          python3 scripts/device/build_startup_environment_matrix.py \
-            --platform android \
-            --output-root "$QWQ_OUTPUT_ROOT/ci/startup-environment-android-build-matrix"
-      - name: 上传四环境 Android package-only 启动报告
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: startup-environment-android-build-matrix-${{ github.run_id }}
-          path: ${{ env.QWQ_OUTPUT_ROOT }}/ci/startup-environment-android-build-matrix/**/report.json
-          if-no-files-found: error
-          retention-days: 14
-      - name: 从真实 Launcher 执行 Android 原生启动 Gate instrumentation
-        if: ${{ needs.discover_devices.outputs.has_android == 'true' }}
-        working-directory: ${{ github.workspace }}/repo/quwoquan_app
-        run: |
-          set -euo pipefail
-          ANDROID_DEVICE_ID="$(python3 - <<'PY'
-          import json
-          import subprocess
-
-          result = subprocess.run(
-              ["flutter", "devices", "--machine"],
-              check=True,
-              capture_output=True,
-              text=True,
-          )
-          devices = json.loads(result.stdout[result.stdout.find("["):result.stdout.rfind("]") + 1])
-          android = [
-              str(device.get("id") or "")
-              for device in devices
-              if str(device.get("targetPlatform") or "").lower().startswith("android")
-          ]
-          if not android or not android[0]:
-              raise SystemExit("GATE_BLOCK: discovered Android device disappeared")
-          print(android[0])
-          PY
-          )"
-          bash scripts/device/verify_android_native_startup_gate.sh "$ANDROID_DEVICE_ID"
-      - name: 预热 sqlite3 macOS native asset
-        working-directory: ${{ github.workspace }}/repo/quwoquan_app
-        run: |
-          set -euo pipefail
-          warmup_script="$(mktemp "${PWD}/.dart_tool/sqlite3-prewarm.XXXXXX.dart")"
-          cat > "${warmup_script}" <<'DART'
-          import 'package:sqlite3/sqlite3.dart';
-
-          void main() {
-            final db = sqlite3.openInMemory();
-            db.execute('select 1;');
-            db.dispose();
-            print('sqlite3-prewarm-ok ${sqlite3.version}');
-          }
-          DART
-          cleanup() {
-            rm -f "${warmup_script}"
-          }
-          trap cleanup EXIT
-          attempts=0
-          until dart run "${warmup_script}"; do
-            attempts=$((attempts + 1))
-            if [ "${attempts}" -ge 5 ]; then
-              echo "::error::sqlite3 native asset prewarm failed after ${attempts} attempts"
-              exit 1
-            fi
-            sleep $((attempts * 5))
+          for exact_ref in "$STACK_REF" "$ANDROID_REF" "$IOS_REF"; do
+            case "$exact_ref" in ghcr.io/*@sha256:*) ;; *) exit 2 ;; esac
           done
-      - name: Bootstrap beta-local stack for mainline auto prod
-        if: ${{ needs.discover_devices.outputs.profile == 'mainline_auto_prod' }}
-        working-directory: ${{ github.workspace }}/repo
+          test "${STACK_REF##*@}" = "$STACK_DIGEST"
+          test "${ANDROID_REF##*@}" = "$ANDROID_DIGEST"
+          test "${IOS_REF##*@}" = "$IOS_DIGEST"
+      - name: Login immutable evidence registry
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize exact candidate and exact producer-returned evidence refs
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        working-directory: ${{ env.AGGREGATE_REPO_DIR }}
         env:
-          AUTO_OPEN_OPS: "0"
-          START_APP: "0"
+          STACK_REF: ${{ needs.beta_stack.outputs.stack_ref }}
+          STACK_DIGEST: ${{ needs.beta_stack.outputs.stack_digest }}
+          ANDROID_REF: ${{ needs.android_device_matrix.outputs.evidence_ref }}
+          ANDROID_DIGEST: ${{ needs.android_device_matrix.outputs.evidence_digest }}
+          IOS_REF: ${{ needs.ios_device_matrix.outputs.evidence_ref }}
+          IOS_DIGEST: ${{ needs.ios_device_matrix.outputs.evidence_digest }}
         run: |
           set -euo pipefail
-          python3 quwoquan_ops/cli/stackctl.py package --env beta --include-services --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-package"
-          python3 quwoquan_ops/cli/stackctl.py up --target beta-local --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-up"
-          python3 quwoquan_ops/cli/stackctl.py health --target beta-local --scope full --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-health"
-          python3 quwoquan_ops/cli/stackctl.py inspect --target beta-local --scope all --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-inspect"
-          python3 quwoquan_ops/cli/stackctl.py verify --env beta --kind all --profile integration --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-verify"
-      - id: run_matrix
-        name: Run mobile matrix environments
-        working-directory: ${{ github.workspace }}/repo
+          MANIFEST_ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/beta-aggregation/release-evidence-manifest"
+          INCOMING="$QWQ_OUTPUT_ROOT/env/beta/runs/evidence-incoming"
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "${{ inputs.release_evidence_ref }}" \
+            --output-dir "$MANIFEST_ROOT"
+          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
+            --manifest "$MANIFEST_ROOT/manifest.json" \
+            --expected-candidate "${{ inputs.candidate_digest }}" \
+            --expected-artifact-digest "${{ inputs.artifact_digest }}" \
+            --expected-workflow-run-id "${{ inputs.producer_workflow_run_id }}" \
+            --expected-source-sha "${{ inputs.source_git_sha }}" \
+            --expected-repository "${{ github.repository }}" \
+            --expected-release-ref "${{ inputs.release_evidence_ref }}"
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$STACK_REF" --expected-digest "$STACK_DIGEST" \
+            --output-dir "$INCOMING/stack" --require-file stack.json
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$ANDROID_REF" --expected-digest "$ANDROID_DIGEST" \
+            --output-dir "$INCOMING/android" --require-file platform.json --require-file raw/device-lease.json
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$IOS_REF" --expected-digest "$IOS_DIGEST" \
+            --output-dir "$INCOMING/ios" --require-file platform.json --require-file raw/device-lease.json
+          echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$MANIFEST_ROOT" >> "$GITHUB_ENV"
+      - name: Seal one Beta receipt after host, lease and overlap validation
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        working-directory: ${{ env.AGGREGATE_REPO_DIR }}
         env:
-          BETA_LOCAL_GATEWAY_BASE_URL: http://127.0.0.1:18000
-          BETA_LOCAL_MEDIA_BASE_URL: http://127.0.0.1:18100
-          ASSISTANT_MATRIX_GATEWAY_BASE_URL: http://127.0.0.1:18000
-          ASSISTANT_MATRIX_GATEWAY_HEALTH_URL: http://127.0.0.1:18000
-          CHAT_AVATAR_GATEWAY_BASE_URL: http://127.0.0.1:18000
-          EVENT_NAME: ${{ github.event_name }}
-          ACCOUNT_CLOSURE_DISPOSABLE_ACK: ${{ inputs.account_closure_disposable_ack }}
-          ACCOUNT_CLOSURE_PROD_PLATFORM: ${{ inputs.account_closure_prod_platform }}
-          ACCOUNT_CLOSURE_PROD_DEVICE_ID: ${{ inputs.account_closure_prod_device_id }}
+          STACK_REF: ${{ needs.beta_stack.outputs.stack_ref }}
+          STACK_DIGEST: ${{ needs.beta_stack.outputs.stack_digest }}
+          ANDROID_REF: ${{ needs.android_device_matrix.outputs.evidence_ref }}
+          ANDROID_DIGEST: ${{ needs.android_device_matrix.outputs.evidence_digest }}
+          IOS_REF: ${{ needs.ios_device_matrix.outputs.evidence_ref }}
+          IOS_DIGEST: ${{ needs.ios_device_matrix.outputs.evidence_digest }}
         run: |
-          ENV_NAMES="$(python3 - <<'PY'
-          import json
-          print("\n".join(json.loads("""${{ needs.discover_devices.outputs.env_json }}""")))
-          PY
-          )"
-          MATRIX_KINDS="$(python3 - <<'PY'
-          import json
-          raw = """${{ needs.discover_devices.outputs.matrix_kind }}""".strip()
-          if not raw:
-              items = ["assistant"]
-          elif raw.startswith('['):
-              items = [str(item).strip() for item in json.loads(raw) if str(item).strip()]
-          else:
-              items = [item.strip() for item in raw.split(',') if item.strip()]
-          print("\n".join(items or ["assistant"]))
-          PY
-          )"
-          resolve_patrol_target() {
-            python3 - "$1" <<'PY'
-          import json
-          import sys
-          from pathlib import Path
+          set -euo pipefail
+          INCOMING="$QWQ_OUTPUT_ROOT/env/beta/runs/evidence-incoming"
+          RECEIPT="$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-receipt"
+          RAW="$RECEIPT/raw"
+          mkdir -p "$RAW/platforms/android" "$RAW/platforms/ios"
+          cp -R "$INCOMING/android/." "$RAW/platforms/android/"
+          cp -R "$INCOMING/ios/." "$RAW/platforms/ios/"
+          python3 quwoquan_ops/ci/render_beta_device_evidence.py merge \
+            --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
+            --expected-host-digest "${{ needs.beta_stack.outputs.host_digest }}" \
+            --stack-bundle "$INCOMING/stack" --stack-ref "$STACK_REF" --stack-digest "$STACK_DIGEST" \
+            --android-bundle "$INCOMING/android" --android-ref "$ANDROID_REF" --android-digest "$ANDROID_DIGEST" \
+            --ios-bundle "$INCOMING/ios" --ios-ref "$IOS_REF" --ios-digest "$IOS_DIGEST" \
+            --output "$RAW/devices.json"
+          for command in package up health verify; do
+            cp "$INCOMING/stack/raw/${command}.json" "$RAW/${command}.json"
+          done
+          cp "$INCOMING/android/platform.json" "$RAW/android-platform.json"
+          cp "$INCOMING/ios/platform.json" "$RAW/ios-platform.json"
+          python3 quwoquan_ops/ci/render_environment_release_receipt.py \
+            --manifest "$QWQ_PROD_RELEASE_ARTIFACT_ROOT/manifest.json" \
+            --environment beta \
+            --evidence "package=$RAW/package.json" \
+            --evidence "up=$RAW/up.json" \
+            --evidence "health=$RAW/health.json" \
+            --evidence "verify=$RAW/verify.json" \
+            --evidence "android-platform=$RAW/android-platform.json" \
+            --evidence "ios-platform=$RAW/ios-platform.json" \
+            --evidence "devices=$RAW/devices.json" \
+            --require-evidence package --require-evidence up --require-evidence health --require-evidence verify \
+            --require-evidence android-platform --require-evidence ios-platform --require-evidence devices \
+            --archive-prefix evidence/raw/environments/beta/raw \
+            --output "$RECEIPT/beta.json"
+      - name: Setup Buildx for aggregated Beta evidence
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
+      - id: receipt_bundle
+        name: Publish immutable Beta environment evidence OCI
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/mainline-receipt
+          file: ${{ env.AGGREGATE_REPO_DIR }}/quwoquan_ops/ci/app_candidate_evidence.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/environment-evidence:beta-${{ github.run_id }}-${{ github.run_attempt }}
+          sbom: true
+          provenance: mode=max
+      - id: receipt_ref
+        name: Record exact Beta environment evidence ref
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
+        run: echo "ref=ghcr.io/${{ github.repository }}/environment-evidence@${{ steps.receipt_bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
+      - id: finish
+        if: always()
+        name: Finish aggregation timer
+        run: echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
-          journey_id = sys.argv[1]
-          suites = json.loads(
-              Path("quwoquan_ops/environments/gamma/validation_suites.json").read_text(
-                  encoding="utf-8"
-              )
-          )
-          journey = suites["uiJourneys"].get(journey_id)
-          if not isinstance(journey, dict):
-              raise SystemExit(f"{journey_id} is not registered")
-          if journey.get("runner") != "patrol":
-              raise SystemExit(f"{journey_id} must use patrol")
-          target = str(journey.get("target") or "").strip()
-          if not target:
-              raise SystemExit(f"{journey_id} target is missing")
-          print(target)
-          PY
-          }
-          resolve_topology_public_bases() {
-            python3 - "$1" <<'PY'
-          import sys
-          from quwoquan_ops.cli import stackctl
-
-          target_name = sys.argv[1]
-          topology = stackctl.load_environment_topology()
-          target = stackctl.get_target(topology, target_name)
-          bases = target.get("publicBases") or {}
-          keys = (
-              "api",
-              "productOps",
-              "mediaAvatar",
-              "mediaImage",
-              "mediaVideo",
-              "mediaUpload",
-              "rtc",
-          )
-          missing = [key for key in keys if not str(bases.get(key) or "").strip()]
-          if missing:
-              raise SystemExit(
-                  f"{target_name} publicBases missing: " + ", ".join(missing)
-              )
-          print("\t".join(str(bases[key]).strip() for key in keys))
-          PY
-          }
-          failures=0
-          android_result="skipped"
-          ios_result="skipped"
-          prod_closure_requested=0
-          prod_closure_selected_platform_seen=0
-          if [[ $'\n'"${ENV_NAMES}"$'\n' == *$'\nprod\n'* ]] &&
-             [[ $'\n'"${MATRIX_KINDS}"$'\n' == *$'\naccount-closure\n'* ]]; then
-            prod_closure_requested=1
-          fi
-          run_platform_envs() {
-            local platform="$1"
-            local result_var="$2"
-            local step_failures=0
-            local fail_fast=0
-            while IFS= read -r env_name; do
-              [ -n "${env_name}" ] || continue
-              while IFS= read -r matrix_kind; do
-                [ -n "${matrix_kind}" ] || continue
-                echo "::group::Run ${env_name}/${matrix_kind} on ${platform} (self-hosted)"
-                export API_CONTRACT_ENV="${env_name}"
-                set +e
-                if [ "${matrix_kind}" = "chat-avatar" ]; then
-                  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
-                  matrix_exit_code=$?
-                elif [ "${matrix_kind}" = "user-profile" ]; then
-                  if [ "${env_name}" != "gamma" ]; then
-                    echo "::error::user-profile device journey is only defined for gamma; received env=${env_name}"
-                    matrix_exit_code=2
-                  else
-                    profile_target="$(resolve_patrol_target user_profile_journey_patrol)"
-                    bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
-                      --platform "${platform}" \
-                      --target "${profile_target}" \
-                      --gateway-base-url "${GAMMA_BASE_URL}" \
-                      --media-avatar-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
-                      --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/user-profile-${platform}.json"
-                    matrix_exit_code=$?
-                  fi
-                elif [ "${matrix_kind}" = "account-closure" ]; then
-                  closure_target="$(resolve_patrol_target account_closure_patrol)"
-                  closure_install_id="account-closure-${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-1}-${platform}-$(date +%s)-{device}"
-                  if [ "${env_name}" = "gamma" ]; then
-                    bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh \
-                      --platform "${platform}" \
-                      --target "${closure_target}" \
-                      --patrol-install-id "${closure_install_id}" \
-                      --gateway-base-url "${GAMMA_BASE_URL}" \
-                      --media-avatar-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
-                      --report "$QWQ_OUTPUT_ROOT/env/gamma/runs/device-matrix/account-closure-${platform}.json"
-                    matrix_exit_code=$?
-                  elif [ "${env_name}" = "prod" ]; then
-                    if [ "${platform}" != "${ACCOUNT_CLOSURE_PROD_PLATFORM:-ios}" ]; then
-                      echo "::notice::Skip destructive Prod account closure on ${platform}; selected platform=${ACCOUNT_CLOSURE_PROD_PLATFORM:-ios}"
-                      matrix_exit_code=0
-                    else
-                      prod_closure_selected_platform_seen=1
-                      if [ "${EVENT_NAME}" != "workflow_dispatch" ] || [ "${ACCOUNT_CLOSURE_DISPOSABLE_ACK}" != "true" ]; then
-                        echo "::error::Prod account closure requires workflow_dispatch and account_closure_disposable_ack=true"
-                        matrix_exit_code=2
-                      elif [ -z "${ACCOUNT_CLOSURE_PROD_DEVICE_ID:-}" ]; then
-                        echo "::error::Prod account closure requires one explicit account_closure_prod_device_id"
-                        matrix_exit_code=2
-                      else
-                        missing_prod_secret=0
-                        for required_name in \
-                          PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN \
-                          PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN \
-                          PROD_ACCOUNT_CLOSURE_OWNER_ID \
-                          PROD_ACCOUNT_CLOSURE_PERSONA_ID; do
-                          if [ -z "${!required_name:-}" ]; then
-                            echo "::error::Production environment secret ${required_name} is required"
-                            missing_prod_secret=1
-                          fi
-                        done
-                        if [ "${missing_prod_secret}" -ne 0 ]; then
-                          matrix_exit_code=2
-                        else
-                          IFS=$'\t' read -r \
-                            prod_api_base \
-                            prod_product_ops_base \
-                            prod_media_avatar_base \
-                            prod_media_image_base \
-                            prod_media_video_base \
-                            prod_media_upload_base \
-                            prod_rtc_base < <(resolve_topology_public_bases prod-hosted)
-                          TEST_AUTH_TOKEN="${PROD_ACCOUNT_CLOSURE_TEST_AUTH_TOKEN}" \
-                          TEST_REFRESH_TOKEN="${PROD_ACCOUNT_CLOSURE_TEST_REFRESH_TOKEN}" \
-                          APP_CURRENT_OWNER_ID="${PROD_ACCOUNT_CLOSURE_OWNER_ID}" \
-                          APP_CURRENT_SUB_ACCOUNT_ID="${PROD_ACCOUNT_CLOSURE_PERSONA_ID}" \
-                          python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
-                            --env-name prod-hosted \
-                            --runtime-env prod \
-                            --api-contract-env prod \
-                            --target "${closure_target}" \
-                            --patrol-install-id "${closure_install_id}" \
-                            --account-closure-disposable-ack \
-                            --platform "${platform}" \
-                            --device-id "${ACCOUNT_CLOSURE_PROD_DEVICE_ID}" \
-                            --gateway-base-url "${prod_api_base}" \
-                            --product-ops-base-url "${prod_product_ops_base}" \
-                            --media-avatar-base-url "${prod_media_avatar_base}" \
-                            --media-image-base-url "${prod_media_image_base}" \
-                            --media-video-base-url "${prod_media_video_base}" \
-                            --media-upload-base-url "${prod_media_upload_base}" \
-                            --rtc-media-connection-url "${prod_rtc_base}" \
-                            --report "$QWQ_OUTPUT_ROOT/env/prod/runs/device-matrix/account-closure-${platform}.json"
-                          matrix_exit_code=$?
-                        fi
-                      fi
-                    fi
-                  else
-                    echo "::error::account-closure device journey supports gamma or protected prod only; received env=${env_name}"
-                    matrix_exit_code=2
-                  fi
-                elif [ "${matrix_kind}" = "media-publication" ]; then
-                  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/ci/run_media_publication_device_matrix_ci.py \
-                    --environment "${env_name}" \
-                    --platform "${platform}"
-                  matrix_exit_code=$?
-                elif [ "${matrix_kind}" = "environment-smoke" ] || [ "${matrix_kind}" = "app-core-readback" ]; then
-                  smoke_supported=1
-                  case "${env_name}" in
-                    beta)
-                      smoke_target_name="beta-local"
-                      smoke_env_alias="local-beta"
-                      smoke_runtime_env="beta"
-                      ;;
-                    gamma)
-                      smoke_target_name="gamma-local"
-                      smoke_env_alias="local-gamma"
-                      smoke_runtime_env="gamma"
-                      ;;
-                    prod-sim)
-                      smoke_target_name="prod-sim"
-                      smoke_env_alias="local-prod-sim"
-                      smoke_runtime_env="prod"
-                      ;;
-                    *)
-                      echo "::error::${matrix_kind} does not support env=${env_name}; Alpha uses quwoquan_app/run.sh natural entry"
-                      smoke_supported=0
-                      ;;
-                  esac
-                  if [ "${smoke_supported}" = "1" ]; then
-                    if [ -z "${VIDEO_PLAYBACK_CANARY_WORK_ID:-}" ]; then
-                      echo "::error::VIDEO_PLAYBACK_CANARY_WORK_ID is required for ${matrix_kind}"
-                      matrix_exit_code=2
-                    else
-                      if [ "${matrix_kind}" = "app-core-readback" ]; then
-                        smoke_target="test/user_acceptance/patrol/environment/app_core_readback__user_acceptance_test.dart"
-                        smoke_report_name="app-core-readback"
-                      else
-                        smoke_target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart"
-                        smoke_report_name="environment-smoke"
-                      fi
-                      IFS=$'\t' read -r \
-                        smoke_gateway_base_url \
-                        smoke_product_ops_base_url \
-                        smoke_media_avatar_base_url \
-                        smoke_media_image_base_url \
-                        smoke_media_video_base_url \
-                        smoke_media_upload_base_url \
-                        smoke_rtc_base_url < <(resolve_topology_public_bases "${smoke_target_name}")
-                      python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
-                        --env-name "${smoke_env_alias}" \
-                        --runtime-env "${smoke_runtime_env}" \
-                        --api-contract-env "${smoke_runtime_env}" \
-                        --target "${smoke_target}" \
-                        --gateway-base-url "${smoke_gateway_base_url}" \
-                        --product-ops-base-url "${smoke_product_ops_base_url}" \
-                        --media-avatar-base-url "${smoke_media_avatar_base_url}" \
-                        --media-image-base-url "${smoke_media_image_base_url}" \
-                        --media-video-base-url "${smoke_media_video_base_url}" \
-                        --media-upload-base-url "${smoke_media_upload_base_url}" \
-                        --rtc-media-connection-url "${smoke_rtc_base_url}" \
-                        --video-playback-canary-work-id "${VIDEO_PLAYBACK_CANARY_WORK_ID}" \
-                        --platform "${platform}" \
-                        --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/${smoke_report_name}-${platform}.json"
-                      matrix_exit_code=$?
-                    fi
-                  else
-                    matrix_exit_code=2
-                  fi
-                else
-                  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/run_assistant_device_matrix_ci.py --platform "${platform}"
-                  matrix_exit_code=$?
-                fi
-                set -e
-                if [ "${matrix_exit_code}" -eq 86 ]; then
-                  echo "::warning::${platform}/${env_name}/${matrix_kind} hit fail-fast category; stop remaining ${platform} matrix items."
-                  step_failures=$((step_failures + 1))
-                  fail_fast=1
-                elif [ "${matrix_exit_code}" -ne 0 ]; then
-                  step_failures=$((step_failures + 1))
-                fi
-                echo "::endgroup::"
-                if [ "${fail_fast}" -eq 1 ]; then
-                  break
-                fi
-              done <<EOF_KINDS
-          ${MATRIX_KINDS}
-          EOF_KINDS
-              if [ "${fail_fast}" -eq 1 ]; then
-                break
-              fi
-            done <<EOF
-          ${ENV_NAMES}
-          EOF
-            if [ "${step_failures}" -ne 0 ]; then
-              printf -v "${result_var}" '%s' "failure"
-              failures=$((failures + step_failures))
-            else
-              printf -v "${result_var}" '%s' "success"
-            fi
-          }
-          if [ "${{ needs.discover_devices.outputs.has_android }}" = "true" ]; then
-            run_platform_envs android android_result
-          else
-            echo "::notice::No Android device discovered for this run; Android matrix skipped."
-          fi
-          if [ "${{ needs.discover_devices.outputs.has_ios }}" = "true" ]; then
-            run_platform_envs ios ios_result
-          else
-            echo "::notice::No iOS device discovered for this run; iOS matrix skipped."
-          fi
-          if [ "${prod_closure_requested}" -eq 1 ] &&
-             [ "${prod_closure_selected_platform_seen}" -ne 1 ]; then
-            echo "::error::Selected Prod account closure platform ${ACCOUNT_CLOSURE_PROD_PLATFORM:-ios} is unavailable"
-            failures=$((failures + 1))
-          fi
-          echo "android_result=${android_result}" >> "$GITHUB_OUTPUT"
-          echo "ios_result=${ios_result}" >> "$GITHUB_OUTPUT"
-          if [ "${failures}" -ne 0 ]; then
-            echo "::error::Mobile matrix encountered ${failures} failing environment(s)"
-            exit 1
-          fi
-      - name: Verify mobile matrix evidence in producing job
-        if: ${{ always() && !cancelled() }}
+  beta_teardown:
+    name: Teardown the one Beta stack after aggregation
+    needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix]
+    if: ${{ always() && needs.beta_stack.outputs.formal_runtime_started == 'true' }}
+    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    timeout-minutes: 1
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.source_git_sha || inputs.checkout_ref || github.sha }}
+          path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/teardown
+          clean: false
+          persist-credentials: false
+      - id: host
+        name: Refuse teardown from a different physical Mac
+        working-directory: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/teardown
         run: |
-          python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_device_matrix_evidence.py \
-            --artifact-root "$QWQ_OUTPUT_ROOT" \
-            --report-glob "env/*/runs/device-matrix/**/*-android.json" \
-            --report-glob "env/*/runs/device-matrix/**/*-ios.json"
-      - name: Teardown beta-local stack after mainline auto prod
-        if: ${{ always() && needs.discover_devices.outputs.profile == 'mainline_auto_prod' }}
-        continue-on-error: true
-        working-directory: ${{ github.workspace }}/repo
+          python3 quwoquan_ops/ci/device_runner_lease.py host --github-output "$GITHUB_OUTPUT"
+          test "$(tail -n 1 "$GITHUB_OUTPUT" | cut -d= -f2-)" = "${{ needs.beta_stack.outputs.host_digest }}"
+      - name: Teardown only the recorded formal Beta runtime
+        working-directory: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/teardown
         run: |
           python3 quwoquan_ops/cli/stackctl.py down \
             --target beta-local \
-            --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-down"
-      - id: finish
-        if: always()
-        name: Finish timer
-        run: |
-          started_at="${{ steps.start.outputs.started_at }}"
-          if [ -n "${started_at}" ]; then
-            echo "duration_seconds=$(( $(date +%s) - started_at ))" >> "$GITHUB_OUTPUT"
-          else
-            echo "duration_seconds=0" >> "$GITHUB_OUTPUT"
-          fi
+            --formal-release \
+            --release-manifest "$QWQ_OUTPUT_ROOT/env/repo/runs/beta-stack/release-evidence-manifest/manifest.json" \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/formal-runtime/down"
 
   app_env_device_matrix_summary:
     name: 05. App Env Device Matrix
-    needs:
-      - discover_devices
-      - mobile_matrix
+    needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix, beta_teardown]
     if: always()
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      contents: read
+      actions: read
+    env:
+      SUMMARY_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/summary
     outputs:
-      critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
+      machine_critical_path_seconds: ${{ steps.timing.outputs.machine_critical_path_seconds }}
       summary_result: ${{ steps.summary.outputs.result }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
-      - name: 输出 App Env Device Matrix 耗时摘要
-        id: timing
+          ref: ${{ inputs.source_git_sha || inputs.checkout_ref || github.sha }}
+          path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/summary
+          clean: false
+          persist-credentials: false
+      - id: timing
+        name: Render official GitHub DAG timing
+        working-directory: ${{ env.SUMMARY_REPO_DIR }}
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
-          DISCOVER_SECONDS: ${{ needs.discover_devices.outputs.duration_seconds }}
-          MOBILE_SECONDS: ${{ needs.mobile_matrix.outputs.duration_seconds }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
-            echo "critical_path_seconds=0" >> "$GITHUB_OUTPUT"
-            python3 quwoquan_ops/ci/render_ci_timing_summary.py \
-              --gate-key 05.app_env_device_matrix_pr \
-              --title "05. App Env Device Matrix" \
-              --critical-path-seconds 0 \
-              --phase "pr_default_skip=0" \
-              --note "PR 默认跳过 self-hosted mobile matrix；启用后以 discover + 设备矩阵 artifacts 为准。" \
-              --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
-              --write-step-summary
-          else
-            CRITICAL_PATH_SECONDS=$(( ${DISCOVER_SECONDS:-0} + ${MOBILE_SECONDS:-0} ))
-            echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
-            python3 quwoquan_ops/ci/render_ci_timing_summary.py \
-              --gate-key 05.app_env_device_matrix_pr \
-              --title "05. App Env Device Matrix" \
-              --critical-path-seconds "${CRITICAL_PATH_SECONDS:-0}" \
-              --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
-              --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
-              --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，证据在 producing job 内验证。" \
-              --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
-              --write-step-summary
+          if [ "$SELF_HOSTED_ENABLED" != true ]; then
+            echo "machine_critical_path_seconds=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-      - name: 汇总并阻断失败项
-        id: summary
+          TIMING_OUTPUT="$(mktemp)"
+          python3 quwoquan_ops/ci/github_actions_timing.py \
+            --repository "${{ github.repository }}" \
+            --run-id "${{ github.run_id }}" \
+            --phase "beta_stack=Prepare one Beta stack prerequisite" \
+            --phase "android=Android device matrix" \
+            --phase "ios=iOS device matrix" \
+            --phase "aggregation=Aggregate mobile matrix evidence" \
+            --require-count "beta_stack=1" --require-count "android=1" --require-count "ios=1" --require-count "aggregation=1" \
+            --dag-layer beta_stack --dag-layer android,ios --dag-layer aggregation \
+            --candidate-job "Aggregate mobile matrix evidence" \
+            --critical-start run \
+            --github-output "$TIMING_OUTPUT"
+          source "$TIMING_OUTPUT"
+          cat "$TIMING_OUTPUT" >> "$GITHUB_OUTPUT"
+          DURATION_ARGS=(--calendar-lead-time-seconds "$calendar_lead_time_seconds")
+          EVIDENCE_ARGS=()
+          NOTE_ARGS=()
+          if [[ -n "${queue_seconds:-}" ]]; then DURATION_ARGS+=(--queue-seconds "$queue_seconds"); fi
+          if [[ -n "${missing_evidence:-}" ]]; then
+            EVIDENCE_ARGS+=(--missing-evidence "$missing_evidence")
+            NOTE_ARGS+=(--note "GitHub Jobs API omitted created_at for one or more matched jobs; queue duration is absent and no zero or substitute timestamp was used.")
+          fi
+          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
+            --gate-key 05.app_env_device_matrix_pr \
+            --title "05. App Env Device Matrix" \
+            --machine-critical-path-seconds "$machine_critical_path_seconds" \
+            --critical-path-source github_run_calendar \
+            --run-created-at "$run_created_at" \
+            --candidate-ready-at "$candidate_ready_at" \
+            "${DURATION_ARGS[@]}" \
+            "${EVIDENCE_ARGS[@]}" \
+            "${NOTE_ARGS[@]}" \
+            --phase "beta_stack=$phase_beta_stack" \
+            --phase "android=$phase_android" \
+            --phase "ios=$phase_ios" \
+            --phase "aggregation=$phase_aggregation" \
+            --note "GitHub Jobs API proves explicit Android/iOS jobs share one host-bound stack and execute before one aggregator." \
+            --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
+            --write-step-summary
+          if [ "$calendar_lead_time_seconds" -gt 480 ]; then
+            echo "::error::GATE_BLOCK: Beta stack/device/aggregation calendar path exceeded the 480 second hard budget"
+            exit 2
+          fi
+          if [[ -n "${missing_evidence:-}" ]]; then
+            echo "::error::GATE_BLOCK: App device matrix timing is historical_incomplete: ${missing_evidence}"
+            exit 2
+          fi
+      - id: summary
+        name: Block any missing or failed platform
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
-          DISCOVER: ${{ needs.discover_devices.result }}
-          ANDROID: ${{ needs.mobile_matrix.outputs.android_result }}
-          IOS: ${{ needs.mobile_matrix.outputs.ios_result }}
-          HAS_ANDROID: ${{ needs.discover_devices.outputs.has_android }}
-          HAS_IOS: ${{ needs.discover_devices.outputs.has_ios }}
-          ALLOW_MISSING_PLATFORMS: ${{ needs.discover_devices.outputs.allow_missing_platforms }}
+          STACK: ${{ needs.beta_stack.result }}
+          ANDROID: ${{ needs.android_device_matrix.result }}
+          IOS: ${{ needs.ios_device_matrix.result }}
+          AGGREGATE: ${{ needs.mobile_matrix.result }}
+          TEARDOWN: ${{ needs.beta_teardown.result }}
+          FORMAL_RUNTIME_STARTED: ${{ needs.beta_stack.outputs.formal_runtime_started }}
+          ALLOW_MISSING: ${{ needs.beta_stack.outputs.allow_missing_platforms }}
         run: |
           set -euo pipefail
-          if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+          if [ "$SELF_HOSTED_ENABLED" != true ]; then
             echo "result=success" >> "$GITHUB_OUTPUT"
-            echo "::notice::self-hosted mobile matrix is disabled for this PR; summary gate passes by default."
             exit 0
           fi
           args=()
-          if [ "${ALLOW_MISSING_PLATFORMS}" = "true" ]; then
-            args+=(--allow-missing-platforms)
-          fi
-          python3 quwoquan_ops/ci/device_matrix/check_gate.py \
-            --discover-result "${DISCOVER}" \
-            --android-result "${ANDROID}" \
-            --ios-result "${IOS}" \
-            --has-android "${HAS_ANDROID}" \
-            --has-ios "${HAS_IOS}" \
+          if [ "$ALLOW_MISSING" = true ]; then args+=(--allow-missing-platforms); fi
+          python3 "$SUMMARY_REPO_DIR/quwoquan_ops/ci/device_matrix/check_gate.py" \
+            --discover-result "$STACK" \
+            --android-result "$ANDROID" \
+            --ios-result "$IOS" \
+            --has-android true \
+            --has-ios true \
             "${args[@]}"
+          test "$AGGREGATE" = success
+          if [ "$FORMAL_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi
           echo "result=success" >> "$GITHUB_OUTPUT"

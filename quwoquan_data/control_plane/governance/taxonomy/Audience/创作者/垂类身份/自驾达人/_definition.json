@@ -1,0 +1,11 @@
+{
+  "label": "自驾达人",
+  "labelEn": "Road Trip Expert",
+  "description": "专注自驾路线与车旅经验的创作者",
+  "axisRole": "creatorIdentity",
+  "sameAsRefs": [
+    "Topic/旅行/出行方式/自驾"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
+}

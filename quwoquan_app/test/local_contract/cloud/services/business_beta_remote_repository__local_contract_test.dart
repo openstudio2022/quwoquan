@@ -23,6 +23,7 @@ import 'package:quwoquan_app/cloud/remote/circle/circle/circle_query_remote.dart
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_read_model_projection.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/discovery_feed_query_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/cloud/remote/user/persona/persona_query_remote.dart';
@@ -52,7 +53,19 @@ void main() {
         gatewayBaseUri: Uri.parse(baseUrl),
       ),
     );
-    final contentRepository = RemoteContentRepository(baseUrl: baseUrl);
+    final contentRepository = RemoteContentRepository(
+      discoveryFeedQuery: RemoteContentDiscoveryFeedQuery(
+        client: generatedClient,
+        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.homeFeed.id,
+          routeId: AppUiSurfaces.homeFeed.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(),
+        ),
+        blockedKeywordsLoader: () async => const <String>[],
+      ),
+      baseUrl: baseUrl,
+    );
     final contentPostReader = RemoteContentPostReaderAdapter(
       client: generatedClient,
       invocationContext: (clientPageId) {
@@ -345,7 +358,7 @@ void main() {
     );
     final activePersonaContext = await personaQuery.getActivePersonaContext();
     expect(activePersonaContext.ownerUserId, currentUserId);
-    expect(activePersonaContext.subAccountId, currentUserId);
+    expect(activePersonaContext.personaId, currentUserId);
     expect(currentUser.displayName, matches(_defaultNicknamePattern));
     final imageBase = CloudRuntimeConfig.mediaImageCdnBaseUrl.trim();
     if (imageBase.isEmpty) {
@@ -355,7 +368,11 @@ void main() {
         reason: '未注入媒体交付 endpoint 时，不得把 object key 当作可加载 URL',
       );
     } else {
-      expect(currentUser.backgroundUrl, startsWith('$imageBase/'));
+      expect(
+        currentUser.backgroundUrl,
+        startsWith('${Uri.parse(imageBase).origin}/media/background/'),
+        reason: 'background 复用 mediaImage origin，路径只由 publicSliceKey 决定',
+      );
     }
     final userPostsPage = await contentPostReader.listUserPosts(
       userId: 'fixture_user_current',
@@ -570,11 +587,11 @@ class _ContractSeedHttpServer {
       if (path == '/content/feed') {
         _writeJson(request, {
           'items': _filteredFeed(request.uri.queryParameters),
+          'outcome': 'content',
         });
         return;
       }
-      if (path.startsWith('/content/sub-accounts/') &&
-          path.endsWith('/posts')) {
+      if (path.startsWith('/content/personas/') && path.endsWith('/posts')) {
         final userId = request.uri.pathSegments[2];
         final selectedIds = userId == 'fixture_user_current'
             ? _fixtures.userFeedSeed['myPostIds'] as List<dynamic>
@@ -637,7 +654,7 @@ class _ContractSeedHttpServer {
         return;
       }
       if (path == '/circles') {
-        _writeJson(request, {'items': _fixtures.circleSeed['circles']});
+        _writeJson(request, {'items': _circleRows()});
         return;
       }
       if (path == '/circles/fixture_circle_photo') {
@@ -698,7 +715,7 @@ class _ContractSeedHttpServer {
       }
       if (path == '/users/fixture_user_current/circles' ||
           path == '/users/fixture_user_photo/circles') {
-        _writeJson(request, {'items': _fixtures.circleSeed['circles']});
+        _writeJson(request, {'items': _circleRows()});
         return;
       }
       if (path == '/homepages/search') {
@@ -756,7 +773,15 @@ class _ContractSeedHttpServer {
     if (limit != null) {
       items = items.take(limit).toList(growable: false);
     }
-    return items.map(contentPostWireFromReadModelMap).toList(growable: false);
+    return items.map(_contentFeedWire).toList(growable: false);
+  }
+
+  Map<String, dynamic> _contentFeedWire(Map<String, dynamic> source) {
+    final wire = contentPostWireFromReadModelMap(source);
+    wire['postId'] = wire.remove('id');
+    wire['contentType'] = wire.remove('type');
+    wire['mediaUrls'] = wire.remove('imageUrls') ?? const <String>[];
+    return wire;
   }
 
   List<Map<String, dynamic>> _contentPostsByIds(List<dynamic> ids) {
@@ -859,6 +884,7 @@ class _ContractSeedHttpServer {
           'kind': 'user',
           'objectId': contact['userId'],
           'userId': contact['userId'],
+          'userHandle': contact['userHandle'],
           'title': contact['displayName'],
           'subtitle': contact['bio'],
           'avatarUrl': contact['avatarUrl'],
@@ -874,6 +900,7 @@ class _ContractSeedHttpServer {
           'id': circle['id'],
           'kind': 'circle',
           'objectId': circle['id'],
+          'userHandle': '',
           'circleId': circle['id'],
           'title': circle['name'],
           'subtitle': circle['description'],
@@ -895,6 +922,7 @@ class _ContractSeedHttpServer {
           'id': conversationId,
           'kind': 'group',
           'objectId': conversationId,
+          'userHandle': '',
           'conversationId': conversationId,
           'circleId': conversation['circleId'] ?? '',
           'title': conversation['title'],
@@ -918,6 +946,7 @@ class _ContractSeedHttpServer {
         .map(
           (contact) => <String, dynamic>{
             'userId': contact['userId'],
+            'userHandle': contact['userHandle'],
             'displayName': contact['displayName'] ?? '',
             'avatarUrl': contact['avatarUrl'] ?? '',
             'bio': contact['bio'] ?? '',
@@ -937,6 +966,7 @@ class _ContractSeedHttpServer {
         .map(
           (member) => <String, dynamic>{
             'userId': member['userId'],
+            'userHandle': member['userHandle'],
             'displayName': member['displayName'] ?? '',
             'avatarUrl': member['avatarUrl'] ?? '',
             'role': member['role'] ?? 'member',
@@ -950,9 +980,27 @@ class _ContractSeedHttpServer {
   }
 
   Map<String, dynamic> _circle(String id) {
+    final row =
+        ((_fixtures.circleSeed['circles'] as List<dynamic>)
+                .cast<Map<String, dynamic>>())
+            .firstWhere((item) => item['id'] == id);
+    return _circleWire(row);
+  }
+
+  List<Map<String, dynamic>> _circleRows() {
     return ((_fixtures.circleSeed['circles'] as List<dynamic>)
             .cast<Map<String, dynamic>>())
-        .firstWhere((item) => item['id'] == id);
+        .map(_circleWire)
+        .toList(growable: false);
+  }
+
+  Map<String, dynamic> _circleWire(Map<String, dynamic> row) {
+    return <String, dynamic>{
+      ...row,
+      'status': row['status'] ?? 'active',
+      'kind': row['kind'] ?? 'interest',
+      'displaySubjectType': row['displaySubjectType'] ?? 'circle',
+    };
   }
 
   Map<String, dynamic> _profile(String id) {
@@ -965,13 +1013,12 @@ class _ContractSeedHttpServer {
     final stats = (profile['stats'] as Map<String, dynamic>?) ?? {};
     final userId = profile['userId'].toString();
     return <String, dynamic>{
-      'subAccountId': userId,
+      'personaId': userId,
       'ownerUserId': userId,
       'userHandle': userId,
-      'username': userId,
       'nickname': profile['displayName'],
       'displayName': profile['displayName'],
-      'subjectType': 'user',
+      'subjectType': 'account',
       'avatarUrl': profile['avatarUrl'],
       'backgroundUrl': profile['backgroundUrl'],
       'bio': profile['bio'],
@@ -987,7 +1034,7 @@ class _ContractSeedHttpServer {
     final profile = _profile(userId);
     return <String, dynamic>{
       'ownerUserId': userId,
-      'subAccountId': userId,
+      'personaId': userId,
       'subjectType': 'owner',
       'displayName': profile['displayName'],
       'avatarUrl': profile['avatarUrl'],

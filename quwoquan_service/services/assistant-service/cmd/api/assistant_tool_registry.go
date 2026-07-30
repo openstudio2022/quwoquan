@@ -5,12 +5,15 @@ import (
 	"net/http"
 
 	runtimeconfig "quwoquan_service/runtime/config"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/tool"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/assets"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/finance"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/modelprovider"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/providerbinding"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/publicsearch"
+	serviceruntimeconfig "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/runtimeconfig"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/searchclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/weather"
 )
@@ -18,11 +21,13 @@ import (
 func buildAgentLoop(
 	appEnv string,
 	internalSearch *searchclient.Client,
+	modelConfig serviceruntimeconfig.ModelConfig,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
-) (*application.AgentLoop, error) {
+) (*orchestration.AgentLoop, error) {
 	model, err := buildModelProvider(
 		appEnv,
+		modelConfig,
 		configProvider,
 		newEgressClient,
 	)
@@ -38,28 +43,33 @@ func buildAgentLoop(
 	if err != nil {
 		return nil, fmt.Errorf("search provider binding invalid: %w", err)
 	}
-	return application.NewAgentLoop(application.ModelDrivenSkillRuntime{
+	promptAssets, err := assets.NewDefaultPromptAssetLoader()
+	if err != nil {
+		return nil, fmt.Errorf("prompt asset loader unavailable: %w", err)
+	}
+	loop := orchestration.NewAgentLoop(orchestration.ModelDrivenSkillRuntime{
 		Model: model,
-	}, application.ReactRuntime{
+	}, orchestration.ReactRuntime{
 		Model: model,
-		Tools: application.DefaultToolCoordinator{
+		Tools: orchestration.DefaultToolCoordinator{
 			Registry: registry,
 		},
-	}, nil), nil
+	}, nil)
+	loop.PromptAssets = promptAssets
+	loop.Subagents = orchestration.ModelSubagentPlanner{Model: model}
+	return loop, nil
 }
 
 func buildModelProvider(
 	appEnv string,
+	modelConfig serviceruntimeconfig.ModelConfig,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
-) (application.ModelProvider, error) {
+) (orchestration.ModelProvider, error) {
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.model.generation",
-		[]string{
-			providerbinding.ModelAdapterXiaomiMimo,
-			providerbinding.ModelAdapterProtocolFixture,
-		},
+		providerbinding.ModelAdapterIDs(),
 		configProvider,
 	)
 	if err != nil {
@@ -77,13 +87,21 @@ func buildModelProvider(
 		modelprovider.Config{
 			CompletionURL: completionURL,
 			APIKey:        apiKey,
+			Models: modelprovider.TierModels{
+				Fast:      modelConfig.Tier.Fast,
+				Balanced:  modelConfig.Tier.Balanced,
+				Reasoning: modelConfig.Tier.Reasoning,
+			},
+			NativeToolCalling: modelConfig.NativeToolCalling,
 		},
 		newEgressClient(binding.AdapterID, int(binding.Timeout.Milliseconds())),
 	)
 	if err != nil {
 		return nil, err
 	}
-	return application.ProviderBackedModelProvider{Backend: backend}, nil
+	return orchestration.ProviderBackedModelProvider{
+		Backend: orchestration.TierDegradingModelProvider{Backend: backend},
+	}, nil
 }
 
 func buildSearchRegistry(
@@ -96,15 +114,23 @@ func buildSearchRegistry(
 	if internalSearch == nil {
 		return tool.Registry{}, fmt.Errorf("canonical search client is required")
 	}
-	registry.Register(tool.AppSearchMetadata(), internalSearch.Handler())
-
 	public := buildPublicSearchProvider(appEnv, configProvider, newEgressClient)
 	weatherProvider := buildWeatherProvider(appEnv, configProvider, newEgressClient)
 	financeProvider := buildFinanceProvider(appEnv, configProvider, newEgressClient)
-	registry.Register(
-		tool.WebSearchMetadata(),
-		application.NewExternalWebSearchHandler(public, weatherProvider, financeProvider),
-	)
+	handlers := map[string]tool.Handler{
+		"app_search": internalSearch.Handler(),
+		"web_search": orchestration.NewExternalWebSearchHandler(public, weatherProvider, financeProvider),
+	}
+	for _, meta := range tool.CanonicalMetadata() {
+		handler, ok := handlers[meta.ToolName]
+		if !ok {
+			return tool.Registry{}, fmt.Errorf(
+				"canonical tool %q has no registered handler",
+				meta.ToolName,
+			)
+		}
+		registry.Register(meta, handler)
+	}
 	return registry, nil
 }
 
@@ -112,7 +138,7 @@ func buildPublicSearchProvider(
 	appEnv string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
-) application.PublicSearchProvider {
+) ports.PublicSearchProvider {
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.public.search",
@@ -143,7 +169,7 @@ func buildWeatherProvider(
 	appEnv string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
-) application.WeatherProvider {
+) ports.WeatherProvider {
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.weather.forecast",
@@ -178,7 +204,7 @@ func buildFinanceProvider(
 	appEnv string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
 	newEgressClient func(sourceID string, timeoutMs int) *http.Client,
-) application.FinanceProvider {
+) ports.FinanceProvider {
 	binding, err := resolveAssistantBinding(
 		appEnv,
 		"assistant.finance.quote",

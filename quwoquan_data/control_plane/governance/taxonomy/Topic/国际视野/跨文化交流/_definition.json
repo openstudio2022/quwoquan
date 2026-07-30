@@ -2,6 +2,7 @@
   "label": "跨文化交流",
   "labelEn": "Cross-Cultural Exchange",
   "description": "不同文化的交流碰撞",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

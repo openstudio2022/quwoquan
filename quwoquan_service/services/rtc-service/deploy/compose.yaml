@@ -15,7 +15,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_RTC_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_RTC_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       RTC_SERVICE_ADDR: ":18083"
       MONGO_URI: mongodb://mongodb:27017
       MONGO_DATABASE: quwoquan_rtc

@@ -8,8 +8,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show isCanonicalSha256Digest;
 
 const String _patchLogName = 'FeedRealtimePatch';
+const Object _unsetPolicyDigest = Object();
 
 /// 单 channel 的实时 patch 展示态（强类型；不承载已剔除内容——
 /// `negative_feedback_removal` 直接落 [DiscoveryFeedMapNotifier.removePostLocally]）。
@@ -19,11 +22,12 @@ const String _patchLogName = 'FeedRealtimePatch';
 class FeedRealtimePatchHint {
   const FeedRealtimePatchHint({
     required this.channelId,
+    required this.reasonCode,
     this.newCandidateCount = 0,
     this.refreshSuggested = false,
-    this.reasonCode = FeedPatchReasonCode.unknown,
     this.lastPatchId = '',
     this.feedRequestId,
+    this.policyDigest,
   });
 
   final String channelId;
@@ -40,6 +44,12 @@ class FeedRealtimePatchHint {
   /// 触发该提示的 feed 归因 id（与 [DiscoveryFeedState.feedRequestId] 对齐）。
   final String? feedRequestId;
 
+  /// 触发最后一条 patch 的唯一推荐策略内容摘要。
+  ///
+  /// `null` 仅表示该 patch 来源未提供；非空值已由 wire parser
+  /// 严格校验为 `sha256:<64 lowercase hex>`。
+  final String? policyDigest;
+
   bool get hasUpdate => newCandidateCount > 0 || refreshSuggested;
 
   FeedRealtimePatchHint copyWith({
@@ -48,6 +58,7 @@ class FeedRealtimePatchHint {
     FeedPatchReasonCode? reasonCode,
     String? lastPatchId,
     String? feedRequestId,
+    Object? policyDigest = _unsetPolicyDigest,
   }) {
     return FeedRealtimePatchHint(
       channelId: channelId,
@@ -56,6 +67,9 @@ class FeedRealtimePatchHint {
       reasonCode: reasonCode ?? this.reasonCode,
       lastPatchId: lastPatchId ?? this.lastPatchId,
       feedRequestId: feedRequestId ?? this.feedRequestId,
+      policyDigest: identical(policyDigest, _unsetPolicyDigest)
+          ? this.policyDigest
+          : policyDigest as String?,
     );
   }
 }
@@ -119,6 +133,12 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
   /// 上游（realtime 层）负责 `parseFeedRealtimePatch`（schema 不符时 fail-closed 抛错并记录）；
   /// 此处完成鉴权门、幂等去重、feed 对齐与按类型的安全合并。
   void applyPatch(FeedRealtimePatch patch) {
+    final policyDigest = patch.policyDigest;
+    if (policyDigest != null && !isCanonicalSha256Digest(policyDigest)) {
+      throw const FormatException(
+        'policyDigest must be a canonical SHA-256 digest',
+      );
+    }
     // 1) 鉴权门：游客不消费；patch.userId 与当前用户不一致则忽略（防串号）。
     final currentUserId = _currentUserId();
     if (currentUserId.isEmpty) {
@@ -164,9 +184,6 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
         );
       case FeedRealtimePatchType.refreshSuggestion:
         _applyHint(patch, targetChannels, refresh: true);
-      case FeedRealtimePatchType.unknown:
-        // 前向兼容：未知类型已计入去重，结构化记录但不改动 feed。
-        _recordEvent('feed_patch_ignored_unknown_type', patch);
     }
   }
 
@@ -212,6 +229,12 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
       // feedRequestId 对齐：patch 指定归因 id 时必须等于该 channel 当前 feed 的归因 id；
       // 不一致说明 patch 针对已过期的 feed 请求，忽略。
       if (reqId.isNotEmpty && reqId != (value.feedRequestId?.trim() ?? '')) {
+        continue;
+      }
+      // policyDigest 一旦由 patch 提供，必须精确对齐该 channel 当前
+      // feed 窗口；不做 trim、fallback 或跨请求沿用。
+      if (patch.policyDigest != null &&
+          patch.policyDigest != value.policyDigest) {
         continue;
       }
       targets.add(channelKey);
@@ -285,13 +308,11 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
       case FeedPatchRemovalDimension.post:
         return false;
       case FeedPatchRemovalDimension.author:
-        return item.authorId == value || item.subAccountId == value;
+        return item.authorId == value || item.personaId == value;
       case FeedPatchRemovalDimension.contentType:
         return item.identity == value ||
             item.type == value ||
             item.displayFormat == value;
-      case FeedPatchRemovalDimension.unknown:
-        return false;
     }
   }
 
@@ -306,7 +327,11 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
     final updated = Map<String, FeedRealtimePatchHint>.from(state.hints);
     for (final channelKey in targetChannels) {
       final existing =
-          updated[channelKey] ?? FeedRealtimePatchHint(channelId: channelKey);
+          updated[channelKey] ??
+          FeedRealtimePatchHint(
+            channelId: channelKey,
+            reasonCode: patch.reasonCode,
+          );
       updated[channelKey] = existing.copyWith(
         newCandidateCount: candidateDelta > 0
             ? existing.newCandidateCount + candidateDelta
@@ -315,6 +340,7 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
         reasonCode: patch.reasonCode,
         lastPatchId: patch.patchId,
         feedRequestId: patch.feedRequestId ?? existing.feedRequestId,
+        policyDigest: patch.policyDigest,
       );
     }
     state = FeedRealtimePatchState(hints: updated);
@@ -346,9 +372,9 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
     if (!auth.isAuthenticated) {
       return '';
     }
-    final subAccountId = auth.activeSubAccountId.trim();
-    if (subAccountId.isNotEmpty) {
-      return subAccountId;
+    final personaId = auth.activePersonaId.trim();
+    if (personaId.isNotEmpty) {
+      return personaId;
     }
     return auth.ownerId.trim();
   }
@@ -371,7 +397,7 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
       'affectedCount': patch.affectedCount,
       'safeToApplyWhileViewing': patch.safeToApplyWhileViewing,
       'targetChannels': channels.join(','),
-      'rankingVersion': patch.rankingVersion ?? '',
+      if (patch.policyDigest != null) 'policyDigest': patch.policyDigest,
       if (patch.removalDimension != null)
         'removalDimension': patch.removalDimension!.wire,
       'appliedCount': ?appliedCount,
@@ -391,6 +417,7 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
       'channelId': channelId,
       'newCandidateCount': hint.newCandidateCount,
       'refreshSuggested': hint.refreshSuggested,
+      if (hint.policyDigest != null) 'policyDigest': hint.policyDigest,
     });
   }
 

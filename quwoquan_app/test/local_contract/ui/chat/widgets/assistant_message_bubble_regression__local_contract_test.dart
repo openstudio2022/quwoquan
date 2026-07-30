@@ -93,11 +93,6 @@ AssistantJourney? _extractJourney(Map<String, dynamic> extra) {
   if (topLevel is Map) {
     return AssistantJourney.fromJson(topLevel.cast<String, dynamic>());
   }
-  final runArtifacts = (extra['runArtifacts'] as Map?)?.cast<String, dynamic>();
-  final nested = runArtifacts?['journey'];
-  if (nested is Map) {
-    return AssistantJourney.fromJson(nested.cast<String, dynamic>());
-  }
   return null;
 }
 
@@ -192,7 +187,7 @@ void main() {
     expect(find.text(AssistantText.assistantProcessStageAnswer), findsNothing);
   });
 
-  testWidgets('助理过程抽屉可从 runArtifacts.journey 恢复来源摘要', (tester) async {
+  testWidgets('助理过程抽屉从 canonical journey 恢复来源摘要', (tester) async {
     AssistantCitation? tappedRef;
     final references = <Map<String, dynamic>>[
       <String, dynamic>{
@@ -246,7 +241,7 @@ void main() {
           'processingSummary': '已核对 1 个天气来源',
           'acceptedReferences': references,
         },
-        'runArtifacts': <String, dynamic>{'journey': journey},
+        'journey': journey,
       },
     );
 
@@ -286,30 +281,28 @@ void main() {
       id: 'assistant_msg_process_reason_short',
       content: '最终回答',
       extra: {
-        'runArtifacts': {
-          'journey': _journeyPayload(
-            stages: <Map<String, dynamic>>[
-              <String, dynamic>{
-                'stageId': 'analyze',
-                'status': 'completed',
-                'order': 0,
-                'summary': '先确认问题落点，后面的资料才更容易收敛。',
-              },
-            ],
-            entries: <Map<String, dynamic>>[
-              <String, dynamic>{
-                'entryId': 'journey.analyze.reason_short',
-                'stageId': 'analyze',
-                'kind': 'narrative',
-                'status': 'completed',
-                'order': 0,
-                'headline': '先确认问题落点，后面的资料才更容易收敛。',
-                'detail': '{"contractId":"assistant_turn","searchPlans":[1]}',
-              },
-            ],
-            summary: '先确认问题落点，后面的资料才更容易收敛。',
-          ),
-        },
+        'journey': _journeyPayload(
+          stages: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'stageId': 'analyze',
+              'status': 'completed',
+              'order': 0,
+              'summary': '先确认问题落点，后面的资料才更容易收敛。',
+            },
+          ],
+          entries: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'entryId': 'journey.analyze.reason_short',
+              'stageId': 'analyze',
+              'kind': 'narrative',
+              'status': 'completed',
+              'order': 0,
+              'headline': '先确认问题落点，后面的资料才更容易收敛。',
+              'detail': '{"contractId":"assistant_turn","searchPlans":[1]}',
+            },
+          ],
+          summary: '先确认问题落点，后面的资料才更容易收敛。',
+        ),
       },
     );
 
@@ -668,8 +661,6 @@ void main() {
         'displayMarkdown': structuredMarkdown,
         'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
         'runArtifacts': <String, dynamic>{
-          'displayMarkdown': structuredMarkdown,
-          'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
           'answerEvidenceBindings': <Map<String, dynamic>>[
             <String, dynamic>{
               'bindingId': 'binding_weather_1',

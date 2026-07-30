@@ -10,6 +10,9 @@ errors:
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [GetSkillSubscription, UpdateSkillSubscriptionStatus]
   recovery_action: surface
   dart_const: subscriptionNotFound
   go_const: ErrSubscriptionNotFound
@@ -21,6 +24,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [CreateSkillSubscription, UpdateSkillSubscriptionStatus, TickSkillSubscriptionCron]
   recovery_action: surface
   dart_const: subscriptionInvalidArgument
   go_const: ErrSubscriptionInvalidArgument
@@ -32,6 +38,9 @@ errors:
   kind: USER
   reason: invalid_transition
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [UpdateSkillSubscriptionStatus]
   recovery_action: refresh
   dart_const: subscriptionInvalidTransition
   go_const: ErrSubscriptionInvalidTransition
@@ -43,6 +52,9 @@ errors:
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CreateSkillSubscription, UpdateSkillSubscriptionStatus]
   recovery_action: refresh
   dart_const: subscriptionIdempotencyConflict
   go_const: ErrSubscriptionIdempotencyConflict
@@ -54,6 +66,9 @@ errors:
   kind: USER
   reason: forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [CreateSkillSubscription]
   recovery_action: surface
   dart_const: subscriptionDestinationForbidden
   go_const: ErrSubscriptionDestinationForbidden
@@ -65,6 +80,9 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [ListSkillSubscriptions, CreateSkillSubscription, GetSkillSubscription, UpdateSkillSubscriptionStatus, TickSkillSubscriptionCron]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: subscriptionStorageUnavailable
@@ -77,6 +95,9 @@ errors:
   kind: SYSTEM
   reason: destination_validation_unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [CreateSkillSubscription]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: subscriptionDestinationValidationUnavailable
@@ -89,6 +110,9 @@ errors:
   kind: SYSTEM
   reason: delivery_failed
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [TickSkillSubscriptionCron]
   recovery_action: retry
   recovery_after_seconds: 300
   dart_const: subscriptionDeliveryFailed

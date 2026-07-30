@@ -3,7 +3,7 @@ package providerbinding
 import (
 	"context"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 // UnavailableSearchProvider is an explicit fail-closed boundary for an
@@ -14,21 +14,21 @@ type UnavailableSearchProvider struct {
 
 func (p UnavailableSearchProvider) Search(
 	_ context.Context,
-	_ application.ExternalSearchRequest,
-) (application.ExternalSearchResult, error) {
-	return application.ExternalSearchResult{}, p.failure()
+	_ ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
+	return ports.ExternalSearchResult{}, p.failure()
 }
 
 func (p UnavailableSearchProvider) Lookup(
 	_ context.Context,
-	_ application.ExternalSearchRequest,
-) (application.ExternalSearchResult, error) {
-	return application.ExternalSearchResult{}, p.failure()
+	_ ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
+	return ports.ExternalSearchResult{}, p.failure()
 }
 
-func (p UnavailableSearchProvider) failure() application.ProviderFailure {
-	return application.ProviderFailure{
+func (p UnavailableSearchProvider) failure() ports.ProviderFailure {
+	return ports.ProviderFailure{
 		Capability: p.Capability,
-		Reason:     application.ProviderFailureUnavailable,
+		Reason:     ports.ProviderFailureUnavailable,
 	}
 }

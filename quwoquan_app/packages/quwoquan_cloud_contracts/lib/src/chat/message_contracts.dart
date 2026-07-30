@@ -2,6 +2,7 @@ import '../operation_request_payload.dart';
 import 'conversation_contracts.dart' show ChatCommandAck;
 
 export 'conversation_contracts.dart' show ChatCommandAck;
+part '../generated/requests/chat/message_contracts.requests.g.dart';
 
 final class ChatMessageCardAttribute {
   ChatMessageCardAttribute({required String name, required String value})
@@ -60,105 +61,6 @@ final class ChatMessageCardCommand {
   final List<ChatMessageCardAttribute> attributes;
 }
 
-final class ChatSendMessageCommand {
-  ChatSendMessageCommand({
-    required String conversationId,
-    required String type,
-    required this.content,
-    required String clientMsgId,
-    String? mediaAssetId,
-    this.card,
-    String? replyToMessageId,
-    Iterable<String> mentions = const <String>[],
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    this.personaContextVersion,
-  }) : conversationId = _requiredText(conversationId, 'conversationId'),
-       type = _messageType(type),
-       clientMsgId = _requiredText(clientMsgId, 'clientMsgId'),
-       mediaAssetId = _optionalText(mediaAssetId),
-       replyToMessageId = _optionalText(replyToMessageId),
-       mentions = List<String>.unmodifiable(
-         mentions.map((mention) => _requiredText(mention, 'mention')),
-       ),
-       senderDisplayNameSnapshot = _optionalText(senderDisplayNameSnapshot),
-       senderAvatarUrlSnapshot = _optionalText(senderAvatarUrlSnapshot) {
-    final mediaType = const <String>{'audio', 'image', 'video', 'file'};
-    if (mediaType.contains(type) && this.mediaAssetId == null) {
-      throw ArgumentError('$type message requires mediaAssetId');
-    }
-    if (!mediaType.contains(type) && this.mediaAssetId != null) {
-      throw ArgumentError('$type message must not bind mediaAssetId');
-    }
-    if (type == 'card' && card == null) {
-      throw ArgumentError('card message requires card');
-    }
-    if (type != 'card' && card != null) {
-      throw ArgumentError('$type message must not contain card');
-    }
-    if (content.runes.length > 5000) {
-      throw ArgumentError.value(
-        content,
-        'content',
-        'must not exceed 5000 code points',
-      );
-    }
-    if (type == 'text' && content.trim().isEmpty) {
-      throw ArgumentError.value(
-        content,
-        'content',
-        'text message content is required',
-      );
-    }
-    final resolvedCard = card;
-    if (resolvedCard != null) {
-      if (resolvedCard.title.runes.length > 120) {
-        throw ArgumentError.value(
-          resolvedCard.title,
-          'card.title',
-          'must not exceed 120 code points',
-        );
-      }
-      if (resolvedCard.attributes.length > 16) {
-        throw ArgumentError.value(
-          resolvedCard.attributes.length,
-          'card.attributes',
-          'must not exceed 16 items',
-        );
-      }
-      final names = <String>{};
-      for (final attribute in resolvedCard.attributes) {
-        if (!names.add(attribute.name)) {
-          throw ArgumentError.value(
-            attribute.name,
-            'card.attributes',
-            'names must be unique',
-          );
-        }
-      }
-    }
-    if (personaContextVersion != null && personaContextVersion! <= 0) {
-      throw ArgumentError.value(
-        personaContextVersion,
-        'personaContextVersion',
-        'must be > 0',
-      );
-    }
-  }
-
-  final String conversationId;
-  final String type;
-  final String content;
-  final String clientMsgId;
-  final String? mediaAssetId;
-  final ChatMessageCardCommand? card;
-  final String? replyToMessageId;
-  final List<String> mentions;
-  final String? senderDisplayNameSnapshot;
-  final String? senderAvatarUrlSnapshot;
-  final int? personaContextVersion;
-}
-
 final class ChatSendMessageResult {
   const ChatSendMessageResult({
     required this.messageId,
@@ -182,48 +84,10 @@ abstract interface class ChatMessageQuery {
 }
 
 abstract interface class ChatMessageMutationWriter {
-  Future<ChatCommandAck> recallMessage(ChatRecallMessageCommand command);
-}
-
-CloudOperationRequestPayload encodeChatSendMessageCommand(
-  ChatSendMessageCommand command,
-) {
-  final card = command.card;
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': command.conversationId},
-    body: <String, Object?>{
-      'type': command.type,
-      'content': command.content,
-      'clientMsgId': command.clientMsgId,
-      if (command.mediaAssetId case final value?) 'mediaAssetId': value,
-      if (card != null)
-        'card': <String, Object?>{
-          'kind': card.kind,
-          'title': card.title,
-          if (card.subtitle case final value?) 'subtitle': value,
-          if (card.thumbnailUrl case final value?) 'thumbnailUrl': value,
-          if (card.deeplink case final value?) 'deeplink': value,
-          if (card.landingUrl case final value?) 'landingUrl': value,
-          if (card.shareText case final value?) 'shareText': value,
-          if (card.message case final value?) 'message': value,
-          'attributes': <Map<String, String>>[
-            for (final attribute in card.attributes)
-              <String, String>{
-                'name': attribute.name,
-                'value': attribute.value,
-              },
-          ],
-        },
-      if (command.replyToMessageId case final value?) 'replyToMessageId': value,
-      if (command.mentions.isNotEmpty) 'mentions': command.mentions,
-      if (command.senderDisplayNameSnapshot case final value?)
-        'senderDisplayNameSnapshot': value,
-      if (command.senderAvatarUrlSnapshot case final value?)
-        'senderAvatarUrlSnapshot': value,
-      if (command.personaContextVersion case final value?)
-        'personaContextVersion': value,
-    },
-  );
+  Future<ChatCommandAck> recallMessage(
+    ChatRecallMessageCommand command, {
+    required String idempotencyKey,
+  });
 }
 
 ChatSendMessageResult decodeChatSendMessageResult(Object? response) {
@@ -327,43 +191,6 @@ final class ChatMessagePageSlice {
   final int? nextBeforeSeq;
 }
 
-final class ChatListMessagesQuery {
-  ChatListMessagesQuery({
-    required String conversationId,
-    this.afterSeq,
-    this.beforeSeq,
-    this.limit = 20,
-  }) : conversationId = _requiredText(conversationId, 'conversationId') {
-    if (afterSeq != null && beforeSeq != null) {
-      throw ArgumentError('afterSeq and beforeSeq cannot both be set');
-    }
-    if ((afterSeq ?? 0) < 0 || (beforeSeq ?? 0) < 0) {
-      throw ArgumentError('message sequence bounds must be non-negative');
-    }
-    if (limit < 1 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be in 1..100');
-    }
-  }
-
-  final String conversationId;
-  final int? afterSeq;
-  final int? beforeSeq;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListMessagesQuery(
-  ChatListMessagesQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': query.conversationId},
-    queryParameters: <String, String>{
-      'limit': '${query.limit}',
-      if (query.afterSeq case final value?) 'afterSeq': '$value',
-      if (query.beforeSeq case final value?) 'beforeSeq': '$value',
-    },
-  );
-}
-
 ChatMessagePageSlice decodeChatMessagePageSlice(Object? response) {
   final root = _expectObject(response, 'ListMessages response');
   _expectOnlyKeys(root, const <String>{
@@ -379,59 +206,6 @@ ChatMessagePageSlice decodeChatMessagePageSlice(Object? response) {
       rawItems.map((item) => _decodeChatMessage(item)),
     ),
     nextBeforeSeq: _optionalPositiveInt(root['nextBeforeSeq'], 'nextBeforeSeq'),
-  );
-}
-
-final class ChatRecallMessageCommand {
-  ChatRecallMessageCommand({
-    required String conversationId,
-    required String idempotencyKey,
-    required String messageId,
-  }) : conversationId = _requiredText(conversationId, 'conversationId'),
-       idempotencyKey = _requiredText(idempotencyKey, 'idempotencyKey'),
-       messageId = _requiredText(messageId, 'messageId');
-
-  final String conversationId;
-  final String idempotencyKey;
-  final String messageId;
-}
-
-CloudOperationRequestPayload encodeChatRecallMessageCommand(
-  ChatRecallMessageCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'conversationId': command.conversationId,
-      'messageId': command.messageId,
-    },
-  );
-}
-
-final class ChatSyncMessagesQuery {
-  ChatSyncMessagesQuery({
-    required String conversationId,
-    required this.lastSeq,
-    this.limit = 500,
-  }) : conversationId = _requiredText(conversationId, 'conversationId') {
-    if (lastSeq < 0) {
-      throw ArgumentError.value(lastSeq, 'lastSeq', 'must be non-negative');
-    }
-    if (limit < 1 || limit > 500) {
-      throw ArgumentError.value(limit, 'limit', 'must be in 1..500');
-    }
-  }
-
-  final String conversationId;
-  final int lastSeq;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatSyncMessagesQuery(
-  ChatSyncMessagesQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': query.conversationId},
-    body: <String, Object?>{'lastSeq': query.lastSeq, 'limit': query.limit},
   );
 }
 
@@ -593,21 +367,6 @@ const Set<String> _messageCardWireKeys = <String>{
   'message',
   'attributes',
 };
-
-String _messageType(String value) {
-  final type = _requiredText(value, 'type');
-  if (!const <String>{
-    'text',
-    'audio',
-    'image',
-    'video',
-    'file',
-    'card',
-  }.contains(type)) {
-    throw ArgumentError.value(value, 'type', 'unsupported message type');
-  }
-  return type;
-}
 
 Map<String, Object?> _expectObject(Object? value, String context) {
   if (value is! Map) {

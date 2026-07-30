@@ -3,6 +3,7 @@
 
 class ChatConversationMemberDto {
   final String userId;
+  final String userHandle;
   final String displayName;
   final String avatarUrl;
   final String role;
@@ -13,6 +14,7 @@ class ChatConversationMemberDto {
 
   ChatConversationMemberDto({
     this.userId = '',
+    this.userHandle = '',
     this.displayName = '',
     this.avatarUrl = '',
     this.role = 'member',
@@ -25,6 +27,7 @@ class ChatConversationMemberDto {
   factory ChatConversationMemberDto.fromMap(Map<String, dynamic> m) {
     return ChatConversationMemberDto(
       userId: m['userId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       role: m['role']?.toString() ?? 'member',
@@ -38,6 +41,7 @@ class ChatConversationMemberDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'userId': userId,
+      'userHandle': userHandle,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'role': role,
@@ -50,6 +54,7 @@ class ChatConversationMemberDto {
 
   ChatConversationMemberDto copyWith({
     String? userId,
+    String? userHandle,
     String? displayName,
     String? avatarUrl,
     String? role,
@@ -60,6 +65,7 @@ class ChatConversationMemberDto {
   }) {
     return ChatConversationMemberDto(
       userId: userId ?? this.userId,
+      userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       role: role ?? this.role,

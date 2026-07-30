@@ -399,11 +399,11 @@ surfaces:
   - id: userProfile
     owner: user
     route_id: userProfile
-    path_template: /user/{username}
+    path_template: /user/{userHandle}
     description: 用户主页壳层（我的 / TA的，统一对象页 + 你们的交集卡）
     operation_ids:
       - GetUserHomepageBundle
-      - GetSubAccountProfile
+      - GetPersonaProfile
       - ListUserPosts
       - GetRelationshipCapability
       - FollowUser
@@ -475,7 +475,7 @@ surfaces:
       - InitiateContactDiscovery
       - GetLatestContactDiscovery
       - DismissContactDiscovery
-      - GetSubAccountProfile
+      - GetPersonaProfile
       - GetRelationshipCapability
       - FollowUser
 
@@ -485,7 +485,7 @@ surfaces:
     path_template: /add-contact/confirm
     description: 添加联系人确认页（来源 扫码 / 通讯录 / 搜索）
     operation_ids:
-      - GetSubAccountProfile
+      - GetPersonaProfile
       - GetRelationshipCapability
       - FollowUser
 
@@ -600,6 +600,7 @@ surfaces:
       - LoginWithAlipay
       - LoginWithQq
       - LoginOneTap
+      - CompleteFederatedPhoneBinding
       - CreateAlipayAuthorizationRequest
       - ResolveOneTapLoginHint
 

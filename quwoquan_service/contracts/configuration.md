@@ -70,7 +70,7 @@
 `sys.<service>.<area>.<key>`
 
 示例：
-- `sys.gateway.rate_limit.per_user_rps`
+- `sys.api-edge.rate_limit.query.limit`
 - `sys.orchestrator.downstream.timeout_ms`
 - `sys.content.mongo.max_pool_size`
 - `sys.assistant.otel.trace_sample_ratio`
@@ -126,8 +126,7 @@
 
 ### 5.4 安全与防护（Security / Protection）
 
-- `sys.gateway.rate_limit.per_user_rps`
-- `sys.gateway.rate_limit.per_ip_rps`
+- `sys.api-edge.rate_limit.query.limit`
+- `sys.api-edge.rate_limit.query.window_seconds`
 - `sys.gateway.allowlist.enabled`
 - `sys.gateway.blocklist.enabled`
-

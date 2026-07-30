@@ -13,12 +13,12 @@ import (
 
 func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 	body := readOptionalBody(r)
-	followeeID := strings.TrimSpace(r.PathValue("targetSubAccountId"))
+	followeeID := strings.TrimSpace(r.PathValue("targetPersonaId"))
 	if followeeID == "" {
-		writeInvalidArg(w, r, "targetSubAccountId required")
+		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
-	followerID, err := h.resolveActorSubAccountID(r.Context(), r, anyString(body["actorSubAccountId"]))
+	followerID, err := h.resolveActorPersonaID(r.Context(), r, anyString(body["actorPersonaId"]))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -36,22 +36,22 @@ func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"actorSubAccountId":  followerID,
-		"targetSubAccountId": followeeID,
-		"relationState":      relationshipState(rel, followerID, followeeID),
-		"idempotentReplay":   result.IdempotentReplay || !result.Changed,
-		"updatedAt":          relationshipUpdatedAt(result),
+		"actorPersonaId":   followerID,
+		"targetPersonaId":  followeeID,
+		"relationState":    relationshipState(rel, followerID, followeeID),
+		"idempotentReplay": result.IdempotentReplay || !result.Changed,
+		"updatedAt":        relationshipUpdatedAt(result),
 	})
 }
 
 func (h *UserHandler) handleUnfollow(w http.ResponseWriter, r *http.Request) {
 	body := readOptionalBody(r)
-	followeeID := strings.TrimSpace(r.PathValue("targetSubAccountId"))
+	followeeID := strings.TrimSpace(r.PathValue("targetPersonaId"))
 	if followeeID == "" {
-		writeInvalidArg(w, r, "targetSubAccountId required")
+		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
-	followerID, err := h.resolveActorSubAccountID(r.Context(), r, anyString(body["actorSubAccountId"]))
+	followerID, err := h.resolveActorPersonaID(r.Context(), r, anyString(body["actorPersonaId"]))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -67,21 +67,21 @@ func (h *UserHandler) handleUnfollow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"actorSubAccountId":  followerID,
-		"targetSubAccountId": followeeID,
-		"relationState":      relationshipState(rel, followerID, followeeID),
-		"idempotentReplay":   result.IdempotentReplay || !result.Changed,
-		"updatedAt":          relationshipUpdatedAt(result),
+		"actorPersonaId":   followerID,
+		"targetPersonaId":  followeeID,
+		"relationState":    relationshipState(rel, followerID, followeeID),
+		"idempotentReplay": result.IdempotentReplay || !result.Changed,
+		"updatedAt":        relationshipUpdatedAt(result),
 	})
 }
 
 func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	defer func() { reltelemetry.Collector().RecordListLatency(time.Since(startedAt)) }()
-	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
-	viewerID, _ := h.resolveActorSubAccountID(r.Context(), r, "")
+	personaID := strings.TrimSpace(r.PathValue("personaId"))
+	viewerID, _ := h.resolveActorPersonaID(r.Context(), r, "")
 	items, next, err := h.collectFollowListItems(
-		r.Context(), viewerID, subAccountID, parseCursor(r), parseLimit(r, 20), true, parseListSearchQuery(r),
+		r.Context(), viewerID, personaID, parseCursor(r), parseLimit(r, 20), true, parseListSearchQuery(r),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -93,10 +93,10 @@ func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleListFollowers(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	defer func() { reltelemetry.Collector().RecordListLatency(time.Since(startedAt)) }()
-	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
-	viewerID, _ := h.resolveActorSubAccountID(r.Context(), r, "")
+	personaID := strings.TrimSpace(r.PathValue("personaId"))
+	viewerID, _ := h.resolveActorPersonaID(r.Context(), r, "")
 	items, next, err := h.collectFollowListItems(
-		r.Context(), viewerID, subAccountID, parseCursor(r), parseLimit(r, 20), false, parseListSearchQuery(r),
+		r.Context(), viewerID, personaID, parseCursor(r), parseLimit(r, 20), false, parseListSearchQuery(r),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -113,7 +113,7 @@ func parseListSearchQuery(r *http.Request) string {
 
 func (h *UserHandler) collectFollowListItems(
 	ctx context.Context,
-	viewerID, subAccountID, cursor string,
+	viewerID, personaID, cursor string,
 	limit int,
 	listFollowing bool,
 	searchQuery string,
@@ -130,9 +130,9 @@ func (h *UserHandler) collectFollowListItems(
 			err   error
 		)
 		if listFollowing {
-			edges, nextCursor, err = h.relationship.ListFollowing(ctx, subAccountID, nextCursor, limit)
+			edges, nextCursor, err = h.relationship.ListFollowing(ctx, personaID, nextCursor, limit)
 		} else {
-			edges, nextCursor, err = h.relationship.ListFollowers(ctx, subAccountID, nextCursor, limit)
+			edges, nextCursor, err = h.relationship.ListFollowers(ctx, personaID, nextCursor, limit)
 		}
 		if err != nil {
 			return nil, "", err
@@ -149,7 +149,7 @@ func (h *UserHandler) collectFollowListItems(
 			if !followListItemMatchesQuery(batch[i], searchQuery) {
 				continue
 			}
-			subjectID := strings.TrimSpace(anyString(batch[i]["subAccountId"]))
+			subjectID := strings.TrimSpace(anyString(batch[i]["personaId"]))
 			if subjectID != "" {
 				if _, ok := seen[subjectID]; ok {
 					continue
@@ -168,13 +168,13 @@ func (h *UserHandler) collectFollowListItems(
 	return items, nextCursor, nil
 }
 
-// followListItemMatchesQuery 按昵称/用户名做服务端不区分大小写子串匹配；
+// followListItemMatchesQuery 按昵称/公开句柄做服务端不区分大小写子串匹配；
 // 空查询恒 true。匹配在 overfetch+fill 循环内执行，翻页语义与 block 过滤一致。
 func followListItemMatchesQuery(item map[string]any, searchQuery string) bool {
 	if searchQuery == "" {
 		return true
 	}
-	for _, key := range [...]string{"displayName", "username", "subAccountId"} {
+	for _, key := range [...]string{"displayName", "userHandle", "personaId"} {
 		if strings.Contains(strings.ToLower(anyString(item[key])), searchQuery) {
 			return true
 		}
@@ -204,15 +204,15 @@ func (h *UserHandler) buildFollowListItems(
 				continue
 			}
 		}
-		view, err := h.subAccount.GetSubAccountProfileView(ctx, targetID)
+		view, err := h.persona.GetPersonaProfileView(ctx, targetID)
 		if err != nil || view == nil {
 			reltelemetry.Collector().RecordPageDrift()
 			usertelemetry.RolloutCollector().RecordAttributionMismatch()
 			continue
 		}
 		item := map[string]any{
-			"subAccountId":      view["subAccountId"],
-			"username":          view["username"],
+			"personaId":         view["personaId"],
+			"userHandle":        view["userHandle"],
 			"displayName":       view["displayName"],
 			"avatarUrl":         view["avatarUrl"],
 			"avatarVersion":     view["avatarVersion"],
@@ -222,7 +222,7 @@ func (h *UserHandler) buildFollowListItems(
 		if viewerID != "" {
 			rel, _ := h.relationship.GetRelationship(ctx, viewerID, targetID)
 			item["relationState"] = relationshipState(rel, viewerID, targetID)
-			item["relationshipCapability"] = h.buildRelationshipCapabilityView(
+			item["relationshipCapability"] = h.relationshipCapabilityView(
 				ctx, viewerID, targetID, rel, false, false,
 			)
 		} else {

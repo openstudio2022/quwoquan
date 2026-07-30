@@ -4,7 +4,7 @@
   "additionalProperties": false,
   "required": [
     "creatorProfileId",
-    "subAccountId",
+    "personaId",
     "authorId",
     "isSystemBuiltin",
     "displayName",
@@ -21,7 +21,6 @@
     "qualityScore",
     "fatigueScore",
     "riskTier",
-    "profileVersion",
     "publicProfileTagRefs",
     "recommendationTagRefs",
     "preferredBlueprintIds",
@@ -33,7 +32,7 @@
   ],
   "properties": {
     "creatorProfileId": { "type": "string" },
-    "subAccountId": { "type": "string" },
+    "personaId": { "type": "string" },
     "authorId": { "type": "string" },
     "isSystemBuiltin": { "type": "boolean" },
     "displayName": { "type": "string" },
@@ -109,7 +108,6 @@
     "qualityScore": { "type": "number", "minimum": 0, "maximum": 1 },
     "fatigueScore": { "type": "number", "minimum": 0, "maximum": 1 },
     "riskTier": { "enum": ["low", "medium", "high"] },
-    "profileVersion": { "type": "string" },
     "publicProfileTagRefs": { "type": "array", "items": { "type": "string" } },
     "recommendationTagRefs": { "type": "array", "items": { "type": "string" } },
     "preferredBlueprintIds": { "type": "array", "items": { "type": "string" } },

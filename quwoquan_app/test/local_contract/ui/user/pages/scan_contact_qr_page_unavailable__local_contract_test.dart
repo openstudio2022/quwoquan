@@ -67,14 +67,8 @@ void main() {
       capabilities: CapabilityProfile.mobile.copyWith(camera: false),
     );
 
-    expect(
-      find.text(ContactText.scanQrCameraUnavailableTitle),
-      findsOneWidget,
-    );
-    expect(
-      find.text(ContactText.scanQrCameraUnavailableBody),
-      findsOneWidget,
-    );
+    expect(find.text(ContactText.scanQrCameraUnavailableTitle), findsOneWidget);
+    expect(find.text(ContactText.scanQrCameraUnavailableBody), findsOneWidget);
     expect(find.textContaining('Scanning is not supported'), findsNothing);
     expect(find.textContaining('No cameras available'), findsNothing);
     expect(find.text(ContactText.scanQrAlbum), findsOneWidget);
@@ -174,7 +168,7 @@ class _ResolvingUserProfileRepository extends MockUserProfileRepository {
     lastToken = token;
     lastHandle = handle;
     return ProfileQrResolveWireDto(
-      subAccountId: 'user_alice',
+      personaId: 'user_alice',
       userHandle: 'alice',
       publicProfileUrl: 'https://quwoquan.com/u/alice',
       scanStatus: 'accepted',

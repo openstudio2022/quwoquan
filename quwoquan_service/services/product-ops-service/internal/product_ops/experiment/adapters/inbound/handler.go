@@ -12,7 +12,8 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	productopsgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/experiment"
+	experimentgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/experiment"
+	assignmentgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/experiment_assignment_fact"
 	experimentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/application"
 	experimentmodel "quwoquan_service/services/product-ops-service/internal/product_ops/experiment/domain/model"
 	assignmentapp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/application"
@@ -29,13 +30,13 @@ type UpdateExperimentRolloutRequest struct {
 }
 
 type ExperimentCatalogItem struct {
-	ID               string                    `json:"id"`
-	Key              string                    `json:"key"`
-	Status           string                    `json:"status"`
-	PolicyVersion    string                    `json:"policyVersion"`
-	Variants         []experimentmodel.Variant `json:"variants"`
-	VariantStats     map[string]int            `json:"variantStats"`
-	AssignedSubjects int                       `json:"assignedSubjects"`
+	ID                 string                    `json:"id"`
+	Key                string                    `json:"key"`
+	Status             string                    `json:"status"`
+	ExperimentRevision int64                     `json:"experimentRevision"`
+	Variants           []experimentmodel.Variant `json:"variants"`
+	VariantStats       map[string]int            `json:"variantStats"`
+	AssignedSubjects   int                       `json:"assignedSubjects"`
 }
 
 type ExperimentCatalogSlice struct {
@@ -43,18 +44,18 @@ type ExperimentCatalogSlice struct {
 }
 
 type ExperimentStatsSlice struct {
-	ExperimentID     string         `json:"experimentId"`
-	PolicyVersion    string         `json:"policyVersion"`
-	Status           string         `json:"status"`
-	VariantStats     map[string]int `json:"variantStats"`
-	AssignedSubjects int            `json:"assignedSubjects"`
+	ExperimentID       string         `json:"experimentId"`
+	ExperimentRevision int64          `json:"experimentRevision"`
+	Status             string         `json:"status"`
+	VariantStats       map[string]int `json:"variantStats"`
+	AssignedSubjects   int            `json:"assignedSubjects"`
 }
 
 type UpdateExperimentRolloutResult struct {
-	ID            string                    `json:"id"`
-	Status        string                    `json:"status"`
-	PolicyVersion string                    `json:"policyVersion"`
-	Variants      []experimentmodel.Variant `json:"variants"`
+	ID                 string                    `json:"id"`
+	Status             string                    `json:"status"`
+	ExperimentRevision int64                     `json:"experimentRevision"`
+	Variants           []experimentmodel.Variant `json:"variants"`
 }
 
 func NewHandler(experiments *experimentapp.Facade) (*Handler, error) {
@@ -77,24 +78,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/ops/experiments/") && strings.HasSuffix(r.URL.Path, "/stats"):
 		h.getStats(w, r)
 	default:
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experiment route or method is not registered"))
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument("experiment route or method is not registered"))
 	}
 }
 
 func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
 	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/assignment")
 	if experimentID == "" {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentInvalidArgument("experimentId is required"))
 		return
 	}
 	subjectKey, err := trustedSubjectKey(r)
 	if err != nil {
-		writeError(w, r, productopsgenerated.AppErrorFromUnauthorized(err.Error()))
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentUnauthorized(err.Error()))
 		return
 	}
 	result, err := h.assignments.Get(r.Context(), experimentID, subjectKey)
 	if err != nil {
-		writeExperimentError(w, r, err, false)
+		writeAssignmentError(w, r, err, false)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -103,21 +104,21 @@ func (h *Handler) getAssignment(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) assign(w http.ResponseWriter, r *http.Request) {
 	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/assignment")
 	if experimentID == "" {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentInvalidArgument("experimentId is required"))
 		return
 	}
 	if err := requireEmptyBody(r); err != nil {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument(err.Error()))
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentInvalidArgument(err.Error()))
 		return
 	}
 	subjectKey, err := trustedSubjectKey(r)
 	if err != nil {
-		writeError(w, r, productopsgenerated.AppErrorFromUnauthorized(err.Error()))
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentUnauthorized(err.Error()))
 		return
 	}
 	result, inserted, err := h.assignments.Assign(r.Context(), experimentID, subjectKey)
 	if err != nil {
-		writeExperimentError(w, r, err, true)
+		writeAssignmentError(w, r, err, true)
 		return
 	}
 	status := http.StatusOK
@@ -130,16 +131,16 @@ func (h *Handler) assign(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getStats(w http.ResponseWriter, r *http.Request) {
 	experimentID := segmentBetween(r.URL.Path, "/ops/experiments/", "/stats")
 	if experimentID == "" {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentInvalidArgument("experimentId is required"))
 		return
 	}
 	experiment, stats, err := h.assignments.Stats(r.Context(), experimentID)
 	if err != nil {
-		writeExperimentError(w, r, err, false)
+		writeAssignmentError(w, r, err, false)
 		return
 	}
 	writeJSON(w, http.StatusOK, ExperimentStatsSlice{
-		ExperimentID: experiment.ID, PolicyVersion: strconv.FormatInt(experiment.Version, 10),
+		ExperimentID: experiment.ID, ExperimentRevision: experiment.Version,
 		Status: experiment.Status, VariantStats: stats.VariantCounts,
 		AssignedSubjects: stats.AssignedSubjects,
 	})
@@ -153,7 +154,7 @@ func (h *Handler) listExperiments(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]ExperimentCatalogItem, 0, len(items))
 	for _, item := range items {
-		// 目录读已携带当前 policyVersion，统计只做一次分配聚合查询，
+		// 目录读已携带当前 experimentRevision，统计只做一次分配聚合查询，
 		// 不再逐实验重复 Load（N+1 收敛）。
 		stats, err := h.experiments.StatsFor(r.Context(), item)
 		if err != nil {
@@ -162,7 +163,7 @@ func (h *Handler) listExperiments(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, ExperimentCatalogItem{
 			ID: item.ID, Key: item.Key, Status: item.Status,
-			PolicyVersion: strconv.FormatInt(item.Version, 10), Variants: item.Variants,
+			ExperimentRevision: item.Version, Variants: item.Variants,
 			VariantStats: stats.VariantCounts, AssignedSubjects: stats.AssignedSubjects,
 		})
 	}
@@ -173,22 +174,22 @@ func (h *Handler) listExperiments(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) updateRollout(w http.ResponseWriter, r *http.Request) {
 	experimentID := segmentBetween(r.URL.Path, "/control-plane/product/experiments/", ":rollout")
 	if experimentID == "" {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("experimentId is required"))
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument("experimentId is required"))
 		return
 	}
 	var command UpdateExperimentRolloutRequest
 	if err := decodeStrictJSON(r, &command); err != nil {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument(err.Error()))
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument(err.Error()))
 		return
 	}
 	expectedVersion, err := parseIfMatchVersion(r.Header.Get("If-Match"))
 	if err != nil {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument(err.Error()))
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument(err.Error()))
 		return
 	}
 	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
 	if idempotencyKey == "" {
-		writeError(w, r, productopsgenerated.AppErrorFromInvalidArgument("Idempotency-Key is required"))
+		writeError(w, r, experimentgenerated.AppErrorFromInvalidArgument("Idempotency-Key is required"))
 		return
 	}
 	if _, err := h.experiments.UpdateRollout(
@@ -205,7 +206,7 @@ func (h *Handler) updateRollout(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, UpdateExperimentRolloutResult{
 		ID: updated.ID, Status: updated.Status,
-		PolicyVersion: strconv.FormatInt(updated.Version, 10), Variants: updated.Variants,
+		ExperimentRevision: updated.Version, Variants: updated.Variants,
 	})
 }
 
@@ -237,21 +238,34 @@ func trustedSubjectKey(r *http.Request) (string, error) {
 func writeExperimentError(w http.ResponseWriter, r *http.Request, err error, write bool) {
 	switch {
 	case errors.Is(err, experimentmodel.ErrNotFound):
-		writeError(w, r, productopsgenerated.AppErrorFromExperimentNotFound(err.Error()))
-	case errors.Is(err, experimentmodel.ErrAssignmentNotFound):
-		writeError(w, r, productopsgenerated.AppErrorFromAssignmentNotFound(err.Error()))
-	case errors.Is(err, experimentmodel.ErrDisabled):
-		writeError(w, r, productopsgenerated.AppErrorFromExperimentNotRunning(err.Error()))
+		writeError(w, r, experimentgenerated.AppErrorFromExperimentNotFound(err.Error()))
 	case errors.Is(err, experimentmodel.ErrVersionConflict):
-		writeError(w, r, productopsgenerated.AppErrorFromVersionConflict(err.Error()))
+		writeError(w, r, experimentgenerated.AppErrorFromVersionConflict(err.Error()))
 	case errors.Is(err, experimentmodel.ErrIdempotencyConflict):
-		writeError(w, r, productopsgenerated.AppErrorFromIdempotencyConflict(err.Error()))
+		writeError(w, r, experimentgenerated.AppErrorFromIdempotencyConflict(err.Error()))
 	default:
 		if write {
-			writeError(w, r, productopsgenerated.AppErrorFromStorageWriteFailed(err.Error()))
+			writeError(w, r, experimentgenerated.AppErrorFromStorageWriteFailed(err.Error()))
 			return
 		}
-		writeError(w, r, productopsgenerated.AppErrorFromStorageReadFailed(err.Error()))
+		writeError(w, r, experimentgenerated.AppErrorFromStorageReadFailed(err.Error()))
+	}
+}
+
+func writeAssignmentError(w http.ResponseWriter, r *http.Request, err error, write bool) {
+	switch {
+	case errors.Is(err, experimentmodel.ErrNotFound):
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentExperimentNotFound(err.Error()))
+	case errors.Is(err, experimentmodel.ErrAssignmentNotFound):
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentNotFound(err.Error()))
+	case errors.Is(err, experimentmodel.ErrDisabled):
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentNotRunning(err.Error()))
+	default:
+		if write {
+			writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentStorageWriteFailed(err.Error()))
+			return
+		}
+		writeError(w, r, assignmentgenerated.AppErrorFromExperimentAssignmentStorageReadFailed(err.Error()))
 	}
 }
 

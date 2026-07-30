@@ -15,12 +15,13 @@ from content.release.canonical.release_attestation import (  # noqa: E402
     ReleaseAttestation,
     ReleaseAttestationError,
 )
-from content.release.model import ReleaseKind  # noqa: E402
+from content.release.model import DataSourceOwner, ReleaseKind  # noqa: E402
 
 
 def _receipt() -> ReleaseAttestation:
     return ReleaseAttestation(
         release_id="20260718--travel-homepage-coverage--test-release-a--001",
+        source_owner=DataSourceOwner.QWQ_DATA,
         release_kind=ReleaseKind.CONTENT,
         execution_ids=(
             "20260718--travel-homepage-coverage--test-region-a--pilot-001",

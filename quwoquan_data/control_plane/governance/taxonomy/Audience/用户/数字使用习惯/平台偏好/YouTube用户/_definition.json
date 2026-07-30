@@ -2,6 +2,7 @@
   "label": "YouTube用户",
   "labelEn": "YouTube User",
   "description": "主要使用YouTube",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

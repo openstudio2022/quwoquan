@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
@@ -28,11 +29,27 @@ class ArticleReaderMetricNames {
 }
 
 class ArticleReaderObservability {
-  ArticleReaderObservability(this._analytics, this._telemetryRecorder);
+  ArticleReaderObservability(
+    this._analytics,
+    this._telemetryRecorder, {
+    int fallbackDedupCapacity = 512,
+    Duration fallbackDedupTtl = const Duration(minutes: 30),
+    DateTime Function()? now,
+  }) : assert(fallbackDedupCapacity > 0),
+       assert(fallbackDedupTtl > Duration.zero),
+       _fallbackDedupCapacity = fallbackDedupCapacity,
+       _fallbackDedupTtl = fallbackDedupTtl,
+       _now = now ?? DateTime.now;
 
   final AnalyticsService _analytics;
   final AppTelemetryRecorder _telemetryRecorder;
-  final Set<String> _fallbackKeys = <String>{};
+  final int _fallbackDedupCapacity;
+  final Duration _fallbackDedupTtl;
+  final DateTime Function() _now;
+  final LinkedHashMap<String, DateTime> _fallbackKeys =
+      LinkedHashMap<String, DateTime>();
+
+  int get debugFallbackDedupEntryCount => _fallbackKeys.length;
 
   void trackReaderOpen({
     required String postId,
@@ -194,7 +211,7 @@ class ArticleReaderObservability {
     required bool bookReaderEnabled,
   }) {
     final key = '$postId|$reason';
-    if (!_fallbackKeys.add(key)) {
+    if (!_markFallback(key)) {
       return;
     }
     _track(
@@ -205,6 +222,23 @@ class ArticleReaderObservability {
         'bookReaderEnabled': bookReaderEnabled,
       },
     );
+  }
+
+  bool _markFallback(String key) {
+    final now = _now().toUtc();
+    _fallbackKeys.removeWhere(
+      (_, seenAt) => now.difference(seenAt) >= _fallbackDedupTtl,
+    );
+    final existing = _fallbackKeys.remove(key);
+    if (existing != null) {
+      _fallbackKeys[key] = now;
+      return false;
+    }
+    _fallbackKeys[key] = now;
+    while (_fallbackKeys.length > _fallbackDedupCapacity) {
+      _fallbackKeys.remove(_fallbackKeys.keys.first);
+    }
+    return true;
   }
 
   void _track({

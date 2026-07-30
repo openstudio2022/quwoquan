@@ -1,0 +1,12 @@
+{
+  "label": "阿尔伯塔省",
+  "labelEn": "Alberta",
+  "description": "落基山国家公园群所在",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

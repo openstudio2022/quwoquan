@@ -2,10 +2,11 @@ package local_contract
 
 import (
 	"context"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/streaming"
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 )
 
@@ -16,26 +17,26 @@ type migratedAgentLoopSkillRuntime struct{}
 func (migratedAgentLoopSkillRuntime) SelectSkill(
 	_ context.Context,
 	_ assistant.AssistantTurn,
-) (application.SkillSelection, error) {
-	return application.SkillSelection{
+) (orchestration.SkillSelection, error) {
+	return orchestration.SkillSelection{
 		SkillID:     "general_qa",
 		DomainID:    "assistant",
 		DisplayName: "通用问答",
 	}, nil
 }
 
-func (migratedAgentLoopFinalModel) Complete(_ context.Context, request application.ModelRequest) (application.ModelResponse, error) {
+func (migratedAgentLoopFinalModel) Complete(_ context.Context, request orchestration.ModelRequest) (orchestration.ModelResponse, error) {
 	_ = request
-	return application.ModelResponse{
+	return orchestration.ModelResponse{
 		Text:            "已通过真实 application port 完成回答。",
 		StructuredDelta: map[string]any{"nextAction": "answer"},
 	}, nil
 }
 
 func TestAgentLoopRunTurnPublishesACompletedAnswer(t *testing.T) {
-	loop := application.NewAgentLoop(
+	loop := orchestration.NewAgentLoop(
 		migratedAgentLoopSkillRuntime{},
-		application.ReactRuntime{Model: migratedAgentLoopFinalModel{}},
+		orchestration.ReactRuntime{Model: migratedAgentLoopFinalModel{}},
 		func() time.Time { return time.Date(2026, 7, 22, 0, 0, 0, 0, time.UTC) },
 	)
 
@@ -54,7 +55,7 @@ func TestAgentLoopRunTurnPublishesACompletedAnswer(t *testing.T) {
 	if err != nil || failure != nil {
 		t.Fatalf("RunTurn() err=%v failure=%+v", err, failure)
 	}
-	if len(events) == 0 || events[len(events)-1].EventType != string(application.AssistantStreamEventCompleted) {
+	if len(events) == 0 || events[len(events)-1].EventType != string(assistantstreaming.AssistantStreamEventCompleted) {
 		t.Fatalf("expected completed stream event, got %#v", events)
 	}
 }

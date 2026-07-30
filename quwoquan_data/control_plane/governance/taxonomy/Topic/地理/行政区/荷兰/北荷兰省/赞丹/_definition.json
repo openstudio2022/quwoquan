@@ -1,0 +1,12 @@
+{
+  "label": "赞丹",
+  "labelEn": "Zaandam",
+  "description": "风车村与传统工业遗产",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

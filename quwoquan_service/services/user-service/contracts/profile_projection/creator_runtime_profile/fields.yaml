@@ -10,8 +10,8 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: projection
-- name: subAccountId
-  source: subAccountId
+- name: personaId
+  source: personaId
   type: string
   constraints:
   - NOT_NULL

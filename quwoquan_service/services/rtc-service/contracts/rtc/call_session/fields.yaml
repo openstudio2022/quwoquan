@@ -1,516 +1,524 @@
 description: 通话会话（聚合根）
 fields:
-- name: _id
-  source: _id
-  type: string
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  client_dart_name: callId
-  description: RFC 4122 UUID；同时作为 iOS CallKit / Android Telecom 的稳定通话标识
-  role: authoritative_state
-- name: callType
-  source: callType
-  type: enum
-  enum_ref: CallType
-  constraints:
-  - NOT_NULL
-  client_default: audio
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: audio/video
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: CallStatus
-  constraints:
-  - NOT_NULL
-  client_default: initiated
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 通话状态
-  role: authoritative_state
-- name: initiatorId
-  source: initiatorId
-  type: string
-  constraints:
-  - NOT_NULL
-  client_default: ''
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 发起者 userId
-  role: authoritative_state
-  reference: true
-- name: initiatorRingtoneId
-  source: initiatorRingtoneId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 发起通话时快照的发起方官方呼叫铃声 ID；群邀请后续加人沿用该值
-  role: authoritative_state
-  reference: true
-- name: conversationId
-  source: conversationId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 关联会话（来自哪个聊天发起的通话）
-  role: authoritative_state
-  reference: true
-- name: circleId
-  source: circleId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 关联圈子（圈子通话入口）
-  role: authoritative_state
-  reference: true
-- name: roomId
-  source: roomId
-  type: string
-  constraints:
-  - NOT_NULL
-  client_default: ''
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 媒体房间 ID
-  role: authoritative_state
-- name: maxParticipants
-  source: maxParticipants
-  type: int
-  constraints:
-  - NOT_NULL
-  client_default: '32'
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 最大参与人数（1v1=2, 多人≤32）
-  role: authoritative_state
-- name: participantCount
-  source: participantCount
-  type: int
-  constraints:
-  - NOT_NULL
-  client_default: '0'
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前参与人数
-  role: authoritative_state
-- name: participants
-  source: participants
-  type: embedded_list
-  item_entity: CallParticipant
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: API JSON 嵌入参与者列表（非存储字段，客户端 DTO 合成）
-  role: owned_value
-- name: isScreenSharing
-  source: isScreenSharing
-  type: bool
-  constraints:
-  - NOT_NULL
-  client_default: 'false'
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 是否有人正在共享屏幕
-  role: authoritative_state
-- name: screenShareUserId
-  source: screenShareUserId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 当前屏幕共享者 userId
-  role: authoritative_state
-- name: endReason
-  source: endReason
-  type: enum
-  enum_ref: EndReason
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 通话结束原因
-  role: authoritative_state
-- name: durationMs
-  source: durationMs
-  type: long
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 通话时长（毫秒，通话结束后写入）
-  role: authoritative_state
-- name: startedAt
-  source: startedAt
-  type: datetime
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 通话建连时间（至少两个参与者 connected、会话首次进入 in_call 时）
-  role: authoritative_state
-- name: endedAt
-  source: endedAt
-  type: datetime
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 通话结束时间
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: datetime
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: datetime
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: _id
+    source: _id
+    type: string
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    client_dart_name: callId
+    description: RFC 4122 UUID；同时作为 iOS CallKit / Android Telecom 的稳定通话标识
+    role: authoritative_state
+  - name: callType
+    source: callType
+    type: enum
+    enum_ref: CallType
+    constraints:
+      - NOT_NULL
+    client_default: audio
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: audio/video
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: CallStatus
+    constraints:
+      - NOT_NULL
+    client_default: initiated
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 通话状态
+    role: authoritative_state
+  - name: initiatorId
+    source: initiatorId
+    type: string
+    constraints:
+      - NOT_NULL
+    client_default: ''
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发起者 userId
+    role: authoritative_state
+    reference: true
+  - name: initiatorRingtoneId
+    source: initiatorRingtoneId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发起通话时快照的发起方官方呼叫铃声 ID；群邀请后续加人沿用该值
+    role: authoritative_state
+    reference: true
+  - name: conversationId
+    source: conversationId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 关联会话（来自哪个聊天发起的通话）
+    role: authoritative_state
+    reference: true
+  - name: circleId
+    source: circleId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 关联圈子（圈子通话入口）
+    role: authoritative_state
+    reference: true
+  - name: roomId
+    source: roomId
+    type: string
+    constraints:
+      - NOT_NULL
+    client_default: ''
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 媒体房间 ID
+    role: authoritative_state
+  - name: maxParticipants
+    source: maxParticipants
+    type: int
+    constraints:
+      - NOT_NULL
+    client_default: '32'
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 最大参与人数（1v1=2, 多人≤32）
+    role: authoritative_state
+  - name: participantCount
+    source: participantCount
+    type: int
+    constraints:
+      - NOT_NULL
+    client_default: '0'
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 当前参与人数
+    role: authoritative_state
+  - name: participants
+    source: participants
+    type: '[]CallParticipant'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: API JSON 嵌入参与者列表（非存储字段，客户端 DTO 合成）
+    role: owned_value
+  - name: isScreenSharing
+    source: isScreenSharing
+    type: bool
+    constraints:
+      - NOT_NULL
+    client_default: 'false'
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 是否有人正在共享屏幕
+    role: authoritative_state
+  - name: screenShareUserId
+    source: screenShareUserId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 当前屏幕共享者 userId
+    role: authoritative_state
+  - name: endReason
+    source: endReason
+    type: enum
+    enum_ref: EndReason
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 通话结束原因
+    role: authoritative_state
+  - name: durationMs
+    source: durationMs
+    type: long
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 通话时长（毫秒，通话结束后写入）
+    role: authoritative_state
+  - name: startedAt
+    source: startedAt
+    type: datetime
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 通话建连时间（至少两个参与者 connected、会话首次进入 in_call 时）
+    role: authoritative_state
+  - name: endedAt
+    source: endedAt
+    type: datetime
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 通话结束时间
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: datetime
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: datetime
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
 members:
   CallParticipant:
     kind: owned_entity
     fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      client_default: ''
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      role: authoritative_state
-    - name: role
-      source: role
-      type: enum
-      enum_ref: ParticipantRole
-      constraints:
-      - NOT_NULL
-      client_default: invitee
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: initiator/invitee
-      role: authoritative_state
-    - name: status
-      source: status
-      type: enum
-      enum_ref: ParticipantStatus
-      constraints:
-      - NOT_NULL
-      client_default: invited
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: invited/ringing/connecting/connected/left/timeout
-      role: authoritative_state
-    - name: isMuted
-      source: isMuted
-      type: bool
-      constraints:
-      - NOT_NULL
-      client_default: 'false'
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      role: authoritative_state
-    - name: isCameraOn
-      source: isCameraOn
-      type: bool
-      constraints:
-      - NOT_NULL
-      client_default: 'true'
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      role: authoritative_state
-    - name: joinedAt
-      source: joinedAt
-      type: datetime
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      role: authoritative_state
-    - name: leftAt
-      source: leftAt
-      type: datetime
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      role: authoritative_state
-    - name: inviteStatus
-      source: inviteStatus
-      type: enum
-      enum_ref: CallInviteStatus
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 邀请生命周期状态（加人/链接入会结果反馈）
-      role: authoritative_state
-    - name: invitedBy
-      source: invitedBy
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 邀请发起者 userId（区分原始发起人与会中加人邀请方）
-      role: authoritative_state
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - NOT_NULL
+        client_default: ''
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        role: authoritative_state
+      - name: role
+        source: role
+        type: enum
+        enum_ref: ParticipantRole
+        constraints:
+          - NOT_NULL
+        client_default: invitee
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: initiator/invitee
+        role: authoritative_state
+      - name: status
+        source: status
+        type: enum
+        enum_ref: ParticipantStatus
+        constraints:
+          - NOT_NULL
+        client_default: invited
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: invited/ringing/connecting/connected/left/timeout
+        role: authoritative_state
+      - name: isMuted
+        source: isMuted
+        type: bool
+        constraints:
+          - NOT_NULL
+        client_default: 'false'
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        role: authoritative_state
+      - name: isCameraOn
+        source: isCameraOn
+        type: bool
+        constraints:
+          - NOT_NULL
+        client_default: 'true'
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        role: authoritative_state
+      - name: joinedAt
+        source: joinedAt
+        type: datetime
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        role: authoritative_state
+      - name: leftAt
+        source: leftAt
+        type: datetime
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        role: authoritative_state
+      - name: inviteStatus
+        source: inviteStatus
+        type: enum
+        enum_ref: CallInviteStatus
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 邀请生命周期状态（加人/链接入会结果反馈）
+        role: authoritative_state
+      - name: invitedBy
+        source: invitedBy
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 邀请发起者 userId（区分原始发起人与会中加人邀请方）
+        role: authoritative_state
     description: 通话参与者（嵌入 CallSession）
 types:
   RtcAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 RTC 账号安全 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:
-    - name: sourceStreamId
-      source: sourceStreamId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: write
+      - name: sourceStreamId
+        source: sourceStreamId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: write
   RtcAccountClosureDeadLetterRecoveryAccepted:
     description: RTC 账号安全 source PEL 已受理重新消费。
     fields:
-    - name: sourceStreamId
-      source: sourceStreamId
-      type: string
-      constraints:
-      - PK
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: recoveryAccepted
-      source: recoveryAccepted
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  CallParticipant:
-    description: 通话参与者（嵌入 CallSession）
+      - name: sourceStreamId
+        source: sourceStreamId
+        type: string
+        constraints:
+          - PK
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: recoveryAccepted
+        source: recoveryAccepted
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  InitiateCallRequest:
+    description: InitiateCall 的唯一 HTTP body；身份只由认证上下文注入，不接受 body 身份字段。
     fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      client_default: ''
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: role
-      source: role
-      type: enum
-      enum_ref: ParticipantRole
-      constraints:
-      - NOT_NULL
-      client_default: invitee
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: initiator/invitee
-    - name: status
-      source: status
-      type: enum
-      enum_ref: ParticipantStatus
-      constraints:
-      - NOT_NULL
-      client_default: invited
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: invited/ringing/connecting/connected/left/timeout
-    - name: isMuted
-      source: isMuted
-      type: bool
-      constraints:
-      - NOT_NULL
-      client_default: 'false'
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: isCameraOn
-      source: isCameraOn
-      type: bool
-      constraints:
-      - NOT_NULL
-      client_default: 'true'
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: joinedAt
-      source: joinedAt
-      type: datetime
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: leftAt
-      source: leftAt
-      type: datetime
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: inviteStatus
-      source: inviteStatus
-      type: enum
-      enum_ref: CallInviteStatus
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 邀请生命周期状态（加人/链接入会结果反馈）
-    - name: invitedBy
-      source: invitedBy
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 邀请发起者 userId（区分原始发起人与会中加人邀请方）
-enums:
-  CallType:
-    values:
-    - audio
-    - video
-    description: 通话类型
-  CallStatus:
-    values:
-    - initiated
-    - ringing
-    - connecting
-    - in_call
-    - ended
-    description: 通话状态机
-  EndReason:
-    values:
-    - normal
-    - cancelled
-    - rejected
-    - no_answer
-    - error
-    - timeout
-    - last_leave
-    - account_closed
-    - account_suspended
-    description: 通话结束原因
-  ParticipantRole:
-    values:
-    - initiator
-    - invitee
-    description: 参与者角色
-  ParticipantStatus:
-    values:
-    - invited
-    - ringing
-    - connecting
-    - connected
-    - left
-    - timeout
-    description: 参与者状态
-  TrustRelation:
-    values:
-    - known
-    - possibly_unknown
-    description: 信任关系两态：known=联系人/同好/当前会话或群成员（可信）； possibly_unknown=其他群成员/链接加入者/无共同关系者（提示注意隐私）。富信息（共同关注的人数量等）后续增强。
-  CallInviteStatus:
-    values:
-    - pending
-    - ringing
-    - accepted
-    - declined
-    - expired
-    - cancelled
-    description: 通话邀请生命周期状态（用于通话中加人/链接入会的结果反馈）
+      - {name: callType, source: callType, type: enum, enum_ref: CallType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - name: inviteeIds
+        source: inviteeIds
+        type: '[]string'
+        constraints: [NOT_NULL]
+        classification: PII
+        log_policy: redacted
+        api_exposure: write
+        ops_exposure: mask
+      - {name: conversationId, source: conversationId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: circleId, source: circleId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read}
+      - {name: maxParticipants, source: maxParticipants, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  InviteToCallRequest:
+    description: InviteToCall 的唯一 HTTP body；callId 只来自 canonical path binding。
+    fields:
+      - name: inviteeIds
+        source: inviteeIds
+        type: '[]string'
+        constraints: [NOT_NULL]
+        classification: PII
+        log_policy: redacted
+        api_exposure: write
+        ops_exposure: mask
+  ToggleMuteRequest:
+    description: ToggleMute 的唯一 HTTP body。
+    fields:
+      - {name: muted, source: muted, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  ToggleCameraRequest:
+    description: ToggleCamera 的唯一 HTTP body。
+    fields:
+      - {name: cameraOn, source: cameraOn, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  CallEventPayload:
+    description: CallSession outbox 与 realtime signal 共用的强类型载荷；各事件只消费 events.yaml 声明的 payload_fields。
+    fields:
+      - {name: callId, source: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: eventId, source: eventId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: callType, source: callType, type: enum, enum_ref: CallType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: initiatorId, source: initiatorId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: mask, api_exposure: read, ops_exposure: mask}
+      - {name: initiatorRingtoneId, source: initiatorRingtoneId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: targetPersonaId, source: targetPersonaId, type: string, constraints: [NULLABLE], classification: PII, log_policy: mask, api_exposure: read, ops_exposure: mask}
+      - {name: callerName, source: callerName, type: string, constraints: [NULLABLE], classification: PII, log_policy: mask, api_exposure: read, ops_exposure: mask}
+      - {name: callerAvatarUrl, source: callerAvatarUrl, type: url, constraints: [NULLABLE], classification: PII, log_policy: redacted, api_exposure: read, ops_exposure: mask}
+      - {name: sourceLabel, source: sourceLabel, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: trustRelation, source: trustRelation, type: enum, enum_ref: TrustRelation, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: deliveryKey, source: deliveryKey, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: conversationId, source: conversationId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: circleId, source: circleId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: maxParticipants, source: maxParticipants, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: userId, source: userId, type: string, constraints: [NULLABLE], classification: PII, log_policy: mask, api_exposure: read, ops_exposure: mask}
+      - {name: role, source: role, type: enum, enum_ref: ParticipantRole, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: status, source: status, type: enum, enum_ref: CallStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: participantCount, source: participantCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: endReason, source: endReason, type: enum, enum_ref: EndReason, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: durationMs, source: durationMs, type: long, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: startedAt, source: startedAt, type: datetime, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: endedAt, source: endedAt, type: datetime, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: createdAt, source: createdAt, type: datetime, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, source: expiresAt, type: datetime, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  RtcGetCallQuery:
+    fields:
+      - name: callId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  RtcListCallsQuery:
+    fields:
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+      - name: status
+        type: CallStatus
+        enum_ref: CallStatus
+        constraints:
+          - NULLABLE
+        client_dart_type: CallStatus?
+        client_wire: canonicalEnum
+      - name: missed
+        type: bool
+        client_dart_name: missedOnly
+        client_dart_type: bool
+        client_default: "false"
+  RtcToggleCameraCommand:
+    fields:
+      - name: callId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: cameraOn
+        type: bool
+        client_dart_type: bool
+  RtcInviteToCallCommand:
+    fields:
+      - name: callId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: inviteeIds
+        type: '[]string'
+        client_dart_type: List<String>
+        client_normalization: trim_drop_empty
+  RtcInitiateCallCommand:
+    fields:
+      - name: callType
+        type: CallType
+        enum_ref: CallType
+        client_dart_type: CallType
+        client_wire: canonicalEnum
+      - name: inviteeIds
+        type: '[]string'
+        client_dart_type: List<String>
+        client_normalization: trim_drop_empty
+      - name: conversationId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: circleId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: maxParticipants
+        type: int
+        client_dart_type: int
+        client_default: "32"
+  RtcToggleMuteCommand:
+    fields:
+      - name: callId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: muted
+        type: bool
+        client_dart_type: bool
+  RtcCallIdCommand:
+    fields:
+      - name: callId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim

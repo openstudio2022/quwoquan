@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 type Config struct {
@@ -41,8 +41,8 @@ func New(cfg Config, httpClient *http.Client) (*Client, error) {
 
 func (c *Client) Lookup(
 	ctx context.Context,
-	request application.ExternalSearchRequest,
-) (application.ExternalSearchResult, error) {
+	request ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
 	candidates := make([]string, 0, 2)
 	if value := strings.TrimSpace(request.LocationSearchName); value != "" {
 		candidates = append(candidates, value)
@@ -64,17 +64,17 @@ func (c *Client) Lookup(
 		lastErr = err
 	}
 	if lastErr != nil {
-		return application.ExternalSearchResult{}, lastErr
+		return ports.ExternalSearchResult{}, lastErr
 	}
-	return application.ExternalSearchResult{}, application.ProviderFailure{
-		Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+	return ports.ExternalSearchResult{}, ports.ProviderFailure{
+		Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 	}
 }
 
 func (c *Client) lookupCandidate(
 	ctx context.Context,
 	candidate string,
-) (application.ExternalSearchResult, error) {
+) (ports.ExternalSearchResult, error) {
 	geocodeURL, err := queryURL(c.geocodingURL, url.Values{
 		"count":    {"5"},
 		"language": {"zh"},
@@ -82,28 +82,28 @@ func (c *Client) lookupCandidate(
 		"name":     {candidate},
 	})
 	if err != nil {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	var geocode geocodeWire
 	geocodeBody, geocodeStatus, err := c.get(ctx, geocodeURL, "quwoquan-assistant/1.0")
 	if err != nil {
-		return application.ExternalSearchResult{}, err
+		return ports.ExternalSearchResult{}, err
 	}
 	if geocodeStatus < http.StatusOK || geocodeStatus >= http.StatusMultipleChoices {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureUnavailable,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureUnavailable,
 		}
 	}
 	if err := json.Unmarshal(geocodeBody, &geocode); err != nil {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	if len(geocode.Results) == 0 {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	place := geocode.Results[0]
@@ -120,23 +120,23 @@ func (c *Client) lookupCandidate(
 		"forecast_days": {"3"},
 	})
 	if err != nil {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	var forecast forecastWire
 	forecastBody, forecastStatus, err := c.get(ctx, forecastURL, "quwoquan-assistant/1.0")
 	if err != nil {
-		return application.ExternalSearchResult{}, err
+		return ports.ExternalSearchResult{}, err
 	}
 	if forecastStatus < http.StatusOK || forecastStatus >= http.StatusMultipleChoices {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureUnavailable,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureUnavailable,
 		}
 	}
 	if err := json.Unmarshal(forecastBody, &forecast); err != nil {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 		}
 	}
 	placeName := place.Name
@@ -192,8 +192,8 @@ func (c *Client) get(
 	for attempt := 0; attempt < 2; attempt++ {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
-			return nil, 0, application.ProviderFailure{
-				Capability: "weather", Reason: application.ProviderFailureInvalidResponse,
+			return nil, 0, ports.ProviderFailure{
+				Capability: "weather", Reason: ports.ProviderFailureInvalidResponse,
 			}
 		}
 		request.Header.Set("User-Agent", userAgent)
@@ -222,22 +222,25 @@ func (c *Client) get(
 	return nil, 0, weatherFailure(lastErr)
 }
 
-func weatherFailure(err error) application.ProviderFailure {
+func weatherFailure(err error) ports.ProviderFailure {
 	if err == context.DeadlineExceeded {
-		return application.ProviderFailure{
-			Capability: "weather", Reason: application.ProviderFailureTimeout,
+		return ports.ProviderFailure{
+			Capability: "weather", Reason: ports.ProviderFailureTimeout,
 		}
 	}
-	return application.ProviderFailure{
-		Capability: "weather", Reason: application.ProviderFailureUnavailable,
+	return ports.ProviderFailure{
+		Capability: "weather", Reason: ports.ProviderFailureUnavailable,
 	}
 }
 
-func normalizeResult(summary string, references []application.ExternalReference) application.ExternalSearchResult {
+func normalizeResult(
+	summary string,
+	references []ports.ExternalReference,
+) ports.ExternalSearchResult {
 	for index := range references {
 		references[index].Rank = index + 1
 	}
-	return application.ExternalSearchResult{
+	return ports.ExternalSearchResult{
 		Summary: summary, References: references,
 	}
 }
@@ -291,8 +294,8 @@ func queryURL(raw string, values url.Values) (string, error) {
 	return parsed.String(), nil
 }
 
-func authorityReferences(query, place string) []application.ExternalReference {
-	references := []application.ExternalReference{
+func authorityReferences(query, place string) []ports.ExternalReference {
+	references := []ports.ExternalReference{
 		{Title: "中国天气网", URL: "https://www.weather.com.cn/", Source: "weather_com_cn", Snippet: "中国天气网为国家级天气服务入口。"},
 		{Title: "中央气象台", URL: "https://www.nmc.cn/", Source: "national_meteorological_center", Snippet: "中央气象台提供全国天气预报和预警。"},
 		{Title: "中国气象局", URL: "https://www.cma.gov.cn/", Source: "china_meteorological_administration", Snippet: "中国气象局为国家气象主管机构入口。"},
@@ -303,7 +306,7 @@ func authorityReferences(query, place string) []application.ExternalReference {
 	return references
 }
 
-func regionalAuthority(raw string) (application.ExternalReference, bool) {
+func regionalAuthority(raw string) (ports.ExternalReference, bool) {
 	normalized := strings.ToLower(raw)
 	regions := []struct {
 		keywords []string
@@ -320,14 +323,14 @@ func regionalAuthority(raw string) (application.ExternalReference, bool) {
 	for _, region := range regions {
 		for _, keyword := range region.keywords {
 			if strings.Contains(normalized, keyword) {
-				return application.ExternalReference{
+				return ports.ExternalReference{
 					Title: region.title, URL: region.url, Source: region.source,
 					Snippet: region.title + "为区域气象服务入口。",
 				}, true
 			}
 		}
 	}
-	return application.ExternalReference{}, false
+	return ports.ExternalReference{}, false
 }
 
 func weatherCode(code int) string {

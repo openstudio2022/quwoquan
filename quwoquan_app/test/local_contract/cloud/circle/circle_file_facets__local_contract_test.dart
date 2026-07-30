@@ -125,7 +125,7 @@ void main() {
   );
 
   test('CircleFile only uses If-Match for multi-writer snapshot updates', () {
-    final update = encodeUpdateCircleFileCommand(
+    final update = encodeCircleCircleFileUpdateCircleFileGeneratedRequest(
       UpdateCircleFileCommand(
         circleId: 'circle-1',
         fileId: 'file-1',
@@ -136,7 +136,7 @@ void main() {
     expect(update.headers, <String, String>{'If-Match': '"7"'});
     expect(update.body, <String, Object?>{'name': 'renamed.pdf'});
 
-    final delete = encodeDeleteCircleFileCommand(
+    final delete = encodeCircleCircleFileDeleteCircleFileGeneratedRequest(
       DeleteCircleFileCommand(circleId: 'circle-1', fileId: 'file-1'),
     );
     expect(delete.headers, isEmpty);

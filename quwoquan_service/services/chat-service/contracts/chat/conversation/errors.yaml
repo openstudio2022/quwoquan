@@ -11,6 +11,16 @@ errors:
 - code: CHAT.USER.invalid_argument
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
+    - ListConversations
+    - ListSelectableGroupConversations
+    - RecoverChatAccountClosureDeadLetter
+    - chat.conversation_membership.ResolveAssistantDeliveryMembership
+    - chat.message.ListAssistantGroundingMessages
+    - chat.message.SendAssistantDeliveryMessage
   http_status: 400
   recovery_action: surface
   dart_const: invalidArgument
@@ -21,6 +31,10 @@ errors:
 - code: CHAT.USER.circle_group_binding_write_forbidden
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
   http_status: 400
   recovery_action: surface
   dart_const: circleGroupBindingWriteForbidden
@@ -31,6 +45,30 @@ errors:
 - code: CHAT.USER.conversation_not_found
   kind: USER
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - DissolveConversation
+    - GetConversation
+    - GetGroupHome
+    - ListSelectableGroupContactMembers
+    - UpdateAnnouncement
+    - UpdateConversationTitle
+    - UpdateGroupGovernanceSettings
+    - chat.conversation_membership.AddMembers
+    - chat.conversation_membership.InviteAssistant
+    - chat.conversation_membership.LeaveConversation
+    - chat.conversation_membership.ListMembers
+    - chat.conversation_membership.RemoveAssistant
+    - chat.conversation_membership.RemoveMember
+    - chat.conversation_membership.ResolveAssistantDeliveryMembership
+    - chat.conversation_membership.TransferOwnership
+    - chat.conversation_membership.UpdateGroupAdmins
+    - chat.conversation_user_state.MarkAsRead
+    - chat.conversation_user_state.UpdateConversationSettings
+    - chat.message.ListAssistantGroundingMessages
+    - chat.message.ListMessages
+    - chat.message.SyncMessages
   http_status: 404
   recovery_action: surface
   dart_const: conversationNotFound
@@ -41,6 +79,45 @@ errors:
 - code: CHAT.USER.unauthorized
   kind: USER
   reason: unauthorized
+  emitted_by:
+  - surface: http
+    operations:
+    - BatchGetConversations
+    - CreateConversation
+    - DissolveConversation
+    - GetConversation
+    - GetGroupHome
+    - GetReceipts
+    - ListContactHome
+    - ListContacts
+    - ListConversationTimestamps
+    - ListConversations
+    - ListGroupCandidates
+    - ListInbox
+    - ListMessageHome
+    - ListSelectableGroupContactMembers
+    - ListSelectableGroupConversations
+    - RecoverChatAccountClosureDeadLetter
+    - UpdateAnnouncement
+    - UpdateConversationTitle
+    - UpdateGroupGovernanceSettings
+    - chat.conversation_membership.AddMembers
+    - chat.conversation_membership.InviteAssistant
+    - chat.conversation_membership.LeaveConversation
+    - chat.conversation_membership.ListMembers
+    - chat.conversation_membership.RemoveAssistant
+    - chat.conversation_membership.RemoveMember
+    - chat.conversation_membership.ResolveAssistantDeliveryMembership
+    - chat.conversation_membership.TransferOwnership
+    - chat.conversation_membership.UpdateGroupAdmins
+    - chat.conversation_user_state.MarkAsRead
+    - chat.conversation_user_state.UpdateConversationSettings
+    - chat.message.ListAssistantGroundingMessages
+    - chat.message.ListMessages
+    - chat.message.RecallMessage
+    - chat.message.SendAssistantDeliveryMessage
+    - chat.message.SendMessage
+    - chat.message.SyncMessages
   http_status: 401
   recovery_action: surface
   dart_const: unauthorized
@@ -51,6 +128,12 @@ errors:
 - code: CHAT.USER.message_not_found
   kind: USER
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - GetReceipts
+    - chat.conversation_user_state.MarkAsRead
+    - chat.message.RecallMessage
   http_status: 404
   recovery_action: surface
   dart_const: messageNotFound
@@ -61,6 +144,10 @@ errors:
 - code: CHAT.USER.message_recall_forbidden
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.message.RecallMessage
   http_status: 403
   recovery_action: surface
   dart_const: messageRecallForbidden
@@ -71,6 +158,10 @@ errors:
 - code: CHAT.USER.message_recall_expired
   kind: USER
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.message.RecallMessage
   http_status: 409
   recovery_action: surface
   dart_const: messageRecallExpired
@@ -81,6 +172,11 @@ errors:
 - code: CHAT.USER.message_idempotency_conflict
   kind: USER
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.message.SendAssistantDeliveryMessage
+    - chat.message.SendMessage
   http_status: 409
   recovery_action: surface
   dart_const: messageIdempotencyConflict
@@ -91,6 +187,10 @@ errors:
 - code: CHAT.USER.conversation_idempotency_conflict
   kind: USER
   reason: idempotency_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
   http_status: 409
   recovery_action: surface
   dart_const: conversationIdempotencyConflict
@@ -101,6 +201,12 @@ errors:
 - code: CHAT.USER.message_too_long
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdateAnnouncement
+    - chat.message.SendAssistantDeliveryMessage
+    - chat.message.SendMessage
   http_status: 400
   recovery_action: surface
   dart_const: messageTooLong
@@ -111,6 +217,11 @@ errors:
 - code: CHAT.USER.message_invalid
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.message.SendAssistantDeliveryMessage
+    - chat.message.SendMessage
   http_status: 400
   recovery_action: surface
   dart_const: messageInvalid
@@ -121,6 +232,10 @@ errors:
 - code: CHAT.USER.message_media_invalid
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.message.SendMessage
   http_status: 400
   recovery_action: surface
   dart_const: messageMediaInvalid
@@ -131,6 +246,10 @@ errors:
 - code: CHAT.SYSTEM.message_media_unavailable
   kind: SYSTEM
   reason: dependency_unavailable
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.message.SendMessage
   http_status: 503
   recovery_action: retry
   recovery_after_seconds: 3
@@ -139,20 +258,14 @@ errors:
   user_message:
     zh: 媒体服务暂时不可用，请稍后重试
     en: Media service is temporarily unavailable; try again later
-- code: CHAT.USER.rate_limited
-  kind: USER
-  reason: rate_limited
-  http_status: 429
-  recovery_action: retry
-  recovery_after_seconds: 5
-  dart_const: rateLimited
-  go_const: ErrRateLimited
-  user_message:
-    zh: 发送太频繁，请稍后重试
-    en: Sending too frequently, please wait
 - code: CHAT.USER.not_mutual
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
+    - chat.message.SendMessage
   http_status: 403
   recovery_action: surface
   dart_const: notMutual
@@ -163,6 +276,10 @@ errors:
 - code: CHAT.USER.greeting_required
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
   http_status: 403
   recovery_action: surface
   dart_const: greetingRequired
@@ -173,6 +290,16 @@ errors:
 - code: CHAT.USER.blocked
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
+    - GetReceipts
+    - chat.conversation_user_state.MarkAsRead
+    - chat.message.ListAssistantGroundingMessages
+    - chat.message.RecallMessage
+    - chat.message.SendAssistantDeliveryMessage
+    - chat.message.SendMessage
   http_status: 403
   recovery_action: surface
   dart_const: blocked
@@ -183,6 +310,11 @@ errors:
 - code: CHAT.USER.group_member_not_mutual
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
+    - chat.conversation_membership.AddMembers
   http_status: 403
   recovery_action: surface
   dart_const: groupMemberNotMutual
@@ -193,6 +325,11 @@ errors:
 - code: CHAT.USER.group_member_blocked
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
+    - chat.conversation_membership.AddMembers
   http_status: 403
   recovery_action: surface
   dart_const: groupMemberBlocked
@@ -203,6 +340,17 @@ errors:
 - code: CHAT.USER.group_governance_forbidden
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - DissolveConversation
+    - UpdateAnnouncement
+    - UpdateConversationTitle
+    - UpdateGroupGovernanceSettings
+    - chat.conversation_membership.AddMembers
+    - chat.conversation_membership.RemoveMember
+    - chat.conversation_membership.TransferOwnership
+    - chat.conversation_membership.UpdateGroupAdmins
   http_status: 403
   recovery_action: surface
   dart_const: groupGovernanceForbidden
@@ -213,6 +361,20 @@ errors:
 - code: CHAT.USER.circle_group_managed_by_circle
   kind: USER
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - DissolveConversation
+    - UpdateAnnouncement
+    - UpdateConversationTitle
+    - UpdateGroupGovernanceSettings
+    - chat.conversation_membership.AddMembers
+    - chat.conversation_membership.InviteAssistant
+    - chat.conversation_membership.LeaveConversation
+    - chat.conversation_membership.RemoveAssistant
+    - chat.conversation_membership.RemoveMember
+    - chat.conversation_membership.TransferOwnership
+    - chat.conversation_membership.UpdateGroupAdmins
   http_status: 409
   recovery_action: surface
   dart_const: circleGroupManagedByCircle
@@ -223,8 +385,9 @@ errors:
 - code: CHAT.SYSTEM.circle_group_binding_conflict
   kind: SYSTEM
   reason: projection_conflict
-  http_status: 409
-  recovery_action: surface
+  emitted_by:
+  - surface: consumer
+  recovery_action: retry
   dart_const: circleGroupBindingConflict
   go_const: ErrCircleGroupBindingConflict
   user_message:
@@ -233,6 +396,11 @@ errors:
 - code: CHAT.USER.group_full
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateConversation
+    - chat.conversation_membership.AddMembers
   http_status: 400
   recovery_action: surface
   dart_const: groupFull
@@ -243,6 +411,15 @@ errors:
 - code: CHAT.USER.conversation_dissolved
   kind: USER
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - UpdateAnnouncement
+    - UpdateConversationTitle
+    - UpdateGroupGovernanceSettings
+    - chat.conversation_membership.AddMembers
+    - chat.conversation_membership.LeaveConversation
+    - chat.conversation_membership.RemoveMember
   http_status: 409
   recovery_action: surface
   dart_const: conversationDissolved
@@ -253,6 +430,10 @@ errors:
 - code: CHAT.USER.group_owner_must_transfer_before_leave
   kind: USER
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - chat.conversation_membership.LeaveConversation
   http_status: 409
   recovery_action: surface
   dart_const: groupOwnerMustTransferBeforeLeave
@@ -263,6 +444,45 @@ errors:
 - code: CHAT.SYSTEM.internal_error
   kind: SYSTEM
   reason: internal_error
+  emitted_by:
+  - surface: http
+    operations:
+    - BatchGetConversations
+    - CreateConversation
+    - DissolveConversation
+    - GetConversation
+    - GetGroupHome
+    - GetReceipts
+    - ListContactHome
+    - ListContacts
+    - ListConversationTimestamps
+    - ListConversations
+    - ListGroupCandidates
+    - ListInbox
+    - ListMessageHome
+    - ListSelectableGroupContactMembers
+    - ListSelectableGroupConversations
+    - RecoverChatAccountClosureDeadLetter
+    - UpdateAnnouncement
+    - UpdateConversationTitle
+    - UpdateGroupGovernanceSettings
+    - chat.conversation_membership.AddMembers
+    - chat.conversation_membership.InviteAssistant
+    - chat.conversation_membership.LeaveConversation
+    - chat.conversation_membership.ListMembers
+    - chat.conversation_membership.RemoveAssistant
+    - chat.conversation_membership.RemoveMember
+    - chat.conversation_membership.ResolveAssistantDeliveryMembership
+    - chat.conversation_membership.TransferOwnership
+    - chat.conversation_membership.UpdateGroupAdmins
+    - chat.conversation_user_state.MarkAsRead
+    - chat.conversation_user_state.UpdateConversationSettings
+    - chat.message.ListAssistantGroundingMessages
+    - chat.message.ListMessages
+    - chat.message.RecallMessage
+    - chat.message.SendAssistantDeliveryMessage
+    - chat.message.SendMessage
+    - chat.message.SyncMessages
   http_status: 500
   recovery_action: surface
   dart_const: internalError

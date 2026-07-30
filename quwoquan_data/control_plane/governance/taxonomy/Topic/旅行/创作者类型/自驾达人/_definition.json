@@ -1,9 +1,0 @@
-{
-  "tagRef": "Topic/旅行/创作者类型/自驾达人",
-  "label": "自驾达人",
-  "labelEn": "self-drive specialist",
-  "description": "以自驾线路、路书与车况经验为主的旅行创作者类型。",
-  "createdAt": "2026-07-14T00:00:00Z",
-  "updatedAt": "2026-07-14T00:00:00Z",
-  "schema": "quwoquan.tag.definition"
-}

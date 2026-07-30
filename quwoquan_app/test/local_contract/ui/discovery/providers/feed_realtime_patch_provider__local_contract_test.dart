@@ -10,8 +10,12 @@ import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider
 
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
-const String _authedUserId = 'test-sub-account';
+const String _authedUserId = 'test-persona';
 const String _channel = 'moment';
+const String _policyA =
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const String _policyB =
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 void main() {
   late RecordingAppTelemetryRecorder ops;
@@ -26,6 +30,7 @@ void main() {
   ProviderContainer buildContainer({
     required List<PostBaseDto> items,
     String feedRequestId = 'frq_test_1',
+    String? policyDigest = _policyA,
     bool authenticated = true,
   }) {
     final seed = <String, AsyncValue<DiscoveryFeedState>>{
@@ -34,6 +39,7 @@ void main() {
           items: items,
           seenItemIds: items.map((e) => e.id).toList(growable: false),
           feedRequestId: feedRequestId,
+          policyDigest: policyDigest,
         ),
       ),
     };
@@ -152,6 +158,7 @@ void main() {
       expect(hint, isNotNull);
       expect(hint!.newCandidateCount, 5);
       expect(hint.hasUpdate, isTrue);
+      expect(hint.policyDigest, _policyA);
       // 不插入、不跳位：feed 内容与顺序保持不变。
       expect(currentItemIds(container), <String>['p0', 'p1']);
     });
@@ -173,9 +180,66 @@ void main() {
       expect(hint.hasUpdate, isTrue);
       expect(currentItemIds(container), <String>['p0', 'p1']);
     });
+
+    test('latest patch 未提供 policyDigest 时清空 hint 归因而不沿用', () {
+      final container = buildContainer(items: _posts(2));
+      final notifier = container.read(feedRealtimePatchProvider.notifier);
+
+      notifier.applyPatch(
+        _patch(
+          patchId: 'hint-with-policy',
+          type: FeedRealtimePatchType.newCandidateHint,
+          affectedCount: 1,
+        ),
+      );
+      expect(
+        container
+            .read(feedRealtimePatchProvider)
+            .hintFor(_channel)!
+            .policyDigest,
+        _policyA,
+      );
+
+      notifier.applyPatch(
+        _patch(
+          patchId: 'hint-without-policy',
+          type: FeedRealtimePatchType.newCandidateHint,
+          affectedCount: 1,
+          policyDigest: null,
+        ),
+      );
+      final hint = container.read(feedRealtimePatchProvider).hintFor(_channel)!;
+      expect(hint.newCandidateCount, 2);
+      expect(
+        hint.policyDigest,
+        isNull,
+        reason:
+            'null means source omitted; it must not fallback to prior digest',
+      );
+    });
   });
 
   group('幂等去重 / 对齐 / 鉴权', () {
+    test('provider boundary rejects a non-canonical policyDigest', () {
+      final container = buildContainer(items: _posts(2));
+      final notifier = container.read(feedRealtimePatchProvider.notifier);
+
+      expect(
+        () => notifier.applyPatch(
+          _patch(
+            patchId: 'invalid-policy-1',
+            type: FeedRealtimePatchType.newCandidateHint,
+            policyDigest: '',
+          ),
+        ),
+        throwsFormatException,
+      );
+      expect(
+        container.read(feedRealtimePatchProvider).hintFor(_channel),
+        isNull,
+      );
+    });
+
     test('patchId 去重：同一 patchId 重复到达只生效一次', () {
       final container = buildContainer(items: _posts(2));
       final notifier = container.read(feedRealtimePatchProvider.notifier);
@@ -220,6 +284,26 @@ void main() {
         container.read(feedRealtimePatchProvider).hintFor(_channel),
         isNull,
       );
+    });
+
+    test('policyDigest 不匹配当前 channel feed 则忽略', () {
+      final container = buildContainer(items: _posts(2));
+      final notifier = container.read(feedRealtimePatchProvider.notifier);
+
+      notifier.applyPatch(
+        _patch(
+          patchId: 'stale-policy-1',
+          type: FeedRealtimePatchType.newCandidateHint,
+          affectedCount: 2,
+          policyDigest: _policyB,
+        ),
+      );
+
+      expect(
+        container.read(feedRealtimePatchProvider).hintFor(_channel),
+        isNull,
+      );
+      expect(eventsNamed('feed_patch_misaligned'), hasLength(1));
     });
 
     test('游客不消费 patch（鉴权门拦截）', () {
@@ -314,7 +398,7 @@ PostBaseDto _post(String id, {String authorId = 'author-default'}) {
     'contentType': 'micro',
     'type': 'micro',
     'authorId': authorId,
-    'subAccountId': authorId,
+    'personaId': authorId,
     'displayName': 'fixture',
     'body': 'fixture body $id',
     'likeCount': 0,
@@ -332,6 +416,7 @@ FeedRealtimePatch _patch({
   FeedPatchRemovalDimension? removalDimension,
   String? removalDimensionValue,
   int affectedCount = 0,
+  String? policyDigest = _policyA,
 }) {
   return FeedRealtimePatch(
     patchId: patchId,
@@ -344,6 +429,7 @@ FeedRealtimePatch _patch({
     removalDimension: removalDimension,
     removalDimensionValue: removalDimensionValue,
     affectedCount: affectedCount,
+    policyDigest: policyDigest,
     safeToApplyWhileViewing: true,
     emittedAt: '2026-06-18T00:00:00Z',
   );
@@ -354,8 +440,9 @@ class _AuthedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'test-token',
+    refreshToken: 'test-refresh-token',
     ownerId: 'test-owner',
-    activeSubAccountId: _authedUserId,
+    activePersonaId: _authedUserId,
     accountState: 'active',
     installId: 'test-install',
   );

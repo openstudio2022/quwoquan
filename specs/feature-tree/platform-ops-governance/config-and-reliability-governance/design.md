@@ -29,7 +29,7 @@
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
-- 影响 Story：[`config-source-governance`](./config-source-governance/spec.md)、[`reliability-policy-control`](./reliability-policy-control/spec.md)
+- 影响 Story：本能力的全部直属 Story。
 - 关联验收：`SIT-001`
 
 <a id="dec-002"></a>
@@ -43,6 +43,16 @@
 - 影响 Story：[`reliability-policy-control`](./reliability-policy-control/spec.md)
 - 关联验收：`SIT-001`、`GWT-002`
 
+<a id="dec-003"></a>
+### DEC-003 镜像身份由部署包精确绑定且配置不声明兼容范围
+- 决策：镜像内容以部署包内唯一的不可变 digest/ref 为事实；运行实例只回报该精确身份，服务 config schema 不再维护最低/最高镜像版本、兼容区间或环境例外。
+- 理由：兼容范围无法证明当前实例实际运行的字节，且会把部署事实复制为第二套配置真相源；精确身份可直接关联 package、receipt、回滚目标和运行回读。
+- 被否决方案：SemVer 上下界、多个可接受版本、空值视为本地开发、可变 tag、兼容解析或 fallback。
+- 约束与影响：Kubernetes 包必须写入 digest annotation 并使用 `@sha256` 镜像引用；Compose 必须注入受门禁校验的精确 ref 和由其完整派生的单一摘要。标准 `apiVersion`、第三方包 SemVer 与镜像传输 tag 不作为服务兼容协议。
+- 关联要求：`REQ-002`
+- 影响 Story：[`config-source-governance`](./config-source-governance/spec.md)、[`reliability-policy-control`](./reliability-policy-control/spec.md)
+- 关联验收：`SIT-001`、`GWT-001`、`GWT-002`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。
@@ -52,7 +62,6 @@
 
 ## 6. 质量与观测
 
-- 各领域各自维护 `sys.*` 配置读写与灰度口径。
-- 方案 A：配置包版本 + 渐进灰度。
-- 高风险配置天然可审计、可回滚。
-- 对配置中心的“秒级生效”能力利用不足。
+- 各服务自治维护 `sys.*` 配置来源，平台运维控制面统一发布、灰度、审计和回滚口径。
+- 配置内容摘要、镜像精确身份与托管 receipt 分别证明其所属事实，并由同一候选发布关联；不得互相推断或复制兼容范围。
+- 高风险配置和镜像发布必须可审计、可回读、可回滚；任一身份缺失或漂移均不得产生成功事实。

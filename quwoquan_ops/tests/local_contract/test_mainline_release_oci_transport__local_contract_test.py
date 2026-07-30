@@ -1,17 +1,150 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from quwoquan_ops.cli.prod import collect_mainline_image_descriptors as collector
 from quwoquan_ops.cli.prod import fetch_mainline_release_artifact as fetcher
+from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import load_prod_plane_images as image_loader
 from quwoquan_ops.cli.prod import registry_transport
+
+
+def _build_input_manifest(
+    *,
+    repository: str = "ghcr.io/owner/repo/content-service",
+    transport_ref: str = "ghcr.io/owner/repo/content-service:sha-candidate",
+) -> dict[str, object]:
+    return finalizer.seal_manifest(
+        {
+            "schema": finalizer.SCHEMA,
+            "candidateId": None,
+            "status": "build-input",
+            "generatedAt": "2026-07-28T00:00:00Z",
+            "source": {
+                "gitSha": "a" * 40,
+                "treeDigest": "sha1:" + ("b" * 40),
+                "repository": "owner/repo",
+                "workflowRunId": "42",
+                "sourceArchiveDigest": None,
+            },
+            "artifactDigest": None,
+            "images": {
+                "content-service": {
+                    "repository": repository,
+                    "transportRef": transport_ref,
+                }
+            },
+            "configurationPackages": {
+                environment: {
+                    "content-service": {
+                        "path": (
+                            f"packages/environments/{environment}/services/"
+                            "content-service/config/config.yaml"
+                        ),
+                        "digest": "sha256:" + ("c" * 64),
+                    }
+                }
+                for environment in finalizer.ENVIRONMENTS
+            },
+            "applicationPackages": {
+                environment: {} for environment in finalizer.ENVIRONMENTS
+            },
+            "contractGraphDigest": None,
+            "requiredEvidence": {
+                "images": ["content-service"],
+                "configurationPackages": {
+                    environment: ["content-service"]
+                    for environment in finalizer.ENVIRONMENTS
+                },
+                "applicationPackages": {
+                    environment: list(finalizer.APPLICATION_PACKAGES[environment])
+                    for environment in finalizer.ENVIRONMENTS
+                },
+                "contractGraphDigest": True,
+                "providerEvidence": True,
+                "testEvidence": list(finalizer.TEST_LAYERS),
+                "environmentReceipts": list(finalizer.ENVIRONMENTS),
+                "rolloutReceipt": True,
+                "rollbackReceipt": True,
+            },
+            "testEvidence": {},
+            "providerEvidence": {},
+            "environmentReceipts": {},
+            "rolloutReceipt": None,
+            "rollbackReceipt": None,
+            "blockers": [
+                "immutable-image-evidence-pending",
+                "whole-application-evidence-pending",
+            ],
+            "missingEvidence": [
+                "images.content-service.digest",
+                *(
+                    f"applicationPackages.{environment}.{surface}"
+                    for environment in finalizer.ENVIRONMENTS
+                    for surface in finalizer.APPLICATION_PACKAGES[environment]
+                ),
+                "contractGraphDigest",
+                "providerEvidence",
+                "testEvidence",
+                *(f"environmentReceipts.{environment}" for environment in finalizer.ENVIRONMENTS),
+                "rollbackReceipt.ready",
+                "rolloutReceipt",
+                "rollbackReceipt.outcome",
+            ],
+        }
+    )
+
+
+def _component_manifest(config_bytes: bytes) -> dict[str, object]:
+    repository = "ghcr.io/owner/repo/content-service"
+    transport_ref = repository + ":sha-candidate"
+    digest = "sha256:" + ("d" * 64)
+    ref = f"{repository}@{digest}"
+    manifest = _build_input_manifest(
+        repository=repository,
+        transport_ref=transport_ref,
+    )
+    manifest["status"] = "component-ready"
+    manifest["images"] = {
+        "content-service": {
+            "repository": repository,
+            "transportRef": transport_ref,
+            "digest": digest,
+            "ref": ref,
+            "attestations": {
+                "spdxSbom": f"oci://{ref}#spdxSbom",
+                "slsaProvenance": f"oci://{ref}#slsaProvenance",
+            },
+        }
+    }
+    for environment in finalizer.ENVIRONMENTS:
+        manifest["configurationPackages"][environment]["content-service"][
+            "digest"
+        ] = "sha256:" + hashlib.sha256(config_bytes).hexdigest()
+    manifest["blockers"] = ["whole-application-evidence-pending"]
+    manifest["missingEvidence"] = [
+        *(
+            f"applicationPackages.{environment}.{surface}"
+            for environment in finalizer.ENVIRONMENTS
+            for surface in finalizer.APPLICATION_PACKAGES[environment]
+        ),
+        "contractGraphDigest",
+        "providerEvidence",
+        "testEvidence",
+        *(f"environmentReceipts.{environment}" for environment in finalizer.ENVIRONMENTS),
+        "rollbackReceipt.ready",
+        "rolloutReceipt",
+        "rollbackReceipt.outcome",
+    ]
+    return finalizer.seal_manifest(manifest)
 
 
 class MainlineReleaseOCITransportContractTest(unittest.TestCase):
@@ -20,6 +153,19 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
     spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-003
     spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-008
     """
+
+    def test_fetcher_accepts_every_canonical_online_lifecycle_status(self) -> None:
+        self.assertEqual(
+            fetcher.FETCHABLE_STATUSES,
+            {
+                "component-ready",
+                "candidate-ready",
+                "deployable",
+                "released",
+                "rolled-back",
+                "rollback-failed",
+            },
+        )
 
     def test_registry_transport_retries_same_command_with_bounded_backoff(self) -> None:
         command = mock.Mock(
@@ -64,14 +210,7 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             )
 
     def test_collector_resolves_ghcr_tag_to_digest_descriptor(self) -> None:
-        manifest = {
-            "status": "build-input",
-            "requiredImages": ["content-service"],
-            "imageRepositories": {
-                "content-service": "ghcr.io/owner/repo/content-service"
-            },
-            "versions": {"imageVersion": "1.20260727.42"},
-        }
+        manifest = _build_input_manifest()
         digest = "sha256:" + ("a" * 64)
         completed = subprocess.CompletedProcess(
             ["docker"],
@@ -79,8 +218,10 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             stdout=f"Name: image\nMediaType: application/vnd.oci.image.index.v1+json\nDigest: {digest}\n",
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
-            collector.subprocess, "run", return_value=completed
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(collector.subprocess, "run", return_value=completed),
+            mock.patch.object(collector, "verify_oci_supply_chain") as verify,
         ):
             output = Path(tmp)
             descriptors = collector.collect(manifest, output)
@@ -92,19 +233,68 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             recorded["ref"],
             f"ghcr.io/owner/repo/content-service@{digest}",
         )
+        verify.assert_called_once_with(
+            f"ghcr.io/owner/repo/content-service@{digest}",
+            repository="owner/repo",
+            signer_workflow="owner/repo/.github/workflows/service_pipeline.yml",
+        )
+
+    def test_collector_resolves_independent_images_concurrently(self) -> None:
+        manifest = _build_input_manifest()
+        repository = "ghcr.io/owner/repo/user-service"
+        manifest["images"]["user-service"] = {
+            "repository": repository,
+            "transportRef": repository + ":sha-candidate",
+        }
+        manifest["requiredEvidence"]["images"] = [
+            "content-service",
+            "user-service",
+        ]
+        for environment in finalizer.ENVIRONMENTS:
+            manifest["configurationPackages"][environment]["user-service"] = {
+                "path": (
+                    f"packages/environments/{environment}/services/"
+                    "user-service/config/config.yaml"
+                ),
+                "digest": "sha256:" + ("c" * 64),
+            }
+            manifest["requiredEvidence"]["configurationPackages"][environment] = [
+                "content-service",
+                "user-service",
+            ]
+        manifest["missingEvidence"].insert(1, "images.user-service.digest")
+        manifest = finalizer.seal_manifest(manifest)
+        rendezvous = threading.Barrier(2, timeout=2)
+        digest = "sha256:" + ("a" * 64)
+
+        def resolve(_ref: str) -> str:
+            rendezvous.wait()
+            return digest
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(collector, "resolve_registry_digest", side_effect=resolve),
+            mock.patch.object(collector, "verify_oci_supply_chain"),
+        ):
+            descriptors = collector.collect(manifest, Path(tmp))
+
+        self.assertEqual(
+            list(descriptors),
+            ["content-service", "user-service"],
+        )
 
     def test_collector_rejects_latest_and_non_ghcr(self) -> None:
-        base = {
-            "status": "build-input",
-            "requiredImages": ["content-service"],
-            "imageRepositories": {"content-service": "docker.io/owner/content"},
-            "versions": {"imageVersion": "latest"},
-        }
+        base = _build_input_manifest(
+            transport_ref="ghcr.io/owner/repo/content-service:latest"
+        )
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(ValueError, "not immutable"):
+            with self.assertRaisesRegex(ValueError, "must not use latest"):
                 collector.collect(base, Path(tmp))
-            base["versions"]["imageVersion"] = "1.2.3"
-            with self.assertRaisesRegex(ValueError, "not GHCR"):
+            base = _build_input_manifest(
+                repository="docker.io/owner/content",
+                transport_ref="docker.io/owner/content:sha-candidate",
+            )
+            with self.assertRaisesRegex(ValueError, "transport reference is invalid"):
                 collector.collect(base, Path(tmp))
 
     def test_fetcher_requires_release_artifact_digest(self) -> None:
@@ -136,6 +326,8 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
             "ghcr.io/owner/repo/release-artifact@sha256:" + ("d" * 64)
         )
         calls: list[list[str]] = []
+        config_bytes = b"config: canonical\n"
+        manifest = _component_manifest(config_bytes)
 
         def fake_run(argv: list[str]) -> subprocess.CompletedProcess[str]:
             calls.append(argv)
@@ -154,10 +346,19 @@ class MainlineReleaseOCITransportContractTest(unittest.TestCase):
                     stderr="",
                 )
             if argv[1] == "cp":
-                Path(argv[-1]).joinpath("manifest.json").write_text(
-                    "{}",
-                    encoding="utf-8",
+                root = Path(argv[-1])
+                root.joinpath("manifest.json").write_text(
+                    json.dumps(manifest), encoding="utf-8"
                 )
+                for environment in finalizer.ENVIRONMENTS:
+                    config = (
+                        root
+                        / "packages/environments"
+                        / environment
+                        / "services/content-service/config/config.yaml"
+                    )
+                    config.parent.mkdir(parents=True, exist_ok=True)
+                    config.write_bytes(config_bytes)
             return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
 
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(

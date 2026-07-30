@@ -51,7 +51,7 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 				asset.MediaType,
 				asset.AssetID,
 				asset.Version,
-				asset.ContentType,
+				asset.MimeType,
 			)
 		}
 		ready := asset.ProcessingStatus == mediamodel.ProcessingStatusReady
@@ -62,24 +62,28 @@ func (r *PostBindingReader) FindMediaAssetsForBinding(
 			)
 		}
 		result[assetID] = postapp.MediaAssetBindingSlice{
-			AssetID:                      asset.AssetID,
-			OwnerID:                      asset.OwnerID,
-			Ready:                        ready,
-			ProcessingStatus:             string(asset.ProcessingStatus),
-			MediaType:                    asset.MediaType,
-			ContentType:                  asset.ContentType,
-			Version:                      asset.Version,
-			PublicSliceKey:               publicSliceKey,
-			VerifiedDurationMs:           asset.VerifiedDurationMs,
-			VideoWidth:                   asset.VideoWidth,
-			VideoHeight:                  asset.VideoHeight,
-			VideoPublicSliceKey:          asset.VideoPublicSliceKey,
-			CoverPublicSliceKey:          asset.CoverPublicSliceKey,
-			PreviewTrackVersion:          asset.PreviewTrackVersion,
-			PreviewTrackManifestSliceKey: asset.PreviewTrackManifestSliceKey,
-			CoverStrategy:                asset.CoverStrategy,
-			ManualCoverAssetID:           asset.ManualCoverAssetID,
-			CoverFrameTimeMs:             asset.CoverFrameTimeMs,
+			AssetID:                       asset.AssetID,
+			OwnerID:                       asset.OwnerID,
+			Ready:                         ready,
+			ProcessingStatus:              string(asset.ProcessingStatus),
+			MediaType:                     asset.MediaType,
+			MimeType:                      asset.MimeType,
+			Version:                       asset.Version,
+			PublicSliceKey:                publicSliceKey,
+			VerifiedDurationMs:            asset.VerifiedDurationMs,
+			VideoWidth:                    asset.VideoWidth,
+			VideoHeight:                   asset.VideoHeight,
+			VideoPublicSliceKey:           asset.VideoPublicSliceKey,
+			CoverPublicSliceKey:           asset.CoverPublicSliceKey,
+			PreviewTrackVersion:           asset.PreviewTrackVersion,
+			PreviewTrackManifestSliceKey:  asset.PreviewTrackManifestSliceKey,
+			HLSCMAFDescriptorVersion:      asset.HLSCMAFDescriptorVersion,
+			HLSCMAFDescriptorSliceKey:     asset.HLSCMAFDescriptorSliceKey,
+			HLSCMAFMasterManifestSliceKey: asset.HLSCMAFMasterManifestSliceKey,
+			HLSCMAFRenditionCount:         asset.HLSCMAFRenditionCount,
+			CoverStrategy:                 asset.CoverStrategy,
+			ManualCoverAssetID:            asset.ManualCoverAssetID,
+			CoverFrameTimeMs:              asset.CoverFrameTimeMs,
 		}
 	}
 	return result, nil
@@ -112,7 +116,7 @@ func (r *PostBindingReader) MaterializePublicSlices(
 			asset.MediaType,
 			asset.AssetID,
 			asset.Version,
-			asset.ContentType,
+			asset.MimeType,
 		)
 		if asset.MediaType == "image" {
 			sourceObjectKey = asset.ImageNormalizedObjectKey

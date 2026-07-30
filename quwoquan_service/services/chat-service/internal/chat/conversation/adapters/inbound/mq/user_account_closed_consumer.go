@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"quwoquan_service/runtime/accountrestriction"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
 )
@@ -90,6 +91,7 @@ func (config UserAccountClosedConsumerConfig) withDefaults() UserAccountClosedCo
 type UserAccountClosedConsumer struct {
 	redis             rtredis.Client
 	projection        application.UserAccountClosedProjection
+	restrictions      application.UserAccountRestrictionProjection
 	failures          UserAccountClosedFailureStore
 	consumer          string
 	config            UserAccountClosedConsumerConfig
@@ -97,6 +99,20 @@ type UserAccountClosedConsumer struct {
 	mu                sync.RWMutex
 	lastSuccess       time.Time
 	lastFailureDigest string
+}
+
+// WithUserAccountRestrictionProjection binds the reversible UserSuspended /
+// UserRestored path to this shared stream consumer. A restriction event is
+// retried and DLQ-held when the projection is not configured; it is never ACKed
+// as an unsupported UserAccountClosed event.
+func (c *UserAccountClosedConsumer) WithUserAccountRestrictionProjection(
+	projection application.UserAccountRestrictionProjection,
+) *UserAccountClosedConsumer {
+	if c == nil || projection == nil {
+		panic("chat user account restriction projection is required")
+	}
+	c.restrictions = projection
+	return c
 }
 
 func NewUserAccountClosedConsumer(
@@ -268,6 +284,33 @@ func (c *UserAccountClosedConsumer) processMessage(
 		recordUserAccountClosedOutcome("held_for_recovery")
 		return nil
 	}
+	if restrictionEvent, restrictionErr := accountrestriction.Decode(
+		message.Values,
+	); restrictionErr == nil {
+		if c.restrictions == nil {
+			err := errors.New(
+				"chat user account restriction projection is not configured",
+			)
+			return c.handleMessageFailure(ctx, message, err)
+		}
+		result, err := c.restrictions.Apply(ctx, restrictionEvent)
+		if err != nil {
+			return c.handleMessageFailure(ctx, message, err)
+		}
+		if ackErr := c.ackAndClear(ctx, message.ID); ackErr != nil {
+			return ackErr
+		}
+		outcome := "restriction_applied"
+		if result.Replayed {
+			outcome = "restriction_replayed"
+		}
+		recordUserAccountClosedOutcome(outcome)
+		observeUserAccountClosedDuration(time.Since(startedAt))
+		return nil
+	} else if !errors.Is(restrictionErr, accountrestriction.ErrUnsupportedEvent) {
+		return c.handleMessageFailure(ctx, message, restrictionErr)
+	}
+
 	event, err := decodeUserAccountClosed(message.Values)
 	if errors.Is(err, errUnsupportedUserAccountEvent) {
 		if ackErr := c.ackAndClear(ctx, message.ID); ackErr != nil {
@@ -293,74 +336,82 @@ func (c *UserAccountClosedConsumer) processMessage(
 		}
 	}
 	if err != nil {
-		attempts, recordErr := c.failures.RecordUserAccountClosedFailure(
+		return c.handleMessageFailure(ctx, message, err)
+	}
+	return nil
+}
+
+func (c *UserAccountClosedConsumer) handleMessageFailure(
+	ctx context.Context,
+	message rtredis.StreamMessage,
+	err error,
+) error {
+	attempts, recordErr := c.failures.RecordUserAccountClosedFailure(
+		ctx,
+		message.ID,
+		message.Values["eventId"],
+		err,
+	)
+	if recordErr != nil {
+		held, heldErr := c.failures.IsUserAccountClosedDeadLettered(
 			ctx,
 			message.ID,
-			message.Values["eventId"],
+		)
+		if heldErr == nil && held {
+			recordUserAccountClosedOutcome("held_for_recovery")
+			return nil
+		}
+		return fmt.Errorf(
+			"record chat UserAccountClosed failure: %w",
+			recordErr,
+		)
+	}
+	if attempts < c.config.MaxAttempts {
+		recordUserAccountClosedOutcome("retry")
+		return fmt.Errorf(
+			"chat UserAccountClosed attempt %d/%d: %w",
+			attempts,
+			c.config.MaxAttempts,
 			err,
 		)
-		if recordErr != nil {
-			held, heldErr := c.failures.IsUserAccountClosedDeadLettered(
-				ctx,
-				message.ID,
-			)
-			if heldErr == nil && held {
-				recordUserAccountClosedOutcome("held_for_recovery")
-				return nil
-			}
-			return fmt.Errorf(
-				"record chat UserAccountClosed failure: %w",
-				recordErr,
-			)
-		}
-		if attempts < c.config.MaxAttempts {
-			recordUserAccountClosedOutcome("retry")
-			return fmt.Errorf(
-				"chat UserAccountClosed attempt %d/%d: %w",
-				attempts,
-				c.config.MaxAttempts,
-				err,
-			)
-		}
-		if _, dlqErr := c.redis.XAdd(
-			ctx,
-			userAccountClosedDLQ,
-			userAccountClosedDLQValues(message, err, attempts),
-		); dlqErr != nil {
-			return fmt.Errorf("append chat UserAccountClosed DLQ: %w", dlqErr)
-		}
-		if expireErr := c.redis.Expire(
-			ctx,
-			userAccountClosedDLQ,
-			userAccountClosedDLQTTL,
-		); expireErr != nil {
-			return fmt.Errorf(
-				"refresh chat UserAccountClosed DLQ retention: %w",
-				expireErr,
-			)
-		}
-		if markErr := c.failures.MarkUserAccountClosedDeadLettered(
-			ctx,
-			message.ID,
-		); markErr != nil {
-			return fmt.Errorf(
-				"mark chat UserAccountClosed dead-letter state: %w",
-				markErr,
-			)
-		}
-		recordUserAccountClosedOutcome("dlq")
-		c.logger.ErrorContext(
-			ctx,
-			"chat UserAccountClosed event moved to DLQ",
-			slog.String(
-				"sourceStreamDigest",
-				irreversibleUserAccountClosedDigest(message.ID),
-			),
-			slog.String("errorDigest", irreversibleUserAccountClosedDigest(err.Error())),
-			slog.Int64("attempts", attempts),
-		)
-		return nil
 	}
+	if _, dlqErr := c.redis.XAdd(
+		ctx,
+		userAccountClosedDLQ,
+		userAccountClosedDLQValues(message, err, attempts),
+	); dlqErr != nil {
+		return fmt.Errorf("append chat UserAccountClosed DLQ: %w", dlqErr)
+	}
+	if expireErr := c.redis.Expire(
+		ctx,
+		userAccountClosedDLQ,
+		userAccountClosedDLQTTL,
+	); expireErr != nil {
+		return fmt.Errorf(
+			"refresh chat UserAccountClosed DLQ retention: %w",
+			expireErr,
+		)
+	}
+	if markErr := c.failures.MarkUserAccountClosedDeadLettered(
+		ctx,
+		message.ID,
+	); markErr != nil {
+		return fmt.Errorf(
+			"mark chat UserAccountClosed dead-letter state: %w",
+			markErr,
+		)
+	}
+	recordUserAccountClosedOutcome("dlq")
+	c.logger.ErrorContext(
+		ctx,
+		"chat UserAccountClosed event moved to DLQ",
+		slog.String(
+			"sourceStreamDigest",
+			irreversibleUserAccountClosedDigest(message.ID),
+		),
+		slog.String("errorDigest", irreversibleUserAccountClosedDigest(err.Error())),
+		slog.Int64("attempts", attempts),
+	)
 	return nil
 }
 

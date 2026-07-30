@@ -1,0 +1,41 @@
+services:
+  api-edge:
+    image: "${QWQ_COMPOSE_API_EDGE_IMAGE:?fixed api-edge source image reference is required}"
+    build:
+      context: ../../../quwoquan_service
+      dockerfile: services/api-edge/build/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${QWQ_COMPOSE_GO_BASE_IMAGE:?QWQ_COMPOSE_GO_BASE_IMAGE is required}"
+        ALPINE_BASE_IMAGE: "${QWQ_COMPOSE_ALPINE_BASE_IMAGE:?QWQ_COMPOSE_ALPINE_BASE_IMAGE is required}"
+        GO_BUILD_FLAGS: "${QWQ_COMPOSE_GO_BUILD_FLAGS:--p=1}"
+    environment:
+      SERVICE_NAME: api-edge
+      APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${QWQ_COMPOSE_API_EDGE_CONFIG_VERSION:?api-edge config version is required}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
+      SERVICE_INSTANCE_ID: "${QWQ_COMPOSE_API_EDGE_INSTANCE_ID:-api-edge-local}"
+      AUTH_JWT_SECRET: "${AUTH_JWT_SECRET:?AUTH_JWT_SECRET is required}"
+      AUTH_JWT_ISSUER: "${AUTH_JWT_ISSUER:?AUTH_JWT_ISSUER is required}"
+      AUTH_JWT_AUDIENCE: "${AUTH_JWT_AUDIENCE:?AUTH_JWT_AUDIENCE is required}"
+      AUTH_JWT_TOKEN_VERSION: "${AUTH_JWT_TOKEN_VERSION:?AUTH_JWT_TOKEN_VERSION is required}"
+      AUTH_DEVICE_TICKET_SECRET: "${AUTH_DEVICE_TICKET_SECRET:?AUTH_DEVICE_TICKET_SECRET is required}"
+      AUTH_DEVICE_TICKET_ISSUER: "${AUTH_DEVICE_TICKET_ISSUER:?AUTH_DEVICE_TICKET_ISSUER is required}"
+      AUTH_DEVICE_TICKET_AUDIENCE: "${AUTH_DEVICE_TICKET_AUDIENCE:?AUTH_DEVICE_TICKET_AUDIENCE is required}"
+      AUTH_DEVICE_TICKET_TOKEN_VERSION: "${AUTH_DEVICE_TICKET_TOKEN_VERSION:?AUTH_DEVICE_TICKET_TOKEN_VERSION is required}"
+      OPS_OIDC_ISSUER: "${OPS_OIDC_ISSUER:-}"
+      OPS_OIDC_AUDIENCE: "${OPS_OIDC_AUDIENCE:-}"
+      OPS_OIDC_JWKS_URL: "${OPS_OIDC_JWKS_URL:-}"
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    volumes:
+      - ${QWQ_COMPOSE_CONFIG_ROOT:?config root is required}:/etc/qwq-config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18079/readyz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 20

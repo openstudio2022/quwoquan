@@ -86,19 +86,9 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	return cfg, nil
 }
 
-func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
+func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
 	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
 		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
-	}
-	if strings.TrimSpace(imageVersion) == "" {
-		// Allow local dev without image version.
-		return nil
-	}
-	if cfg.Config.MinImageVersion != "" && compareSemver(imageVersion, cfg.Config.MinImageVersion) < 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s below min_image_version=%s", imageVersion, cfg.Config.MinImageVersion)
-	}
-	if cfg.Config.MaxImageVersion != "" && compareSemver(imageVersion, cfg.Config.MaxImageVersion) > 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s above max_image_version=%s", imageVersion, cfg.Config.MaxImageVersion)
 	}
 	return nil
 }
@@ -118,6 +108,25 @@ func preflightConfig(cfg config, appEnv string) error {
 	}
 	if resolveMongoURI(cfg) == "" {
 		return fmt.Errorf("%s content runtime requires mongo.uri/MONGO_URI", appEnv)
+	}
+	if cfg.Feed.ActiveSupplyCacheTTLMS <= 0 ||
+		cfg.Feed.ActiveSupplyCacheJitterMS < 0 ||
+		cfg.Feed.ActiveSupplyCacheJitterMS >= cfg.Feed.ActiveSupplyCacheTTLMS {
+		return fmt.Errorf(
+			"%s content runtime requires feed active-supply cache ttl > jitter >= 0",
+			appEnv,
+		)
+	}
+	if cfg.Feed.MaxInflight <= 0 ||
+		cfg.Feed.MaximumRecallSources <= 0 ||
+		cfg.Feed.MaximumUnterminatedCallsPerSource <= 0 {
+		return fmt.Errorf(
+			"%s content runtime requires positive feed owner inflight, recall source and per-source unterminated-call budgets",
+			appEnv,
+		)
+	}
+	if err := validateFeedQuotaPolicies(cfg.Feed); err != nil {
+		return fmt.Errorf("%s content runtime requires valid global feed admission: %w", appEnv, err)
 	}
 	if err := validateAccountSecurityAuthorityConfig(cfg, appEnv); err != nil {
 		return err
@@ -313,29 +322,6 @@ func validateRemoteRedisScene(name string, cfg redisSceneCfg) error {
 		return fmt.Errorf("redis.%s.mode must be standalone|cluster, got %q", name, cfg.Mode)
 	}
 	return nil
-}
-
-func compareSemver(a, b string) int {
-	parse := func(v string) [3]int {
-		var out [3]int
-		parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(v), "v"), ".")
-		for i := 0; i < len(parts) && i < 3; i++ {
-			n, _ := strconv.Atoi(parts[i])
-			out[i] = n
-		}
-		return out
-	}
-	av := parse(a)
-	bv := parse(b)
-	for i := 0; i < 3; i++ {
-		if av[i] > bv[i] {
-			return 1
-		}
-		if av[i] < bv[i] {
-			return -1
-		}
-	}
-	return 0
 }
 
 // applyEnvOverrides applies environment variable overrides to all config sections.
@@ -579,6 +565,15 @@ func collaborativeRecallRollbackDisabled() bool {
 	return parseBoolEnv("QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
 		parseBoolEnv("DISABLE_COLLABORATIVE_RECALL_SOURCES", false) ||
 		parseBoolEnv("disable_collaborative_recall_sources", false)
+}
+
+// intersectionRecallRollbackDisabled 关闭交集召回通道（装配级回滚）。
+// 关闭后交集回到「只解释、不供给」：附着与展示不受影响，排序侧的交集边权特征
+// 也仍在（它由 featureStore 注入），只是不再由交集边拉入候选。
+func intersectionRecallRollbackDisabled() bool {
+	return parseBoolEnv("QWQ_DISABLE_INTERSECTION_RECALL_SOURCE", false) ||
+		parseBoolEnv("DISABLE_INTERSECTION_RECALL_SOURCE", false) ||
+		parseBoolEnv("disable_intersection_recall_source", false)
 }
 
 func premiumPoolSourceRollbackDisabled() bool {

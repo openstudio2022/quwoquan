@@ -9,11 +9,11 @@ tables:
       - PK
       - NOT_NULL
       - DEFAULT_GEN_RANDOM_UUID
-    - name: requester_sub_account_id
+    - name: requester_persona_id
       type: VARCHAR(64)
       constraints:
       - NOT_NULL
-    - name: target_sub_account_id
+    - name: target_persona_id
       type: VARCHAR(64)
       constraints:
       - NOT_NULL
@@ -55,18 +55,18 @@ tables:
     indexes:
     - name: idx_gr_inbox
       columns:
-      - target_sub_account_id
+      - target_persona_id
       - status
       - created_at DESC
     - name: idx_gr_outbox
       columns:
-      - requester_sub_account_id
+      - requester_persona_id
       - status
       - created_at DESC
     - name: idx_gr_unique_pending
       columns:
-      - requester_sub_account_id
-      - target_sub_account_id
+      - requester_persona_id
+      - target_persona_id
       condition: status = 'pending'
       unique: true
     - name: idx_gr_expire
@@ -83,7 +83,7 @@ tables:
       constraints:
       - PK
       - NOT_NULL
-    - name: actor_sub_account_id
+    - name: actor_persona_id
       type: VARCHAR(64)
       constraints:
       - NOT_NULL
@@ -111,7 +111,7 @@ tables:
     indexes:
     - name: uq_gr_receipt_key
       columns:
-      - actor_sub_account_id
+      - actor_persona_id
       - idempotency_key
       unique: true
   greeting_request_outbox:
@@ -159,7 +159,7 @@ tables:
 cache:
   backend: redis
   patterns:
-  - key: greeting:inbox:{targetSubAccountId}:pending
+  - key: greeting:inbox:{targetPersonaId}:pending
     ttl: 60s
     invalidate_on:
     - GreetingRequestSent

@@ -4,13 +4,17 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 /// C4 持久化块允许的顶层键（与 [buildPersistedAssistantTurnFields] 及 controller spread 对齐）。
 const Set<String> kPersistedAssistantTimelinePayloadKeys = {
   assistantJourneyField,
-  assistantUiProcessTimelineField,
   assistantProcessTimelineField,
   assistantUnderstandingSnapshotField,
   assistantAnswerProcessingField,
   assistantHistoricalThinkingSnapshotField,
   assistantRetrievalProcessingField,
   assistantProviderReasoningContinuationField,
+  assistantSystemContextEnvelopeField,
+  assistantUnderstandingResultField,
+  assistantTaskGraphField,
+  assistantOrchestratorStateField,
+  assistantTurnSynthesisStateField,
   assistantDisplayStateField,
   assistantDisplayMarkdownField,
   assistantDisplayPlainTextField,

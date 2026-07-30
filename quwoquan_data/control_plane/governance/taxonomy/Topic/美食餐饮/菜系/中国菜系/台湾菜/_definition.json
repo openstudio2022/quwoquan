@@ -2,6 +2,7 @@
   "label": "台湾菜",
   "labelEn": "Taiwanese Cuisine",
   "description": "台湾本土饮食文化",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

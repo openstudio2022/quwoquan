@@ -63,8 +63,8 @@
   - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `shared-homepage-network` 继续处理。
   - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
 - [`JNY-011 / SCN-027`](../spec.md#scn-027)
-  - 本领域负责：在“附近同趣·结伴同行·线下局”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
-  - 进入条件：用户发起“附近同趣·结伴同行·线下局”且身份、输入与权限前置成立。
+  - 本领域负责：在“结伴同行与线下相聚”中，维护 Circle、CircleGroup、Gathering、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+  - 进入条件：用户发起“结伴同行与线下相聚”且身份、输入与权限前置成立。
   - 交付给下游的结果：维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果，供 `recommendation-platform` 继续处理。
   - 不负责：不拥有聊天消息、内容正文、主页或用户关系事实。
 
@@ -75,6 +75,7 @@
 - [`circle-collaboration-tools`](./circle-collaboration-tools/spec.md)：以圈子或组织主页内的群为协作单元，统一交流、资料与公告
 - [`circle-experience-redesign`](./circle-experience-redesign/spec.md)：按群组类型提供一致的发现、详情与协作入口
 - [`circle-management-and-stats`](./circle-management-and-stats/spec.md)：为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图。
+- [`gathering-coordination`](./gathering-coordination/spec.md)：让「有人一起去吗」变成一个可加入、有名单、有时间、有绑定会话的真实对象，承接交集行动阶梯的同行与线下两级。
 - [`in-circle-recommendation-loop`](./in-circle-recommendation-loop/spec.md)：把圈内行为事实转为权限受控的候选排序，并将曝光与反馈归因回评估链路。
 
 ## 5. 领域要求

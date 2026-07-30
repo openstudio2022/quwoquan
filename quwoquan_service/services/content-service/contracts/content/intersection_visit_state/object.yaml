@@ -21,7 +21,5 @@ business_rules:
 - 各维度水位只能单调推进；命令未指定维度时推进全部维度
 - 重放（任意次 MarkIntersectionsVisited）语义等价且无副作用放大
 lifecycle:
-  states:
-  - active
   optimistic_concurrency: none
   idempotency: naturally_convergent_monotonic_watermark

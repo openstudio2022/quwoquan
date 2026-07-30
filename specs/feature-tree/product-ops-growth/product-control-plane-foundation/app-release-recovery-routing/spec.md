@@ -63,7 +63,7 @@
 - 所有页面、接口和 APK 地址必须使用 HTTPS；iOS PWA 和 Android 下载页只允许趣我圈官方 Web 域名，Android APK 仅允许趣我圈官方 CDN 白名单。
 - 版本查询和下载重定向使用 `no-store`；APK CDN 对不可变对象使用长期 immutable cache。
 - 非法远程配置必须使服务启动失败或该平台发布事实不可用，不得回退第三方地址。
-- Web、Android、Portal、ContractGraph、Provider binding 与三层 CaseResult 摘要必须被同一 `mainline-release-artifact` 摘要引用；缺少任一引用时正式 deploy 与 prevalidate 均返回 `GATE_BLOCK`。
+- Web、Android、Portal、ContractGraph、Provider evidence 与三层 CaseResult 摘要必须被同一 canonical `ReleaseEvidenceManifest` candidate digest 引用；缺少任一引用时正式 deploy 与 prevalidate 均返回 `GATE_BLOCK`。
 
 ## 4. 契约引用
 

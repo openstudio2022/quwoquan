@@ -719,7 +719,7 @@ class _SettingsQueryReader implements contracts.UserSettingsQueryReader {
         source: contracts.AppearanceSource.ownerDefault,
         ownerDefaultThemeMode: contracts.ThemeModeSetting.system,
         ownerDefaultFontSizePreset: contracts.FontSizePreset.md,
-        hasSubAccountOverride: false,
+        hasPersonaOverride: false,
         version: 1,
         updatedAt: DateTime.utc(2026, 7, 19),
       );
@@ -747,7 +747,7 @@ class _SpyAuthSessionStore implements AuthSessionStore {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'owner-id',
-    activeSubAccountId: 'sub-id',
+    activePersonaId: 'sub-id',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -775,7 +775,7 @@ class _SpyAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {
@@ -849,7 +849,7 @@ final class _SettingsTestAuthSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'owner-id',
-    activeSubAccountId: 'sub-id',
+    activePersonaId: 'sub-id',
     accountState: 'active',
     identityOrigin: 'settings-test',
     installId: 'install-id',
@@ -944,7 +944,7 @@ final class _RecordingUserSettingsCommandWriter
       source: contracts.AppearanceSource.ownerDefault,
       ownerDefaultThemeMode: command.themeMode,
       ownerDefaultFontSizePreset: command.fontSizePreset,
-      hasSubAccountOverride: false,
+      hasPersonaOverride: false,
       version: ++version,
       updatedAt: DateTime.utc(2026, 7, 19),
     );

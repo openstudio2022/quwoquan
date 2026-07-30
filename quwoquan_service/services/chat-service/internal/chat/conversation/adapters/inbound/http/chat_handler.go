@@ -278,8 +278,8 @@ func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 	if senderID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
-			"缺少 X-Client-Sub-Account-Id",
-			"missing X-Client-Sub-Account-Id",
+			"缺少 X-Client-Persona-Id",
+			"missing X-Client-Persona-Id",
 		))
 		return
 	}

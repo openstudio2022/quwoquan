@@ -1,0 +1,14 @@
+{
+  "label": "焦段",
+  "labelEn": "Focal Length Range",
+  "description": "由 focalLengthMm 归入的焦段区间（未做等效换算时按 EXIF 原值）",
+  "axisRole": "topic",
+  "collectionChannel": "exif",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:30:11.970796+00:00",
+  "updatedAt": "2026-07-28T14:30:11.970796+00:00"
+}

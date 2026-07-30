@@ -294,7 +294,7 @@ func runCoverage(args []string, stdout io.Writer) error {
 		return fmt.Errorf("unsupported format %q", *format)
 	}
 	fmt.Fprintf(stdout,
-		"sources=%d documents=%d objects=%d explicit_object_kinds=%d registered_domains=%d bounded_contexts=%d registered_objects=%d object_relationships=%d operations=%d explicit_operation_kinds=%d bound_operations=%d projections=%d public_operations=%d openapi_operations=%d openapi_matched=%d openapi_orphans=%d readiness_evidence_packets=%d readiness_modeled=%d readiness_contract_ready=%d readiness_implemented=%d readiness_commercial_ready=%d\n",
+		"sources=%d documents=%d objects=%d explicit_object_kinds=%d registered_domains=%d bounded_contexts=%d registered_objects=%d object_relationships=%d operations=%d runtime_entrypoints=%d explicit_operation_kinds=%d bound_operations=%d projections=%d public_operations=%d openapi_operations=%d openapi_matched=%d openapi_orphans=%d readiness_evidence_packets=%d readiness_evidence_objects=%d readiness_modeled=%d readiness_contract_ready=%d readiness_implemented=%d readiness_commercial_ready=%d\n",
 		coverage.Sources,
 		coverage.Documents,
 		coverage.Objects,
@@ -304,6 +304,7 @@ func runCoverage(args []string, stdout io.Writer) error {
 		coverage.RegisteredObjects,
 		coverage.ObjectRelationships,
 		coverage.Operations,
+		coverage.RuntimeEntrypoints,
 		coverage.ExplicitOperationKinds,
 		coverage.BoundOperations,
 		coverage.Projections,
@@ -312,10 +313,11 @@ func runCoverage(args []string, stdout io.Writer) error {
 		coverage.OpenAPIMatched,
 		coverage.OpenAPIOrphans,
 		coverage.ReadinessEvidencePackets,
-		coverage.ObjectsByReadiness["modeled"],
-		coverage.ObjectsByReadiness["contract-ready"],
-		coverage.ObjectsByReadiness["implemented"],
-		coverage.ObjectsByReadiness["commercial-ready"],
+		coverage.ReadinessEvidenceObjects,
+		coverage.ReadinessModeled,
+		coverage.ReadinessContractReady,
+		coverage.ReadinessImplemented,
+		coverage.ReadinessCommercialReady,
 	)
 	return nil
 }

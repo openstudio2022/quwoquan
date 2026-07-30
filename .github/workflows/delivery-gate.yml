@@ -6,6 +6,7 @@ name: 03. Delivery Gate
 
 permissions:
   contents: read
+  actions: read
 
 env:
   QWQ_OUTPUT_ROOT: .qwq_output
@@ -32,18 +33,87 @@ on:
         required: false
         type: string
         default: ''
+      candidate_digest:
+        description: Stable candidateId from the same Service Pipeline DAG
+        required: false
+        type: string
+        default: ''
+      artifact_digest:
+        description: ReleaseEvidenceManifest snapshot artifactDigest
+        required: false
+        type: string
+        default: ''
+      release_evidence_ref:
+        description: Exact immutable GHCR release evidence OCI ref
+        required: false
+        type: string
+        default: ''
+      producer_workflow_run_id:
+        description: ReleaseEvidenceManifest source.workflowRunId
+        required: false
+        type: string
+        default: ''
+      source_git_sha:
+        description: ReleaseEvidenceManifest source.gitSha
+        required: false
+        type: string
+        default: ''
+      produce_release_evidence:
+        description: Produce immutable provider and three-layer test evidence for candidate sealing
+        required: false
+        type: boolean
+        default: false
+      provider_evidence_ref:
+        description: Exact immutable GHCR OCI ref containing controlled Provider evidence
+        required: false
+        type: string
+        default: ''
+      provider_evidence_digest:
+        description: OCI transport digest for controlled Provider evidence
+        required: false
+        type: string
+        default: ''
+      user_acceptance_evidence_ref:
+        description: Exact immutable GHCR OCI ref containing real Remote user_acceptance evidence for this source tree
+        required: false
+        type: string
+        default: ''
+      user_acceptance_evidence_digest:
+        description: OCI transport digest for the real Remote user_acceptance evidence
+        required: false
+        type: string
+        default: ''
     outputs:
-      critical_path_seconds:
-        description: Delivery Gate critical path seconds
-        value: ${{ jobs.delivery_gate_summary.outputs.critical_path_seconds }}
+      machine_critical_path_seconds:
+        description: Diagnostic Delivery Gate job DAG execution path; never the end-to-end budget clock
+        value: ${{ jobs.delivery_gate_summary.outputs.machine_critical_path_seconds }}
       summary_result:
         description: Delivery Gate summary result
         value: ${{ jobs.delivery_gate_summary.outputs.summary_result }}
+      candidate_digest:
+        description: Candidate identity bound to this Delivery Gate
+        value: ${{ jobs.delivery_gate_summary.outputs.candidate_digest }}
+      artifact_digest:
+        description: Evidence snapshot bound to this Delivery Gate
+        value: ${{ jobs.delivery_gate_summary.outputs.artifact_digest }}
+      delivery_evidence_ref:
+        description: Exact immutable Provider/test evidence OCI ref
+        value: ${{ jobs.release_evidence.outputs.delivery_evidence_ref }}
+      delivery_evidence_digest:
+        description: Provider/test evidence OCI transport digest
+        value: ${{ jobs.release_evidence.outputs.delivery_evidence_digest }}
+      source_git_sha:
+        description: Exact source Git SHA bound to Provider/test evidence
+        value: ${{ jobs.release_evidence.outputs.source_git_sha }}
 
 jobs:
   topology_regression:
     name: Delivery Gate — Topology
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       service: ${{ steps.detect.outputs.service }}
@@ -51,6 +121,8 @@ jobs:
       portal: ${{ steps.detect.outputs.portal }}
       topology: ${{ steps.detect.outputs.topology }}
       data: ${{ steps.detect.outputs.data }}
+      candidate_digest: ${{ steps.candidate.outputs.candidate_digest }}
+      artifact_digest: ${{ steps.candidate.outputs.artifact_digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -69,6 +141,48 @@ jobs:
             --base-sha "${BASE_SHA}" \
             --head-sha "${HEAD_SHA}" \
             --github-output "$GITHUB_OUTPUT"
+      - name: Login GHCR for candidate binding
+        if: ${{ inputs.candidate_digest != '' || inputs.artifact_digest != '' || inputs.release_evidence_ref != '' || inputs.producer_workflow_run_id != '' || inputs.source_git_sha != '' }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: candidate
+        name: Bind Delivery Gate to the exact Service Pipeline candidate
+        if: ${{ inputs.candidate_digest != '' || inputs.artifact_digest != '' || inputs.release_evidence_ref != '' || inputs.producer_workflow_run_id != '' || inputs.source_git_sha != '' }}
+        env:
+          EXPECTED_CANDIDATE: ${{ inputs.candidate_digest }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ inputs.artifact_digest }}
+          EXPECTED_RELEASE_REF: ${{ inputs.release_evidence_ref }}
+          EXPECTED_WORKFLOW_RUN_ID: ${{ inputs.producer_workflow_run_id }}
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_git_sha }}
+        run: |
+          REQUIRED=(EXPECTED_CANDIDATE EXPECTED_ARTIFACT_DIGEST EXPECTED_RELEASE_REF EXPECTED_WORKFLOW_RUN_ID EXPECTED_SOURCE_SHA)
+          for name in "${REQUIRED[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::GATE_BLOCK: partial Service Pipeline candidate binding: ${name} is missing"
+              exit 2
+            fi
+          done
+          if [[ "$EXPECTED_SOURCE_SHA" != "${{ inputs.head_sha }}" ]] || [[ "$EXPECTED_SOURCE_SHA" != "${{ inputs.checkout_ref }}" ]]; then
+            echo "::error::GATE_BLOCK: Delivery Gate source SHA differs from the release candidate"
+            exit 2
+          fi
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/delivery-release-evidence"
+          python3 quwoquan_ops/cli/prod/fetch_mainline_release_artifact.py \
+            --ref "$EXPECTED_RELEASE_REF" \
+            --output-dir "$ROOT"
+          python3 quwoquan_ops/ci/verify_workflow_release_candidate.py \
+            --manifest "$ROOT/manifest.json" \
+            --expected-candidate "$EXPECTED_CANDIDATE" \
+            --expected-artifact-digest "$EXPECTED_ARTIFACT_DIGEST" \
+            --expected-workflow-run-id "$EXPECTED_WORKFLOW_RUN_ID" \
+            --expected-source-sha "$EXPECTED_SOURCE_SHA" \
+            --expected-repository "${{ github.repository }}" \
+            --expected-release-ref "$EXPECTED_RELEASE_REF"
+          echo "candidate_digest=$EXPECTED_CANDIDATE" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=$EXPECTED_ARTIFACT_DIGEST" >> "$GITHUB_OUTPUT"
       - name: Environment Topology Regression
         if: ${{ steps.detect.outputs.topology == 'true' }}
         run: |
@@ -82,6 +196,7 @@ jobs:
   quwoquan_service:
     name: Delivery Gate — Service (L2)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
@@ -97,6 +212,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
       - name: 设置 Dart
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
@@ -116,12 +232,14 @@ jobs:
   search_contract_smoke:
     name: Delivery Gate — Search /search Contract Smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: >-
       ${{
         needs.topology_regression.outputs.service == 'true' ||
         needs.topology_regression.outputs.app == 'true' ||
-        needs.topology_regression.outputs.topology == 'true'
+        needs.topology_regression.outputs.topology == 'true' ||
+        inputs.produce_release_evidence
       }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
@@ -136,6 +254,7 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: quwoquan_service/go.mod
+          cache: false
       - name: Verify canonical /search response contract
         working-directory: quwoquan_service
         run: go test ./services/search-service/tests/api_integration/search/search_query -count=1
@@ -153,6 +272,7 @@ jobs:
   quwoquan_app_static:
     name: Delivery Gate — App Static
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     outputs:
@@ -164,8 +284,12 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           channel: stable
           cache: true
       - name: Gate (quwoquan_app static + PA core)
@@ -181,6 +305,7 @@ jobs:
   quwoquan_app_tests:
     name: Delivery Gate — App Tests Shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     strategy:
@@ -196,8 +321,12 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           channel: stable
           cache: true
       - name: Gate (quwoquan_app tests shard)
@@ -218,6 +347,7 @@ jobs:
   quwoquan_app_serial:
     name: Delivery Gate — App Serial
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     outputs:
@@ -229,8 +359,12 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           channel: stable
           cache: true
       - name: Gate (quwoquan_app serial suites)
@@ -248,42 +382,32 @@ jobs:
   quwoquan_app:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs:
       - topology_regression
       - quwoquan_app_static
       - quwoquan_app_tests
       - quwoquan_app_serial
     if: always() && needs.topology_regression.outputs.app == 'true'
-    outputs:
-      duration_seconds: ${{ steps.combine.outputs.duration_seconds }}
     steps:
       - id: combine
-        name: Combine app phase timings (wall = max)
+        name: Require every App phase
         env:
-          STATIC_SECONDS: ${{ needs.quwoquan_app_static.outputs.duration_seconds }}
-          SERIAL_SECONDS: ${{ needs.quwoquan_app_serial.outputs.duration_seconds }}
           TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
           STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
           SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
         run: |
           set -euo pipefail
-          STATIC_SECONDS="${STATIC_SECONDS:-0}"
-          SERIAL_SECONDS="${SERIAL_SECONDS:-0}"
-          # Matrix job duration is not a single output; approximate wall by max(static, serial, budget app phase).
-          # Fail if any required phase failed.
           if [ "${STATIC_RESULT}" != "success" ] || [ "${SERIAL_RESULT}" != "success" ] || [ "${TESTS_RESULT}" != "success" ]; then
             echo "::error::App L1 phases failed (static=${STATIC_RESULT}, tests=${TESTS_RESULT}, serial=${SERIAL_RESULT})"
             exit 1
           fi
-          WALL="$STATIC_SECONDS"
-          if [ "${SERIAL_SECONDS}" -gt "$WALL" ]; then WALL="${SERIAL_SECONDS}"; fi
-          # Sharded tests dominate wall clock; use at least serial/static max and keep summary honest via phase budgets.
-          echo "duration_seconds=${WALL}" >> "$GITHUB_OUTPUT"
-          echo "App L1 wall≈max(static,serial)=${WALL}s; sharded tests result=${TESTS_RESULT}"
+          echo "App L1 static, all four test shards and serial suites succeeded."
 
   quwoquan_data:
     name: Delivery Gate — Data
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.data == 'true' }}
     outputs:
@@ -312,6 +436,7 @@ jobs:
   ops_portal:
     name: Delivery Gate — Ops Portal
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.portal == 'true' }}
     outputs:
@@ -328,6 +453,7 @@ jobs:
         with:
           node-version: "20.19.0"
           cache: npm
+          cache-dependency-path: quwoquan_ops/portal/package-lock.json
       - name: Gate (ops-portal)
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope portal
@@ -336,6 +462,159 @@ jobs:
         name: Finish timer
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  release_evidence:
+    name: Delivery Gate — Candidate qualification evidence
+    needs:
+      - topology_regression
+      - quwoquan_service
+      - search_contract_smoke
+      - quwoquan_app
+      - quwoquan_app_static
+      - quwoquan_app_tests
+      - quwoquan_app_serial
+      - quwoquan_data
+      - ops_portal
+    if: always() && inputs.produce_release_evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      delivery_evidence_ref: ${{ steps.bundle_ref.outputs.ref }}
+      delivery_evidence_digest: ${{ steps.bundle.outputs.digest }}
+      source_git_sha: ${{ steps.identity.outputs.source_git_sha }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - id: identity
+        name: Resolve immutable evidence coordinates
+        run: |
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          SOURCE_TREE="sha1:$(git rev-parse HEAD^{tree})"
+          if [[ -n "${{ inputs.head_sha }}" && "$SOURCE_SHA" != "${{ inputs.head_sha }}" ]]; then
+            echo "::error::GATE_BLOCK: Delivery evidence checkout differs from the requested source"
+            exit 2
+          fi
+          echo "source_git_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "source_tree_digest=$SOURCE_TREE" >> "$GITHUB_OUTPUT"
+      - name: Login immutable Provider evidence registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Materialize controlled Provider evidence by exact OCI digest
+        env:
+          PROVIDER_EVIDENCE_REF: ${{ inputs.provider_evidence_ref }}
+          PROVIDER_EVIDENCE_DIGEST: ${{ inputs.provider_evidence_digest }}
+        run: |
+          if [[ ! "$PROVIDER_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || \
+             [[ "${PROVIDER_EVIDENCE_REF##*@}" != "$PROVIDER_EVIDENCE_DIGEST" ]]; then
+            echo "::error::GATE_BLOCK: controlled Provider evidence must be an exact immutable OCI ref"
+            exit 2
+          fi
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$PROVIDER_EVIDENCE_REF" \
+            --expected-digest "$PROVIDER_EVIDENCE_DIGEST" \
+            --output-dir "$QWQ_OUTPUT_ROOT"
+      - name: Produce canonical Provider conformance source or GATE_BLOCK
+        env:
+          PROVIDER_EVIDENCE_REF: ${{ inputs.provider_evidence_ref }}
+          PROVIDER_EVIDENCE_DIGEST: ${{ inputs.provider_evidence_digest }}
+        run: |
+          set -euo pipefail
+          ROOT="$QWQ_OUTPUT_ROOT/env/repo/runs/mainline-delivery-evidence"
+          mkdir -p "$ROOT"
+          python3 quwoquan_ops/ci/render_provider_conformance_source.py \
+            --require-environment prod \
+            --source-evidence-ref "$PROVIDER_EVIDENCE_REF" \
+            --source-evidence-digest "$PROVIDER_EVIDENCE_DIGEST" \
+            --archive-dir "$ROOT/provider-raw" \
+            --output "$ROOT/provider-conformance-source.json"
+      - name: Materialize real Remote user_acceptance evidence by exact OCI digest
+        env:
+          USER_ACCEPTANCE_EVIDENCE_REF: ${{ inputs.user_acceptance_evidence_ref }}
+          USER_ACCEPTANCE_EVIDENCE_DIGEST: ${{ inputs.user_acceptance_evidence_digest }}
+        run: |
+          if [[ ! "$USER_ACCEPTANCE_EVIDENCE_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]] || \
+             [[ "${USER_ACCEPTANCE_EVIDENCE_REF##*@}" != "$USER_ACCEPTANCE_EVIDENCE_DIGEST" ]]; then
+            echo "::error::GATE_BLOCK: real Remote user_acceptance evidence must be an exact immutable OCI ref"
+            exit 2
+          fi
+          python3 quwoquan_ops/ci/materialize_evidence_oci.py \
+            --ref "$USER_ACCEPTANCE_EVIDENCE_REF" \
+            --expected-digest "$USER_ACCEPTANCE_EVIDENCE_DIGEST" \
+            --output-dir "$QWQ_OUTPUT_ROOT/env/repo/runs/imported-user-acceptance" \
+            --require-file test-evidence.json
+      - name: Aggregate exact three-layer test results
+        env:
+          SERVICE_IMPACTED: ${{ needs.topology_regression.outputs.service }}
+          APP_IMPACTED: ${{ needs.topology_regression.outputs.app }}
+          DATA_IMPACTED: ${{ needs.topology_regression.outputs.data }}
+          PORTAL_IMPACTED: ${{ needs.topology_regression.outputs.portal }}
+          TOPOLOGY_RESULT: ${{ needs.topology_regression.result }}
+          SERVICE_RESULT: ${{ needs.quwoquan_service.result }}
+          SEARCH_RESULT: ${{ needs.search_contract_smoke.result }}
+          APP_STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
+          APP_TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
+          APP_SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
+          DATA_RESULT: ${{ needs.quwoquan_data.result }}
+          PORTAL_RESULT: ${{ needs.ops_portal.result }}
+          SOURCE_GIT_SHA: ${{ steps.identity.outputs.source_git_sha }}
+          SOURCE_TREE_DIGEST: ${{ steps.identity.outputs.source_tree_digest }}
+          USER_ACCEPTANCE_EVIDENCE_DIGEST: ${{ inputs.user_acceptance_evidence_digest }}
+        run: |
+          ARGS=(
+            --source-git-sha "$SOURCE_GIT_SHA"
+            --source-tree-digest "$SOURCE_TREE_DIGEST"
+            --repository "${{ github.repository }}"
+            --workflow-run-id "${{ github.run_id }}"
+            --output "$QWQ_OUTPUT_ROOT/env/repo/runs/mainline-delivery-evidence/test-evidence.json"
+            --job-result "topology=$TOPOLOGY_RESULT"
+            --job-result "service=$SERVICE_RESULT"
+            --job-result "search=$SEARCH_RESULT"
+            --job-result "app_static=$APP_STATIC_RESULT"
+            --job-result "app_tests=$APP_TESTS_RESULT"
+            --job-result "app_serial=$APP_SERIAL_RESULT"
+            --job-result "data=$DATA_RESULT"
+            --job-result "portal=$PORTAL_RESULT"
+            --local-required topology
+            --api-required search
+            --user-acceptance-source "$QWQ_OUTPUT_ROOT/env/repo/runs/imported-user-acceptance/test-evidence.json"
+            --user-acceptance-transport-digest "$USER_ACCEPTANCE_EVIDENCE_DIGEST"
+          )
+          if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--local-required service); fi
+          if [[ "$APP_IMPACTED" == "true" ]]; then
+            ARGS+=(--local-required app_static --local-required app_tests --local-required app_serial)
+          fi
+          if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--local-required data); fi
+          if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--local-required portal); fi
+          python3 quwoquan_ops/ci/render_delivery_release_evidence.py "${ARGS[@]}"
+      - name: Setup Buildx for immutable Delivery evidence
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.35.0
+          cache-binary: false
+          clean: false
+      - id: bundle
+        name: Publish immutable Provider and test evidence OCI
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
+        with:
+          context: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/mainline-delivery-evidence
+          file: quwoquan_ops/ci/app_candidate_evidence.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}/delivery-evidence:run-${{ github.run_id }}
+          sbom: true
+          provenance: mode=max
+      - id: bundle_ref
+        name: Record exact immutable Delivery evidence ref
+        run: |
+          echo "ref=ghcr.io/${{ github.repository }}/delivery-evidence@${{ steps.bundle.outputs.digest }}" >> "$GITHUB_OUTPUT"
 
   delivery_gate_summary:
     name: 03. Delivery Gate
@@ -349,58 +628,151 @@ jobs:
       - quwoquan_app_serial
       - quwoquan_data
       - ops_portal
+      - release_evidence
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      critical_path_seconds: ${{ steps.timing.outputs.critical_path_seconds }}
+      machine_critical_path_seconds: ${{ steps.timing.outputs.machine_critical_path_seconds }}
       summary_result: ${{ steps.summary.outputs.result }}
+      candidate_digest: ${{ needs.topology_regression.outputs.candidate_digest }}
+      artifact_digest: ${{ needs.topology_regression.outputs.artifact_digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ inputs.checkout_ref || github.sha }}
+      - name: Read authoritative Delivery Gate job timings
+        id: job_timing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SERVICE_IMPACTED: ${{ needs.topology_regression.outputs.service }}
+          APP_IMPACTED: ${{ needs.topology_regression.outputs.app }}
+          DATA_IMPACTED: ${{ needs.topology_regression.outputs.data }}
+          PORTAL_IMPACTED: ${{ needs.topology_regression.outputs.portal }}
+          TOPOLOGY_IMPACTED: ${{ needs.topology_regression.outputs.topology }}
+          PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
+        run: |
+          ARGS=(
+            --repository "${{ github.repository }}"
+            --run-id "${{ github.run_id }}"
+            --phase "topology=Delivery Gate — Topology"
+            --phase "service=Delivery Gate — Service (L2)"
+            --phase "search=Delivery Gate — Search /search Contract Smoke"
+            --phase "app_static=Delivery Gate — App Static"
+            --phase "app_tests=Delivery Gate — App Tests Shard "
+            --phase "app_serial=Delivery Gate — App Serial"
+            --phase "data=Delivery Gate — Data"
+            --phase "portal=Delivery Gate — Ops Portal"
+            --phase "release_evidence=Delivery Gate — Candidate qualification evidence"
+            --require-count "topology=1"
+            --dag-layer "topology"
+            --critical-start run
+            --github-output "$GITHUB_OUTPUT"
+          )
+          FANOUT=()
+          if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--require-count "service=1"); FANOUT+=(service); fi
+          if [[ "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
+          if [[ "$APP_IMPACTED" == "true" ]]; then
+            ARGS+=(--require-count "app_static=1" --require-count "app_tests=4" --require-count "app_serial=1")
+            FANOUT+=(app_static app_tests app_serial)
+          fi
+          if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--require-count "data=1"); FANOUT+=(data); fi
+          if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--require-count "portal=1"); FANOUT+=(portal); fi
+          if (( ${#FANOUT[@]} > 0 )); then
+            ARGS+=(--dag-layer "$(IFS=,; echo "${FANOUT[*]}")")
+          fi
+          if [[ "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then
+            ARGS+=(--require-count "release_evidence=1" --dag-layer "release_evidence")
+          fi
+          python3 quwoquan_ops/ci/github_actions_timing.py "${ARGS[@]}"
+      - id: delivery_budget
+        name: Read canonical Delivery Gate budget
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          gate = json.loads(
+              Path("quwoquan_ops/environments/pr_gate_timing_budgets.json").read_text(
+                  encoding="utf-8"
+              )
+          )["gates"]["03.delivery_gate"]
+          print(f"soft={int(gate['budgetSeconds'])}")
+          print(f"hard={int(gate['hardFailSeconds'])}")
+          PY
       - name: 输出 Delivery Gate 耗时摘要
         id: timing
         env:
-          TOPOLOGY_SECONDS: ${{ needs.topology_regression.outputs.duration_seconds }}
-          SERVICE_SECONDS: ${{ needs.quwoquan_service.outputs.duration_seconds }}
-          SEARCH_SECONDS: ${{ needs.search_contract_smoke.outputs.duration_seconds }}
-          APP_SECONDS: ${{ needs.quwoquan_app.outputs.duration_seconds }}
-          APP_STATIC_SECONDS: ${{ needs.quwoquan_app_static.outputs.duration_seconds }}
-          APP_SERIAL_SECONDS: ${{ needs.quwoquan_app_serial.outputs.duration_seconds }}
-          DATA_SECONDS: ${{ needs.quwoquan_data.outputs.duration_seconds }}
-          PORTAL_SECONDS: ${{ needs.ops_portal.outputs.duration_seconds }}
+          TOPOLOGY_SECONDS: ${{ steps.job_timing.outputs.phase_topology }}
+          SERVICE_SECONDS: ${{ steps.job_timing.outputs.phase_service }}
+          SEARCH_SECONDS: ${{ steps.job_timing.outputs.phase_search }}
+          APP_STATIC_SECONDS: ${{ steps.job_timing.outputs.phase_app_static }}
+          APP_TESTS_SECONDS: ${{ steps.job_timing.outputs.phase_app_tests }}
+          APP_SERIAL_SECONDS: ${{ steps.job_timing.outputs.phase_app_serial }}
+          DATA_SECONDS: ${{ steps.job_timing.outputs.phase_data }}
+          PORTAL_SECONDS: ${{ steps.job_timing.outputs.phase_portal }}
+          MACHINE_CRITICAL_PATH_SECONDS: ${{ steps.job_timing.outputs.machine_critical_path_seconds }}
+          RUN_CREATED_AT: ${{ steps.job_timing.outputs.run_created_at }}
+          CANDIDATE_READY_AT: ${{ steps.job_timing.outputs.candidate_ready_at }}
+          QUEUE_SECONDS: ${{ steps.job_timing.outputs.queue_seconds }}
+          UPSTREAM_MISSING_EVIDENCE: ${{ steps.job_timing.outputs.missing_evidence }}
+          SETUP_SECONDS: ${{ steps.job_timing.outputs.setup_seconds }}
+          EXECUTION_SECONDS: ${{ steps.job_timing.outputs.execution_seconds }}
+          CALENDAR_SECONDS: ${{ steps.job_timing.outputs.calendar_lead_time_seconds }}
+          SOFT_BUDGET_SECONDS: ${{ steps.delivery_budget.outputs.soft }}
+          HARD_FAIL_SECONDS: ${{ steps.delivery_budget.outputs.hard }}
         run: |
-          TOPOLOGY_SECONDS="${TOPOLOGY_SECONDS:-0}"
-          SERVICE_SECONDS="${SERVICE_SECONDS:-0}"
-          SEARCH_SECONDS="${SEARCH_SECONDS:-0}"
-          APP_SECONDS="${APP_SECONDS:-0}"
-          APP_STATIC_SECONDS="${APP_STATIC_SECONDS:-0}"
-          APP_SERIAL_SECONDS="${APP_SERIAL_SECONDS:-0}"
-          DATA_SECONDS="${DATA_SECONDS:-0}"
-          PORTAL_SECONDS="${PORTAL_SECONDS:-0}"
-          if [ "${APP_STATIC_SECONDS}" -gt "${APP_SECONDS}" ]; then APP_SECONDS="${APP_STATIC_SECONDS}"; fi
-          if [ "${APP_SERIAL_SECONDS}" -gt "${APP_SECONDS}" ]; then APP_SECONDS="${APP_SERIAL_SECONDS}"; fi
-          FANOUT_SECONDS="${SERVICE_SECONDS}"
-          if [ "${SEARCH_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${SEARCH_SECONDS}"; fi
-          if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
-          if [ "${DATA_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${DATA_SECONDS}"; fi
-          if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
-          CRITICAL_PATH_SECONDS=$(( TOPOLOGY_SECONDS + FANOUT_SECONDS ))
+          REQUIRED=(TOPOLOGY_SECONDS MACHINE_CRITICAL_PATH_SECONDS RUN_CREATED_AT CANDIDATE_READY_AT CALENDAR_SECONDS)
+          for name in "${REQUIRED[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::GATE_BLOCK: official Delivery Gate timing is missing ${name}"
+              exit 2
+            fi
+          done
+          PHASE_ARGS=(--phase "topology_regression=${TOPOLOGY_SECONDS}")
+          if [[ -n "$SERVICE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_service=${SERVICE_SECONDS}"); fi
+          if [[ -n "$SEARCH_SECONDS" ]]; then PHASE_ARGS+=(--phase "search_contract_smoke=${SEARCH_SECONDS}"); fi
+          if [[ -n "$APP_STATIC_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_static=${APP_STATIC_SECONDS}"); fi
+          if [[ -n "$APP_TESTS_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_tests=${APP_TESTS_SECONDS}"); fi
+          if [[ -n "$APP_SERIAL_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_serial=${APP_SERIAL_SECONDS}"); fi
+          if [[ -n "$DATA_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_data=${DATA_SECONDS}"); fi
+          if [[ -n "$PORTAL_SECONDS" ]]; then PHASE_ARGS+=(--phase "ops_portal=${PORTAL_SECONDS}"); fi
+          DURATION_ARGS=(--calendar-lead-time-seconds "$CALENDAR_SECONDS")
+          EVIDENCE_ARGS=()
+          NOTE_ARGS=()
+          if [[ -n "$QUEUE_SECONDS" ]]; then DURATION_ARGS+=(--queue-seconds "$QUEUE_SECONDS"); fi
+          if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
+            EVIDENCE_ARGS+=(--missing-evidence "$UPSTREAM_MISSING_EVIDENCE")
+            NOTE_ARGS+=(--note "GitHub Jobs API omitted created_at for one or more matched jobs; queue duration is absent and no zero or substitute timestamp was used.")
+          fi
+          if [[ -n "$SETUP_SECONDS" ]]; then DURATION_ARGS+=(--setup-seconds "$SETUP_SECONDS"); fi
+          if [[ -n "$EXECUTION_SECONDS" ]]; then DURATION_ARGS+=(--execution-seconds "$EXECUTION_SECONDS"); fi
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 03.delivery_gate \
             --title "03. Delivery Gate" \
-            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
-            --phase "topology_regression=${TOPOLOGY_SECONDS}" \
-            --phase "quwoquan_service=${SERVICE_SECONDS}" \
-            --phase "search_contract_smoke=${SEARCH_SECONDS}" \
-            --phase "quwoquan_app=${APP_SECONDS}" \
-            --phase "quwoquan_app_static=${APP_STATIC_SECONDS}" \
-            --phase "quwoquan_app_serial=${APP_SERIAL_SECONDS}" \
-            --phase "quwoquan_data=${DATA_SECONDS}" \
-            --phase "ops_portal=${PORTAL_SECONDS}" \
+            --machine-critical-path-seconds "${MACHINE_CRITICAL_PATH_SECONDS}" \
+            --critical-path-source github_run_calendar \
+            --candidate-digest "${{ inputs.candidate_digest }}" \
+            --workflow-run-id "${{ inputs.producer_workflow_run_id || github.run_id }}" \
+            --source-git-sha "${{ inputs.source_git_sha || github.sha }}" \
+            --run-created-at "$RUN_CREATED_AT" \
+            --candidate-ready-at "$CANDIDATE_READY_AT" \
+            "${DURATION_ARGS[@]}" \
+            "${EVIDENCE_ARGS[@]}" \
+            "${NOTE_ARGS[@]}" \
+            "${PHASE_ARGS[@]}" \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/delivery-gate-summary.json" \
             --write-step-summary
-          echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
+          echo "machine_critical_path_seconds=${MACHINE_CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
+          if [ "${CALENDAR_SECONDS}" -gt "${HARD_FAIL_SECONDS}" ]; then
+            echo "::error::Delivery Gate end-to-end time ${CALENDAR_SECONDS}s exceeds the ${HARD_FAIL_SECONDS}s hard gate"
+            exit 1
+          elif [ "${CALENDAR_SECONDS}" -gt "${SOFT_BUDGET_SECONDS}" ]; then
+            echo "::warning::Delivery Gate end-to-end time ${CALENDAR_SECONDS}s exceeds the ${SOFT_BUDGET_SECONDS}s soft budget"
+          fi
+          if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
+            echo "::error::GATE_BLOCK: Delivery Gate timing is historical_incomplete: ${UPSTREAM_MISSING_EVIDENCE}"
+            exit 2
+          fi
       - name: 汇总并阻断失败项
         id: summary
         env:
@@ -413,6 +785,8 @@ jobs:
           APP_SERIAL: ${{ needs.quwoquan_app_serial.result }}
           DATA: ${{ needs.quwoquan_data.result }}
           PORTAL: ${{ needs.ops_portal.result }}
+          RELEASE_EVIDENCE: ${{ needs.release_evidence.result }}
+          PRODUCE_RELEASE_EVIDENCE: ${{ inputs.produce_release_evidence }}
         run: |
           set -euo pipefail
           fail=0
@@ -439,6 +813,11 @@ jobs:
           expect_success_or_skipped "quwoquan_app_serial" "${APP_SERIAL}" "检查 app 串行套件"
           expect_success_or_skipped "quwoquan_data" "${DATA}" "检查 data scope gate 输出"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
+          if [ "${PRODUCE_RELEASE_EVIDENCE}" = "true" ]; then
+            expect_success "release_evidence" "${RELEASE_EVIDENCE}" "检查 Provider 与真实 Remote user_acceptance 不可变证据"
+          else
+            expect_success_or_skipped "release_evidence" "${RELEASE_EVIDENCE}" "非发布调用必须跳过候选证据封装"
+          fi
           if [ "${fail}" -ne 0 ]; then
             echo "result=failure" >> "$GITHUB_OUTPUT"
             echo "::error::Delivery Gate 未全部成功；请按上列分项修复后重跑。"
@@ -446,7 +825,7 @@ jobs:
           fi
           echo "result=success" >> "$GITHUB_OUTPUT"
       - name: Upload delivery gate timing summary
-        if: always()
+        if: ${{ failure() && !cancelled() }}
         continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -454,3 +833,4 @@ jobs:
           path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/delivery-gate-summary.json
           if-no-files-found: error
           compression-level: 0
+          retention-days: 3

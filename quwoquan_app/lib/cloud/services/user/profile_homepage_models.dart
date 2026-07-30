@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_manage
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona/persona_management_summary_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/account/user_account_stats_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart';
@@ -19,13 +19,12 @@ part 'profile_homepage_bundle_models.dart';
 part "profile_homepage_persona_models.dart";
 
 @immutable
-class SubAccountProfileViewData {
-  const SubAccountProfileViewData({
-    required this.subAccountId,
+class PersonaProfileViewData {
+  const PersonaProfileViewData({
+    required this.personaId,
     required this.ownerUserId,
     required this.subjectType,
     required this.userHandle,
-    required this.username,
     required this.displayName,
     this.nicknameCustomized = false,
     required this.avatarUrl,
@@ -47,11 +46,10 @@ class SubAccountProfileViewData {
     required this.overriddenFields,
     required this.updatedAt,
   });
-  final String subAccountId;
+  final String personaId;
   final String ownerUserId;
   final String subjectType;
   final String userHandle;
-  final String username;
   final String displayName;
 
   /// 昵称是否被用户自定义过。false = 仍是云侧默认昵称（我的主页展示编辑画笔，
@@ -85,19 +83,18 @@ class SubAccountProfileViewData {
   final DateTime? updatedAt;
 
   /// Wire DTO 已按 canonical 字段解码；此处仅做展示层派生。
-  factory SubAccountProfileViewData.fromSubAccountProfileWire(
-    SubAccountProfileWireDto w,
+  factory PersonaProfileViewData.fromPersonaProfileWire(
+    PersonaProfileWireDto w,
   ) {
-    final subAccountId = w.subAccountId;
+    final personaId = w.personaId;
     final nickname = w.nickname;
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
-        : (nickname.isNotEmpty ? nickname : subAccountId);
-    final userHandle = w.userHandle.isNotEmpty
-        ? w.userHandle
-        : (w.username.isNotEmpty ? w.username : subAccountId);
-    final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'user';
-    final username = w.username.isNotEmpty ? w.username : userHandle;
+        : (nickname.isNotEmpty ? nickname : personaId);
+    final userHandle = w.userHandle;
+    final subjectType = w.subjectType.isNotEmpty
+        ? w.subjectType
+        : (personaId.isEmpty ? 'account' : 'persona');
     // 本地选取（相册/拍照）的临时文件路径在 alpha「保存后即时回显」链路中原样保留，
     // 不经媒体解析器（否则会被当作服务端相对路径拼接成不可访问 URL）。
     final avatarUrl = isLocalFileImageSource(w.avatarUrl)
@@ -106,12 +103,11 @@ class SubAccountProfileViewData {
     final backgroundUrl = isLocalFileImageSource(w.backgroundUrl)
         ? w.backgroundUrl
         : resolveContentMediaUrl(w.backgroundUrl);
-    return SubAccountProfileViewData(
-      subAccountId: subAccountId,
+    return PersonaProfileViewData(
+      personaId: personaId,
       ownerUserId: w.ownerUserId,
       subjectType: subjectType,
       userHandle: userHandle,
-      username: username,
       displayName: displayName,
       nicknameCustomized: w.nicknameCustomized,
       avatarUrl: avatarUrl,
@@ -135,22 +131,17 @@ class SubAccountProfileViewData {
     );
   }
 
-  factory SubAccountProfileViewData.fromSubAccountProfileProjection(
-    SubAccountProfileProjection projection,
+  factory PersonaProfileViewData.fromPersonaProfileProjection(
+    PersonaProfileProjection projection,
   ) {
-    final subAccountId = projection.subAccountId;
+    final personaId = projection.personaId;
     final displayName = projection.displayName.isNotEmpty
         ? projection.displayName
-        : (projection.nickname.isNotEmpty ? projection.nickname : subAccountId);
-    final userHandle = projection.userHandle.isNotEmpty
-        ? projection.userHandle
-        : (projection.username.isNotEmpty ? projection.username : subAccountId);
+        : (projection.nickname.isNotEmpty ? projection.nickname : personaId);
+    final userHandle = projection.userHandle;
     final subjectType = projection.subjectType.isNotEmpty
         ? projection.subjectType
-        : 'user';
-    final username = projection.username.isNotEmpty
-        ? projection.username
-        : userHandle;
+        : 'account';
     final avatarUrl = isLocalFileImageSource(projection.avatarUrl)
         ? projection.avatarUrl
         : resolveAvatarImageUrl(
@@ -160,12 +151,11 @@ class SubAccountProfileViewData {
     final backgroundUrl = isLocalFileImageSource(projection.backgroundUrl)
         ? projection.backgroundUrl
         : resolveContentMediaUrl(projection.backgroundUrl);
-    return SubAccountProfileViewData(
-      subAccountId: subAccountId,
+    return PersonaProfileViewData(
+      personaId: personaId,
       ownerUserId: projection.ownerUserId,
       subjectType: subjectType,
       userHandle: userHandle,
-      username: username,
       displayName: displayName,
       nicknameCustomized: projection.nicknameCustomized,
       avatarUrl: avatarUrl,
@@ -190,13 +180,12 @@ class SubAccountProfileViewData {
     );
   }
 
-  SubAccountProfileViewData mergeStats(UserProfileStatsViewData stats) {
-    return SubAccountProfileViewData(
-      subAccountId: subAccountId,
+  PersonaProfileViewData mergeStats(UserProfileStatsViewData stats) {
+    return PersonaProfileViewData(
+      personaId: personaId,
       ownerUserId: ownerUserId,
       subjectType: subjectType,
       userHandle: userHandle,
-      username: username,
       displayName: displayName,
       nicknameCustomized: nicknameCustomized,
       avatarUrl: avatarUrl,
@@ -260,7 +249,7 @@ class UserProfileStatsViewData {
     );
   }
 
-  factory UserProfileStatsViewData.fromProfile(SubAccountProfileViewData p) {
+  factory UserProfileStatsViewData.fromProfile(PersonaProfileViewData p) {
     return UserProfileStatsViewData(
       followingCount: p.followingCount,
       circleCount: p.circleCount,
@@ -306,8 +295,7 @@ class RelationshipViewData {
 @immutable
 class ProfileSocialRelationRowViewData {
   const ProfileSocialRelationRowViewData({
-    required this.subAccountId,
-    required this.username,
+    required this.personaId,
     required this.userHandle,
     required this.displayName,
     required this.avatarUrl,
@@ -317,8 +305,7 @@ class ProfileSocialRelationRowViewData {
     this.followedAt,
     this.relationshipCapability,
   });
-  final String subAccountId;
-  final String username;
+  final String personaId;
   final String userHandle;
   final String displayName;
   final String avatarUrl;
@@ -327,36 +314,17 @@ class ProfileSocialRelationRowViewData {
   final String relationState;
   final DateTime? followedAt;
   final RelationshipCapabilityDto? relationshipCapability;
-  bool get isSelf => effectiveRelationshipCapability?.isSelf ?? false;
-  bool get isFollowing =>
-      effectiveRelationshipCapability?.viewerFollowsTarget ?? false;
-  RelationshipCapabilityDto? get effectiveRelationshipCapability {
-    final capability = relationshipCapability;
-    if (capability != null) {
-      return capability;
-    }
-    return RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: '',
-      targetId: subAccountId,
-      isFollowing: relationState == 'following' || relationState == 'mutual',
-      isFollowedBy: relationState == 'followed_by' || relationState == 'mutual',
-      isSelf: relationState == 'self',
-    );
-  }
+  bool get isSelf => relationshipCapability?.isSelf ?? false;
+  bool get isFollowing => relationshipCapability?.viewerFollowsTarget ?? false;
 
   factory ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
     ProfileSocialRelationRowWireDto w,
   ) {
-    final id = w.subAccountId;
+    final id = w.personaId;
     final name = w.displayName.isNotEmpty ? w.displayName : id;
-    final handle = w.userHandle.isNotEmpty
-        ? w.userHandle
-        : (w.username.isNotEmpty ? w.username : id);
-    final username = w.username.isNotEmpty ? w.username : handle;
     return ProfileSocialRelationRowViewData(
-      subAccountId: id,
-      username: username,
-      userHandle: handle,
+      personaId: id,
+      userHandle: w.userHandle,
       displayName: name,
       avatarUrl: resolveAvatarImageUrl(
         w.avatarUrl,
@@ -375,16 +343,11 @@ class ProfileSocialRelationRowViewData {
   factory ProfileSocialRelationRowViewData.fromPersonaRelationshipListItem(
     PersonaRelationshipListItem item,
   ) {
-    final id = item.subAccountId;
+    final id = item.personaId;
     final name = item.displayName.isNotEmpty ? item.displayName : id;
-    final handle = item.userHandle.isNotEmpty
-        ? item.userHandle
-        : (item.username.isNotEmpty ? item.username : id);
-    final username = item.username.isNotEmpty ? item.username : handle;
     return ProfileSocialRelationRowViewData(
-      subAccountId: id,
-      username: username,
-      userHandle: handle,
+      personaId: id,
+      userHandle: item.userHandle,
       displayName: name,
       avatarUrl: resolveAvatarImageUrl(item.avatarUrl),
       profileVisibility: item.profileVisibility,
@@ -399,8 +362,7 @@ class ProfileSocialRelationRowViewData {
   }
 
   ProfileSocialRelationRowViewData copyWith({
-    String? subAccountId,
-    String? username,
+    String? personaId,
     String? userHandle,
     String? displayName,
     String? avatarUrl,
@@ -411,8 +373,7 @@ class ProfileSocialRelationRowViewData {
     RelationshipCapabilityDto? relationshipCapability,
   }) {
     return ProfileSocialRelationRowViewData(
-      subAccountId: subAccountId ?? this.subAccountId,
-      username: username ?? this.username,
+      personaId: personaId ?? this.personaId,
       userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,

@@ -15,6 +15,7 @@ from core.semantic_mentions import (
     DEFAULT_MAX_DEPTH,
     bounded_candidate_walk,
 )
+from core.schema import assert_valid
 from governance.creators.candidates.state import (
     STATUS_PENDING_REVIEW,
     STATUS_PUBLISHED,
@@ -96,7 +97,9 @@ class CandidateRepository:
         path = self.candidate_path(candidate_id)
         if not path.is_file():
             return None
-        return json.loads(path.read_text(encoding="utf-8"))
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+        assert_valid(candidate, "governance", "candidate", label=path.as_posix())
+        return candidate
 
     def find(self, kind: str, natural_key: str) -> dict[str, Any] | None:
         return self.get(candidate_id_for(kind, natural_key))
@@ -109,7 +112,9 @@ class CandidateRepository:
     ) -> list[dict[str, Any]]:
         output: list[dict[str, Any]] = []
         for path in sorted(self.candidates_dir.glob("candidate_*.json")):
-            candidate = json.loads(path.read_text(encoding="utf-8"))
+            candidate = self.get(path.stem)
+            if candidate is None:
+                continue
             if status is not None and candidate.get("status") != status:
                 continue
             if kind is not None and candidate.get("kind") != kind:
@@ -147,7 +152,7 @@ class CandidateRepository:
                 changed = True
             if changed:
                 existing["updatedAt"] = timestamp
-                existing["version"] = int(existing.get("version") or 1) + 1
+                existing["revision"] = int(existing["revision"]) + 1
                 _atomic_write_json(self.candidate_path(candidate_id), existing)
                 self._audit(
                     action="candidate.intake_updated",
@@ -168,7 +173,7 @@ class CandidateRepository:
             "mentionIds": normalized_mentions,
             "createdAt": timestamp,
             "updatedAt": timestamp,
-            "version": 1,
+            "revision": 1,
         }
         _atomic_write_json(self.candidate_path(candidate_id), candidate)
         self._audit(
@@ -260,7 +265,7 @@ class CandidateRepository:
         if target_status != previous_status:
             candidate["status"] = target_status
             candidate["updatedAt"] = timestamp
-            candidate["version"] = int(candidate.get("version") or 1) + 1
+            candidate["revision"] = int(candidate["revision"]) + 1
             candidate["lastReview"] = {
                 "decisionId": decision_id_value,
                 "reviewer": reviewer_value,
@@ -302,7 +307,7 @@ class CandidateRepository:
             (
                 str(candidate.get("candidateId") or ""),
                 action,
-                str(candidate.get("version") or ""),
+                str(candidate.get("revision") or ""),
                 occurred_at,
             )
         )
@@ -315,10 +320,11 @@ class CandidateRepository:
             "actor": actor,
             "occurredAt": occurred_at,
             "status": candidate.get("status"),
-            "version": candidate.get("version"),
+            "candidateRevision": candidate.get("revision"),
         }
         if details:
             row["details"] = dict(details)
+        assert_valid(row, "governance", "audit_event", label=self.audit_path.as_posix())
         _append_ndjson(self.audit_path, row)
 
     def _emit_backfill(
@@ -330,7 +336,7 @@ class CandidateRepository:
             (
                 str(candidate.get("candidateId") or ""),
                 str(review_record.get("decisionId") or ""),
-                str(candidate.get("version") or ""),
+                str(candidate.get("revision") or ""),
             )
         )
         event_id = "backfill_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]

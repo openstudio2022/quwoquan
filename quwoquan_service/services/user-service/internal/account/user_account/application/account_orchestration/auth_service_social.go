@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -11,7 +10,11 @@ import (
 
 	rtobs "quwoquan_service/runtime/observability"
 	sessiongenerated "quwoquan_service/services/user-service/generated/account/account_session"
+	bindinggenerated "quwoquan_service/services/user-service/generated/account/credential_binding"
 	"quwoquan_service/services/user-service/generated/account/user_account"
+	sessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
+	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
+	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
 )
 
 // FederatedLoginFacade is the application capability exposed to a transport
@@ -61,13 +64,28 @@ func (f *FederatedLoginFacade) Login(
 	deviceID string,
 	platform string,
 	appVersion string,
-) (_ *LoginResult, err error) {
+	agreementVersion string,
+	privacyVersion string,
+) (_ *sessionapp.FederatedLoginOutcome, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithFederatedIdentity")
 	defer func() { rtobs.EndSpan(span, err) }()
 
 	if f == nil || f.auth == nil || f.identityVerifier == nil {
 		return nil, sessiongenerated.AppErrorFromSocialProviderUnavailable(
 			"federated identity capability unavailable",
+		)
+	}
+	if strings.TrimSpace(deviceID) == "" ||
+		strings.TrimSpace(platform) == "" ||
+		strings.TrimSpace(appVersion) == "" {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"federated login device context required",
+		)
+	}
+	if strings.TrimSpace(agreementVersion) == "" ||
+		strings.TrimSpace(privacyVersion) == "" {
+		return nil, sessiongenerated.AppErrorFromConsentRequired(
+			"federated login consent context required",
 		)
 	}
 	authorizationCode = strings.TrimSpace(authorizationCode)
@@ -89,6 +107,8 @@ func (f *FederatedLoginFacade) Login(
 		deviceID,
 		platform,
 		appVersion,
+		agreementVersion,
+		privacyVersion,
 	)
 }
 
@@ -98,7 +118,9 @@ func (s *AuthService) loginWithVerifiedFederatedIdentity(
 	deviceID string,
 	platform string,
 	appVersion string,
-) (_ *LoginResult, err error) {
+	agreementVersion string,
+	privacyVersion string,
+) (_ *sessionapp.FederatedLoginOutcome, err error) {
 	ctx, span := rtobs.StartBusinessSpan(
 		ctx,
 		"user.LoginWithVerifiedFederatedIdentity",
@@ -116,90 +138,110 @@ func (s *AuthService) loginWithVerifiedFederatedIdentity(
 			fmt.Sprintf("federated credential lookup: %v", err),
 		)
 	}
-	var ownerID string
 	if found {
 		state := existing.State()
-		ownerID = state.OwnerID
-		_ = s.credentials.MarkUsed(ctx, state.ID, time.Now().UTC())
-	} else {
-		ownerID, err = s.createOwnerAccountForFederatedIdentity(ctx, identity)
-		if err != nil {
-			return nil, err
-		}
-		if syncErr := s.syncFederatedProfileOnFirstLogin(ctx, ownerID, identity); syncErr != nil {
-			slog.WarnContext(
-				ctx,
-				"federated identity profile first-sync failed",
-				"owner.id", ownerID,
-				"error", syncErr.Error(),
+		if state.Status != credentialmodel.StatusActive {
+			return nil, bindinggenerated.AppErrorFromCredentialConflict(
+				"federated credential is not active",
 			)
 		}
+		ownerID := state.OwnerID
+		_ = s.credentials.MarkUsed(ctx, state.ID, time.Now().UTC())
+		if err := s.persistLoginDevice(
+			ctx,
+			ownerID,
+			deviceID,
+			platform,
+			appVersion,
+		); err != nil {
+			return nil, generated.AppErrorFromInternalError(
+				fmt.Sprintf("persist federated login device: %v", err),
+			)
+		}
+		if err := s.persistConsentRecord(
+			ctx,
+			ownerID,
+			agreementVersion,
+			privacyVersion,
+			deviceID,
+			platform,
+			"LoginWithFederatedIdentity",
+		); err != nil {
+			return nil, generated.AppErrorFromInternalError(
+				fmt.Sprintf("persist federated consent: %v", err),
+			)
+		}
+		session, issueErr := s.issueLoginResult(
+			ctx,
+			ownerID,
+			string(identity.CredentialType),
+			identity.CredentialKey,
+			deviceID,
+		)
+		if issueErr != nil {
+			return nil, issueErr
+		}
+		outcome, outcomeErr := sessionapp.NewAuthenticatedFederatedLogin(session)
+		if outcomeErr != nil {
+			return nil, generated.AppErrorFromInternalError(
+				"build authenticated federated login outcome",
+			)
+		}
+		return outcome, nil
 	}
-	if err := s.persistLoginDevice(ctx, ownerID, deviceID, platform, appVersion); err != nil {
+
+	if s.federatedBindingTickets == nil {
 		return nil, generated.AppErrorFromInternalError(
-			fmt.Sprintf("persist federated login device: %v", err),
+			"federated phone binding ticket store unavailable",
 		)
 	}
-	return s.issueLoginResult(
+	provider, err := credentialmodel.ProviderForCredentialType(identity.CredentialType)
+	if err != nil {
+		return nil, sessiongenerated.AppErrorFromSocialProviderUnavailable(
+			"federated identity provider mapping unavailable",
+		)
+	}
+	issued, err := s.federatedBindingTickets.IssueFederatedPhoneBindingTicket(
 		ctx,
-		ownerID,
-		string(identity.CredentialType),
-		identity.CredentialKey,
-		deviceID,
+		credentialapp.IssueFederatedPhoneBindingTicket{
+			Provider:         provider,
+			CredentialType:   identity.CredentialType,
+			CredentialKey:    identity.CredentialKey,
+			DisplayName:      sanitizeFederatedDisplayName(identity.DisplayName),
+			AvatarURL:        strings.TrimSpace(identity.AvatarURL),
+			DeviceID:         strings.TrimSpace(deviceID),
+			Platform:         strings.TrimSpace(platform),
+			AppVersion:       strings.TrimSpace(appVersion),
+			AgreementVersion: strings.TrimSpace(agreementVersion),
+			PrivacyVersion:   strings.TrimSpace(privacyVersion),
+			ExpiresAt: time.Now().UTC().Add(
+				credentialapp.FederatedPhoneBindingTicketTTL,
+			),
+		},
 	)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(
+			"issue federated phone binding ticket",
+		)
+	}
+	outcome, outcomeErr := sessionapp.NewPhoneBindingRequiredFederatedLogin(
+		issued.Opaque,
+		string(issued.Provider),
+		issued.ExpiresInSeconds,
+	)
+	if outcomeErr != nil {
+		return nil, generated.AppErrorFromInternalError(
+			"build federated phone binding outcome",
+		)
+	}
+	return outcome, nil
 }
 
-func (s *AuthService) syncFederatedProfileOnFirstLogin(
+func (s *AuthService) CompleteFederatedPhoneBinding(
 	ctx context.Context,
-	ownerID string,
-	identity VerifiedFederatedIdentity,
-) error {
-	profile, err := s.profiles.FindByID(ctx, ownerID)
-	if err != nil || profile == nil {
-		return err
-	}
-	updated := false
-	if displayName := sanitizeFederatedDisplayName(identity.DisplayName); displayName != "" {
-		profile.OwnerDisplayName = displayName
-		profile.Nickname = displayName
-		profile.NicknameCustomized = true
-		updated = true
-	}
-	if avatar := strings.TrimSpace(identity.AvatarURL); avatar != "" &&
-		avatar != strings.TrimSpace(profile.AvatarURL) {
-		profile.AvatarURL = avatar
-		profile.AvatarVersion++
-		if profile.AvatarVersion <= 0 {
-			profile.AvatarVersion = 1
-		}
-		profile.AvatarAssetID = fmt.Sprintf("ua_%s", ownerID)
-		updated = true
-	}
-	if updated {
-		if err := s.profiles.Update(ctx, profile); err != nil {
-			return err
-		}
-	}
-	activeSub, err := s.personas.FindActiveByUserID(ctx, ownerID)
-	if err != nil || activeSub == nil {
-		return err
-	}
-	personaUpdated := false
-	if name := strings.TrimSpace(profile.Nickname); name != "" && activeSub.DisplayName != name {
-		activeSub.DisplayName = name
-		personaUpdated = true
-	}
-	if avatar := strings.TrimSpace(profile.AvatarURL); avatar != "" &&
-		(activeSub.AvatarURL != avatar || activeSub.AvatarVersion != profile.AvatarVersion) {
-		activeSub.AvatarURL = avatar
-		activeSub.AvatarVersion = profile.AvatarVersion
-		personaUpdated = true
-	}
-	if personaUpdated {
-		normalizePersonaPersistence(activeSub)
-		return s.personas.Update(ctx, activeSub)
-	}
-	return nil
+	command credentialapp.CompleteFederatedPhoneBindingCommand,
+) (_ *sessionapp.AuthSessionGrant, err error) {
+	return s.completeFederatedPhoneBinding(ctx, command)
 }
 
 func sanitizeFederatedDisplayName(name string) string {

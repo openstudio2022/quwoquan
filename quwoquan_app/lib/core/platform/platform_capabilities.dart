@@ -20,6 +20,7 @@ class PlatformCapabilities {
     required this.incomingCallUi,
     required this.webPushIncomingCall,
     required this.nativeVideoEditing,
+    required this.adaptiveVideoPlayback,
     required this.secureStorage,
     required this.backgroundAudio,
     required this.wideScreenLayout,
@@ -69,6 +70,13 @@ class PlatformCapabilities {
 
   /// Native video trim/mute/export via platform channel.
   final bool nativeVideoEditing;
+
+  /// Native player can consume the repository HLS/CMAF profile and perform ABR.
+  ///
+  /// This is deliberately conservative: only the Android/iOS player baseline is
+  /// enabled. Web requires an owned HLS runtime and desktop/OHOS require device
+  /// matrix evidence before their profiles can opt in.
+  final bool adaptiveVideoPlayback;
 
   /// Hardware-backed secure key/value storage.
   final bool secureStorage;
@@ -134,6 +142,7 @@ class PlatformCapabilities {
     bool? incomingCallUi,
     bool? webPushIncomingCall,
     bool? nativeVideoEditing,
+    bool? adaptiveVideoPlayback,
     bool? secureStorage,
     bool? backgroundAudio,
     bool? wideScreenLayout,
@@ -159,6 +168,8 @@ class PlatformCapabilities {
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
       webPushIncomingCall: webPushIncomingCall ?? this.webPushIncomingCall,
       nativeVideoEditing: nativeVideoEditing ?? this.nativeVideoEditing,
+      adaptiveVideoPlayback:
+          adaptiveVideoPlayback ?? this.adaptiveVideoPlayback,
       secureStorage: secureStorage ?? this.secureStorage,
       backgroundAudio: backgroundAudio ?? this.backgroundAudio,
       wideScreenLayout: wideScreenLayout ?? this.wideScreenLayout,
@@ -198,6 +209,7 @@ class CapabilityProfile {
     incomingCallUi: true,
     webPushIncomingCall: false,
     nativeVideoEditing: true,
+    adaptiveVideoPlayback: true,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: false,
@@ -223,6 +235,7 @@ class CapabilityProfile {
     incomingCallUi: false,
     webPushIncomingCall: false,
     nativeVideoEditing: false,
+    adaptiveVideoPlayback: false,
     secureStorage: false,
     backgroundAudio: false,
     wideScreenLayout: true,
@@ -250,6 +263,7 @@ class CapabilityProfile {
     incomingCallUi: false,
     webPushIncomingCall: false,
     nativeVideoEditing: false,
+    adaptiveVideoPlayback: false,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: false,
@@ -275,6 +289,7 @@ class CapabilityProfile {
     incomingCallUi: false,
     webPushIncomingCall: false,
     nativeVideoEditing: false,
+    adaptiveVideoPlayback: false,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: true,

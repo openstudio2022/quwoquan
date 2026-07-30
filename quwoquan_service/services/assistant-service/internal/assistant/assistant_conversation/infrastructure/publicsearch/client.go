@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 type Config struct {
@@ -36,16 +36,16 @@ func New(cfg Config, httpClient *http.Client) (*Client, error) {
 
 func (c *Client) Search(
 	ctx context.Context,
-	request application.ExternalSearchRequest,
-) (application.ExternalSearchResult, error) {
+	request ports.ExternalSearchRequest,
+) (ports.ExternalSearchResult, error) {
 	queries := uniqueQueries(request.Queries, request.Query)
 	if len(queries) == 0 {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
 			Capability: "public_search",
-			Reason:     application.ProviderFailureInvalidResponse,
+			Reason:     ports.ProviderFailureInvalidResponse,
 		}
 	}
-	references := make([]application.ExternalReference, 0, 5)
+	references := make([]ports.ExternalReference, 0, 5)
 	for _, query := range queries {
 		result, err := c.duckDuckGo(ctx, query)
 		if err != nil {
@@ -57,43 +57,43 @@ func (c *Client) Search(
 		}
 	}
 	if len(references) > 0 {
-		return application.ExternalSearchResult{
+		return ports.ExternalSearchResult{
 			Summary:    summaryFromReferences(references),
 			References: references,
 		}, nil
 	}
-	return application.ExternalSearchResult{}, application.ProviderFailure{
+	return ports.ExternalSearchResult{}, ports.ProviderFailure{
 		Capability: "public_search",
-		Reason:     application.ProviderFailureUnavailable,
+		Reason:     ports.ProviderFailureUnavailable,
 	}
 }
 
 func (c *Client) duckDuckGo(
 	ctx context.Context,
 	query string,
-) (application.ExternalSearchResult, error) {
+) (ports.ExternalSearchResult, error) {
 	endpoint := *c.searchURL
 	parameters := endpoint.Query()
 	parameters.Set("q", query)
 	endpoint.RawQuery = parameters.Encode()
 	body, status, err := c.get(ctx, endpoint.String(), "quwoquan-assistant/1.0")
 	if err != nil {
-		return application.ExternalSearchResult{}, err
+		return ports.ExternalSearchResult{}, err
 	}
 	if status < http.StatusOK || status >= http.StatusMultipleChoices {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
 			Capability: "public_search",
-			Reason:     application.ProviderFailureUnavailable,
+			Reason:     ports.ProviderFailureUnavailable,
 		}
 	}
 	references := extractDuckDuckGoResults(string(body))
 	if len(references) == 0 {
-		return application.ExternalSearchResult{}, application.ProviderFailure{
+		return ports.ExternalSearchResult{}, ports.ProviderFailure{
 			Capability: "public_search",
-			Reason:     application.ProviderFailureInvalidResponse,
+			Reason:     ports.ProviderFailureInvalidResponse,
 		}
 	}
-	return application.ExternalSearchResult{
+	return ports.ExternalSearchResult{
 		Summary:    summaryFromReferences(references),
 		References: references,
 	}, nil
@@ -108,9 +108,9 @@ func (c *Client) get(
 	for attempt := 0; attempt < 2; attempt++ {
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
-			return nil, 0, application.ProviderFailure{
+			return nil, 0, ports.ProviderFailure{
 				Capability: "public_search",
-				Reason:     application.ProviderFailureInvalidResponse,
+				Reason:     ports.ProviderFailureInvalidResponse,
 			}
 		}
 		request.Header.Set("User-Agent", userAgent)
@@ -136,16 +136,16 @@ func (c *Client) get(
 	return nil, 0, providerFailure(lastErr)
 }
 
-func providerFailure(err error) application.ProviderFailure {
+func providerFailure(err error) ports.ProviderFailure {
 	if err == context.DeadlineExceeded {
-		return application.ProviderFailure{
+		return ports.ProviderFailure{
 			Capability: "public_search",
-			Reason:     application.ProviderFailureTimeout,
+			Reason:     ports.ProviderFailureTimeout,
 		}
 	}
-	return application.ProviderFailure{
+	return ports.ProviderFailure{
 		Capability: "public_search",
-		Reason:     application.ProviderFailureUnavailable,
+		Reason:     ports.ProviderFailureUnavailable,
 	}
 }
 
@@ -155,10 +155,10 @@ var (
 	snippetPattern = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>|<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</div>`)
 )
 
-func extractDuckDuckGoResults(raw string) []application.ExternalReference {
+func extractDuckDuckGoResults(raw string) []ports.ExternalReference {
 	results := resultPattern.FindAllStringSubmatch(raw, 5)
 	snippets := snippetPattern.FindAllStringSubmatch(raw, 5)
-	references := make([]application.ExternalReference, 0, len(results))
+	references := make([]ports.ExternalReference, 0, len(results))
 	for index, result := range results {
 		title := cleanText(result[2])
 		href := ""
@@ -184,7 +184,7 @@ func extractDuckDuckGoResults(raw string) []application.ExternalReference {
 		if source == "" {
 			source = "public_web"
 		}
-		references = append(references, application.ExternalReference{
+		references = append(references, ports.ExternalReference{
 			Title:   title,
 			URL:     href,
 			Source:  source,
@@ -213,10 +213,10 @@ func uniqueQueries(values []string, fallback string) []string {
 }
 
 func mergeReferences(
-	existing []application.ExternalReference,
-	incoming []application.ExternalReference,
+	existing []ports.ExternalReference,
+	incoming []ports.ExternalReference,
 	limit int,
-) []application.ExternalReference {
+) []ports.ExternalReference {
 	seen := make(map[string]struct{}, len(existing))
 	for _, reference := range existing {
 		seen[reference.URL+"|"+reference.Title+"|"+reference.Source] = struct{}{}
@@ -236,7 +236,7 @@ func mergeReferences(
 	return existing
 }
 
-func summaryFromReferences(references []application.ExternalReference) string {
+func summaryFromReferences(references []ports.ExternalReference) string {
 	parts := make([]string, 0, len(references))
 	for _, reference := range references {
 		if reference.Snippet != "" {

@@ -98,7 +98,7 @@ def compute_asset_manifest_sha256(assets: list[dict[str, Any]]) -> str:
     return _canonical_json_digest(canonical_assets)
 
 
-def compute_document_version_sha256(
+def compute_document_bundle_sha256(
     *,
     document_sha256: str,
     asset_manifest_sha256: str,
@@ -227,7 +227,7 @@ def build_article_asset_manifest(
             entry["durationMs"] = item["durationMs"]
         manifest_assets.append(entry)
     asset_manifest_sha256 = compute_asset_manifest_sha256(manifest_assets)
-    document_version_sha256 = compute_document_version_sha256(
+    document_bundle_sha256 = compute_document_bundle_sha256(
         document_sha256=document_sha256,
         asset_manifest_sha256=asset_manifest_sha256,
         render_profile=render_profile,
@@ -238,7 +238,7 @@ def build_article_asset_manifest(
         "articleMarkdownDigest": document_sha256,
         "documentSha256": document_sha256,
         "assetManifestSha256": asset_manifest_sha256,
-        "documentVersionSha256": document_version_sha256,
+        "documentBundleSha256": document_bundle_sha256,
         "assets": manifest_assets,
     }
 

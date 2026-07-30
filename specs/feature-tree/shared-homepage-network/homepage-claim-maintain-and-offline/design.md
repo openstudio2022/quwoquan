@@ -34,6 +34,18 @@
 - 影响 Story：[`claimed-homepage-basic-maintenance`](./claimed-homepage-basic-maintenance/spec.md)、[`homepage-candidate-intake-and-publish`](./homepage-candidate-intake-and-publish/spec.md)、[`homepage-claim-request-and-review`](./homepage-claim-request-and-review/spec.md)、[`homepage-offline-report-and-history-retention`](./homepage-offline-report-and-history-retention/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 Homepage 写聚合与 viewer-scoped 读模型分离
+
+- 决策：`Homepage` 只拥有主页权威状态与版本 CAS。
+- 读侧边界：关注、评分、内容、问答、群组、关系与助手上下文由独立 projection owner 维护，并在 `HomepageDetailView` / `HomepageShellView` 查询边界组合。
+- 理由：viewer-scoped 与跨对象最终一致事实不可能属于同一个 Homepage 聚合版本，把它们写入聚合会同时污染一致性边界、加载成本与权限语义。
+- 被否决方案：在 `Homepage.fields` 保留 `role: projection`、让查询直接返回写聚合、在 `HomepageShellView` 用裸 `object` 再复制一份投影 shape。
+- 约束与影响：`HomepageViewerFollowSlice` 独立于聚合快照，壳层字段必须引用 canonical typed read model。
+- 写入约束：命令只更新权威字段，投影只能由 reader/projector 写入。
+- 关联要求：`REQ-002`
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

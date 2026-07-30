@@ -32,11 +32,12 @@ capabilities:
 - idempotent_commands
 business_rules:
 - cohort 名称唯一且权重总和必须为 10000 basis points
-- 每个 cohort 必须且只能映射到同 policyId 下已 staged 的 releaseVersion
+- 每个 cohort 必须且只能映射到同 policyId 下已 staged 的 releaseDigest
 - activation 以单一 Mongo transaction 提交 current/previous mapping、revision、receipt 与 outbox
 - rollback 精确恢复 previousAssignments，不根据当前 release 推测历史
 - activation 或 rollback 只影响后续 Run，既有 Run 冻结选择不可改写
 lifecycle:
+  state_field: status
   states:
   - active
   initial: active
@@ -59,4 +60,4 @@ members:
     kind: owned_entity
     cardinality: 1:N
     max_cardinality: 32
-    description: cohort 到 immutable releaseVersion 的映射。
+    description: cohort 到 immutable releaseDigest 的映射；revision 只表示 rollout 状态序列。

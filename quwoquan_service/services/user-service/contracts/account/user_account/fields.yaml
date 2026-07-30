@@ -1,2819 +1,2563 @@
 description: 用户根实体——登录凭证、设备、恢复、审计与多分身管理容器
 fields:
-- name: userId
-  source: userId
-  type: string
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 全局唯一 owner ID；匿名与注册账号都使用同一稳定主键规则
-  role: authoritative_state
-- name: accountState
-  source: accountState
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  recommend_feature: false
-  description: 账号生命周期状态：anonymous | active | suspended | closed（closed 为注销终态）
-  role: authoritative_state
-- name: authEpoch
-  source: authEpoch
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: metadata_only
-  api_exposure: drop
-  ops_exposure: read
-  recommend_feature: false
-  description: 账号安全代次；Suspend/Restore/Close 递增，认证、refresh 和服务鉴权拒绝旧 epoch token
-  role: authoritative_state
-- name: suspensionCaseRef
-  source: suspensionCaseRef
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: mask
-  api_exposure: drop
-  ops_exposure: read
-  recommend_feature: false
-  description: 当前有效限制对应的不透明运营 case 引用；禁止写入审核理由、证据或用户可见响应
-  role: authoritative_state
-- name: suspendedAt
-  source: suspendedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: metadata_only
-  api_exposure: drop
-  ops_exposure: read
-  recommend_feature: false
-  description: 当前 suspended 状态首次生效时间；Restore 后保留仅供审计，不作为公开资料字段
-  role: authoritative_state
-- name: identityOrigin
-  source: identityOrigin
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 首次创建来源：anonymous_device | phone | federated | apple | passkey | migrated_seed
-  role: authoritative_state
-- name: logicalShard
-  source: logicalShard
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 固定逻辑槽位；由结构化 ownerId 生成并长期稳定
-  role: authoritative_state
-- name: anonymousRetentionPolicy
-  source: anonymousRetentionPolicy
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  recommend_feature: false
-  description: 匿名痕迹保留策略；当前固定为 preserve
-  role: authoritative_state
-- name: phone
-  source: phone
-  type: string
-  constraints:
-  - UK
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: drop
-  ops_exposure: mask
-  recommend_feature: false
-  description: 手机号（登录凭证）；匿名账号允许为空
-  role: authoritative_state
-- name: nickname
-  source: nickname
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  search_field: true
-  description: 昵称（显示名，允许重复，不再作为唯一标识；唯一性由 userId/subAccountId/userHandle 承担）
-  role: projection
-- name: nicknameCustomized
-  source: nicknameCustomized
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 用户是否手动修改过昵称；首次创建的系统默认昵称为 false，用户改名后置 true，端侧据此决定是否展示昵称编辑画笔
-  role: projection
-- name: avatarUrl
-  source: avatarUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: false
-  role: projection
-- name: avatarAssetId
-  source: avatarAssetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 用户头像资产主键；作为头像真相源的稳定引用
-  role: authoritative_state
-  reference: true
-- name: avatarVersion
-  source: avatarVersion
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 用户头像版本号；用于群头像重算与 patch 幂等
-  role: projection
-- name: backgroundUrl
-  source: backgroundUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: false
-  description: owner 基线主页头图 URL
-  role: projection
-- name: backgroundAssetId
-  source: backgroundAssetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 用户主页头图资产主键；作为封面图真相源的稳定引用
-  role: authoritative_state
-  reference: true
-- name: bio
-  source: bio
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  search_field: true
-  description: 个人签名
-  role: projection
-- name: identityTags
-  source: identityTags
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  search_field: true
-  description: 主页单行身份标签（用户语言短词，如「AI产品 / 摄影 / 旅行 / 北京」），端侧以 · 分隔单行展示；与 bio 互补不重复
-  role: projection
-- name: interestTags
-  source: interestTags
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  recommend_feature: true
-  tag_ref: true
-  description: 声明式用户兴趣（路径制 tagRef，真相源 control_plane/governance/taxonomy）；与行为派生兴趣互补，用于兴趣维度交集与冷启动召回
-  role: projection
-- name: gender
-  source: gender
-  type: enum
-  enum_ref: Gender
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read_write
-  ops_exposure: mask
-  recommend_feature: true
-  role: projection
-- name: birthDate
-  source: birthDate
-  type: date
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: drop
-  api_exposure: read_write
-  ops_exposure: drop
-  recommend_feature: false
-  role: projection
-- name: region
-  source: region
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 地区（ipResidenceProfile 落库）
-  role: projection
-- name: regionTagRef
-  source: regionTagRef
-  type: tag_ref
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 省市两级结构化行政区 tagRef，公开展示由 tag-service 派生
-  role: projection
-- name: status
-  source: status
-  type: enum
-  enum_ref: UserStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  recommend_feature: false
-  observe_metric: user_status_gauge
-  role: authoritative_state
-- name: profileVersion
-  source: profileVersion
-  type: int
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 画像快照版本号（端侧增量校验）
-  role: projection
-- name: followerCount
-  source: followerCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 关注该用户主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
-  role: projection
-- name: followingCount
-  source: followingCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: projection
-- name: postCount
-  source: postCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: projection
-- name: circleCount
-  source: circleCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 已加入圈子数（由 circle-service 成员变更事件驱动更新）
-  role: projection
-- name: likeCount
-  source: likeCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  description: 获赞总数（由 content-service 点赞事件驱动更新）
-  role: projection
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: true
-  role: authoritative_state
-- name: ownerDisplayName
-  source: ownerDisplayName
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PII
-  log_policy: mask
-  api_exposure: drop
-  ops_exposure: read
-  recommend_feature: false
-  description: 主控账号管理视角名称（仅自己控制台可见，不对外展示）
-  role: projection
-- name: subAccountCount
-  source: subAccountCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  description: 当前持有子账号数量（冗余计数）
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  recommend_feature: false
-  role: authoritative_state
+  - name: userId
+    source: userId
+    type: string
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 全局唯一 owner ID；匿名与注册账号都使用同一稳定主键规则
+    role: authoritative_state
+  - name: accountState
+    source: accountState
+    type: enum
+    enum_ref: AccountState
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    recommend_feature: false
+    observe_metric: user_account_state_gauge
+    description: 账号生命周期状态：anonymous | active | suspended | closed（closed 为注销终态）
+    role: authoritative_state
+  - name: authEpoch
+    source: authEpoch
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: metadata_only
+    api_exposure: drop
+    ops_exposure: read
+    recommend_feature: false
+    description: 账号安全代次；Suspend/Restore/Close 递增，认证、refresh 和服务鉴权拒绝旧 epoch token
+    role: authoritative_state
+  - name: suspensionCaseRef
+    source: suspensionCaseRef
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前有效限制对应的不透明运营 case 引用；禁止写入审核理由、证据或用户可见响应
+    role: authoritative_state
+  - name: suspendedAt
+    source: suspendedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: metadata_only
+    api_exposure: drop
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前 suspended 状态首次生效时间；Restore 后保留仅供审计，不作为公开资料字段
+    role: authoritative_state
+  - name: identityOrigin
+    source: identityOrigin
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 首次创建来源：anonymous_device | phone | federated | apple | passkey | migrated_seed
+    role: authoritative_state
+  - name: logicalShard
+    source: logicalShard
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 固定逻辑槽位；由结构化 ownerId 生成并长期稳定
+    role: authoritative_state
+  - name: anonymousRetentionPolicy
+    source: anonymousRetentionPolicy
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    recommend_feature: false
+    description: 匿名痕迹保留策略；当前固定为 preserve
+    role: authoritative_state
+  - name: phone
+    source: phone
+    type: string
+    constraints:
+      - UK
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: mask
+    recommend_feature: false
+    description: 手机号（登录凭证）；匿名账号允许为空
+    role: authoritative_state
+  - name: nickname
+    source: nickname
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    search_field: true
+    description: 昵称（显示名，允许重复，不再作为唯一标识；唯一性由 userId/personaId/userHandle 承担）
+    role: projection
+  - name: nicknameCustomized
+    source: nicknameCustomized
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 用户是否手动修改过昵称；首次创建的系统默认昵称为 false，用户改名后置 true，端侧据此决定是否展示昵称编辑画笔
+    role: projection
+  - name: avatarUrl
+    source: avatarUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前 active Persona 头像投影；只由 Persona outbox projector 写入
+    role: projection
+  - name: avatarAssetId
+    source: avatarAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前 active Persona 头像资产主键投影；只由 Persona outbox projector 写入
+    role: projection
+    reference: true
+  - name: avatarVersion
+    source: avatarVersion
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前 active Persona 头像版本投影；只由 Persona outbox projector 写入，用于群头像重算与缓存失效
+    role: projection
+  - name: backgroundUrl
+    source: backgroundUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前 active Persona 主页头图投影；只由 Persona outbox projector 写入
+    role: projection
+  - name: backgroundAssetId
+    source: backgroundAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前 active Persona 主页头图资产主键投影；只由 Persona outbox projector 写入
+    role: projection
+    reference: true
+  - name: bio
+    source: bio
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    search_field: true
+    description: 当前 active Persona 个人签名投影；只由 Persona outbox projector 写入
+    role: projection
+  - name: identityTags
+    source: identityTags
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    search_field: true
+    description: 当前 active Persona 主页身份标签投影；只由 Persona outbox projector 写入，端侧以 · 分隔单行展示
+    role: projection
+  - name: interestTags
+    source: interestTags
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    tag_ref: true
+    description: 当前 active Persona 声明式兴趣投影；只由 Persona outbox projector 写入，tagRef 真相源为 control_plane/governance/taxonomy
+    role: projection
+  - name: gender
+    source: gender
+    type: enum
+    enum_ref: Gender
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: mask
+    recommend_feature: true
+    description: 当前 active Persona 性别投影；只由 Persona outbox projector 写入
+    role: projection
+  - name: birthDate
+    source: birthDate
+    type: date
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: drop
+    api_exposure: read
+    ops_exposure: drop
+    recommend_feature: false
+    description: 当前 active Persona 出生日期投影；只由 Persona outbox projector 写入
+    role: projection
+  - name: region
+    source: region
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 当前 active Persona 地区投影；只由 Persona outbox projector 写入
+    role: projection
+  - name: regionTagRef
+    source: regionTagRef
+    type: tag_ref
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 当前 active Persona 省市行政区 tagRef 投影；只由 Persona outbox projector 写入，公开展示由 tag-service 派生
+    role: projection
+  - name: profileVersion
+    source: profileVersion
+    type: int
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: Persona 公开资料投影版本号；只由 Persona outbox projector 推进，供端侧增量校验
+    role: projection
+  - name: followerCount
+    source: followerCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 关注该用户主页的人数；只由 canonical relationship outbox projector 写入，修复任务仅从同一权威关系事实重放；前台展示为「粉丝」
+    role: projection
+  - name: followingCount
+    source: followingCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 当前 Persona 关注数；只由 canonical relationship outbox projector 写入，修复任务仅从同一权威关系事实重放
+    role: projection
+  - name: postCount
+    source: postCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 公开作品数；只由 canonical content outbox projector 写入，修复任务仅从同一权威内容事实重放
+    role: projection
+  - name: circleCount
+    source: circleCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 已加入圈子数；只由 canonical circle membership outbox projector 写入，修复任务仅从同一权威成员事实重放
+    role: projection
+  - name: likeCount
+    source: likeCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    description: 获赞总数；只由 canonical content reaction outbox projector 写入，修复任务仅从同一权威互动事实重放
+    role: projection
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: true
+    role: authoritative_state
+  - name: ownerDisplayName
+    source: ownerDisplayName
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PII
+    log_policy: mask
+    api_exposure: drop
+    ops_exposure: read
+    recommend_feature: false
+    description: 主控账号管理视角名称（仅自己控制台可见，不对外展示）
+    role: projection
+  - name: personaCount
+    source: personaCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    description: 当前持有Persona数量（冗余计数）
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    recommend_feature: false
+    role: authoritative_state
 types:
   LoginAccountHint:
     description: 登录页历史账号或运营商命中账号的脱敏摘要；只用于展示和二次登录，不是认证事实
     cache_excluded: true
     fields:
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 登录页展示昵称；优先 ownerDisplayName，其次 nickname
-    - name: nicknameCustomized
-      source: nicknameCustomized
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 昵称是否为用户主动设置或第三方授权同步的有效公开昵称；端侧不得通过昵称格式猜测
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarAssetId
-      source: avatarAssetId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: maskedPhone
-      source: maskedPhone
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-      description: 脱敏手机号，如 138****8888；端侧不得接触真实手机号
-    - name: identityOrigin
-      source: identityOrigin
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastLoginAt
-      source: lastLoginAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 登录页展示昵称；优先 ownerDisplayName，其次 nickname
+      - name: nicknameCustomized
+        source: nicknameCustomized
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 昵称是否为用户主动设置或第三方授权同步的有效公开昵称；端侧不得通过昵称格式猜测
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarAssetId
+        source: avatarAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: maskedPhone
+        source: maskedPhone
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+        description: 脱敏手机号，如 138****8888；端侧不得接触真实手机号
+      - name: identityOrigin
+        source: identityOrigin
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastLoginAt
+        source: lastLoginAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   OneTapLoginHintResponse:
     description: 运营商一键登录提示响应；不签发 token，只返回脱敏号码和账号摘要
     cache_excluded: true
     fields:
-    - name: state
-      source: state
-      type: enum
-      enum_ref: OneTapLoginHintState
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: maskedPhone
-      source: maskedPhone
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: registered
-      source: registered
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: accountHint
-      source: accountHint
-      type: object
-      object_ref: LoginAccountHint
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: expiresInSeconds
-      source: expiresInSeconds
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: providerRequestId
-      source: providerRequestId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    enums:
-      OneTapLoginHintState:
-        values:
-        - registered
-        - new_phone
-        - unavailable
-        description: 运营商号码是否命中已有账号
+      - name: state
+        source: state
+        type: enum
+        enum_ref: OneTapLoginHintState
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: maskedPhone
+        source: maskedPhone
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+      - name: registered
+        source: registered
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: accountHint
+        source: accountHint
+        type: object
+        object_ref: LoginAccountHint
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+      - name: expiresInSeconds
+        source: expiresInSeconds
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: providerRequestId
+        source: providerRequestId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   CarrierProviderAuditContext:
     description: 运营商服务商审计上下文；禁止记录真实手机号和 carrier token
     cache_excluded: true
     fields:
-    - name: provider
-      source: provider
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: providerRequestId
-      source: providerRequestId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: latencyMs
-      source: latencyMs
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: resultCode
-      source: resultCode
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: occurredAt
-      source: occurredAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: provider
+        source: provider
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: providerRequestId
+        source: providerRequestId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: latencyMs
+        source: latencyMs
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: resultCode
+        source: resultCode
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: occurredAt
+        source: occurredAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
   ConsentRecord:
     description: 登录前用户协议与隐私政策同意记录；用于登录、数据权利与法务审计
     cache_excluded: true
     fields:
-    - name: id
-      source: id
-      type: string
-      constraints:
-      - PK
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: ownerId
-      source: ownerId
-      type: string
-      constraints:
-      - FK_user_profiles_CASCADE
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: agreementVersion
-      source: agreementVersion
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: privacyVersion
-      source: privacyVersion
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: acceptedAt
-      source: acceptedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: deviceId
-      source: deviceId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: platform
-      source: platform
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: sourceOperation
-      source: sourceOperation
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: id
+        source: id
+        type: string
+        constraints:
+          - PK
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: ownerId
+        source: ownerId
+        type: string
+        constraints:
+          - FK_user_profiles_CASCADE
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: agreementVersion
+        source: agreementVersion
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: privacyVersion
+        source: privacyVersion
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: acceptedAt
+        source: acceptedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: platform
+        source: platform
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: sourceOperation
+        source: sourceOperation
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
     business_rules:
-    - id: last_credential_protection
-      description: OwnerAccount 至少保留 1 个 isActive=true 的凭证，不能全部解绑
+      - id: last_credential_protection
+        description: OwnerAccount 至少保留 1 个 isActive=true 的凭证，不能全部解绑
   AnonymousDeviceBinding:
     description: 匿名设备到 owner 账号的稳定绑定，不直接暴露或依赖原始设备标识
     cache_excluded: true
     fields:
-    - name: id
-      source: id
-      type: string
-      constraints:
-      - PK
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: ownerId
-      source: ownerId
-      type: string
-      constraints:
-      - FK_user_profiles_CASCADE
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      description: 绑定到的匿名或已升级 owner ID
-    - name: installIdHash
-      source: installIdHash
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-      description: 安装实例标识的哈希值，仅用于审计和定位
-    - name: deviceFingerprintHash
-      source: deviceFingerprintHash
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-      description: 设备指纹摘要；同设备稳定命中同一匿名 owner
-    - name: platform
-      source: platform
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: appVersion
-      source: appVersion
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: lastSeenAt
-      source: lastSeenAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: id
+        source: id
+        type: string
+        constraints:
+          - PK
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: ownerId
+        source: ownerId
+        type: string
+        constraints:
+          - FK_user_profiles_CASCADE
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 绑定到的匿名或已升级 owner ID
+      - name: installIdHash
+        source: installIdHash
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 安装实例标识的哈希值，仅用于审计和定位
+      - name: deviceFingerprintHash
+        source: deviceFingerprintHash
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 设备指纹摘要；同设备稳定命中同一匿名 owner
+      - name: platform
+        source: platform
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: appVersion
+        source: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: lastSeenAt
+        source: lastSeenAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: createdAt
+        source: createdAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
     unique_constraints:
-    - columns:
-      - deviceFingerprintHash
-      description: 同一设备指纹只能绑定到一个 owner
+      - columns:
+          - deviceFingerprintHash
+        description: 同一设备指纹只能绑定到一个 owner
   ProfileQrToken:
     description: 我的二维码可撤销 token 存储；仅保存 token hash，不保存手机号、ownerId 或 bearer token
     fields:
-    - name: tokenId
-      source: tokenId
-      type: string
-      constraints:
-      - PK
-      classification: INTERNAL
-      log_policy: mask
-      api_exposure: drop
-      ops_exposure: mask
-    - name: tokenHash
-      source: tokenHash
-      type: string
-      constraints:
-      - NOT_NULL
-      - UK
-      classification: INTERNAL
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: mask
-    - name: ownerUserId
-      source: ownerUserId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: userHandle
-      source: userHandle
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: styleVersion
-      source: styleVersion
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: status
-      source: status
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: expiresAt
-      source: expiresAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: revokedAt
-      source: revokedAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: tokenId
+        source: tokenId
+        type: string
+        constraints:
+          - PK
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: mask
+      - name: tokenHash
+        source: tokenHash
+        type: string
+        constraints:
+          - NOT_NULL
+          - UK
+        classification: INTERNAL
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: mask
+      - name: ownerUserId
+        source: ownerUserId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: status
+        source: status
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: expiresAt
+        source: expiresAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: revokedAt
+        source: revokedAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: createdAt
+        source: createdAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
   AccountEnforcementDecisionWire:
     description: 'Product Ops 受信审批后的内部执行决策；主体、审批人与证据在 OIDC claims 和审计链中 验证，本 wire 只承载最小且不透明的决策引用，禁止携带审核理由或证据正文。
 
-      '
+'
     fields:
-    - name: decisionId
-      source: decisionId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: write
-      ops_exposure: read
-    - name: caseRef
-      source: caseRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: mask
-      api_exposure: write
-      ops_exposure: read
-    - name: decisionDigest
-      source: decisionDigest
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: write
-      ops_exposure: read
-    - name: approvedAt
-      source: approvedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: write
-      ops_exposure: read
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: decisionId
+        source: decisionId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
+      - name: caseRef
+        source: caseRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: write
+        ops_exposure: read
+      - name: decisionDigest
+        source: decisionDigest
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: read
+      - name: approvedAt
+        source: approvedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
   AccountEnforcementResultWire:
     description: 受信封禁或恢复命令结果；只返回账号安全状态与幂等回执，不返回运营审核事实
     fields:
-    - name: accountState
-      source: accountState
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: authEpoch
-      source: authEpoch
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-    - name: decisionId
-      source: decisionId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-    - name: idempotentReplay
-      source: idempotentReplay
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: occurredAt
-      source: occurredAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
+      - name: accountState
+        source: accountState
+        type: enum
+        enum_ref: AccountState
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: authEpoch
+        source: authEpoch
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: decisionId
+        source: decisionId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: occurredAt
+        source: occurredAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
   AccountSecuritySnapshotWire:
     description: 仅供受信资源服务同步鉴权的最小账号安全快照；禁止包含资料、Persona、设备、凭证、case 或任何可识别资料
     fields:
-    - name: accountState
-      source: accountState
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 权威账号状态；资源服务只能据此拒绝 closed 或 suspended 主体
-    - name: authEpoch
-      source: authEpoch
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-      description: 权威安全代次；与 access token 的 ae 不匹配时必须拒绝
+      - name: accountState
+        source: accountState
+        type: enum
+        enum_ref: AccountState
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 权威账号状态；资源服务只能据此拒绝 closed 或 suspended 主体
+      - name: authEpoch
+        source: authEpoch
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
+        description: 权威安全代次；与 access token 的 ae 不匹配时必须拒绝
   AccountSecurityAuthorityHealthWire:
     description: 仅供受信资源服务 readiness 使用的账号安全权威存活回执；不包含任何账号主体或状态
     fields:
-    - name: status
-      source: status
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 恒为 ok；表示服务凭据、scope、路由和 UserAccount 权威读取均可用
+      - name: status
+        source: status
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 恒为 ok；表示服务凭据、scope、路由和 UserAccount 权威读取均可用
   UserAccountEnforcementPayload:
     description: Suspend/Restore durable 事件最小载荷；下游仅据此维护可逆 restriction projection
     fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-    - name: personaIds
-      source: personaIds
-      type: '[]string'
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: metadata_only
-    - name: accountState
-      source: accountState
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-    - name: authEpoch
-      source: authEpoch
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-    - name: decisionRef
-      source: decisionRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: mask
-    - name: occurredAt
-      source: occurredAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+      - name: personaIds
+        source: personaIds
+        type: '[]string'
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: metadata_only
+      - name: accountState
+        source: accountState
+        type: enum
+        enum_ref: AccountState
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+      - name: authEpoch
+        source: authEpoch
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+      - name: decisionRef
+        source: decisionRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: mask
+      - name: occurredAt
+        source: occurredAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
   UserAuth:
     description: 认证凭证（安全隔离，不缓存到 Redis）
     cache_excluded: true
     fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - PK
-      - FK_user_profiles_CASCADE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: drop
-      description: 1:1 关联
-    - name: passwordHash
-      source: passwordHash
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-    - name: otpSecret
-      source: otpSecret
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-    - name: refreshToken
-      source: refreshToken
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-    - name: refreshTokenExpiresAt
-      source: refreshTokenExpiresAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: drop
-    - name: lastLoginAt
-      source: lastLoginAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: lastLoginIp
-      source: lastLoginIp
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: drop
-      ops_exposure: mask
-    - name: loginFailCount
-      source: loginFailCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      observe_metric: login_fail_counter
-    - name: lockedUntil
-      source: lockedUntil
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: drop
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: drop
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - PK
+          - FK_user_profiles_CASCADE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+        description: 1:1 关联
+      - name: passwordHash
+        source: passwordHash
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+      - name: otpSecret
+        source: otpSecret
+        type: string
+        constraints:
+          - NULLABLE
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+      - name: refreshToken
+        source: refreshToken
+        type: string
+        constraints:
+          - NULLABLE
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+      - name: refreshTokenExpiresAt
+        source: refreshTokenExpiresAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+      - name: lastLoginAt
+        source: lastLoginAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: lastLoginIp
+        source: lastLoginIp
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: drop
+        ops_exposure: mask
+      - name: loginFailCount
+        source: loginFailCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        observe_metric: login_fail_counter
+      - name: lockedUntil
+        source: lockedUntil
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: createdAt
+        source: createdAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: drop
   AppearanceSettingsView:
-    description: 聚合 owner 默认值与当前子账号 override 后的 appearance 快照
+    description: 聚合 owner 默认值与当前Persona override 后的 appearance 快照
     fields:
-    - name: themeMode
-      source: themeMode
-      type: enum
-      enum_ref: ThemeModeSetting
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: fontSizePreset
-      source: fontSizePreset
-      type: enum
-      enum_ref: FontSizePreset
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: source
-      source: source
-      type: enum
-      enum_ref: AppearanceSource
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: ownerDefaultThemeMode
-      source: ownerDefaultThemeMode
-      type: enum
-      enum_ref: ThemeModeSetting
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: ownerDefaultFontSizePreset
-      source: ownerDefaultFontSizePreset
-      type: enum
-      enum_ref: FontSizePreset
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: hasSubAccountOverride
-      source: hasSubAccountOverride
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: version
-      source: version
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_1
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: themeMode
+        source: themeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: fontSizePreset
+        source: fontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: source
+        source: source
+        type: enum
+        enum_ref: AppearanceSource
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: ownerDefaultThemeMode
+        source: ownerDefaultThemeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: ownerDefaultFontSizePreset
+        source: ownerDefaultFontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: hasPersonaOverride
+        source: hasPersonaOverride
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: version
+        source: version
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_1
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   AppearanceSettingsMutation:
     description: 写入外观与字号偏好的统一 mutation
     fields:
-    - name: themeMode
-      source: themeMode
-      type: enum
-      enum_ref: ThemeModeSetting
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: fontSizePreset
-      source: fontSizePreset
-      type: enum
-      enum_ref: FontSizePreset
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: applyScope
-      source: applyScope
-      type: enum
-      enum_ref: AppearanceApplyScope
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 当前子账号 / 全部账号 / 恢复继承
+      - name: themeMode
+        source: themeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: fontSizePreset
+        source: fontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: applyScope
+        source: applyScope
+        type: enum
+        enum_ref: AppearanceApplyScope
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 当前Persona / 全部账号 / 恢复继承
   ProfileInheritanceStateView:
     description: 用户基线与分身 override 合成后的继承状态视图
     fields:
-    - name: inheritsFromOwner
-      source: inheritsFromOwner
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: overriddenFields
-      source: overriddenFields
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastSyncSource
-      source: lastSyncSource
-      type: enum
-      enum_ref: ProfileSyncSource
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastSyncAt
-      source: lastSyncAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: inheritsFromOwner
+        source: inheritsFromOwner
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: overriddenFields
+        source: overriddenFields
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastSyncSource
+        source: lastSyncSource
+        type: enum
+        enum_ref: ProfileSyncSource
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastSyncAt
+        source: lastSyncAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   ActivePersonaContextView:
     description: 当前激活分身上下文快照；供 content/chat/circle/assistant/notification 统一消费
     fields:
-    - name: ownerUserId
-      source: ownerUserId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: subjectType
-      source: subjectType
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarVersion
-      source: avatarVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: isPrimary
-      source: isPrimary
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: isolationLevel
-      source: isolationLevel
-      type: enum
-      enum_ref: IsolationLevel
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: profileVisibility
-      source: profileVisibility
-      type: enum
-      enum_ref: ProfileVisibility
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: contextVersion
-      source: contextVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_1
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: personaSnapshotVersion
-      source: personaSnapshotVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_1
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: sourceSurfaceId
-      source: sourceSurfaceId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: explicitOverride
-      source: explicitOverride
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: switchedAt
-      source: switchedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: ownerUserId
+        source: ownerUserId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: subjectType
+        source: subjectType
+        type: enum
+        enum_ref: ProfileOwnerKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarVersion
+        source: avatarVersion
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: isPrimary
+        source: isPrimary
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: isolationLevel
+        source: isolationLevel
+        type: enum
+        enum_ref: IsolationLevel
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: profileVisibility
+        source: profileVisibility
+        type: enum
+        enum_ref: ProfileVisibility
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: contextVersion
+        source: contextVersion
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_1
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: personaSnapshotVersion
+        source: personaSnapshotVersion
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_1
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: sourceSurfaceId
+        source: sourceSurfaceId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: explicitOverride
+        source: explicitOverride
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: switchedAt
+        source: switchedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   PersonaManagementItemView:
     description: 用户私有的分身管理列表项视图
     fields:
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: userHandle
-      source: userHandle
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: phone
-      source: phone
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: email
-      source: email
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: backgroundUrl
-      source: backgroundUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: bio
-      source: bio
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: isolationLevel
-      source: isolationLevel
-      type: enum
-      enum_ref: IsolationLevel
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: isPrimary
-      source: isPrimary
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: isActive
-      source: isActive
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: status
-      source: status
-      type: enum
-      enum_ref: PersonaStatus
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: retiredAt
-      source: retiredAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: inheritsProfileFromOwner
-      source: inheritsProfileFromOwner
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_TRUE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 与 Persona 实体同名字段单轨对齐；wire 不得输出 inheritsFromOwner 旧键
-    - name: overriddenProfileFields
-      source: overriddenProfileFields
-      type: string[]
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 分身已覆写、不再随 owner 同步的资料字段列表
-    - name: lastProfileSyncAt
-      source: lastProfileSyncAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastProfileSyncSource
-      source: lastProfileSyncSource
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: profileVisibility
-      source: profileVisibility
-      type: enum
-      enum_ref: ProfileVisibility
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: purposeHint
-      source: purposeHint
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lastActivatedAt
-      source: lastActivatedAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: backgroundUrl
+        source: backgroundUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: bio
+        source: bio
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: isolationLevel
+        source: isolationLevel
+        type: enum
+        enum_ref: IsolationLevel
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: isPrimary
+        source: isPrimary
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: isActive
+        source: isActive
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: status
+        source: status
+        type: enum
+        enum_ref: PersonaStatus
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: retiredAt
+        source: retiredAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: inheritsProfileFromOwner
+        source: inheritsProfileFromOwner
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_TRUE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 与 Persona 实体同名字段单轨对齐；wire 不得输出 inheritsFromOwner 旧键
+      - name: overriddenProfileFields
+        source: overriddenProfileFields
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: Persona 间显式同步时保留的字段掩码；不授权从 UserAccount 回读公开资料
+      - name: lastProfileSyncAt
+        source: lastProfileSyncAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastProfileSyncSource
+        source: lastProfileSyncSource
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: profileVisibility
+        source: profileVisibility
+        type: enum
+        enum_ref: ProfileVisibility
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: purposeHint
+        source: purposeHint
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lastActivatedAt
+        source: lastActivatedAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   PersonaManagementQuotaView:
     description: owner 私有的分身配额与主状态摘要
     fields:
-    - name: ownerUserId
-      source: ownerUserId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: totalCount
-      source: totalCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: quotaLimit
-      source: quotaLimit
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_5
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: remainingCount
-      source: remainingCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: activeSubAccountId
-      source: activeSubAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: primarySubAccountId
-      source: primarySubAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: ownerUserId
+        source: ownerUserId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: totalCount
+        source: totalCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: quotaLimit
+        source: quotaLimit
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_5
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: remainingCount
+        source: remainingCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: activePersonaId
+        source: activePersonaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: primaryPersonaId
+        source: primaryPersonaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   PersonaLifecycleGuardView:
     description: owner 在退役前读取的生命周期保护视图
     fields:
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: requestedAction
-      source: requestedAction
-      type: enum
-      enum_ref: PersonaLifecycleAction
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: allowed
-      source: allowed
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: reason
-      source: reason
-      type: enum
-      enum_ref: PersonaLifecycleGuardReason
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: requiresSuccessor
-      source: requiresSuccessor
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  SubAccountProfileView:
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: requestedAction
+        source: requestedAction
+        type: enum
+        enum_ref: PersonaLifecycleAction
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: allowed
+        source: allowed
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: reason
+        source: reason
+        type: enum
+        enum_ref: PersonaLifecycleGuardReason
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: requiresSuccessor
+        source: requiresSuccessor
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  PersonaProfileView:
     description: 统一个人主页主体读模型；用户与分身最终都映射到此视图
     fields:
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 稳定公开主体 ID；个人主页、关系图谱与跨域动作统一以此为真相源
-    - name: ownerUserId
-      source: ownerUserId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 仅用于本人管理/上下文透传；公开读取不得返回
-    - name: subjectType
-      source: subjectType
-      type: enum
-      enum_ref: ProfileSubjectType
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: userHandle
-      source: userHandle
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 公开句柄真相源；用于公开路由与展示
-    - name: username
-      source: username
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 兼容别名；值与 userHandle 保持一致，不再承担内部主键语义
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: nicknameCustomized
-      source: nicknameCustomized
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 是否手动修改过昵称；端侧据此决定本人主页是否展示昵称编辑画笔
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: backgroundUrl
-      source: backgroundUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: bio
-      source: bio
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: identityTags
-      source: identityTags
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 主页单行身份标签（继承 owner 基线 identityTags，端侧以 · 分隔单行展示）
-    - name: followerCount
-      source: followerCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 关注该子账号主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
-    - name: followingCount
-      source: followingCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: postCount
-      source: postCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: circleCount
-      source: circleCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: likeCount
-      source: likeCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: profileVisibility
-      source: profileVisibility
-      type: enum
-      enum_ref: ProfileVisibility
-      constraints:
-      - NOT_NULL
-      - DEFAULT_PUBLIC
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 兼容展示枚举；由 isolationLevel 派生（open->public, semi->friends, strict->private）
-    - name: isolationLevel
-      source: isolationLevel
-      type: enum
-      enum_ref: IsolationLevel
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 公开访问边界真相源；strict 时公开读取返回不可见语义
-    - name: inheritsFromOwner
-      source: inheritsFromOwner
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: overriddenFields
-      source: overriddenFields
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 稳定公开主体 ID；个人主页、关系图谱与跨域动作统一以此为真相源
+      - name: ownerUserId
+        source: ownerUserId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 仅用于本人管理/上下文透传；公开读取不得返回
+      - name: subjectType
+        source: subjectType
+        type: enum
+        enum_ref: ProfileOwnerKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 公开句柄真相源；用于公开路由与展示
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: nicknameCustomized
+        source: nicknameCustomized
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否手动修改过昵称；端侧据此决定本人主页是否展示昵称编辑画笔
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: backgroundUrl
+        source: backgroundUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: bio
+        source: bio
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: identityTags
+        source: identityTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前 Persona 的主页单行身份标签，端侧以 · 分隔单行展示；禁止从 UserAccount 回退
+      - name: followerCount
+        source: followerCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 关注该Persona主页的人数；人页统计前台展示为「粉丝」（字段名 followerCount 不变，禁止使用「关注者」）
+      - name: followingCount
+        source: followingCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: postCount
+        source: postCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: circleCount
+        source: circleCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: likeCount
+        source: likeCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: profileVisibility
+        source: profileVisibility
+        type: enum
+        enum_ref: ProfileVisibility
+        constraints:
+          - NOT_NULL
+          - DEFAULT_PUBLIC
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: Persona isPrivate 的展示投影，仅允许 public/private；isolationLevel 是独立的跨上下文隔离策略
+      - name: isolationLevel
+        source: isolationLevel
+        type: enum
+        enum_ref: IsolationLevel
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 跨上下文隔离策略；strict 同样禁止公开读取，但不承担 profileVisibility 的派生真相源
+      - name: inheritsFromOwner
+        source: inheritsFromOwner
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: overriddenFields
+        source: overriddenFields
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   UserProfileTagProjectionEvent:
     description: 用户职业/兴趣标签变更的 durable 投影事件；tag-service 按 eventId 幂等消费并独占 object_tag_index 写入
     fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: internal
-      ops_exposure: read
-    - name: tagRefs
-      source: tagRefs
-      type: '[]tag_ref'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: internal
-      ops_exposure: read
-    - name: taxonomyReleaseId
-      source: taxonomyReleaseId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: internal
-      ops_exposure: read
-    - name: profileVersion
-      source: profileVersion
-      type: int64
-      constraints:
-      - NOT_NULL
-      - POSITIVE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: internal
-      ops_exposure: read
-    - name: occurredAt
-      source: occurredAt
-      type: datetime
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: internal
-      ops_exposure: read
-  SubAccountProfileMutation:
-    description: 统一资料编辑 mutation；显式携带同步范围与同步目标
-    fields:
-    - name: nickname
-      source: nickname
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: phone
-      source: phone
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: mask
-    - name: email
-      source: email
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: mask
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: avatarAssetId
-      source: avatarAssetId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 头像媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
-    - name: backgroundUrl
-      source: backgroundUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: backgroundAssetId
-      source: backgroundAssetId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 封面媒体资产 ID；服务校验 owner/scope/status 后绑定并派生 URL
-    - name: bio
-      source: bio
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: gender
-      source: gender
-      type: enum
-      enum_ref: Gender
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: birthDate
-      source: birthDate
-      type: date
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: drop
-      api_exposure: read_write
-      ops_exposure: read
-    - name: region
-      source: region
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: regionTagRef
-      source: regionTagRef
-      type: tag_ref
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-      description: 省市两级结构化行政区 tagRef，必须位于 Topic/地理/行政区/中国/ 下，公开展示由 tag-service 派生
-    - name: occupationTagRef
-      source: occupationTagRef
-      type: tag_ref
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 用户职业标签，V1 单选，必须由 tag-service validateRefs 校验
-    - name: interestTagRefs
-      source: interestTagRefs
-      type: '[]tag_ref'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 用户兴趣标签，V1 多选，必须由 tag-service validateRefs 校验
-    - name: expectedTaxonomyReleaseId
-      source: expectedTaxonomyReleaseId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 修改职业或兴趣标签时必填；作为 tag taxonomy release 的乐观并发前置条件
-    - name: callerRingtoneId
-      source: callerRingtoneId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: isolationLevel
-      source: isolationLevel
-      type: enum
-      enum_ref: IsolationLevel
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: purposeHint
-      source: purposeHint
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: drop
-      ops_exposure: read
-    - name: profileVisibility
-      source: profileVisibility
-      type: enum
-      enum_ref: ProfileVisibility
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: applyScope
-      source: applyScope
-      type: enum
-      enum_ref: ProfileSyncApplyScope
-      constraints:
-      - NOT_NULL
-      - DEFAULT_CURRENT_SUBJECT_ONLY
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: syncTargetIds
-      source: syncTargetIds
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: fieldsMask
-      source: fieldsMask
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: internal
+        ops_exposure: read
+      - name: tagRefs
+        source: tagRefs
+        type: '[]tag_ref'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: internal
+        ops_exposure: read
+      - name: taxonomyReleaseId
+        source: taxonomyReleaseId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: internal
+        ops_exposure: read
+      - name: profileVersion
+        source: profileVersion
+        type: int64
+        constraints:
+          - NOT_NULL
+          - POSITIVE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: internal
+        ops_exposure: read
+      - name: occurredAt
+        source: occurredAt
+        type: datetime
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: internal
+        ops_exposure: read
   ProfileQrCardWire:
     description: 我的二维码卡片 wire；payload 为公开主页 HTTPS link + 可撤销 token 摘要，不包含手机号或 bearer token
     fields:
-    - name: publicProfileUrl
-      source: publicProfileUrl
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: qrPayload
-      source: qrPayload
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: qrTokenId
-      source: qrTokenId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: styleVersion
-      source: styleVersion
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: region
-      source: region
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: read
-    - name: shareText
-      source: shareText
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: expiresAt
-      source: expiresAt
-      type: timestamp
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: publicProfileUrl
+        source: publicProfileUrl
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: qrPayload
+        source: qrPayload
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: qrTokenId
+        source: qrTokenId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: region
+        source: region
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read
+      - name: shareText
+        source: shareText
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: expiresAt
+        source: expiresAt
+        type: timestamp
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   ProfileQrResolveWire:
     description: 公开二维码扫码解析结果；只返回规范主页目标与扫码状态
     fields:
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: userHandle
-      source: userHandle
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: publicProfileUrl
-      source: publicProfileUrl
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: scanStatus
-      source: scanStatus
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: publicProfileUrl
+        source: publicProfileUrl
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: scanStatus
+        source: scanStatus
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   ProfileCredentialSummaryWire:
     description: 本人资料编辑页私有凭证摘要，只返回脱敏展示值
     fields:
-    - name: credentialType
-      source: credentialType
-      type: enum
-      enum_ref: CredentialType
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayLabel
-      source: displayLabel
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: isBound
-      source: isBound
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: credentialType
+        source: credentialType
+        type: enum
+        enum_ref: CredentialType
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: displayLabel
+        source: displayLabel
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+      - name: isBound
+        source: isBound
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   CloseAccountRequestWire:
     description: 账号注销命令请求（App 内自助发起，Apple 5.1.1(v)；确认交互在客户端完成）
     fields:
-    - name: clientRequestId
-      source: clientRequestId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-      description: 客户端幂等重放键；与 Idempotency-Key header 二选一
+      - name: clientRequestId
+        source: clientRequestId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+        description: 客户端幂等重放键；与 Idempotency-Key header 二选一
+  UserSyncPullRequestWire:
+    description: 当前账号资料同步游标请求；主体只从已验证的 access principal 注入，不进入请求体
+    fields:
+      - name: afterSeq
+        source: afterSeq
+        type: int
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
+      - name: limit
+        source: limit
+        type: int
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
   CloseAccountResultWire:
     description: 账号注销命令结果；closed 为终态，重放返回幂等成功
     fields:
-    - name: accountState
-      source: accountState
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 注销后账号状态；恒为 closed
-    - name: closedAt
-      source: closedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 注销生效时间（UTC RFC3339）
-    - name: idempotentReplay
-      source: idempotentReplay
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 是否为已 closed 账号的幂等重放
+      - name: accountState
+        source: accountState
+        type: enum
+        enum_ref: AccountState
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 注销后账号状态；恒为 closed
+      - name: closedAt
+        source: closedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 注销生效时间（UTC RFC3339）
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: bool
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 是否为已 closed 账号的幂等重放
   ProfileEditSnapshotWire:
     description: 本人资料编辑页私有快照，合并 owner/profile、active persona、凭证摘要、QR 摘要和标签选择
     fields:
-    - name: ownerUserId
-      source: ownerUserId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarAssetId
-      source: avatarAssetId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarVersion
-      source: avatarVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: backgroundUrl
-      source: backgroundUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: backgroundAssetId
-      source: backgroundAssetId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: nickname
-      source: nickname
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: gender
-      source: gender
-      type: enum
-      enum_ref: Gender
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: birthDate
-      source: birthDate
-      type: date
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: drop
-      api_exposure: read_write
-      ops_exposure: read
-    - name: region
-      source: region
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: regionTagRef
-      source: regionTagRef
-      type: tag_ref
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-      description: 省市两级结构化行政区 tagRef；客户端保存 tagRef，不提交任意展示文案
-    - name: userHandle
-      source: userHandle
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 系统分配的趣我圈号，只读，不允许客户端 PATCH
-    - name: bio
-      source: bio
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: identityTags
-      source: identityTags
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: occupationTagRef
-      source: occupationTagRef
-      type: tag_ref
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: interestTagRefs
-      source: interestTagRefs
-      type: '[]tag_ref'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: phoneCredential
-      source: phoneCredential
-      type: ProfileCredentialSummaryWire
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: mask
-    - name: qrCard
-      source: qrCard
-      type: ProfileQrCardWire
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  SocialRelationshipCapabilityView:
-    description: 社交关系搜索结果携带的关系能力位快照
-    fields:
-    - name: relationState
-      source: relationState
-      type: enum
-      enum_ref: RelationshipState
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: canFollow
-      source: canFollow
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: canUnfollow
-      source: canUnfollow
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: canOpenConversation
-      source: canOpenConversation
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: canStartVoiceCall
-      source: canStartVoiceCall
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: canStartVideoCall
-      source: canStartVideoCall
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: ownerUserId
+        source: ownerUserId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarAssetId
+        source: avatarAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarVersion
+        source: avatarVersion
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: backgroundUrl
+        source: backgroundUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: backgroundAssetId
+        source: backgroundAssetId
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: nickname
+        source: nickname
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: gender
+        source: gender
+        type: enum
+        enum_ref: Gender
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: birthDate
+        source: birthDate
+        type: date
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: drop
+        api_exposure: read_write
+        ops_exposure: read
+      - name: region
+        source: region
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: regionTagRef
+        source: regionTagRef
+        type: tag_ref
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+        description: 省市两级结构化行政区 tagRef；客户端保存 tagRef，不提交任意展示文案
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 系统分配的趣我圈号，只读，不允许客户端 PATCH
+      - name: bio
+        source: bio
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: identityTags
+        source: identityTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: occupationTagRef
+        source: occupationTagRef
+        type: tag_ref
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: interestTagRefs
+        source: interestTagRefs
+        type: '[]tag_ref'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: phoneCredential
+        source: phoneCredential
+        type: ProfileCredentialSummaryWire
+        constraints:
+          - NULLABLE
+        classification: PII
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+      - name: qrCard
+        source: qrCard
+        type: ProfileQrCardWire
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   SocialRelationSearchItemView:
     description: 社交关系搜索结果项视图，统一承接“人”的搜索对象
     fields:
-    - name: subAccountId
-      source: subAccountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: username
-      source: username
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 兼容别名；与 userHandle 保持一致
-    - name: userHandle
-      source: userHandle
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayName
-      source: displayName
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: avatarUrl
-      source: avatarUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: headline
-      source: headline
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: chatAvailable
-      source: chatAvailable
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: relationshipCapability
-      source: relationshipCapability
-      type: SocialRelationshipCapabilityView
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: personaId
+        source: personaId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: userHandle
+        source: userHandle
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 公开句柄的唯一 wire 字段
+      - name: displayName
+        source: displayName
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: avatarUrl
+        source: avatarUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: headline
+        source: headline
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: chatAvailable
+        source: chatAvailable
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: relationshipCapability
+        source: relationshipCapability
+        type: RelationshipCapabilityWire
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   UserAccountClosedPayload:
     description: 账号注销 durable 事件；personaIds 供下游删除或匿名化归属数据
     fields:
-    - name: userId
-      source: userId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-    - name: personaIds
-      source: personaIds
-      type: '[]string'
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: metadata_only
-    - name: accountState
-      source: accountState
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
+      - name: userId
+        source: userId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+      - name: personaIds
+        source: personaIds
+        type: '[]string'
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: metadata_only
+      - name: accountState
+        source: accountState
+        type: enum
+        enum_ref: AccountState
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+  ListPersonasQuery:
+    fields: []
+  GetPersonaLifecycleGuardQuery:
+    fields:
+      - name: personaId
+        type: string
+        client_dart_type: String
+  GetActivePersonaContextQuery:
+    fields: []
+  GetProfileEditSnapshotQuery:
+    fields: []
+  ResolveProfileQrTokenQuery:
+    fields:
+      - name: qr
+        type: string
+        client_dart_type: String
+      - name: handle
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_omit_empty: true
+  GetMeProfileQuery:
+    fields: []
+  GetPersonaProfileQuery:
+    fields:
+      - name: personaId
+        type: string
+        client_dart_type: String
+  SearchSocialRelationsQuery:
+    fields:
+      - name: query
+        type: string
+        client_dart_type: String
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_omit_empty: true
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  GetProfileQrCardQuery:
+    fields: []
+  GetUserHomepageBundleQuery:
+    fields:
+      - name: personaId
+        type: string
+        client_dart_type: String
+  CloseAccountCommand:
+    fields:
+      - name: clientRequestId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+  GetPersonaManagementSummaryQuery:
+    fields: []

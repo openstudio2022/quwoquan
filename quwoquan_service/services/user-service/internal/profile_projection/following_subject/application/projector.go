@@ -26,7 +26,7 @@ func NewProjector(store ProjectionStore) *Projector {
 }
 
 // ApplyPersonaRelationship 消费 PersonaFollowStateChanged：source persona
-// 关注/取关 target user。
+// 关注/取关 target persona。
 func (p *Projector) ApplyPersonaRelationship(ctx context.Context, event relmodel.OutboxEvent) error {
 	payload := event.Payload
 	if payload.SourcePersonaID == "" || payload.TargetPersonaID == "" {
@@ -36,7 +36,7 @@ func (p *Projector) ApplyPersonaRelationship(ctx context.Context, event relmodel
 		return p.store.UpsertFollow(
 			ctx,
 			payload.SourcePersonaID,
-			"user",
+			"persona",
 			payload.TargetPersonaID,
 			payload.OccurredAt,
 			payload.Version,
@@ -45,7 +45,7 @@ func (p *Projector) ApplyPersonaRelationship(ctx context.Context, event relmodel
 	return p.store.RemoveFollow(
 		ctx,
 		payload.SourcePersonaID,
-		"user",
+		"persona",
 		payload.TargetPersonaID,
 		payload.Version,
 	)

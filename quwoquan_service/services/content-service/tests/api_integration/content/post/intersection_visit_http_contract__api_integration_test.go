@@ -45,7 +45,7 @@ func TestIntersectionVisitHTTPContract(t *testing.T) {
 		)
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Client-User-Id", viewer)
-		request.Header.Set("X-Client-Sub-Account-Id", viewer)
+		request.Header.Set("X-Client-Persona-Id", viewer)
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)
 		return recorder

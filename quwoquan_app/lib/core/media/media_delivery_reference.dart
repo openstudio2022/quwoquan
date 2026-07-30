@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 
 /// 媒体公开交付的业务种类。种类由上游 typed projection 声明，解析器不从路径或扩展名猜测。
@@ -135,6 +136,20 @@ class MediaEndpointConfig {
   }
 }
 
+/// Production and tests consume one typed media-endpoint source.
+///
+/// Environment packages inject the compile-time values through
+/// [CloudRuntimeConfig]. Missing values stay unavailable; callers must render
+/// their declared recovery/fallback state instead of inventing an authority.
+final mediaEndpointConfigProvider = Provider<MediaEndpointConfig?>((ref) {
+  return MediaEndpointConfig.tryCreateAvailable(
+    avatarBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+    imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+    attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+  );
+});
+
 /// 已验证的公开媒体交付引用。
 ///
 /// UI、缓存和网络播放器只能消费此类型；内部 CAS key / upload object key 不能构造本类型。
@@ -180,6 +195,7 @@ enum MediaDeliveryResolutionFailure {
   unsupportedScheme,
   untrustedOrigin,
   invalidCanonicalPath,
+  invalidCanonicalQuery,
 }
 
 class MediaDeliveryResolutionException implements Exception {
@@ -250,10 +266,15 @@ class MediaDeliveryResolver {
         );
       }
       final segments = _validateCanonicalPath(parsed.path);
+      final queryParameters = _validateCanonicalQuery(
+        parsed,
+        kind: kind,
+        segments: segments,
+      );
       final endpointKind = _effectiveEndpointKind(
         kind,
         segments,
-        parsed.queryParameters,
+        queryParameters,
       );
       if (!endpointConfig.allowsOrigin(endpointKind, parsed)) {
         throw MediaDeliveryResolutionException(
@@ -261,11 +282,17 @@ class MediaDeliveryResolver {
           '媒体交付 origin 不属于注入的 ${endpointKind.name} 端点',
         );
       }
+      final canonical = _canonicalizePublicUri(
+        parsed,
+        segments: segments,
+        queryParameters: queryParameters,
+        requestedVersion: version,
+      );
       return MediaDeliveryReference._(
         kind: kind,
-        deliveryUri: _withVersion(parsed, version),
+        deliveryUri: canonical.uri,
         assetId: assetId,
-        version: version,
+        version: canonical.version,
         sha256: sha256,
       );
     }
@@ -277,10 +304,15 @@ class MediaDeliveryResolver {
       );
     }
     final segments = _validateCanonicalPath(parsed.path);
+    final queryParameters = _validateCanonicalQuery(
+      parsed,
+      kind: kind,
+      segments: segments,
+    );
     final endpointKind = _effectiveEndpointKind(
       kind,
       segments,
-      parsed.queryParameters,
+      queryParameters,
     );
     final base = endpointConfig.baseFor(endpointKind);
     final relativeSegments = _withoutExistingBasePrefix(
@@ -289,15 +321,19 @@ class MediaDeliveryResolver {
     );
     final uri = base.replace(
       pathSegments: <String>[...base.pathSegments, ...relativeSegments],
-      queryParameters: parsed.queryParameters.isEmpty
-          ? null
-          : parsed.queryParameters,
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
+    );
+    final canonical = _canonicalizePublicUri(
+      uri,
+      segments: segments,
+      queryParameters: queryParameters,
+      requestedVersion: version,
     );
     return MediaDeliveryReference._(
       kind: kind,
-      deliveryUri: _withVersion(uri, version),
+      deliveryUri: canonical.uri,
       assetId: assetId,
-      version: version,
+      version: canonical.version,
       sha256: sha256,
     );
   }
@@ -366,9 +402,10 @@ class MediaDeliveryResolver {
       MediaDeliveryKind.background => 'background',
       MediaDeliveryKind.attachment => 'attachment',
     };
-    if (segments.length >= 2 &&
+    if (segments.length >= 4 &&
         segments.first == 'media' &&
-        segments[1] == expectedRoot) {
+        segments[1] == expectedRoot &&
+        segments[2] == 's') {
       return kind;
     }
     // A video service may expose a generated first-frame derivative under the
@@ -376,9 +413,10 @@ class MediaDeliveryResolver {
     // `variant=thumb` contract selects the same injected video authority while
     // preserving the caller's image presentation semantics.
     if (kind == MediaDeliveryKind.image &&
-        segments.length >= 2 &&
+        segments.length >= 4 &&
         segments.first == 'media' &&
         segments[1] == 'video' &&
+        segments[2] == 's' &&
         queryParameters['variant'] == 'thumb') {
       return MediaDeliveryKind.video;
     }
@@ -390,13 +428,94 @@ class MediaDeliveryResolver {
     );
   }
 
-  static Uri _withVersion(Uri uri, int version) {
-    if (version <= 0) {
-      return uri;
+  static Map<String, String> _validateCanonicalQuery(
+    Uri uri, {
+    required MediaDeliveryKind kind,
+    required List<String> segments,
+  }) {
+    const allowedKeys = <String>{'variant', 't'};
+    final allParameters = uri.queryParametersAll;
+    if (allParameters.keys.any((key) => !allowedKeys.contains(key)) ||
+        allParameters.values.any((values) => values.length != 1)) {
+      throw const MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.invalidCanonicalQuery,
+        '公开媒体引用不得携带版本信封、签名、授权或重复 query 参数',
+      );
     }
-    final query = Map<String, String>.from(uri.queryParameters)
-      ..['v'] = version.toString();
-    return uri.replace(queryParameters: query);
+
+    final isVideoThumbnail =
+        kind == MediaDeliveryKind.image &&
+        segments.length >= 4 &&
+        segments.first == 'media' &&
+        segments[1] == 'video' &&
+        segments[2] == 's';
+    final variant = uri.queryParameters['variant'];
+    final frameTime = uri.queryParameters['t'];
+    if (isVideoThumbnail) {
+      final frameTimeMs = frameTime == null ? 0 : int.tryParse(frameTime);
+      if (variant != 'thumb' ||
+          frameTimeMs == null ||
+          frameTimeMs < 0 ||
+          frameTimeMs > 3600000) {
+        throw const MediaDeliveryResolutionException(
+          MediaDeliveryResolutionFailure.invalidCanonicalQuery,
+          'video 首帧引用只允许 variant=thumb 和 0..3600000 毫秒的 t',
+        );
+      }
+    } else if (variant != null || frameTime != null) {
+      throw const MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.invalidCanonicalQuery,
+        '只有显式 video 首帧引用可携带 variant/t',
+      );
+    }
+
+    final canonical = <String, String>{};
+    if (variant != null) {
+      canonical['variant'] = variant;
+    }
+    if (frameTime != null) {
+      canonical['t'] = frameTime;
+    }
+    return canonical;
+  }
+
+  static ({Uri uri, int version}) _canonicalizePublicUri(
+    Uri uri, {
+    required List<String> segments,
+    required Map<String, String> queryParameters,
+    required int requestedVersion,
+  }) {
+    if (requestedVersion < 0) {
+      throw const MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.invalidCanonicalQuery,
+        '媒体版本不得为负数',
+      );
+    }
+    final pathVersions = segments
+        .skip(3)
+        .map((segment) => RegExp(r'^v([1-9][0-9]*)$').firstMatch(segment))
+        .whereType<RegExpMatch>()
+        .map((match) => int.parse(match.group(1)!))
+        .toList(growable: false);
+    if (pathVersions.length != 1) {
+      throw const MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.invalidCanonicalPath,
+        '公开媒体路径必须且只能包含一个正整数版本段',
+      );
+    }
+    final pathVersion = pathVersions.single;
+    if (requestedVersion > 0 && requestedVersion != pathVersion) {
+      throw const MediaDeliveryResolutionException(
+        MediaDeliveryResolutionFailure.invalidCanonicalQuery,
+        '请求版本与媒体路径版本不一致',
+      );
+    }
+    return (
+      uri: uri.replace(
+        queryParameters: queryParameters.isEmpty ? null : queryParameters,
+      ),
+      version: pathVersion,
+    );
   }
 }
 
@@ -414,7 +533,9 @@ int _effectivePort(Uri uri) {
 }
 
 bool _pathHasPrefix(List<String> path, List<String> prefix) {
-  final normalizedPrefix = prefix.where((segment) => segment.isNotEmpty).toList();
+  final normalizedPrefix = prefix
+      .where((segment) => segment.isNotEmpty)
+      .toList();
   if (normalizedPrefix.isEmpty) {
     return true;
   }
@@ -433,7 +554,9 @@ List<String> _withoutExistingBasePrefix(
   List<String> path,
   List<String> prefix,
 ) {
-  final normalizedPrefix = prefix.where((segment) => segment.isNotEmpty).toList();
+  final normalizedPrefix = prefix
+      .where((segment) => segment.isNotEmpty)
+      .toList();
   if (!_pathHasPrefix(path, normalizedPrefix)) {
     return path;
   }

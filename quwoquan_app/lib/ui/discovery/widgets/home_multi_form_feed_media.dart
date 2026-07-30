@@ -1,7 +1,7 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
-class _HomeImagePostCard extends StatelessWidget {
+class _HomeImagePostCard extends ConsumerWidget {
   const _HomeImagePostCard({
     required this.item,
     required this.isDark,
@@ -23,7 +23,7 @@ class _HomeImagePostCard extends StatelessWidget {
   final VoidCallback? onFallbackTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final title = item.normalizedTitle;
     final body = item.normalizedBody;
     final contextObjectName = title.isNotEmpty ? title : body;
@@ -33,7 +33,7 @@ class _HomeImagePostCard extends StatelessWidget {
       objectKind: 'content',
       routeId: 'workBrowser',
     );
-    final media = _buildMedia(context);
+    final media = _buildMedia(context, ref.watch(mediaEndpointConfigProvider));
     final isMomentGrid = _isMomentGridPost(item);
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
@@ -102,7 +102,10 @@ class _HomeImagePostCard extends StatelessWidget {
     );
   }
 
-  Widget? _buildMedia(BuildContext context) {
+  Widget? _buildMedia(
+    BuildContext context,
+    MediaEndpointConfig? endpointConfig,
+  ) {
     final urls = item.mediaImageUrls;
     if (_isMomentGridPost(item)) {
       final visibleCount = _momentGridVisibleCount(urls.length);
@@ -143,7 +146,10 @@ class _HomeImagePostCard extends StatelessWidget {
           ),
           child: AppCachedNetworkImage(
             imageUrl: url,
-            imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+            imageUrlCandidates: resolveContentMediaUrlCandidates(
+              url,
+              endpointConfig: endpointConfig,
+            ),
             cdnPreset: CdnImagePreset.cover,
             fit: BoxFit.cover,
             placeholder: _mediaPlaceholder(isDark),
@@ -626,21 +632,24 @@ class _ArticleThumb extends StatelessWidget {
   }
 }
 
-class _ArticleCoverImage extends StatelessWidget {
+class _ArticleCoverImage extends ConsumerWidget {
   const _ArticleCoverImage({required this.url, required this.isDark});
 
   final String url;
   final bool isDark;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(
         DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
       ),
       child: AppCachedNetworkImage(
         imageUrl: url,
-        imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+        imageUrlCandidates: resolveContentMediaUrlCandidates(
+          url,
+          endpointConfig: ref.watch(mediaEndpointConfigProvider),
+        ),
         cdnPreset: CdnImagePreset.cover,
         fit: BoxFit.cover,
         placeholder: _mediaPlaceholder(isDark),

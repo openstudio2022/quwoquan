@@ -1,49 +1,33 @@
 events:
-- name: ReportCreated
-  description: 举报提交
+- name: content.report.created
+  description: 举报聚合创建事实；post 目标审核 Case 和推荐负信号各使用独立 checkpoint。
   producer: content-service
-  consumers:
-  - notification-service
-  channel: event_store
-  payload_fields:
-  - id
-  - version
-  - reporterId
-  - reporterAccountId
-  - targetType
-  - targetId
-  - reason
-  - idempotencyKey
-- name: ReportResolved
-  description: 举报处理完成；comment + delete_content 由 content-comment-moderation-projector 幂等收敛为隐藏态。
+  consumers: [content-report-runtime-events, content-report-moderation-projection, content-report-recommend-signal]
+  channel: transactional_outbox
+  payload_entity: ReportCreatedPayload
+  payload_shape: exact
+  payload_fields: [reportId, reporterId, reporterAccountId, targetType, targetId, reason]
+- name: content.report.review_started
+  description: operator 开始审核；当前只发布到 shared runtime event transport。
   producer: content-service
-  consumers:
-  - notification-service
-  - user-service
-  - content-comment-moderation-projector
-  channel: event_store
-  payload_fields:
-  - id
-  - version
-  - reporterId
-  - reporterAccountId
-  - targetType
-  - targetId
-  - resolution
-  - reviewerId
-  - idempotencyKey
-- name: ReportDismissed
-  description: 举报审核完成但未发现违规
+  consumers: [content-report-runtime-events]
+  channel: transactional_outbox
+  payload_entity: ReportReviewStartedPayload
+  payload_shape: exact
+  payload_fields: [reportId, reviewerId]
+- name: content.report.resolved
+  description: 举报核实并结案；通知与 comment delete_content 治理投影分别使用独立 checkpoint。
   producer: content-service
-  consumers:
-  - notification-service
-  channel: event_store
-  payload_fields:
-  - id
-  - version
-  - reporterId
-  - reporterAccountId
-  - targetType
-  - targetId
-  - reviewerId
-  - idempotencyKey
+  consumers: [content-report-runtime-events, content-report-notification-stream, content-report-comment-moderation]
+  channel: transactional_outbox
+  payload_entity: ReportResolvedPayload
+  payload_shape: exact
+  payload_fields: [reportId, reporterId, reporterAccountId, targetType, targetId, reviewerId, resolution]
+- name: content.report.dismissed
+  description: 举报审核完成但未发现违规；通知传输使用独立 checkpoint。
+  producer: content-service
+  consumers: [content-report-runtime-events, content-report-notification-stream]
+  channel: transactional_outbox
+  payload_entity: ReportDismissedPayload
+  payload_shape: exact
+  payload_fields: [reportId, reporterId, reporterAccountId, targetType, targetId, reviewerId]

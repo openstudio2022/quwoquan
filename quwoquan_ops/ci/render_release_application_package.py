@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+"""Render and validate immutable App package evidence for ReleaseEvidenceManifest."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+from pathlib import Path
+from typing import Any
+
+
+SCHEMA = "release-application-package"
+ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
+SURFACES = ("android", "ios", "web", "macos")
+GENERIC_PACKAGES = tuple(
+    (environment, surface)
+    for environment in ENVIRONMENTS[:-1]
+    for surface in SURFACES
+) + (("prod", "ios"), ("prod", "macos"))
+GENERIC_FIELDS = frozenset(
+    {
+        "schema",
+        "environment",
+        "surface",
+        "sourceGitSha",
+        "sourceTreeDigest",
+        "packageDigest",
+    }
+)
+DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+GIT_SHA_PATTERN = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
+TREE_DIGEST_PATTERN = re.compile(r"(?:sha1:[0-9a-f]{40}|sha256:[0-9a-f]{64})")
+SPECIAL_SCHEMAS = {
+    "publicWeb": "qwq.public-web.release",
+    "android": "qwq.android.official-release",
+    "opsPortal": "qwq.ops_portal_package",
+}
+PAYLOAD_NAMES = {
+    "android": "app-release.apk",
+    "ios": "quwoquan.ipa",
+    "web": "public-web.tar.gz",
+    "macos": "quwoquan-macos.zip",
+}
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    render = subparsers.add_parser("render")
+    render.add_argument("--environment", choices=ENVIRONMENTS, required=True)
+    render.add_argument("--surface", choices=SURFACES, required=True)
+    render.add_argument("--package", required=True, type=Path)
+    render.add_argument("--source-git-sha", required=True)
+    render.add_argument("--source-tree-digest", required=True)
+    render.add_argument("--output", required=True, type=Path)
+
+    bind = subparsers.add_parser("bind-special")
+    bind.add_argument("--kind", choices=tuple(SPECIAL_SCHEMAS), required=True)
+    bind.add_argument("--manifest", required=True, type=Path)
+    bind.add_argument("--source-git-sha", required=True)
+    bind.add_argument("--source-tree-digest", required=True)
+    bind.add_argument("--output", required=True, type=Path)
+
+    validate = subparsers.add_parser("validate-bundle")
+    validate.add_argument("--bundle-dir", required=True, type=Path)
+    validate.add_argument("--source-git-sha", required=True)
+    validate.add_argument("--source-tree-digest", required=True)
+    return parser
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
+
+
+def _sha256_tree(root: Path) -> str:
+    digest = hashlib.sha256()
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError(f"package directory is missing or unsafe: {root}")
+    entries = sorted(root.rglob("*"))
+    unsafe = next((path for path in entries if path.is_symlink()), None)
+    if unsafe is not None:
+        raise ValueError(f"package tree contains a symlink: {unsafe}")
+    files = [path for path in entries if path.is_file()]
+    if not files:
+        raise ValueError(f"package directory is empty: {root}")
+    for path in files:
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
+
+
+def _package_digest(path: Path) -> str:
+    resolved = path.expanduser().resolve()
+    if path.is_symlink() or not resolved.exists():
+        raise ValueError(f"package is missing or is a symlink: {path}")
+    if resolved.is_file():
+        if resolved.stat().st_size <= 0:
+            raise ValueError(f"package file is empty: {path}")
+        return _sha256_file(resolved)
+    if resolved.is_dir():
+        return _sha256_tree(resolved)
+    raise ValueError(f"package is not a regular file or directory: {path}")
+
+
+def _generic_package_digest(path: Path) -> str:
+    """Hash the complete payload directory consumed by the release finalizer."""
+
+    resolved = path.expanduser().resolve()
+    if path.is_symlink() or not resolved.is_dir():
+        raise ValueError(
+            "generic application package must be the canonical payload directory: "
+            f"{path}"
+        )
+    return _sha256_tree(resolved)
+
+
+def _public_web_tree_digest(root: Path) -> str:
+    """Match the canonical public Web producer's contentSHA256 algorithm."""
+
+    digest = hashlib.sha256()
+    files = sorted(item for item in root.rglob("*") if item.is_file())
+    if not files:
+        raise ValueError(f"public Web package directory is empty: {root}")
+    for path in files:
+        if path.is_symlink():
+            raise ValueError(f"public Web package contains a symlink: {path}")
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(len(relative).to_bytes(4, "big"))
+        digest.update(relative)
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return "sha256:" + digest.hexdigest()
+
+
+def _ops_portal_tree_digest(root: Path) -> str:
+    """Match stackctl's path-sensitive Ops Portal dist digest."""
+
+    digest = hashlib.sha256()
+    files = sorted(item for item in root.rglob("*") if item.is_file())
+    if not files:
+        raise ValueError(f"Ops Portal dist directory is empty: {root}")
+    for path in files:
+        if path.is_symlink():
+            raise ValueError(f"Ops Portal dist contains a symlink: {path}")
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(_sha256_file(path).encode("ascii"))
+        digest.update(b"\0")
+    return "sha256:" + digest.hexdigest()
+
+
+def _validate_source(source_git_sha: str, source_tree_digest: str) -> tuple[str, str]:
+    git_sha = source_git_sha.strip().lower()
+    tree_digest = source_tree_digest.strip().lower()
+    if GIT_SHA_PATTERN.fullmatch(git_sha) is None:
+        raise ValueError("sourceGitSha is not a full immutable Git SHA")
+    if TREE_DIGEST_PATTERN.fullmatch(tree_digest) is None:
+        raise ValueError("sourceTreeDigest is not an immutable Git tree digest")
+    return git_sha, tree_digest
+
+
+def _git_identity() -> tuple[str, str]:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    prefix = "sha1" if len(tree) == 40 else "sha256" if len(tree) == 64 else ""
+    if not prefix:
+        raise ValueError("current Git tree identity is not canonical")
+    return revision, f"{prefix}:{tree}"
+
+
+def _require_checkout(source_git_sha: str, source_tree_digest: str) -> None:
+    expected = _validate_source(source_git_sha, source_tree_digest)
+    actual = _git_identity()
+    if actual != expected:
+        raise ValueError(
+            "checked-out source identity differs from requested candidate: "
+            f"actual={actual}, expected={expected}"
+        )
+
+
+def render(
+    *,
+    environment: str,
+    surface: str,
+    package: Path,
+    source_git_sha: str,
+    source_tree_digest: str,
+) -> dict[str, str]:
+    _require_checkout(source_git_sha, source_tree_digest)
+    payload = {
+        "schema": SCHEMA,
+        "environment": environment,
+        "surface": surface,
+        "sourceGitSha": source_git_sha.strip().lower(),
+        "sourceTreeDigest": source_tree_digest.strip().lower(),
+        "packageDigest": _generic_package_digest(package),
+    }
+    validate_generic(payload, environment=environment, surface=surface)
+    return payload
+
+
+def validate_generic(
+    payload: Any,
+    *,
+    environment: str,
+    surface: str,
+    source_git_sha: str | None = None,
+    source_tree_digest: str | None = None,
+) -> dict[str, str]:
+    if not isinstance(payload, dict) or set(payload) != GENERIC_FIELDS:
+        raise ValueError(
+            f"{environment}/{surface} application package fields are not canonical"
+        )
+    if payload.get("schema") != SCHEMA:
+        raise ValueError(f"{environment}/{surface} application package schema mismatch")
+    if payload.get("environment") != environment or payload.get("surface") != surface:
+        raise ValueError(f"{environment}/{surface} application package identity mismatch")
+    git_sha, tree_digest = _validate_source(
+        str(payload.get("sourceGitSha") or ""),
+        str(payload.get("sourceTreeDigest") or ""),
+    )
+    if source_git_sha is not None and git_sha != source_git_sha:
+        raise ValueError(f"{environment}/{surface} sourceGitSha mismatch")
+    if source_tree_digest is not None and tree_digest != source_tree_digest:
+        raise ValueError(f"{environment}/{surface} sourceTreeDigest mismatch")
+    if DIGEST_PATTERN.fullmatch(str(payload.get("packageDigest") or "")) is None:
+        raise ValueError(f"{environment}/{surface} packageDigest is not immutable")
+    return {str(key): str(value) for key, value in payload.items()}
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid JSON evidence {path}: {error}") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"JSON evidence must be an object: {path}")
+    return payload
+
+
+def bind_special(
+    *,
+    kind: str,
+    manifest_path: Path,
+    source_git_sha: str,
+    source_tree_digest: str,
+) -> dict[str, Any]:
+    _require_checkout(source_git_sha, source_tree_digest)
+    payload = _load_json(manifest_path)
+    if payload.get("schema") != SPECIAL_SCHEMAS[kind]:
+        raise ValueError(f"{kind} package schema mismatch")
+    if kind == "publicWeb":
+        if payload.get("environment") != "prod":
+            raise ValueError("public Web package is not bound to prod")
+        content_digest = str(payload.get("contentSHA256") or "")
+        if re.fullmatch(r"[0-9a-f]{64}", content_digest) is None:
+            raise ValueError("public Web content digest is invalid")
+        public = manifest_path.parent / "public"
+        if _public_web_tree_digest(public) != f"sha256:{content_digest}":
+            raise ValueError("public Web content digest does not match its payload")
+    elif kind == "android":
+        if payload.get("platform") != "android":
+            raise ValueError("Android package platform mismatch")
+        artifact = manifest_path.parent / str(payload.get("packagedAPK") or "")
+        if _package_digest(artifact) != f"sha256:{payload.get('apkSHA256') or ''}":
+            raise ValueError("Android package digest does not match its payload")
+    else:
+        if payload.get("environment") != "prod" or payload.get("target") != "prod-hosted":
+            raise ValueError("Ops Portal package is not bound to prod/prod-hosted")
+        if payload.get("gitRevision") != source_git_sha:
+            raise ValueError("Ops Portal package Git revision mismatch")
+        digests = payload.get("digests")
+        if not isinstance(digests, dict) or any(
+            DIGEST_PATTERN.fullmatch(str(value or "")) is None
+            for value in digests.values()
+        ):
+            raise ValueError("Ops Portal package digests are incomplete")
+        if payload.get("packageDigest") != digests.get("distTree"):
+            raise ValueError("Ops Portal packageDigest does not match its dist evidence")
+    payload["sourceGitSha"] = source_git_sha.strip().lower()
+    payload["sourceTreeDigest"] = source_tree_digest.strip().lower()
+    return payload
+
+
+def validate_bundle(
+    *, bundle_dir: Path, source_git_sha: str, source_tree_digest: str
+) -> None:
+    git_sha, tree_digest = _validate_source(source_git_sha, source_tree_digest)
+    applications = bundle_dir / "application-packages"
+    actual_files = {
+        path.name for path in applications.glob("*.json") if path.is_file()
+    }
+    expected_files = {
+        f"{environment}--{surface}.json"
+        for environment, surface in GENERIC_PACKAGES
+    }
+    if actual_files != expected_files:
+        raise ValueError(
+            "generic application package set mismatch: "
+            f"missing={sorted(expected_files - actual_files)}, "
+            f"extra={sorted(actual_files - expected_files)}"
+        )
+    for environment, surface in GENERIC_PACKAGES:
+        payload = validate_generic(
+            _load_json(applications / f"{environment}--{surface}.json"),
+            environment=environment,
+            surface=surface,
+            source_git_sha=git_sha,
+            source_tree_digest=tree_digest,
+        )
+        package = bundle_dir / "payloads" / environment / surface / PAYLOAD_NAMES[surface]
+        if not package.is_file() or _package_digest(package.parent) != payload["packageDigest"]:
+            raise ValueError(
+                f"{environment}/{surface} hosted payload digest mismatch"
+            )
+    special_files = {
+        "publicWeb": bundle_dir / "public-web-manifest.json",
+        "android": bundle_dir / "android-release-manifest.json",
+        "opsPortal": bundle_dir / "ops-portal-provenance.json",
+    }
+    for kind, path in special_files.items():
+        payload = _load_json(path)
+        if payload.get("schema") != SPECIAL_SCHEMAS[kind]:
+            raise ValueError(f"{kind} package schema mismatch")
+        if payload.get("sourceGitSha") != git_sha:
+            raise ValueError(f"{kind} sourceGitSha mismatch")
+        if payload.get("sourceTreeDigest") != tree_digest:
+            raise ValueError(f"{kind} sourceTreeDigest mismatch")
+    public_web = _load_json(special_files["publicWeb"])
+    public = bundle_dir / "payloads/prod/web"
+    if _public_web_tree_digest(public) != "sha256:" + str(
+        public_web.get("contentSHA256") or ""
+    ):
+        raise ValueError("prod public Web hosted payload digest mismatch")
+    android = _load_json(special_files["android"])
+    apk = bundle_dir / "payloads/prod/android" / str(
+        android.get("packagedAPK") or ""
+    )
+    if _package_digest(apk) != "sha256:" + str(android.get("apkSHA256") or ""):
+        raise ValueError("prod Android hosted payload digest mismatch")
+    portal = _load_json(special_files["opsPortal"])
+    portal_root = bundle_dir / "payloads/prod/opsPortal"
+    portal_digests = portal.get("digests") or {}
+    if _sha256_file(portal_root / "manifest.json") != portal_digests.get("manifest"):
+        raise ValueError("prod Ops Portal manifest digest mismatch")
+    if _ops_portal_tree_digest(portal_root / "dist") != portal_digests.get("distTree"):
+        raise ValueError("prod Ops Portal dist digest mismatch")
+    if portal.get("packageDigest") != portal_digests.get("distTree"):
+        raise ValueError("prod Ops Portal packageDigest mismatch")
+
+
+def main() -> int:
+    args = _parser().parse_args()
+    try:
+        if args.command == "render":
+            payload = render(
+                environment=args.environment,
+                surface=args.surface,
+                package=args.package,
+                source_git_sha=args.source_git_sha,
+                source_tree_digest=args.source_tree_digest,
+            )
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(_canonical_json(payload), encoding="utf-8")
+        elif args.command == "bind-special":
+            payload = bind_special(
+                kind=args.kind,
+                manifest_path=args.manifest,
+                source_git_sha=args.source_git_sha,
+                source_tree_digest=args.source_tree_digest,
+            )
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(_canonical_json(payload), encoding="utf-8")
+        else:
+            validate_bundle(
+                bundle_dir=args.bundle_dir,
+                source_git_sha=args.source_git_sha.strip().lower(),
+                source_tree_digest=args.source_tree_digest.strip().lower(),
+            )
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"GATE_BLOCK: {error}")
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

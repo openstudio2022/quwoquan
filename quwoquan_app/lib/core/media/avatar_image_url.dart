@@ -9,12 +9,14 @@ String resolveAvatarImageUrl(
   String? gatewayBaseUrl,
   String? avatarCdnBaseUrl,
   int? avatarVersion,
+  MediaEndpointConfig? endpointConfig,
 }) {
   final candidates = resolveAvatarImageUrlCandidates(
     raw,
     gatewayBaseUrl: gatewayBaseUrl,
     avatarCdnBaseUrl: avatarCdnBaseUrl,
     avatarVersion: avatarVersion,
+    endpointConfig: endpointConfig,
   );
   return candidates.isEmpty ? '' : candidates.first;
 }
@@ -25,6 +27,7 @@ List<String> resolveAvatarImageUrlCandidates(
   String? gatewayBaseUrl,
   String? avatarCdnBaseUrl,
   int? avatarVersion,
+  MediaEndpointConfig? endpointConfig,
 }) {
   final source = raw?.trim() ?? '';
   if (source.isEmpty) {
@@ -37,12 +40,14 @@ List<String> resolveAvatarImageUrlCandidates(
 
   final avatarBase =
       avatarCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl;
-  final endpoints = MediaEndpointConfig.tryCreateAvailable(
-    avatarBaseUrl: avatarBase,
-    imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-    videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
-    attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
-  );
+  final endpoints =
+      endpointConfig ??
+      MediaEndpointConfig.tryCreateAvailable(
+        avatarBaseUrl: avatarBase,
+        imageBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+        videoBaseUrl: CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+        attachmentBaseUrl: CloudRuntimeConfig.mediaImageCdnBaseUrl,
+      );
   if (endpoints == null) {
     return const <String>[];
   }

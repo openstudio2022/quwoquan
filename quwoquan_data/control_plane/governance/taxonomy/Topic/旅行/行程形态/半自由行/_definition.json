@@ -2,6 +2,7 @@
   "label": "半自由行",
   "labelEn": "Semi-independent",
   "description": "部分跟团部分自由的混合形态",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

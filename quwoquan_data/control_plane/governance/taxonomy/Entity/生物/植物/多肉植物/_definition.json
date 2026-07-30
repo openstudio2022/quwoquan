@@ -2,6 +2,7 @@
   "label": "多肉植物",
   "labelEn": "Succulent",
   "description": "多肉植物类型",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

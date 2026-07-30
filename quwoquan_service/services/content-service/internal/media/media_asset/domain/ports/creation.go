@@ -16,7 +16,7 @@ type Creation struct {
 	ObjectKey        string
 	SHA256           string
 	MediaType        string
-	ContentType      string
+	MimeType         string
 	FileSize         int64
 	AccessPolicy     string
 	ProcessingStatus string

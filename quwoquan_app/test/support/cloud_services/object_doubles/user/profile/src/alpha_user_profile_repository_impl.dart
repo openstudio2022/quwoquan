@@ -11,11 +11,11 @@ class MockUserProfileRepository
 
   /// 本人在 mock 下保存的资料覆盖（开发态进程内持久化）。
   ///
-  /// key = subAccountId；value = 合并后的完整 wire。保存成功后 [getUserProfile]
+  /// key = personaId；value = 合并后的完整 wire。保存成功后 [getUserProfile]
   /// 立即读到同一真相源，保证「我的主页」即时回显新昵称 / 简介 / 头像 / 封面，
   /// 不再是空实现导致的「保存后无变化」。
-  static final Map<String, SubAccountProfileWireDto> _profileOverrides =
-      <String, SubAccountProfileWireDto>{};
+  static final Map<String, PersonaProfileWireDto> _profileOverrides =
+      <String, PersonaProfileWireDto>{};
 
   /// 本人编辑页私有快照覆盖。
   ///
@@ -27,13 +27,13 @@ class MockUserProfileRepository
       _contractPersonaRows().map(Map<String, dynamic>.from).toList();
 
   /// 解析某个用户的基础 wire（覆盖优先，其次契约种子，最后默认档案）。
-  SubAccountProfileWireDto _baseProfileWire(String userId) {
+  PersonaProfileWireDto _baseProfileWire(String userId) {
     final override = _profileOverrides[userId];
     if (override != null) {
       return _normalizeCurrentUserVariantWire(userId, override);
     }
-    if (_ownerLikeSubAccountIds.contains(userId)) {
-      final currentOverride = _profileOverrides[kMockCurrentSubAccountId];
+    if (_ownerLikePersonaIds.contains(userId)) {
+      final currentOverride = _profileOverrides[kMockCurrentPersonaId];
       if (currentOverride != null) {
         return _normalizeCurrentUserVariantWire(userId, currentOverride);
       }
@@ -44,56 +44,54 @@ class MockUserProfileRepository
     );
   }
 
-  SubAccountProfileWireDto _normalizeCurrentUserVariantWire(
+  PersonaProfileWireDto _normalizeCurrentUserVariantWire(
     String requestedId,
-    SubAccountProfileWireDto wire,
+    PersonaProfileWireDto wire,
   ) {
-    if (!_ownerLikeSubAccountIds.contains(requestedId)) {
+    if (!_ownerLikePersonaIds.contains(requestedId)) {
       return wire;
     }
     return wire.copyWith(
       ownerUserId: kMockCurrentOwnerId,
-      subAccountId: kMockCurrentSubAccountId,
+      personaId: kMockCurrentPersonaId,
     );
   }
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
-    return SubAccountProfileViewData.fromSubAccountProfileWire(
+  Future<PersonaProfileViewData> getUserProfile(String userId) async {
+    return PersonaProfileViewData.fromPersonaProfileWire(
       _baseProfileWire(userId),
     );
   }
 
   /// Mock 本人态判定（开发态约定）：'me' 或 contract 当前用户视为本人。
-  static Set<String> get _ownerLikeSubAccountIds => {
+  static Set<String> get _ownerLikePersonaIds => {
     'me',
     'fixture_user_current',
     'user_001',
-    AlphaFixtureUserResolver.currentUserVariantSubAccountId,
+    AlphaFixtureUserResolver.currentUserVariantPersonaId,
     AlphaFixtureUserResolver.currentUserVariantUserId,
   };
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
-    final resolvedId = AlphaFixtureUserResolver.resolveSubAccountId(
-      subAccountId,
-    );
+    final resolvedId = AlphaFixtureUserResolver.resolvePersonaId(personaId);
     final profile = await getUserProfile(resolvedId);
     final stats = UserProfileStatsViewData.fromProfile(profile);
     final isOwner =
-        _ownerLikeSubAccountIds.contains(subAccountId) ||
-        _ownerLikeSubAccountIds.contains(resolvedId);
+        _ownerLikePersonaIds.contains(personaId) ||
+        _ownerLikePersonaIds.contains(resolvedId);
     final relation = await getRelationship(resolvedId);
-    final viewerSubAccountId = isOwner
+    final viewerPersonaId = isOwner
         ? resolvedId
-        : AlphaFixtureUserResolver.currentUserVariantSubAccountId;
+        : AlphaFixtureUserResolver.currentUserVariantPersonaId;
     final relationshipCapability = isOwner
         ? null
-        : RelationshipCapabilityDto.fromFollowFlags(
-            viewerId: viewerSubAccountId,
-            targetId: subAccountId,
+        : _fixtureRelationshipCapability(
+            viewerId: viewerPersonaId,
+            targetId: personaId,
             isFollowing: relation.isFollowing,
             isFollowedBy: relation.isFollowedBy,
             hasFormalConversation: relation.isMutual,
@@ -104,28 +102,26 @@ class MockUserProfileRepository
       relationshipCapability: relationshipCapability,
       tabCounts: UserHomepageTabCountsViewData.fromStats(stats),
       viewerContext: UserHomepageViewerContextViewData(
-        viewerSubAccountId: viewerSubAccountId,
+        viewerPersonaId: viewerPersonaId,
         isOwner: isOwner,
         isGuest: false,
         relationToTarget: isOwner ? 'self' : relation.relationState,
         canViewFullProfile: true,
       ),
       cacheVersion:
-          'mock-${profile.subAccountId}-${profile.updatedAt?.toIso8601String() ?? 'static'}',
+          'mock-${profile.personaId}-${profile.updatedAt?.toIso8601String() ?? 'static'}',
     );
   }
 
   @override
   Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
-    final profile = await getUserProfile(kMockCurrentSubAccountId);
+    final profile = await getUserProfile(kMockCurrentPersonaId);
     final credentials = await listCredentialsForProfileEdit();
     final base = ProfileEditSnapshotData.fromProfile(
       profile: profile,
       credentials: credentials,
     );
-    final override = _resolveMockProfileEditSnapshotWire(
-      kMockCurrentSubAccountId,
-    );
+    final override = _resolveMockProfileEditSnapshotWire(kMockCurrentPersonaId);
     if (override == null) {
       return base;
     }
@@ -172,11 +168,11 @@ class MockUserProfileRepository
       }
     }
     hit ??= rows.isNotEmpty ? rows.first : null;
-    final subAccountId = hit?['userId']?.toString() ?? normalizedHandle;
+    final personaId = hit?['userId']?.toString() ?? normalizedHandle;
     return ProfileQrResolveWireDto(
-      subAccountId: subAccountId,
-      userHandle: subAccountId,
-      publicProfileUrl: 'https://quwoquan.com/u/$subAccountId',
+      personaId: personaId,
+      userHandle: personaId,
+      publicProfileUrl: 'https://quwoquan.com/u/$personaId',
       scanStatus: 'accepted',
     );
   }
@@ -210,7 +206,7 @@ class MockUserProfileRepository
 
   @override
   Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
-    required String subAccountId,
+    required String personaId,
     required String impactId,
     String evidenceSnapshotId = '',
     String cursor = '',
@@ -219,7 +215,7 @@ class MockUserProfileRepository
     // 真相源：同一 intersection_core seed 的 AuthorImpactSummary。按 impactId /
     // evidenceSnapshotId 定位对应 AuthorImpactItem，再从该 item 自身派生可枚举明细行
     // （不新造第二套业务列表，R15/R30）；未命中作者或未命中影响 → 空页（不造假）。
-    final summary = await getAuthorImpact(subAccountId);
+    final summary = await getAuthorImpact(personaId);
     final item = _matchImpactItem(summary, impactId, evidenceSnapshotId);
     if (item == null) {
       return AuthorImpactEvidencePage(
@@ -311,7 +307,7 @@ class MockUserProfileRepository
   /// 打动作者归一：空 / owner-like（me/user_001）→ 本人种子作者 fixture_user_current。
   static String _resolveImpactAuthorId(String userId) {
     final trimmed = userId.trim();
-    if (trimmed.isEmpty || _ownerLikeSubAccountIds.contains(trimmed)) {
+    if (trimmed.isEmpty || _ownerLikePersonaIds.contains(trimmed)) {
       return 'fixture_user_current';
     }
     return trimmed;
@@ -338,26 +334,28 @@ class MockUserProfileRepository
         })
         .take(limit)
         .map((user) {
-          final subAccountId = user['userId']?.toString() ?? '';
-          final relationship =
-              _contractRelationshipByTargetUserId[subAccountId];
+          final personaId = user['userId']?.toString() ?? '';
+          final relationship = _contractRelationshipByTargetUserId[personaId];
           final relationState =
               relationship?['relationState']?.toString() ?? 'not_following';
           final isFollowing = relationship?['isFollowing'] == true;
           final hasFormalConversation =
               relationState == 'mutual' || isFollowing;
           final wire = SocialRelationSearchItemWireDto(
-            subAccountId: subAccountId,
-            username: subAccountId,
-            displayName: (user['displayName'] ?? subAccountId).toString(),
+            personaId: personaId,
+            userHandle: personaId,
+            displayName: (user['displayName'] ?? personaId).toString(),
             avatarUrl: user['avatarUrl']?.toString(),
             avatarVersion: (user['avatarVersion'] as num?)?.toInt() ?? 0,
             headline: (user['bio'] ?? '').toString(),
             chatAvailable: hasFormalConversation,
-            relationshipCapability: SocialRelationshipCapabilityWireDto(
+            relationshipCapability: RelationshipCapabilityWireDto(
+              viewerPersonaId: kMockCurrentPersonaId,
+              targetPersonaId: personaId,
               relationState: relationState,
               canFollow: !isFollowing,
               canUnfollow: isFollowing,
+              canFollowBack: relationState == 'followed_by',
               canOpenConversation: hasFormalConversation,
             ),
           );
@@ -371,8 +369,8 @@ class MockUserProfileRepository
   Future<void> followUser(
     String targetUserId, {
     String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
+    String? personaId,
+    String? personaContextVersion,
   }) async {
     _contractRelationshipByTargetUserId[targetUserId] = <String, dynamic>{
       'relationState': 'following',
@@ -384,17 +382,17 @@ class MockUserProfileRepository
 
   @override
   Future<void> follow(
-    String targetSubAccountId, {
+    String targetPersonaId, {
     required String sourceSurfaceId,
   }) {
-    return followUser(targetSubAccountId);
+    return followUser(targetPersonaId);
   }
 
   Future<void> unfollowUser(
     String targetUserId, {
     String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
+    String? personaId,
+    String? personaContextVersion,
   }) async {
     _contractRelationshipByTargetUserId[targetUserId] = <String, dynamic>{
       'relationState': 'not_following',
@@ -405,8 +403,8 @@ class MockUserProfileRepository
   }
 
   @override
-  Future<void> unfollow(String targetSubAccountId) {
-    return unfollowUser(targetSubAccountId);
+  Future<void> unfollow(String targetPersonaId) {
+    return unfollowUser(targetPersonaId);
   }
 
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowingPage(
@@ -453,13 +451,13 @@ class MockUserProfileRepository
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowing({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) {
     return listFollowingPage(
-      subAccountId,
+      personaId,
       query: query,
       cursor: cursor,
       limit: limit,
@@ -510,13 +508,13 @@ class MockUserProfileRepository
 
   @override
   Future<CursorPage<ProfileSocialRelationRowViewData>> listFollowers({
-    required String subAccountId,
+    required String personaId,
     String? query,
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) {
     return listFollowersPage(
-      subAccountId,
+      personaId,
       query: query,
       cursor: cursor,
       limit: limit,
@@ -547,7 +545,7 @@ class MockUserProfileRepository
     final isolation = request.isolationLevel;
     final isPrivate = isolation == 'strict';
     final row = <String, dynamic>{
-      'subAccountId': 'new_persona_${_mockPersonaRows.length + 1}',
+      'personaId': 'new_persona_${_mockPersonaRows.length + 1}',
       ...wire,
       'isActive': false,
       'isPrimary': false,
@@ -558,11 +556,11 @@ class MockUserProfileRepository
   }
 
   Future<void> updatePersona(
-    String subAccountId,
+    String personaId,
     PersonaUpdateRequestDto request,
   ) async {
     final index = _mockPersonaRows.indexWhere(
-      (item) => item['subAccountId'] == subAccountId,
+      (item) => item['personaId'] == personaId,
     );
     if (index < 0) {
       throw StateError('persona not found');
@@ -570,13 +568,13 @@ class MockUserProfileRepository
     _mockPersonaRows[index] = <String, dynamic>{
       ..._mockPersonaRows[index],
       ..._omitNullMapValues(request.toMap()),
-      'subAccountId': subAccountId,
+      'personaId': personaId,
     };
   }
 
-  Future<void> activatePersona(String subAccountId) async {
+  Future<void> activatePersona(String personaId) async {
     final index = _mockPersonaRows.indexWhere(
-      (item) => item['subAccountId'] == subAccountId,
+      (item) => item['personaId'] == personaId,
     );
     if (index < 0) {
       throw StateError('persona not found');
@@ -605,4 +603,39 @@ class MockUserProfileRepository
         'isMutual': item['mutualFollow'] == true,
       },
   };
+}
+
+RelationshipCapabilityDto _fixtureRelationshipCapability({
+  required String viewerId,
+  required String targetId,
+  required bool isFollowing,
+  required bool isFollowedBy,
+  bool hasFormalConversation = false,
+}) {
+  final isMutual = isFollowing && isFollowedBy;
+  final relationState = isMutual
+      ? 'mutual'
+      : isFollowing
+      ? 'following'
+      : isFollowedBy
+      ? 'followed_by'
+      : 'not_following';
+  return RelationshipCapabilityDto(
+    viewerPersonaId: viewerId,
+    targetPersonaId: targetId,
+    relationState: relationState,
+    canFollow: !isFollowing,
+    canUnfollow: isFollowing,
+    canFollowBack: isFollowedBy && !isFollowing,
+    canGreet: !isMutual && !hasFormalConversation,
+    canOpenConversation: isMutual || hasFormalConversation,
+    canCreateDirectConversation: isMutual,
+    canSendMessage: isMutual || hasFormalConversation,
+    hasPendingGreeting: false,
+    hasFormalConversation: hasFormalConversation,
+    canStartVoiceCall: isMutual,
+    canStartVideoCall: isMutual,
+    isBlocked: false,
+    isBlockedBy: false,
+  );
 }

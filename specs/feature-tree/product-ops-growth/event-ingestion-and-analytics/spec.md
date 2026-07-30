@@ -69,6 +69,7 @@
 
 - ContentBehaviorTracker 和 ContentEngagementTracker 只调用 BehaviorReporter，BehaviorRepository 不调用 Ops。
 - /content/behaviors 或专用命令只产生一次 BehaviorSignal，并经 BehaviorBatchReported 驱动推荐投影。
+- VisitRecord 只持有访问计数与统计读模型，不发布第二路推荐事件；同一 actor 与 Idempotency-Key 的重放在 Mongo 聚合与回执同一事务内只计数一次。
 - Portal behavior 卡读取 recommendation Prometheus 真实指标。
 
 <a id="req-005"></a>
@@ -130,18 +131,19 @@
 - WHEN 参与者发起“推荐反馈单出口与一次生效”对应动作。
 - THEN ContentBehaviorTracker 和 ContentEngagementTracker 只调用 BehaviorReporter，BehaviorRepository 不调用 Ops。
 - THEN /content/behaviors 或专用命令只产生一次 BehaviorSignal，并经 BehaviorBatchReported 驱动推荐投影。
+- THEN VisitRecord 重放只返回首次回执且访问计数不增加，不产生 VisitRecorded 或其他并行推荐信号。
 - THEN Portal behavior 卡读取 recommendation Prometheus 真实指标。
 
 ## 8. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 产品遥测的 Gamma ES、Prod SLS 与真机证据未闭合
+### OPEN-001 产品遥测的 Gamma ES 与 Prod SLS Provider 证据未闭合
 
 - 类型：`risk`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：Gamma Elasticsearch 替身的完整 Port 证据、Prod 真实 SLS 资源/回滚证据与真机旅程尚未共同闭合。
-- 完成判定：`SIT-002`、Prod hosted receipt 与对应 AppRoot 真机 UAT 均通过。
+- 影响或价值：Gamma Elasticsearch 替身的完整 Port 证据与 Prod 真实 SLS 资源、鉴权、TTL、告警和回滚证据尚未共同闭合；真机恢复补报仅由 `OPEN-004` 跟踪。
+- 完成判定：`SIT-002` 与 Prod hosted Provider receipt 均通过。
 
 <a id="open-002"></a>
 ### OPEN-002 九字段目录与 App 可靠交付
@@ -166,7 +168,7 @@
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
+- 准出影响：`block`
 - 影响或价值：尚缺 Prod 真实 SLS 接收、Android/iPhone 本地加密队列和真机补报证据的共同闭合；恢复异常必须严格保持十字段，并与产品事件和身份事实完全隔离。
 - 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
 

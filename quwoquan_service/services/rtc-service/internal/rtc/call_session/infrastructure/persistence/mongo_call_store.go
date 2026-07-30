@@ -281,7 +281,7 @@ func (s *MongoCallStore) FindReceipt(
 		return application.CallCommitResult{}, false, nil
 	}
 	if receipt.Command != commandName || receipt.Digest != commandDigest {
-		return application.CallCommitResult{}, false, application.ErrVersionConflict
+		return application.CallCommitResult{}, false, application.ErrIdempotencyConflict
 	}
 	return application.CallCommitResult{Session: receipt.Result, Replayed: true}, true, nil
 }
@@ -337,7 +337,7 @@ func (s *MongoCallStore) Commit(
 			return nil, receiptErr
 		} else if found && receipt.ExpiresAt.After(time.Now().UTC()) {
 			if receipt.Command != commit.CommandName || receipt.Digest != commit.CommandDigest {
-				return nil, application.ErrVersionConflict
+				return nil, application.ErrIdempotencyConflict
 			}
 			result = application.CallCommitResult{Session: receipt.Result, Replayed: true}
 			return nil, nil

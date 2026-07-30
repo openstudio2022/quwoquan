@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-002
+
 package runtimemedia
 
 import (
@@ -6,10 +8,10 @@ import (
 	"testing"
 )
 
-func TestBuildAvatarGroupAssetRefProjectsPublicDeliveryReference(t *testing.T) {
-	ref := BuildAvatarGroupAssetRef(
+func TestBuildAvatarGroupDeliveryReferenceUsesOnePublicSliceIdentity(t *testing.T) {
+	ref := BuildAvatarGroupDeliveryReference(
 		"conversation_001",
-		"ga_conversation_001_v1",
+		"ga_conversation_001",
 		1,
 		"abcdef1234567890",
 		"https://cdn.example.com",
@@ -18,23 +20,22 @@ func TestBuildAvatarGroupAssetRefProjectsPublicDeliveryReference(t *testing.T) {
 	if ref.AssetKind != AssetKindAvatarGroup {
 		t.Fatalf("expected avatar group kind, got %s", ref.AssetKind)
 	}
-	if ref.ObjectKey == "" {
-		t.Fatal("expected internal storage key")
+	if ref.PublicSliceKey == "" {
+		t.Fatal("expected public slice key")
 	}
-	delivery := ref.DeliveryReference()
-	want := "https://cdn.example.com/media/avatar/s/conversation/conversation_001/v1/abcdef1234567890.png?v=1"
-	if delivery.DeliveryURI != want {
-		t.Fatalf("unexpected delivery URI: %s", delivery.DeliveryURI)
+	want := "https://cdn.example.com/media/avatar/s/conversation/conversation_001/v1/abcdef1234567890.png"
+	if ref.DeliveryURI != want {
+		t.Fatalf("unexpected delivery URI: %s", ref.DeliveryURI)
 	}
-	if delivery.PublicSliceKey != "media/avatar/s/conversation/conversation_001/v1/abcdef1234567890.png" {
-		t.Fatalf("unexpected public slice key: %s", delivery.PublicSliceKey)
+	if ref.PublicSliceKey != "media/avatar/s/conversation/conversation_001/v1/abcdef1234567890.png" {
+		t.Fatalf("unexpected public slice key: %s", ref.PublicSliceKey)
 	}
 }
 
-func TestInternalAssetRefDoesNotSerializeStorageKey(t *testing.T) {
-	ref := BuildAvatarGroupAssetRef(
+func TestGroupAvatarDeliveryReferenceDoesNotSerializeObjectKey(t *testing.T) {
+	ref := BuildAvatarGroupDeliveryReference(
 		"conversation_001",
-		"ga_conversation_001_v1",
+		"ga_conversation_001",
 		1,
 		"abcdef1234567890",
 		"https://cdn.example.com",
@@ -43,16 +44,16 @@ func TestInternalAssetRefDoesNotSerializeStorageKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if strings.Contains(string(encoded), "objectKey") || strings.Contains(string(encoded), "abcdef1234567890") {
-		t.Fatalf("internal asset ref leaked storage data: %s", encoded)
+	if strings.Contains(string(encoded), "objectKey") {
+		t.Fatalf("delivery reference leaked a second storage identity: %s", encoded)
 	}
 }
 
-func TestBuildAssetURLEmptyOrInvalidBaseReturnsEmpty(t *testing.T) {
-	if got := BuildAssetURL("", "media/avatar/s/conversation/c_1/v2/hash.png", 2); got != "" {
+func TestBuildPublicMediaURLEmptyOrInvalidBaseReturnsEmpty(t *testing.T) {
+	if got := BuildPublicMediaURL("", "media/avatar/s/conversation/c_1/v2/hash.png", 2); got != "" {
 		t.Fatalf("expected empty URL, got %s", got)
 	}
-	if got := BuildAssetURL("cdn.example.com", "media/avatar/s/conversation/c_1/v2/hash.png", 2); got != "" {
+	if got := BuildPublicMediaURL("cdn.example.com", "media/avatar/s/conversation/c_1/v2/hash.png", 2); got != "" {
 		t.Fatalf("expected empty URL for bare host, got %s", got)
 	}
 }
@@ -64,8 +65,79 @@ func TestNormalizeMediaCDNBaseRequiresHTTPS(t *testing.T) {
 	if got := NormalizeMediaCDNBase("http://cdn.example.com"); got != "" {
 		t.Fatalf("expected non-HTTPS base rejection, got %q", got)
 	}
+	if got := NormalizeMediaCDNBase("https://cdn.example.com/media/image"); got != "https://cdn.example.com/media/image" {
+		t.Fatalf("expected canonical role path base, got %q", got)
+	}
 	if got := BuildPublicMediaURL("https://cdn.example.com", "media/avatar/a.png", 1); got != "" {
 		t.Fatalf("unexpected non-canonical key URL %q", got)
+	}
+}
+
+func TestResolveReleaseMediaAssetUsesSameHTTPSBaseValidationAsURLBuilder(t *testing.T) {
+	const ownerRef = "entities/地点/景区/九寨沟"
+	const assetID = "asset_fixture_001"
+	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	publicSliceKey := BuildContentMediaPublicSliceKey("image", assetID, 1, "image/jpeg")
+	assets := map[string]ReleaseMediaAsset{
+		assetID: {
+			AssetID:            assetID,
+			Kind:               "image",
+			Version:            1,
+			ContentType:        "image/jpeg",
+			PublicSliceKey:     publicSliceKey,
+			SHA256:             digest,
+			OwnerRefs:          []string{ownerRef},
+			RightsSnapshotRefs: []string{"objects/" + ownerRef + "/rights_snapshots/r1.json"},
+		},
+	}
+
+	if _, err := ResolveReleaseMediaAsset(
+		assets,
+		MediaDeliveryBases{Image: "http://media.example.com"},
+		assetID,
+		"image",
+		digest,
+		ownerRef,
+	); err == nil {
+		t.Fatal("expected non-HTTPS media base to be rejected before returning a resolution")
+	}
+
+	resolved, err := ResolveReleaseMediaAsset(
+		assets,
+		MediaDeliveryBases{Image: "https://media.example.com"},
+		assetID,
+		"image",
+		digest,
+		ownerRef,
+	)
+	if err != nil {
+		t.Fatalf("resolve HTTPS delivery: %v", err)
+	}
+	want := "https://media.example.com/" + publicSliceKey
+	if resolved.PublicURL != want {
+		t.Fatalf("unexpected public URL: got %q want %q", resolved.PublicURL, want)
+	}
+
+	resolved, err = ResolveReleaseMediaAsset(
+		assets,
+		MediaDeliveryBases{Image: "https://media.example.com/media/image"},
+		assetID,
+		"image",
+		digest,
+		ownerRef,
+	)
+	if err != nil {
+		t.Fatalf("resolve canonical role path base: %v", err)
+	}
+	if resolved.PublicURL != want {
+		t.Fatalf("role base must preserve one canonical media path: got %q want %q", resolved.PublicURL, want)
+	}
+	if got := BuildPublicMediaURL(
+		"https://media.example.com/media/video",
+		publicSliceKey,
+		1,
+	); got != "" {
+		t.Fatalf("cross-kind role base must fail closed, got %q", got)
 	}
 }
 
@@ -83,9 +155,61 @@ func TestBuildPublicMediaURLRejectsCASObjectKey(t *testing.T) {
 	if got := BuildPublicMediaURL(
 		"https://cdn.example.com",
 		"media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-		2,
-	); got != "https://cdn.example.com/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png?v=2" {
+		1,
+	); got != "https://cdn.example.com/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" {
 		t.Fatalf("unexpected valid public slice URL %q", got)
+	}
+	if got := BuildPublicMediaURL(
+		"https://cdn.example.com",
+		"media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+		0,
+	); got != "" {
+		t.Fatalf("zero version must fail closed instead of bypassing path validation, got %q", got)
+	}
+	if got := BuildPublicMediaURL(
+		"https://cdn.example.com",
+		"media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+		-1,
+	); got != "" {
+		t.Fatalf("negative version must fail closed instead of falling back to v1, got %q", got)
+	}
+	if got := BuildPublicMediaURL(
+		"https://cdn.example.com",
+		"media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+		2,
+	); got != "" {
+		t.Fatalf("mismatched path/request version must fail closed, got %q", got)
+	}
+	if got := BuildPublicMediaURL(
+		"https://cdn.example.com",
+		"media/attachment/s/asset/attachment_001/v1/source.pdf",
+		1,
+	); got != "https://cdn.example.com/media/attachment/s/asset/attachment_001/v1/source.pdf" {
+		t.Fatalf("unexpected attachment public slice URL %q", got)
+	}
+	if got := BuildPublicMediaURL(
+		"https://cdn.example.com",
+		"media/video/s/asset/video_001/source.mp4",
+		1,
+	); got != "" {
+		t.Fatalf("unversioned public slice must fail closed, got %q", got)
+	}
+}
+
+func TestPublicSliceBuildersRejectInvalidVersionInsteadOfFallingBackToV1(t *testing.T) {
+	if got := BuildAvatarPublicSliceKey("user", "user_001", 0, "digest"); got != "" {
+		t.Fatalf("avatar key builder must reject zero version, got %q", got)
+	}
+	if got := BuildContentMediaPublicSliceKey("image", "asset_001", -1, "image/png"); got != "" {
+		t.Fatalf("content key builder must reject negative version, got %q", got)
+	}
+	if version, ok := PublicSliceVersion(
+		"media/image/s/asset/asset_001/v3/source.png",
+	); !ok || version != 3 {
+		t.Fatalf("expected canonical path version 3, got version=%d ok=%v", version, ok)
+	}
+	if _, ok := PublicSliceVersion("media/image/s/asset/asset_001/source.png"); ok {
+		t.Fatal("unversioned public slice must not expose a version")
 	}
 }
 

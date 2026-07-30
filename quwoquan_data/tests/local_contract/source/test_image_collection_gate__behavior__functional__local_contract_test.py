@@ -441,10 +441,10 @@ def test_article_candidate_warns_on_bad_optional_image_but_image_lane_blocks_it(
         lane="image",
         vertical="travel",
     )
-    assert travel_image_verdict["passed"], travel_image_verdict
+    assert not travel_image_verdict["passed"], travel_image_verdict
     assert any(
         "unsupported license" in issue
-        for issue in travel_image_verdict["warnings"]
+        for issue in travel_image_verdict["issues"]
     ), travel_image_verdict
     verdict = _candidate_gate(
         _source(

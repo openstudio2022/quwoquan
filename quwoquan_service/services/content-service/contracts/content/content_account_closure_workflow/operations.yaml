@@ -1,0 +1,62 @@
+description: ContentAccountClosureWorkflow 的受控 terminal marker 恢复命令。
+commercial_defaults:
+  status: blocked
+  block_reason: 需要四环境真实 UserAccountClosed 重放、对象清理与审计证据
+  gap_id: CONTENT_ACCOUNT_CLOSURE_COMMERCIAL_CLOSURE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+- method: POST
+  path: /internal/content/account-closure/dead-letters:recover
+  operation: RecoverContentAccountClosureDeadLetter
+  actor: none
+  application:
+    kind: command
+    facet: ContentAccountClosureRecoveryCommandFacet
+    method: recoverAccountClosureDeadLetter
+    aggregate_owner: ContentAccountClosureWorkflow
+    mutation_target: ContentAccountClosureWorkflow
+    invariant_target: ContentAccountClosureWorkflow
+  authorization:
+    principal: operator
+    scopes:
+    - ops.account_closure.write
+    permissions:
+    - content.account_closure.recover
+    ownership_policy: service_owned_projection_delivery
+  commercial:
+    status: ready
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.unauthorized
+  - CONTENT.SYSTEM.internal_error
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: content_account_closure_dead_letter_recover
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  request_entity: ContentAccountClosureDeadLetterRecoveryRequest
+  response_entity: ContentAccountClosureDeadLetterRecoveryAccepted
+  success_status: 202
+  security:
+    auth_mode: required
+    principal: operator
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+  description: operator 只释放 Content 自有 terminal marker，使原 events.user.account PEL 重新进入有限重试；禁止从脱敏 DLQ 重建 payload。
+consumers:
+- name: platform-ops
+  capabilities: [recover_account_closure]

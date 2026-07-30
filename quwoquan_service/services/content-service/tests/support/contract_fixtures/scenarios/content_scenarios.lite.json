@@ -15,10 +15,10 @@
           "contentType": "image",
           "contentIdentity": "work",
           "authorId": "fixture_user_photo",
-          "subAccountId": "fixture_user_photo",
+          "personaId": "fixture_user_photo",
           "authorDisplayName": "契约摄影师",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
           "postType": "galleryPost",
           "primaryTheme": "photography",
           "secondaryThemes": [
@@ -31,11 +31,11 @@
           "title": "西湖晨光摄影测试详情",
           "summary": "西湖晨光摄影测试详情",
           "body": "西湖晨光下的契约照片。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/cover.png",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_photo_001/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
           "circleIds": [
             "fixture_circle_photo"
@@ -55,18 +55,18 @@
           "updatedAt": "2026-05-01T00:00:00Z",
           "publishedAt": "2026-05-02T00:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_photo_001/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_photo_001/cover.png",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_photo_001/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_photo_001/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
           "tagRefs": [
             "fixture",
@@ -80,10 +80,10 @@
           "contentType": "image",
           "contentIdentity": "work",
           "authorId": "fixture_user_photo",
-          "subAccountId": "fixture_user_photo",
+          "personaId": "fixture_user_photo",
           "authorDisplayName": "契约摄影师",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
           "postType": "heroPost",
           "primaryTheme": "photography",
           "secondaryThemes": [
@@ -96,10 +96,10 @@
           "title": "城市傍晚的光影层次",
           "summary": "城市傍晚的光影层次",
           "body": "城市傍晚的光影层次。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_002/cover.png",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_photo_002/cover.png"
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png"
           ],
           "circleIds": [
             "fixture_circle_photo"
@@ -119,16 +119,16 @@
           "updatedAt": "2026-05-01T01:00:00Z",
           "publishedAt": "2026-05-02T01:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_photo_002/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_photo_002/cover.png",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_photo_002/cover.png"
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_photo_002/cover.png"
+            "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png"
           ],
           "tagRefs": [
             "fixture",
@@ -142,10 +142,10 @@
           "contentType": "video",
           "contentIdentity": "work",
           "authorId": "fixture_user_travel",
-          "subAccountId": "fixture_user_travel",
+          "personaId": "fixture_user_travel",
           "authorDisplayName": "契约旅行家",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
           "postType": "videoCoverPost",
           "primaryTheme": "travel",
           "secondaryThemes": [
@@ -158,11 +158,11 @@
           "title": "杭州一日游契约视频",
           "summary": "杭州一日游契约视频。",
           "body": "杭州一日游契约视频。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
-            "media/image/s/archived-image/post/fixture_video_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_video_001/v1/image-2.png"
           ],
           "circleIds": [
             "fixture_circle_travel"
@@ -182,18 +182,18 @@
           "updatedAt": "2026-05-01T03:00:00Z",
           "publishedAt": "2026-05-02T03:00:00Z",
           "authorDisplayNameSnapshot": "契约旅行家",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_video_001/cover.png",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
-            "media/image/s/archived-image/post/fixture_video_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_video_001/v1/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_video_001/cover.png",
-            "media/image/s/archived-image/post/fixture_video_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_video_001/v1/image-2.png"
           ],
           "tagRefs": [
             "fixture",
@@ -201,7 +201,7 @@
             "videoCoverPost"
           ],
           "locationName": "杭州",
-          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
+          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4",
           "durationMs": 45000
         },
         {
@@ -209,10 +209,10 @@
           "contentType": "article",
           "contentIdentity": "work",
           "authorId": "fixture_user_article",
-          "subAccountId": "fixture_user_article",
+          "personaId": "fixture_user_article",
           "authorDisplayName": "契约撰稿人",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_article/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_article/v1/background.png",
           "postType": "articlePost",
           "primaryTheme": "designWriting",
           "secondaryThemes": [
@@ -225,11 +225,11 @@
           "title": "契约驱动的发现页文章",
           "summary": "契约驱动的发现页文章。",
           "body": "文章、攻略与长图文作者。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_article_001/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_article_001/cover.png",
+          "coverUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_article_001/cover.png",
-            "media/image/s/archived-image/post/fixture_article_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png"
           ],
           "circleIds": [
             "fixture_circle_tech"
@@ -249,18 +249,18 @@
           "updatedAt": "2026-05-03T05:00:00Z",
           "publishedAt": "2026-05-02T05:00:00Z",
           "authorDisplayNameSnapshot": "契约撰稿人",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_article/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_article_001/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_article_001/cover.png",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_article/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_article_001/cover.png",
-            "media/image/s/archived-image/post/fixture_article_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_article_001/cover.png",
-            "media/image/s/archived-image/post/fixture_article_001/image-2.png"
+            "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
+            "media/image/s/archived-image/post/fixture_article_001/v1/image-2.png"
           ],
           "tagRefs": [
             "fixture",
@@ -280,7 +280,7 @@
                 "assetId": "fixture_asset_media_image_s_archived-image_post_fixture_article_001_cover_png",
                 "kind": "image",
                 "scope": "cold_start",
-                "objectKey": "media/image/s/archived-image/post/fixture_article_001/cover.png",
+                "objectKey": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
                 "caption": "封面",
                 "sha256": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
               }
@@ -300,10 +300,10 @@
           "contentType": "micro",
           "contentIdentity": "moment",
           "authorId": "fixture_user_current",
-          "subAccountId": "fixture_user_current",
+          "personaId": "fixture_user_current",
           "authorDisplayName": "新同学_260622_6698692",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
           "postType": "momentPost",
           "primaryTheme": "lifestyle",
           "secondaryThemes": [
@@ -316,10 +316,10 @@
           "title": "契约周末早餐",
           "summary": "契约周末早餐。",
           "body": "咖啡、手账与周末早餐。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_moment_001/cover.png",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_moment_001/cover.png",
+          "coverUrl": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_moment_001/cover.png"
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png"
           ],
           "circleIds": [
             "fixture_circle_life"
@@ -339,16 +339,16 @@
           "updatedAt": "2026-05-01T07:00:00Z",
           "publishedAt": "2026-05-02T07:00:00Z",
           "authorDisplayNameSnapshot": "新同学_260622_6698692",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_moment_001/cover.png",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_moment_001/cover.png",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_moment_001/cover.png"
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_moment_001/cover.png"
+            "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png"
           ],
           "tagRefs": [
             "fixture",
@@ -362,10 +362,10 @@
           "contentType": "image",
           "contentIdentity": "work",
           "authorId": "fixture_user_photo",
-          "subAccountId": "fixture_user_photo",
+          "personaId": "fixture_user_photo",
           "authorDisplayName": "契约摄影师",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
           "postType": "heroPost",
           "primaryTheme": "photography",
           "secondaryThemes": [
@@ -378,10 +378,10 @@
           "title": "晨光 #1",
           "summary": "今天把底片送洗了。，用于 heroPost 视觉与作者头像同源验证。",
           "body": "共享池真实图片样本，主题=摄影，作者=契约摄影师，圈子=契约摄影社。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg"
+            "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg"
           ],
           "circleIds": [
             "fixture_circle_photo"
@@ -401,16 +401,16 @@
           "updatedAt": "2026-05-12T16:00:00Z",
           "publishedAt": "2026-05-13T16:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg"
+            "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_post_photography_001/cover.jpg"
+            "media/image/s/archived-image/post/fixture_post_photography_001/v1/cover.jpg"
           ],
           "tagRefs": [
             "fixture",
@@ -424,10 +424,10 @@
           "contentType": "image",
           "contentIdentity": "work",
           "authorId": "fixture_user_current",
-          "subAccountId": "fixture_user_current",
+          "personaId": "fixture_user_current",
           "authorDisplayName": "新同学_260622_6698692",
-          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
+          "authorAvatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
           "postType": "heroPost",
           "primaryTheme": "lifestyle",
           "secondaryThemes": [
@@ -440,10 +440,10 @@
           "title": "窗边 #1",
           "summary": "把桌面重新整理了一遍。，用于 heroPost 视觉与作者头像同源验证。",
           "body": "共享池真实图片样本，主题=生活方式，作者=新同学_260622_6698692，圈子=契约生活方式。",
-          "coverUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg",
-          "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg",
+          "coverUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
           "mediaUrls": [
-            "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg"
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
           ],
           "circleIds": [
             "fixture_circle_life"
@@ -463,16 +463,16 @@
           "updatedAt": "2026-05-19T08:00:00Z",
           "publishedAt": "2026-05-20T08:00:00Z",
           "authorDisplayNameSnapshot": "新同学_260622_6698692",
-          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
-          "coverObjectKey": "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg",
-          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg",
+          "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
+          "coverObjectKey": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg",
           "mediaObjectKeys": [
-            "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg"
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
           ],
           "imageObjectKeys": [
-            "media/image/s/archived-image/post/fixture_post_lifestyle_001/cover.jpg"
+            "media/image/s/archived-image/post/fixture_post_lifestyle_001/v1/cover.jpg"
           ],
           "tagRefs": [
             "fixture",
@@ -527,8 +527,8 @@
           "postId": "fixture_photo_002",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "契约好友",
-          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
-          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
+          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
           "content": "共享池评论样本 #2",
           "createdAt": "2026-06-05T21:00:00Z"
         },
@@ -538,8 +538,8 @@
           "postId": "fixture_video_001",
           "authorId": "fixture_user_commenter",
           "authorDisplayNameSnapshot": "契约评论者",
-          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/avatar.png",
-          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/avatar.png",
+          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
+          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
           "content": "共享池评论样本 #4",
           "createdAt": "2026-06-05T23:00:00Z"
         },
@@ -549,8 +549,8 @@
           "postId": "fixture_article_001",
           "authorId": "fixture_user_current",
           "authorDisplayNameSnapshot": "新同学_260622_6698692",
-          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
+          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "content": "共享池评论样本 #6",
           "createdAt": "2026-06-06T01:00:00Z"
         },
@@ -560,8 +560,8 @@
           "postId": "fixture_moment_001",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "契约好友",
-          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
-          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
+          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
           "content": "共享池评论样本 #8",
           "createdAt": "2026-06-06T03:00:00Z"
         },
@@ -571,8 +571,8 @@
           "postId": "fixture_post_photography_001",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "契约好友",
-          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
-          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
+          "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+          "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
           "content": "共享池评论样本 #11",
           "createdAt": "2026-06-06T06:00:00Z"
         }
@@ -623,16 +623,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_1",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -677,7 +677,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_1",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -687,7 +687,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -738,7 +738,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -797,16 +797,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_2",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -851,7 +851,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_2",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -861,7 +861,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -912,7 +912,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -973,16 +973,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_3",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -1027,7 +1027,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_3",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -1037,7 +1037,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -1088,7 +1088,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -1151,16 +1151,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_4",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -1205,7 +1205,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_4",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -1215,7 +1215,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -1266,7 +1266,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -1331,16 +1331,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_5",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -1385,7 +1385,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_5",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -1395,7 +1395,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -1446,7 +1446,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -1513,16 +1513,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_6",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -1567,7 +1567,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_6",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -1577,7 +1577,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -1628,7 +1628,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -1697,16 +1697,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_7",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -1751,7 +1751,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_7",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -1761,7 +1761,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -1812,7 +1812,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -1883,16 +1883,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_8",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -1937,7 +1937,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_8",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -1947,7 +1947,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -1998,7 +1998,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -2073,16 +2073,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_moment_grid_10",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -2127,7 +2127,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "actionTargetId": "alpha_moment_grid_10",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -2137,7 +2137,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -2188,7 +2188,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -2247,16 +2247,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_landscape_single",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -2302,7 +2302,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_landscape_single",
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
               "actorEvidenceCompleteness": "complete",
@@ -2311,12 +2311,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_single_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -2433,16 +2433,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_landscape_carousel",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -2488,7 +2488,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_landscape_carousel",
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
               "actorEvidenceCompleteness": "complete",
@@ -2497,12 +2497,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_landscape_carousel_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -2607,16 +2607,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_portrait_single",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -2662,7 +2662,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_portrait_single",
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
               "actorEvidenceCompleteness": "complete",
@@ -2671,12 +2671,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_single_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -2789,16 +2789,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_portrait_carousel",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -2844,7 +2844,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_portrait_carousel",
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
               "actorEvidenceCompleteness": "complete",
@@ -2853,12 +2853,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_portrait_carousel_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -2963,16 +2963,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人赞过和评论过",
+              "primaryText": "关注你的人林清越等2人赞过和评论过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_extreme_ratio_guard",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人赞过和评论过",
+              "connectionSummary": "关注你的人林清越等2人赞过和评论过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -3018,7 +3018,7 @@
                 }
               ],
               "actionTargetId": "alpha_photo_extreme_ratio_guard",
-              "displayText": "联系人林清越等2人赞过和评论过",
+              "displayText": "关注你的人林清越等2人赞过和评论过",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
               "actorEvidenceCompleteness": "complete",
@@ -3027,12 +3027,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_photo_extreme_ratio_guard_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "赞过和评论过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -3114,7 +3114,7 @@
           "body": "只有配文的个人竖屏视频，进入焦点后自动播放，离开焦点后暂停。",
           "coverUrl": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_moment_001/v1/cover.png",
-          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
+          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4",
           "mediaUrls": [],
           "imageUrls": [],
           "durationMs": 15000,
@@ -3224,12 +3224,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_portrait_playable_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -3311,7 +3311,7 @@
           "body": "横屏视频满宽展示，仍复用同一播放器组件。",
           "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/source.mp4",
+          "videoUrl": "media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4",
           "mediaUrls": [],
           "imageUrls": [],
           "durationMs": 15000,
@@ -3421,12 +3421,12 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
-                  "relationSourceRef": "commonContact",
+                  "relationLabel": "关注你的人",
+                  "relationSourceRef": "commonFollower",
                   "relationObjectId": "",
                   "relationObjectName": "",
                   "sourcePointId": "alpha_ix_alpha_video_landscape_playable_actor_2",
-                  "sourceRef": "commonContact",
+                  "sourceRef": "commonFollower",
                   "actionSummaryText": "看过",
                   "likeCount": 0,
                   "commentCount": 0,
@@ -3525,16 +3525,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人读过",
+              "primaryText": "关注你的人林清越等2人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_text_short",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人读过",
+              "connectionSummary": "关注你的人林清越等2人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -3578,7 +3578,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人读过",
+              "displayText": "关注你的人林清越等2人读过",
               "actionTargetId": "alpha_article_text_short",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -3588,7 +3588,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -3639,7 +3639,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -3704,16 +3704,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人读过",
+              "primaryText": "关注你的人林清越等2人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_text_long",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人读过",
+              "connectionSummary": "关注你的人林清越等2人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -3757,7 +3757,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人读过",
+              "displayText": "关注你的人林清越等2人读过",
               "actionTargetId": "alpha_article_text_long",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -3767,7 +3767,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -3818,7 +3818,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -3887,16 +3887,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人读过",
+              "primaryText": "关注你的人林清越等2人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_top_image",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人读过",
+              "connectionSummary": "关注你的人林清越等2人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -3940,7 +3940,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人读过",
+              "displayText": "关注你的人林清越等2人读过",
               "actionTargetId": "alpha_article_top_image",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -3950,7 +3950,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -4001,7 +4001,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -4070,16 +4070,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人读过",
+              "primaryText": "关注你的人林清越等2人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_side_image",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人读过",
+              "connectionSummary": "关注你的人林清越等2人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -4123,7 +4123,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人读过",
+              "displayText": "关注你的人林清越等2人读过",
               "actionTargetId": "alpha_article_side_image",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -4133,7 +4133,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -4184,7 +4184,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -4257,16 +4257,16 @@
               "objectKind": "content",
               "relationObjectId": "fixture_user_lin",
               "strength": 0.86,
-              "primaryText": "联系人林清越等2人读过",
+              "primaryText": "关注你的人林清越等2人读过",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_article_top_three_images",
               "intersectionClass": "fact",
               "displayName": "林清越",
-              "connectionSummary": "联系人林清越等2人读过",
+              "connectionSummary": "关注你的人林清越等2人读过",
               "rankState": "fresh",
               "primarySpans": [
                 {
-                  "text": "联系人",
+                  "text": "关注你的人",
                   "role": "plain"
                 },
                 {
@@ -4310,7 +4310,7 @@
                   }
                 }
               ],
-              "displayText": "联系人林清越等2人读过",
+              "displayText": "关注你的人林清越等2人读过",
               "actionTargetId": "alpha_article_top_three_images",
               "kind": "alpha_showcase",
               "actorEvidenceTotalCount": 2,
@@ -4320,7 +4320,7 @@
                   "actorId": "fixture_user_lin",
                   "displayName": "林清越",
                   "avatarUrl": "",
-                  "relationLabel": "联系人",
+                  "relationLabel": "关注你的人",
                   "relationSourceRef": "alpha_showcase",
                   "relationObjectId": "",
                   "relationObjectName": "",
@@ -4371,7 +4371,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "privacyState": "visible",
                 "target": {
                   "objectType": "user",
@@ -6179,9 +6179,9 @@
           "likeCount": 7
         },
         {
-          "commentId": "seed_v1_c1",
-          "_id": "seed_v1_c1",
-          "postId": "v1",
+          "commentId": "seed_video_tokyo_midnight_c1",
+          "_id": "seed_video_tokyo_midnight_c1",
+          "postId": "video_tokyo_midnight",
           "authorId": "fixture_user_commenter",
           "authorDisplayNameSnapshot": "林清越",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
@@ -6192,9 +6192,9 @@
           "replyCount": 1
         },
         {
-          "commentId": "seed_v1_c2",
-          "_id": "seed_v1_c2",
-          "postId": "v1",
+          "commentId": "seed_video_tokyo_midnight_c2",
+          "_id": "seed_video_tokyo_midnight_c2",
+          "postId": "video_tokyo_midnight",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "周末去哪儿",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
@@ -6204,9 +6204,9 @@
           "likeCount": 11
         },
         {
-          "commentId": "seed_v1_c3",
-          "_id": "seed_v1_c3",
-          "postId": "v1",
+          "commentId": "seed_video_tokyo_midnight_c3",
+          "_id": "seed_video_tokyo_midnight_c3",
+          "postId": "video_tokyo_midnight",
           "authorId": "fixture_user_photo",
           "authorDisplayNameSnapshot": "契约摄影师",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
@@ -6216,25 +6216,25 @@
           "likeCount": 7
         },
         {
-          "commentId": "seed_v1_c1_r1",
-          "_id": "seed_v1_c1_r1",
-          "postId": "v1",
+          "commentId": "seed_video_tokyo_midnight_c1_r1",
+          "_id": "seed_video_tokyo_midnight_c1_r1",
+          "postId": "video_tokyo_midnight",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "周末去哪儿",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
           "authorAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
           "content": "同问，蹲一个定位～",
-          "parentCommentId": "seed_v1_c1",
-          "replyToCommentId": "seed_v1_c1",
+          "parentCommentId": "seed_video_tokyo_midnight_c1",
+          "replyToCommentId": "seed_video_tokyo_midnight_c1",
           "createdAt": "2026-06-10T08:03:00Z",
           "replyToUserId": "fixture_user_commenter",
           "replyToDisplayName": "林清越",
           "likeCount": 2
         },
         {
-          "commentId": "seed_v2_c1",
-          "_id": "seed_v2_c1",
-          "postId": "v2",
+          "commentId": "seed_video_forest_walk_c1",
+          "_id": "seed_video_forest_walk_c1",
+          "postId": "video_forest_walk",
           "authorId": "fixture_user_commenter",
           "authorDisplayNameSnapshot": "林清越",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
@@ -6244,9 +6244,9 @@
           "likeCount": 15
         },
         {
-          "commentId": "seed_v2_c2",
-          "_id": "seed_v2_c2",
-          "postId": "v2",
+          "commentId": "seed_video_forest_walk_c2",
+          "_id": "seed_video_forest_walk_c2",
+          "postId": "video_forest_walk",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "周末去哪儿",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
@@ -6256,9 +6256,9 @@
           "likeCount": 11
         },
         {
-          "commentId": "seed_v2_c3",
-          "_id": "seed_v2_c3",
-          "postId": "v2",
+          "commentId": "seed_video_forest_walk_c3",
+          "_id": "seed_video_forest_walk_c3",
+          "postId": "video_forest_walk",
           "authorId": "fixture_user_photo",
           "authorDisplayNameSnapshot": "契约摄影师",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
@@ -6268,9 +6268,9 @@
           "likeCount": 7
         },
         {
-          "commentId": "seed_v3_c1",
-          "_id": "seed_v3_c1",
-          "postId": "v3",
+          "commentId": "seed_video_future_ai_c1",
+          "_id": "seed_video_future_ai_c1",
+          "postId": "video_future_ai",
           "authorId": "fixture_user_commenter",
           "authorDisplayNameSnapshot": "林清越",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
@@ -6280,9 +6280,9 @@
           "likeCount": 15
         },
         {
-          "commentId": "seed_v3_c2",
-          "_id": "seed_v3_c2",
-          "postId": "v3",
+          "commentId": "seed_video_future_ai_c2",
+          "_id": "seed_video_future_ai_c2",
+          "postId": "video_future_ai",
           "authorId": "fixture_user_friend",
           "authorDisplayNameSnapshot": "周末去哪儿",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
@@ -6292,9 +6292,9 @@
           "likeCount": 11
         },
         {
-          "commentId": "seed_v3_c3",
-          "_id": "seed_v3_c3",
-          "postId": "v3",
+          "commentId": "seed_video_future_ai_c3",
+          "_id": "seed_video_future_ai_c3",
+          "postId": "video_future_ai",
           "authorId": "fixture_user_photo",
           "authorDisplayNameSnapshot": "契约摄影师",
           "authorAvatarObjectKeySnapshot": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
@@ -9062,10 +9062,10 @@
             "actionType": "view_object",
             "actionTargetId": "fixture_homepage_travel_route_erhai",
             "source": "relationship",
-            "primaryText": "联系人林清越等3人来过「洱海环线」",
+            "primaryText": "关注你的人林清越等3人也看过「洱海环线」",
             "primarySpans": [
               {
-                "text": "联系人",
+                "text": "关注你的人",
                 "role": "plain"
               },
               {
@@ -9093,7 +9093,7 @@
                 }
               },
               {
-                "text": "人来过",
+                "text": "人也看过",
                 "role": "plain"
               },
               {
@@ -9112,15 +9112,15 @@
                 "pointId": "objix_erhai_followee_p0",
                 "pointClass": "fact",
                 "dimension": "location",
-                "label": "关注的人来过",
-                "displayText": "联系人林清越等3人来过「洱海环线」",
-                "sourceRef": "followeeVisited",
+                "label": "关注的人也看过",
+                "displayText": "关注你的人林清越等3人也看过「洱海环线」",
+                "sourceRef": "followeeViewedObject",
                 "visibility": "public",
                 "count": 3,
                 "sampleText": "周屿"
               }
             ],
-            "displayText": "联系人林清越等3人来过「洱海环线」",
+            "displayText": "关注你的人林清越等3人也看过「洱海环线」",
             "kind": "relationship",
             "actorEvidenceTotalCount": 3,
             "actorEvidenceCompleteness": "complete",
@@ -9129,13 +9129,13 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "relationSourceRef": "relationship",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_followee_actor_1",
                 "sourceRef": "relationship",
-                "actionSummaryText": "来过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9160,7 +9160,7 @@
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_followee_actor_2",
                 "sourceRef": "sharedFollowees",
-                "actionSummaryText": "来过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9178,14 +9178,14 @@
               {
                 "actorId": "fixture_user_photography_06",
                 "displayName": "契约摄影评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/v1/avatar.jpg",
                 "relationLabel": "城市漫游圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_followee_actor_3",
                 "sourceRef": "sharedCircle",
-                "actionSummaryText": "来过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9205,7 +9205,7 @@
               "actorId": "fixture_user_lin",
               "displayName": "林清越",
               "avatarUrl": "",
-              "relationLabel": "联系人",
+              "relationLabel": "关注你的人",
               "privacyState": "visible",
               "target": {
                 "objectType": "user",
@@ -9227,10 +9227,10 @@
             "actionType": "view_object",
             "actionTargetId": "fixture_homepage_travel_route_erhai",
             "source": "relationship",
-            "primaryText": "联系人林清越等6人都去过「洱海环线」",
+            "primaryText": "关注你的人林清越等6人也看过「洱海环线」",
             "primarySpans": [
               {
-                "text": "联系人",
+                "text": "关注你的人",
                 "role": "plain"
               },
               {
@@ -9258,7 +9258,7 @@
                 }
               },
               {
-                "text": "人都去过",
+                "text": "人也看过",
                 "role": "plain"
               },
               {
@@ -9278,14 +9278,14 @@
                 "pointClass": "fact",
                 "dimension": "location",
                 "label": "共同走过",
-                "displayText": "联系人林清越等6人都去过「洱海环线」",
-                "sourceRef": "coVisitedEntity",
+                "displayText": "关注你的人林清越等6人也看过「洱海环线」",
+                "sourceRef": "sharedEntityAttention",
                 "visibility": "public",
                 "count": 6,
                 "sampleText": "林清越"
               }
             ],
-            "displayText": "联系人林清越等6人都去过「洱海环线」",
+            "displayText": "关注你的人林清越等6人也看过「洱海环线」",
             "kind": "relationship",
             "actorEvidenceTotalCount": 6,
             "actorEvidenceCompleteness": "complete",
@@ -9294,13 +9294,13 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "relationSourceRef": "relationship",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_covisited_actor_1",
                 "sourceRef": "relationship",
-                "actionSummaryText": "都去过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9325,7 +9325,7 @@
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_covisited_actor_2",
                 "sourceRef": "sharedFollowees",
-                "actionSummaryText": "都去过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9343,14 +9343,14 @@
               {
                 "actorId": "fixture_user_photography_06",
                 "displayName": "契约摄影评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/v1/avatar.jpg",
                 "relationLabel": "城市漫游圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_covisited_actor_3",
                 "sourceRef": "sharedCircle",
-                "actionSummaryText": "都去过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9368,14 +9368,14 @@
               {
                 "actorId": "fixture_user_travel_02",
                 "displayName": "契约旅行副作者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coCommented",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_covisited_actor_4",
                 "sourceRef": "coCommented",
-                "actionSummaryText": "都去过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9393,14 +9393,14 @@
               {
                 "actorId": "fixture_user_photography_07",
                 "displayName": "契约摄影成员",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_07/avatar.png",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_07/v1/avatar.png",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coSharedContent",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_covisited_actor_5",
                 "sourceRef": "coSharedContent",
-                "actionSummaryText": "都去过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9418,14 +9418,14 @@
               {
                 "actorId": "fixture_user_travel_08",
                 "displayName": "契约旅行当前用户镜像",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_08/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_08/v1/avatar.jpg",
                 "relationLabel": "黄金投资圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_erhai_covisited_actor_6",
                 "sourceRef": "sharedCircle",
-                "actionSummaryText": "都去过「洱海环线」",
+                "actionSummaryText": "也看过「洱海环线」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9445,7 +9445,7 @@
               "actorId": "fixture_user_lin",
               "displayName": "林清越",
               "avatarUrl": "",
-              "relationLabel": "联系人",
+              "relationLabel": "关注你的人",
               "privacyState": "visible",
               "target": {
                 "objectType": "user",
@@ -9469,10 +9469,10 @@
             "actionType": "view_object",
             "actionTargetId": "fixture_homepage_travel_spot_duanqiao",
             "source": "relationship",
-            "primaryText": "联系人林清越等4人都去过「断桥晨雾机位」",
+            "primaryText": "关注你的人林清越等4人也看过「断桥晨雾机位」",
             "primarySpans": [
               {
-                "text": "联系人",
+                "text": "关注你的人",
                 "role": "plain"
               },
               {
@@ -9500,7 +9500,7 @@
                 }
               },
               {
-                "text": "人都去过",
+                "text": "人也看过",
                 "role": "plain"
               },
               {
@@ -9520,14 +9520,14 @@
                 "pointClass": "fact",
                 "dimension": "location",
                 "label": "共同机位",
-                "displayText": "联系人林清越等4人都去过「断桥晨雾机位」",
-                "sourceRef": "coVisitedEntity",
+                "displayText": "关注你的人林清越等4人也看过「断桥晨雾机位」",
+                "sourceRef": "sharedEntityAttention",
                 "visibility": "public",
                 "count": 4,
                 "sampleText": "周屿"
               }
             ],
-            "displayText": "联系人林清越等4人都去过「断桥晨雾机位」",
+            "displayText": "关注你的人林清越等4人也看过「断桥晨雾机位」",
             "kind": "relationship",
             "actorEvidenceTotalCount": 4,
             "actorEvidenceCompleteness": "complete",
@@ -9536,13 +9536,13 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "relationSourceRef": "relationship",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_duanqiao_covisited_actor_1",
                 "sourceRef": "relationship",
-                "actionSummaryText": "都去过「断桥晨雾机位」",
+                "actionSummaryText": "也看过「断桥晨雾机位」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9567,7 +9567,7 @@
                 "relationObjectName": "",
                 "sourcePointId": "objix_duanqiao_covisited_actor_2",
                 "sourceRef": "sharedFollowees",
-                "actionSummaryText": "都去过「断桥晨雾机位」",
+                "actionSummaryText": "也看过「断桥晨雾机位」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9585,14 +9585,14 @@
               {
                 "actorId": "fixture_user_photography_06",
                 "displayName": "契约摄影评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/v1/avatar.jpg",
                 "relationLabel": "城市漫游圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_duanqiao_covisited_actor_3",
                 "sourceRef": "sharedCircle",
-                "actionSummaryText": "都去过「断桥晨雾机位」",
+                "actionSummaryText": "也看过「断桥晨雾机位」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9610,14 +9610,14 @@
               {
                 "actorId": "fixture_user_travel_02",
                 "displayName": "契约旅行副作者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coCommented",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_duanqiao_covisited_actor_4",
                 "sourceRef": "coCommented",
-                "actionSummaryText": "都去过「断桥晨雾机位」",
+                "actionSummaryText": "也看过「断桥晨雾机位」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -9637,7 +9637,7 @@
               "actorId": "fixture_user_lin",
               "displayName": "林清越",
               "avatarUrl": "",
-              "relationLabel": "联系人",
+              "relationLabel": "关注你的人",
               "privacyState": "visible",
               "target": {
                 "objectType": "user",
@@ -9660,11 +9660,11 @@
             "actionType": "view_object",
             "actionTargetId": "u_lin",
             "source": "relationship",
-            "connectionSummary": "联系人林清越等4人也关注了林清越",
-            "primaryText": "联系人林清越等4人也关注了林清越",
+            "connectionSummary": "关注你的人林清越等4人也关注了林清越",
+            "primaryText": "关注你的人林清越等4人也关注了林清越",
             "primarySpans": [
               {
-                "text": "联系人",
+                "text": "关注你的人",
                 "role": "plain"
               },
               {
@@ -9712,28 +9712,28 @@
                 "pointClass": "fact",
                 "dimension": "relationship",
                 "label": "共同关注的人",
-                "displayText": "联系人林清越等4人也关注了林清越",
+                "displayText": "关注你的人林清越等4人也关注了林清越",
                 "sourceRef": "sharedFollowees",
                 "visibility": "public",
                 "count": 4,
                 "sampleText": "林清越",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg",
-                  "media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1494790108377-be9c29b29330/v1/avatar.jpg",
+                  "media/avatar/s/archived-avatar/user/u_1500648767791-00dcc994a43e/v1/avatar.jpg"
                 ]
               },
               {
                 "pointId": "objix_user_u_lin_p1",
                 "pointClass": "fact",
                 "dimension": "relationship",
-                "label": "共同联系人",
-                "displayText": "联系人林清越等4人也关注了林清越",
-                "sourceRef": "commonContact",
+                "label": "共同关注者",
+                "displayText": "关注你的人林清越等4人也关注了林清越",
+                "sourceRef": "commonFollower",
                 "visibility": "public",
                 "count": 2,
                 "sampleText": "老同学 李航",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
                 ]
               },
               {
@@ -9741,7 +9741,7 @@
                 "pointClass": "fact",
                 "dimension": "content",
                 "label": "共同讨论",
-                "displayText": "联系人林清越等4人也关注了林清越",
+                "displayText": "关注你的人林清越等4人也关注了林清越",
                 "sourceRef": "coCommented",
                 "visibility": "public",
                 "count": 3,
@@ -9752,14 +9752,14 @@
                 "pointClass": "fact",
                 "dimension": "interest",
                 "label": "都爱摄影",
-                "displayText": "联系人林清越等4人也关注了林清越",
+                "displayText": "关注你的人林清越等4人也关注了林清越",
                 "sourceRef": "sharedTagSample",
                 "visibility": "public",
                 "count": 4,
                 "sampleText": "林清越"
               }
             ],
-            "displayText": "联系人林清越等4人也关注了林清越",
+            "displayText": "关注你的人林清越等4人也关注了林清越",
             "kind": "relationship",
             "actorEvidenceTotalCount": 4,
             "actorEvidenceCompleteness": "complete",
@@ -9768,7 +9768,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "relationSourceRef": "relationship",
                 "relationObjectId": "",
                 "relationObjectName": "",
@@ -9817,7 +9817,7 @@
               {
                 "actorId": "fixture_user_photography_06",
                 "displayName": "契约摄影评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/v1/avatar.jpg",
                 "relationLabel": "城市漫游圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
@@ -9842,7 +9842,7 @@
               {
                 "actorId": "fixture_user_travel_02",
                 "displayName": "契约旅行副作者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coCommented",
                 "relationObjectId": "",
@@ -9869,7 +9869,7 @@
               "actorId": "fixture_user_lin",
               "displayName": "林清越",
               "avatarUrl": "",
-              "relationLabel": "联系人",
+              "relationLabel": "关注你的人",
               "privacyState": "visible",
               "target": {
                 "objectType": "user",
@@ -9892,11 +9892,11 @@
             "actionType": "view_object",
             "actionTargetId": "c_photo",
             "source": "relationship",
-            "connectionSummary": "联系人林清越等6人也在「摄影爱好者圈」",
-            "primaryText": "联系人林清越等6人也在「摄影爱好者圈」",
+            "connectionSummary": "关注你的人林清越等6人也在「摄影爱好者圈」",
+            "primaryText": "关注你的人林清越等6人也在「摄影爱好者圈」",
             "primarySpans": [
               {
-                "text": "联系人",
+                "text": "关注你的人",
                 "role": "plain"
               },
               {
@@ -9944,28 +9944,28 @@
                 "pointClass": "fact",
                 "dimension": "relationship",
                 "label": "关注的人在这",
-                "displayText": "联系人林清越等6人也在「摄影爱好者圈」",
+                "displayText": "关注你的人林清越等6人也在「摄影爱好者圈」",
                 "sourceRef": "followeeInObject",
                 "visibility": "public",
                 "count": 6,
                 "sampleText": "周屿",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg",
-                  "media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1500648767791-00dcc994a43e/v1/avatar.jpg",
+                  "media/avatar/s/archived-avatar/user/u_1438761681033-6461ffad8d80/v1/avatar.jpg"
                 ]
               },
               {
                 "pointId": "objix_circle_c_photo_p1",
                 "pointClass": "fact",
                 "dimension": "relationship",
-                "label": "联系人在这",
-                "displayText": "联系人林清越等6人也在「摄影爱好者圈」",
-                "sourceRef": "commonContact",
+                "label": "关注你的人在这",
+                "displayText": "关注你的人林清越等6人也在「摄影爱好者圈」",
+                "sourceRef": "commonFollower",
                 "visibility": "public",
                 "count": 3,
                 "sampleText": "老同学 李航",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
                 ]
               },
               {
@@ -9973,13 +9973,13 @@
                 "pointClass": "fact",
                 "dimension": "relationship",
                 "label": "关注的人常来",
-                "displayText": "联系人林清越等6人也在「摄影爱好者圈」",
+                "displayText": "关注你的人林清越等6人也在「摄影爱好者圈」",
                 "sourceRef": "followeeInObject",
                 "visibility": "public",
                 "count": 3,
                 "sampleText": "林清越",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1494790108377-be9c29b29330/v1/avatar.jpg"
                 ]
               },
               {
@@ -9987,14 +9987,14 @@
                 "pointClass": "fact",
                 "dimension": "interest",
                 "label": "都聊摄影",
-                "displayText": "联系人林清越等6人也在「摄影爱好者圈」",
+                "displayText": "关注你的人林清越等6人也在「摄影爱好者圈」",
                 "sourceRef": "sharedTagSample",
                 "visibility": "public",
                 "count": 6,
                 "sampleText": "林清越"
               }
             ],
-            "displayText": "联系人林清越等6人也在「摄影爱好者圈」",
+            "displayText": "关注你的人林清越等6人也在「摄影爱好者圈」",
             "kind": "relationship",
             "actorEvidenceTotalCount": 6,
             "actorEvidenceCompleteness": "complete",
@@ -10003,7 +10003,7 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "relationSourceRef": "relationship",
                 "relationObjectId": "",
                 "relationObjectName": "",
@@ -10052,7 +10052,7 @@
               {
                 "actorId": "fixture_user_photography_06",
                 "displayName": "契约摄影评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/v1/avatar.jpg",
                 "relationLabel": "城市漫游圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
@@ -10077,7 +10077,7 @@
               {
                 "actorId": "fixture_user_travel_02",
                 "displayName": "契约旅行副作者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coCommented",
                 "relationObjectId": "",
@@ -10102,7 +10102,7 @@
               {
                 "actorId": "fixture_user_photography_07",
                 "displayName": "契约摄影成员",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_07/avatar.png",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_07/v1/avatar.png",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coSharedContent",
                 "relationObjectId": "",
@@ -10127,7 +10127,7 @@
               {
                 "actorId": "fixture_user_travel_08",
                 "displayName": "契约旅行当前用户镜像",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_08/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_08/v1/avatar.jpg",
                 "relationLabel": "黄金投资圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
@@ -10154,7 +10154,7 @@
               "actorId": "fixture_user_lin",
               "displayName": "林清越",
               "avatarUrl": "",
-              "relationLabel": "联系人",
+              "relationLabel": "关注你的人",
               "privacyState": "visible",
               "target": {
                 "objectType": "user",
@@ -10177,11 +10177,11 @@
             "actionType": "view_object",
             "actionTargetId": "e_pku",
             "source": "relationship",
-            "connectionSummary": "联系人林清越等9人来过「新东方」",
-            "primaryText": "联系人林清越等9人来过「新东方」",
+            "connectionSummary": "关注你的人林清越等9人也看过「新东方」",
+            "primaryText": "关注你的人林清越等9人也看过「新东方」",
             "primarySpans": [
               {
-                "text": "联系人",
+                "text": "关注你的人",
                 "role": "plain"
               },
               {
@@ -10209,7 +10209,7 @@
                 }
               },
               {
-                "text": "人来过",
+                "text": "人也看过",
                 "role": "plain"
               },
               {
@@ -10228,30 +10228,30 @@
                 "pointId": "objix_entity_e_pku_p0",
                 "pointClass": "fact",
                 "dimension": "location",
-                "label": "关注的人来过",
-                "displayText": "联系人林清越等9人来过「新东方」",
-                "sourceRef": "followeeVisited",
+                "label": "关注的人也看过",
+                "displayText": "关注你的人林清越等9人也看过「新东方」",
+                "sourceRef": "followeeViewedObject",
                 "visibility": "public",
                 "count": 9,
                 "sampleText": "周屿",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1500648767791-00dcc994a43e/v1/avatar.jpg",
-                  "media/avatar/s/mock/seed/u_1438761681033-6461ffad8d80/v1/avatar.jpg",
-                  "media/avatar/s/mock/seed/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1500648767791-00dcc994a43e/v1/avatar.jpg",
+                  "media/avatar/s/archived-avatar/user/u_1438761681033-6461ffad8d80/v1/avatar.jpg",
+                  "media/avatar/s/archived-avatar/user/u_1507003211169-0a1dd7228f2d/v1/avatar.jpg"
                 ]
               },
               {
                 "pointId": "objix_entity_e_pku_p1",
                 "pointClass": "fact",
                 "dimension": "location",
-                "label": "联系人来过",
-                "displayText": "联系人林清越等9人来过「新东方」",
-                "sourceRef": "followeeVisited",
+                "label": "关注你的人也看过",
+                "displayText": "关注你的人林清越等9人也看过「新东方」",
+                "sourceRef": "followeeViewedObject",
                 "visibility": "public",
                 "count": 4,
                 "sampleText": "同事 苏黎",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1494790108377-be9c29b29330/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1494790108377-be9c29b29330/v1/avatar.jpg"
                 ]
               },
               {
@@ -10259,17 +10259,17 @@
                 "pointClass": "fact",
                 "dimension": "relationship",
                 "label": "关注的人加入",
-                "displayText": "联系人林清越等9人来过「新东方」",
+                "displayText": "关注你的人林清越等9人也看过「新东方」",
                 "sourceRef": "followeeInObject",
                 "visibility": "public",
                 "count": 6,
                 "sampleText": "校友摄影圈",
                 "sampleAvatarUrls": [
-                  "media/avatar/s/mock/seed/u_1499952127939-9bbf5af6c51c/v1/avatar.jpg"
+                  "media/avatar/s/archived-avatar/user/u_1499952127939-9bbf5af6c51c/v1/avatar.jpg"
                 ]
               }
             ],
-            "displayText": "联系人林清越等9人来过「新东方」",
+            "displayText": "关注你的人林清越等9人也看过「新东方」",
             "kind": "relationship",
             "actorEvidenceTotalCount": 9,
             "actorEvidenceCompleteness": "complete",
@@ -10278,13 +10278,13 @@
                 "actorId": "fixture_user_lin",
                 "displayName": "林清越",
                 "avatarUrl": "",
-                "relationLabel": "联系人",
+                "relationLabel": "关注你的人",
                 "relationSourceRef": "relationship",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_1",
                 "sourceRef": "relationship",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10309,7 +10309,7 @@
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_2",
                 "sourceRef": "sharedFollowees",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10327,14 +10327,14 @@
               {
                 "actorId": "fixture_user_photography_06",
                 "displayName": "契约摄影评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_06/v1/avatar.jpg",
                 "relationLabel": "城市漫游圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_3",
                 "sourceRef": "sharedCircle",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10352,14 +10352,14 @@
               {
                 "actorId": "fixture_user_travel_02",
                 "displayName": "契约旅行副作者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_02/v1/avatar.jpg",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coCommented",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_4",
                 "sourceRef": "coCommented",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10377,14 +10377,14 @@
               {
                 "actorId": "fixture_user_photography_07",
                 "displayName": "契约摄影成员",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_07/avatar.png",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_07/v1/avatar.png",
                 "relationLabel": "你互动过其内容的用户",
                 "relationSourceRef": "coSharedContent",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_5",
                 "sourceRef": "coSharedContent",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10402,14 +10402,14 @@
               {
                 "actorId": "fixture_user_travel_08",
                 "displayName": "契约旅行当前用户镜像",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_08/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_08/v1/avatar.jpg",
                 "relationLabel": "黄金投资圈圈友",
                 "relationSourceRef": "sharedCircle",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_6",
                 "sourceRef": "sharedCircle",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10427,14 +10427,14 @@
               {
                 "actorId": "fixture_user_photography_03",
                 "displayName": "契约摄影圈主",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_03/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photography_03/v1/avatar.jpg",
                 "relationLabel": "校友",
                 "relationSourceRef": "alumni",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_7",
                 "sourceRef": "alumni",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10452,14 +10452,14 @@
               {
                 "actorId": "fixture_user_travel_06",
                 "displayName": "契约旅行评论者",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_06/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_06/v1/avatar.jpg",
                 "relationLabel": "校友",
                 "relationSourceRef": "sameSchool",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_8",
                 "sourceRef": "sameSchool",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10477,14 +10477,14 @@
               {
                 "actorId": "fixture_user_travel_03",
                 "displayName": "契约旅行圈主",
-                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_03/avatar.jpg",
+                "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel_03/v1/avatar.jpg",
                 "relationLabel": "同事",
                 "relationSourceRef": "sameCompany",
                 "relationObjectId": "",
                 "relationObjectName": "",
                 "sourcePointId": "objix_entity_e_pku_actor_9",
                 "sourceRef": "sameCompany",
-                "actionSummaryText": "来过「新东方」",
+                "actionSummaryText": "也看过「新东方」",
                 "likeCount": 0,
                 "commentCount": 0,
                 "shareCount": 0,
@@ -10504,7 +10504,7 @@
               "actorId": "fixture_user_lin",
               "displayName": "林清越",
               "avatarUrl": "",
-              "relationLabel": "联系人",
+              "relationLabel": "关注你的人",
               "privacyState": "visible",
               "target": {
                 "objectType": "user",

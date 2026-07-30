@@ -1,6 +1,6 @@
 
 workflows:
-  - workflow_id: moderation_case_v1
+  - workflow_id: moderation_case
     object_type: moderation_case
     states:
       - reported
@@ -34,7 +34,7 @@ workflows:
       min_assets: 1
       asset_types: [image, video, text, snapshot]
 
-  - workflow_id: appeal_case_v1
+  - workflow_id: appeal_case
     object_type: appeal_case
     states:
       - submitted
@@ -58,7 +58,7 @@ workflows:
       first_response_minutes: 60
       resolution_hours: 48
 
-  - workflow_id: recovery_case_v1
+  - workflow_id: recovery_case
     object_type: recovery_case
     states:
       - requested
@@ -88,7 +88,7 @@ workflows:
       first_response_minutes: 60
       resolution_hours: 72
 
-  - workflow_id: experiment_rollout_v1
+  - workflow_id: experiment_rollout
     object_type: experiment
     states:
       - draft
@@ -110,7 +110,7 @@ workflows:
       - from: completed
         to: [archived]
 
-  - workflow_id: recommendation_policy_v1
+  - workflow_id: recommendation_policy
     object_type: recommendation_policy
     states:
       - draft

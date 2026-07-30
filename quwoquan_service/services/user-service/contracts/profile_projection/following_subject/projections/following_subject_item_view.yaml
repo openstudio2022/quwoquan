@@ -10,6 +10,9 @@ client_projection:
   dart_class: FollowingSubjectItemViewDto
   base_class: ''
   output_path: cloud/runtime/generated/user/profile_projection/following_subject_item_view_dto.g.dart
+  strict: true
+  dart_imports:
+  - package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart
   fields:
   - name: subjectId
     dart_type: String
@@ -17,10 +20,11 @@ client_projection:
     source: subjectId
     default: ''''''
   - name: subjectType
-    dart_type: String
+    type: enum
+    dart_type: FollowSubjectKind
+    enum_ref: FollowSubjectKind
     nullable: false
     source: subjectType
-    default: ''''''
   - name: displayName
     dart_type: String
     nullable: false

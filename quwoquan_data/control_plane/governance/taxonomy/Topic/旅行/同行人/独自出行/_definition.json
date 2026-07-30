@@ -1,0 +1,13 @@
+{
+  "label": "独自出行",
+  "labelEn": "Solo",
+  "description": "一人出行，关注安全、社交与单人友好设施",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

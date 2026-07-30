@@ -5,6 +5,7 @@ events:
   consumers:
   - media-processing
   channel: transactional_outbox
+  payload_entity: MediaAsset
   payload_fields:
   - id
   - version
@@ -20,6 +21,7 @@ events:
   - content-service
   - search-service
   channel: transactional_outbox
+  payload_entity: MediaAsset
   payload_fields:
   - id
   - version
@@ -31,6 +33,7 @@ events:
   consumers:
   - content-service
   channel: transactional_outbox
+  payload_entity: MediaAsset
   payload_fields:
   - id
   - version
@@ -42,6 +45,7 @@ events:
   consumers:
   - media-processing
   channel: transactional_outbox
+  payload_entity: MediaAsset
   payload_fields:
   - id
   - version

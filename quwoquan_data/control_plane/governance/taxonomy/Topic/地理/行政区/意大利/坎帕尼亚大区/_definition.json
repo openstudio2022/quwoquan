@@ -1,0 +1,12 @@
+{
+  "label": "坎帕尼亚大区",
+  "labelEn": "Campania",
+  "description": "南部海岸与古城遗址",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

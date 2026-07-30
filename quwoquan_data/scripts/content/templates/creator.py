@@ -149,11 +149,11 @@ def _sys_creator_hard_gate_errors(creator: dict[str, Any], label: str) -> list[s
         errors.append(f"{label}: creatorProfileId must match sys travel/photo pattern")
     if len(creator_id) > 32:
         errors.append(f"{label}: creatorProfileId must be <= 32 chars")
-    sub_id = str(creator.get("subAccountId") or creator.get("authorId") or "")
+    sub_id = str(creator.get("personaId") or creator.get("authorId") or "")
     if sub_id != f"{creator_id}_sub_01":
-        errors.append(f"{label}: subAccountId/authorId must equal {creator_id}_sub_01")
+        errors.append(f"{label}: personaId/authorId must equal {creator_id}_sub_01")
     if len(sub_id) > 32:
-        errors.append(f"{label}: subAccountId must be <= 32 chars")
+        errors.append(f"{label}: personaId must be <= 32 chars")
     if re.search(r"\d", str(creator.get("displayName") or "")):
         errors.append(f"{label}: displayName must not contain digits")
     for field in FORBIDDEN_SYS_CREATOR_FIELDS:

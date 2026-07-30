@@ -91,10 +91,11 @@ def prepare_entity_pages(execution_id: str, spec: dict[str, Any]) -> tuple[Path,
             "etype": etype,
             "entityRef": entity_ref(domain, etype, name),
             # 主清单契约字段（discovery_seed/2）：物化时写入 _entity.json。
-            # geoTagRef 是物化必填（_REQUIRED_ENTITY_FIELDS），typeTagRefs 供打标物化消费（WP3）。
+            # geoTagRef 是物化必填（_REQUIRED_ENTITY_FIELDS），typeTagRefs 供打标物化消费（WP3），
+            # coordinates 可选，物化后由 entity-service importer 写入 Homepage.location。
             **{
                 key: target[key]
-                for key in ("geoTagRef", "geoTagRefs", "typeTagRefs", "aliases")
+                for key in ("geoTagRef", "geoTagRefs", "typeTagRefs", "aliases", "coordinates")
                 if target.get(key)
             },
             **creator_assignment,

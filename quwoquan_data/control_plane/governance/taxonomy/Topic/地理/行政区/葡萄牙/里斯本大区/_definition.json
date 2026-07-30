@@ -1,0 +1,12 @@
+{
+  "label": "里斯本大区",
+  "labelEn": "Lisbon Region",
+  "description": "首都圈与大西洋海岸",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

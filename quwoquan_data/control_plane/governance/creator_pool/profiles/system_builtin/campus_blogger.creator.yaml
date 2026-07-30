@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_campus_blogger_001
-subAccountId: builtin_campus_blogger
+personaId: builtin_campus_blogger
 authorId: builtin_campus_blogger
 isSystemBuiltin: true
 displayName: 校园观察员阿澈
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.86
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/教育成长/校园生活
   - Format/内容角度/测评/校园评测

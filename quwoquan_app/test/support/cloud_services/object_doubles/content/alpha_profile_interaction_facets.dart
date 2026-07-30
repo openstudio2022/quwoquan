@@ -31,7 +31,7 @@ final class AlphaProfileInteractionFacet
         _rows
             .where(
               (row) =>
-                  row.ownerPersonaId == query.subAccountId &&
+                  row.ownerPersonaId == query.personaId &&
                   row.activity.direction == direction.wireValue &&
                   row.activity.activityType == query.type.wireValue,
             )
@@ -70,7 +70,7 @@ final class AlphaProfileInteractionFacet
   ) async {
     final rowIndex = _rows.indexWhere(
       (row) =>
-          row.ownerPersonaId == command.subAccountId &&
+          row.ownerPersonaId == command.personaId &&
           row.activity.direction ==
               ContentProfileInteractionDirection.received.wireValue &&
           row.activity.activityId == command.activityId,
@@ -79,7 +79,7 @@ final class AlphaProfileInteractionFacet
       throw StateError('profile interaction activity is not owned by persona');
     }
     final semanticKey =
-        '${command.subAccountId}\u0000${command.activityId}\u0000'
+        '${command.personaId}\u0000${command.activityId}\u0000'
         '${command.state.wireValue}';
     final replay = _facts[semanticKey];
     if (replay != null) {
@@ -134,18 +134,15 @@ final class AlphaProfileInteractionFacet
     final direction = _text(raw['direction'], fallback: 'received');
     final activityID = _requiredText(raw['interactionId'], 'interactionId');
     final ownerPersonaID = _requiredText(
-      raw['ownerSubAccountId'],
-      'ownerSubAccountId',
+      raw['ownerPersonaId'],
+      'ownerPersonaId',
     );
-    final actorID = _requiredText(
-      raw['actorSubAccountId'],
-      'actorSubAccountId',
-    );
+    final actorID = _requiredText(raw['actorPersonaId'], 'actorPersonaId');
     final targetPersonaID = _requiredText(
-      raw['targetSubAccountId'],
-      'targetSubAccountId',
+      raw['targetPersonaId'],
+      'targetPersonaId',
     );
-    final counterpartID = _text(raw['counterpartSubAccountId']);
+    final counterpartID = _text(raw['counterpartPersonaId']);
     final actorName = _text(raw['actorDisplayName'], fallback: actorID);
     final counterpartName = _text(
       raw['counterpartDisplayName'],
@@ -170,13 +167,13 @@ final class AlphaProfileInteractionFacet
         activityId: activityID,
         activityType: _text(raw['activityType'], fallback: 'share'),
         direction: direction,
-        actorSubAccountId: actorID,
+        actorPersonaId: actorID,
         actorDisplayName: actorName,
         actorAvatarUrl: _text(raw['actorAvatarUrl']),
-        counterpartSubAccountId: counterpartID,
+        counterpartPersonaId: counterpartID,
         counterpartDisplayName: counterpartName,
         counterpartAvatarUrl: _text(raw['counterpartAvatarUrl']),
-        targetSubAccountId: targetPersonaID,
+        targetPersonaId: targetPersonaID,
         targetContentId: targetContentID,
         targetContentType: switch (previewKind) {
           'video' => 'video',
@@ -187,7 +184,7 @@ final class AlphaProfileInteractionFacet
         targetKind: targetKind,
         targetAvailability: availability,
         targetReplyCount: _integer(raw['targetReplyCount']),
-        displaySubAccountId: displayID,
+        displayPersonaId: displayID,
         displayName: displayName,
         displayAvatarUrl: direction == 'sent'
             ? _text(raw['counterpartAvatarUrl'])
@@ -238,21 +235,21 @@ ContentProfileInteractionActivity _withReadState(
     commentId: activity.commentId,
     parentCommentId: activity.parentCommentId,
     viewerReaction: activity.viewerReaction,
-    actorSubAccountId: activity.actorSubAccountId,
+    actorPersonaId: activity.actorPersonaId,
     actorDisplayName: activity.actorDisplayName,
     actorAvatarUrl: activity.actorAvatarUrl,
     actorAvatarVersion: activity.actorAvatarVersion,
-    counterpartSubAccountId: activity.counterpartSubAccountId,
+    counterpartPersonaId: activity.counterpartPersonaId,
     counterpartDisplayName: activity.counterpartDisplayName,
     counterpartAvatarUrl: activity.counterpartAvatarUrl,
-    targetSubAccountId: activity.targetSubAccountId,
+    targetPersonaId: activity.targetPersonaId,
     targetContentId: activity.targetContentId,
     targetContentType: activity.targetContentType,
     targetContentSummary: activity.targetContentSummary,
     targetKind: activity.targetKind,
     targetAvailability: activity.targetAvailability,
     targetReplyCount: activity.targetReplyCount,
-    displaySubAccountId: activity.displaySubAccountId,
+    displayPersonaId: activity.displayPersonaId,
     displayName: activity.displayName,
     displayAvatarUrl: activity.displayAvatarUrl,
     displayAvatarVersion: activity.displayAvatarVersion,

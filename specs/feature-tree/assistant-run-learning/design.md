@@ -4,11 +4,11 @@
 
 ## 1. 背景与设计目标
 
-- 设计目标：让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以版本化策略、学习事件、反馈聚合和用户确认的画像提案持续改进助手行为。
+- 设计目标：让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以 releaseDigest 内容寻址的不可变策略发布、学习事件、反馈聚合和用户确认的画像提案持续改进助手行为。
 
 ## 2. 领域模型与所有权
 
-- authoritative ownership：拥有 `AssistantConversation`、`AssistantRun`、流式事件、助手策略版本和助手学习事实的生命周期与写入决定权。
+- authoritative ownership：拥有 `AssistantConversation`、`AssistantRun`、流式事件、助手策略发布和助手学习事实的生命周期与写入决定权。
 - write boundary：只能通过本领域公开 command 修改其拥有事实。
 - cross-domain proposal boundary：`ProfileUpdateProposal`、`Persona`、应用审计与回滚事实归 user-service 的用户身份画像领域所有；助手只通过该聚合的公开 command/event 提交可审核来源，不复制状态机、receipt、outbox 或存储。
 - 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
@@ -36,7 +36,7 @@
 <a id="dec-001"></a>
 ### DEC-001 运行状态是流式交付的唯一事实源
 - 决策：运行状态是流式交付的唯一事实源。
-- 理由：让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以版本化策略、学习事件、反馈聚合和用户确认的画像提案持续改进助手行为。
+- 理由：让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以 releaseDigest 唯一标识策略内容，并通过 rollout revision 控制激活与回滚。
 - 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`

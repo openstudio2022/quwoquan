@@ -101,6 +101,10 @@ func applyCommentAuthorExclusions(filter bson.M, authorIDs []string) {
 	filter["authorId"] = bson.M{"$nin": excluded}
 }
 
+func applyCommentAccountRestrictionVisibility(filter bson.M) {
+	filter["accountRestricted"] = bson.M{"$ne": true}
+}
+
 func normalizeCommentPageLimit(limit int) int {
 	if limit <= 0 {
 		return 20

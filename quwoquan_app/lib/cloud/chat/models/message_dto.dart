@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_card_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart'
@@ -20,7 +21,7 @@ class ChatMessageDisplayItem {
     required this.senderId,
     required this.senderName,
     required this.senderAvatar,
-    required this.senderSubAccountId,
+    required this.senderPersonaId,
     required this.type,
     required this.content,
     required this.status,
@@ -44,7 +45,7 @@ class ChatMessageDisplayItem {
   final String senderId;
   final String senderName;
   final String senderAvatar;
-  final String senderSubAccountId;
+  final String senderPersonaId;
   final String type;
   final String content;
   final String status;
@@ -63,7 +64,10 @@ class ChatMessageDisplayItem {
 
 /// 气泡与长按菜单使用的展示模型（仅 UI；契约字段仍以 [ChatMessageDto] 为准）。
 extension ChatMessageDtoDisplay on ChatMessageDto {
-  ChatMessageDisplayItem toDisplayItem({required String currentUserId}) {
+  ChatMessageDisplayItem toDisplayItem({
+    required String currentUserId,
+    MediaEndpointConfig? mediaEndpointConfig,
+  }) {
     final isSelf =
         senderId == currentUserId ||
         (senderId == 'current_user' && currentUserId.isNotEmpty);
@@ -79,8 +83,11 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       clientMsgId: clientMsgId,
       senderId: senderId,
       senderName: senderName?.trim() ?? '',
-      senderAvatar: resolveAvatarImageUrl(senderAvatar),
-      senderSubAccountId: senderId,
+      senderAvatar: resolveAvatarImageUrl(
+        senderAvatar,
+        endpointConfig: mediaEndpointConfig,
+      ),
+      senderPersonaId: senderId,
       type: type,
       content: content?.trim() ?? '',
       status: status,

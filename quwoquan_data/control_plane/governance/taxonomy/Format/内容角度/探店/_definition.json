@@ -2,6 +2,7 @@
   "label": "探店",
   "labelEn": "Store Visit",
   "description": "探访餐厅、门店、景点、住宿的打卡体验内容视角",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -21,7 +21,7 @@ var telemetrySchemaPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 //
 // 它只依赖 application 层的 typed ports；不向业务层暴露 SQL、schema 或
 // backend identity。每个测试/环境使用独立 schema，删除 schema 即可完整清理
-// raw、startup、runtime、ledger 与 visit 数据。
+// raw、startup、runtime 与 ledger 数据。VisitRecord 只属于 MongoDB。
 type PostgresTelemetryStore struct {
 	pool   *pgxpool.Pool
 	schema string
@@ -101,16 +101,7 @@ CREATE TABLE IF NOT EXISTS %s.telemetry_runtime_records (
 );
 CREATE INDEX IF NOT EXISTS telemetry_runtime_records_occurred_at_idx
   ON %s.telemetry_runtime_records (occurred_at DESC);
-CREATE TABLE IF NOT EXISTS %s.telemetry_visits (
-  target_type TEXT NOT NULL,
-  target_key TEXT NOT NULL,
-  user_id TEXT NOT NULL,
-  visit_count INTEGER NOT NULL,
-  last_seen_at TIMESTAMPTZ NOT NULL,
-  session_id TEXT NOT NULL DEFAULT '',
-  source TEXT NOT NULL DEFAULT '',
-  PRIMARY KEY (target_type, target_key, user_id)
-);
+DROP TABLE IF EXISTS %s.telemetry_visits;
 `, schema,
 		schema,
 		schema,
@@ -122,8 +113,10 @@ CREATE TABLE IF NOT EXISTS %s.telemetry_visits (
 		schema,
 		schema,
 	)
-	_, err := s.pool.Exec(ctx, ddl)
-	return err
+	if _, err := s.pool.Exec(ctx, ddl); err != nil {
+		return err
+	}
+	return nil
 }
 
 func quoteTelemetryIdentifier(value string) string {
@@ -132,98 +125,6 @@ func quoteTelemetryIdentifier(value string) string {
 
 func (s *PostgresTelemetryStore) table(name string) string {
 	return quoteTelemetryIdentifier(s.schema) + "." + quoteTelemetryIdentifier(name)
-}
-
-func (s *PostgresTelemetryStore) RecordVisit(
-	ctx context.Context,
-	input application.VisitInput,
-) (application.VisitRecord, error) {
-	targetType := strings.TrimSpace(input.TargetType)
-	targetKey := strings.TrimSpace(input.TargetKey)
-	userID := strings.TrimSpace(input.UserID)
-	if targetType == "" || targetKey == "" {
-		return application.VisitRecord{}, errors.New("visit target is required")
-	}
-	if userID == "" {
-		userID = "anonymous"
-	}
-	const query = `
-INSERT INTO %s (target_type,target_key,user_id,visit_count,last_seen_at,session_id,source)
-VALUES ($1,$2,$3,1,NOW(),$4,$5)
-ON CONFLICT (target_type,target_key,user_id)
-DO UPDATE SET
-  visit_count = %s.visit_count + 1,
-  last_seen_at = NOW(),
-  session_id = EXCLUDED.session_id,
-  source = EXCLUDED.source
-RETURNING visit_count,last_seen_at,session_id,source`
-	stmt := fmt.Sprintf(query, s.table("telemetry_visits"), s.table("telemetry_visits"))
-	var record application.VisitRecord
-	var lastSeen time.Time
-	if err := s.pool.QueryRow(ctx, stmt, targetType, targetKey, userID,
-		strings.TrimSpace(input.SessionID), strings.TrimSpace(input.Source)).
-		Scan(&record.VisitCount, &lastSeen, &record.SessionID, &record.Source); err != nil {
-		return application.VisitRecord{}, err
-	}
-	record.TargetType = targetType
-	record.TargetKey = targetKey
-	record.UserID = userID
-	record.LastSeenAt = lastSeen.UTC().Format(time.RFC3339Nano)
-	return record, nil
-}
-
-func (s *PostgresTelemetryStore) GetVisit(
-	ctx context.Context,
-	userID, targetType, targetKey string,
-) (application.VisitRecord, bool, error) {
-	var record application.VisitRecord
-	var lastSeen time.Time
-	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-SELECT target_type,target_key,user_id,visit_count,last_seen_at,session_id,source
-FROM %s
-WHERE user_id=$1 AND target_type=$2 AND target_key=$3`, s.table("telemetry_visits")),
-		strings.TrimSpace(userID), strings.TrimSpace(targetType), strings.TrimSpace(targetKey)).
-		Scan(&record.TargetType, &record.TargetKey, &record.UserID,
-			&record.VisitCount, &lastSeen, &record.SessionID, &record.Source)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return application.VisitRecord{}, false, nil
-	}
-	if err != nil {
-		return application.VisitRecord{}, false, err
-	}
-	record.LastSeenAt = lastSeen.UTC().Format(time.RFC3339Nano)
-	return record, true, nil
-}
-
-func (s *PostgresTelemetryStore) GetVisitStats(
-	ctx context.Context,
-	query application.VisitStatsQuery,
-) (application.VisitStats, error) {
-	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-SELECT target_type,target_key,user_id,visit_count,last_seen_at,session_id,source
-FROM %s
-WHERE target_type=$1 AND target_key=$2
-ORDER BY last_seen_at DESC`, s.table("telemetry_visits")),
-		strings.TrimSpace(query.TargetType), strings.TrimSpace(query.TargetKey))
-	if err != nil {
-		return application.VisitStats{}, err
-	}
-	defer rows.Close()
-	out := application.VisitStats{Items: make([]application.VisitRecord, 0)}
-	for rows.Next() {
-		var item application.VisitRecord
-		var lastSeen time.Time
-		if err := rows.Scan(
-			&item.TargetType, &item.TargetKey, &item.UserID, &item.VisitCount,
-			&lastSeen, &item.SessionID, &item.Source,
-		); err != nil {
-			return application.VisitStats{}, err
-		}
-		item.LastSeenAt = lastSeen.UTC().Format(time.RFC3339Nano)
-		out.TotalVisits += item.VisitCount
-		out.Items = append(out.Items, item)
-	}
-	return out, rows.Err()
 }
 
 func (s *PostgresTelemetryStore) Begin(
@@ -857,7 +758,6 @@ func minTelemetryInt(a, b int) int {
 }
 
 // Ensure the single integration composition satisfies every typed telemetry port.
-var _ application.VisitTelemetryStore = (*PostgresTelemetryStore)(nil)
 var _ application.EventLogStore = (*PostgresTelemetryStore)(nil)
 var _ application.EventBatchLedger = (*PostgresTelemetryStore)(nil)
 var _ application.RuntimeLogStore = (*PostgresTelemetryStore)(nil)

@@ -4,7 +4,6 @@
     "reason": "cloud adapter roots are a fail-closed architecture policy",
     "expires_when": "never while the cloud runtime exists"
   },
-  "version": 4,
   "adapter_roots": [
     "quwoquan_app/lib/cloud/remote",
     "quwoquan_app/lib/cloud/services"

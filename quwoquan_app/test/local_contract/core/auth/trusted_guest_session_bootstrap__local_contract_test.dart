@@ -16,6 +16,13 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('匿名设备指纹保持既有 canonical 字节身份', () {
+    expect(
+      deriveAnonymousDeviceFingerprintHash('install-1'),
+      'd7e2cc6057f3cbb1233d162744070d4c5a1afac3fb218c559cbf389ad888f605',
+    );
+  });
+
   test('首次正常启动单飞获取可信游客会话且不改变显式登录语义', () async {
     final store = _MemoryAuthSessionStore(_emptyStored());
     LoginAnonymousCommand? captured;
@@ -51,7 +58,7 @@ void main() {
     expect(state.isAuthenticated, isFalse);
     expect(state.isAnonymousSession, isTrue);
     expect(state.hasTrustedSession, isTrue);
-    expect(state.activeSubAccountId, 'anonymous-persona');
+    expect(state.activePersonaId, 'anonymous-persona');
     expect(
       await container
           .read(authSessionControllerProvider.notifier)
@@ -80,9 +87,7 @@ void main() {
 
   test('恢复既有匿名 bearer 时不重复调用 LoginAnonymous', () async {
     var loginCalls = 0;
-    final store = _MemoryAuthSessionStore(
-      _storedFromGrant(_anonymousGrant(), trustedGuestSession: true),
-    );
+    final store = _MemoryAuthSessionStore(_storedFromGrant(_anonymousGrant()));
     final container = ProviderContainer(
       overrides: [
         startupAuthRestoreGateProvider.overrideWith(_OpenAuthGate.new),
@@ -239,24 +244,6 @@ void main() {
     expect(stored.rememberedLoginMaskedIdentifier, '138****0001');
     expect(stored.manualLoggedOut, isTrue);
   });
-
-  test('升级自匿名身份的旧正式账号 refresh token 迁移到返回账号槽', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'auth.install_id': 'install-1',
-      'auth.account_state': 'active',
-      'auth.identity_origin': 'anonymous_device',
-      'auth.manual_logged_out': true,
-    });
-    FlutterSecureStorage.setMockInitialValues(<String, String>{
-      'auth.refresh_token': 'legacy-formal-refresh',
-    });
-
-    final stored = await AuthSessionStore().read();
-
-    expect(stored.refreshToken, isEmpty);
-    expect(stored.rememberedRefreshToken, 'legacy-formal-refresh');
-    expect(stored.quickLoginRefreshToken, 'legacy-formal-refresh');
-  });
 }
 
 final class _OpenAuthGate extends StartupAuthRestoreGateNotifier {
@@ -279,20 +266,22 @@ final class _LoginWriter implements AccountSessionLoginCommandWriter {
       throw UnsupportedError('not used');
 
   @override
-  Future<AuthSessionGrant> loginWithAlipay(LoginWithAlipayCommand command) =>
-      throw UnsupportedError('not used');
+  Future<FederatedLoginOutcome> loginWithAlipay(
+    LoginWithAlipayCommand command,
+  ) => throw UnsupportedError('not used');
 
   @override
   Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command) =>
       throw UnsupportedError('not used');
 
   @override
-  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command) =>
+  Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) =>
       throw UnsupportedError('not used');
 
   @override
-  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command) =>
-      throw UnsupportedError('not used');
+  Future<FederatedLoginOutcome> loginWithWechat(
+    LoginWithWechatCommand command,
+  ) => throw UnsupportedError('not used');
 }
 
 final class _MemoryAuthSessionStore extends AuthSessionStore {
@@ -314,8 +303,6 @@ final class _MemoryAuthSessionStore extends AuthSessionStore {
     stored = _storedFromGrant(
       result,
       previous: stored,
-      trustedGuestSession:
-          rememberedLoginMethod == AuthRememberedLoginMethod.anonymous,
       rememberedLoginMethod: rememberedLoginMethod,
       rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier,
       rememberedLoginIdentifier: rememberedLoginIdentifier,
@@ -327,7 +314,7 @@ StoredAuthSession _emptyStored() => const StoredAuthSession(
   accessToken: '',
   refreshToken: '',
   ownerId: '',
-  activeSubAccountId: '',
+  activePersonaId: '',
   accountState: '',
   identityOrigin: '',
   installId: 'install-1',
@@ -338,51 +325,50 @@ StoredAuthSession _emptyStored() => const StoredAuthSession(
 StoredAuthSession _storedFromGrant(
   AuthSessionGrant grant, {
   StoredAuthSession? previous,
-  required bool trustedGuestSession,
   AuthRememberedLoginMethod rememberedLoginMethod =
       AuthRememberedLoginMethod.unknown,
   String? rememberedLoginMaskedIdentifier,
   String? rememberedLoginIdentifier,
 }) {
+  final isAnonymousSession = grant.accountState.trim() == 'anonymous';
   return StoredAuthSession(
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken,
     ownerId: grant.ownerId,
-    activeSubAccountId: grant.activeSub?.subAccountId ?? '',
+    activePersonaId: grant.activePersona?.personaId ?? '',
     accountState: grant.accountState,
     identityOrigin: grant.identityOrigin,
-    trustedGuestSession: trustedGuestSession,
     installId: previous?.installId ?? 'install-1',
     lastRefreshAtEpochMs: DateTime.now().millisecondsSinceEpoch,
     lastForegroundAuthCheckAtEpochMs: DateTime.now().millisecondsSinceEpoch,
-    rememberedLoginMethod: trustedGuestSession
+    rememberedLoginMethod: isAnonymousSession
         ? previous?.rememberedLoginMethod ?? AuthRememberedLoginMethod.unknown
         : rememberedLoginMethod,
-    rememberedLoginMaskedIdentifier: trustedGuestSession
+    rememberedLoginMaskedIdentifier: isAnonymousSession
         ? previous?.rememberedLoginMaskedIdentifier ?? ''
         : rememberedLoginMaskedIdentifier ?? '',
-    rememberedLoginIdentifier: trustedGuestSession
+    rememberedLoginIdentifier: isAnonymousSession
         ? previous?.rememberedLoginIdentifier ?? ''
         : rememberedLoginIdentifier ?? '',
-    rememberedDisplayName: trustedGuestSession
+    rememberedDisplayName: isAnonymousSession
         ? previous?.rememberedDisplayName ?? ''
         : grant.accountHint?.displayName ?? '',
-    rememberedAvatarUrl: trustedGuestSession
+    rememberedAvatarUrl: isAnonymousSession
         ? previous?.rememberedAvatarUrl ?? ''
         : grant.accountHint?.avatarUrl ?? '',
-    rememberedNicknameCustomized: trustedGuestSession
+    rememberedNicknameCustomized: isAnonymousSession
         ? previous?.rememberedNicknameCustomized ?? false
         : grant.accountHint?.nicknameCustomized ?? false,
-    rememberedRefreshToken: trustedGuestSession
+    rememberedRefreshToken: isAnonymousSession
         ? previous?.rememberedRefreshToken ?? ''
         : '',
-    quickLoginExpiresAtEpochMs: trustedGuestSession
+    quickLoginExpiresAtEpochMs: isAnonymousSession
         ? previous?.quickLoginExpiresAtEpochMs ?? 0
         : 0,
-    manualLoggedOut: trustedGuestSession
+    manualLoggedOut: isAnonymousSession
         ? previous?.manualLoggedOut ?? false
         : false,
-    launchPromptDismissed: trustedGuestSession
+    launchPromptDismissed: isAnonymousSession
         ? previous?.launchPromptDismissed ?? true
         : false,
   );
@@ -396,9 +382,9 @@ AuthSessionGrant _anonymousGrant() => const AuthSessionGrant(
   identityOrigin: 'anonymous_device',
   logicalShard: 1,
   anonymousRetentionPolicy: 'preserve',
-  subAccountCount: 1,
+  personaCount: 1,
   sessionRememberTtlSeconds: 2592000,
-  activeSub: ActivePersonaEnvelope(subAccountId: 'anonymous-persona'),
+  activePersona: ActivePersonaEnvelope(personaId: 'anonymous-persona'),
 );
 
 AuthSessionGrant _formalGrant() => const AuthSessionGrant(
@@ -409,9 +395,9 @@ AuthSessionGrant _formalGrant() => const AuthSessionGrant(
   identityOrigin: 'anonymous_device',
   logicalShard: 2,
   anonymousRetentionPolicy: 'preserve',
-  subAccountCount: 1,
+  personaCount: 1,
   sessionRememberTtlSeconds: 2592000,
-  activeSub: ActivePersonaEnvelope(subAccountId: 'formal-persona'),
+  activePersona: ActivePersonaEnvelope(personaId: 'formal-persona'),
 );
 
 Future<void> _waitUntil(bool Function() predicate) async {

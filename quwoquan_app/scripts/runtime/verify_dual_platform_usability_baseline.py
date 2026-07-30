@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Static gate for dual-platform truly-usable baseline contracts.
+"""Static component-readiness gate for dual-platform runtime wiring.
 
-Host T3 / HTTP 200 alone is never enough. This gate proves the required
-launcher, error anti-leak, app-core-readback Patrol journey, and device-matrix
-wiring stay on the unique mainline before any “stable baseline” claim.
+This gate checks only repository-controlled wiring.  It never claims runtime
+or commercial readiness; those facts belong to the canonical startup
+environment CaseResult report.
 """
 
 from __future__ import annotations
@@ -56,7 +56,10 @@ def main() -> int:
         GAMMA_T3,
     ):
         if not path.is_file():
-            fail(failures, f"missing required baseline artifact: {path.relative_to(ROOT)}")
+            fail(
+                failures,
+                f"missing required component artifact: {path.relative_to(ROOT)}",
+            )
 
     if failures:
         _emit(failures)
@@ -138,6 +141,14 @@ def main() -> int:
             fail(failures, f"{RUN_SH.relative_to(ROOT)}: missing launcher requirement {required}")
 
     patrol = CORE_READBACK_PATROL.read_text(encoding="utf-8")
+    if "skip:" in patrol or "kRunPatrolT4" in patrol:
+        fail(
+            failures,
+            (
+                f"{CORE_READBACK_PATROL.relative_to(ROOT)}: required readback "
+                "must not use a dynamic skip"
+            ),
+        )
     for needle in (
         "environment_app_core_readback",
         "provisionPatrolCoreChatConversation",
@@ -225,15 +236,12 @@ def main() -> int:
 
 def _emit(failures: list[str]) -> None:
     if failures:
-        print("[verify_dual_platform_usability_baseline] FAIL")
+        print("[verify_dual_platform_component_readiness] FAILED")
         for item in failures:
             print(f"- {item}")
         return
-    print("[verify_dual_platform_usability_baseline] OK")
-    print(
-        "Stable baseline still requires dual-platform router shell + four-core "
-        "user journeys; host T3 alone is insufficient."
-    )
+    print("[verify_dual_platform_component_readiness] COMPONENT_READY")
+    print("Runtime readiness is decided only by the startup environment CaseResult report.")
 
 
 if __name__ == "__main__":

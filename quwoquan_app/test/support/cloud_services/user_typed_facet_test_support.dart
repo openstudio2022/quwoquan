@@ -1,16 +1,33 @@
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import 'repository_mock_reexports.dart';
 
+/// Chat/User widget contracts use an explicit authenticated identity instead
+/// of relying on the production session store or an anonymous default.
+final class TestAuthenticatedSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'test-access-token',
+    refreshToken: 'test-refresh-token',
+    ownerId: 'fixture_user_current',
+    activePersonaId: 'fixture_user_current',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'test-install-id',
+  );
+}
+
 RemoteGreetingRepository alphaGreetingRepository({
-  String requesterSubAccountId = 'fixture_user_current',
+  String requesterPersonaId = 'fixture_user_current',
   Iterable<GreetingRequestRecord> seedInbox = const <GreetingRequestRecord>[],
   Iterable<GreetingRequestRecord> seedOutbox = const <GreetingRequestRecord>[],
 }) {
   final facet = AlphaGreetingRequestFacet(
-    requesterSubAccountId: requesterSubAccountId,
+    requesterPersonaId: requesterPersonaId,
     seedInbox: seedInbox,
     seedOutbox: seedOutbox,
   );
@@ -50,8 +67,8 @@ final class TestRelationshipCapabilityQuery
   ) async {
     return switch (_preset) {
       _RelationshipCapabilityPreset.mutual => RelationshipCapabilityResult(
-        viewerSubAccountId: 'fixture_user_current',
-        targetSubAccountId: query.targetSubAccountId,
+        viewerPersonaId: 'fixture_user_current',
+        targetPersonaId: query.targetPersonaId,
         relationState: 'mutual',
         canFollow: false,
         canUnfollow: true,
@@ -69,8 +86,8 @@ final class TestRelationshipCapabilityQuery
       ),
       _RelationshipCapabilityPreset.notFollowing =>
         RelationshipCapabilityResult(
-          viewerSubAccountId: 'fixture_user_current',
-          targetSubAccountId: query.targetSubAccountId,
+          viewerPersonaId: 'fixture_user_current',
+          targetPersonaId: query.targetPersonaId,
           relationState: 'not_following',
           canFollow: true,
           canUnfollow: false,
@@ -102,7 +119,7 @@ final class _ReconciledRelationshipCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     final result = await query.getRelationshipCapability(
-      GetRelationshipCapabilityQuery(targetSubAccountId: targetUserId),
+      GetRelationshipCapabilityQuery(targetPersonaId: targetUserId),
     );
     return RelationshipCapabilityDto.fromContract(result);
   }

@@ -13,8 +13,6 @@ class ChatConversationWireDto {
   final String circleGroupId;
   final String entityId;
   final String originType;
-  final String bindingType;
-  final String lifecyclePolicy;
   final int maxSeq;
   final int memberCount;
   final int membersRosterRevision;
@@ -44,8 +42,6 @@ class ChatConversationWireDto {
     required this.circleGroupId,
     required this.entityId,
     required this.originType,
-    required this.bindingType,
-    required this.lifecyclePolicy,
     required this.maxSeq,
     required this.memberCount,
     required this.membersRosterRevision,
@@ -78,8 +74,6 @@ class ChatConversationWireDto {
       circleGroupId: m['circleGroupId'] as String,
       entityId: m['entityId'] as String,
       originType: m['originType'] as String,
-      bindingType: m['bindingType'] as String,
-      lifecyclePolicy: m['lifecyclePolicy'] as String,
       maxSeq: m['maxSeq'] as int,
       memberCount: m['memberCount'] as int,
       membersRosterRevision: m['membersRosterRevision'] as int,
@@ -112,8 +106,6 @@ class ChatConversationWireDto {
       'circleGroupId': circleGroupId,
       'entityId': entityId,
       'originType': originType,
-      'bindingType': bindingType,
-      'lifecyclePolicy': lifecyclePolicy,
       'maxSeq': maxSeq,
       'memberCount': memberCount,
       'membersRosterRevision': membersRosterRevision,
@@ -145,8 +137,6 @@ class ChatConversationWireDto {
     String? circleGroupId,
     String? entityId,
     String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     int? maxSeq,
     int? memberCount,
     int? membersRosterRevision,
@@ -176,8 +166,6 @@ class ChatConversationWireDto {
       circleGroupId: circleGroupId ?? this.circleGroupId,
       entityId: entityId ?? this.entityId,
       originType: originType ?? this.originType,
-      bindingType: bindingType ?? this.bindingType,
-      lifecyclePolicy: lifecyclePolicy ?? this.lifecyclePolicy,
       maxSeq: maxSeq ?? this.maxSeq,
       memberCount: memberCount ?? this.memberCount,
       membersRosterRevision: membersRosterRevision ?? this.membersRosterRevision,
@@ -211,8 +199,6 @@ void _validateChatConversationWireDtoWire(Map<String, dynamic> m) {
     'circleGroupId',
     'entityId',
     'originType',
-    'bindingType',
-    'lifecyclePolicy',
     'maxSeq',
     'memberCount',
     'membersRosterRevision',
@@ -266,12 +252,6 @@ void _validateChatConversationWireDtoWire(Map<String, dynamic> m) {
   }
   if (!m.containsKey('originType') || m['originType'] == null || (m['originType'] is! String)) {
     throw FormatException('ChatConversationWireDto.originType has an invalid wire value');
-  }
-  if (!m.containsKey('bindingType') || m['bindingType'] == null || (m['bindingType'] is! String)) {
-    throw FormatException('ChatConversationWireDto.bindingType has an invalid wire value');
-  }
-  if (!m.containsKey('lifecyclePolicy') || m['lifecyclePolicy'] == null || (m['lifecyclePolicy'] is! String)) {
-    throw FormatException('ChatConversationWireDto.lifecyclePolicy has an invalid wire value');
   }
   if (!m.containsKey('maxSeq') || m['maxSeq'] == null || (m['maxSeq'] is! int)) {
     throw FormatException('ChatConversationWireDto.maxSeq has an invalid wire value');

@@ -1,0 +1,12 @@
+{
+  "label": "纽约州",
+  "labelEn": "New York",
+  "description": "东北部核心州",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

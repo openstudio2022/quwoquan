@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -214,6 +215,34 @@ void main() {
         expect(requestCount, 0);
       },
     );
+
+    test('stop cancels a pending long poll backoff timer', () {
+      fakeAsync((clock) {
+        var requestCount = 0;
+        final transport = LongPollTransport(
+          config: const RealtimeConfig(
+            wsUrl: 'ws://127.0.0.1:18080/realtime/ws',
+            longPollHoldSec: 1,
+          ),
+          authTokenProvider: const _TokenProvider('jwt-token'),
+          onEvents: (_) {},
+          client: MockClient((request) async {
+            requestCount++;
+            throw http.ClientException('offline', request.url);
+          }),
+        );
+
+        transport.start();
+        clock.flushMicrotasks();
+
+        expect(requestCount, 5);
+        expect(clock.pendingTimers, hasLength(1));
+
+        transport.stop();
+        expect(clock.pendingTimers, isEmpty);
+        transport.dispose();
+      });
+    });
   });
 }
 

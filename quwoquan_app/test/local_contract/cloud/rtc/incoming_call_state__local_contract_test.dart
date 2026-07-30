@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -105,8 +104,8 @@ final class _CallQuery implements CallQuery {
     final now = DateTime.utc(2026, 7, 19);
     return CallSessionDto(
       callId: query.callId,
-      callType: 'audio',
-      status: 'ringing',
+      callType: CallType.audio,
+      status: CallStatus.ringing,
       initiatorId: 'persona-caller',
       roomId: 'rtc-room-${query.callId}',
       maxParticipants: 2,
@@ -114,13 +113,13 @@ final class _CallQuery implements CallQuery {
       participants: <CallParticipantDto>[
         const CallParticipantDto(
           userId: 'persona-caller',
-          role: 'initiator',
-          status: 'ringing',
+          role: ParticipantRole.initiator,
+          status: ParticipantStatus.ringing,
         ),
         const CallParticipantDto(
           userId: 'persona-current',
-          role: 'invitee',
-          status: 'ringing',
+          role: ParticipantRole.invitee,
+          status: ParticipantStatus.ringing,
         ),
       ],
       createdAt: now,

@@ -21,8 +21,9 @@ import (
 	"quwoquan_service/internal/platform/testinfra"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 	learningapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/application"
 	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
@@ -31,6 +32,8 @@ import (
 	preferencefact "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/application"
 	preferencepersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_preference_fact/infrastructure/persistence"
 )
+
+const integrationPolicyReleaseDigest = "e1a0a7e3379c544c2551da7aafba674ddae2ac9c7d08fdb5762301e9097c771d"
 
 var (
 	integrationMongoDB              *mongo.Database
@@ -220,24 +223,23 @@ func initializeIntegrationStores(ctx context.Context) {
 	}
 }
 
-func newIntegrationAssistantService(opts ...application.AssistantServiceOption) *application.AssistantService {
+func newIntegrationAssistantService(opts ...orchestration.AssistantServiceOption) *orchestration.AssistantService {
 	learningFactService := learningapplication.NewService(
 		integrationLearningFactStore,
 		learningpersistence.NewMongoRunOwnerReader(integrationMongoDB),
 		nil,
 	)
-	baseOptions := []application.AssistantServiceOption{
-		application.WithLearningFactWriter(
-			application.LearningFactWriterFunc(
+	baseOptions := []orchestration.AssistantServiceOption{
+		orchestration.WithLearningFactWriter(
+			ports.LearningFactWriterFunc(
 				func(
 					ctx context.Context,
-					command application.ServiceScorecardFactCommand,
+					command ports.ServiceScorecardFactCommand,
 				) error {
 					_, err := learningFactService.AppendServiceFact(
 						ctx,
 						learningmodel.AppendCommand{
 							EventID:          command.EventID,
-							EventVersion:     1,
 							FactType:         learningmodel.FactTypeServiceScorecard,
 							AssistantTurnID:  command.AssistantTurnID,
 							ReferralSource:   "service",
@@ -253,11 +255,11 @@ func newIntegrationAssistantService(opts ...application.AssistantServiceOption) 
 				},
 			),
 		),
-		application.WithLearningProjectionReader(integrationLearningProjector),
-		application.WithSkillSubscriptionStore(integrationSubscriptionStore),
-		application.WithConversationRunStore(integrationConversationRunStore),
-		application.WithFrozenPolicyResolver(
-			application.FrozenPolicyResolverFunc(
+		orchestration.WithLearningProjectionReader(integrationLearningProjector),
+		orchestration.WithSkillSubscriptionStore(integrationSubscriptionStore),
+		orchestration.WithConversationRunStore(integrationConversationRunStore),
+		orchestration.WithFrozenPolicyResolver(
+			ports.FrozenPolicyResolverFunc(
 				func(
 					_ context.Context,
 					policyID string,
@@ -273,7 +275,7 @@ func newIntegrationAssistantService(opts ...application.AssistantServiceOption) 
 					}
 					return assistant.AssistantFrozenPolicySelection{
 						PolicyID:        policyID,
-						ReleaseVersion:  "test-release-v1",
+						ReleaseDigest:   integrationPolicyReleaseDigest,
 						Cohort:          "control",
 						RolloutRevision: 1,
 						RuleID:          "test-default",
@@ -283,18 +285,18 @@ func newIntegrationAssistantService(opts ...application.AssistantServiceOption) 
 							DomainID:        domainID,
 							PromptPolicy:    "test frozen prompt",
 							AllowedTools:    []string{},
-							SearchIntensity: "balanced",
+							SearchIntensity: "medium",
 						},
 					}, nil
 				},
 			),
 		),
-		application.WithPreferenceSnapshotReader(
+		orchestration.WithPreferenceSnapshotReader(
 			preferencefact.NewQueryFacade(integrationPreferenceStore),
 		),
 	}
 	baseOptions = append(baseOptions, opts...)
-	return application.NewAssistantService(
+	return orchestration.NewAssistantService(
 		integrationConsentStore,
 		integrationRedisClient,
 		baseOptions...,
@@ -349,6 +351,9 @@ func resetIntegrationState(t *testing.T) {
 	if err := integrationRedisServer.FlushDBs(ctx, 0, 1, 2); err != nil {
 		t.Fatalf("reset assistant integration Redis: %v", err)
 	}
+	if _, err := integrationLearningProjector.Rebuild(ctx); err != nil {
+		t.Fatalf("initialize canonical assistant learning projection: %v", err)
+	}
 }
 
 func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
@@ -358,7 +363,7 @@ func TestAssistantStorageTopologyMigrationsAndIndexes(t *testing.T) {
 	assertMongoIndex(t, "skill_subscriptions", "idx_skill_subscriptions_status_updated")
 	assertMongoIndex(t, "assistant_preference_facts", "uq_assistant_preference_identity")
 	assertMongoIndex(t, "assistant_run_events", "uq_run_events_run_seq")
-	assertMongoIndex(t, "assistant_learning_facts", "uq_assistant_learning_fact_identity")
+	assertMongoIndex(t, "assistant_learning_facts", "uq_assistant_learning_fact_sequence")
 	assertMongoIndex(t, "assistant_learning_facts", "idx_assistant_learning_fact_turn")
 	assertMongoIndex(t, "rm_assistant_learning_projection", "idx_assistant_learning_projection_owner_updated")
 

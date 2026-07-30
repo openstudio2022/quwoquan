@@ -89,16 +89,16 @@ def _remote_runtime_config_issues() -> list[str]:
             issues.append(f"{_rel(path)}: runtime config must be a mapping")
             continue
         runtime = document.get("runtime")
-        seed = document.get("seed")
-        if not isinstance(runtime, dict) or not isinstance(seed, dict):
-            issues.append(f"{_rel(path)}: runtime and seed mappings are required")
+        if not isinstance(runtime, dict):
+            issues.append(f"{_rel(path)}: runtime mapping is required")
             continue
-        for field, value in (("runtime.currentUserId", runtime.get("currentUserId")), ("seed.manifest", seed.get("manifest"))):
-            text = str(value or "").lower()
-            if any(token in text for token in RETIRED_RUNTIME_SEED_TOKENS):
-                issues.append(f"{_rel(path)}: {field} must not reference fixture or mock data")
-        if seed.get("enabled") is not False:
-            issues.append(f"{_rel(path)}: remote runtime seed.enabled must be false")
+        if "seed" in document:
+            issues.append(f"{_rel(path)}: remote runtime must not carry seed config")
+        current_user = str(runtime.get("currentUserId") or "").lower()
+        if any(token in current_user for token in RETIRED_RUNTIME_SEED_TOKENS):
+            issues.append(
+                f"{_rel(path)}: runtime.currentUserId must not reference fixture or mock data"
+            )
     return issues
 
 

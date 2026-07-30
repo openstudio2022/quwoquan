@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/rtc/rtc_signal_payloads.g.dart';
 import 'package:quwoquan_app/cloud/rtc/rtc_signal_events.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CallType;
 
 void main() {
   group('isRtcSignalWireType', () {
@@ -25,7 +27,7 @@ void main() {
         payload: const <String, dynamic>{'callType': 'video'},
       );
       expect(p, isA<RtcCallRingingWsPayload>());
-      expect((p as RtcCallRingingWsPayload).data.callType, equals('video'));
+      expect((p as RtcCallRingingWsPayload).data.callType, CallType.video);
     });
 
     test('未知 type → RtcWsUnknownPayload', () {
@@ -51,7 +53,7 @@ void main() {
       expect(e.payload, isA<RtcCallRingingWsPayload>());
       expect(
         (e.payload as RtcCallRingingWsPayload).data.callType,
-        equals('video'),
+        CallType.video,
       );
     });
 

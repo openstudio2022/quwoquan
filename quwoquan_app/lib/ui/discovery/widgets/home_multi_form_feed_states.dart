@@ -196,3 +196,34 @@ class _HomeFollowingFeedEmptyState extends StatelessWidget {
     );
   }
 }
+
+/// Remote 查询健康完成但当前没有可展示内容时的中性终态。
+class _HomeFeedCompletedEmptyState extends StatelessWidget {
+  const _HomeFeedCompletedEmptyState({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final secondaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return ColoredBox(
+      color: pageBackground,
+      child: Center(
+        child: Text(
+          DiscoveryFeedText.contentLoadingCompleted,
+          key: const ValueKey<String>('home-feed-completed-empty'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: AppTypography.iosCaption1,
+            color: secondaryText,
+          ),
+        ),
+      ),
+    );
+  }
+}

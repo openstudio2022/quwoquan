@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-014
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-003
 import 'dart:async';
 import 'dart:io';
 
@@ -8,12 +9,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
+import 'package:quwoquan_app/components/media/video/player/video_playback_session.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/media/adaptive_video_delivery.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
+import 'package:quwoquan_app/core/media/media_playback_failure.dart';
+import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:video_player/video_player.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import '../../../../../support/video/fake_video_player_platform.dart';
@@ -21,8 +27,27 @@ import '../../../../../support/video/fake_video_player_platform.dart';
 final class _NoopMediaDownloadCache extends MediaDownloadCache {
   _NoopMediaDownloadCache() : super();
 
+  final List<String> lookedUpUrls = <String>[];
+
   @override
-  Future<String?> getCachedFilePath(String url) async => null;
+  Future<String?> getCachedFilePath(String url) async {
+    lookedUpUrls.add(url);
+    return null;
+  }
+}
+
+final _runtimeAdaptiveFlagProvider =
+    NotifierProvider<_RuntimeAdaptiveFlagNotifier, bool>(
+      _RuntimeAdaptiveFlagNotifier.new,
+    );
+
+final class _RuntimeAdaptiveFlagNotifier extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void setEnabled(bool value) {
+    state = value;
+  }
 }
 
 void main() {
@@ -35,7 +60,21 @@ void main() {
           attachmentBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
         ),
       ).resolve(
-        'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+        'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+        kind: MediaDeliveryKind.video,
+        assetId: 'video-primary-0001',
+        version: 1,
+      );
+  final adaptiveDelivery =
+      MediaDeliveryResolver(
+        MediaEndpointConfig(
+          avatarBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          imageBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          videoBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+          attachmentBaseUrl: 'https://cdn.alpha.quwoquan.com:17100',
+        ),
+      ).resolve(
+        'media/video/s/asset/video-primary-0001/v1/hls/master.m3u8',
         kind: MediaDeliveryKind.video,
         assetId: 'video-primary-0001',
         version: 1,
@@ -337,14 +376,447 @@ void main() {
     expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
   });
 
-  test('VideoPlayerWidget API 仅暴露 deliveryReference', () {
-    // 编译期契约：构造函数需要 MediaDeliveryReference；运行时抽检字段。
+  test('VideoPlayerWidget API 只接收已验证的 typed delivery reference', () {
+    // 编译期契约：P0/P1 都必须是 MediaDeliveryReference，不能传裸业务 object key。
     final widget = VideoPlayerWidget(deliveryReference: delivery);
     expect(widget.deliveryReference.kind, MediaDeliveryKind.video);
     expect(widget.deliveryReference.url, contains('video-primary-0001'));
+    expect(widget.adaptiveDeliveryReference, isNull);
   });
 
-  test('外层离屏视频不抢占原生解码器槽位', () {
+  testWidgets('feature flag 变化不重建没有 adaptive descriptor 的 MP4', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        contentFeatureFlagProvider(
+          hlsCmafAdaptivePlaybackFeatureFlag,
+        ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                onControllerCreated: controllers.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+
+    container.read(_runtimeAdaptiveFlagProvider.notifier).setEnabled(false);
+    await tester.pumpAndSettle();
+
+    expect(fakePlatform.createdDataSources, hasLength(1));
+    expect(fakePlatform.disposeCount, 0);
+    expect(controllers, hasLength(1));
+  });
+
+  testWidgets('HLS 初始化失败按候选序回退同 asset/version MP4', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform()
+      ..failCreateForUris.add(adaptiveDelivery.url);
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final cache = _NoopMediaDownloadCache();
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(cache),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        contentFeatureFlagProvider(
+          hlsCmafAdaptivePlaybackFeatureFlag,
+        ).overrideWithValue(true),
+      ],
+    );
+    addTearDown(container.dispose);
+    int? startedCandidateIndex;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                adaptiveDeliveryReference: adaptiveDelivery,
+                adaptiveDescriptorVersion: 1,
+                onPlaybackStarted: (_, candidateIndex) {
+                  startedCandidateIndex = candidateIndex;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      fakePlatform.createdDataSources.map((source) => source.uri),
+      <String>[adaptiveDelivery.url, delivery.url],
+    );
+    expect(fakePlatform.createdDataSources.first.formatHint, VideoFormat.hls);
+    expect(startedCandidateIndex, 1);
+    expect(cache.lookedUpUrls, <String>[
+      delivery.url,
+    ], reason: 'HLS master 不能进入脱离相对 segment 上下文的单文件缓存');
+  });
+
+  testWidgets('HLS 运行时失败只在当前 delivery 内降级 MP4', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        contentFeatureFlagProvider(
+          hlsCmafAdaptivePlaybackFeatureFlag,
+        ).overrideWithValue(true),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+    final startedCandidateIndexes = <int>[];
+    final playbackSession = VideoPlaybackSession();
+    addTearDown(playbackSession.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                adaptiveDeliveryReference: adaptiveDelivery,
+                adaptiveDescriptorVersion: 1,
+                playbackSession: playbackSession,
+                onControllerCreated: controllers.add,
+                onPlaybackStarted: (_, candidateIndex) {
+                  startedCandidateIndexes.add(candidateIndex);
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+    expect(
+      fakePlatform.createdDataSources.map((source) => source.uri),
+      <String>[adaptiveDelivery.url],
+    );
+
+    controllers.single.value = controllers.single.value.copyWith(
+      position: const Duration(seconds: 37),
+    );
+    controllers.single.value = controllers.single.value.copyWith(
+      errorDescription: 'injected HLS runtime failure',
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+
+    expect(
+      fakePlatform.createdDataSources.map((source) => source.uri),
+      <String>[adaptiveDelivery.url, delivery.url],
+    );
+    expect(startedCandidateIndexes, <int>[0, 1]);
+    expect(controllers, hasLength(2));
+    expect(fakePlatform.seekTargets, <Duration>[
+      const Duration(seconds: 37),
+    ], reason: '同资产 HLS → MP4 降级必须从原播放位置续接，不能从 0 秒重播');
+    expect(
+      playbackSession.snapshot.lastSourceSwitchSeekResult?.outcome,
+      VideoSourceSwitchSeekOutcome.positionReadbackSettled,
+      reason: '切源 seek 必须在新 controller attach 后进入 typed session 结果',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('video-player-ready')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('HLS 降级后的 source-switch seek 永不返回也会退出初始化链', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        contentFeatureFlagProvider(
+          hlsCmafAdaptivePlaybackFeatureFlag,
+        ).overrideWithValue(true),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+    final startedCandidateIndexes = <int>[];
+    final playbackSession = VideoPlaybackSession();
+    addTearDown(playbackSession.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                adaptiveDeliveryReference: adaptiveDelivery,
+                adaptiveDescriptorVersion: 1,
+                playbackSession: playbackSession,
+                onControllerCreated: controllers.add,
+                onPlaybackStarted: (_, candidateIndex) {
+                  startedCandidateIndexes.add(candidateIndex);
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+
+    controllers.single.value = controllers.single.value.copyWith(
+      position: const Duration(seconds: 37),
+    );
+    fakePlatform.seekCompleter = Completer<void>();
+    controllers.single.value = controllers.single.value.copyWith(
+      errorDescription: 'injected HLS runtime failure with stalled seek',
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(controllers, hasLength(2));
+    expect(startedCandidateIndexes, <int>[0, 1]);
+    expect(
+      playbackSession.snapshot.lastSourceSwitchSeekResult?.outcome,
+      VideoSourceSwitchSeekOutcome.commandTimedOut,
+    );
+    expect(
+      playbackSession.takeQoeSummary().seekEvidenceSource,
+      'source_switch_command_failed',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('video-player-ready')),
+      findsOneWidget,
+      reason: '初始化等待虽已结束，source-switch 自身 deadline 仍必须让链路退出',
+    );
+  });
+
+  testWidgets('flag 切换与 HLS error 并发时按 controller 冻结快照降级', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        contentFeatureFlagProvider(
+          hlsCmafAdaptivePlaybackFeatureFlag,
+        ).overrideWith((ref) => ref.watch(_runtimeAdaptiveFlagProvider)),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+    final failures = <MediaPlaybackFailure>[];
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                adaptiveDeliveryReference: adaptiveDelivery,
+                adaptiveDescriptorVersion: 1,
+                onControllerCreated: controllers.add,
+                onPlaybackFailed: failures.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+
+    container.read(_runtimeAdaptiveFlagProvider.notifier).setEnabled(false);
+    controllers.single.value = controllers.single.value.copyWith(
+      errorDescription: 'injected HLS runtime failure during flag switch',
+    );
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+
+    expect(failures, isEmpty, reason: '旧 HLS controller 不得用已变更的 flag 重算候选数');
+    await tester.pumpAndSettle();
+    expect(
+      fakePlatform.createdDataSources.map((source) => source.uri),
+      <String>[adaptiveDelivery.url, delivery.url],
+      reason: '并发降级完成后，已是目标 MP4 的 controller 不应再被重建',
+    );
+    expect(controllers, hasLength(2));
+    expect(failures, isEmpty);
+  });
+
+  testWidgets('HLS 位置超过较短 MP4 时降级到可播放尾部而非 0 秒', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform(
+      duration: const Duration(seconds: 20),
+    );
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: [
+        mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        contentFeatureFlagProvider(
+          hlsCmafAdaptivePlaybackFeatureFlag,
+        ).overrideWithValue(true),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+    final playbackSession = VideoPlaybackSession();
+    addTearDown(playbackSession.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                adaptiveDeliveryReference: adaptiveDelivery,
+                adaptiveDescriptorVersion: 1,
+                playbackSession: playbackSession,
+                onControllerCreated: controllers.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+
+    controllers.single.value = controllers.single.value.copyWith(
+      duration: const Duration(seconds: 60),
+      position: const Duration(seconds: 37),
+    );
+    controllers.single.value = controllers.single.value.copyWith(
+      errorDescription: 'injected HLS runtime failure',
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+
+    expect(
+      fakePlatform.createdDataSources.map((source) => source.uri),
+      <String>[adaptiveDelivery.url, delivery.url],
+    );
+    expect(controllers, hasLength(2));
+    expect(
+      fakePlatform.seekTargets,
+      <Duration>[const Duration(milliseconds: 19500)],
+      reason: '超出 fallback 时长时应留出尾部安全量，不得 seek 到 duration 或从 0 秒重播',
+    );
+    expect(
+      playbackSession.snapshot.lastSourceSwitchSeekResult?.target,
+      const Duration(milliseconds: 19500),
+    );
+  });
+
+  test('外层离屏视频不抢占槽位且视频书只预热唯一 N+1', () {
     final source =
         File(
           'lib/ui/discovery/widgets/works_immersive_viewer.dart',
@@ -360,7 +832,10 @@ void main() {
         ).readAsStringSync();
 
     expect(source, contains('isVisible: index == _currentPage'));
-    expect(source, contains('initialize: widget.isVisible && isCurrent'));
+    expect(source, contains('final shouldPreheat ='));
+    expect(source, contains('index == _currentEpisodeIndex + 1'));
+    expect(source, contains('initialize: shouldInitialize'));
+    expect(source, contains('didHaveMemoryPressure()'));
     expect(source, contains('viewportEpoch != _videoViewportEpoch'));
   });
 }

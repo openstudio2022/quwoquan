@@ -2,6 +2,7 @@
   "label": "运动",
   "labelEn": "Sports",
   "description": "运动健身、户外探险、竞技体育、极限运动与电竞内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

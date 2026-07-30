@@ -2,6 +2,7 @@
   "label": "运动品牌",
   "labelEn": "Sports Brand",
   "description": "运动装备与服饰品牌类型",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

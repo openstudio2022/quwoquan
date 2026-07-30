@@ -49,9 +49,9 @@ CREATE TABLE IF NOT EXISTS experiment_assignment_facts (
   experiment_id VARCHAR(64) NOT NULL REFERENCES experiments(id),
   subject_key VARCHAR(128) NOT NULL,
   variant VARCHAR(32) NOT NULL,
-  policy_version VARCHAR(64) NOT NULL,
+  experiment_revision BIGINT NOT NULL,
   assigned_at TIMESTAMPTZ NOT NULL,
-  CONSTRAINT uq_assignment_subject UNIQUE(experiment_id, policy_version, subject_key)
+  CONSTRAINT uq_assignment_subject UNIQUE(experiment_id, experiment_revision, subject_key)
 );
 CREATE INDEX IF NOT EXISTS idx_assignment_experiment
   ON experiment_assignment_facts(experiment_id, variant);
@@ -233,7 +233,6 @@ VALUES ($1,$2,$3,$4)`, changes.Experiment.ID, idempotencyKey, commandDigest, cha
 func (s *PostgresStore) Append(
 	ctx context.Context,
 	fact model.AssignmentFact,
-	event model.Event,
 ) (model.AssignmentFact, bool, error) {
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -248,31 +247,26 @@ func (s *PostgresStore) Append(
 	var canonicalAt time.Time
 	err = tx.QueryRow(ctx, `
 INSERT INTO experiment_assignment_facts(
-  id, experiment_id, subject_key, variant, policy_version, assigned_at
+  id, experiment_id, subject_key, variant, experiment_revision, assigned_at
 ) VALUES ($1,$2,$3,$4,$5,$6)
-ON CONFLICT (experiment_id, policy_version, subject_key) DO NOTHING
-RETURNING id, experiment_id, subject_key, variant, policy_version, assigned_at`,
-		fact.ID, fact.ExperimentID, fact.SubjectKey, fact.Variant, fact.PolicyVersion, assignedAt,
-	).Scan(&canonical.ID, &canonical.ExperimentID, &canonical.SubjectKey, &canonical.Variant, &canonical.PolicyVersion, &canonicalAt)
+ON CONFLICT (experiment_id, experiment_revision, subject_key) DO NOTHING
+RETURNING id, experiment_id, subject_key, variant, experiment_revision, assigned_at`,
+		fact.ID, fact.ExperimentID, fact.SubjectKey, fact.Variant, fact.ExperimentRevision, assignedAt,
+	).Scan(&canonical.ID, &canonical.ExperimentID, &canonical.SubjectKey, &canonical.Variant, &canonical.ExperimentRevision, &canonicalAt)
 	inserted := true
 	if errors.Is(err, pgx.ErrNoRows) {
 		inserted = false
 		err = tx.QueryRow(ctx, `
-SELECT id, experiment_id, subject_key, variant, policy_version, assigned_at
+SELECT id, experiment_id, subject_key, variant, experiment_revision, assigned_at
 FROM experiment_assignment_facts
-WHERE experiment_id=$1 AND policy_version=$2 AND subject_key=$3`,
-			fact.ExperimentID, fact.PolicyVersion, fact.SubjectKey,
-		).Scan(&canonical.ID, &canonical.ExperimentID, &canonical.SubjectKey, &canonical.Variant, &canonical.PolicyVersion, &canonicalAt)
+WHERE experiment_id=$1 AND experiment_revision=$2 AND subject_key=$3`,
+			fact.ExperimentID, fact.ExperimentRevision, fact.SubjectKey,
+		).Scan(&canonical.ID, &canonical.ExperimentID, &canonical.SubjectKey, &canonical.Variant, &canonical.ExperimentRevision, &canonicalAt)
 	}
 	if err != nil {
 		return model.AssignmentFact{}, false, err
 	}
 	canonical.AssignedAt = canonicalAt.UTC().Format(time.RFC3339)
-	if inserted {
-		if err := insertOutbox(ctx, tx, event); err != nil {
-			return model.AssignmentFact{}, false, err
-		}
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return model.AssignmentFact{}, false, err
 	}
@@ -281,16 +275,18 @@ WHERE experiment_id=$1 AND policy_version=$2 AND subject_key=$3`,
 
 func (s *PostgresStore) Get(
 	ctx context.Context,
-	experimentID, policyVersion, subjectKey string,
+	experimentID string,
+	experimentRevision int64,
+	subjectKey string,
 ) (model.AssignmentFact, error) {
 	var out model.AssignmentFact
 	var assignedAt time.Time
 	err := s.pool.QueryRow(ctx, `
-SELECT id, experiment_id, subject_key, variant, policy_version, assigned_at
+SELECT id, experiment_id, subject_key, variant, experiment_revision, assigned_at
 FROM experiment_assignment_facts
-WHERE experiment_id=$1 AND policy_version=$2 AND subject_key=$3`,
-		experimentID, policyVersion, subjectKey,
-	).Scan(&out.ID, &out.ExperimentID, &out.SubjectKey, &out.Variant, &out.PolicyVersion, &assignedAt)
+WHERE experiment_id=$1 AND experiment_revision=$2 AND subject_key=$3`,
+		experimentID, experimentRevision, subjectKey,
+	).Scan(&out.ID, &out.ExperimentID, &out.SubjectKey, &out.Variant, &out.ExperimentRevision, &assignedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.AssignmentFact{}, model.ErrAssignmentNotFound
 	}
@@ -301,10 +297,10 @@ WHERE experiment_id=$1 AND policy_version=$2 AND subject_key=$3`,
 	return out, nil
 }
 
-func (s *PostgresStore) Stats(ctx context.Context, experimentID, policyVersion string) (ports.AssignmentStats, error) {
+func (s *PostgresStore) Stats(ctx context.Context, experimentID string, experimentRevision int64) (ports.AssignmentStats, error) {
 	rows, err := s.pool.Query(ctx, `
 SELECT variant, COUNT(*) FROM experiment_assignment_facts
-WHERE experiment_id=$1 AND policy_version=$2 GROUP BY variant ORDER BY variant`, experimentID, policyVersion)
+WHERE experiment_id=$1 AND experiment_revision=$2 GROUP BY variant ORDER BY variant`, experimentID, experimentRevision)
 	if err != nil {
 		return ports.AssignmentStats{}, err
 	}

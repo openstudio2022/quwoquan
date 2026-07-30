@@ -91,18 +91,17 @@ void main() {
   );
 }
 
-AppendAssistantLearningFactRequest _fact({double feedbackScore = 1}) =>
-    AppendAssistantLearningFactRequest(
+AssistantLearningFactAppendCommand _fact({double feedbackScore = 1}) =>
+    AssistantLearningFactAppendCommand(
       eventId: 'feedback:turn-1:useful',
-      eventVersion: 1,
-      factType: AssistantLearningFactType.userFeedback,
+      factType: AssistantLearningFactType.userFeedback.wireName,
       assistantTurnId: 'turn-1',
-      referralSource: AssistantReferralSource.assistantConversation,
+      referralSource: AssistantReferralSource.assistantConversation.wireName,
       domainId: 'assistant',
-      feedbackType: FeedbackType.useful,
+      feedbackType: FeedbackType.useful.wireName,
       feedbackScore: feedbackScore,
       trainingEligible: false,
-      occurredAt: DateTime.utc(2026, 7, 26).toIso8601String(),
+      occurredAt: DateTime.utc(2026, 7, 26),
     );
 
 final class _LearningFactRemote implements AssistantLearningFactAppendFacet {
@@ -110,25 +109,25 @@ final class _LearningFactRemote implements AssistantLearningFactAppendFacet {
 
   final bool available;
   final String? receiptEventId;
-  final List<AppendAssistantLearningFactRequest> requests =
-      <AppendAssistantLearningFactRequest>[];
+  final List<AssistantLearningFactAppendCommand> requests =
+      <AssistantLearningFactAppendCommand>[];
 
   @override
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AppendAssistantLearningFactRequest request,
+  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+    required AssistantLearningFactAppendCommand request,
   }) async {
     if (!available) {
       throw StateError('network unavailable');
     }
     requests.add(request);
-    return AssistantLearningFactReceipt(
+    return AssistantLearningFactAppendReceipt(
       eventId: receiptEventId ?? request.eventId,
-      eventVersion: request.eventVersion,
       accepted: true,
       deduplicated: false,
       appendSequence: 1,
-      payloadDigest: 'digest',
-      recordedAt: DateTime.utc(2026, 7, 26).toIso8601String(),
+      payloadDigest:
+          '0000000000000000000000000000000000000000000000000000000000000000',
+      recordedAt: DateTime.utc(2026, 7, 26),
     );
   }
 }

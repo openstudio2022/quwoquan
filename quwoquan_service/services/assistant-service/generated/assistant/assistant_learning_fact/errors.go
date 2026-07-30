@@ -15,6 +15,7 @@ var (
 	ErrLearningFactRunNotFound      = errors.New("ASSISTANT.USER.learning_fact_run_not_found")
 	ErrLearningFactSinkUnavailable  = errors.New("ASSISTANT.SYSTEM.learning_fact_sink_unavailable")
 	ErrLearningFactUnauthorized     = errors.New("ASSISTANT.USER.learning_fact_unauthorized")
+	ErrLearningOpsUnavailable       = errors.New("ASSISTANT.SYSTEM.learning_ops_unavailable")
 )
 
 // AppErrorFromLearningFactIdentityConflict returns *AppError for ASSISTANT.USER.learning_fact_identity_conflict (user_message from errors.yaml).
@@ -51,4 +52,10 @@ func AppErrorFromLearningFactSinkUnavailable(debugMessage string) *rterr.AppErro
 func AppErrorFromLearningFactUnauthorized(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.learning_fact_unauthorized")
 	return rterr.NewAppError(code, "请登录后再提交助手反馈", debugMessage).WithMetadata("learning_fact_unauthorized", 401).WithRecovery("reauth", 0)
+}
+
+// AppErrorFromLearningOpsUnavailable returns *AppError for ASSISTANT.SYSTEM.learning_ops_unavailable (user_message from errors.yaml).
+func AppErrorFromLearningOpsUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.SYSTEM.learning_ops_unavailable")
+	return rterr.NewAppError(code, "助手学习摘要暂时无法读取，请稍后重试", debugMessage).WithMetadata("learning_ops_unavailable", 503).WithRecovery("retry", 3)
 }

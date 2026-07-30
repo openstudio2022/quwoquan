@@ -35,7 +35,11 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/content_report_reason_sheet.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentReportTargetType, CreateContentReportCommand;
+    show
+        CircleJoinPolicy,
+        CircleVisibility,
+        ContentReportTargetType,
+        CreateContentReportCommand;
 import 'package:share_plus/share_plus.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_membership_approval_page.dart';
@@ -155,18 +159,21 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   bool _canAccessPrimaryContent(CircleState state) {
-    final visibility = state.circleData?.visibility ?? 'public';
-    return visibility != 'private' || _isMemberLike(state);
+    final visibility = state.circleData?.visibility ?? CircleVisibility.public;
+    return visibility == CircleVisibility.public || _isMemberLike(state);
   }
 
   bool _canAccessMemberSpaces(CircleState state) {
     return _isMemberLike(state);
   }
 
-  bool _isVerified(CircleState state) {
-    final status = (state.circleData?.status ?? '').trim().toLowerCase();
-    return status == 'official' || status == 'verified';
-  }
+  String _joinGateDescription(CircleJoinPolicy? policy) => switch (policy ??
+      CircleJoinPolicy.open) {
+    CircleJoinPolicy.open => CommunityText.circleJoinOpenDescription,
+    CircleJoinPolicy.approval => CommunityText.circleJoinApprovalDescription,
+    CircleJoinPolicy.inviteOnly =>
+      CommunityText.circleJoinInviteOnlyDescription,
+  };
 
   Future<void> _openEditor(
     BuildContext context, {
@@ -245,7 +252,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               icon: CupertinoIcons.slider_horizontal_3,
             ),
             // 审批入口仅 approval 圈子展示（open 圈子无 pending 队列语义）。
-            if (state.circleData?.joinPolicy == 'approval')
+            if (state.circleData?.joinPolicy == CircleJoinPolicy.approval)
               const AppActionSheetItem<_CircleMoreAction>(
                 value: _CircleMoreAction.approval,
                 label: CommunityText.circleApprovalTitle,

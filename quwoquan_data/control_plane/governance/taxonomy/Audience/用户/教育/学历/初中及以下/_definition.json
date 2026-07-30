@@ -2,6 +2,7 @@
   "label": "初中及以下",
   "labelEn": "Junior High or Below",
   "description": "初中及以下学历",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

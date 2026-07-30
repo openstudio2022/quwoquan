@@ -1,4 +1,4 @@
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话持久化消息 Map；子树用 codegen/Codec/assistantJsonAsStringKeyedMap 收窄。
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话持久化消息 Map；子树用 codegen/Codec 收窄。
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
@@ -7,19 +7,15 @@ import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
 import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
-import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
-import 'package:quwoquan_app/assistant/transcript/citation/citation_destination_resolver.dart';
 
 part 'persisted_assistant_turn_timeline_helpers.dart';
 
 const String assistantJourneyField = 'journey';
 const String assistantProcessTimelineField = 'processTimeline';
-const String assistantUiProcessTimelineField = 'uiProcessTimeline';
 const String assistantDisplayMarkdownField = 'displayMarkdown';
 const String assistantDisplayPlainTextField = 'displayPlainText';
 const String assistantFollowupPromptField = 'followupPrompt';
@@ -37,24 +33,6 @@ const String assistantTaskGraphField = 'taskGraph';
 const String assistantOrchestratorStateField = 'orchestratorState';
 const String assistantTurnSynthesisStateField = 'turnSynthesisState';
 const String assistantBoundaryOutcomeField = 'assistantBoundaryOutcome';
-const String assistantHistoryStorageVersion = 'assistant_history_v1';
-
-/// `jsonDecode` 根或嵌套 JSON 对象 → `Map<String, dynamic>`（会话持久化加载等）。
-Map<String, dynamic>? assistantJsonAsStringKeyedMap(Object? value) {
-  if (value is Map<String, dynamic>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.map((k, v) => MapEntry(k.toString(), v));
-  }
-  return null;
-}
-
-const List<JourneyStageId> assistantPrimaryJourneyStages = <JourneyStageId>[
-  JourneyStageId.analyze,
-  JourneyStageId.search,
-  JourneyStageId.verify,
-];
 
 AssistantJourney resolvePersistedAssistantJourney(
   Map<String, dynamic> message,
@@ -64,14 +42,6 @@ AssistantJourney resolvePersistedAssistantJourney(
     final parsed = AssistantJourney.fromJson(raw);
     return parsed.isEmpty ? const AssistantJourney() : parsed;
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  final nested = (runArtifacts?[assistantJourneyField] as Map?)
-      ?.cast<String, dynamic>();
-  if (nested != null && nested.isNotEmpty) {
-    final parsed = AssistantJourney.fromJson(nested);
-    return parsed.isEmpty ? const AssistantJourney() : parsed;
-  }
   return const AssistantJourney();
 }
 
@@ -79,26 +49,7 @@ AssistantJourney resolvePersistedAssistantJourney(
 AssistantJourney resolvePersistedAssistantJourneyForDisplay(
   Map<String, dynamic> message,
 ) {
-  final timeline = resolvePersistedAssistantTimeline(message);
-  if (!timeline.isEmpty) {
-    return timeline;
-  }
-  return const AssistantJourney();
-}
-
-AssistantJourney resolvePersistedAssistantTimeline(
-  Map<String, dynamic> message,
-) {
-  final raw = (message[assistantUiProcessTimelineField] as Map?)
-      ?.cast<String, dynamic>();
-  if (raw == null || raw.isEmpty) {
-    return const AssistantJourney();
-  }
-  final parsed = AssistantJourney.fromJson(raw);
-  if (parsed.isEmpty || !_hasCanonicalPrimaryTimeline(parsed)) {
-    return const AssistantJourney();
-  }
-  return parsed;
+  return resolvePersistedAssistantJourney(message);
 }
 
 List<ProcessTimelineFrame> resolvePersistedAssistantProcessTimeline(
@@ -107,18 +58,10 @@ List<ProcessTimelineFrame> resolvePersistedAssistantProcessTimeline(
   final direct = _parseProcessTimelineList(
     message[assistantProcessTimelineField],
   );
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  final nested = _parseProcessTimelineList(
-    runArtifacts?[assistantProcessTimelineField],
-  );
-  final baseTimeline = hasStructuredProcessTimeline(direct)
-      ? direct
-      : (hasStructuredProcessTimeline(nested)
-            ? nested
-            : const <ProcessTimelineFrame>[]);
   final supplemented = buildProcessTimelineFromSnapshots(
-    processTimeline: baseTimeline,
+    processTimeline: hasStructuredProcessTimeline(direct)
+        ? direct
+        : const <ProcessTimelineFrame>[],
     understandingSnapshot: resolvePersistedAssistantUnderstandingSnapshot(
       message,
     ),
@@ -148,18 +91,7 @@ AssistantDisplayState resolvePersistedAssistantDisplayState(
   if (hasAssistantDisplayState(direct)) {
     return direct;
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  if (runArtifacts == null || runArtifacts.isEmpty) {
-    return const AssistantDisplayState();
-  }
-  try {
-    return resolveAssistantDisplayStateFromRunArtifacts(
-      RunArtifacts.fromJson(runArtifacts),
-    );
-  } catch (_) {
-    return const AssistantDisplayState();
-  }
+  return const AssistantDisplayState();
 }
 
 RunArtifactsUnderstandingSnapshot
@@ -274,65 +206,6 @@ TurnSynthesisState resolvePersistedAssistantTurnSynthesisState(
   return TurnSynthesisState.fromJson(raw);
 }
 
-AssistantJourney resolveAssistantJourneyFromRunResponse(
-  AssistantRunResponse response,
-) {
-  final runArtifactsJourney = response.runArtifacts?.journey;
-  if (runArtifactsJourney != null && !runArtifactsJourney.isEmpty) {
-    return runArtifactsJourney;
-  }
-  final topLevel = response.structuredResponse[assistantJourneyField];
-  if (topLevel is Map) {
-    final parsed = AssistantJourney.fromJson(topLevel.cast<String, dynamic>());
-    if (!parsed.isEmpty) {
-      return parsed;
-    }
-  }
-  return const AssistantJourney();
-}
-
-List<ProcessTimelineFrame> resolveAssistantProcessTimelineFromRunResponse(
-  AssistantRunResponse response,
-) {
-  final runArtifactsTimeline = response.runArtifacts?.processTimeline;
-  if (runArtifactsTimeline != null &&
-      hasStructuredProcessTimeline(runArtifactsTimeline)) {
-    return normalizeProcessTimeline(runArtifactsTimeline);
-  }
-  final topLevel = response.structuredResponse[assistantProcessTimelineField];
-  final direct = _parseProcessTimelineList(topLevel);
-  if (hasStructuredProcessTimeline(direct)) {
-    return direct;
-  }
-  return const <ProcessTimelineFrame>[];
-}
-
-List<ProcessTimelineFrame>
-resolveAssistantVisibleProcessTimelineFromRunResponse(
-  AssistantRunResponse response,
-) {
-  return buildVisibleProcessTimeline(
-    resolveAssistantProcessTimelineFromRunResponse(response),
-  );
-}
-
-AssistantDisplayState resolveAssistantDisplayStateFromRunResponse(
-  AssistantRunResponse response,
-) {
-  final direct = parseAssistantDisplayStateFromMap(
-    (response.structuredResponse[assistantDisplayStateField] as Map?)
-        ?.cast<String, dynamic>(),
-  );
-  if (hasAssistantDisplayState(direct)) {
-    return direct;
-  }
-  final runArtifacts = response.runArtifacts;
-  if (runArtifacts == null) {
-    return const AssistantDisplayState();
-  }
-  return resolveAssistantDisplayStateFromRunArtifacts(runArtifacts);
-}
-
 String resolvePersistedAssistantDisplayMarkdown(Map<String, dynamic> message) {
   final displayState = resolvePersistedAssistantDisplayState(message);
   if (displayState.answer.blocks.isNotEmpty) {
@@ -371,215 +244,6 @@ List<String> resolveAssistantActionHintsFromMessage(
       .toList(growable: false);
 }
 
-String resolveAssistantFollowupPromptFromResponse(
-  AssistantRunResponse response,
-) {
-  return _sanitizeUserFacingTimelineText(
-    (response.structuredResponse[assistantFollowupPromptField] as String?) ??
-        '',
-  );
-}
-
-List<String> resolveAssistantActionHintsFromResponse(
-  AssistantRunResponse response,
-) {
-  return ((response.structuredResponse[assistantActionHintsField] as List?) ??
-          const <Object?>[])
-      .whereType<String>()
-      .map(_sanitizeUserFacingTimelineText)
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-}
-
-AssistantJourney buildAssistantUiProcessTimeline(AssistantJourney journey) {
-  if (journey.isEmpty) {
-    return const AssistantJourney();
-  }
-  final stagesById = <JourneyStageId, AssistantJourneyStage>{
-    for (final stage in journey.stages) stage.stageId: stage,
-  };
-  final normalizedStages = <AssistantJourneyStage>[
-    _normalizeStageForTimeline(
-      stageId: JourneyStageId.analyze,
-      order: 0,
-      rawStage: stagesById[JourneyStageId.analyze],
-      readiness: journey.readiness,
-      journeySummary: journey.summary,
-    ),
-    _normalizeStageForTimeline(
-      stageId: JourneyStageId.search,
-      order: 1,
-      rawStage: stagesById[JourneyStageId.search],
-      readiness: journey.readiness,
-      journeySummary: journey.summary,
-    ),
-    _normalizeStageForTimeline(
-      stageId: JourneyStageId.verify,
-      order: 2,
-      rawStage: stagesById[JourneyStageId.verify],
-      readiness: journey.readiness,
-      journeySummary: journey.summary,
-    ),
-    _normalizeStageForTimeline(
-      stageId: JourneyStageId.answer,
-      order: 3,
-      rawStage: stagesById[JourneyStageId.answer],
-      readiness: journey.readiness,
-      journeySummary: journey.summary,
-    ),
-  ];
-  final normalizedEntries =
-      journey.entries
-          .map(_normalizeEntryForTimeline)
-          .where(_timelineEntryHasVisibleSignal)
-          .toList(growable: false)
-        ..sort((a, b) => a.order.compareTo(b.order));
-  final referenceSummary = _normalizeReferenceSummary(
-    journey.referenceSummary,
-    fallbackEntries: normalizedEntries,
-  );
-  final summary = _sanitizeUserFacingTimelineText(journey.summary);
-  return AssistantJourney(
-    stages: normalizedStages,
-    entries: normalizedEntries,
-    summary: summary,
-    referenceSummary: referenceSummary,
-    readiness: journey.readiness,
-  );
-}
-
-AssistantJourney buildAssistantUiProcessTimelineFromProcessTimeline(
-  List<ProcessTimelineFrame> processTimeline, {
-  AssistantJourney fallbackJourney = const AssistantJourney(),
-}) {
-  final visibleTimeline = buildVisibleProcessTimeline(processTimeline);
-  if (visibleTimeline.isEmpty) {
-    return fallbackJourney.isEmpty
-        ? const AssistantJourney()
-        : buildAssistantUiProcessTimeline(fallbackJourney);
-  }
-  final references = <AssistantJourneyReference>[];
-  final seenReferenceKeys = <String>{};
-  void collectReference(RetrievalProcessingReference reference) {
-    if (!hasUsableCitationDestination(
-      reference.destination,
-      title: reference.title,
-      source: reference.source,
-    )) {
-      return;
-    }
-    final key = citationReferenceKey(
-      reference.destination,
-      source: reference.source,
-      title: reference.title,
-    );
-    if (key.trim().isEmpty || !seenReferenceKeys.add(key)) {
-      return;
-    }
-    references.add(
-      AssistantJourneyReference(
-        title: reference.title.trim(),
-        destination: reference.destination,
-        source: reference.source.trim(),
-      ),
-    );
-  }
-
-  final stages = <AssistantJourneyStage>[];
-  final entries = <AssistantJourneyEntry>[];
-  for (final frame in visibleTimeline) {
-    final stageId = assistantJourneyStageForProcessStep(frame.stepId);
-    if (stageId == JourneyStageId.unknown) {
-      continue;
-    }
-    final summary = _sanitizeUserFacingTimelineText(
-      frame.headline,
-      stageId: stageId,
-    );
-    final detail = _sanitizeUserFacingTimelineText(
-      frame.detail,
-      stageId: stageId,
-    );
-    for (final reference in frame.references) {
-      collectReference(reference);
-    }
-    stages.add(
-      AssistantJourneyStage(
-        stageId: stageId,
-        status: frame.status,
-        order: stages.length,
-        summary: summary,
-        referenceCount: stageId == JourneyStageId.verify
-            ? _maxInt(<int>[
-                frame.references.length,
-                frame.retrievalProcessing.acceptedDocumentCount,
-                frame.retrievalProcessing.acceptedReferences.length,
-              ])
-            : 0,
-      ),
-    );
-    if (summary.isEmpty && detail.isEmpty && frame.references.isEmpty) {
-      continue;
-    }
-    entries.add(
-      AssistantJourneyEntry(
-        entryId: assistantProcessFrameId(frame.stepId),
-        stageId: stageId,
-        kind: frame.references.isNotEmpty
-            ? JourneyEntryKind.referenceBundle
-            : JourneyEntryKind.narrative,
-        status: frame.status,
-        order: entries.length,
-        headline: summary,
-        detail: detail,
-        references: frame.references
-            .map(
-              (reference) => AssistantJourneyReference(
-                title: reference.title.trim(),
-                destination: reference.destination,
-                source: reference.source.trim(),
-              ),
-            )
-            .toList(growable: false),
-      ),
-    );
-  }
-  final effectiveFinalAnswerReady =
-      fallbackJourney.readiness.finalAnswerReady ||
-      visibleTimeline.every(
-        (frame) => frame.status == JourneyStageStatus.completed,
-      );
-  final summary = _firstNonEmpty(<String>[
-    if (effectiveFinalAnswerReady)
-      ...visibleTimeline.reversed.map((frame) => frame.headline.trim()),
-    fallbackJourney.summary,
-    visibleTimeline.last.headline.trim(),
-  ]);
-  return AssistantJourney(
-    stages: stages,
-    entries: entries,
-    summary: summary,
-    referenceSummary: AssistantJourneyReferenceSummary(
-      count: references.length,
-      references: references,
-    ),
-    readiness: AssistantJourneyReadiness(
-      nextAction: effectiveFinalAnswerReady
-          ? AssistantNextAction.answer
-          : AssistantNextAction.unknown,
-      finalAnswerMode: effectiveFinalAnswerReady
-          ? FinalAnswerMode.full
-          : fallbackJourney.readiness.finalAnswerMode,
-      answerEligibility: effectiveFinalAnswerReady
-          ? AnswerEligibility.eligible
-          : fallbackJourney.readiness.answerEligibility,
-      finalAnswerReady: effectiveFinalAnswerReady,
-      clarificationNeeded: fallbackJourney.readiness.clarificationNeeded,
-      needExpansion: fallbackJourney.readiness.needExpansion,
-    ),
-  );
-}
-
 Map<String, dynamic> buildPersistedAssistantTurnFields({
   required AssistantJourney journey,
   required String displayMarkdown,
@@ -614,11 +278,6 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
             answerProcessing,
           ),
         );
-  final persistedUiTimeline =
-      buildAssistantUiProcessTimelineFromProcessTimeline(
-        persistedProcessTimeline,
-        fallbackJourney: journey,
-      );
   final normalizedDisplayMarkdown =
       AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
         displayMarkdown,
@@ -631,8 +290,6 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
       );
   return <String, dynamic>{
     assistantJourneyField: journey.toJson(),
-    if (!persistedUiTimeline.isEmpty)
-      assistantUiProcessTimelineField: persistedUiTimeline.toJson(),
     if (persistedProcessTimeline.isNotEmpty)
       assistantProcessTimelineField: persistedProcessTimeline
           .map((item) => item.toJson())
@@ -685,214 +342,4 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
         .toList(growable: false),
     'assistantElapsedMs': elapsedMs,
   };
-}
-
-bool isCanonicalPersistedAssistantTurnMessage(Map<String, dynamic> message) {
-  final hasCanonicalEnvelope =
-      message.containsKey(assistantJourneyField) ||
-      message.containsKey(assistantDisplayStateField) ||
-      message.containsKey(assistantUiProcessTimelineField) ||
-      message.containsKey(assistantProcessTimelineField) ||
-      message.containsKey(assistantDisplayMarkdownField) ||
-      message.containsKey(assistantDisplayPlainTextField) ||
-      message.containsKey(assistantUnderstandingSnapshotField) ||
-      message.containsKey(assistantAnswerProcessingField) ||
-      message.containsKey(assistantRetrievalProcessingField) ||
-      message.containsKey(assistantUnderstandingResultField) ||
-      message.containsKey(assistantTaskGraphField) ||
-      message.containsKey(assistantOrchestratorStateField) ||
-      message.containsKey(assistantTurnSynthesisStateField) ||
-      message.containsKey(assistantBoundaryOutcomeField);
-  if (!hasCanonicalEnvelope) {
-    return false;
-  }
-  final answerSignals = <String>[
-    resolvePersistedAssistantDisplayMarkdown(message),
-    resolvePersistedAssistantDisplayPlainText(message),
-    AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-      (message['content'] as String?) ?? '',
-      allowJsonExtraction: false,
-    ),
-  ];
-  return answerSignals.any((item) => item.trim().isNotEmpty) ||
-      _hasReplayableAssistantTurnState(message);
-}
-
-Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
-  Map<String, dynamic> message,
-) {
-  if (!isCanonicalPersistedAssistantTurnMessage(message)) {
-    return null;
-  }
-  final journey = resolvePersistedAssistantJourney(message);
-  final processTimeline = resolvePersistedAssistantProcessTimeline(message);
-  final displayState = resolvePersistedAssistantDisplayState(message);
-  final understandingSnapshot = _resolvePersistedStructuredMap(
-    message,
-    assistantUnderstandingSnapshotField,
-  );
-  final answerProcessing = _resolvePersistedStructuredMap(
-    message,
-    assistantAnswerProcessingField,
-  );
-  final historicalThinkingSnapshot = _resolvePersistedStructuredMap(
-    message,
-    assistantHistoricalThinkingSnapshotField,
-  );
-  final retrievalProcessing = _resolvePersistedStructuredMap(
-    message,
-    assistantRetrievalProcessingField,
-  );
-  final systemContextEnvelope = _resolvePersistedStructuredMap(
-    message,
-    assistantSystemContextEnvelopeField,
-  );
-  final understandingResult = _resolvePersistedStructuredMap(
-    message,
-    assistantUnderstandingResultField,
-  );
-  final taskGraph = _resolvePersistedStructuredMap(
-    message,
-    assistantTaskGraphField,
-  );
-  final orchestratorState = _resolvePersistedStructuredMap(
-    message,
-    assistantOrchestratorStateField,
-  );
-  final turnSynthesisState = _resolvePersistedStructuredMap(
-    message,
-    assistantTurnSynthesisStateField,
-  );
-  final assistantBoundaryOutcome = _resolvePersistedStructuredMap(
-    message,
-    assistantBoundaryOutcomeField,
-  );
-  final displayMarkdown =
-      AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
-        resolvePersistedAssistantDisplayMarkdown(message),
-        allowJsonExtraction: false,
-      );
-  final displayPlainText =
-      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-        resolvePersistedAssistantDisplayPlainText(message),
-        allowJsonExtraction: false,
-      );
-  final providerReasoningContinuation =
-      (message[assistantProviderReasoningContinuationField] as String?)
-          ?.trim() ??
-      '';
-  final normalized = <String, dynamic>{
-    ...message,
-    'streaming': false,
-    assistantJourneyField: journey.toJson(),
-    if (hasAssistantDisplayState(displayState))
-      assistantDisplayStateField: displayState.toJson(),
-    if (processTimeline.isNotEmpty)
-      assistantProcessTimelineField: processTimeline
-          .map((item) => item.toJson())
-          .toList(growable: false),
-    if (_hasStructuredContent(understandingSnapshot))
-      assistantUnderstandingSnapshotField: understandingSnapshot,
-    if (_hasStructuredContent(answerProcessing))
-      assistantAnswerProcessingField: answerProcessing,
-    if (_hasStructuredContent(historicalThinkingSnapshot))
-      assistantHistoricalThinkingSnapshotField: historicalThinkingSnapshot,
-    if (_hasStructuredContent(retrievalProcessing))
-      assistantRetrievalProcessingField: retrievalProcessing,
-    if (_hasStructuredContent(systemContextEnvelope))
-      assistantSystemContextEnvelopeField: systemContextEnvelope,
-    if (_hasStructuredContent(understandingResult))
-      assistantUnderstandingResultField: understandingResult,
-    if (_hasStructuredContent(taskGraph)) assistantTaskGraphField: taskGraph,
-    if (_hasStructuredContent(orchestratorState))
-      assistantOrchestratorStateField: orchestratorState,
-    if (_hasStructuredContent(turnSynthesisState))
-      assistantTurnSynthesisStateField: turnSynthesisState,
-    if (_hasStructuredContent(assistantBoundaryOutcome))
-      assistantBoundaryOutcomeField: assistantBoundaryOutcome,
-    if (providerReasoningContinuation.isNotEmpty)
-      assistantProviderReasoningContinuationField:
-          providerReasoningContinuation,
-    assistantDisplayMarkdownField: displayMarkdown,
-    assistantDisplayPlainTextField: displayPlainText,
-    assistantFollowupPromptField: resolveAssistantFollowupPromptFromMessage(
-      message,
-    ),
-    assistantActionHintsField: resolveAssistantActionHintsFromMessage(message),
-    'assistantElapsedMs': (message['assistantElapsedMs'] as num?)?.toInt() ?? 0,
-  };
-  final bestContent = displayPlainText.isNotEmpty
-      ? displayPlainText
-      : (displayMarkdown.isNotEmpty
-            ? AssistantDisplayTextResolver.stripMarkdown(displayMarkdown)
-            : AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-                (message['content'] as String?) ?? '',
-                allowJsonExtraction: false,
-              ));
-  normalized['content'] = bestContent;
-  normalized.remove('assistantTurnSchemaVersion');
-  normalized.remove('machineEnvelope');
-  normalized.remove('streamFinalAnswer');
-  normalized.remove('decisionJson');
-  final runArtifacts = (normalized['runArtifacts'] as Map?)
-      ?.cast<String, dynamic>();
-  if (runArtifacts != null && runArtifacts.isNotEmpty) {
-    normalized['runArtifacts'] = Map<String, dynamic>.from(runArtifacts)
-      ..remove('machineEnvelope');
-  }
-  return normalized;
-}
-
-bool _hasReplayableAssistantTurnState(Map<String, dynamic> message) {
-  final journey = resolvePersistedAssistantJourney(message);
-  if (!journey.isEmpty) {
-    return true;
-  }
-  if (resolvePersistedAssistantProcessTimeline(message).isNotEmpty) {
-    return true;
-  }
-  if (hasAssistantDisplayState(
-    resolvePersistedAssistantDisplayState(message),
-  )) {
-    return true;
-  }
-  return _hasStructuredContent(
-        _resolvePersistedStructuredMap(
-          message,
-          assistantUnderstandingSnapshotField,
-        ),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(message, assistantAnswerProcessingField),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(
-          message,
-          assistantRetrievalProcessingField,
-        ),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(
-          message,
-          assistantUnderstandingResultField,
-        ),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(message, assistantTaskGraphField),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(
-          message,
-          assistantOrchestratorStateField,
-        ),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(
-          message,
-          assistantTurnSynthesisStateField,
-        ),
-      ) ||
-      _hasStructuredContent(
-        _resolvePersistedStructuredMap(message, assistantBoundaryOutcomeField),
-      );
 }

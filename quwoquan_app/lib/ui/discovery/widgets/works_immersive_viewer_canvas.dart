@@ -122,17 +122,26 @@ class _WorksVideoCanvas extends StatefulWidget {
   State<_WorksVideoCanvas> createState() => _WorksVideoCanvasState();
 }
 
-class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
+enum _WorksVideoEpisodeScrollDirection { forward, backward }
+
+class _WorksVideoCanvasState extends State<_WorksVideoCanvas>
+    with WidgetsBindingObserver {
   late final PageController _episodeController;
   late int _currentEpisodeIndex;
   bool _episodePlaybackSettled = true;
+  bool _forwardPreheatAllowed = true;
+  bool _appIsForeground = true;
+  bool _preheatSuppressedByMemoryPressure = false;
+  _WorksVideoEpisodeScrollDirection? _episodeScrollDirection;
+  int _preheatReadinessGeneration = 0;
   Timer? _episodeSettleTimer;
-  final Map<String, VideoPlaybackSession> _sessionsByIdentity =
+  final Map<String, VideoPlaybackSession> _mountedSessionsByIdentity =
       <String, VideoPlaybackSession>{};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _currentEpisodeIndex = _safeEpisodeIndex(widget.initialEpisodeIndex);
     _episodeController = PageController(initialPage: _currentEpisodeIndex);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -142,7 +151,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
         widget.onActiveSessionChanged(
           _currentEpisodeIndex,
           identity,
-          _sessionsByIdentity[identity],
+          _mountedSessionsByIdentity[identity],
         );
       }
     });
@@ -152,6 +161,10 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   void didUpdateWidget(covariant _WorksVideoCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     final episodeReconciled = _reconcileEpisodes(oldWidget);
+    if (episodeReconciled) {
+      _forwardPreheatAllowed = false;
+      _scheduleEpisodePlaybackSettle();
+    }
     if (episodeReconciled && widget.isVisible && oldWidget.isVisible) {
       final identity = _currentEpisodeIdentity;
       if (identity != null) {
@@ -159,7 +172,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
         widget.onActiveSessionChanged(
           _currentEpisodeIndex,
           identity,
-          _sessionsByIdentity[identity],
+          _mountedSessionsByIdentity[identity],
         );
       }
     }
@@ -173,13 +186,14 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           widget.onActiveSessionChanged(
             _currentEpisodeIndex,
             identity,
-            _sessionsByIdentity[identity],
+            _mountedSessionsByIdentity[identity],
           );
         }
       }
       return;
     }
     if (widget.isVisible) {
+      _forwardPreheatAllowed = !_preheatSuppressedByMemoryPressure;
       final identity = _currentEpisodeIdentity;
       if (identity == null) {
         return;
@@ -188,10 +202,12 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
       widget.onActiveSessionChanged(
         _currentEpisodeIndex,
         identity,
-        _sessionsByIdentity[identity],
+        _mountedSessionsByIdentity[identity],
       );
       return;
     }
+    _forwardPreheatAllowed = false;
+    _preheatReadinessGeneration += 1;
     final identity = _currentEpisodeIdentity;
     if (identity != null) {
       widget.onActiveSessionChanged(_currentEpisodeIndex, identity, null);
@@ -200,17 +216,45 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _preheatReadinessGeneration += 1;
     _episodeSettleTimer?.cancel();
     final identity = _currentEpisodeIdentity;
     if (identity != null) {
       widget.onActiveSessionChanged(_currentEpisodeIndex, identity, null);
     }
-    for (final session in _sessionsByIdentity.values) {
-      session.dispose();
-    }
-    _sessionsByIdentity.clear();
+    // Session ownership belongs to each mounted episode stage. Clearing this
+    // non-owning registry must not dispose a session before the stage's
+    // VideoPlayerWidget and AnimatedBuilder have unmounted.
+    _mountedSessionsByIdentity.clear();
     _episodeController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final foreground = state == AppLifecycleState.resumed;
+    if (_appIsForeground == foreground) {
+      return;
+    }
+    setState(() {
+      _appIsForeground = foreground;
+      _forwardPreheatAllowed =
+          foreground && !_preheatSuppressedByMemoryPressure;
+      _preheatReadinessGeneration += 1;
+    });
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    if (_preheatSuppressedByMemoryPressure) {
+      return;
+    }
+    setState(() {
+      _preheatSuppressedByMemoryPressure = true;
+      _forwardPreheatAllowed = false;
+      _preheatReadinessGeneration += 1;
+    });
   }
 
   int _safeEpisodeIndex(int index) {
@@ -229,26 +273,6 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 
   bool _reconcileEpisodes(_WorksVideoCanvas oldWidget) {
-    final validIdentities = widget.items.map((item) => item.identity).toSet();
-    final removedIdentities = _sessionsByIdentity.keys
-        .where((identity) => !validIdentities.contains(identity))
-        .toList(growable: false);
-    final removedSessions = <VideoPlaybackSession>[];
-    for (final identity in removedIdentities) {
-      final session = _sessionsByIdentity.remove(identity);
-      if (session != null) {
-        removedSessions.add(session);
-      }
-    }
-    if (removedSessions.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        // 旧 VideoPlayerWidget 必须先完成 detach；在父 didUpdateWidget 中同步
-        // dispose session 会让仍挂载的子节点命中 disposed ChangeNotifier。
-        for (final session in removedSessions) {
-          session.dispose();
-        }
-      });
-    }
     if (widget.items.isEmpty) {
       final changed = _currentEpisodeIndex != 0;
       _currentEpisodeIndex = 0;
@@ -284,15 +308,42 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 
   bool _handleEpisodeScrollNotification(ScrollNotification notification) {
-    if (notification is ScrollStartNotification ||
-        notification is ScrollUpdateNotification) {
+    if (notification is ScrollStartNotification) {
+      _episodeScrollDirection = null;
       _episodeSettleTimer?.cancel();
       if (_episodePlaybackSettled) {
         setState(() => _episodePlaybackSettled = false);
       }
       return false;
     }
+    if (notification is ScrollUpdateNotification) {
+      _episodeSettleTimer?.cancel();
+      if (_episodePlaybackSettled) {
+        setState(() => _episodePlaybackSettled = false);
+      }
+      final delta = notification.scrollDelta ?? 0;
+      if (delta == 0) {
+        return false;
+      }
+      final direction = delta > 0
+          ? _WorksVideoEpisodeScrollDirection.forward
+          : _WorksVideoEpisodeScrollDirection.backward;
+      final directionChanged =
+          _episodeScrollDirection != null &&
+          _episodeScrollDirection != direction;
+      _episodeScrollDirection = direction;
+      if ((direction == _WorksVideoEpisodeScrollDirection.backward ||
+              directionChanged) &&
+          _forwardPreheatAllowed) {
+        setState(() {
+          _forwardPreheatAllowed = false;
+          _preheatReadinessGeneration += 1;
+        });
+      }
+      return false;
+    }
     if (notification is ScrollEndNotification) {
+      _episodeScrollDirection = null;
       _scheduleEpisodePlaybackSettle();
     }
     return false;
@@ -302,12 +353,22 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
     _episodeSettleTimer?.cancel();
     _episodeSettleTimer = Timer(homeFeedVideoAutoPlayScrollEndDebounce, () {
       if (!mounted) return;
-      setState(() => _episodePlaybackSettled = true);
+      setState(() {
+        _episodePlaybackSettled = true;
+        _forwardPreheatAllowed =
+            _appIsForeground && !_preheatSuppressedByMemoryPressure;
+      });
     });
   }
 
-  VideoPlaybackSession _sessionFor(String identity) {
-    return _sessionsByIdentity.putIfAbsent(identity, VideoPlaybackSession.new);
+  void _trackMountedSession(String identity, VideoPlaybackSession session) {
+    _mountedSessionsByIdentity[identity] = session;
+  }
+
+  void _untrackMountedSession(String identity, VideoPlaybackSession session) {
+    if (identical(_mountedSessionsByIdentity[identity], session)) {
+      _mountedSessionsByIdentity.remove(identity);
+    }
   }
 
   void _registerSession(
@@ -315,14 +376,22 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
     String identity,
     VideoPlaybackSession session,
   ) {
-    _sessionsByIdentity[identity] = session;
+    _mountedSessionsByIdentity[identity] = session;
     if (widget.isVisible && index == _currentEpisodeIndex) {
       widget.onActiveSessionChanged(index, identity, session);
+      final generation = ++_preheatReadinessGeneration;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            generation != _preheatReadinessGeneration ||
+            !widget.isVisible ||
+            identity != _currentEpisodeIdentity ||
+            !identical(_mountedSessionsByIdentity[identity], session) ||
+            !session.snapshot.isInitialized) {
+          return;
+        }
+        setState(() {});
+      });
     }
-  }
-
-  void _togglePlayback(String identity) {
-    unawaited(_sessionFor(identity).toggle());
   }
 
   @override
@@ -339,13 +408,15 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           child: PageView.builder(
             controller: _episodeController,
             scrollDirection: Axis.horizontal,
-            allowImplicitScrolling: false,
+            allowImplicitScrolling: true,
             itemCount: items.length,
             onPageChanged: (index) {
               final identity = items[index].identity;
               setState(() {
                 _currentEpisodeIndex = index;
                 _episodePlaybackSettled = false;
+                _forwardPreheatAllowed = false;
+                _preheatReadinessGeneration += 1;
               });
               _scheduleEpisodePlaybackSettle();
               if (widget.isVisible) {
@@ -353,7 +424,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                 widget.onActiveSessionChanged(
                   index,
                   identity,
-                  _sessionsByIdentity[identity],
+                  _mountedSessionsByIdentity[identity],
                 );
               }
             },
@@ -361,8 +432,20 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
               final item = items[index];
               final identity = item.identity;
               final isCurrent = index == _currentEpisodeIndex;
-              final keepAlive = widget.isVisible && isCurrent;
-              final session = _sessionFor(identity);
+              final currentIdentity = _currentEpisodeIdentity;
+              final currentSession = currentIdentity == null
+                  ? null
+                  : _mountedSessionsByIdentity[currentIdentity];
+              final shouldPreheat =
+                  widget.isVisible &&
+                  _appIsForeground &&
+                  !_preheatSuppressedByMemoryPressure &&
+                  _forwardPreheatAllowed &&
+                  currentSession?.snapshot.isInitialized == true &&
+                  index == _currentEpisodeIndex + 1;
+              final shouldInitialize =
+                  widget.isVisible && (isCurrent || shouldPreheat);
+              final keepAlive = shouldInitialize;
               return KeyedSubtree(
                 key: ValueKey<String>(
                   'works-video-stage-${widget.post.id}-$index',
@@ -372,40 +455,20 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                     'works-video-stage-identity-${widget.post.id}-$identity',
                   ),
                   keepAlive: keepAlive,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      KeyedSubtree(
-                        key: ValueKey<String>(
-                          'works-video-${widget.post.id}-$index',
-                        ),
-                        child: VideoPlayerWidget(
-                          key: ValueKey<String>(
-                            'works-video-identity-${widget.post.id}-$identity',
-                          ),
-                          deliveryReference: item.deliveryReference,
-                          thumbnailReference: item.coverReference,
-                          initialize: widget.isVisible && isCurrent,
-                          autoPlay:
-                              widget.isVisible &&
-                              isCurrent &&
-                              _episodePlaybackSettled,
-                          showControls: false,
-                          verifiedDuration: item.verifiedDuration,
-                          onTap: widget.isVisible
-                              ? () => _togglePlayback(identity)
-                              : null,
-                          playbackSession: session,
-                          onPlaybackSessionCreated: (registeredSession) =>
-                              _registerSession(
-                                index,
-                                identity,
-                                registeredSession,
-                              ),
-                        ),
-                      ),
-                      _WorksPausedPlaybackOverlay(session: session),
-                    ],
+                  child: _WorksVideoEpisodeStage(
+                    postId: widget.post.id,
+                    index: index,
+                    identity: identity,
+                    item: item,
+                    initialize: shouldInitialize,
+                    autoPlay:
+                        widget.isVisible &&
+                        isCurrent &&
+                        _episodePlaybackSettled,
+                    tapEnabled: widget.isVisible,
+                    onSessionMounted: _trackMountedSession,
+                    onSessionReady: _registerSession,
+                    onSessionUnmounted: _untrackMountedSession,
                   ),
                 ),
               );
@@ -428,6 +491,98 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Owns exactly one episode session for as long as that episode subtree is
+/// mounted. Flutter unmounts the children before this State is disposed, so the
+/// player detaches its controller and AnimatedBuilder removes its listener
+/// before this owner disposes the session.
+class _WorksVideoEpisodeStage extends StatefulWidget {
+  const _WorksVideoEpisodeStage({
+    required this.postId,
+    required this.index,
+    required this.identity,
+    required this.item,
+    required this.initialize,
+    required this.autoPlay,
+    required this.tapEnabled,
+    required this.onSessionMounted,
+    required this.onSessionReady,
+    required this.onSessionUnmounted,
+  });
+
+  final String postId;
+  final int index;
+  final String identity;
+  final _WorksVideoDeliveryItem item;
+  final bool initialize;
+  final bool autoPlay;
+  final bool tapEnabled;
+  final void Function(String identity, VideoPlaybackSession session)
+  onSessionMounted;
+  final void Function(int index, String identity, VideoPlaybackSession session)
+  onSessionReady;
+  final void Function(String identity, VideoPlaybackSession session)
+  onSessionUnmounted;
+
+  @override
+  State<_WorksVideoEpisodeStage> createState() =>
+      _WorksVideoEpisodeStageState();
+}
+
+class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
+  late final VideoPlaybackSession _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = VideoPlaybackSession();
+    widget.onSessionMounted(widget.identity, _session);
+  }
+
+  @override
+  void dispose() {
+    widget.onSessionUnmounted(widget.identity, _session);
+    _session.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        KeyedSubtree(
+          key: ValueKey<String>('works-video-${widget.postId}-${widget.index}'),
+          child: VideoPlayerWidget(
+            key: ValueKey<String>(
+              'works-video-identity-${widget.postId}-${widget.identity}',
+            ),
+            deliveryReference: item.deliveryReference,
+            adaptiveDeliveryReference: item.adaptiveDeliveryReference,
+            adaptiveDescriptorVersion: item.adaptiveDescriptorVersion,
+            thumbnailReference: item.coverReference,
+            initialize: widget.initialize,
+            autoPlay: widget.autoPlay,
+            showControls: false,
+            verifiedDuration: item.verifiedDuration,
+            onTap: widget.tapEnabled
+                ? () => unawaited(_session.toggle())
+                : null,
+            playbackSession: _session,
+            onPlaybackSessionCreated: (registeredSession) =>
+                widget.onSessionReady(
+                  widget.index,
+                  widget.identity,
+                  registeredSession,
+                ),
+          ),
+        ),
+        _WorksPausedPlaybackOverlay(session: _session),
       ],
     );
   }
@@ -755,16 +910,20 @@ class _WorksTextCanvas extends StatelessWidget {
 @immutable
 class _WorksVideoDeliveryItem {
   const _WorksVideoDeliveryItem({
+    required this.identity,
     required this.deliveryReference,
+    this.adaptiveDeliveryReference,
+    this.adaptiveDescriptorVersion = 0,
     this.coverReference,
     this.verifiedDuration,
     this.previewTrackDescriptor,
   });
 
+  final String identity;
   final MediaDeliveryReference deliveryReference;
+  final MediaDeliveryReference? adaptiveDeliveryReference;
+  final int adaptiveDescriptorVersion;
   final MediaDeliveryReference? coverReference;
   final Duration? verifiedDuration;
   final VideoPreviewTrackDescriptor? previewTrackDescriptor;
-
-  String get identity => deliveryReference.cacheIdentity;
 }

@@ -44,6 +44,23 @@ func main() {
 		CommentLines: []string{"Notification error sentinels and helpers. Transport semantics come from errors.yaml."},
 	})
 	writeGoFile(filepath.Join(outputDir, "errors.go"), rendered)
+	var deliveryJobErrors contractcodegen.ErrorsFile
+	const deliveryJobErrorsSource = "notification/notification_delivery/notification_delivery_job/errors.yaml"
+	if err := source.Decode(deliveryJobErrorsSource, &deliveryJobErrors); err != nil {
+		exitErr(fmt.Errorf("load %s: %w", deliveryJobErrorsSource, err))
+	}
+	deliveryJobRendered := contractcodegen.RenderGoErrorsFile(
+		&deliveryJobErrors,
+		contractcodegen.GoErrorsFileOptions{
+			Generator:    "tools/codegen_notification_service",
+			SourcePath:   deliveryJobErrorsSource,
+			CommentLines: []string{"NotificationDeliveryJob error sentinels and helpers. Transport semantics come from errors.yaml."},
+		},
+	)
+	writeGoFile(
+		filepath.Join(filepath.Dir(outputDir), "notification_delivery_job", "errors.go"),
+		deliveryJobRendered,
+	)
 
 	var routes serviceRoutesFile
 	const routesSource = "notification/notification_delivery/notification/operations.yaml"

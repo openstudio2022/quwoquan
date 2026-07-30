@@ -13,11 +13,11 @@ import (
 	"net/url"
 	"strings"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 // Client reads derived interest profiles from user-service for proactive
-// personalization. It implements application.ProactiveInterestReader.
+// personalization. It implements ports.ProactiveInterestReader.
 type Client struct {
 	baseURL string
 	http    *http.Client
@@ -55,7 +55,10 @@ type topInterest struct {
 // A nil profile (nil error) is returned when the reader is not configured
 // (empty base url / nil client) or userID is blank, so callers degrade to
 // non-personalized output without special-casing.
-func (c *Client) GetInterestProfile(ctx context.Context, userID string) (*application.ProactiveInterestProfile, error) {
+func (c *Client) GetInterestProfile(
+	ctx context.Context,
+	userID string,
+) (*ports.ProactiveInterestProfile, error) {
 	userID = strings.TrimSpace(userID)
 	if c == nil || c.http == nil || c.baseURL == "" || userID == "" {
 		return nil, nil
@@ -83,17 +86,17 @@ func (c *Client) GetInterestProfile(ctx context.Context, userID string) (*applic
 	return mapProfile(payload), nil
 }
 
-func mapProfile(payload interestProfileResponse) *application.ProactiveInterestProfile {
-	interests := make([]application.ProactiveInterest, 0, len(payload.TopInterests))
+func mapProfile(payload interestProfileResponse) *ports.ProactiveInterestProfile {
+	interests := make([]ports.ProactiveInterest, 0, len(payload.TopInterests))
 	for _, it := range payload.TopInterests {
-		interests = append(interests, application.ProactiveInterest{
+		interests = append(interests, ports.ProactiveInterest{
 			TagRef:    it.TagRef,
 			Dimension: it.Dimension,
 			Score:     it.Score,
 			Level:     it.Level,
 		})
 	}
-	return &application.ProactiveInterestProfile{
+	return &ports.ProactiveInterestProfile{
 		TopInterests:   interests,
 		DimensionTops:  payload.DimensionTops,
 		LifecycleStage: payload.LifecycleStage,

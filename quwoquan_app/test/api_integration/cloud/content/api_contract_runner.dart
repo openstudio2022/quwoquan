@@ -8,8 +8,8 @@
 /// 执行方式：
 ///   ```
 ///   API_CONTRACT_ENV=gamma \
-///   GAMMA_BASE_URL=https://gamma-api.quwoquan.com \
-///   GAMMA_PRODUCT_OPS_BASE_URL=https://gamma-product-ops.quwoquan.com \
+///   GAMMA_BASE_URL=https://api.gamma.quwoquan.com \
+///   GAMMA_PRODUCT_OPS_BASE_URL=https://ops.gamma.quwoquan.com \
 ///   make test-api-contract
 ///
 ///   # 或直接执行本文件：
@@ -128,7 +128,7 @@ void main() {
     _session = await LocalGammaAnonymousSession.login(
       client: _client,
       baseUrl: _apiBase,
-      subject: 'content-api-contract-v1',
+      subject: 'content-api-contract',
     );
     _apiAvailable = true;
   });
@@ -526,43 +526,40 @@ void main() {
       expect(resp.statusCode, 204);
     });
 
-    test(
-      'POST/DELETE /user/sub-accounts/{targetSubAccountId}/block 可用',
-      () async {
-        if (!_apiAvailable) {
-          return markTestSkipped('$_apiContractEnv unavailable');
-        }
-        if (_isLocalGammaContentOnly) {
-          return markTestSkipped(
-            'local gamma content mirror excludes user routes',
-          );
-        }
-        const targetUserId = 'contract_block_target_001';
-        final blockResp = await _client
-            .post(
-              Uri.parse('$_apiBase/user/sub-accounts/$targetUserId/block'),
-              headers: _authHeaders('user.block.create'),
-            )
-            .timeout(const Duration(seconds: 10));
-        expect(
-          [200, 201, 204].contains(blockResp.statusCode),
-          isTrue,
-          reason: 'block user route should succeed',
+    test('POST/DELETE /user/personas/{targetPersonaId}/block 可用', () async {
+      if (!_apiAvailable) {
+        return markTestSkipped('$_apiContractEnv unavailable');
+      }
+      if (_isLocalGammaContentOnly) {
+        return markTestSkipped(
+          'local gamma content mirror excludes user routes',
         );
+      }
+      const targetUserId = 'contract_block_target_001';
+      final blockResp = await _client
+          .post(
+            Uri.parse('$_apiBase/user/personas/$targetUserId/block'),
+            headers: _authHeaders('user.block.create'),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(
+        [200, 201, 204].contains(blockResp.statusCode),
+        isTrue,
+        reason: 'block user route should succeed',
+      );
 
-        final unblockResp = await _client
-            .delete(
-              Uri.parse('$_apiBase/user/sub-accounts/$targetUserId/block'),
-              headers: _authHeaders('user.block.delete'),
-            )
-            .timeout(const Duration(seconds: 10));
-        expect(
-          [200, 204].contains(unblockResp.statusCode),
-          isTrue,
-          reason: 'unblock user route should succeed',
-        );
-      },
-    );
+      final unblockResp = await _client
+          .delete(
+            Uri.parse('$_apiBase/user/personas/$targetUserId/block'),
+            headers: _authHeaders('user.block.delete'),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(
+        [200, 204].contains(unblockResp.statusCode),
+        isTrue,
+        reason: 'unblock user route should succeed',
+      );
+    });
 
     test('PATCH /user/settings/privacy 可写并回读 blockedKeywords', () async {
       if (!_apiAvailable) {

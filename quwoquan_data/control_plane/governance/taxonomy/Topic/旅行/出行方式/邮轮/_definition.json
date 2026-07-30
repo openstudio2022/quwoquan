@@ -2,6 +2,7 @@
   "label": "邮轮",
   "labelEn": "Cruise Ship",
   "description": "邮轮航线出行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

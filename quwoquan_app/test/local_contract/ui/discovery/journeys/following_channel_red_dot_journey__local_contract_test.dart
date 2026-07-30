@@ -70,7 +70,7 @@ final class _StatefulFollowingSubjectFacet
 
 FollowingSubjectResult _seedSubject({
   required String id,
-  required String type,
+  required FollowSubjectKind type,
   required String displayName,
   required bool unread,
 }) {
@@ -78,7 +78,7 @@ FollowingSubjectResult _seedSubject({
     subjectId: id,
     subjectType: type,
     displayName: displayName,
-    targetRouteId: type,
+    targetRouteId: type.wireValue,
     targetObjectId: id,
     followedAt: DateTime.utc(2026, 5, 20, 8),
     unreadChangeCount: unread ? 2 : 0,
@@ -98,13 +98,13 @@ void main() {
     final facet = _StatefulFollowingSubjectFacet(<FollowingSubjectResult>[
       _seedSubject(
         id: 'homepage_emeishan',
-        type: 'homepage',
+        type: FollowSubjectKind.homepage,
         displayName: '峨眉山',
         unread: true,
       ),
       _seedSubject(
         id: 'user_photographer',
-        type: 'user',
+        type: FollowSubjectKind.persona,
         displayName: '旅行摄影师',
         unread: false,
       ),

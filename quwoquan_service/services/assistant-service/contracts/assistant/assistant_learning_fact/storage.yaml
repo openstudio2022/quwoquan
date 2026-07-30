@@ -4,11 +4,6 @@ collections:
     entity: AssistantLearningFact
     description: 唯一不可变学习事实源；原始敏感文本只保留在此受控集合。
     indexes:
-    - name: uq_assistant_learning_fact_identity
-      keys:
-        eventId: 1
-        eventVersion: 1
-      unique: true
     - name: uq_assistant_learning_fact_sequence
       keys:
         appendSequence: 1
@@ -28,12 +23,6 @@ collections:
   assistant_learning_fact_receipts:
     entity: AssistantLearningFact
     description: durable append receipt；保存 identity、payload digest 与原始 append sequence。
-    indexes:
-    - name: uq_assistant_learning_fact_receipt_identity
-      keys:
-        eventId: 1
-        eventVersion: 1
-      unique: true
   assistant_learning_fact_outbox:
     entity: AssistantLearningFact
     description: 脱敏 canonical learning fact outbox；禁止包含任何原始文本。
@@ -57,7 +46,7 @@ collections:
       unique: true
   rm_assistant_learning_projection:
     entity: AssistantLearningProjection
-    description: definition-versioned owner projection；只含脱敏聚合，revision 通过 CAS 递增。
+    description: canonical definition digest 约束的 owner projection；只含脱敏聚合，generationId 仅表示一次原子重建，revision 通过 CAS 递增。
     indexes:
     - name: idx_assistant_learning_projection_owner_updated
       keys:
@@ -69,7 +58,7 @@ collections:
         watermarkSequence: 1
   assistant_learning_projection_receipts:
     entity: AssistantLearningProjection
-    description: 每个 fact identity 与 definition version 的 durable projection receipt。
+    description: 每个 canonical fact append sequence 与 active rebuild generation 的 durable projection receipt。
     indexes:
     - name: uq_assistant_learning_projection_receipt_sequence
       keys:
@@ -78,7 +67,7 @@ collections:
       unique: true
   assistant_learning_projection_watermarks:
     entity: AssistantLearningProjection
-    description: 全局 append sequence checkpoint 与 ready/rebuilding 状态；与 projection/receipt 同事务提交。
+    description: 全局 append sequence checkpoint、canonical definition digest 与 ready/rebuilding 状态；重建追平后原子切换 active generation，并在同一事务清理非 active generation。
     indexes:
     - name: uq_assistant_learning_projection_watermark
       keys:

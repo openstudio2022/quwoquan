@@ -657,9 +657,9 @@ class _WebContentFeed extends ConsumerWidget {
                   String? backgroundUrl,
                 }) {
                   context.push(
-                    AppRoutePaths.userProfile(username: userId),
+                    AppRoutePaths.userProfile(userHandle: userId),
                     extra: UserProfileRouteExtra(
-                      subAccountId: userId,
+                      personaId: userId,
                       avatar: avatarUrl,
                       displayName: displayName,
                       backgroundImage: backgroundUrl,
@@ -673,6 +673,7 @@ class _WebContentFeed extends ConsumerWidget {
                   ref,
                   post: post,
                   mediaIndex: index,
+                  channelId: channelId,
                   feedPosts: feedPosts,
                 ),
               );

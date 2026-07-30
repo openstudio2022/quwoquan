@@ -2,6 +2,7 @@
   "label": "景区内",
   "labelEn": "In Scenic Area",
   "description": "位于景区内部",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

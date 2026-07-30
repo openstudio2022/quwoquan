@@ -50,9 +50,9 @@ func TestRetrieveWireValueObjectsUseLowerCamelCaseKeys(t *testing.T) {
 		},
 		{
 			name:      "provenance",
-			value:     Provenance{Provider: "elasticsearch", IndexVersion: "search-v1", GeneratedAt: generatedAt},
-			wantKeys:  []string{"provider", "indexVersion", "generatedAt"},
-			forbidden: []string{"Provider", "IndexVersion", "GeneratedAt"},
+			value:     Provenance{Provider: "elasticsearch", GeneratedAt: generatedAt},
+			wantKeys:  []string{"provider", "generatedAt"},
+			forbidden: []string{"Provider", "IndexVersion", "GeneratedAt", "indexVersion"},
 		},
 	}
 

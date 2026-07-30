@@ -46,6 +46,13 @@
 - 生成代码必须通过对应语言编译与 `--check` 校验。
 - missing、stale、orphan 产物必须 fail-closed；生成代码不得包含硬编码存储地址或 secret。
 
+<a id="req-003"></a>
+### REQ-003 请求 wire 只从 canonical bindings 生成
+
+- operation 的非 body wire 位置只由 `request_bindings.path/query/header/injected` 表达；body 只由 `request_entity + request_body_kind` 定义。
+- `request_fields/path_params/query_params` 与 `client_contract.*_bindings` 不得作为 operation 可编辑输入，compiler、ContractGraph、OpenAPI 和 App request ABI 必须从 canonical bindings 派生。
+- App 只通过 generated request type、encoder、`GeneratedCloudOperationClient` 与统一 executor 发出 metadata 已声明的 path/query/header/body；metadata、生成 encoder 与实际 wire 不一致时 fail-closed。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
@@ -61,6 +68,7 @@
 - WHEN 参与者发起“runtime codegen 能力”对应动作。
 - THEN 服务自治契约被编译为一次性视图，直属 Story 从同一 ContractGraph Source 生成可编译产物，且重复生成无差异。
 - AND 契约无效、产物 stale/orphan 或 generator 绕过统一 Source 时明确失败且不写入伪成功产物。
+- AND 请求侧门禁同时校验 canonical bindings、生成 request ABI/encoder 与统一 executor，扫描为空或出现退役请求字段时失败。
 
 ## 8. 开放事项
 

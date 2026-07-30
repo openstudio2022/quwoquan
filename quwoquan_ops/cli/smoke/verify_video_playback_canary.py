@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""验证 prod-hosted gray-initial 视频播放 canary 的前置条件与媒体 TLS 面。"""
+"""验证指定环境 published-release 视频 canary 的完整公共交付面。"""
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import sys
 import urllib.error
-import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -18,6 +18,17 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.release_video_delivery import (
+    DELIVERY_EVIDENCE_SCHEMA,
+    ReleaseVideoDeliveryError,
+    build_release_video_url,
+    load_release_video_binding,
+    probe_duration_ms,
+    probe_first_frame,
+    probe_https_video,
+    resolve_readiness_path,
+    validate_delivery,
+)
 
 
 FORBIDDEN_RELEASE_CANARY_TOKENS = frozenset(
@@ -59,24 +70,32 @@ def _required_rollout_stage(name: str) -> str:
     return stage
 
 
-def _probe_https_video(url: str) -> tuple[int, str]:
-    request = urllib.request.Request(url, headers={"Range": "bytes=0-1"})
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return int(response.status), str(response.headers.get("Content-Type") or "")
-    except urllib.error.HTTPError as exc:
-        return int(exc.code), str(exc.headers.get("Content-Type") or "")
-
-
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", default="prod-hosted")
     parser.add_argument(
-        "--public-slice-key-env",
+        "--release-readiness",
+        default=os.environ.get("DATA_RELEASE_READINESS_RECEIPT", "").strip(),
+        help=(
+            "Canonical Data release-readiness.json below QWQ_OUTPUT_ROOT; "
+            "defaults to DATA_RELEASE_READINESS_RECEIPT."
+        ),
+    )
+    parser.add_argument(
+        "--video-work-id",
         default="",
+        help=(
+            "Optional release-bound premium video post/work id. If omitted, the "
+            "Data receipt must expose exactly one candidate."
+        ),
+    )
+    parser.add_argument(
+        "--video-asset-id",
+        default=os.environ.get("VIDEO_PLAYBACK_CANARY_ASSET_ID", "").strip(),
     )
     parser.add_argument("--auth-token-env", default="PROD_TEST_AUTH_TOKEN")
     parser.add_argument("--rollout-stage-env", default="PROD_ROLLOUT_STAGE")
+    parser.add_argument("--timeout-seconds", type=int, default=30)
     parser.add_argument("--report", default="")
     return parser
 
@@ -84,39 +103,72 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
-        if args.target != "prod-hosted":
-            raise ValueError("release playback canary probe only accepts target prod-hosted")
-        _required_secret_env(args.auth_token_env)
-        stage = _required_rollout_stage(args.rollout_stage_env)
         topology = load_environment_topology()
         target = get_target(topology, args.target)
+        if args.target == "prod-hosted":
+            _required_secret_env(args.auth_token_env)
+            stage = _required_rollout_stage(args.rollout_stage_env)
+        else:
+            stage = "local"
         playback_canary = target.get("playbackCanary")
-        configured_slice_key_env = (
-            str(playback_canary.get("publicSliceKeyEnv") or "").strip()
-            if isinstance(playback_canary, dict)
-            else ""
+        if not isinstance(playback_canary, dict) or playback_canary.get(
+            "source"
+        ) != "published-release":
+            raise ValueError(
+                "target playbackCanary.source must be published-release"
+            )
+        environment = str(target.get("env") or "").strip()
+        if environment not in {"alpha", "beta", "gamma", "prod"}:
+            raise ValueError("target environment is invalid")
+        work_id_env = str(playback_canary.get("workIdEnv") or "").strip()
+        requested_work_id = str(args.video_work_id or "").strip() or os.environ.get(
+            work_id_env or "VIDEO_PLAYBACK_CANARY_WORK_ID",
+            "",
+        ).strip()
+        readiness_path = resolve_readiness_path(args.release_readiness)
+        binding = load_release_video_binding(
+            readiness_path,
+            expected_environment=environment,
+            requested_work_id=requested_work_id,
+            requested_asset_id=args.video_asset_id,
         )
-        slice_key_env = (
-            str(args.public_slice_key_env or "").strip()
-            or configured_slice_key_env
-            or "VIDEO_PLAYBACK_CANARY_PUBLIC_SLICE_KEY"
-        )
-        key = _canonical_release_video_slice_key(
-            os.environ.get(slice_key_env, "")
-        )
+        key = _canonical_release_video_slice_key(binding["publicSliceKey"])
+        slice_key_env = str(playback_canary.get("publicSliceKeyEnv") or "").strip()
+        configured_slice_key = os.environ.get(slice_key_env, "").strip()
+        if configured_slice_key and _canonical_release_video_slice_key(
+            configured_slice_key
+        ) != key:
+            raise ValueError(
+                "configured publicSliceKey drifts from the canonical Data receipt"
+            )
         base = str((target.get("publicBases") or {}).get("mediaVideo") or "").rstrip("/")
         parsed_base = urlsplit(base)
         if parsed_base.scheme != "https" or not parsed_base.netloc:
-            raise ValueError("prod-hosted mediaVideo authority must be an HTTPS public base")
-        url = f"{base}/{key}"
-        status, content_type = _probe_https_video(url)
-        if status != 206:
-            raise ValueError(f"release video Range probe expected HTTP 206, got {status}")
-        if not content_type.lower().startswith("video/"):
-            raise ValueError(
-                f"release video Range probe expected Content-Type video/*, got {content_type or '<empty>'}"
-            )
-    except ValueError as exc:
+            raise ValueError("mediaVideo authority must be an HTTPS public base")
+        url = build_release_video_url(target.get("publicBases") or {}, binding)
+        delivery = probe_https_video(
+            url,
+            expected_bytes=int(binding["expectedBytes"]),
+            timeout_seconds=max(1, args.timeout_seconds),
+        )
+        validate_delivery(
+            delivery,
+            expected_mime_type=str(binding["expectedMimeType"]),
+            expected_bytes=int(binding["expectedBytes"]),
+            expected_hash=str(binding["expectedHash"]),
+            expected_public_slice_key=key,
+        )
+        duration_ms = probe_duration_ms(
+            url,
+            timeout_seconds=max(1, args.timeout_seconds),
+        )
+        first_frame_decoded = probe_first_frame(
+            url,
+            timeout_seconds=max(1, args.timeout_seconds),
+        )
+        if first_frame_decoded is not True:
+            raise ValueError("release video decoded first-frame probe did not pass")
+    except (ReleaseVideoDeliveryError, ValueError) as exc:
         print(f"GATE_BLOCK: {exc}")
         return 2
     except (OSError, urllib.error.URLError) as exc:
@@ -124,13 +176,43 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     report = {
+        "schema": DELIVERY_EVIDENCE_SCHEMA,
         "status": "passed",
+        "capturedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+        "environment": environment,
         "target": args.target,
         "rolloutStage": stage,
+        "release": {
+            "releaseId": binding["releaseId"],
+            "sourceOwner": binding["sourceOwner"],
+            "manifestDigest": binding["manifestDigest"],
+            "mediaManifestDigest": binding["mediaManifestDigest"],
+            "importRunId": binding["importRunId"],
+            "verifyRunId": binding["verifyRunId"],
+            "readinessReceiptRef": binding["readinessReceiptRef"],
+        },
+        "video": {
+            "workId": binding["workId"],
+            "postId": binding["postId"],
+            "postRef": binding["postRef"],
+            "assetId": binding["assetId"],
+            "assetVersion": binding["assetVersion"],
+            "publicSliceKey": key,
+            "publicUrl": url,
+            "expectedMimeType": binding["expectedMimeType"],
+            "expectedBytes": binding["expectedBytes"],
+            "expectedHash": binding["expectedHash"],
+        },
+        "delivery": delivery,
+        "playback": {
+            "durationMs": duration_ms,
+            "firstFrameDecoded": first_frame_decoded,
+        },
+        # Kept as typed aliases for the runtime-media T4 archive reader.
         "publicSliceKey": key,
         "videoAuthority": base,
-        "rangeStatus": status,
-        "contentType": content_type,
+        "rangeStatus": delivery["rangeStatus"],
+        "contentType": delivery["mimeType"],
     }
     if args.report:
         report_path = Path(args.report)

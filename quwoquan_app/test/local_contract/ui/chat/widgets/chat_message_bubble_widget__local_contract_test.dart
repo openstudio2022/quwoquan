@@ -85,7 +85,8 @@ void main() {
       expect(
         richTexts,
         hasLength(1),
-        reason: '单条文本消息只能存在一个提及正文：'
+        reason:
+            '单条文本消息只能存在一个提及正文：'
             '${richTexts.map((item) => item.content).join('|')}',
       );
       final richText = richTexts.single;
@@ -379,7 +380,7 @@ ChatMessageDisplayItem _message({
     senderId: senderId,
     senderName: senderName,
     senderAvatar: '',
-    senderSubAccountId: '',
+    senderPersonaId: '',
     type: type,
     content: content,
     status: status,

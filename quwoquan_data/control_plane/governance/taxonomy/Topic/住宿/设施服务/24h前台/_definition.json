@@ -2,6 +2,7 @@
   "label": "24h前台",
   "labelEn": "24h Front Desk",
   "description": "全天候前台服务",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

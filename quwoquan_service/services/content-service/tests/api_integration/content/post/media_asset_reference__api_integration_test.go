@@ -19,16 +19,16 @@ import (
 func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testing.T) {
 	cleanPosts(t)
 	t.Cleanup(func() { cleanPosts(t) })
-	ownerPersonaID := identity.AnonymousFallbackSubAccountID
+	ownerPersonaID := identity.AnonymousFallbackPersonaID
 
 	initRequest := httptest.NewRequest(
 		http.MethodPost,
 		"/content/media/uploads:init",
-		strings.NewReader(`{"mediaType":"image","contentType":"image/png","fileSize":2048,"expectedSha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
+		strings.NewReader(`{"mediaType":"image","mimeType":"image/png","fileSize":2048,"expectedSha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
 	)
 	initRequest.Header.Set("Content-Type", "application/json")
 	initRequest.Header.Set("X-Client-User-Id", ownerPersonaID)
-	initRequest.Header.Set("X-Client-Sub-Account-Id", ownerPersonaID)
+	initRequest.Header.Set("X-Client-Persona-Id", ownerPersonaID)
 	initRequest.Header.Set("Idempotency-Key", "media-reference-init")
 	initRecorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(initRecorder, initRequest)
@@ -51,7 +51,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 	)
 	completeRequest.Header.Set("Content-Type", "application/json")
 	completeRequest.Header.Set("X-Client-User-Id", ownerPersonaID)
-	completeRequest.Header.Set("X-Client-Sub-Account-Id", ownerPersonaID)
+	completeRequest.Header.Set("X-Client-Persona-Id", ownerPersonaID)
 	completeRequest.Header.Set("Idempotency-Key", "media-reference-complete")
 	completeRecorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(completeRecorder, completeRequest)
@@ -72,10 +72,10 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 		"/internal/content/media/"+assetID+":processing-result",
 		fmt.Sprintf(`{
 			"processingStatus":"ready",
-			"processorProfile":"content_image_normalization_v1",
+			"processorProfile":"content_image_normalization",
 			"imageWidth":540,
 			"imageHeight":960,
-			"imageDeliveryContentType":"image/png",
+			"imageDeliveryMimeType":"image/png",
 			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.png",
 			"imagePublicSliceKey":"media/image/s/asset/%s/v2/source.png",
 			"imageDominantColor":"#1A2B3C",
@@ -117,7 +117,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 		t.Fatal(err)
 	}
 	if reference["assetId"] != assetID || reference["ownerPersonaId"] != ownerPersonaID ||
-		reference["processingStatus"] != "ready" || reference["contentType"] != "image/png" ||
+		reference["processingStatus"] != "ready" || reference["mimeType"] != "image/png" ||
 		reference["fileSize"] != float64(2048) {
 		t.Fatalf("MediaAsset reference slice drift: %#v", reference)
 	}
@@ -145,7 +145,7 @@ func TestMediaAssetReferenceUsesRealStoreAndServiceScopedAuthorization(t *testin
 	}
 	if delivery["assetId"] != assetID || delivery["ownerPersonaId"] != ownerPersonaID ||
 		delivery["processingStatus"] != "ready" || delivery["mediaType"] != "image" ||
-		delivery["contentType"] != "image/png" || delivery["fileSize"] != float64(2048) ||
+		delivery["mimeType"] != "image/png" || delivery["fileSize"] != float64(2048) ||
 		strings.TrimSpace(fmt.Sprint(delivery["cdnUrl"])) == "" {
 		t.Fatalf("MediaAsset delivery reference slice drift: %#v", delivery)
 	}

@@ -1,0 +1,12 @@
+{
+  "label": "会安",
+  "labelEn": "Hoi An",
+  "description": "古城灯笼与河岸夜景",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -18,6 +18,8 @@ def _transaction_root(output_root: Path, transaction_id: str) -> Path:
 
 def _post_media_issues(payload: dict[str, Any], ref: str) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
+    if str(payload.get("contentIdentity") or "").strip() != "work":
+        issues.append({"code": "post_content_identity_invalid", "ref": ref})
     assets = payload.get("assets")
     if not isinstance(assets, list):
         return issues
@@ -88,6 +90,25 @@ def validate_canonical_publish(root: Path) -> dict[str, Any]:
                 issues.append({"code": "dangling_asset_ref", "ref": f"{rel}:{object_key}"})
         if not rel.startswith("creators/"):
             referenced_creators.update(_collect_creator_ids(payload))
+        if rel.startswith("entities/") and rel.endswith("/_entity.json"):
+            creator_profile_id = str(payload.get("creatorProfileId") or "").strip()
+            if creator_profile_id:
+                creator_refs_path = path.parent / "creator.refs.json"
+                creator_refs = (
+                    _read_json(creator_refs_path).get("creatorRefs")
+                    if creator_refs_path.is_file()
+                    else None
+                )
+                if (
+                    not isinstance(creator_refs, list)
+                    or creator_profile_id not in creator_refs
+                ):
+                    issues.append(
+                        {
+                            "code": "entity_creator_closure_missing",
+                            "ref": f"{rel}:{creator_profile_id}",
+                        }
+                    )
         if rel.startswith("posts/") and rel.endswith("/manifest.json"):
             issues.extend(_post_media_issues(payload, rel))
 
@@ -124,6 +145,9 @@ def validate_canonical_publish(root: Path) -> dict[str, Any]:
             issues.append({"code": "orphan_media", "ref": object_key})
 
     creators_root = root / "creators"
+    for creator_id in sorted(referenced_creators):
+        if not (creators_root / creator_id / "_creator.json").is_file():
+            issues.append({"code": "dangling_creator_ref", "ref": creator_id})
     if creators_root.is_dir():
         for manifest in sorted(creators_root.glob("*/_creator.json")):
             creator_id = manifest.parent.name

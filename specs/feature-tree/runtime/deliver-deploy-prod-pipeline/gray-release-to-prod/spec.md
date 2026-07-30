@@ -45,6 +45,12 @@
 
 - 系统必须只有一个 `prod` 生产环境；`gray-initial / carry-on / full` 只是同一 `prod-hosted` 目标的 rollout stage。
 - 发布前真实远端复验统一收敛到 `prod-hosted` 的 `gray-initial`，不引入 `prod-gray` 第二环境，且失败时不得写入成功事实。
+- 三个 rollout stage 必须位于同一个保留 production approval 的事务 job；ReleaseEvidenceManifest 拉取、验签、治理校验和逐服务配置包物化只执行一次。
+- 正式 apply 按 `5% -> 25% -> 100%` 执行并复用 hosted ledger；任一 SLO、health、inspect、doctor 或 integration probe 失败，由 `stackctl` 回滚到 `fromCandidateDigest`。
+- dry-run 不写 hosted ledger，只允许完成 gray-initial 只读校验并明确报告 carry-on/full 未执行，不得生成正式发布回执。
+- 生产晋级与恢复只比较 `fromCandidateDigest/toCandidateDigest`；镜像 transport tag 与配置包路径/摘要只用于实际装配。
+- workflow 创建后达到 1500 秒时不得开始下一 rollout stage；整个主链超过 1800 秒即失败，600 秒以上必须标记 `released_over_soft_budget`。
+- production approval 分段计时只接受绑定当前 repository、workflow run、head SHA 与 `production` environment 的 durable review event；Deployment/Deployment Status 的 `pending/queued/in_progress` 不得被解释为 reviewer 请求或批准时刻。
 
 ## 4. 契约引用
 
@@ -59,6 +65,8 @@
 - GIVEN 开发、测试或运维角色具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“灰度发布到生产”对应的公开行为。
 - THEN **统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
+- AND 受控正式发布只申请一次 production approval、只物化一次 canonical evidence，并在同一事务 job 内依次执行 5%、25%、100%。
+- AND dry-run 只读且不会伪造 carry-on/full ledger；正式 apply 的失败会产生绑定候选摘要的 rollback 回执。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖
@@ -85,8 +93,18 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：CI 与 stackctl 接线不能替代真实 ACK 灰度、SLO gate 和回滚证据。
-- 完成判定：通过 `stackctl deploy --target prod-hosted`，使用按 `edge / media / service / data` 平面隔离的 `PROD_*_SSH_KEY` 与发布 secrets，完成 `gray-initial -> carry-on -> full`、故障注入、SLO 阻断和自动回滚；全部证据绑定同一候选版本。
+- 完成判定：通过 `stackctl deploy --target prod-hosted`，使用按 `edge / media / service / data` 平面隔离的 `PROD_*_SSH_KEY` 与发布 secrets，完成 `gray-initial -> carry-on -> full`、故障注入、SLO 阻断和自动回滚；全部证据绑定同一 candidate digest。
 - 依赖：生产托管主机账号、各平面 SSH 凭据、渠道/数据面 secrets 与发布审批。
+
+<a id="open-004"></a>
+### OPEN-004 production approval durable review event
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：GitHub Deployment、Deployment Status 与 Actions review-history 的当前只读响应没有同时给出 required-reviewer 请求和批准的明确事件时间；用 `queued/in_progress` 或 Prod job `started_at` 替代会把 runner/concurrency queue 误算成审批，造成 timing 假绿。
+- 完成判定：hosted release ledger 持久化显式 production review request/approved 事件及接收时间，并严格绑定 repository、workflow run、head SHA、environment 和 reviewer decision；`CiTimingSummary` 能据此生成 approvalRequestedAt、approvalApprovedAt、humanDecisionWait 与 approvalWait，且不再存在对应 `missingEvidence`。
+- 依赖：GitHub 官方可订阅的 explicit review event、受控 GitHub App/webhook 接收面与 hosted ledger 不可变回读。
 
 <a id="open-002"></a>
 ### OPEN-002 灰度发布到生产 验收证据

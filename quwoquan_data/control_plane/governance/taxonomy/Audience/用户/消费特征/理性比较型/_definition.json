@@ -2,6 +2,7 @@
   "label": "理性比较型",
   "labelEn": "Rational Shopper",
   "description": "倾向多方比较后决策",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

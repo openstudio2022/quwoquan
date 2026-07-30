@@ -2,6 +2,7 @@
   "label": "意大利菜",
   "labelEn": "Italian Cuisine",
   "description": "意式披萨面食菜系",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

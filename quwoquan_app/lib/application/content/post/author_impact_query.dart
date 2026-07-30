@@ -6,10 +6,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 ///
 /// 用户资料查询不得承载内容域事实；App 页面通过该细粒度 Facet 读取影响摘要与证据。
 abstract interface class AuthorImpactQuery {
-  Future<AuthorImpactSummary> getAuthorImpact(String subAccountId);
+  Future<AuthorImpactSummary> getAuthorImpact(String personaId);
 
   Future<AuthorImpactEvidencePage> listAuthorImpactEvidence({
-    required String subAccountId,
+    required String personaId,
     required String impactId,
     String evidenceSnapshotId = '',
     String cursor = '',

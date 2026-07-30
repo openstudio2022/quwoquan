@@ -302,22 +302,22 @@ func (document circleGroupMembershipProjectionDocument) toApplication() applicat
 	}
 }
 
-func (s *MongoChatStore) CreateReceipt(ctx context.Context, receipt *messagemodel.MessageReceipt) error {
-	_, err := s.messageReceipts.InsertOne(ctx, receipt)
+func (s *MongoChatStore) AppendReceiptFact(ctx context.Context, fact *messagemodel.MessageReceiptFact) error {
+	_, err := s.messageReceipts.InsertOne(ctx, fact)
 	if mongo.IsDuplicateKeyError(err) {
-		return fmt.Errorf("%w: message=%s user=%s", messagemodel.ErrMessageReceiptAlreadyExists, receipt.MessageID, receipt.UserID)
+		return fmt.Errorf("%w: message=%s user=%s", messagemodel.ErrMessageReceiptFactAlreadyExists, fact.MessageID, fact.UserID)
 	}
 	return err
 }
 
-func (s *MongoChatStore) ListReceiptsByMessage(ctx context.Context, messageId string) ([]messagemodel.MessageReceipt, error) {
+func (s *MongoChatStore) ListReceiptFactsByMessage(ctx context.Context, messageId string) ([]messagemodel.MessageReceiptFact, error) {
 	cur, err := s.messageReceipts.Find(ctx, bson.M{"messageId": messageId})
 	if err != nil {
 		return nil, err
 	}
 	defer cur.Close(ctx)
 
-	var receipts []messagemodel.MessageReceipt
+	var receipts []messagemodel.MessageReceiptFact
 	if err := cur.All(ctx, &receipts); err != nil {
 		return nil, err
 	}

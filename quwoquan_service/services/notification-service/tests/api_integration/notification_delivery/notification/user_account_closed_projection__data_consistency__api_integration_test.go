@@ -1,15 +1,18 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-004
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
 package api_integration
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/runtime/accountrestriction"
 	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/infrastructure/persistence"
@@ -20,6 +23,50 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 ) {
 	resetNotificationCollections(t)
 	seedAccountClosureOwnedData(t)
+	suspension := accountrestriction.Event{
+		EventID:        "evt-account-owner-suspended",
+		EventName:      accountrestriction.UserSuspendedEventName,
+		AccountID:      "account-owner",
+		AccountVersion: 10,
+		UserID:         "account-owner",
+		PersonaIDs:     []string{"persona-owner"},
+		AccountState:   "suspended",
+		AuthEpoch:      10,
+		DecisionRef:    "decision-account-owner-suspended",
+		OccurredAt:     accountClosureContractTime.Add(-time.Minute),
+	}
+	if result, err := notificationRestriction.Apply(
+		context.Background(),
+		suspension,
+	); err != nil || result.Replayed {
+		t.Fatalf("apply Notification suspension: result=%+v err=%v", result, err)
+	}
+	sameVersionConflict := suspension
+	sameVersionConflict.EventID = "evt-account-owner-suspended-conflict"
+	sameVersionConflict.DecisionRef = "decision-account-owner-suspended-conflict"
+	if _, err := notificationRestriction.Apply(
+		context.Background(),
+		sameVersionConflict,
+	); !errors.Is(err, application.ErrUserAccountRestrictionProjectionConflict) {
+		t.Fatalf("same-version Notification restriction conflict err=%v", err)
+	}
+	// Closure also erases legacy rows from the superseded generic adapter.
+	if _, err := notificationMongoDB.Collection(
+		"notification_user_account_restrictions",
+	).InsertOne(context.Background(), bson.M{
+		"_id": "account-owner", "subjects": []string{"account-owner", "persona-owner"},
+		"restricted": true, "accountVersion": int64(9),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := notificationMongoDB.Collection(
+		"notification_user_account_restriction_inbox",
+	).InsertOne(context.Background(), bson.M{
+		"_id": "evt-account-owner-legacy-suspended", "accountId": "account-owner",
+		"accountVersion": int64(9),
+	}); err != nil {
+		t.Fatal(err)
+	}
 	consumer := newAccountClosureIntegrationConsumer(t, 3)
 	appendAccountClosureIntegrationEvent(
 		t,
@@ -75,6 +122,78 @@ func TestUserAccountClosedConsumerAtomicallyCleansOwnedNotificationData(
 		bson.M{"recipientId": "account-owner"},
 	); count != 0 {
 		t.Fatalf("closed-account recipient records remaining=%d", count)
+	}
+	if count := countAccountClosureDocuments(
+		t,
+		"notification_user_account_restrictions",
+		bson.M{},
+	); count != 0 {
+		t.Fatalf("closed-account restriction state remaining=%d", count)
+	}
+	if count := countAccountClosureDocuments(
+		t,
+		"notification_user_account_restriction_inbox",
+		bson.M{},
+	); count != 0 {
+		t.Fatalf("closed-account restriction inbox remaining=%d", count)
+	}
+	lateRestore := suspension
+	lateRestore.EventID = "evt-account-owner-restore-after-close"
+	lateRestore.EventName = accountrestriction.UserRestoredEventName
+	lateRestore.AccountVersion = 12
+	lateRestore.AccountState = "active"
+	lateRestore.AuthEpoch = 12
+	lateRestore.DecisionRef = "decision-account-owner-restore-after-close"
+	lateRestore.OccurredAt = accountClosureContractTime.Add(time.Minute)
+	if late, err := notificationRestriction.Apply(
+		context.Background(),
+		lateRestore,
+	); err != nil || !late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("late Notification restore after closure: result=%+v err=%v", late, err)
+	}
+	delayedSuspend := suspension
+	delayedSuspend.EventID = "evt-account-owner-delayed-suspend"
+	delayedSuspend.AccountVersion = 9
+	delayedSuspend.AuthEpoch = 9
+	delayedSuspend.DecisionRef = "decision-account-owner-delayed-suspend"
+	delayedSuspend.OccurredAt = accountClosureContractTime.Add(-2 * time.Minute)
+	if late, err := notificationRestriction.Apply(
+		context.Background(),
+		delayedSuspend,
+	); err != nil || !late.Replayed || !late.Stale || !late.Terminal || late.Affected != 0 {
+		t.Fatalf("delayed Notification suspend after closure: result=%+v err=%v", late, err)
+	}
+	if count := countAccountClosureDocuments(
+		t,
+		"notification_user_account_restrictions",
+		bson.M{},
+	); count != 0 {
+		t.Fatalf("late events recreated Notification restriction state=%d", count)
+	}
+	if count := countAccountClosureDocuments(
+		t,
+		"notification_user_account_restriction_inbox",
+		bson.M{},
+	); count != 0 {
+		t.Fatalf("late events recreated Notification restriction inbox=%d", count)
+	}
+	var terminalWatermark bson.M
+	if err := notificationMongoDB.Collection(
+		"notification_user_account_restriction_watermarks",
+	).FindOne(
+		context.Background(),
+		bson.M{"terminal": true, "accountVersion": int64(11)},
+	).Decode(&terminalWatermark); err != nil {
+		t.Fatalf("read Notification terminal restriction watermark: %v", err)
+	}
+	encodedWatermark, err := bson.MarshalExtJSON(terminalWatermark, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rawID := range []string{"account-owner", "persona-owner"} {
+		if strings.Contains(string(encodedWatermark), rawID) {
+			t.Fatalf("Notification terminal watermark retained raw identity %q: %s", rawID, encodedWatermark)
+		}
 	}
 
 	var outbox struct {
@@ -184,11 +303,13 @@ func TestUserAccountClosedConflictStaysPendingThenDLQCanBeRecovered(
 ) {
 	resetNotificationCollections(t)
 	firstEvent := application.UserAccountClosedEvent{
-		EventID:      "evt-account-conflict",
-		UserID:       "account-first",
-		PersonaIDs:   []string{},
-		AccountState: "closed",
-		UpdatedAt:    accountClosureContractTime,
+		EventID:        "evt-account-conflict",
+		AccountVersion: 1,
+		UserID:         "account-first",
+		PersonaIDs:     []string{},
+		AccountState:   "closed",
+		UpdatedAt:      accountClosureContractTime,
+		OccurredAt:     accountClosureContractTime,
 	}
 	if _, err := notificationAccountClosure.ApplyUserAccountClosed(
 		context.Background(),

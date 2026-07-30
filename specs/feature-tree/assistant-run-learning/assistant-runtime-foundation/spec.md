@@ -115,3 +115,13 @@
 - 影响或价值：仍缺 metadata/codegen 类型化。公开 Run 已收敛为 metadata-owned `AssistantTurnEnvelope`，内部 request context 不再越过 HTTP，但终态只持久化文本/失败，`run artifacts`、stream payload、planner/observation、tool retrieval 与 orchestration 仍有匿名 Map/`dynamic`，无法在 journal TTL 后可靠恢复结构化过程或证明字段安全。
 - 完成判定：先定义并持久化 metadata-owned terminal snapshot（answer、可见 process/citation、failure、selected policy）。随后按 `run artifacts -> turn protocol -> planner/observation -> tool retrieval -> orchestration` 收敛为具名 DTO/sealed type。GetRun/历史恢复与 SSE 使用同一 projection，弱类型棘轮只减不增。
 - 依赖：assistant metadata schema 与 app codegen。
+
+<a id="open-004"></a>
+### OPEN-004 assistant_run 聚合仍承载多类互不相关的能力，且已有 typed schema 的字段仍声明为裸 object
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：存在聚合归属错位与弱类型字段。`assistant/assistant_run/object.yaml` 的 description 正确判定"会话、订阅、授权与 AssistantLearningFact 均有独立生命周期，不属于 AssistantRun 聚合成员"，但操作面尚未全部跟上：现有 11 条路由仍横跨 run 生命周期、turn 列表、任务清单、入口个性化与页面上下文，其中 `ReportPageContext` 甚至在无 run 时调用。技能目录已由 `assistant.skill_catalog` 单轨拥有，`GetLearningOpsSummary`、`AssistantLearningOpsSummaryView` 及其 HTTP/application/model 已由 `assistant_learning_fact` 单轨拥有，二者均不再属于本 OPEN；仍错位的有 `AssistantConversationGrounding*`（属 conversation）与 `AssistantIntersectionEvidenceRef`（属 recommendation）。当前 `fields.yaml` 仍约 2600 行，主要花在 40 余个嵌套 view 上，而聚合核心执行状态反而无契约——根上仍有 14 个字段声明为裸 `object`/`[]object`（`subagentPlan`、`aggregationState`、`skillRuns`、`journey`、`contextSnapshot`、`decision` 等），同时 `assistant-service/contracts/_shared/` 存在对应 typed schema（`subagent_plan`、`aggregation_state`、`skill_run`、`assistant_journey`、`context_assembly_result`、`planner_contracts`）。`assistant_turn_view` 对象仍无 `operations.yaml`，端上取 turn 继续走 run 路由，而它的投影定义比 run 内嵌的 `AssistantTurnSummaryView` 更弱。
+- 完成判定：14 个裸 object 字段逐一改为引用已有 `_shared` schema，确无稳定结构者登记为 OPEN 而非留在契约里当 object；继续把 turn/task/入口态/检索门面拆出聚合，`assistant_turn_view` 补齐 operations 并成为 turn 的唯一读侧。`verify_metadata` 断言 `kind: aggregate_root` 的根字段不得为裸 `object`/`[]object`，存量 allowlist 只减不增。
+- 依赖：`quwoquan_service/tools/verify_metadata`。

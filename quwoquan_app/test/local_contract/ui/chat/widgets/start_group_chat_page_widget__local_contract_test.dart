@@ -111,6 +111,30 @@ ProviderContainer _buildContainer(
   return container;
 }
 
+/// 记录建群命令的标题：用于断言「拉群约伴」建出来的群确实以共同对象命名，
+/// 而不是退化成成员名拼接的普通群（承接页必须兑现 banner 的承诺）。
+class _TitleCapturingChatRepository extends MockChatRepository {
+  final List<String?> titles = <String?>[];
+
+  @override
+  Future<ChatConversationCreatedDto> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) {
+    titles.add(title);
+    return super.createConversation(
+      type: type,
+      title: title,
+      maxGroupSize: maxGroupSize,
+      initialMemberIds: initialMemberIds,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+}
+
 /// 模拟服务端互关/拉黑/上限校验失败：createConversation 抛出携带结构化
 /// userMessage 的 CloudException，其余能力沿用 MockChatRepository。
 class _RejectingCreateChatRepository extends MockChatRepository {
@@ -399,7 +423,7 @@ void main() {
       telemetryRecorder: ops,
     );
     const extra = StartGroupChatRouteExtra(
-      actionKey: 'start_companion',
+      actionKey: 'start_gathering',
       actionLabel: '发起结伴',
       targetObjectId: 'fixture_homepage_travel_photo_west_lake',
       targetObjectKind: 'place',
@@ -451,6 +475,57 @@ void main() {
       createEvents.last.extensions.containsKey('intersectionEvidenceId'),
       isFalse,
     );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('拉群约伴：新群以共同对象命名；缺对象名时退回成员名', (tester) async {
+    _suppressImageErrors();
+
+    final named = _TitleCapturingChatRepository();
+    await _pumpStartGroupChatPage(
+      tester,
+      container: _buildContainer(named),
+      routeExtra: const StartGroupChatRouteExtra(
+        actionKey: 'start_gathering',
+        actionLabel: '拉群约伴',
+        targetObjectId: 'fixture_homepage_travel_photo_west_lake',
+        targetObjectKind: 'place',
+        targetObjectName: '西湖',
+        sourceRef: 'coWishlistedEntity',
+      ),
+    );
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
+    await tester.pumpAndSettle();
+    expect(named.titles, isNotEmpty);
+    expect(named.titles.last, ChatText.startGroupChatCompanionGroupTitle('西湖'));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+
+    // 拿不到对象名时不得用 objectId 当群名：退回成员名拼接。
+    final unnamed = _TitleCapturingChatRepository();
+    await _pumpStartGroupChatPage(
+      tester,
+      container: _buildContainer(unnamed),
+      routeExtra: const StartGroupChatRouteExtra(
+        actionKey: 'start_gathering',
+        targetObjectId: 'fixture_homepage_travel_photo_west_lake',
+        targetObjectKind: 'place',
+        sourceRef: 'coWishlistedEntity',
+      ),
+    );
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
+    await tester.pumpAndSettle();
+    expect(unnamed.titles, isNotEmpty);
+    expect(
+      unnamed.titles.last,
+      isNot(contains('fixture_homepage_travel_photo_west_lake')),
+    );
+    expect(unnamed.titles.last?.trim(), isNotEmpty);
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
   });

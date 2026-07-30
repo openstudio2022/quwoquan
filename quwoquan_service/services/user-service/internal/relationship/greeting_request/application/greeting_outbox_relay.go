@@ -60,8 +60,8 @@ func (r *GreetingOutboxRelay) Drain(ctx context.Context, limit int) (int, error)
 }
 
 func (r *GreetingOutboxRelay) deliver(ctx context.Context, event greetingrepo.GreetingOutboxEvent) error {
-	requesterID, _ := event.Payload["requesterSubAccountId"].(string)
-	targetID, _ := event.Payload["targetSubAccountId"].(string)
+	requesterID, _ := event.Payload["requesterPersonaId"].(string)
+	targetID, _ := event.Payload["targetPersonaId"].(string)
 	source, _ := event.Payload["source"].(string)
 	conversationID, _ := event.Payload["promotedConversationId"].(string)
 	allows, ok := event.Payload["targetAllowsStrangerGreeting"].(bool)
@@ -83,8 +83,8 @@ func (r *GreetingOutboxRelay) deliver(ctx context.Context, event greetingrepo.Gr
 		EventID:                      event.EventID,
 		EventName:                    event.EventName,
 		GreetingID:                   event.AggregateID,
-		RequesterSubAccountID:        requesterID,
-		TargetSubAccountID:           targetID,
+		RequesterPersonaID:           requesterID,
+		TargetPersonaID:              targetID,
 		Source:                       source,
 		PromotedConversationID:       conversationID,
 		TargetAllowsStrangerGreeting: allows,

@@ -1,86 +1,106 @@
 fields:
-- name: auditId
-  type: string
-  constraints:
-  - PK
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: assetId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: viewerId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PII
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: purpose
-  type: enum
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: outcome
-  type: enum
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: reason
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: idempotencyKey
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: append_only_fact
-- name: grantedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 原图授权决策时间；denied/rate_limited 同样使用该字段记录决策时刻。
-  role: append_only_fact
-- name: expiresAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 仅 granted 的签名 URL 绝对到期时间；拒绝决策为空。
-  role: append_only_fact
+  - name: auditId
+    type: string
+    constraints:
+      - PK
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: assetId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: viewerId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PII
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: purpose
+    type: enum
+    enum_ref: MediaOriginalAccessPurpose
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: outcome
+    type: enum
+    enum_ref: MediaOriginalAccessOutcome
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: reason
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: idempotencyKey
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: append_only_fact
+  - name: grantedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 原图授权决策时间；denied/rate_limited 同样使用该字段记录决策时刻。
+    role: append_only_fact
+  - name: expiresAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 仅 granted 的签名 URL 绝对到期时间；拒绝决策为空。
+    role: append_only_fact
+types:
+  RequestOriginalImageAccessRequest:
+    fields:
+      - {name: purpose, type: enum, enum_ref: MediaOriginalAccessPurpose, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RequestContentMediaOriginalAccessCommand:
+    fields:
+      - name: mediaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: purpose
+        type: string
+        enum_ref: MediaOriginalAccessPurpose
+        client_dart_type: ContentMediaOriginalAccessPurpose
+        client_default: ContentMediaOriginalAccessPurpose.view
+        client_wire: canonicalEnum

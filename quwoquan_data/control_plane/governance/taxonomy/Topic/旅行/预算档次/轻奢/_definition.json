@@ -1,0 +1,13 @@
+{
+  "label": "轻奢",
+  "labelEn": "Premium",
+  "description": "选择精品住宿与特色体验，愿为品质付溢价",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

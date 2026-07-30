@@ -2,6 +2,7 @@
   "label": "美妆品牌",
   "labelEn": "Beauty Brand",
   "description": "美妆护肤品牌类型",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

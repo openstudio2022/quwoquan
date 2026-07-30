@@ -8,6 +8,7 @@ import (
 	"quwoquan_service/generated/operationsecurity"
 	"quwoquan_service/runtime/health"
 	rtmetrics "quwoquan_service/runtime/metrics"
+	accountenforcementhttp "quwoquan_service/services/product-ops-service/internal/product_ops/account_enforcement_case/adapters/inbound/http"
 	appreleasehttp "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/adapters/inbound/http"
 	experimentassignmenthttp "quwoquan_service/services/product-ops-service/internal/product_ops/experiment_assignment_fact/adapters/inbound/http"
 	recoveryfailurehttp "quwoquan_service/services/product-ops-service/internal/product_ops/recovery_failure/adapters/inbound/http"
@@ -20,14 +21,12 @@ func newServerMux(service *productService, healthChecker *health.Checker) *http.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthChecker.Handler())
 	mux.Handle("/metrics", rtmetrics.Handler())
+	accountenforcementhttp.NewHandler(service.accountEnforcement).Register(mux)
 	mux.HandleFunc("/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		service.experimentHTTP.ServeHTTP(w, r)
 	})
 	experimentassignmenthttp.Register(mux, service.experimentHTTP)
-	visithttp.Register(mux, visithttp.Handlers{
-		Record: service.handleRecordVisit, Stats: service.handleGetVisitStats,
-		NotFound: writeRuntimeNotFound,
-	})
+	visithttp.NewHandler(service.visits).Register(mux)
 	appreleasehttp.NewHandler(service.appRelease).Register(mux)
 	recoveryfailurehttp.NewHandler(service.recoveryFailures, writeRuntimeError).Register(mux)
 	mux.HandleFunc("/ops/events", func(w http.ResponseWriter, r *http.Request) {

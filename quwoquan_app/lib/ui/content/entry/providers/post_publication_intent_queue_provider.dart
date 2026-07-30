@@ -515,7 +515,7 @@ final class PostPublicationIntentQueueNotifier
     LocalPostPublicationIntent intent,
   ) async {
     final activePersona = await ref.read(activePersonaContextProvider.future);
-    if (activePersona.subAccountId.trim() != intent.authorPersonaId) {
+    if (activePersona.personaId.trim() != intent.authorPersonaId) {
       throw const _PostPublicationPersonaMismatchException();
     }
     await _ensurePreparedMediaReady(intent);
@@ -903,7 +903,7 @@ final postPublicationIntentQueueProvider =
 
 String _publicationQueueScopeKey(String? currentUserId) {
   final normalized = currentUserId?.trim() ?? '';
-  return 'post_publication_intents_v1:${normalized.isEmpty ? 'guest' : normalized}';
+  return 'post_publication_intents:${normalized.isEmpty ? 'guest' : normalized}';
 }
 
 String? _optionalStorageText(Object? value) {

@@ -13,7 +13,6 @@ var (
 	ErrUnauthorized        = errors.New("NOTIFICATION.USER.unauthorized")
 	ErrInvalidArgument     = errors.New("NOTIFICATION.USER.invalid_argument")
 	ErrAppMessageNotFound  = errors.New("NOTIFICATION.USER.app_message_not_found")
-	ErrDeliveryNotFound    = errors.New("NOTIFICATION.USER.delivery_not_found")
 	ErrIdempotencyConflict = errors.New("NOTIFICATION.USER.idempotency_conflict")
 	ErrStorageReadFailed   = errors.New("NOTIFICATION.SYSTEM.storage_read_failed")
 	ErrStorageWriteFailed  = errors.New("NOTIFICATION.SYSTEM.storage_write_failed")
@@ -36,12 +35,6 @@ func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 func AppErrorFromAppMessageNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrAppMessageNotFound.Error()))
 	return rerrors.NewAppError(code, "消息不存在或已过期", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
-}
-
-// AppErrorFromDeliveryNotFound returns *AppError for NOTIFICATION.USER.delivery_not_found (user_message from errors.yaml).
-func AppErrorFromDeliveryNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrDeliveryNotFound.Error()))
-	return rerrors.NewAppError(code, "投递记录不存在或已不在死信状态", debugMessage).WithMetadata("not_found", 404).WithRecovery("refresh", 0)
 }
 
 // AppErrorFromIdempotencyConflict returns *AppError for NOTIFICATION.USER.idempotency_conflict (user_message from errors.yaml).

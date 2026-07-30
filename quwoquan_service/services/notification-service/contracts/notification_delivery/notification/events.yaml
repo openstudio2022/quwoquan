@@ -5,10 +5,11 @@ events:
   consumers:
   - notification-delivery-worker
   channel: internal
+  payload_entity: NotificationPushRequestedEvent
   payload_fields:
-  - _id
-  - userId
+  - messageId
   - messageType
   - title
   - summary
-  - target
+  - targetType
+  - targetId

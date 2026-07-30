@@ -50,7 +50,7 @@
 
 - GIVEN 当前 owner 已同意学习上下文、反馈投影达到策略最小样本，且 Run 尚未冻结模型请求。
 - WHEN typed feedback context reader 为该 Run 构建上下文。
-- THEN 模型仅收到 policy allowlist 允许的聚合摘要与版本，不收到原始 query、answer、correction 或跨 owner 事实。
+- THEN 模型仅收到 policy allowlist 允许的聚合摘要，不收到内部 definition digest、原始 query、answer、correction 或跨 owner 事实。
 - AND 低样本、撤销、opt-out、owner 不匹配或 reader 失败时均 fail-closed，不注入旧值或本地合成结果。
 
 ## 6. 依赖
@@ -67,5 +67,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺获批 Prod Provider conformance 后对授权、撤权与真实模型请求的只读端到端回执；Run 已通过 account + persona scoped typed projection reader 构造 context，consent、最小样本与 policy allowlist 均 fail-closed，投影 definition v2 阻断跨 persona 聚合，模型 bridge 只接收脱敏 aggregate snapshot，Gamma 已证明冻结策略下的真实 Run 可执行。
+- 影响或价值：仍缺可用 Gamma 与获批 Prod Provider conformance 后对授权、撤权与真实模型请求的当前只读端到端回执。Run 已通过 account + persona scoped typed projection reader 构造 context，consent、最小样本与 policy allowlist 均 fail-closed。唯一 canonical projection definition 阻断跨 persona 聚合，模型 bridge 只接收脱敏 aggregate snapshot。gamma-local health gate 当前为 0/28，不能沿用历史 Run 回执准出。
 - 完成判定：Run 只读取 owner-scoped typed feedback context reader。policy 显式决定允许字段、最小样本阈值和用户撤销/opt-out。模型 bridge 仅接收 allowlisted summary，不接收原始 query/answer/correction，且 local/API/App 证明命中、低样本不注入、撤销后立即排除和跨 owner fail-closed。`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

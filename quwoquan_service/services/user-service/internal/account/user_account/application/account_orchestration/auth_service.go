@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -28,6 +30,7 @@ import (
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
+	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
 )
 
 const (
@@ -55,12 +58,15 @@ const (
 type AuthService struct {
 	profiles                 userrepo.UserProfileStore
 	personas                 PersonaStore
+	personaCommands          personaports.PersonaCommandStore
+	personaProfileProjector  userrepo.PersonaProfileProjector
 	credentials              credentialports.AggregateStore
 	credentialCommands       credentialapp.CommandFacet
 	sessions                 sessionapp.CommandFacet
 	deviceRegistration       registrationapp.InternalRegisterer
 	consents                 userrepo.ConsentRecordStore
 	anonymousDevices         userrepo.AnonymousDeviceBindingStore
+	federatedBindingTickets  credentialapp.FederatedPhoneBindingStore
 	shardDirectory           *ShardDirectory
 	carrierPhoneResolver     CarrierPhoneResolver
 	otp                      OtpCodeStore
@@ -116,6 +122,18 @@ func NewAuthService(
 func WithCredentialCommands(facet credentialapp.CommandFacet) AuthServiceOption {
 	return func(s *AuthService) {
 		s.credentialCommands = facet
+	}
+}
+
+// WithPersonaCommandPipeline installs the only Persona bootstrap write path:
+// state/receipt/outbox first, followed by the durable public-profile projection.
+func WithPersonaCommandPipeline(
+	commands personaports.PersonaCommandStore,
+	projector userrepo.PersonaProfileProjector,
+) AuthServiceOption {
+	return func(s *AuthService) {
+		s.personaCommands = commands
+		s.personaProfileProjector = projector
 	}
 }
 
@@ -177,6 +195,16 @@ func WithConsentRecordStore(repo userrepo.ConsentRecordStore) AuthServiceOption 
 	}
 }
 
+func WithFederatedPhoneBindingTickets(
+	store credentialapp.FederatedPhoneBindingStore,
+) AuthServiceOption {
+	return func(s *AuthService) {
+		if store != nil {
+			s.federatedBindingTickets = store
+		}
+	}
+}
+
 func WithCarrierPhoneResolver(resolver CarrierPhoneResolver) AuthServiceOption {
 	return func(s *AuthService) {
 		if resolver != nil {
@@ -216,21 +244,6 @@ func WithAccessTokenSigner(signer *rtauth.Signer) AuthServiceOption {
 	}
 }
 
-// LoginResult is returned after a successful authentication.
-type LoginResult struct {
-	AccessToken               string         `json:"accessToken"`
-	RefreshToken              string         `json:"refreshToken"`
-	OwnerID                   string         `json:"ownerId"`
-	ActiveSub                 map[string]any `json:"activeSub"`
-	SubAccountCount           int            `json:"subAccountCount"`
-	AccountState              string         `json:"accountState"`
-	IdentityOrigin            string         `json:"identityOrigin"`
-	LogicalShard              int            `json:"logicalShard"`
-	AnonymousRetentionPolicy  string         `json:"anonymousRetentionPolicy"`
-	AccountHint               map[string]any `json:"accountHint,omitempty"`
-	SessionRememberTTLSeconds int            `json:"sessionRememberTtlSeconds"`
-}
-
 type OneTapLoginHint struct {
 	State             string         `json:"state"`
 	MaskedPhone       string         `json:"maskedPhone"`
@@ -241,8 +254,8 @@ type OneTapLoginHint struct {
 }
 
 // LoginWithCredential authenticates via the given credential type and key.
-// It creates a new OwnerAccount + default SubAccount if not found.
-func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey, displayLabel string) (*LoginResult, error) {
+// It creates a new OwnerAccount + default Persona if not found.
+func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey, displayLabel string) (*sessionapp.AuthSessionGrant, error) {
 	return s.LoginWithCredentialOnDevice(ctx, credType, credKey, displayLabel, "")
 }
 
@@ -251,7 +264,7 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 func (s *AuthService) LoginWithCredentialOnDevice(
 	ctx context.Context,
 	credType, credKey, displayLabel, deviceID string,
-) (_ *LoginResult, err error) {
+) (_ *sessionapp.AuthSessionGrant, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithCredential",
 		attribute.String("credential.type", credType))
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -274,7 +287,7 @@ func (s *AuthService) LoginWithCredentialOnDevice(
 		ownerID = state.OwnerID
 		_ = s.credentials.MarkUsed(ctx, state.ID, time.Now().UTC())
 	} else {
-		// New user: create OwnerAccount + default SubAccount
+		// New user: create OwnerAccount + default Persona
 		ownerID, err = s.createOwnerAccount(ctx, credType, credKey, displayLabel)
 		if err != nil {
 			return nil, accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create owner: %v", err))
@@ -301,10 +314,14 @@ func (s *AuthService) promoteCredentialOwner(
 		return nil
 	}
 	promoteRegisteredProfile(profile)
+	phone := ""
 	if strings.TrimSpace(credType) == credentialPhone && strings.TrimSpace(profile.Phone) == "" {
-		profile.Phone = credKey
+		phone = credKey
 	}
-	return s.profiles.Update(ctx, profile)
+	return s.profiles.PromoteRegistration(ctx, userrepo.RegistrationPromotion{
+		UserID: ownerID,
+		Phone:  phone,
+	})
 }
 
 // UnbindCredential deactivates a credential, but prevents removing the last one.
@@ -374,49 +391,73 @@ func (s *AuthService) createOwnerAccountWithIdentity(
 	if _, err := s.resolvePhysicalShard(ownerID); err != nil {
 		return "", err
 	}
-	subAccountID, err := buildSubAccountIdentity(identity.RootPrefix)
+	personaID, err := buildPersonaIdentity(identity.RootPrefix)
 	if err != nil {
 		return "", err
 	}
 
-	profile := &model.UserProfile{
+	defaultNickname := s.buildDefaultNickname()
+	account := userrepo.UserAccountCreate{
 		UserID:                   ownerID,
 		Phone:                    "",
-		Nickname:                 s.buildDefaultNickname(),
-		NicknameCustomized:       false,
-		Status:                   "active",
 		AccountState:             accountStateForCredentialType(string(credentialType)),
 		IdentityOrigin:           identityOrigin,
 		LogicalShard:             identity.LogicalShard,
 		AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(string(credentialType)),
-		IdentityTags:             "{}",
-		ProfileVersion:           1,
-		SubAccountCount:          1,
+		PersonaCount:             1,
 	}
 	if credentialType == credentialmodel.CredentialType(credentialPhone) ||
 		credentialType == credentialmodel.CredentialType(credentialCarrierPhone) {
-		profile.Phone = credentialKey
+		account.Phone = credentialKey
 	}
 
-	if err := s.profiles.Create(ctx, profile); err != nil {
-		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create profile: %v", err))
+	if err := s.profiles.CreateAccount(ctx, account); err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create account: %v", err))
 	}
 
 	persona := &model.Persona{
 		UserID:                   ownerID,
-		SubAccountID:             subAccountID,
-		UserHandle:               systemUserHandleForSubAccount(subAccountID),
-		DisplayName:              profile.Nickname,
-		Phone:                    profile.Phone,
+		PersonaID:                personaID,
+		UserHandle:               systemUserHandleForPersona(personaID),
+		DisplayName:              defaultNickname,
+		NicknameCustomized:       false,
+		IdentityTags:             []string{},
 		IsPrimary:                true,
 		IsActive:                 true,
 		IsolationLevel:           defaultIsolationLevel,
-		InheritsProfileFromOwner: true,
+		InheritsProfileFromOwner: false,
 		OverriddenProfileFields:  encodeProfileFieldList(nil),
+		LastProfileSyncSource:    "initial_inherit",
 	}
 	normalizePersonaPersistence(persona)
-	if err := s.personas.Create(ctx, persona); err != nil {
-		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create persona: %v", err))
+	if s.personaCommands == nil || s.personaProfileProjector == nil {
+		return "", accountgenerated.AppErrorFromInternalError(
+			"Persona bootstrap command pipeline unavailable",
+		)
+	}
+	bootstrapDigest := sha256.Sum256([]byte(strings.Join([]string{
+		ownerID,
+		personaID,
+		defaultNickname,
+		identityOrigin,
+	}, "\x00")))
+	personaResult, err := s.personaCommands.CommitCreate(
+		ctx,
+		persona,
+		personaports.PersonaCommandMeta{
+			IdempotencyKey: "auth-persona-bootstrap:" + personaID,
+			CommandDigest:  hex.EncodeToString(bootstrapDigest[:]),
+		},
+	)
+	if err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("create Persona: %v", err))
+	}
+	if _, err := s.personaProfileProjector.Project(
+		ctx,
+		personaResult.PersonaID,
+		personaResult.Version,
+	); err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("project Persona profile: %v", err))
 	}
 
 	if s.credentialCommands == nil {
@@ -444,19 +485,27 @@ func (s *AuthService) resolvePhysicalShard(ownerID string) (string, error) {
 	if s == nil || s.shardDirectory == nil {
 		return "", nil
 	}
-	physicalShard := strings.TrimSpace(s.shardDirectory.ResolvePhysicalShardForOwnerID(ownerID))
+	resolved, err := s.shardDirectory.ResolvePhysicalShardForOwnerID(ownerID)
+	if err != nil {
+		return "", accountgenerated.AppErrorFromInternalError(
+			"resolve physical shard for canonical owner identity",
+		)
+	}
+	physicalShard := strings.TrimSpace(resolved)
 	if physicalShard == "" {
-		return "", accountgenerated.AppErrorFromInternalError(fmt.Sprintf("resolve physical shard for owner %s", ownerID))
+		return "", accountgenerated.AppErrorFromInternalError(
+			"resolve physical shard for canonical owner identity",
+		)
 	}
 	return physicalShard, nil
 }
 
-func buildActiveSubEnvelope(activeSub *model.Persona) map[string]any {
-	if activeSub == nil {
+func buildActivePersonaEnvelope(activePersona *model.Persona) map[string]any {
+	if activePersona == nil {
 		return map[string]any{}
 	}
 	return map[string]any{
-		"subAccountId": activeSub.SubAccountID,
+		"personaId": activePersona.PersonaID,
 	}
 }
 
@@ -586,7 +635,7 @@ func (s *AuthService) requireActiveAccountSecurity(
 //
 // 前缀云侧可配置（默认「新同学」）；7 位尾号混合时/分/秒/毫秒与随机扰动，
 // 在允许重复的前提下尽量降低近时刻碰撞概率。昵称唯一性仍由
-// ownerID/subAccountId/userHandle 承担。
+// ownerID/personaId/userHandle 承担。
 func (s *AuthService) buildDefaultNickname() string {
 	prefix := strings.TrimSpace(s.nicknamePrefix)
 	if prefix == "" {
@@ -610,14 +659,6 @@ func defaultNicknameSevenDigitSuffix(now time.Time) int64 {
 	return (millisOfDay + n.Int64()) % 10_000_000
 }
 
-func extractOwnerRootPrefix(ownerID string) string {
-	parts := strings.Split(strings.TrimSpace(ownerID), "_")
-	if len(parts) >= 5 && parts[0] == "uo" {
-		return parts[3]
-	}
-	return "0000"
-}
-
 func identityOriginValue(credType string) string {
 	origin, _ := identityOriginForCredentialType(credType)
 	return origin
@@ -637,7 +678,7 @@ func profileIntField(profile *model.UserProfile, getter func(*model.UserProfile)
 	return getter(profile)
 }
 
-// SubAccountService handles SubAccount lifecycle within an OwnerAccount.
+// PersonaService handles Persona lifecycle within an OwnerAccount.
 func defaultString(value, fallback string) string {
 	if value != "" {
 		return value
@@ -650,15 +691,14 @@ func isPersonaHandleConflict(err error) bool {
 }
 
 var (
-	ErrSubAccountNotFound     = personagenerated.AppErrorFromSubAccountNotFound("sub-account not found")
-	ErrPrimarySubAccount      = personagenerated.AppErrorFromPrimarySubAccountGuard("primary persona cannot be retired")
-	ErrLastSubAccount         = personagenerated.AppErrorFromLastSubAccount("cannot retire the last active persona")
-	ErrActiveSubAccountAction = personagenerated.AppErrorFromActiveSubAccountGuard("switch to another persona before retiring this one")
-	ErrRetiredPersonaAction   = personagenerated.AppErrorFromRetiredSubAccountGuard("retired persona cannot accept new actions")
-	ErrSubAccountStrictIso    = personagenerated.AppErrorFromSubAccountStrictIsolation("user not found")
-	ErrPersonaHandleTaken     = personagenerated.AppErrorFromSubAccountHandleTaken("persona_handle_taken")
+	ErrPersonaNotFound      = personagenerated.AppErrorFromPersonaNotFound("persona not found")
+	ErrPrimaryPersona       = personagenerated.AppErrorFromPrimaryPersonaGuard("primary persona cannot be retired")
+	ErrLastPersona          = personagenerated.AppErrorFromLastPersona("cannot retire the last active persona")
+	ErrActivePersonaAction  = personagenerated.AppErrorFromActivePersonaGuard("switch to another persona before retiring this one")
+	ErrRetiredPersonaAction = personagenerated.AppErrorFromRetiredPersonaGuard("retired persona cannot accept new actions")
+	ErrPersonaHandleTaken   = personagenerated.AppErrorFromPersonaHandleTaken("persona_handle_taken")
 )
 
-func findPersonaBySubAccountID(ctx context.Context, personas userrepo.PersonaReader, subAccountID string) (*model.Persona, error) {
-	return personas.FindBySubAccountID(ctx, subAccountID)
+func findPersonaByPersonaID(ctx context.Context, personas userrepo.PersonaReader, personaID string) (*model.Persona, error) {
+	return personas.FindByPersonaID(ctx, personaID)
 }

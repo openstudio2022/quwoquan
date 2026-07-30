@@ -2,331 +2,542 @@ description: 'Comment 是独立聚合；其持久化状态只描述一条评论�
 
   replyCount、列表预览和互动计数均为可重建读模型，不属于 Comment 写模型。
 
-  '
+'
 fields:
-- name: id
-  source: id
-  type: string
-  constraints:
-  - PK
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  source: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: Comment 聚合乐观并发版本；每次命令事实提交时原子递增。
-  role: authoritative_state
-- name: postId
-  source: postId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 被评论内容的外部引用；不嵌入或持有 Post 聚合。
-  role: authoritative_state
-  reference: true
-- name: authorId
-  source: authorId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 评论作者公开 persona/sub-account 主体。
-  role: authoritative_state
-  reference: true
-- name: authorDisplayNameSnapshot
-  source: authorDisplayNameSnapshot
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: owned_value
-- name: authorAvatarUrlSnapshot
-  source: authorAvatarUrlSnapshot
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: owned_value
-- name: personaContextVersion
-  source: personaContextVersion
-  type: int
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: content
-  source: content
-  type: string
-  constraints:
-  - NOT_NULL
-  - MAX_LENGTH_1000
-  classification: PUBLIC
-  log_policy: redacted
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: replyToCommentId
-  source: replyToCommentId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 实际被回复的评论；允许指向一级评论或其一级回复。
-  role: authoritative_state
-  reference: true
-- name: replyToUserId
-  source: replyToUserId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 由回复目标投影确定，客户端不可伪造。
-  role: authoritative_state
-  reference: true
-- name: parentCommentId
-  source: parentCommentId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 一级线程根；回复回复时仍指向同一一级根，禁止形成三级树。
-  role: authoritative_state
-  reference: true
-- name: attachmentMediaIds
-  source: attachmentMediaIds
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  - MAX_ITEMS_9
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 已绑定 comment_attachment MediaAsset 的外部引用。
-  role: authoritative_state
-  reference: true
-- name: mentions
-  source: mentions
-  type: '[]CommentMention'
-  constraints:
-  - NULLABLE
-  - MAX_ITEMS_20
-  classification: PUBLIC
-  log_policy: redacted
-  api_exposure: read_write
-  ops_exposure: read
-  description: 强类型提及值对象（subjectType、subjectId、displayName）。
-  role: owned_value
-- name: assistantMentioned
-  source: assistantMentioned
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 由 typed mention 值对象推导的助手触发标记。
-  role: authoritative_state
-- name: assistantReplySource
-  source: assistantReplySource
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: assistantCorrectionStatus
-  source: assistantCorrectionStatus
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: CommentStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 'active/hidden/deleted/tombstoned。deleted 为作者软删（终态）；hidden 为 operator
+  - name: id
+    source: id
+    type: string
+    constraints:
+      - PK
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    source: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: Comment 聚合乐观并发版本；每次命令事实提交时原子递增。
+    role: authoritative_state
+  - name: postId
+    source: postId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 被评论内容的外部引用；不嵌入或持有 Post 聚合。
+    role: authoritative_state
+    reference: true
+  - name: authorId
+    source: authorId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 评论作者公开 persona/persona 主体。
+    role: authoritative_state
+    reference: true
+  - name: authorDisplayNameSnapshot
+    source: authorDisplayNameSnapshot
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: owned_value
+  - name: authorAvatarUrlSnapshot
+    source: authorAvatarUrlSnapshot
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: owned_value
+  - name: personaContextVersion
+    source: personaContextVersion
+    type: int
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: content
+    source: content
+    type: string
+    constraints:
+      - NOT_NULL
+      - MAX_LENGTH_1000
+    classification: PUBLIC
+    log_policy: redacted
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: replyToCommentId
+    source: replyToCommentId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 实际被回复的评论；允许指向一级评论或其一级回复。
+    role: authoritative_state
+    reference: true
+  - name: replyToUserId
+    source: replyToUserId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 由回复目标投影确定，客户端不可伪造。
+    role: authoritative_state
+    reference: true
+  - name: parentCommentId
+    source: parentCommentId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 一级线程根；回复回复时仍指向同一一级根，禁止形成三级树。
+    role: authoritative_state
+    reference: true
+  - name: attachmentMediaIds
+    source: attachmentMediaIds
+    type: '[]string'
+    constraints:
+      - NULLABLE
+      - MAX_ITEMS_9
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 已绑定 comment_attachment MediaAsset 的外部引用。
+    role: authoritative_state
+    reference: true
+  - name: mentions
+    source: mentions
+    type: '[]CommentMention'
+    constraints:
+      - NULLABLE
+      - MAX_ITEMS_20
+    classification: PUBLIC
+    log_policy: redacted
+    api_exposure: read_write
+    ops_exposure: read
+    description: 强类型提及值对象（subjectType、subjectId、displayName）。
+    role: owned_value
+  - name: assistantMentioned
+    source: assistantMentioned
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 由 typed mention 值对象推导的助手触发标记。
+    role: authoritative_state
+  - name: assistantReplySource
+    source: assistantReplySource
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: assistantCorrectionStatus
+    source: assistantCorrectionStatus
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: CommentStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 'active/hidden/deleted/tombstoned。deleted 为作者软删（终态）；hidden 为 operator
 
-    治理隐藏（可经 RestoreComment 恢复）；tombstoned 为宿主 Post 删除后的级联终态。
+      治理隐藏（可经 RestoreComment 恢复）；tombstoned 为宿主 Post 删除后的级联终态。
 
-    前台列表只返回 active；作者在「我的评论」可见 hidden 状态标记。
+      前台列表只返回 active；作者在「我的评论」可见 hidden 状态标记。
 
-    '
-  role: authoritative_state
-- name: hotScore
-  source: hotScore
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: '热评排序投影分：(likeCount - dislikeCount) + 2 * replyCount。由 hotScore relay 消费
+'
+    role: authoritative_state
+  - name: hotScore
+    source: hotScore
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: '热评排序投影分：(likeCount - dislikeCount) + 2 * replyCount。由 hotScore relay 消费
 
-    ContentReactionSet/Cleared 与 CommentCreated/CommentDeleted(reply) 事实增量维护，
+      ContentReactionSet/Cleared 与 CommentCreated/CommentDeleted(reply) 事实增量维护，
 
-    可从权威数据全量重算；仅用于服务端 sort=hot keyset 排序，客户端不消费。
+      可从权威数据全量重算；仅用于服务端 sort=hot keyset 排序，客户端不消费。
 
-    '
-  role: authoritative_state
-- name: authorIpLocation
-  source: authorIpLocation
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: '评论创建时由服务端从受信代理头解析的省级 IP 属地快照（如「浙江」）；解析不出落空串
+'
+    role: authoritative_state
+  - name: authorIpLocation
+    source: authorIpLocation
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: '评论创建时由服务端从受信代理头解析的省级 IP 属地快照（如「浙江」）；解析不出落空串
 
-    且前端不展示，绝不臆造。读路径只透传快照，不二次解析。合规依据：互联网用户账号信息
+      且前端不展示，绝不臆造。读路径只透传快照，不二次解析。合规依据：互联网用户账号信息
 
-    管理规定 IP 属地展示要求。
+      管理规定 IP 属地展示要求。
 
-    '
-  role: authoritative_state
-- name: hiddenAt
-  source: hiddenAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: operator 治理隐藏时间；RestoreComment 恢复后清空。审计事实见 CommentModerated outbox。
-  role: authoritative_state
-- name: isPinned
-  source: isPinned
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 仅 post 作者可变更，且二级回复不可置顶。
-  role: authoritative_state
-- name: pinnedAt
-  source: pinnedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: deletedAt
-  source: deletedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 软删时间；CommentCreated/CommentDeleted 事实驱动 Post.commentCount 重建投影。
-  role: authoritative_state
+'
+    role: authoritative_state
+  - name: hiddenAt
+    source: hiddenAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: operator 治理隐藏时间；RestoreComment 恢复后清空。审计事实见 CommentModerated outbox。
+    role: authoritative_state
+  - name: isPinned
+    source: isPinned
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 仅 post 作者可变更，且二级回复不可置顶。
+    role: authoritative_state
+  - name: pinnedAt
+    source: pinnedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: deletedAt
+    source: deletedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 软删时间；CommentCreated/CommentDeleted 事实驱动 Post.commentCount 重建投影。
+    role: authoritative_state
 value_objects:
   CommentMention:
     fields:
-    - name: subjectType
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: subjectId
-      type: string
-      constraints:
-      - NOT_NULL
-    - name: displayName
-      type: string
-      constraints:
-      - NULLABLE
+      - name: subjectType
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: subjectId
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: displayName
+        type: string
+        constraints:
+          - NULLABLE
+types:
+  ModerateContentCommentCommand:
+    fields:
+      - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+      - {name: reason, type: string, constraints: [NOT_NULL, MAX_LENGTH_512], classification: INTERNAL, log_policy: redact, api_exposure: write, ops_exposure: read}
+  CommentCreatedPayload:
+    fields:
+      - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postAuthorId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyToCommentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: replyToUserId, type: string, constraints: [NULLABLE], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: parentCommentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: mentionedUserIds, type: '[]string', constraints: [NULLABLE], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentDeletedPayload:
+    fields:
+      - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: parentCommentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: deletedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentModeratedPayload:
+    fields:
+      - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: parentCommentId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: operatorId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: action, type: enum, enum_ref: CommentModerationAction, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+      - {name: reason, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: redact, api_exposure: drop, ops_exposure: read}
+      - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentPinChangedPayload:
+    fields:
+      - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: commentAuthorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: operatorId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read}
+      - {name: isPinned, type: bool, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: pinnedAt, type: timestamp, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentAttachmentsBoundPayload:
+    fields:
+      - {name: commentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: version, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: attachmentMediaIds, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  CommentsTombstonedPayload:
+    fields:
+      - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: tombstonedCount, type: int, constraints: [NOT_NULL, MIN_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  ContentCommentPageQuery:
+    fields:
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  DeleteContentCommentCommand:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: commentId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  CreateContentCommentCommand:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: content
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: replyToCommentId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: attachmentMediaIds
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim
+      - name: mentions
+        type: '[]object'
+        client_dart_type: List<ContentCommentMention>
+        client_parameter_type: Iterable<ContentCommentMention>
+        client_default: const <ContentCommentMention>[]
+        client_wire: toMap
+      - name: authorDisplayNameSnapshot
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: authorAvatarUrlSnapshot
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: personaContextVersion
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+  BindContentCommentAttachmentsCommand:
+    fields:
+      - name: commentId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: attachmentMediaIds
+        type: '[]string'
+        constraints:
+          - NOT_BLANK
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_normalization: trim
+  ListContentCommentRepliesQuery:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: commentId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "10"
+  ChangeContentCommentPinCommand:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: commentId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  ListContentCommentsQuery:
+    fields:
+      - name: postId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+      - name: sort
+        type: enum
+        client_dart_type: ContentCommentSort
+        client_default: ContentCommentSort.hot
+        client_wire: canonicalEnum
+        enum_ref: CommentSort
 enums:
   CommentStatus:
-  - active
-  - hidden
-  - deleted
-  - tombstoned
+    - active
+    - hidden
+    - deleted
+    - tombstoned
   CommentSort:
-  - hot
-  - latest
+    - hot
+    - latest
   CommentViewerRelation:
-  - none
-  - following
-  - friend
+    - none
+    - following
+    - friend
+  CommentModerationAction:
+    - hide
+    - restore

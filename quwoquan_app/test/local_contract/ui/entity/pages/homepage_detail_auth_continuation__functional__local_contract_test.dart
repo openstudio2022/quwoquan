@@ -54,7 +54,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -111,7 +111,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -166,7 +166,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -238,7 +238,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -266,7 +266,7 @@ void main() {
         .set(
           const OpenHomepageOwnerConversationContinuation(
             homepageId: _homepageId,
-            ownerSubAccountId: 'owner-persona-1',
+            ownerPersonaId: 'owner-persona-1',
           ),
         );
 
@@ -351,7 +351,10 @@ void main() {
       find.byKey(const ValueKey<String>('homepage-detail-login-close')),
       findsNothing,
     );
-    expect(find.text(ObjectHomepageText.homepageWishlistAction), findsOneWidget);
+    expect(
+      find.text(ObjectHomepageText.homepageWishlistAction),
+      findsOneWidget,
+    );
     final container = ProviderScope.containerOf(
       tester.element(find.byType(HomepageDetailPage)),
     );
@@ -368,8 +371,9 @@ final class _FlippableHomepageSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'homepage-access-token',
+      refreshToken: 'homepage-refresh-token',
       ownerId: 'homepage-viewer-owner',
-      activeSubAccountId: 'homepage-viewer-persona',
+      activePersonaId: 'homepage-viewer-persona',
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'homepage-install-id',
@@ -390,7 +394,7 @@ final class _RecordingSubjectFollowWriter
     lastSubjectId = command.subjectId;
     return SubjectFollowCommandResult(
       personaId: 'homepage-viewer-persona',
-      subjectType: command.subjectType.wire,
+      subjectType: command.subjectType,
       subjectId: command.subjectId,
       state: 'following',
       idempotentReplay: false,
@@ -403,7 +407,7 @@ final class _RecordingSubjectFollowWriter
   ) async {
     return SubjectFollowCommandResult(
       personaId: 'homepage-viewer-persona',
-      subjectType: command.subjectType.wire,
+      subjectType: command.subjectType,
       subjectId: command.subjectId,
       state: 'unfollowed',
       idempotentReplay: false,
@@ -441,7 +445,7 @@ final class _ClaimedHomepageRepository extends MockHomepageRepository {
     return detail.copyWith(
       claimStatus: 'claimed',
       ownerUserId: 'owner-user-1',
-      ownerSubAccountId: 'owner-persona-1',
+      ownerPersonaId: 'owner-persona-1',
     );
   }
 }

@@ -9,3 +9,14 @@ source_entities:
 - Persona
 consumers:
 - app
+fields:
+- name: targetPersonaId
+  type: string
+- name: displayName
+  type: string
+- name: userHandle
+  type: string
+- name: avatarUrl
+  type: string
+- name: blockedAt
+  type: timestamp

@@ -52,8 +52,6 @@ enums:
 
   - name: SkillSubscriptionStatus
     values:
-      - name: unknown
-        wire: ''
       - name: active
         wire: active
       - name: paused
@@ -173,32 +171,6 @@ enums:
       - name: decisionSupport
         wire: decision_support
 
-  - name: AnswerShape
-    values:
-      - name: unspecified
-        wire: ''
-      - name: directAnswer
-        wire: direct_answer
-      - name: comparison
-        wire: comparison
-      - name: options
-        wire: options
-      - name: decisionReady
-        wire: decision_ready
-      - name: actionPlan
-        wire: action_plan
-
-  - name: FreshnessNeed
-    values:
-      - name: unspecified
-        wire: ''
-      - name: stable
-        wire: stable
-      - name: recent
-        wire: recent
-      - name: realtime
-        wire: realtime
-
   - name: SkillMode
     values:
       - name: qa
@@ -236,17 +208,6 @@ enums:
         wire: strict
       - name: exhaustive
         wire: explore
-  - name: SearchIterationConvergenceStatus
-    values:
-      - name: unknown
-        wire: ''
-      - name: improving
-        wire: improving
-      - name: flat
-        wire: flat
-      - name: saturated
-        wire: saturated
-
   - name: FinalAnswerMode
     values:
       - name: full
@@ -290,19 +251,6 @@ enums:
         wire: page
       - name: web
         wire: web
-      - name: unknown
-        wire: ''
-
-  - name: SkillExecutionTarget
-    values:
-      - name: toolChain
-        wire: tool_chain
-      - name: nativeApi
-        wire: native_api
-      - name: iosIntent
-        wire: ios_intent
-      - name: androidIntent
-        wire: android_intent
       - name: unknown
         wire: ''
 
@@ -429,6 +377,35 @@ enums:
       - name: references
         wire: references
 
+  - name: SearchPlanDimension
+    values:
+      - name: unknown
+        wire: ''
+      - name: currentState
+        wire: current_state
+      - name: decisionImpact
+        wire: decision_impact
+      - name: candidateSpace
+        wire: candidate_space
+      - name: tradeoffs
+        wire: tradeoffs
+      - name: fitConstraints
+        wire: fit_constraints
+      - name: fitScenarios
+        wire: fit_scenarios
+      - name: riskBoundaries
+        wire: risk_boundaries
+      - name: keyFacts
+        wire: key_facts
+      - name: decisionThreshold
+        wire: decision_threshold
+      - name: coreObject
+        wire: core_object
+      - name: supportingEvidence
+        wire: supporting_evidence
+      - name: latestSignal
+        wire: latest_signal
+
   - name: TraceVisibility
     values:
       - name: userVisible
@@ -437,6 +414,28 @@ enums:
         wire: system
       - name: internal
         wire: internal
+
+  - name: ToolRecoveryAction
+    values:
+      - name: unknown
+        wire: ''
+      - name: failTurn
+        wire: fail_turn
+      - name: skipTool
+        wire: skip_tool
+      - name: degradeAnswer
+        wire: degrade_answer
+
+  - name: ToolDisruptionLevel
+    values:
+      - name: unknown
+        wire: ''
+      - name: none
+        wire: none
+      - name: partial
+        wire: partial
+      - name: full
+        wire: full
 
   - name: SlotValueStatus
     values:
@@ -625,34 +624,6 @@ enums:
       - name: unknown
         wire: ''
 
-  - name: QueryNormalizationIssue
-    values:
-      - name: pinyinInput
-        wire: pinyin_input
-      - name: noTimeSpecified
-        wire: no_time_specified
-      - name: noLocation
-        wire: no_location
-      - name: ambiguousIntent
-        wire: ambiguous_intent
-      - name: nonStandardLanguage
-        wire: non_standard_language
-      - name: unknown
-        wire: ''
-
-  - name: EvidenceStatus
-    values:
-      - name: full
-        wire: full
-      - name: bounded
-        wire: bounded
-      - name: notRequired
-        wire: not_required
-      - name: retry
-        wire: retry
-      - name: unknown
-        wire: ''
-
   - name: ContextFillType
     values:
       - name: contextFill
@@ -725,6 +696,14 @@ enums:
         wire: tone
       - name: language
         wire: language
+      - name: frequentLocations
+        wire: frequent_locations
+      - name: familyTerms
+        wire: family_terms
+      - name: dietaryRestrictions
+        wire: dietary_restrictions
+      - name: travelPreferences
+        wire: travel_preferences
       - name: unknown
         wire: ''
 
@@ -734,6 +713,8 @@ enums:
         wire: explicit_rewrite
       - name: management
         wire: management
+      - name: conversationConfirmed
+        wire: conversation_confirmed
       - name: unknown
         wire: ''
 
@@ -743,5 +724,16 @@ enums:
         wire: active
       - name: revoked
         wire: revoked
+
+  - name: AssistantResponseType
+    values:
+      - name: text
+        wire: text
+      - name: structured
+        wire: structured
+      - name: actionCard
+        wire: action_card
+      - name: stream
+        wire: stream
       - name: unknown
         wire: ''

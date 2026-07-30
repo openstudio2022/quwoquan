@@ -5,470 +5,517 @@ commercial_defaults:
   gap_id: CIRCLE_MEMBERSHIP_COMMERCIAL_CLOSURE
   target_story: app-cloud-business-object-commercial-closure
 api_routes:
-- method: GET
-  path: /personas/{personaId}/circles
-  operation: ListPersonaCircles
-  commercial:
-    status: ready
-  actor: none
-  application:
-    kind: query
-    facet: CircleMembershipQueryFacet
-    method: listPersonaCircles
-    reader: PersonaCircleReader
-    slice: PersonaCirclePageSlice
-  query_params:
-  - query
-  - cursor
-  - limit
-  response_entity: PersonaCircleSlice
-  security:
-    auth_mode: optional
-  authorization:
-    principal: public
-    ownership_policy: public_circle_membership_projection
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: PUBLIC
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_persona_circles
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: PersonaCircleListQuery
-    response_type: PersonaCirclePageSlice
-    request_encoder: encodePersonaCircleListQuery
-    response_decoder: decodePersonaCirclePageSlice
-- method: POST
-  path: /circles/{circleId}/memberships
-  operation: JoinCircle
-  commercial:
-    status: ready
-  actor: persona
-  security:
-    auth_mode: required
-  application:
-    kind: command
-    facet: CircleMembershipCommandFacet
-    method: joinCircle
-    aggregate_owner: CircleMembership
-    mutation_target: CircleMembership
-    invariant_target: CircleMembership
-  authorization:
-    principal: persona
-    ownership_policy: self_membership_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.join_approval_required
-  - CIRCLE.USER.membership_already_active
-  - CIRCLE.USER.membership_idempotency_conflict
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_join
-    trace: true
-    attributes:
-    - outcome
-    - role
-  slo:
-    latency_p95_ms: 600
-    availability_percent: 99.9
-  response_entity: CircleMembershipCommandResult
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: JoinCircleMembershipCommand
-    response_type: CircleMembershipCommandResult
-    request_encoder: encodeJoinCircleMembershipCommand
-    response_decoder: decodeCircleMembershipCommandResult
-- method: DELETE
-  path: /circles/{circleId}/memberships/self
-  operation: LeaveCircle
-  commercial:
-    status: ready
-  actor: persona
-  security:
-    auth_mode: required
-  application:
-    kind: command
-    facet: CircleMembershipCommandFacet
-    method: leaveCircle
-    aggregate_owner: CircleMembership
-    mutation_target: CircleMembership
-    invariant_target: CircleMembership
-  headers:
-  - Idempotency-Key
-  authorization:
-    principal: persona
-    ownership_policy: self_membership_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.membership_not_found
-  - CIRCLE.USER.membership_owner_cannot_leave
-  - CIRCLE.USER.membership_version_conflict
-  - CIRCLE.USER.membership_idempotency_conflict
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_leave
-    trace: true
-    attributes:
-    - outcome
-    - role
-  slo:
-    latency_p95_ms: 600
-    availability_percent: 99.9
-  response_entity: CircleMembershipCommandResult
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: LeaveCircleMembershipCommand
-    response_type: CircleMembershipCommandResult
-    request_encoder: encodeLeaveCircleMembershipCommand
-    response_decoder: decodeCircleMembershipCommandResult
-- method: GET
-  path: /circles/{circleId}/memberships/self
-  operation: GetMyCircleMembership
-  commercial:
-    status: ready
-  actor: persona
-  security:
-    auth_mode: required
-  application:
-    kind: query
-    facet: CircleMembershipQueryFacet
-    method: getMyCircleMembership
-    reader: CircleMembershipReader
-    slice: CircleMembershipSlice
-  response_entity: CircleMembershipSlice
-  authorization:
-    principal: persona
-    ownership_policy: self_membership_only
-  reliability:
-    timeout_ms: 1000
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.membership_not_found
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_self_read
-    trace: true
-    attributes:
-    - outcome
-    - role
-  slo:
-    latency_p95_ms: 350
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: MyCircleMembershipQuery
-    response_type: CircleMembershipSlice
-    request_encoder: encodeMyCircleMembershipQuery
-    response_decoder: decodeCircleMembershipSlice
-- method: GET
-  path: /circles/{circleId}/memberships
-  operation: ListCircleMemberships
-  commercial:
-    status: ready
-  actor: none
-  application:
-    kind: query
-    facet: CircleMembershipQueryFacet
-    method: listCircleMemberships
-    reader: CircleMembershipReader
-    slice: CircleMembershipPageSlice
-  query_params:
-  - cursor
-  - limit
-  response_entity: CircleMembershipSlice
-  security:
-    auth_mode: public
-  authorization:
-    principal: public
-    ownership_policy: public_circle_roster
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_roster
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: CircleMembershipListQuery
-    response_type: CircleMembershipPageSlice
-    request_encoder: encodeCircleMembershipListQuery
-    response_decoder: decodeCircleMembershipPageSlice
-- method: GET
-  path: /circles/{circleId}/memberships/pending
-  operation: ListPendingCircleMemberships
-  commercial:
-    status: ready
-  actor: persona
-  security:
-    auth_mode: required
-  application:
-    kind: query
-    facet: CircleMembershipQueryFacet
-    method: listPendingCircleMemberships
-    reader: CircleMembershipReader
-    slice: CircleMembershipPageSlice
-  query_params:
-  - cursor
-  - limit
-  response_entity: CircleMembershipSlice
-  authorization:
-    principal: persona
-    ownership_policy: circle_moderator_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.permission_denied
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_pending_list
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: PendingCircleMembershipListQuery
-    response_type: CircleMembershipPageSlice
-    request_encoder: encodePendingCircleMembershipListQuery
-    response_decoder: decodeCircleMembershipPageSlice
-- method: POST
-  path: /circles/{circleId}/memberships/{personaId}:approve
-  operation: ApproveCircleMember
-  commercial:
-    status: ready
-  actor: persona
-  security:
-    auth_mode: required
-  headers:
-  - Idempotency-Key
-  application:
-    kind: command
-    facet: CircleMembershipCommandFacet
-    method: approveCircleMember
-    aggregate_owner: CircleMembership
-    mutation_target: CircleMembership
-    invariant_target: CircleMembership
-  response_entity: CircleMembershipCommandResult
-  authorization:
-    principal: persona
-    ownership_policy: circle_moderator_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.permission_denied
-  - CIRCLE.USER.membership_not_found
-  - CIRCLE.USER.membership_state_conflict
-  - CIRCLE.USER.membership_version_conflict
-  - CIRCLE.USER.membership_idempotency_conflict
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_approve
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 650
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: DecideCircleMembershipCommand
-    response_type: CircleMembershipCommandResult
-    request_encoder: encodeApproveCircleMembershipCommand
-    response_decoder: decodeCircleMembershipCommandResult
-- method: POST
-  path: /circles/{circleId}/memberships/{personaId}:reject
-  operation: RejectCircleMember
-  commercial:
-    status: ready
-  actor: persona
-  security:
-    auth_mode: required
-  headers:
-  - Idempotency-Key
-  application:
-    kind: command
-    facet: CircleMembershipCommandFacet
-    method: rejectCircleMember
-    aggregate_owner: CircleMembership
-    mutation_target: CircleMembership
-    invariant_target: CircleMembership
-  response_entity: CircleMembershipCommandResult
-  authorization:
-    principal: persona
-    ownership_policy: circle_moderator_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.permission_denied
-  - CIRCLE.USER.membership_not_found
-  - CIRCLE.USER.membership_state_conflict
-  - CIRCLE.USER.membership_version_conflict
-  - CIRCLE.USER.membership_idempotency_conflict
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_reject
-    trace: true
-    attributes:
-    - outcome
-  slo:
-    latency_p95_ms: 650
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: DecideCircleMembershipCommand
-    response_type: CircleMembershipCommandResult
-    request_encoder: encodeRejectCircleMembershipCommand
-    response_decoder: decodeCircleMembershipCommandResult
-- method: PATCH
-  path: /circles/{circleId}/memberships/{personaId}/role
-  operation: UpdateCircleMembershipRole
-  commercial:
-    status: ready
-  actor: persona
-  application:
-    kind: command
-    facet: CircleMembershipCommandFacet
-    method: updateCircleMembershipRole
-    aggregate_owner: CircleMembership
-    mutation_target: CircleMembership
-    invariant_target: CircleMembership
-  request_entity: UpdateCircleMembershipRoleRequest
-  response_entity: CircleMembershipCommandResult
-  security:
-    auth_mode: required
-  headers:
-  - Idempotency-Key
-  authorization:
-    principal: persona
-    ownership_policy: circle_moderator_only
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - CIRCLE.USER.invalid_argument
-  - CIRCLE.USER.permission_denied
-  - CIRCLE.USER.membership_not_found
-  - CIRCLE.USER.membership_role_invalid
-  - CIRCLE.USER.membership_version_conflict
-  - CIRCLE.USER.membership_idempotency_conflict
-  - CIRCLE.SYSTEM.membership_storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: circle_membership_role_update
-    trace: true
-    attributes:
-    - outcome
-    - target_role
-  slo:
-    latency_p95_ms: 600
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../circle/membership_contracts.dart
-    request_type: UpdateCircleMembershipRoleCommand
-    response_type: CircleMembershipCommandResult
-    request_encoder: encodeUpdateCircleMembershipRoleCommand
-    response_decoder: decodeCircleMembershipCommandResult
+  - method: GET
+    path: /personas/{personaId}/circles
+    operation: ListPersonaCircles
+    request_bindings:
+      path:
+        - name: personaId
+          field: personaId
+      query:
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+          required: false
+        - name: query
+          field: query
+          required: false
+    commercial:
+      status: ready
+    actor: none
+    application:
+      kind: query
+      facet: CircleMembershipQueryFacet
+      method: listPersonaCircles
+      reader: PersonaCircleReader
+      slice: PersonaCirclePageSlice
+    response_entity: PersonaCircleSlice
+    security:
+      auth_mode: optional
+    authorization:
+      principal: public
+      ownership_policy: public_circle_membership_projection
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_persona_circles
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: PersonaCirclePageSlice
+      response_decoder: decodePersonaCirclePageSlice
+    request_entity: PersonaCircleListQuery
+    request_body_kind: none
+  - method: POST
+    path: /circles/{circleId}/memberships
+    operation: JoinCircle
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+    commercial:
+      status: ready
+    actor: persona
+    security:
+      auth_mode: required
+    application:
+      kind: command
+      facet: CircleMembershipCommandFacet
+      method: joinCircle
+      aggregate_owner: CircleMembership
+      mutation_target: CircleMembership
+      invariant_target: CircleMembership
+    authorization:
+      principal: persona
+      ownership_policy: self_membership_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.join_approval_required
+      - CIRCLE.USER.membership_already_active
+      - CIRCLE.USER.membership_idempotency_conflict
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_join
+      trace: true
+      attributes:
+        - outcome
+        - role
+    slo:
+      latency_p95_ms: 600
+      availability_percent: 99.9
+    response_entity: CircleMembershipCommandResult
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipCommandResult
+      response_decoder: decodeCircleMembershipCommandResult
+    request_entity: JoinCircleMembershipCommand
+    request_body_kind: none
+  - method: DELETE
+    path: /circles/{circleId}/memberships/self
+    operation: LeaveCircle
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+    commercial:
+      status: ready
+    actor: persona
+    security:
+      auth_mode: required
+    application:
+      kind: command
+      facet: CircleMembershipCommandFacet
+      method: leaveCircle
+      aggregate_owner: CircleMembership
+      mutation_target: CircleMembership
+      invariant_target: CircleMembership
+    authorization:
+      principal: persona
+      ownership_policy: self_membership_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.membership_not_found
+      - CIRCLE.USER.membership_owner_cannot_leave
+      - CIRCLE.USER.membership_version_conflict
+      - CIRCLE.USER.membership_idempotency_conflict
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_leave
+      trace: true
+      attributes:
+        - outcome
+        - role
+    slo:
+      latency_p95_ms: 600
+      availability_percent: 99.9
+    response_entity: CircleMembershipCommandResult
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipCommandResult
+      response_decoder: decodeCircleMembershipCommandResult
+    request_entity: LeaveCircleMembershipCommand
+    request_body_kind: none
+  - method: GET
+    path: /circles/{circleId}/memberships/self
+    operation: GetMyCircleMembership
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+    commercial:
+      status: ready
+    actor: persona
+    security:
+      auth_mode: required
+    application:
+      kind: query
+      facet: CircleMembershipQueryFacet
+      method: getMyCircleMembership
+      reader: CircleMembershipReader
+      slice: CircleMembershipSlice
+    response_entity: CircleMembershipSlice
+    authorization:
+      principal: persona
+      ownership_policy: self_membership_only
+    reliability:
+      timeout_ms: 1000
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.membership_not_found
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_self_read
+      trace: true
+      attributes:
+        - outcome
+        - role
+    slo:
+      latency_p95_ms: 350
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipSlice
+      response_decoder: decodeCircleMembershipSlice
+    request_entity: MyCircleMembershipQuery
+    request_body_kind: none
+  - method: GET
+    path: /circles/{circleId}/memberships
+    operation: ListCircleMemberships
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+      query:
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+          required: false
+    commercial:
+      status: ready
+    actor: none
+    application:
+      kind: query
+      facet: CircleMembershipQueryFacet
+      method: listCircleMemberships
+      reader: CircleMembershipReader
+      slice: CircleMembershipPageSlice
+    response_entity: CircleMembershipSlice
+    security:
+      auth_mode: public
+    authorization:
+      principal: public
+      ownership_policy: public_circle_roster
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_roster
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipPageSlice
+      response_decoder: decodeCircleMembershipPageSlice
+    request_entity: CircleMembershipListQuery
+    request_body_kind: none
+  - method: GET
+    path: /circles/{circleId}/memberships/pending
+    operation: ListPendingCircleMemberships
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+      query:
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+          required: false
+    commercial:
+      status: ready
+    actor: persona
+    security:
+      auth_mode: required
+    application:
+      kind: query
+      facet: CircleMembershipQueryFacet
+      method: listPendingCircleMemberships
+      reader: CircleMembershipReader
+      slice: CircleMembershipPageSlice
+    response_entity: CircleMembershipSlice
+    authorization:
+      principal: persona
+      ownership_policy: circle_moderator_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.permission_denied
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_pending_list
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipPageSlice
+      response_decoder: decodeCircleMembershipPageSlice
+    request_entity: PendingCircleMembershipListQuery
+    request_body_kind: none
+  - method: POST
+    path: /circles/{circleId}/memberships/{personaId}:approve
+    operation: ApproveCircleMember
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+        - name: personaId
+          field: personaId
+    commercial:
+      status: ready
+    actor: persona
+    security:
+      auth_mode: required
+    application:
+      kind: command
+      facet: CircleMembershipCommandFacet
+      method: approveCircleMember
+      aggregate_owner: CircleMembership
+      mutation_target: CircleMembership
+      invariant_target: CircleMembership
+    response_entity: CircleMembershipCommandResult
+    authorization:
+      principal: persona
+      ownership_policy: circle_moderator_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.permission_denied
+      - CIRCLE.USER.membership_not_found
+      - CIRCLE.USER.membership_state_conflict
+      - CIRCLE.USER.membership_version_conflict
+      - CIRCLE.USER.membership_idempotency_conflict
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_approve
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 650
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipCommandResult
+      response_decoder: decodeCircleMembershipCommandResult
+    request_entity: DecideCircleMembershipCommand
+    request_body_kind: none
+  - method: POST
+    path: /circles/{circleId}/memberships/{personaId}:reject
+    operation: RejectCircleMember
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+        - name: personaId
+          field: personaId
+    commercial:
+      status: ready
+    actor: persona
+    security:
+      auth_mode: required
+    application:
+      kind: command
+      facet: CircleMembershipCommandFacet
+      method: rejectCircleMember
+      aggregate_owner: CircleMembership
+      mutation_target: CircleMembership
+      invariant_target: CircleMembership
+    response_entity: CircleMembershipCommandResult
+    authorization:
+      principal: persona
+      ownership_policy: circle_moderator_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.permission_denied
+      - CIRCLE.USER.membership_not_found
+      - CIRCLE.USER.membership_state_conflict
+      - CIRCLE.USER.membership_version_conflict
+      - CIRCLE.USER.membership_idempotency_conflict
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_reject
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 650
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipCommandResult
+      response_decoder: decodeCircleMembershipCommandResult
+    request_entity: DecideCircleMembershipCommand
+    request_body_kind: none
+  - method: PATCH
+    path: /circles/{circleId}/memberships/{personaId}/role
+    operation: UpdateCircleMembershipRole
+    request_bindings:
+      path:
+        - name: circleId
+          field: circleId
+        - name: personaId
+          field: personaId
+    commercial:
+      status: ready
+    actor: persona
+    application:
+      kind: command
+      facet: CircleMembershipCommandFacet
+      method: updateCircleMembershipRole
+      aggregate_owner: CircleMembership
+      mutation_target: CircleMembership
+      invariant_target: CircleMembership
+    request_entity: UpdateCircleMembershipRoleCommand
+    response_entity: CircleMembershipCommandResult
+    security:
+      auth_mode: required
+    authorization:
+      principal: persona
+      ownership_policy: circle_moderator_only
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CIRCLE.USER.invalid_argument
+      - CIRCLE.USER.permission_denied
+      - CIRCLE.USER.membership_not_found
+      - CIRCLE.USER.membership_role_invalid
+      - CIRCLE.USER.membership_version_conflict
+      - CIRCLE.USER.membership_idempotency_conflict
+      - CIRCLE.SYSTEM.membership_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_membership_role_update
+      trace: true
+      attributes:
+        - outcome
+        - target_role
+    slo:
+      latency_p95_ms: 600
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../circle/membership_contracts.dart
+      response_type: CircleMembershipCommandResult
+      response_decoder: decodeCircleMembershipCommandResult
+    request_body_kind: object
 contract_test:
   coverage_requirements:
-  - aggregate invariants and version conflicts covered
-  - generated authorization rejects forged actor headers
-  - aggregate, command receipt and outbox commit in one real Mongo transaction
-  - every sink owns an independent durable checkpoint
-  - replay cannot double-apply Circle memberCount or stream side effects
+    - aggregate invariants and version conflicts covered
+    - generated authorization rejects forged actor headers
+    - aggregate, command receipt and outbox commit in one real Mongo transaction
+    - every sink owns an independent durable checkpoint
+    - replay cannot double-apply Circle memberCount or stream side effects
   mock_strategy:
     service_side:
       description: 使用 MongoDB 7 replica set 与 Redis 7 testcontainers，不 mock Store、outbox、投影或消息链路
@@ -479,30 +526,30 @@ contract_test:
         seed: 仅插入目标 Circle policy projection；CircleMembership 必须经真实 HTTP Command Facade 创建
         cleanup: DeleteMany all circle_membership_* collections and FLUSHDB isolated Redis
       scenarios:
-      - name: membership_transaction_and_replay
-        commands:
-        - JoinCircle
-        - LeaveCircle
-        assertions:
-        - forged actor header returns 401 before persistence
-        - same Idempotency-Key and semantic command returns idempotentReplay=true
-        - same Idempotency-Key with another command returns CIRCLE.USER.membership_idempotency_conflict
-        - circle_memberships, command receipt and outbox counts remain unique
-      - name: membership_projection_and_stream
-        commands:
-        - JoinCircle
-        - LeaveCircle
-        - replay
-        assertions:
-        - Circle.memberCount converges once
-        - projection inbox prevents duplicate increments
-        - failed or replayed sink never shares another sink checkpoint
-        - events.circle.memberships contains typed immutable envelopes
-      - name: owner_and_moderator_invariants
-        commands:
-        - JoinCircle
-        - LeaveCircle
-        - UpdateCircleMembershipRole
-        assertions:
-        - owner cannot leave
-        - only owner or active admin can change a non-owner role
+        - name: membership_transaction_and_replay
+          commands:
+            - JoinCircle
+            - LeaveCircle
+          assertions:
+            - forged actor header returns 401 before persistence
+            - same Idempotency-Key and semantic command returns idempotentReplay=true
+            - same Idempotency-Key with another command returns CIRCLE.USER.membership_idempotency_conflict
+            - circle_memberships, command receipt and outbox counts remain unique
+        - name: membership_projection_and_stream
+          commands:
+            - JoinCircle
+            - LeaveCircle
+            - replay
+          assertions:
+            - Circle.memberCount converges once
+            - projection inbox prevents duplicate increments
+            - failed or replayed sink never shares another sink checkpoint
+            - events.circle.memberships contains typed immutable envelopes
+        - name: owner_and_moderator_invariants
+          commands:
+            - JoinCircle
+            - LeaveCircle
+            - UpdateCircleMembershipRole
+          assertions:
+            - owner cannot leave
+            - only owner or active admin can change a non-owner role

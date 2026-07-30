@@ -66,7 +66,7 @@ envelope_fields:
 - name: patchType
   type: enum
   dart_type: FeedRealtimePatchType
-  enum_ref: patch_type
+  enum_ref: FeedRealtimePatchType
   nullable: false
   required: true
   description: patch 类型
@@ -98,14 +98,14 @@ envelope_fields:
 - name: reasonCode
   type: enum
   dart_type: FeedPatchReasonCode
-  enum_ref: reason_code
+  enum_ref: FeedPatchReasonCode
   nullable: false
   required: true
   description: 触发原因码
 - name: removalDimension
   type: enum
   dart_type: FeedPatchRemovalDimension
-  enum_ref: removal_dimension
+  enum_ref: FeedPatchRemovalDimension
   nullable: true
   default: 'null'
   description: 剔除维度（仅 removal）
@@ -121,18 +121,13 @@ envelope_fields:
   nullable: false
   default: '0'
   description: 受影响/新增候选数量（提示用，端侧可展示「N 条更新」）
-- name: rankingVersion
+- name: policyDigest
   type: string
   dart_type: String
+  format: canonical_sha256
   nullable: true
   default: 'null'
-  description: 关联精排版本（与 DiscoveryFeedPage.rankingVersion 同源）
-- name: reasonVersion
-  type: string
-  dart_type: String
-  nullable: true
-  default: 'null'
-  description: 理由生成版本，用于端云解释一致性
+  description: 关联的唯一推荐策略内容摘要（与 DiscoveryFeedPage.policyDigest 同源）
 - name: safeToApplyWhileViewing
   type: bool
   dart_type: bool

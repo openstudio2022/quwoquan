@@ -1,0 +1,46 @@
+kind: aggregate_root
+description: >-
+  暂停账号通过受限身份链路提交的正式申诉入口聚合；User 领域持有身份绑定、单用途
+  credential、提交限频、认领幂等与最小保留事实，Product Ops 只消费 opaque intakeRef。
+identity:
+  fields:
+  - intakeRef
+  version_source: store_commit
+access:
+  commands: aggregate_facade
+  cross_context: public_contract_only
+  queries: named_reader
+relationships:
+- access: named_reader
+  cardinality: N:1
+  consistency: strong
+  kind: reference
+  name: account
+  on_delete: cascade
+  reference_fields:
+  - accountId
+  target_object: user.UserAccount
+local_identity_reasons:
+  claimedCaseId: immutable Product Ops claim tuple component; Product Ops case is referenced only through the public claim contract and is not a User aggregate identity
+capabilities:
+- commandable
+- expiring
+- idempotent_commands
+- auditable
+business_rules:
+- credential 只能由仍在有效期内、purpose=account_appeal 的已完成 AuthenticationChallenge 签发，身份必须解析到 active phone CredentialBinding
+- 签发和提交时 UserAccount 必须为 suspended；credential 与 intake 均绑定签发时的 authEpoch，账号恢复或安全代次变化后立即失效
+- credential 明文只返回一次且不得进入持久化、日志、事件或错误；服务端只保存 SHA-256 摘要并在提交 intake 时原子消费
+- 每个 challenge 最多签发一个 credential；同账号同 suspension authEpoch 最多存在一个已提交 intake，构成身份级限频与自然幂等
+- Product Ops 认领只接受 intakeRef、accountId、caseId 最小 tuple；同 tuple 重放幂等成功，跨 account 或 case 必须拒绝
+- User 入站与聚合对跨域 tuple 执行唯一业务格式校验：intakeRef 为 `appeal_intake_` 加 32 位 base64url，accountId 只调用 user.UserAccount canonical identity parser，caseId 为 `appeal-` 加小写字母、数字、连字符或下划线。Product Ops 只拥有 caseId 格式并在出站前校验另外两项为有界 RFC3986 unreserved opaque token；合法 transport token 但不满足 User 格式时由 User typed error 拒绝，禁止复制 User 标识规则或接受旧编码
+- intake 不接收自由文本、手机号、证件或证据正文；Product Ops 的审核证据留在其 AccountEnforcementCase，不复制到 User
+- credential 十分钟失效；credential 过期记录和 intake 在各自 deleteAfter 后由 User 服务删除，禁止无限期保留
+- 正式用户入口不得复用已暂停账号 access token、匿名表单或 Product Ops command，且不得向用户暴露 accountId
+lifecycle:
+  state_field: status
+  states:
+  - submitted
+  - claimed
+  optimistic_concurrency: row_lock
+  idempotency: credential_receipt_and_claim_tuple

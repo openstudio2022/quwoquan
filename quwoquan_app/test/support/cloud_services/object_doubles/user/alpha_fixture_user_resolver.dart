@@ -12,17 +12,17 @@ final class AlphaFixtureUserResolver {
   static String get currentUserVariantUserId =>
       _currentUser['userId'] as String;
 
-  static String get currentUserVariantSubAccountId =>
-      _subAccountId(_currentUser) ?? currentUserVariantUserId;
+  static String get currentUserVariantPersonaId =>
+      _personaId(_currentUser) ?? currentUserVariantUserId;
 
   static String resolveUserId(String userId) {
     final normalized = userId.trim();
     return _userIndex[normalized]?['userId'] as String? ?? normalized;
   }
 
-  static String resolveSubAccountId(String subAccountId) {
-    final normalized = subAccountId.trim();
-    return _subAccountId(_userIndex[normalized] ?? const <String, dynamic>{}) ??
+  static String resolvePersonaId(String personaId) {
+    final normalized = personaId.trim();
+    return _personaId(_userIndex[normalized] ?? const <String, dynamic>{}) ??
         normalized;
   }
 
@@ -32,15 +32,14 @@ final class AlphaFixtureUserResolver {
       return null;
     }
     final userId = entry['userId'] as String? ?? id.trim();
-    final subAccountId = _subAccountId(entry) ?? userId;
+    final personaId = _personaId(entry) ?? userId;
     final avatarKey = _mediaObjectKey(entry, 'avatar');
     final backgroundKey = _mediaObjectKey(entry, 'background');
     return <String, dynamic>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'ownerUserId': userId,
-      'subjectType': 'user',
+      'subjectType': 'account',
       'userHandle': entry['userHandle']?.toString() ?? userId,
-      'username': entry['userHandle']?.toString() ?? userId,
       'displayName': entry['displayName']?.toString() ?? userId,
       'nickname': entry['displayName']?.toString() ?? userId,
       'avatarUrl': avatarKey,
@@ -63,12 +62,11 @@ final class AlphaFixtureUserResolver {
   }
 
   static bool isCurrentUserVariantId(String id) {
-    return id == currentUserVariantUserId ||
-        id == currentUserVariantSubAccountId;
+    return id == currentUserVariantUserId || id == currentUserVariantPersonaId;
   }
 
-  static bool isOwnerLikeSubAccountId(String subAccountId) {
-    return subAccountId == 'me' || isCurrentUserVariantId(subAccountId);
+  static bool isOwnerLikePersonaId(String personaId) {
+    return personaId == 'me' || isCurrentUserVariantId(personaId);
   }
 
   static Map<String, dynamic> get _currentUser {
@@ -103,20 +101,20 @@ final class AlphaFixtureUserResolver {
         continue;
       }
       index[userId] = entry;
-      final subAccountId = _subAccountId(entry);
-      if (subAccountId != null) {
-        index[subAccountId] = entry;
+      final personaId = _personaId(entry);
+      if (personaId != null) {
+        index[personaId] = entry;
       }
     }
     return Map<String, Map<String, dynamic>>.unmodifiable(index);
   }
 
-  static String? _subAccountId(Map<String, dynamic> entry) {
-    final explicitId = entry['subAccountId']?.toString().trim();
+  static String? _personaId(Map<String, dynamic> entry) {
+    final explicitId = entry['personaId']?.toString().trim();
     if (explicitId != null && explicitId.isNotEmpty) {
       return explicitId;
     }
-    final refs = entry['subAccountRefs'];
+    final refs = entry['personaRefs'];
     if (refs is List && refs.isNotEmpty) {
       final firstRef = refs.first.toString().trim();
       if (firstRef.isNotEmpty) {

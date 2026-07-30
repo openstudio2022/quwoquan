@@ -28,6 +28,16 @@
       "items": { "type": "string" },
       "description": "可选：跨省/跨市全量地理归属（必须包含 geoTagRef 主归属）；非跨界实体缺省。物化时全量并进 tagRefs，index 分片与 geo_bucket 仍只消费 geoTagRef 单值"
     },
+    "coordinates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lat", "lon"],
+      "properties": {
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+      },
+      "description": "可选：WGS84 点坐标（与 schema/governance/master_list.schema.json coordinates 同形状，来自主清单 leaf 透传）。entity-service homepage importer 据此写入 Homepage.location（2dsphere），驱动搜索 filters.near 与「附近」；缺坐标的实体不参与附近召回，禁止按行政区中心点或城市坐标推断"
+    },
     "sourceRefs": { "type": "array", "items": { "type": "string" }, "description": "来源单元引用（证据链回查）" },
     "sourceUrls": {
       "type": "array",
@@ -70,12 +80,97 @@
         }
       }
     },
+    "structuredFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "可选：实体客观事实的机器可读投影（entity-service HomepageStructuredFactsView 同构）。信源政策按用途分轨：正文底稿仍限 primarySource 三百科闭集，本块额外允许官网与政府/文旅门户，代价是每个已填字段必须在 factSources 有对应条目——无证据的字段会被 homepage importer 丢弃而不是无证据展示。",
+      "properties": {
+        "openingHours": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["openMinuteOfDay", "closeMinuteOfDay"],
+            "properties": {
+              "appliesFrom": { "type": "string", "pattern": "^[0-1][0-9]-[0-3][0-9]$", "description": "适用期起始 MM-DD；与 appliesTo 同时声明或同时省略" },
+              "appliesTo": { "type": "string", "pattern": "^[0-1][0-9]-[0-3][0-9]$", "description": "适用期结束 MM-DD" },
+              "weekdays": {
+                "type": "array",
+                "items": { "type": "integer", "minimum": 1, "maximum": 7 },
+                "description": "适用星期 1=周一..7=周日；为空表示每天"
+              },
+              "openMinuteOfDay": { "type": "integer", "minimum": 0, "maximum": 1439 },
+              "closeMinuteOfDay": { "type": "integer", "minimum": 0, "maximum": 2880, "description": "跨零点场次允许大于 1440（如夜场 22:00-次日 02:00 记为 1560）" },
+              "closed": { "type": "boolean", "description": "该适用期/星期闭馆；闭馆条目忽略时间字段" }
+            }
+          }
+        },
+        "ticketPriceRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "minAmountCents", "maxAmountCents"],
+          "properties": {
+            "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 三字母币种，跨境实体不得隐式假设人民币" },
+            "minAmountCents": { "type": "integer", "minimum": 0 },
+            "maxAmountCents": { "type": "integer", "minimum": 0 },
+            "free": { "type": "boolean", "description": "免费开放，必须与 minAmountCents=0 且 maxAmountCents=0 自洽" }
+          }
+        },
+        "recommendedDurationMinutes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minMinutes", "maxMinutes"],
+          "properties": {
+            "minMinutes": { "type": "integer", "minimum": 1 },
+            "maxMinutes": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "bestSeasonTagRefs": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^Topic/(时间/四季|旅行/季节窗口)/" },
+          "description": "最佳季节 tagRef；不写自由文本，保证可与内容标签求交（同季节窗口到访）"
+        },
+        "altitudeMeters": { "type": "integer", "minimum": -500, "maximum": 9000 },
+        "officialWebsite": { "type": "string", "pattern": "^https://" },
+        "factSources": {
+          "type": "array",
+          "minItems": 1,
+          "description": "逐字段溯源。structuredFacts 的准入条件，不是附属说明。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "sourceId", "sourceClass", "sourceUrl", "observedAt", "confidence"],
+            "properties": {
+              "field": {
+                "enum": [
+                  "openingHours",
+                  "ticketPriceRange",
+                  "recommendedDurationMinutes",
+                  "bestSeasonTagRefs",
+                  "altitudeMeters",
+                  "officialWebsite"
+                ]
+              },
+              "sourceId": { "type": "string", "minLength": 1, "description": "control_plane/_shared/catalogs/content_source_registry.yaml 的 sourceId" },
+              "sourceClass": {
+                "enum": ["encyclopedia", "official_site", "government_tourism"],
+                "description": "必须落在 structuredFactsPolicy.allowedSourceClasses 内"
+              },
+              "sourceUrl": { "type": "string", "pattern": "^https://" },
+              "observedAt": { "type": "string", "minLength": 1, "description": "观测时间；营业时间与票价会过期，端侧据此提示以官方为准" },
+              "confidence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+              "conflictsWithSourceIds": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
     "textSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文来源单元引用" },
     "imageSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "图片来源单元引用" },
     "authorId": { "type": "string", "description": "仓内 creator profile 的稳定 id" },
     "creatorProfileId": { "type": "string" },
     "creatorArchetype": { "type": "string" },
-    "creatorProfileVersion": { "type": "string" },
+    "creatorProfileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "creatorDisclosure": { "type": "object", "description": "平台虚拟创作者披露（type/displayText/visible）" },
     "experienceClaimMode": { "type": "string" },
     "authorQualitySignals": { "type": "object" },

@@ -12,9 +12,9 @@ void _openCommentAuthorProfile(
   final authorId = comment.authorId.trim();
   if (authorId.isEmpty) return;
   context.push(
-    AppRoutePaths.userProfile(username: authorId),
+    AppRoutePaths.userProfile(userHandle: authorId),
     extra: UserProfileRouteExtra(
-      subAccountId: authorId,
+      personaId: authorId,
       avatar: comment.authorAvatarUrlSnapshot,
       displayName: comment.authorDisplayNameSnapshot,
     ),

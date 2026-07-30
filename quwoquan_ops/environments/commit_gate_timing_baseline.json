@@ -1,5 +1,4 @@
 {
-  "version": 1,
   "capturedAt": "2026-07-27",
   "method": "structural_plus_observed_wall_times",
   "notes": "优化前基线：跨域 pre-commit 走 make gate，Flutter local_contract concurrency=1 且双跑。数值来自多次会话实测墙钟与门禁结构推算，非单次干净机精确采样。",

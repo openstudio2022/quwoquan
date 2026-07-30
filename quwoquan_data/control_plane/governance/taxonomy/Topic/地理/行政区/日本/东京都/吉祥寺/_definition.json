@@ -1,0 +1,12 @@
+{
+  "label": "吉祥寺",
+  "labelEn": "Kichijoji",
+  "description": "井之头公园周边生活文化街区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

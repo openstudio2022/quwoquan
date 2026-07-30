@@ -29,7 +29,6 @@ const _qrCard = ProfileQrCardData(
   publicProfileUrl: 'https://mock.quwoquan.local/u/current',
   qrPayload: 'quwoquan://profile/current?qr=mock_current',
   qrTokenId: 'qr_current',
-  styleVersion: 'v1',
   avatarUrl: '',
   displayName: 'fixture_user_current',
   region: '杭州',
@@ -43,7 +42,7 @@ Widget _wrap(_ForwardJourneyChatRepository repository) {
       chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'persona_forward',
+          personaId: 'persona_forward',
           ownerUserId: 'fixture_user_current',
           displayName: '转发测试分身',
           avatarUrl: '',
@@ -92,7 +91,7 @@ void main() {
     expect(repository.lastConversationId, 'conv_2');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '发给你看看');
-    expect(repository.lastCard?.kind, 'profileQr');
+    expect(repository.lastCard?.kind, 'profile_qr');
     expect(repository.lastCard?.attributes, isNotEmpty);
   });
 
@@ -129,7 +128,7 @@ void main() {
           chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'persona_forward',
+              personaId: 'persona_forward',
               ownerUserId: 'fixture_user_current',
               displayName: '转发测试分身',
               avatarUrl: '',
@@ -167,7 +166,7 @@ void main() {
     expect(repository.lastConversationId, 'conv_1');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '群里一起看看');
-    expect(repository.lastCard?.kind, 'post');
+    expect(repository.lastCard?.kind, 'content_post');
     expect(
       repository.lastCard?.attributes
           .where((attribute) => attribute.name == 'postId')
@@ -208,7 +207,7 @@ void main() {
         chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
         activePersonaContextProvider.overrideWith(
           (ref) async => ActivePersonaContextViewData.fallback(
-            subAccountId: 'persona_forward',
+            personaId: 'persona_forward',
             ownerUserId: 'fixture_user_current',
             displayName: '转发测试分身',
             avatarUrl: '',
@@ -340,7 +339,8 @@ class _AuthenticatedSession extends AuthSessionController {
     return const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'share-journey-token',
-      activeSubAccountId: 'persona_forward',
+      refreshToken: 'share-journey-refresh-token',
+      activePersonaId: 'persona_forward',
       ownerId: 'fixture_user_current',
     );
   }
@@ -355,7 +355,8 @@ class _FlippableForwardSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'share-resume-token',
-      activeSubAccountId: 'persona_forward',
+      refreshToken: 'share-resume-refresh-token',
+      activePersonaId: 'persona_forward',
       ownerId: 'fixture_user_current',
     );
   }

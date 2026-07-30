@@ -2,6 +2,10 @@
   "label": "社团活动",
   "labelEn": "Club Activities",
   "description": "学生社团与课外活动",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/用户/兴趣偏好/校园/社团"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

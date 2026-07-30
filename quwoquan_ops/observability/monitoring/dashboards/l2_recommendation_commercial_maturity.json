@@ -168,7 +168,7 @@
         ]
       },
       {
-        "title": "Reason version CTR",
+        "title": "Policy digest CTR",
         "type": "timeseries",
         "gridPos": {
           "h": 8,
@@ -176,11 +176,11 @@
           "x": 0,
           "y": 24
         },
-        "description": "Detects whether primaryText explanation generation changes move click behavior.",
+        "description": "Attributes click-through changes to the exact canonical recommendation policy digest.",
         "targets": [
           {
-            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"click\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",reason_version!=\"unknown\"}[5m])) by (reason_version) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",reason_version!=\"unknown\"}[5m])) by (reason_version), 0.001)",
-            "legendFormat": "{{ reason_version }}"
+            "expr": "sum(rate(recommendation_behavior_by_attribution_total{state=\"click\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",policy_digest!=\"unknown\"}[5m])) by (policy_digest) / clamp_min(sum(rate(recommendation_behavior_by_attribution_total{state=\"impressed\",channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",policy_digest!=\"unknown\"}[5m])) by (policy_digest), 0.001)",
+            "legendFormat": "{{ policy_digest }}"
           }
         ]
       },
@@ -202,7 +202,7 @@
         ]
       },
       {
-        "title": "Ranking and reason version served mix",
+        "title": "Policy digest served mix",
         "type": "timeseries",
         "gridPos": {
           "h": 8,
@@ -210,11 +210,11 @@
           "x": 0,
           "y": 32
         },
-        "description": "Separates ranking_version and reason_version rollout effects before AB significance is available.",
+        "description": "Separates traffic by the exact canonical recommendation policy digest before AB significance is available.",
         "targets": [
           {
-            "expr": "sum(rate(recommendation_feed_served_by_attribution_total{channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",ranking_version!=\"unknown\",reason_version!=\"unknown\"}[5m])) by (ranking_version, reason_version)",
-            "legendFormat": "{{ ranking_version }} / {{ reason_version }}"
+            "expr": "sum(rate(recommendation_feed_served_by_attribution_total{channel=~\"$channel\",vertical=~\"$vertical\",supply_source=~\"$supply_source\",recall_path=~\"$recall_path\",policy_digest!=\"unknown\"}[5m])) by (policy_digest)",
+            "legendFormat": "{{ policy_digest }}"
           }
         ]
       },
@@ -279,6 +279,128 @@
           {
             "expr": "sum(rate(recommendation_feed_ab_experiment_validity_total{result=\"valid\"}[6h])) by (experiment) / clamp_min(sum(rate(recommendation_feed_ab_experiment_validity_total[6h])) by (experiment), 0.001)",
             "legendFormat": "validity {{experiment}}"
+          }
+        ]
+      },
+      {
+        "title": "Feed terminal outcome by request class, empty reason and failure stage",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "Shows success, degraded, empty and failure terminal rates for initial discovery and premium requests without hiding dependency stages behind HTTP 200 empty responses.",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 40
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_feed_terminal_total[5m])) by (request_class, outcome, empty_reason, failure_stage)",
+            "legendFormat": "{{ request_class }} / {{ outcome }} / {{ empty_reason }} / {{ failure_stage }}"
+          }
+        ]
+      },
+      {
+        "title": "Feed delivery-page failure and atomic admission",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "Stable previous-page replay is available only when immutable append/load and same-slot quota admission remain healthy.",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(content_feed_delivery_page_total{result=~\"store_unavailable|atomic_unavailable|payload_rejected|conflict|error|invalid|invalid_quota_policy|shard_key_rejected|shard_byte_rejected|repair_bound_rejected\"}[5m])) / clamp_min(sum(rate(content_feed_delivery_page_total[5m])), 0.001)",
+            "legendFormat": "failure rate"
+          },
+          {
+            "expr": "sum(rate(content_feed_delivery_page_total{operation=\"append\",result=\"atomic_unavailable\"}[5m]))",
+            "legendFormat": "atomic unavailable"
+          }
+        ]
+      },
+      {
+        "title": "Feed delivery-page payload and scope pressure",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "P99 uncompressed payload stays below 64 KiB; quota evictions expose scopes reaching the 8 active windows x 50-page depth budget.",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 48
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(content_feed_delivery_page_payload_bytes_bucket[5m])) by (le))",
+            "legendFormat": "payload p99 bytes"
+          },
+          {
+            "expr": "sum(rate(content_feed_delivery_page_quota_evictions_total[5m]))",
+            "legendFormat": "scope evictions / s"
+          }
+        ]
+      },
+      {
+        "title": "Immutable feed global quota admission",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "Separates owner eviction from fixed-shard key, byte and repair-bound rejection. Rejection never evicts another subject/scope.",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 56
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(recommendation_ranked_feed_window_create_total{result=~\"shard_key_rejected|shard_byte_rejected|repair_bound_rejected\"}[5m])) by (result)",
+            "legendFormat": "ranked window {{ result }}"
+          },
+          {
+            "expr": "sum(rate(content_feed_delivery_page_total{operation=\"append\",result=~\"shard_key_rejected|shard_byte_rejected|repair_bound_rejected\"}[5m])) by (result)",
+            "legendFormat": "delivery page {{ result }}"
+          },
+          {
+            "expr": "sum(rate(recommendation_ranked_feed_window_quota_evictions_total[5m]))",
+            "legendFormat": "ranked owner eviction"
+          },
+          {
+            "expr": "sum(rate(content_feed_delivery_page_quota_evictions_total[5m]))",
+            "legendFormat": "delivery owner eviction"
+          }
+        ]
+      },
+      {
+        "title": "Immutable feed quota-shard utilization",
+        "type": "timeseries",
+        "datasource": "Prometheus",
+        "description": "P99 touched-shard utilization against configured repository defaults. Environment capacity/readback remains a deployment acceptance gate.",
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 56
+        },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(recommendation_ranked_feed_window_shard_live_records_bucket[5m])) by (le)) / 128",
+            "legendFormat": "ranked key utilization"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(recommendation_ranked_feed_window_shard_live_bytes_bucket[5m])) by (le)) / 134217728",
+            "legendFormat": "ranked byte utilization"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(content_feed_delivery_page_shard_live_records_bucket[5m])) by (le)) / 512",
+            "legendFormat": "delivery key utilization"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(content_feed_delivery_page_shard_live_bytes_bucket[5m])) by (le)) / 33554432",
+            "legendFormat": "delivery byte utilization"
           }
         ]
       }

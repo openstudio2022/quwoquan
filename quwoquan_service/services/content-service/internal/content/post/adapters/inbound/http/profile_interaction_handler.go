@@ -9,6 +9,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	profileinteractiongenerated "quwoquan_service/services/content-service/generated/content/profile_interaction_activity_view"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
 	profileinteractionreadapp "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/application"
 )
@@ -33,17 +34,17 @@ func (h *ContentHandler) handleListProfileInteractionActivities(
 	direction string,
 ) {
 	if h.profileInteractionService == nil {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+		writeHTTPError(w, r, profileinteractiongenerated.AppErrorFromInteractionReadModelUnavailable(
 			"ProfileInteractionActivity query facade is not configured",
 		))
 		return
 	}
-	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
-	if subAccountID == "" {
+	personaID := strings.TrimSpace(r.PathValue("personaId"))
+	if personaID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"互动身份不能为空",
-			"missing subAccountId",
+			"missing personaId",
 		))
 		return
 	}
@@ -61,7 +62,7 @@ func (h *ContentHandler) handleListProfileInteractionActivities(
 	page, err := h.profileInteractionService.ListActivities(
 		r.Context(),
 		profileinteractionapp.ActivityPageQuery{
-			OwnerPersonaID:  subAccountID,
+			OwnerPersonaID:  personaID,
 			ViewerPersonaID: operationActorID(r),
 			Direction:       direction,
 			ActivityType:    strings.TrimSpace(r.URL.Query().Get("type")),
@@ -81,22 +82,22 @@ func (h *ContentHandler) handleUpdateProfileInteractionState(
 	r *http.Request,
 ) {
 	if h.profileInteractionService == nil {
-		writeHTTPError(w, r, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+		writeHTTPError(w, r, profileinteractiongenerated.AppErrorFromInteractionReadModelUnavailable(
 			"ProfileInteractionReadFact append facade is not configured",
 		))
 		return
 	}
-	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
+	personaID := strings.TrimSpace(r.PathValue("personaId"))
 	activityID := strings.TrimSpace(r.PathValue("interactionId"))
-	if subAccountID == "" || activityID == "" {
+	if personaID == "" || activityID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"互动标识不能为空",
-			"missing subAccountId or interactionId",
+			"missing personaId or interactionId",
 		))
 		return
 	}
-	if err := requireActiveProfileInteractionOwner(r, subAccountID); err != nil {
+	if err := requireActiveProfileInteractionOwner(r, personaID); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -114,7 +115,7 @@ func (h *ContentHandler) handleUpdateProfileInteractionState(
 	ack, err := h.profileInteractionService.AppendReadFact(
 		r.Context(),
 		profileinteractionreadapp.AppendReadFactCommand{
-			OwnerPersonaID: subAccountID,
+			OwnerPersonaID: personaID,
 			ActivityID:     activityID,
 			State:          strings.TrimSpace(body.State),
 		},
@@ -128,7 +129,7 @@ func (h *ContentHandler) handleUpdateProfileInteractionState(
 
 func requireActiveProfileInteractionOwner(
 	r *http.Request,
-	subAccountID string,
+	personaID string,
 ) error {
 	claims, ok := rtauth.PrincipalFromContext(r.Context())
 	if !ok || strings.TrimSpace(claims.Subject) == "" {
@@ -142,9 +143,9 @@ func requireActiveProfileInteractionOwner(
 			"profile interactions require an active persona",
 		)
 	}
-	if activePersonaID != strings.TrimSpace(subAccountID) {
-		return contentgenerated.AppErrorFromInteractionOwnerForbidden(
-			"requested sub-account is not the active principal persona",
+	if activePersonaID != strings.TrimSpace(personaID) {
+		return profileinteractiongenerated.AppErrorFromInteractionOwnerForbidden(
+			"requested persona is not the active principal persona",
 		)
 	}
 	return nil

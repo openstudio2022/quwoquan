@@ -131,7 +131,7 @@ func (facade *UserSettingsCommandFacade) UpdateAppearanceSettings(
 		now time.Time,
 	) (settingsmodel.ChangeSet, error) {
 		if command.ApplyScope != settingsmodel.AppearanceApplyScopeAllAccounts {
-			// current_sub_account / inherit_owner_default 属于 Persona 聚合。
+			// current_persona / inherit_owner_default 属于 Persona 聚合。
 			// 父级 operation coordinator 负责 Persona 命令；本聚合保持 no-op。
 			return current.UpdateAppearance(
 				current.Appearance.DefaultThemeMode,

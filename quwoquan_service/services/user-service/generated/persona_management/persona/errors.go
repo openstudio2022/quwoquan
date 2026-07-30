@@ -10,67 +10,60 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrSubAccountNotFound        = errors.New("USER.SUB_ACCOUNT.not_found")
-	ErrLastSubAccount            = errors.New("USER.SUB_ACCOUNT.last_sub_account")
-	ErrSubAccountStrictIsolation = errors.New("USER.SUB_ACCOUNT.strict_isolation")
-	ErrSubAccountQuotaReached    = errors.New("USER.SUB_ACCOUNT.quota_reached")
-	ErrPrimarySubAccountGuard    = errors.New("USER.SUB_ACCOUNT.primary_guard")
-	ErrActiveSubAccountGuard     = errors.New("USER.SUB_ACCOUNT.active_guard")
-	ErrRetiredSubAccountGuard    = errors.New("USER.SUB_ACCOUNT.retired_guard")
-	ErrSubAccountHandleTaken     = errors.New("USER.SUB_ACCOUNT.handle_taken")
-	ErrSubAccountHandleReadonly  = errors.New("USER.SUB_ACCOUNT.handle_readonly")
+	ErrPersonaNotFound       = errors.New("USER.PERSONA.not_found")
+	ErrLastPersona           = errors.New("USER.PERSONA.last_persona")
+	ErrPersonaQuotaReached   = errors.New("USER.PERSONA.quota_reached")
+	ErrPrimaryPersonaGuard   = errors.New("USER.PERSONA.primary_guard")
+	ErrActivePersonaGuard    = errors.New("USER.PERSONA.active_guard")
+	ErrRetiredPersonaGuard   = errors.New("USER.PERSONA.retired_guard")
+	ErrPersonaHandleTaken    = errors.New("USER.PERSONA.handle_taken")
+	ErrPersonaHandleReadonly = errors.New("USER.PERSONA.handle_readonly")
 )
 
-// AppErrorFromSubAccountNotFound returns *AppError for USER.SUB_ACCOUNT.not_found (user_message from errors.yaml).
-func AppErrorFromSubAccountNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSubAccountNotFound.Error()))
-	return rerrors.NewAppError(code, "子账号不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+// AppErrorFromPersonaNotFound returns *AppError for USER.PERSONA.not_found (user_message from errors.yaml).
+func AppErrorFromPersonaNotFound(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrPersonaNotFound.Error()))
+	return rerrors.NewAppError(code, "Persona不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
 }
 
-// AppErrorFromLastSubAccount returns *AppError for USER.SUB_ACCOUNT.last_sub_account (user_message from errors.yaml).
-func AppErrorFromLastSubAccount(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrLastSubAccount.Error()))
+// AppErrorFromLastPersona returns *AppError for USER.PERSONA.last_persona (user_message from errors.yaml).
+func AppErrorFromLastPersona(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrLastPersona.Error()))
 	return rerrors.NewAppError(code, "无法删除，这是您的最后一个账号", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromSubAccountStrictIsolation returns *AppError for USER.SUB_ACCOUNT.strict_isolation (user_message from errors.yaml).
-func AppErrorFromSubAccountStrictIsolation(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSubAccountStrictIsolation.Error()))
-	return rerrors.NewAppError(code, "该用户不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
-}
-
-// AppErrorFromSubAccountQuotaReached returns *AppError for USER.SUB_ACCOUNT.quota_reached (user_message from errors.yaml).
-func AppErrorFromSubAccountQuotaReached(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSubAccountQuotaReached.Error()))
+// AppErrorFromPersonaQuotaReached returns *AppError for USER.PERSONA.quota_reached (user_message from errors.yaml).
+func AppErrorFromPersonaQuotaReached(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrPersonaQuotaReached.Error()))
 	return rerrors.NewAppError(code, "分身数量已达上限，请先整理现有分身", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromPrimarySubAccountGuard returns *AppError for USER.SUB_ACCOUNT.primary_guard (user_message from errors.yaml).
-func AppErrorFromPrimarySubAccountGuard(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPrimarySubAccountGuard.Error()))
+// AppErrorFromPrimaryPersonaGuard returns *AppError for USER.PERSONA.primary_guard (user_message from errors.yaml).
+func AppErrorFromPrimaryPersonaGuard(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrPrimaryPersonaGuard.Error()))
 	return rerrors.NewAppError(code, "主分身不能退役", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromActiveSubAccountGuard returns *AppError for USER.SUB_ACCOUNT.active_guard (user_message from errors.yaml).
-func AppErrorFromActiveSubAccountGuard(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrActiveSubAccountGuard.Error()))
+// AppErrorFromActivePersonaGuard returns *AppError for USER.PERSONA.active_guard (user_message from errors.yaml).
+func AppErrorFromActivePersonaGuard(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrActivePersonaGuard.Error()))
 	return rerrors.NewAppError(code, "请先切换到其他分身后再继续", debugMessage).WithMetadata("constraint_violation", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromRetiredSubAccountGuard returns *AppError for USER.SUB_ACCOUNT.retired_guard (user_message from errors.yaml).
-func AppErrorFromRetiredSubAccountGuard(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrRetiredSubAccountGuard.Error()))
+// AppErrorFromRetiredPersonaGuard returns *AppError for USER.PERSONA.retired_guard (user_message from errors.yaml).
+func AppErrorFromRetiredPersonaGuard(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrRetiredPersonaGuard.Error()))
 	return rerrors.NewAppError(code, "该分身已退役，当前操作不可继续", debugMessage).WithMetadata("invalid_status_transition", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromSubAccountHandleTaken returns *AppError for USER.SUB_ACCOUNT.handle_taken (user_message from errors.yaml).
-func AppErrorFromSubAccountHandleTaken(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSubAccountHandleTaken.Error()))
+// AppErrorFromPersonaHandleTaken returns *AppError for USER.PERSONA.handle_taken (user_message from errors.yaml).
+func AppErrorFromPersonaHandleTaken(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrPersonaHandleTaken.Error()))
 	return rerrors.NewAppError(code, "该分身号已被占用，请换一个", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
 }
 
-// AppErrorFromSubAccountHandleReadonly returns *AppError for USER.SUB_ACCOUNT.handle_readonly (user_message from errors.yaml).
-func AppErrorFromSubAccountHandleReadonly(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSubAccountHandleReadonly.Error()))
+// AppErrorFromPersonaHandleReadonly returns *AppError for USER.PERSONA.handle_readonly (user_message from errors.yaml).
+func AppErrorFromPersonaHandleReadonly(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrPersonaHandleReadonly.Error()))
 	return rerrors.NewAppError(code, "趣我圈号由系统分配，暂不支持手动修改", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }

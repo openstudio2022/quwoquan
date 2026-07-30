@@ -54,7 +54,7 @@ void main() {
       expect(media.initCommands.single.fileSize, 4);
       expect(
         media.initCommands.single.expectedSha256,
-        'sha256:9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a',
+        '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a',
       );
     },
   );

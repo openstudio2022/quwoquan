@@ -12,6 +12,9 @@ errors:
   kind: USER
   reason: original_access_denied
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [RequestOriginalImageAccess]
   recovery_action: surface
   dart_const: originalAccessDenied
   go_const: ErrOriginalAccessDenied
@@ -22,6 +25,9 @@ errors:
   kind: USER
   reason: original_access_rate_limited
   http_status: 429
+  emitted_by:
+  - surface: http
+    operations: [RequestOriginalImageAccess]
   recovery_action: retry
   recovery_after_seconds: 60
   dart_const: originalAccessRateLimited

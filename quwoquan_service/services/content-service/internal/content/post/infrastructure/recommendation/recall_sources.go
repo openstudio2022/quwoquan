@@ -32,9 +32,14 @@ func (s *TagRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 	}
 
 	filter := bson.M{"tagRefs": bson.M{"$in": req.Tags}}
+	applyReleaseServingEligibility(filter, req.ActiveReleaseID, req.ActiveManifestDigest)
 	applyVerticalFilter(filter, req.Vertical)
 	opts := options.Find().
-		SetSort(bson.D{{Key: "recScore", Value: -1}, {Key: "publishedAt", Value: -1}}).
+		SetSort(bson.D{
+			{Key: "recScore", Value: -1},
+			{Key: "publishedAt", Value: -1},
+			{Key: "postId", Value: -1},
+		}).
 		SetLimit(int64(limit))
 
 	return queryDiscoveryFeed(ctx, s.coll, filter, opts, "tag_recall")
@@ -63,6 +68,7 @@ func (s *HotRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 	filter := bson.M{
 		"publishedAt": bson.M{"$gte": cutoff},
 	}
+	applyReleaseServingEligibility(filter, req.ActiveReleaseID, req.ActiveManifestDigest)
 	applyVerticalFilter(filter, req.Vertical)
 
 	opts := options.Find().
@@ -70,6 +76,7 @@ func (s *HotRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 			{Key: "likeCount", Value: -1},
 			{Key: "viewCount", Value: -1},
 			{Key: "publishedAt", Value: -1},
+			{Key: "postId", Value: -1},
 		}).
 		SetLimit(int64(limit))
 
@@ -92,10 +99,14 @@ func (s *ExploreRecallSource) Recall(ctx context.Context, req rtrec.RecallReques
 	}
 
 	pipeline := bson.A{}
-	if vertical := normalizedVertical(req.Vertical); vertical != "" {
-		pipeline = append(pipeline, bson.M{"$match": bson.M{"contentVertical": vertical}})
+	filter := bson.M{}
+	applyReleaseServingEligibility(filter, req.ActiveReleaseID, req.ActiveManifestDigest)
+	applyVerticalFilter(filter, req.Vertical)
+	if len(filter) > 0 {
+		pipeline = append(pipeline, bson.M{"$match": filter})
 	}
 	pipeline = append(pipeline, bson.M{"$sample": bson.M{"size": limit}})
+	pipeline = append(pipeline, bson.M{"$project": DiscoveryFeedCandidateProjection()})
 
 	cursor, err := s.coll.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -129,7 +140,7 @@ func NewAuthorRecallSource(db *mongo.Database) *AuthorRecallSource {
 }
 
 func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
-	if strings.TrimSpace(req.UserID) == "" || req.UserID == identity.AnonymousFallbackSubAccountID {
+	if strings.TrimSpace(req.UserID) == "" || req.UserID == identity.AnonymousFallbackPersonaID {
 		return nil, rtrec.SkipRecall("author recall requires an authenticated persona")
 	}
 
@@ -164,9 +175,13 @@ func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest
 	}
 
 	filter := bson.M{"authorId": bson.M{"$in": authorIDs}}
+	applyReleaseServingEligibility(filter, req.ActiveReleaseID, req.ActiveManifestDigest)
 	applyVerticalFilter(filter, req.Vertical)
 	opts := options.Find().
-		SetSort(bson.D{{Key: "publishedAt", Value: -1}}).
+		SetSort(bson.D{
+			{Key: "publishedAt", Value: -1},
+			{Key: "postId", Value: -1},
+		}).
 		SetLimit(int64(limit))
 
 	return queryDiscoveryFeed(ctx, s.feedColl, filter, opts, "author_recall")
@@ -179,6 +194,11 @@ func queryDiscoveryFeed(
 	opts *options.FindOptionsBuilder,
 	recallPath string,
 ) ([]rtrec.ContentCandidate, error) {
+	filter["accountRestricted"] = bson.M{"$ne": true}
+	if opts == nil {
+		opts = options.Find()
+	}
+	opts.SetProjection(DiscoveryFeedCandidateProjection())
 	cursor, err := coll.Find(ctx, filter, opts)
 	if err != nil {
 		return nil, err

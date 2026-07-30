@@ -46,11 +46,11 @@ func TestPostPublicationIntentConcurrentReplayCreatesOnePost(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set(
 				"X-Client-User-Id",
-				identity.AnonymousFallbackSubAccountID,
+				identity.AnonymousFallbackPersonaID,
 			)
 			request.Header.Set(
-				"X-Client-Sub-Account-Id",
-				identity.AnonymousFallbackSubAccountID,
+				"X-Client-Persona-Id",
+				identity.AnonymousFallbackPersonaID,
 			)
 			request.Header.Set("Idempotency-Key", publishIntentID)
 			recorder := httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestPostPublicationIntentConcurrentReplayCreatesOnePost(t *testing.T) {
 
 	ctx := context.Background()
 	postFilter := bson.M{
-		"authorId":        identity.AnonymousFallbackSubAccountID,
+		"authorId":        identity.AnonymousFallbackPersonaID,
 		"publishIntentId": publishIntentID,
 		"localDraftId":    localDraftID,
 	}
@@ -166,7 +166,7 @@ func TestPostPublicationIntentFirstAcceptedDraftWinsPermanently(t *testing.T) {
 	if err := mongoDB.Collection("posts").FindOne(
 		context.Background(),
 		bson.M{
-			"authorId":     identity.AnonymousFallbackSubAccountID,
+			"authorId":     identity.AnonymousFallbackPersonaID,
 			"localDraftId": localDraftID,
 		},
 	).Decode(&stored); err != nil {
@@ -178,7 +178,7 @@ func TestPostPublicationIntentFirstAcceptedDraftWinsPermanently(t *testing.T) {
 	if count, err := mongoDB.Collection("posts").CountDocuments(
 		context.Background(),
 		bson.M{
-			"authorId":     identity.AnonymousFallbackSubAccountID,
+			"authorId":     identity.AnonymousFallbackPersonaID,
 			"localDraftId": localDraftID,
 		},
 	); err != nil || count != 1 {
@@ -221,11 +221,11 @@ func TestPostPublicationIntentRejectsReuseForAnotherDraft(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(
 		"X-Client-User-Id",
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 	)
 	request.Header.Set(
-		"X-Client-Sub-Account-Id",
-		identity.AnonymousFallbackSubAccountID,
+		"X-Client-Persona-Id",
+		identity.AnonymousFallbackPersonaID,
 	)
 	request.Header.Set("Idempotency-Key", publishIntentID)
 	recorder := httptest.NewRecorder()
@@ -277,11 +277,11 @@ func submitPostPublicationIntent(
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(
 		"X-Client-User-Id",
-		identity.AnonymousFallbackSubAccountID,
+		identity.AnonymousFallbackPersonaID,
 	)
 	request.Header.Set(
-		"X-Client-Sub-Account-Id",
-		identity.AnonymousFallbackSubAccountID,
+		"X-Client-Persona-Id",
+		identity.AnonymousFallbackPersonaID,
 	)
 	request.Header.Set("Idempotency-Key", publishIntentID)
 	response := httptest.NewRecorder()

@@ -52,7 +52,6 @@ class ProfileQrCardData {
     required this.publicProfileUrl,
     required this.qrPayload,
     required this.qrTokenId,
-    required this.styleVersion,
     required this.avatarUrl,
     required this.displayName,
     required this.region,
@@ -69,7 +68,6 @@ class ProfileQrCardData {
       publicProfileUrl: map['publicProfileUrl']?.toString() ?? '',
       qrPayload: qrPayload,
       qrTokenId: map['qrTokenId']?.toString() ?? '',
-      styleVersion: map['styleVersion']?.toString() ?? 'v1',
       avatarUrl: map['avatarUrl']?.toString() ?? '',
       displayName: map['displayName']?.toString() ?? '',
       region: map['region']?.toString() ?? '',
@@ -86,7 +84,6 @@ class ProfileQrCardData {
       publicProfileUrl: wire.publicProfileUrl,
       qrPayload: wire.qrPayload,
       qrTokenId: wire.qrTokenId,
-      styleVersion: wire.styleVersion,
       avatarUrl: wire.avatarUrl,
       displayName: wire.displayName,
       region: wire.region,
@@ -103,7 +100,6 @@ class ProfileQrCardData {
       publicProfileUrl: projection.publicProfileUrl,
       qrPayload: projection.qrPayload,
       qrTokenId: projection.qrTokenId,
-      styleVersion: projection.styleVersion,
       avatarUrl: projection.avatarUrl,
       displayName: projection.displayName,
       region: projection.region,
@@ -114,7 +110,7 @@ class ProfileQrCardData {
 
   factory ProfileQrCardData.mockFromSnapshot(ProfileEditSnapshotData snapshot) {
     final handle = snapshot.userHandle.isEmpty
-        ? snapshot.subAccountId
+        ? snapshot.personaId
         : snapshot.userHandle;
     final encodedHandle = Uri.encodeComponent(handle);
     final url =
@@ -123,7 +119,6 @@ class ProfileQrCardData {
       publicProfileUrl: 'https://mock.quwoquan.local/u/$encodedHandle',
       qrPayload: url,
       qrTokenId: 'qr_$handle',
-      styleVersion: 'v1',
       avatarUrl: snapshot.avatarUrl,
       displayName: snapshot.nickname,
       region: snapshot.region,
@@ -134,7 +129,6 @@ class ProfileQrCardData {
   final String publicProfileUrl;
   final String qrPayload;
   final String qrTokenId;
-  final String styleVersion;
   final String avatarUrl;
   final String displayName;
   final String region;
@@ -145,7 +139,7 @@ class ProfileQrCardData {
 class ProfileEditSnapshotData {
   const ProfileEditSnapshotData({
     required this.ownerUserId,
-    required this.subAccountId,
+    required this.personaId,
     required this.avatarUrl,
     required this.avatarAssetId,
     required this.avatarVersion,
@@ -169,7 +163,7 @@ class ProfileEditSnapshotData {
     final qrCard = map['qrCard'];
     return ProfileEditSnapshotData(
       ownerUserId: map['ownerUserId']?.toString() ?? '',
-      subAccountId: map['subAccountId']?.toString() ?? '',
+      personaId: map['personaId']?.toString() ?? '',
       avatarUrl: map['avatarUrl']?.toString() ?? '',
       avatarAssetId: map['avatarAssetId']?.toString() ?? '',
       avatarVersion: (map['avatarVersion'] as num?)?.toInt() ?? 0,
@@ -202,7 +196,7 @@ class ProfileEditSnapshotData {
   factory ProfileEditSnapshotData.fromWire(ProfileEditSnapshotWireDto wire) {
     return ProfileEditSnapshotData(
       ownerUserId: wire.ownerUserId,
-      subAccountId: wire.subAccountId,
+      personaId: wire.personaId,
       avatarUrl: wire.avatarUrl,
       avatarAssetId: wire.avatarAssetId,
       avatarVersion: wire.avatarVersion,
@@ -231,7 +225,7 @@ class ProfileEditSnapshotData {
   ) {
     return ProfileEditSnapshotData(
       ownerUserId: projection.ownerUserId,
-      subAccountId: projection.subAccountId,
+      personaId: projection.personaId,
       avatarUrl: projection.avatarUrl,
       avatarAssetId: projection.avatarAssetId,
       avatarVersion: projection.avatarVersion,
@@ -260,7 +254,7 @@ class ProfileEditSnapshotData {
   }
 
   factory ProfileEditSnapshotData.fromProfile({
-    required SubAccountProfileViewData profile,
+    required PersonaProfileViewData profile,
     List<OwnerCredentialRowDto> credentials = const <OwnerCredentialRowDto>[],
   }) {
     final phoneCredential = credentials
@@ -279,7 +273,7 @@ class ProfileEditSnapshotData {
         .toList(growable: false);
     return ProfileEditSnapshotData(
       ownerUserId: profile.ownerUserId,
-      subAccountId: profile.subAccountId,
+      personaId: profile.personaId,
       avatarUrl: profile.avatarUrl,
       avatarAssetId: '',
       avatarVersion: profile.avatarVersion,
@@ -291,7 +285,7 @@ class ProfileEditSnapshotData {
       region: '',
       regionTagRef: '',
       userHandle: profile.userHandle.isEmpty
-          ? profile.subAccountId
+          ? profile.personaId
           : profile.userHandle,
       bio: profile.bio,
       occupationTagRef: occupationTagRef ?? '',
@@ -303,7 +297,7 @@ class ProfileEditSnapshotData {
   }
 
   final String ownerUserId;
-  final String subAccountId;
+  final String personaId;
   final String avatarUrl;
   final String avatarAssetId;
   final int avatarVersion;

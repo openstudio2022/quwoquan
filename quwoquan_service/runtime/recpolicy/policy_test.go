@@ -7,8 +7,6 @@ import (
 
 // minimal valid policy YAML used across tests.
 const testPolicyYAML = `
-version: 1
-policyVersion: test-v1
 defaultPreset: control
 weightPresets:
   control:
@@ -111,8 +109,8 @@ func mustParse(t *testing.T, raw string) *RecPolicy {
 
 func TestParse_Valid(t *testing.T) {
 	p := mustParse(t, testPolicyYAML)
-	if p.PolicyVersion != "test-v1" {
-		t.Fatalf("policyVersion = %q", p.PolicyVersion)
+	if !strings.HasPrefix(p.effectiveHash, "sha256:") {
+		t.Fatalf("effectiveHash = %q", p.effectiveHash)
 	}
 	if len(p.WeightPresets) != 2 {
 		t.Fatalf("weightPresets = %d, want 2", len(p.WeightPresets))
@@ -129,11 +127,11 @@ func TestValidate_Errors(t *testing.T) {
 		want   string
 	}{
 		{"missing default preset", func(p *RecPolicy) { p.DefaultPreset = "nope" }, "defaultPreset"},
-		{"no version", func(p *RecPolicy) { p.PolicyVersion = "" }, "policyVersion"},
 		{"halflife zero", func(p *RecPolicy) { p.Scorer.FreshnessHalfLifeHours = 0 }, "freshnessHalfLifeHours"},
 		{"maxauthor zero", func(p *RecPolicy) { p.Scorer.MaxAuthorPerFeed = 0 }, "maxAuthorPerFeed"},
 		{"explore out of range", func(p *RecPolicy) { p.Scorer.ExploreFraction = 2 }, "exploreFraction"},
-		{"bucket sum not 100", func(p *RecPolicy) { p.Experiments[0].Buckets[0].WeightPct = 10 }, "want 100"},
+		{"bucket sum not 100", func(p *RecPolicy) { p.Experiments[0].Buckets[0].WeightPct = 10 }, "expected 100"},
+		{"duplicate bucket", func(p *RecPolicy) { p.Experiments[0].Buckets[1].Name = p.Experiments[0].Buckets[0].Name }, "duplicate bucket"},
 		{"bad preset override", func(p *RecPolicy) { p.SegmentTargeting[0].PresetOverride = "ghost" }, "presetOverride"},
 		{"bad weight dim", func(p *RecPolicy) { p.SegmentTargeting[1].WeightDeltas = map[string]float64{"nope": 1} }, "unknown weight dim"},
 		{"guardrail action", func(p *RecPolicy) { p.Guardrails[0].Action = "auto_rollback" }, "only \"suggest_only\""},
@@ -152,6 +150,20 @@ func TestValidate_Errors(t *testing.T) {
 				t.Fatalf("error %q does not contain %q", err.Error(), tc.want)
 			}
 		})
+	}
+}
+
+func TestValidate_AcceptsZeroWeightExperimentArm(t *testing.T) {
+	p := mustParse(t, testPolicyYAML)
+	p.Experiments[0].Buckets = []ExperimentBucket{
+		{Name: "model", WeightPct: 100},
+		{Name: "rule", WeightPct: 0},
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if bucket, ok := p.ResolveBucket(p.Experiments[0].ID, "persona-1", nil); !ok || bucket != "model" {
+		t.Fatalf("ResolveBucket() = (%q, %v), want (model, true)", bucket, ok)
 	}
 }
 
@@ -235,8 +247,8 @@ func TestBaseline_Valid(t *testing.T) {
 	if err := b.Validate(); err != nil {
 		t.Fatalf("baseline invalid: %v", err)
 	}
-	if b.PolicyVersion != BaselinePolicyVersion {
-		t.Fatalf("baseline policyVersion %q != const %q", b.PolicyVersion, BaselinePolicyVersion)
+	if !strings.HasPrefix(b.effectiveHash, "sha256:") {
+		t.Fatalf("baseline effectiveHash = %q", b.effectiveHash)
 	}
 	if _, ok := b.WeightPresets["control"]; !ok {
 		t.Fatal("baseline missing control preset")

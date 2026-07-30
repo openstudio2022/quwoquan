@@ -1,4 +1,3 @@
-version: 1
 # 推荐 feed SLI/SLO 声明。
 # 本文件是推荐体验目标的单一真相源：开发前先冻结 objective，再由实现阶段补齐真实指标源、
 # 告警与看板。已经存在的 HTTP 边界指标来自 runtime/observability；业务指标若暂未接入
@@ -27,7 +26,6 @@ commercial_maturity:
         - repeat_exposure_rate
         - exposure_gini
         - resurfaced_exposure_rate
-        - exposure_filter_smembers_fallback_rate
     flywheel_maturity:
       objective: 强负反馈即时生效、显式标签反馈、在线 AB 与真实流量训练晋升证据。
       primary_slis:
@@ -52,6 +50,16 @@ commercial_maturity:
         - attribution_ctr_by_recall_path
         - scenario_consumption_rate
         - supply_source_share_floor
+        - ranked_feed_window_atomic_unavailable_rate
+        - ranked_feed_window_payload_rejection_rate
+        - ranked_feed_window_shard_key_rejection_rate
+        - ranked_feed_window_shard_byte_rejection_rate
+        - ranked_feed_window_repair_rejection_rate
+        - feed_delivery_page_atomic_unavailable_rate
+        - feed_delivery_page_failure_rate
+        - feed_delivery_page_shard_key_rejection_rate
+        - feed_delivery_page_shard_byte_rejection_rate
+        - feed_delivery_page_repair_rejection_rate
     operations_maturity:
       objective: 人工加权、置顶、精品、热点与违规下架实时剔除具备入口和审计。
       primary_slis:
@@ -83,6 +91,16 @@ alerts:
       - RecommendationSupplySourceShareImbalance
       - TagFeedbackConsumerLagHigh
       - TagFeedbackConsumerFailuresSustained
+      - RankedFeedWindowAtomicUnavailable
+      - RankedFeedWindowPayloadRejectionRateHigh
+      - RankedFeedWindowShardKeyQuotaRejected
+      - RankedFeedWindowShardByteQuotaRejected
+      - RankedFeedWindowRepairBoundRejected
+      - FeedDeliveryPageAtomicUnavailable
+      - FeedDeliveryPageFailureRateHigh
+      - FeedDeliveryPageShardKeyQuotaRejected
+      - FeedDeliveryPageShardByteQuotaRejected
+      - FeedDeliveryPageRepairBoundRejected
 
 metrics:
   http_requests_total: http_server_requests_total
@@ -96,7 +114,8 @@ metrics:
   # following/continuation 合法空态不得再混入首刷空结果 SLO。
   feed_requests_total: rec_pipeline_requests_total
   feed_empty_total: rec_pipeline_empty_results_total
-  # 服务装配后的最终终态；request_class/outcome/failure_stage 均为闭集低基数标签。
+  # 服务装配后的最终终态；request_class/outcome/empty_reason/failure_stage
+  # 均为闭集低基数标签；非 empty 终态的 empty_reason 固定为 none。
   feed_terminal_total: recommendation_feed_terminal_total
   feed_model_hits_total: rec_pipeline_model_hits_total
   feed_rule_hits_total: rec_pipeline_rule_hits_total
@@ -134,13 +153,22 @@ metrics:
   tag_feedback_consumer_total: content_tag_feedback_consumer_total
   tag_feedback_consumer_lag_seconds: content_tag_feedback_consumer_lag_seconds
   tag_feedback_consumer_last_success_unixtime: content_tag_feedback_consumer_last_success_unixtime
-  exposure_filter_smembers_fallback_total: recommendation_exposure_filter_smembers_fallback_total
   exposure_redis_payload_bytes: recommendation_exposure_redis_payload_bytes
   model_score_cache_hit_total: rec_model_score_cache_hit_total
   model_score_batch_total: rec_model_score_batch_total
   dynamic_budget_selected_total: recommendation_dynamic_budget_selected_total
   frequency_cap_filter_total: recommendation_frequency_cap_filter_total
   near_dup_filter_total: recommendation_near_dup_filter_total
+  ranked_feed_window_payload_bytes: recommendation_ranked_feed_window_payload_bytes
+  ranked_feed_window_create_total: recommendation_ranked_feed_window_create_total
+  ranked_feed_window_quota_evictions_total: recommendation_ranked_feed_window_quota_evictions_total
+  ranked_feed_window_shard_live_records: recommendation_ranked_feed_window_shard_live_records
+  ranked_feed_window_shard_live_bytes: recommendation_ranked_feed_window_shard_live_bytes
+  feed_delivery_page_total: content_feed_delivery_page_total
+  feed_delivery_page_payload_bytes: content_feed_delivery_page_payload_bytes
+  feed_delivery_page_quota_evictions_total: content_feed_delivery_page_quota_evictions_total
+  feed_delivery_page_shard_live_records: content_feed_delivery_page_shard_live_records
+  feed_delivery_page_shard_live_bytes: content_feed_delivery_page_shard_live_bytes
 
 north_star:
   id: effective_content_consumption
@@ -178,18 +206,114 @@ slis:
       p95_ms: 100
 
   - id: empty_feed_rate
-    description: discovery/recommend 首刷成功空结果率；following 健康空与有效
-      continuation end 不进入该分子。
+    description: discovery/recommend 与 premium_stream/similar 首刷成功空结果率；
+      following 健康空与有效 continuation end 不进入该分子。
     source: recommendation_feed_terminal_total{request_class="initial_recommend",outcome="empty"} / recommendation_feed_terminal_total{request_class="initial_recommend"}
     objective_max: 0.001
     measured: true
 
   - id: initial_recommend_terminal_failure_rate
-    description: discovery/recommend 首刷 canonical failure 占比；failure_stage 仅允许
-      recall/scorer/active_supply/hydration/exposure 等闭集值。
+    description: discovery/recommend 与 premium_stream/similar 首刷 canonical failure
+      占比；failure_stage 仅允许规格声明的 recall/scorer/active_supply/hard_exclusion/
+      personalization/exposure_memory/ranked_window/delivery_page/hydration/exposure 闭集值。
     source: recommendation_feed_terminal_total{request_class="initial_recommend",outcome="failure"} / recommendation_feed_terminal_total{request_class="initial_recommend"}
     objective_max: 0.005
     measured: true
+
+  - id: ranked_feed_window_atomic_unavailable_rate
+    description: RankedFeedWindow 创建缺少同 slot Lua 原子能力或适配器降级的比例；
+      任一命中都会停止签发 continuation，禁止回退为无界 SET NX。
+    source: recommendation_ranked_feed_window_create_total{result="atomic_unavailable"} / recommendation_ranked_feed_window_create_total
+    objective_max: 0
+    measured: true
+
+  - id: ranked_feed_window_payload_rejection_rate
+    description: 未压缩 RankedFeedWindow JSON 超过 canonical 2 MiB 硬上限的创建比例；
+      超限首屏可降级返回，但不得签发不可续接 cursor。
+    source: recommendation_ranked_feed_window_create_total{result="payload_rejected"} / recommendation_ranked_feed_window_create_total
+    objective_max: 0.001
+    measured: true
+
+  - id: ranked_feed_window_payload_p99_bytes
+    description: RankedFeedWindow 创建/读取的未压缩 JSON P99 bytes；operation 仅为 create/load 闭集。
+    source: histogram_quantile(0.99, sum(rate(recommendation_ranked_feed_window_payload_bytes_bucket[5m])) by (le))
+    objective_max_bytes: 2097152
+    measured: true
+
+  - id: ranked_feed_window_quota_eviction_rate
+    description: canonical 配额主体的活跃 RankedFeedWindow 超过 8 个后原子淘汰最老窗口的观察比例；
+      该信号本身是有界背压，不等价于故障。
+    source: recommendation_ranked_feed_window_quota_evictions_total / recommendation_ranked_feed_window_create_total
+    observe_only: true
+
+  - id: ranked_feed_window_shard_key_rejection_rate
+    description: 固定 quota shard 达到 live key 硬上限后拒绝 contender 的比例；禁止跨主体淘汰或依赖 Redis maxmemory。
+    source: sum(rate(recommendation_ranked_feed_window_create_total{result="shard_key_rejected"}[5m])) / sum(rate(recommendation_ranked_feed_window_create_total[5m]))
+    objective_max: 0.001
+    measured: true
+
+  - id: ranked_feed_window_shard_byte_rejection_rate
+    description: 固定 quota shard 达到 live payload byte 硬上限后拒绝 contender 的比例；winner replay 不得重复计 bytes。
+    source: sum(rate(recommendation_ranked_feed_window_create_total{result="shard_byte_rejected"}[5m])) / sum(rate(recommendation_ranked_feed_window_create_total[5m]))
+    objective_max: 0.001
+    measured: true
+
+  - id: ranked_feed_window_repair_rejection_rate
+    description: quota index/metadata 超出有界修复范围或不一致后 fail-closed 的比例；任何命中均为不变量破坏。
+    source: sum(rate(recommendation_ranked_feed_window_create_total{result="repair_bound_rejected"}[5m])) / sum(rate(recommendation_ranked_feed_window_create_total[5m]))
+    objective_max: 0
+    measured: true
+
+  - id: ranked_feed_window_shard_live_utilization
+    description: 被触达固定 quota shard 的精确 live key/live payload bytes 分布，用于在拒绝前评估配置与容量。
+    source: recommendation_ranked_feed_window_shard_live_records / recommendation_ranked_feed_window_shard_live_bytes
+    observe_only: true
+
+  - id: feed_delivery_page_atomic_unavailable_rate
+    description: FeedDeliveryPage append 缺少同 slot Lua 原子能力的比例；任一命中都会停止返回该页 continuation，禁止回退到非原子 SET NX。
+    source: sum(rate(content_feed_delivery_page_total{operation="append",result="atomic_unavailable"}[5m])) / sum(rate(content_feed_delivery_page_total{operation="append"}[5m]))
+    objective_max: 0
+    measured: true
+
+  - id: feed_delivery_page_failure_rate
+    description: 已交付页 append/load 的系统失败比例；not_found 表示过期或 quota 淘汰后的 canonical invalid cursor，不进入系统失败分子。
+    source: sum(rate(content_feed_delivery_page_total{result=~"store_unavailable|atomic_unavailable|payload_rejected|conflict|error|invalid|invalid_quota_policy|shard_key_rejected|shard_byte_rejected|repair_bound_rejected"}[5m])) / sum(rate(content_feed_delivery_page_total[5m]))
+    objective_max: 0.001
+    measured: true
+
+  - id: feed_delivery_page_payload_p99_bytes
+    description: FeedDeliveryPage append/load 未压缩 JSON P99 bytes，硬上限为 64 KiB。
+    source: histogram_quantile(0.99, sum(rate(content_feed_delivery_page_payload_bytes_bucket[5m])) by (le))
+    objective_max_bytes: 65536
+    measured: true
+
+  - id: feed_delivery_page_quota_eviction_rate
+    description: 同 scope 超过 400 个短期已交付页时原子淘汰最老记录的观察信号；它覆盖 8 个活跃窗口各 50 层，是有界背压，不等价于系统故障。
+    source: sum(rate(content_feed_delivery_page_quota_evictions_total[5m])) / sum(rate(content_feed_delivery_page_total{operation="append"}[5m]))
+    observe_only: true
+
+  - id: feed_delivery_page_shard_key_rejection_rate
+    description: 固定 quota shard 达到 live key 硬上限后拒绝新页的比例；禁止跨 scope 淘汰。
+    source: sum(rate(content_feed_delivery_page_total{operation="append",result="shard_key_rejected"}[5m])) / sum(rate(content_feed_delivery_page_total{operation="append"}[5m]))
+    objective_max: 0.001
+    measured: true
+
+  - id: feed_delivery_page_shard_byte_rejection_rate
+    description: 固定 quota shard 达到 live payload byte 硬上限后拒绝新页的比例。
+    source: sum(rate(content_feed_delivery_page_total{operation="append",result="shard_byte_rejected"}[5m])) / sum(rate(content_feed_delivery_page_total{operation="append"}[5m]))
+    objective_max: 0.001
+    measured: true
+
+  - id: feed_delivery_page_repair_rejection_rate
+    description: quota index/metadata 超出有界修复范围或不一致后 fail-closed 的比例。
+    source: sum(rate(content_feed_delivery_page_total{operation="append",result="repair_bound_rejected"}[5m])) / sum(rate(content_feed_delivery_page_total{operation="append"}[5m]))
+    objective_max: 0
+    measured: true
+
+  - id: feed_delivery_page_shard_live_utilization
+    description: 被触达固定 quota shard 的精确 live key/live payload bytes 分布，用于容量校准。
+    source: content_feed_delivery_page_shard_live_records / content_feed_delivery_page_shard_live_bytes
+    observe_only: true
 
   - id: model_fallback_rate
     description: 模型 scorer 故障/超时降级 RuleScorer 的请求占比（N0-1 语义修正：
@@ -246,7 +370,7 @@ slis:
     objective_min: 0.05
 
   - id: recommendation_attribution_bucket_coverage
-    description: 推荐 served 与 behavior 事件具备可用归因分桶的比例；P0+ 指标按 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class 切分。
+    description: 推荐 served 与 behavior 事件具备可用归因分桶的比例；P0+ 指标按 channel/vertical/supply_source/recall_path/policy_digest/intersection_class 切分。
     source: 1 - sum(rate(recommendation_behavior_by_attribution_total{channel="unknown",recall_path="unknown"}[5m])) / sum(rate(recommendation_behavior_by_attribution_total[5m]))
     objective_min: 0.95
     measured: true
@@ -343,7 +467,7 @@ slis:
     objective_min: 0.95
 
   - id: click_through_rate
-    description: feed 点击率，七态 click 作为分子；P0+ 后可按 channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class 切分。
+    description: feed 点击率，七态 click 作为分子；P0+ 后可按 channel/vertical/supply_source/recall_path/policy_digest/intersection_class 切分。
     source: recommendation_feed_engagement_total{action="click"} / recommendation_feed_impressed_total
     objective_min: 0.05
     measured: true
@@ -385,15 +509,6 @@ slis:
     objective_max: 0
     measured: true
 
-  - id: exposure_filter_smembers_fallback_rate
-    description: 曝光过滤回退到全量 SMembers 的占比。守护性 tripwire：生产
-      FilterCandidates 主路径为 per-candidate SIsMember 点查、无 SMembers 回退
-      分支，本序列恒 0 即健康事实；任何未来引入的回退分支必须调用
-      RecordExposureSMembersFallback 记账，否则告警失守。
-    source: recommendation_exposure_filter_smembers_fallback_total / rec_pipeline_requests_total
-    objective_max: 0.01
-    measured: true
-
   - id: model_score_cache_hit_rate
     description: recommendation-service 打分/特征缓存命中率，用于评估容量优化收益（实现前仅冻结指标名）。
     source: rec_model_score_cache_hit_total / (rec_model_score_cache_hit_total + rec_pipeline_model_hits_total)
@@ -413,6 +528,8 @@ rollback_layers:
     mechanism: "env：QWQ_DISABLE_COLLABORATIVE_RECALL_SOURCES=1（装配级，重启）或 policy collaborativeRecall.enabled=false（热更）"
   - id: disable_premium_pool_source
     mechanism: "env：QWQ_DISABLE_PREMIUM_POOL_SOURCE=1（装配级，重启；premium 请求 fail-closed 空池）"
+  - id: disable_intersection_recall_source
+    mechanism: "env：QWQ_DISABLE_INTERSECTION_RECALL_SOURCE=1（装配级，重启；交集退回只解释不供给，recall_path=intersection_edge 消失，展示与排序边权特征不受影响）"
   - id: disable_ops_intervention_boost
     mechanism: "policy 热更：opsIntervention.enabled=false"
   - id: disable_intersection_affinity_signal

@@ -1,0 +1,12 @@
+{
+  "label": "里约热内卢",
+  "labelEn": "Rio de Janeiro",
+  "description": "基督像与海湾山城",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

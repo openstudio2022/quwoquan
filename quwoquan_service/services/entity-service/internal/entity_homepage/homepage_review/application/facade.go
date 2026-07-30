@@ -357,9 +357,19 @@ type ListQuery struct {
 }
 
 func (f *Facade) ListByHomepage(ctx context.Context, query ListQuery) (ReviewPageSlice, error) {
+	homepageID := strings.TrimSpace(query.HomepageID)
+	_, found, gateErr := f.data.Homepage.FindHomepageStatus(ctx, homepageID)
+	if gateErr != nil {
+		return ReviewPageSlice{}, unavailable(gateErr)
+	}
+	if !found {
+		return ReviewPageSlice{}, generated.AppErrorFromHomepageNotFound(
+			fmt.Sprintf("homepage %s not found for review list", homepageID),
+		)
+	}
 	page, err := f.data.Page.ListByHomepage(
 		ctx,
-		strings.TrimSpace(query.HomepageID),
+		homepageID,
 		reviewports.PageRequest{Cursor: strings.TrimSpace(query.Cursor), Limit: query.Limit},
 	)
 	if err != nil {

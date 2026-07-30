@@ -33,6 +33,8 @@ from content.execution.queue.packets import build_lease_packet  # noqa: E402
 from content.execution import production_contracts as pc  # noqa: E402
 from core import ops_governance as og  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
+from content.templates.registry import TemplateRegistry  # noqa: E402
+from governance.creators.assignment import creator_profile_digest  # noqa: E402
 
 
 def _execution_id(label: str) -> str:
@@ -42,6 +44,9 @@ def _execution_id(label: str) -> str:
 
 BATCH = _execution_id("test_batch_oq")
 FIXTURE_SOURCE_REVISION = "sha256:" + ("1" * 64)
+HIGHLAND_CREATOR_PROFILE_DIGEST = creator_profile_digest(
+    TemplateRegistry.load().creators["qwq_creator_highland_travel_blogger_001"]
+)
 
 
 def _reliable_identity(ref: str) -> dict:
@@ -57,7 +62,7 @@ def _creator_meta() -> dict:
         "authorId": "builtin_highland_travel_blogger",
         "creatorProfileId": "qwq_creator_highland_travel_blogger_001",
         "creatorArchetype": "travel_blogger",
-        "creatorProfileVersion": "1.0.0",
+        "creatorProfileDigest": HIGHLAND_CREATOR_PROFILE_DIGEST,
         "creatorDisclosure": {
             "type": "platform_virtual_creator",
             "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
@@ -350,7 +355,7 @@ def test_governed_article_author_complete_rejects_creator_identity_change():
             "authorId": "builtin_travel_blogger",
             "creatorProfileId": "qwq_creator_travel_blogger_001",
             "creatorArchetype": "travel_blogger",
-            "creatorProfileVersion": "1.0.0",
+            "creatorProfileDigest": HIGHLAND_CREATOR_PROFILE_DIGEST,
         },
     )
     job = oq.acquire_lease(batch, worker="w1", stage="author")
@@ -387,7 +392,7 @@ def test_governed_article_author_complete_backfills_missing_locked_creator():
     assert stamped["authorId"] == "builtin_highland_travel_blogger"
     assert stamped["creatorProfileId"] == "qwq_creator_highland_travel_blogger_001"
     assert stamped["creatorArchetype"] == "travel_blogger"
-    assert stamped["creatorProfileVersion"] == "1.0.0"
+    assert stamped["creatorProfileDigest"] == HIGHLAND_CREATOR_PROFILE_DIGEST
 
 
 def test_governed_article_author_complete_backfill_does_not_rescue_placeholder():

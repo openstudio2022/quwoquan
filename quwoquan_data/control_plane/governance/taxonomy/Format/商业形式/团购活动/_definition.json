@@ -2,6 +2,7 @@
   "label": "团购活动",
   "labelEn": "Group Buying",
   "description": "拼团团购推广",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

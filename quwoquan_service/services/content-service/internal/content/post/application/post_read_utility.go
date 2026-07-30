@@ -14,13 +14,22 @@ func generateArticleSummary(title, body string) string {
 	if b == "" {
 		return t
 	}
-	if len(b) > 100 {
-		b = b[:100]
-	}
+	b = truncateTextRunes(b, 100)
 	if t == "" {
 		return b
 	}
 	return t + "：" + b
+}
+
+func truncateTextRunes(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
 }
 
 func (s *PostService) GenerateArticleSummary(title, body string) string {

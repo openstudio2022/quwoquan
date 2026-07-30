@@ -1,7 +1,7 @@
 read_model: CallSettingsView
 description: Account owner 的来电与铃声设置 typed slice。
 source_entities:
-- UserSetting
+- UserSettings
 consumers:
 - app
 fields:

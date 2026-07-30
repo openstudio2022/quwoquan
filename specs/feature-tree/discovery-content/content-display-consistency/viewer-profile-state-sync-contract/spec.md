@@ -27,15 +27,16 @@
 <a id="req-001"></a>
 ### REQ-001 浏览器与作者主页状态同步
 
-- 必须消费 `owner-subaccount-homepage-unification` 定义的 canonical `RelationshipCapabilityView` 关系矩阵。
+- 必须消费 `owner-persona-homepage-unification` 定义的 canonical `RelationshipCapabilityView` 关系矩阵。
 
 <a id="req-002"></a>
 ### REQ-002 viewer、profile、feed 同时 watch 统一 provider
 
 - viewer、profile、feed 同时 watch 统一 provider。
-- 必须消费 `owner-subaccount-homepage-unification` 定义的 canonical `RelationshipCapabilityView` 关系矩阵。
+- 必须消费 `owner-persona-homepage-unification` 定义的 canonical `RelationshipCapabilityView` 关系矩阵。
 - 关系态必须用对象真相源驱动，而不是页面局部状态拼装。
 - 网络写回必须与 UI 即时反馈分层。
+- 端侧待同步状态只持久化 `desiredBoolValue + confirmedBoolValue` 的 canonical outbox entry；禁止读取 `needsRemoteSync`、guard-only 旧形态或通过缺失字段反推确认态，非法记录必须失效清除且不得发出远程写入。
 
 ## 4. 契约引用
 
@@ -49,6 +50,7 @@
 - GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“浏览器与作者主页状态同步”对应的公开行为。
 - THEN viewer、profile 与 feed 消费同一 canonical `RelationshipCapabilityView` 关系矩阵。
+- AND 同一交互的本地 outbox 只存在一份 canonical entry；旧字段或错误 JSON 类型不会被迁移成待同步命令。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

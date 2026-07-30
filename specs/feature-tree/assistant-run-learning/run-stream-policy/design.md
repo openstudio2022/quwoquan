@@ -37,11 +37,11 @@
 ### DEC-002 策略发布与 Run 解析分离，Run 仅消费已激活映射
 - 决策：非 alpha 环境以镜像内不可变 policy artifact 和显式运行配置驱动专用
   publisher；`cmd/api` 只解析已持久化的 release/rollout，绝不 seed、补写或回退静态策略。
-- 理由：将发布身份、artifact digest、乐观 revision 和 Run 生命周期隔离，避免 deployment
+- 理由：以 artifact 的唯一 releaseDigest 同时承担发布内容身份，并与 rollout 乐观 revision 和 Run 生命周期隔离，避免 deployment
   时隐式策略漂移，并使同一 command 重试与 rollback 可审计。
 - 约束与影响：publisher 只经 release/rollout Facade 写入；artifact 校验失败、release
   缺失和 revision 冲突均失败关闭。Run 在创建点冻结 selection，terminal snapshot 仅投影
-  `policyId/version/cohort`，激活或回滚不改写既有 Run。
+  `policyId/releaseDigest/cohort`，激活或回滚不改写既有 Run。
 - 关联要求：`REQ-002`、`REQ-003`
 - 影响 Story：[`policy-template-routing`](./policy-template-routing/spec.md)
 - 关联验收：`GWT-001`
@@ -55,5 +55,5 @@
 
 ## 6. 质量与观测
 
-- 指标区分首事件延迟、终态延迟、取消成功率、重放结果和策略版本。
-- 策略版本支持按配置灰度和回滚，单个 run 生命周期内不得切换版本。
+- 指标区分首事件延迟、终态延迟、取消成功率、重放结果和 `releaseDigest`。
+- rollout revision 支持按配置灰度和回滚，单个 run 生命周期内不得切换 `releaseDigest`。

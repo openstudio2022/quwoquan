@@ -7,9 +7,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/core/di/cloud_http_client_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart'
-    show accountSessionLoginCommandWriterProvider;
+    show
+        accountSessionLoginCommandWriterProvider,
+        cloudRuntimeEnvironmentProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
@@ -58,8 +61,8 @@ void main() {
               'accessToken': 'anonymous-access',
               'refreshToken': 'anonymous-refresh',
               'ownerId': 'anonymous-owner',
-              'activeSub': <String, String>{
-                'subAccountId': 'anonymous-persona',
+              'activePersona': <String, String>{
+                'personaId': 'anonymous-persona',
               },
               'accountState': 'anonymous',
               'identityOrigin': 'anonymous_device',
@@ -71,6 +74,12 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           unauthenticatedCloudHttpClientProvider.overrideWithValue(httpClient),
+          cloudRuntimeEnvironmentProvider.overrideWithValue(
+            CloudRuntimeEnvironment(
+              environment: CloudEnvironment.alpha,
+              gatewayBaseUri: Uri.parse('https://api.alpha.quwoquan.com'),
+            ),
+          ),
         ],
       );
       addTearDown(container.dispose);
@@ -89,7 +98,7 @@ void main() {
       expect(captured.url.path, UserApiMetadata.loginAnonymousPath);
       expect(captured.headers.containsKey('authorization'), isFalse);
       expect(result.ownerId, 'anonymous-owner');
-      expect(result.activeSub?.subAccountId, 'anonymous-persona');
+      expect(result.activePersona?.personaId, 'anonymous-persona');
     },
   );
 }

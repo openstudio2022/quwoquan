@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	nodecontract "quwoquan_service/services/tag-service/generated/tag/tag_node_view/contract/tag"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/ports"
 	releaseports "quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/domain/taxonomyrelease/ports"
@@ -15,25 +17,28 @@ var ErrTagParentNotFound = errors.New("parent tagRef not found")
 
 // TagResolveView 对齐 operations.yaml ResolveTag 响应。
 type TagResolveView struct {
-	TagRef    string   `json:"tagRef"`
-	Group     string   `json:"group"`
-	Label     string   `json:"label"`
-	LabelEn   string   `json:"labelEn"`
-	Aliases   []string `json:"aliases"`
-	Ancestors []string `json:"ancestors"`
+	TagRef     string   `json:"tagRef"`
+	Group      string   `json:"group"`
+	Label      string   `json:"label"`
+	LabelEn    string   `json:"labelEn"`
+	Aliases    []string `json:"aliases"`
+	Ancestors  []string `json:"ancestors"`
+	AxisRole   string   `json:"axisRole"`
+	SameAsRefs []string `json:"sameAsRefs"`
 }
 
 // TagChildView 对齐 operations.yaml ListTagChildren 响应。
 type TagChildView struct {
-	TagRef          string `json:"tagRef"`
-	Label           string `json:"label"`
-	DisplayLabel    string `json:"displayLabel"`
-	LabelEn         string `json:"labelEn"`
-	ParentTagRef    string `json:"parentTagRef"`
-	Depth           int    `json:"depth"`
-	HasChildren     bool   `json:"hasChildren"`
-	ReleaseID       string `json:"releaseId"`
-	LifecycleStatus string `json:"lifecycleStatus"`
+	TagRef          string                      `json:"tagRef"`
+	Label           string                      `json:"label"`
+	DisplayLabel    string                      `json:"displayLabel"`
+	LabelEn         string                      `json:"labelEn"`
+	ParentTagRef    string                      `json:"parentTagRef"`
+	Depth           int                         `json:"depth"`
+	HasChildren     bool                        `json:"hasChildren"`
+	ReleaseID       string                      `json:"releaseId"`
+	LifecycleStatus string                      `json:"lifecycleStatus"`
+	HeatWindow      *nodecontract.TagHeatWindow `json:"heatWindow"`
 }
 
 // SharedTagView 对齐 operations.yaml SharedTags 响应（交集锚点）。
@@ -109,16 +114,18 @@ func (s *TagService) Resolve(ctx context.Context, tagRef string) (*TagResolveVie
 	if err != nil {
 		return nil, err
 	}
-	if node == nil || node.LifecycleStatus != "active" {
+	if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 		return nil, nil
 	}
 	return &TagResolveView{
-		TagRef:    node.TagRef,
-		Group:     node.Group,
-		Label:     node.Label,
-		LabelEn:   node.LabelEn,
-		Aliases:   node.Aliases,
-		Ancestors: node.Ancestors,
+		TagRef:     node.TagRef,
+		Group:      node.Group,
+		Label:      node.Label,
+		LabelEn:    node.LabelEn,
+		Aliases:    node.Aliases,
+		Ancestors:  node.Ancestors,
+		AxisRole:   node.AxisRole,
+		SameAsRefs: node.SameAsRefs,
 	}, nil
 }
 
@@ -142,7 +149,7 @@ func (s *TagService) ListChildren(ctx context.Context, parentTagRef string, limi
 	if err != nil {
 		return nil, err
 	}
-	if parent == nil || parent.LifecycleStatus != "active" {
+	if parent == nil || !lifecycle.IsUsable(parent.LifecycleStatus) {
 		return nil, ErrTagParentNotFound
 	}
 	children, err := s.nodes.ListChildrenInRelease(ctx, releaseID, parentTagRef, int64(limit))
@@ -151,7 +158,7 @@ func (s *TagService) ListChildren(ctx context.Context, parentTagRef string, limi
 	}
 	out := make([]TagChildView, 0, len(children))
 	for _, child := range children {
-		count, err := s.nodes.CountActiveChildrenInRelease(ctx, releaseID, child.TagRef)
+		count, err := s.nodes.CountUsableChildrenInRelease(ctx, releaseID, child.TagRef)
 		if err != nil {
 			return nil, err
 		}
@@ -169,6 +176,7 @@ func (s *TagService) ListChildren(ctx context.Context, parentTagRef string, limi
 			HasChildren:     count > 0,
 			ReleaseID:       child.ReleaseID,
 			LifecycleStatus: child.LifecycleStatus,
+			HeatWindow:      child.HeatWindow,
 		})
 	}
 	return out, nil
@@ -287,7 +295,7 @@ func (s *TagService) ValidateTagRefs(
 		}
 		exists, ok := cache[tagRef]
 		if !ok {
-			exists, err = s.nodes.IsActiveLeaf(ctx, releaseID, tagRef)
+			exists, err = s.nodes.IsUsableLeaf(ctx, releaseID, tagRef)
 			if err != nil {
 				return nil, err
 			}
@@ -321,7 +329,7 @@ func (s *TagService) TagRefExists(ctx context.Context, tagRef string) (bool, err
 	if err != nil {
 		return false, err
 	}
-	return node != nil && node.LifecycleStatus == "active", nil
+	return node != nil && lifecycle.IsUsable(node.LifecycleStatus), nil
 }
 
 // SharedTags 计算两个对象共享的 tagRef（交集锚点 + 标签富化）。
@@ -354,7 +362,7 @@ func (s *TagService) SharedTags(ctx context.Context, aID, aType, bID, bType stri
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
-		if node == nil || node.LifecycleStatus != "active" {
+		if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 			continue
 		}
 		view := SharedTagView{TagRef: t, Label: node.Label, Strength: 1, Source: "tagRef"}
@@ -382,7 +390,7 @@ func (s *TagService) Inverted(ctx context.Context, tagRef, objectType string, li
 	if err != nil {
 		return nil, err
 	}
-	if node == nil || node.LifecycleStatus != "active" {
+	if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 		return &InvertedObjectsView{TagRef: tagRef, ObjectIds: []string{}}, nil
 	}
 	var idxs []model.ObjectTagIndex

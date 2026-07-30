@@ -39,12 +39,14 @@ type circleAccountClosedInboxDocument struct {
 }
 
 type MongoUserAccountClosedProjection struct {
-	db             *mongo.Database
-	redis          rtredis.Client
-	inbox          *mongo.Collection
-	failures       *mongo.Collection
-	closedSubjects *mongo.Collection
-	now            func() time.Time
+	db               *mongo.Database
+	redis            rtredis.Client
+	inbox            *mongo.Collection
+	failures         *mongo.Collection
+	closedSubjects   *mongo.Collection
+	restrictions     *mongo.Collection
+	restrictionInbox *mongo.Collection
+	now              func() time.Time
 }
 
 var _ application.UserAccountClosedProjection = (*MongoUserAccountClosedProjection)(nil)
@@ -59,12 +61,14 @@ func NewMongoUserAccountClosedProjection(
 		)
 	}
 	return &MongoUserAccountClosedProjection{
-		db:             db,
-		redis:          redis,
-		inbox:          db.Collection(circleAccountClosedInboxCollection),
-		failures:       db.Collection(circleAccountClosedFailureCollection),
-		closedSubjects: db.Collection(circleClosedSubjectCollection),
-		now:            time.Now,
+		db:               db,
+		redis:            redis,
+		inbox:            db.Collection(circleAccountClosedInboxCollection),
+		failures:         db.Collection(circleAccountClosedFailureCollection),
+		closedSubjects:   db.Collection(circleClosedSubjectCollection),
+		restrictions:     db.Collection("circle_user_account_restrictions"),
+		restrictionInbox: db.Collection("circle_user_account_restriction_inbox"),
+		now:              time.Now,
 	}
 }
 
@@ -201,6 +205,13 @@ func (projection *MongoUserAccountClosedProjection) ApplyUserAccountClosed(
 			} else if conflict {
 				return nil, application.ErrUserAccountClosedEventConflict
 			}
+			if err := finalizeCircleAccountRestrictionClosure(
+				txCtx,
+				projection.db,
+				event,
+			); err != nil {
+				return nil, err
+			}
 			if err := projection.persistClosedSubjects(
 				txCtx,
 				event,
@@ -212,6 +223,12 @@ func (projection *MongoUserAccountClosedProjection) ApplyUserAccountClosed(
 				event,
 			)
 			if cleanupErr != nil {
+				return nil, cleanupErr
+			}
+			if cleanupErr := projection.deleteAccountRestrictionState(
+				txCtx,
+				event,
+			); cleanupErr != nil {
 				return nil, cleanupErr
 			}
 			applied = circleAccountClosedInboxDocument{
@@ -262,6 +279,29 @@ func (projection *MongoUserAccountClosedProjection) ApplyUserAccountClosed(
 		return application.UserAccountClosedApplyResult{}, err
 	}
 	return application.UserAccountClosedApplyResult{}, nil
+}
+
+func (projection *MongoUserAccountClosedProjection) deleteAccountRestrictionState(
+	ctx context.Context,
+	event application.UserAccountClosedEvent,
+) error {
+	subjects := event.SubjectIDs()
+	if _, err := projection.restrictions.DeleteMany(
+		ctx,
+		bson.M{"$or": bson.A{
+			bson.M{"_id": event.AccountID},
+			bson.M{"subjects": bson.M{"$in": subjects}},
+		}},
+	); err != nil {
+		return fmt.Errorf("delete closed circle account restriction state: %w", err)
+	}
+	if _, err := projection.restrictionInbox.DeleteMany(
+		ctx,
+		bson.M{"accountId": event.AccountID},
+	); err != nil {
+		return fmt.Errorf("delete closed circle account restriction inbox: %w", err)
+	}
+	return nil
 }
 
 func (projection *MongoUserAccountClosedProjection) persistClosedSubjects(

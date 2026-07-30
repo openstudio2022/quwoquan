@@ -2,6 +2,7 @@
   "label": "资讯",
   "labelEn": "News & Info",
   "description": "新闻报道与信息传播的内容视角",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

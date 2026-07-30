@@ -37,10 +37,8 @@ business_rules:
 - Notification 状态与 outbox 必须在同一 Mongo transaction 提交
 - 互动通知只由业务事件经 durable stream 投影生成，幂等键 notify:{eventType}:{eventId}
 lifecycle:
-  states:
-  - created
-  - delivered
-  - acknowledged
-  - read
-  optimistic_concurrency: version
+  model: monotonic_receipt_milestones
+  milestones: [createdAt, deliveredAt, ackedAt, readAt]
+  terminal_marker: readAt
+  optimistic_concurrency: store_commit
   idempotency: command_receipt

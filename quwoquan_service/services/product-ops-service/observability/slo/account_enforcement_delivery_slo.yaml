@@ -1,0 +1,51 @@
+service: product-ops-service
+domain: ops
+capability: account-enforcement-delivery
+
+metrics:
+  case_commands_total: product_ops_account_enforcement_case_commands_total
+  case_command_duration_seconds: product_ops_account_enforcement_case_command_duration_seconds
+  delivery_attempts_total: product_ops_account_enforcement_delivery_attempts_total
+  delivery_duration_seconds: product_ops_account_enforcement_delivery_duration_seconds
+  delivery_backlog: product_ops_account_enforcement_delivery_backlog
+  readiness_status: runtime_health_check_status
+
+privacy:
+  permitted_labels: [operation, outcome, action, state, check]
+  prohibited_labels: [account_id, case_id, decision_id, reviewer_id, evidence_ref, intake_ref]
+
+slis:
+  - id: account_enforcement_case_command_latency
+    description: 运营 case 命令在真实 PostgreSQL 事务中进入明确终态的延迟。
+    sli: histogram_quantile(0.95, sum(rate(product_ops_account_enforcement_case_command_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 1000
+  - id: account_enforcement_delivery_latency
+    description: 已签发 decision 到 UserAccount 稳定 receipt 的单次调用延迟。
+    sli: histogram_quantile(0.95, sum(rate(product_ops_account_enforcement_delivery_duration_seconds_bucket[5m])) by (le))
+    objective:
+      p95_ms: 1500
+      timeout_ms: 3000
+  - id: account_enforcement_terminal_dlq
+    description: terminal DLQ 非零必须使 readiness 失败并触发人工恢复。
+    sli: product_ops_account_enforcement_delivery_backlog{state="dead_letter"}
+    objective: 0
+  - id: account_enforcement_pending_age
+    description: pending/retrying 超过 60 秒必须使 readiness 失败。
+    sli: runtime_health_check_status{check="account-enforcement-delivery"}
+    objective: 1
+
+alerts:
+  - id: account_enforcement_terminal_dlq_nonzero
+    expression: product_ops_account_enforcement_delivery_backlog{state="dead_letter"} > 0
+    for: 0m
+    severity: critical
+  - id: account_enforcement_delivery_retrying
+    expression: product_ops_account_enforcement_delivery_backlog{state="retrying"} > 0
+    for: 2m
+    severity: warning
+
+failure_semantics:
+  user_account_unknown: fail_closed_and_retry_bounded
+  terminal_dlq: readiness_fail_and_operator_retry_same_decision
+  rollback: stop_dispatcher_without_mutating_approved_decisions

@@ -57,7 +57,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         proposalSlice = await ref
             .read(profileEditProposalQueryReaderProvider)
             .list(
-              ProfileUpdateProposalListQuery(personaId: snapshot.subAccountId),
+              ProfileUpdateProposalListQuery(personaId: snapshot.personaId),
             );
       } catch (error) {
         proposalError = error;
@@ -470,7 +470,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
   }
 
   Future<void> _reloadProfileProposals() async {
-    final personaId = _initial?.subAccountId.trim() ?? '';
+    final personaId = _initial?.personaId.trim() ?? '';
     if (personaId.isEmpty) return;
     try {
       final proposals = await ref

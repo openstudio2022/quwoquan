@@ -166,7 +166,7 @@ def validate_flutter_run_defines(
             if effective_launch_manifest_digest != expected_manifest_digest:
                 issues.append("effective launch manifest digest does not match")
             expected_values = {
-                "schema": "app-effective-launch-manifest-v1",
+                "schema": "app-effective-launch-manifest",
                 "environment": runtime_env,
                 "target": target,
                 "entrypoint": entrypoint,
@@ -304,8 +304,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  - {issue}", file=sys.stderr)
         print(
             "Use the canonical launcher: "
-            "bash quwoquan_app/scripts/device/start_app_instance.sh "
-            "--env <alpha|beta|gamma|prod> --device-id <device-id>",
+            "bash quwoquan_app/run.sh -d <device-id>",
             file=sys.stderr,
         )
         return 2

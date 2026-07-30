@@ -7,162 +7,13 @@ import 'homepage_queries.dart';
 export 'homepage_queries.dart'
     show HomepageDetailProjection, decodeHomepageDetail;
 
+part '../generated/requests/entity/homepage_commands.requests.g.dart';
+
 final class HomepageGeoPointInput {
   const HomepageGeoPointInput({required this.lat, required this.lng});
 
   final double lat;
   final double lng;
-}
-
-final class SuggestHomepageCandidateCommand {
-  SuggestHomepageCandidateCommand({
-    required String title,
-    required String homepageType,
-    String? subtitle,
-    List<String> categoryTags = const <String>[],
-    String? coverUrl,
-    String? address,
-    String? city,
-    String? sourcePlaceId,
-    this.location,
-  }) : title = _required(title, 'title'),
-       homepageType = _required(homepageType, 'homepageType'),
-       subtitle = _optional(subtitle),
-       categoryTags = List<String>.unmodifiable(
-         categoryTags.map((tag) => tag.trim()).where((tag) => tag.isNotEmpty),
-       ),
-       coverUrl = _optional(coverUrl),
-       address = _optional(address),
-       city = _optional(city),
-       sourcePlaceId = _optional(sourcePlaceId);
-
-  final String title;
-  final String homepageType;
-  final String? subtitle;
-  final List<String> categoryTags;
-  final String? coverUrl;
-  final String? address;
-  final String? city;
-  final String? sourcePlaceId;
-  final HomepageGeoPointInput? location;
-}
-
-CloudOperationRequestPayload encodeSuggestHomepageCandidateCommand(
-  SuggestHomepageCandidateCommand command,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      'title': command.title,
-      'homepageType': command.homepageType,
-      if (command.subtitle case final subtitle?) 'subtitle': subtitle,
-      if (command.categoryTags.isNotEmpty) 'categoryTags': command.categoryTags,
-      if (command.coverUrl case final coverUrl?) 'coverUrl': coverUrl,
-      if (command.address case final address?) 'address': address,
-      if (command.city case final city?) 'city': city,
-      if (command.sourcePlaceId case final sourcePlaceId?)
-        'sourcePlaceId': sourcePlaceId,
-      if (command.location case final location?)
-        'location': <String, Object?>{'lat': location.lat, 'lng': location.lng},
-    },
-  );
-}
-
-final class UpdateClaimedHomepageBasicsCommand {
-  UpdateClaimedHomepageBasicsCommand({
-    required String homepageId,
-    String? title,
-    String? subtitle,
-    List<String>? categoryTags,
-    String? coverUrl,
-    String? address,
-    String? city,
-    this.location,
-  }) : homepageId = _required(homepageId, 'homepageId'),
-       title = _optional(title),
-       subtitle = _optional(subtitle),
-       categoryTags = categoryTags == null
-           ? null
-           : List<String>.unmodifiable(
-               categoryTags
-                   .map((tag) => tag.trim())
-                   .where((tag) => tag.isNotEmpty),
-             ),
-       coverUrl = _optional(coverUrl),
-       address = _optional(address),
-       city = _optional(city);
-
-  final String homepageId;
-  final String? title;
-  final String? subtitle;
-  final List<String>? categoryTags;
-  final String? coverUrl;
-  final String? address;
-  final String? city;
-  final HomepageGeoPointInput? location;
-}
-
-CloudOperationRequestPayload encodeUpdateClaimedHomepageBasicsCommand(
-  UpdateClaimedHomepageBasicsCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'homepageId': command.homepageId},
-    body: <String, Object?>{
-      if (command.title case final title?) 'title': title,
-      if (command.subtitle case final subtitle?) 'subtitle': subtitle,
-      if (command.categoryTags case final categoryTags?)
-        'categoryTags': categoryTags,
-      if (command.coverUrl case final coverUrl?) 'coverUrl': coverUrl,
-      if (command.address case final address?) 'address': address,
-      if (command.city case final city?) 'city': city,
-      if (command.location case final location?)
-        'location': <String, Object?>{'lat': location.lat, 'lng': location.lng},
-    },
-  );
-}
-
-final class CreateHomepageClaimRequestCommand {
-  CreateHomepageClaimRequestCommand({
-    required String homepageId,
-    required String claimTier,
-    String? businessLicenseUrl,
-    String? contactPhone,
-    String? identityCardFrontUrl,
-    String? identityCardBackUrl,
-    String? note,
-  }) : homepageId = _required(homepageId, 'homepageId'),
-       claimTier = _required(claimTier, 'claimTier'),
-       businessLicenseUrl = _optional(businessLicenseUrl),
-       contactPhone = _optional(contactPhone),
-       identityCardFrontUrl = _optional(identityCardFrontUrl),
-       identityCardBackUrl = _optional(identityCardBackUrl),
-       note = _optional(note);
-
-  final String homepageId;
-  final String claimTier;
-  final String? businessLicenseUrl;
-  final String? contactPhone;
-  final String? identityCardFrontUrl;
-  final String? identityCardBackUrl;
-  final String? note;
-}
-
-CloudOperationRequestPayload encodeCreateHomepageClaimRequestCommand(
-  CreateHomepageClaimRequestCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'homepageId': command.homepageId},
-    body: <String, Object?>{
-      'claimTier': command.claimTier,
-      if (command.businessLicenseUrl case final value?)
-        'businessLicenseUrl': value,
-      if (command.contactPhone case final value?) 'contactPhone': value,
-      if (command.identityCardFrontUrl case final value?)
-        'identityCardFrontUrl': value,
-      if (command.identityCardBackUrl case final value?)
-        'identityCardBackUrl': value,
-      if (command.note case final value?) 'note': value,
-    },
-  );
 }
 
 final class HomepageClaimRequestView {
@@ -198,38 +49,6 @@ HomepageClaimRequestView decodeHomepageClaimRequestView(Object? response) {
     reviewNote: _optional(root['reviewNote'] as String?),
     createdAt: _optionalTimestamp(root['createdAt']),
     reviewedAt: _optionalTimestamp(root['reviewedAt']),
-  );
-}
-
-final class CreateHomepageStatusReportCommand {
-  CreateHomepageStatusReportCommand({
-    required String homepageId,
-    required String reason,
-    String? description,
-    List<String> evidenceUrls = const <String>[],
-  }) : homepageId = _required(homepageId, 'homepageId'),
-       reason = _required(reason, 'reason'),
-       description = _optional(description),
-       evidenceUrls = List<String>.unmodifiable(
-         evidenceUrls.map((url) => url.trim()).where((url) => url.isNotEmpty),
-       );
-
-  final String homepageId;
-  final String reason;
-  final String? description;
-  final List<String> evidenceUrls;
-}
-
-CloudOperationRequestPayload encodeCreateHomepageStatusReportCommand(
-  CreateHomepageStatusReportCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'homepageId': command.homepageId},
-    body: <String, Object?>{
-      'reason': command.reason,
-      if (command.description case final value?) 'description': value,
-      if (command.evidenceUrls.isNotEmpty) 'evidenceUrls': command.evidenceUrls,
-    },
   );
 }
 
@@ -333,14 +152,6 @@ DateTime? _optionalTimestamp(Object? value) {
     throw const FormatException('timestamp must be an ISO-8601 string');
   }
   return DateTime.parse(value.trim()).toUtc();
-}
-
-String _required(String value, String name) {
-  final text = value.trim();
-  if (text.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return text;
 }
 
 String? _optional(String? value) {

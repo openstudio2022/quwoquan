@@ -42,6 +42,7 @@ business_rules:
 - authorDisplayNameSnapshot/authorAvatarUrlSnapshot 由端侧在发表/更新时快照提交，不跨域回填
 - Homepage 只消费评价投影（averageRating/ratingCount/highlightTags），不与评价聚合强一致提交
 lifecycle:
+  state_field: status
   states:
   - active
   - deleted

@@ -1,0 +1,12 @@
+{
+  "label": "巴利阿里群岛",
+  "labelEn": "Balearic Islands",
+  "description": "地中海群岛度假区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

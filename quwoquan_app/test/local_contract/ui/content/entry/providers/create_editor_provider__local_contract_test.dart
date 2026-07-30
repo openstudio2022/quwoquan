@@ -316,8 +316,8 @@ void main() {
     );
 
     notifier.applyVideoEditing(
-      videoPath: 'edited_v2.mp4',
-      thumbnailPath: 'cover_v2.jpg',
+      videoPath: 'edited_after_trim.mp4',
+      thumbnailPath: 'cover_after_edit.jpg',
       videoDurationMs: 6800,
       trimStartMs: 1400,
       trimEndMs: 5400,
@@ -327,9 +327,9 @@ void main() {
     );
 
     final state = container.read(createEditorProvider);
-    expect(state.videoPath, 'edited_v2.mp4');
+    expect(state.videoPath, 'edited_after_trim.mp4');
     expect(state.originalVideoPath, 'raw.mp4');
-    expect(state.videoThumbnail, 'cover_v2.jpg');
+    expect(state.videoThumbnail, 'cover_after_edit.jpg');
     expect(state.videoDurationMs, 6800);
     expect(state.videoTrimStartMs, 1400);
     expect(state.videoTrimEndMs, 5400);

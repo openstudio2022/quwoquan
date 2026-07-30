@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
@@ -72,23 +73,19 @@ void main() {
         );
       });
 
-      test('新增 objectKind trip/meetup → routeId 反查正确，目标页未实现时优雅降级（契约占位）', () {
-        // 交集行动深化：registry.objectKinds 已登记 trip/meetup，codegen objectKind→routeId
-        // 闭集随之含 tripDetail/meetupDetail（端侧只读分发，不硬编码）。
-        expect(intersectionRouteIdForObjectKind('trip'), 'tripDetail');
-        expect(intersectionRouteIdForObjectKind('meetup'), 'meetupDetail');
-        // 结伴/线下局详情页尚未实现：resolvePath 落入 default → null，端侧静默降级（不崩溃）。
-        // 实现 tripDetail/meetupDetail 页后，需在 resolvePath switch 增补对应 case，
-        // 并把下面两条断言改为 contains(objectId)，本测试即为该实现的提醒式契约。
+      test('objectKind gathering → routeId 反查正确，目标页未实现时优雅降级（契约占位）', () {
+        // 交集行动只认 metadata 登记的 gathering 单轨对象类型；端侧只读 codegen，
+        // 不保留 trip/meetup 兼容映射。
         expect(
-          IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 't1', objectKind: 'trip'),
-          ),
-          isNull,
+          intersectionRouteIdForObjectKind('gathering'),
+          'gatheringDetail',
         );
+        expect(intersectionRouteIdForObjectKind('trip'), isEmpty);
+        expect(intersectionRouteIdForObjectKind('meetup'), isEmpty);
+        // gathering 详情页尚未实现：resolvePath 落入 default → null，端侧静默降级。
         expect(
           IntersectionTargetNavigator.resolvePath(
-            IntersectionTarget(objectId: 'm1', objectKind: 'meetup'),
+            IntersectionTarget(objectId: 'g1', objectKind: 'gathering'),
           ),
           isNull,
         );
@@ -109,9 +106,9 @@ void main() {
             },
           ),
           GoRoute(
-            path: '/user/:username',
+            path: '/user/:userHandle',
             builder: (_, state) =>
-                Text('USER:${state.pathParameters['username']}'),
+                Text('USER:${state.pathParameters['userHandle']}'),
           ),
           GoRoute(
             path: '/chat/start-group',
@@ -239,9 +236,9 @@ void main() {
             },
           ),
           GoRoute(
-            path: '/user/:username',
+            path: '/user/:userHandle',
             builder: (_, state) =>
-                Text('USER:${state.pathParameters['username']}'),
+                Text('USER:${state.pathParameters['userHandle']}'),
           ),
           GoRoute(
             path: '/chat/start-group',
@@ -347,8 +344,8 @@ void main() {
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
         IntersectionActionHint(
-          actionKey: 'join_trip',
-          dispatch: 'companion',
+          actionKey: 'join_gathering',
+          dispatch: 'gathering',
           targetAvailability: 'deferred',
           target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
         ),
@@ -391,7 +388,7 @@ void main() {
       },
     );
 
-    testWidgets('companion dispatch → 进入发起群聊承接页并保留结构化上下文', (tester) async {
+    testWidgets('gathering dispatch → 进入发起群聊承接页并保留结构化上下文', (tester) async {
       IntersectionTarget? trackedTarget;
       IntersectionNavAttribution? trackedAttr;
       Object? startGroupExtra;
@@ -413,9 +410,9 @@ void main() {
       final result = navigator.openActionHint(
         homeContext,
         IntersectionActionHint(
-          actionKey: 'start_companion',
-          dispatch: 'companion',
-          // start_companion 是「公开约伴邀约」，发起环节安全门不含 mutualConsent
+          actionKey: 'start_gathering',
+          dispatch: 'gathering',
+          // start_gathering 是「公开约伴邀约」，发起环节安全门不含 mutualConsent
           // （双向同意属响应/建联阶段，由群聊自身 gate 承接）；与 registry.actionKeyMeta 对齐。
           requiredGates: const <String>[
             'login',
@@ -437,6 +434,22 @@ void main() {
           sourceRef: 'coWishlistedEntity',
           evidenceId: 'ev_wishlist_1',
         ),
+        // 对象名只能取自云侧主句 span：承接页要用它命名约伴群。
+        evidenceReason: IntersectionReason(
+          intersectionId: 'ix_wishlist',
+          kind: 'coWishlistedEntity',
+          primarySpans: <IntersectionTextSpan>[
+            IntersectionTextSpan(text: '你和「陆衡」都想去'),
+            IntersectionTextSpan(
+              text: '「西湖」',
+              role: 'object',
+              target: IntersectionTarget(
+                objectId: 'fixture_homepage_travel_photo_west_lake',
+                objectKind: 'place',
+              ),
+            ),
+          ],
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -449,16 +462,18 @@ void main() {
       expect(trackedAttr?.sourceRef, 'coWishlistedEntity');
       expect(startGroupExtra, isA<StartGroupChatRouteExtra>());
       final extra = startGroupExtra! as StartGroupChatRouteExtra;
-      expect(extra.actionKey, 'start_companion');
+      expect(extra.actionKey, 'start_gathering');
       expect(extra.targetObjectId, 'fixture_homepage_travel_photo_west_lake');
       expect(extra.targetObjectKind, 'place');
+      // 群名要用得上的名字：书名号是主句排版，不进群名；拿不到名字时才退回成员名。
+      expect(extra.targetObjectName, '西湖');
       expect(extra.intersectionId, 'ix_wishlist');
       expect(extra.dimension, 'location');
       expect(extra.sourceRef, 'coWishlistedEntity');
       expect(extra.evidenceId, 'ev_wishlist_1');
     });
 
-    testWidgets('companion dispatch + 无 target → 不进入普通建群', (tester) async {
+    testWidgets('gathering dispatch + 无 target → 不进入普通建群', (tester) async {
       late BuildContext homeContext;
       await tester.pumpWidget(hostWith((c) => homeContext = c));
       await tester.pumpAndSettle();
@@ -466,8 +481,8 @@ void main() {
       final result = const IntersectionTargetNavigator().openActionHint(
         homeContext,
         IntersectionActionHint(
-          actionKey: 'start_companion',
-          dispatch: 'companion',
+          actionKey: 'start_gathering',
+          dispatch: 'gathering',
           targetAvailability: 'available',
         ),
       );
@@ -529,26 +544,65 @@ void main() {
       expect(find.text('USER:u_lin'), findsOneWidget);
     });
 
-    testWidgets('message/connect 无专属真实 handler → 不伪装成 target 导航', (
-      tester,
-    ) async {
+    testWidgets('message → 对方主页破冰承接（打招呼 / 私信兑现承诺）', (tester) async {
       late BuildContext homeContext;
       await tester.pumpWidget(hostWith((c) => homeContext = c));
       await tester.pumpAndSettle();
 
-      for (final dispatch in <String>['message', 'connect']) {
-        final result = const IntersectionTargetNavigator().openActionHint(
-          homeContext,
-          IntersectionActionHint(
-            actionKey: '${dispatch}_example',
-            dispatch: dispatch,
-            requiredGates: const <String>['login'],
-            targetAvailability: 'available',
-            target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'greet_person',
+          dispatch: 'message',
+          requiredGates: const <String>['login', 'greetPreference', 'blocked'],
+          targetAvailability: 'available',
+          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+        ),
+      );
+      expect(result.status, IntersectionActionDispatchStatus.opened);
+      await tester.pumpAndSettle();
+      expect(find.text('USER:u_lin'), findsOneWidget);
+    });
+
+    testWidgets('message 的 target 不是 person → 不伪装成对象下钻', (tester) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'message_person',
+          dispatch: 'message',
+          requiredGates: const <String>['login'],
+          targetAvailability: 'available',
+          target: IntersectionTarget(
+            objectId: 'fixture_circle_photo',
+            objectKind: 'circle',
           ),
-        );
-        expect(result.status, IntersectionActionDispatchStatus.unsupported);
-      }
+        ),
+      );
+      expect(result.status, IntersectionActionDispatchStatus.missingTarget);
+      await tester.pumpAndSettle();
+      expect(find.text('HOME'), findsOneWidget);
+    });
+
+    testWidgets('connect 无专属真实破冰状态机 → 不伪装成 target 导航', (tester) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'join_topic_room',
+          dispatch: 'connect',
+          requiredGates: const <String>['login'],
+          targetAvailability: 'available',
+          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+        ),
+      );
+      expect(result.status, IntersectionActionDispatchStatus.unsupported);
       await tester.pumpAndSettle();
 
       expect(find.text('HOME'), findsOneWidget);

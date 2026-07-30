@@ -5,10 +5,10 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 /// 将 canonical 生命周期守卫原因投影为端侧结构化错误。
 CloudException personaLifecycleGuardExceptionForReason(String reason) {
   final errorCode = switch (reason) {
-    'blocked_primary_persona' => UserErrorCode.primarySubAccountGuard,
-    'blocked_last_persona' => UserErrorCode.lastSubAccount,
-    'blocked_active_persona' => UserErrorCode.activeSubAccountGuard,
-    'blocked_retired_persona' => UserErrorCode.retiredSubAccountGuard,
+    'blocked_primary_persona' => UserErrorCode.primaryPersonaGuard,
+    'blocked_last_persona' => UserErrorCode.lastPersona,
+    'blocked_active_persona' => UserErrorCode.activePersonaGuard,
+    'blocked_retired_persona' => UserErrorCode.retiredPersonaGuard,
     _ => UserErrorCode.invalidArgument,
   };
   return CloudException(

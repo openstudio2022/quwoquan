@@ -23,7 +23,7 @@ type ScoredCandidate struct {
 type ScoringFeatures struct {
 	Session *SessionState
 	User    *UserFeatureVector
-	Weights ScoringWeights
+	Weights recpolicy.WeightPreset
 	// FeatureSnapshotAt 是本次请求读取用户/候选特征后的统一快照时刻。
 	// 在线评分与训练曝光事实必须消费同一时刻，禁止各自在调用点重新取 now，
 	// 否则 ageHours 会形成难以复现的训练/在线偏斜。
@@ -177,14 +177,24 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 				socialPrior += math.Log1p(float64(user.SharedCircleCount)) * sc.IntersectionSignalFactor
 			}
 		}
-		intersectionFact := math.Log1p(nonNegative(c.IntersectionFactStrength))*sc.IntersectionFactFactor +
-			clamp01(c.IntersectionFreshness)*sc.IntersectionFreshnessFactor
+		// 事实交集通道消费「viewer ↔ 该候选对象」的物化交集边权，而不是候选投影上
+		// 的 intersectionFactStrength——后者是内容侧交集承载力（该 post 挂了几个
+		// entity/tag 提示），与看的人无关，用它做事实通道等于把「这条内容能产生交集」
+		// 当成「你和它有交集」。命不中交集边时本通道为 0，不做任何回退。
+		intersectionFact := 0.0
+		edgeWeight := 0.0
+		if edge, ok := user.StrongestIntersectionEdge(c); ok {
+			edgeWeight = clamp01(edge.Weight)
+			intersectionFact = edgeWeight*sc.IntersectionFactFactor +
+				clamp01(edge.Freshness)*sc.IntersectionFreshnessFactor
+		}
 		intersectionAffinity := 0.0
 		if strings.TrimSpace(c.IntersectionConfidenceLabel) != "" {
 			intersectionAffinity = clamp01(c.AffinityIntersectionScore) * sc.IntersectionAffinityFactor
 		}
 		socialPrior += intersectionFact + intersectionAffinity
 		detail["intersectionFact"] = intersectionFact
+		detail["intersectionEdgeWeight"] = edgeWeight
 		detail["intersectionAffinity"] = intersectionAffinity
 		detail["socialPrior"] = socialPrior
 
@@ -378,7 +388,7 @@ type ModelPredictRequest struct {
 	Scenario       string             `json:"scenario"`
 	UserID         string             `json:"userId"`
 	SessionID      string             `json:"sessionId"`
-	ModelVersion   string             `json:"modelVersion,omitempty"`
+	ModelChannel   string             `json:"modelChannel,omitempty"`
 	UserFeatures   *UserFeatureVector `json:"userFeatures,omitempty"`
 	SessionSignals *SessionState      `json:"sessionSignals,omitempty"`
 	Candidates     []CandidateInput   `json:"candidates"`
@@ -392,7 +402,13 @@ type CandidateInput struct {
 	AuthorID    string   `json:"authorId"`
 	Tags        []string `json:"tagRefs"`
 	EntityRefs  []string `json:"entityRefs,omitempty"`
-	AgeHours    float64  `json:"ageHours"`
+	// IntersectionEdge* 是 viewer 与本候选匹配后的不可变 pair 特征。
+	// 三字段只能由 candidateInputAt 经 StrongestIntersectionEdgeFor 一次投影，
+	// Python 在线推理和曝光训练快照都直接消费，禁止各自读取原始边图重算。
+	IntersectionEdgeWeight    float64 `json:"intersectionEdgeWeight,omitempty"`
+	IntersectionEdgeFreshness float64 `json:"intersectionEdgeFreshness,omitempty"`
+	IntersectionEdgeKind      string  `json:"intersectionEdgeKind,omitempty"`
+	AgeHours                  float64 `json:"ageHours"`
 	// PublishHour（N3-3）：发布时刻的 UTC 小时（0-23；publishedAt 缺失为 -1）。
 	// 服务端派生随请求下发，与训练侧 itemFeatures.publishHour 同源，消除
 	// 该特征的训练-在线偏斜（此前在线恒 0）。
@@ -430,7 +446,7 @@ type CandidateScore struct {
 type RemoteModelScorer struct {
 	client       ModelServiceClient
 	Scenario     string // scenario sent to model service, e.g. content_feed
-	ModelVersion string // "champion" or "challenger"; empty means server default
+	ModelChannel string // "champion" or "challenger"; empty means server default
 }
 
 func NewRemoteModelScorer(client ModelServiceClient, scenario string) *RemoteModelScorer {
@@ -440,9 +456,9 @@ func NewRemoteModelScorer(client ModelServiceClient, scenario string) *RemoteMod
 	return &RemoteModelScorer{client: client, Scenario: scenario}
 }
 
-// WithModelVersion returns a copy of the scorer that requests a specific model version.
-func (s *RemoteModelScorer) WithModelVersion(v string) *RemoteModelScorer {
-	return &RemoteModelScorer{client: s.client, Scenario: s.Scenario, ModelVersion: v}
+// WithModelChannel returns a copy of the scorer that requests a specific release channel.
+func (s *RemoteModelScorer) WithModelChannel(channel string) *RemoteModelScorer {
+	return &RemoteModelScorer{client: s.client, Scenario: s.Scenario, ModelChannel: channel}
 }
 
 func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
@@ -452,7 +468,7 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 	}
 	inputs := make([]CandidateInput, len(candidates))
 	for i, c := range candidates {
-		inputs[i] = candidateInputAt(c, now)
+		inputs[i] = candidateInputAt(c, now, features.User)
 	}
 
 	session := features.Session
@@ -466,16 +482,12 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 		"requestHour":      now.Hour(),
 		"requestDayOfWeek": (int(now.Weekday()) + 6) % 7,
 	}
-	if s.ModelVersion != "" {
-		reqCtx["modelVersion"] = s.ModelVersion
-	}
-
 	resp, err := s.client.Predict(ctx, &ModelPredictRequest{
 		Scenario:       s.Scenario,
 		UserID:         session.UserID,
 		SessionID:      session.SessionID,
-		ModelVersion:   s.ModelVersion,
-		UserFeatures:   features.User,
+		ModelChannel:   s.ModelChannel,
+		UserFeatures:   modelUserFeatures(features.User),
 		SessionSignals: session,
 		Candidates:     inputs,
 		Context:        reqCtx,
@@ -559,18 +571,26 @@ func candidateAgeHoursAt(publishedAt, snapshotAt time.Time) float64 {
 
 // candidateInputAt 是在线模型请求与曝光训练快照共用的候选特征装配真相源。
 // 任何新增/退役候选特征都必须只在此处完成一次，并由两条链路共同消费。
-func candidateInputAt(c ContentCandidate, snapshotAt time.Time) CandidateInput {
+func candidateInputAt(
+	c ContentCandidate,
+	snapshotAt time.Time,
+	user *UserFeatureVector,
+) CandidateInput {
 	ageHours := candidateAgeHoursAt(c.PublishedAt, snapshotAt)
 	publishHour := -1
 	if !c.PublishedAt.IsZero() {
 		publishHour = c.PublishedAt.UTC().Hour()
 	}
+	edge, _ := user.StrongestIntersectionEdgeFor(c.AuthorID, c.EntityRefs)
 	return CandidateInput{
 		ContentID:                   c.ContentID,
 		ContentType:                 c.ContentType,
 		AuthorID:                    c.AuthorID,
 		Tags:                        append([]string(nil), c.Tags...),
 		EntityRefs:                  append([]string(nil), c.EntityRefs...),
+		IntersectionEdgeWeight:      edge.Weight,
+		IntersectionEdgeFreshness:   edge.Freshness,
+		IntersectionEdgeKind:        edge.Kind,
 		AgeHours:                    ageHours,
 		PublishHour:                 publishHour,
 		ViewCount:                   c.ViewCount,
@@ -588,6 +608,18 @@ func candidateInputAt(c ContentCandidate, snapshotAt time.Time) CandidateInput {
 		IntersectionConfidenceLabel: c.IntersectionConfidenceLabel,
 		IntersectionClass:           c.IntersectionClass,
 	}
+}
+
+// modelUserFeatures 保留批次级用户特征，但移除已投影为 CandidateInput 三标量的
+// 原始 IntersectionEdges 图。模型服务不再拥有第二套候选命中算法，也不会把整张
+// viewer 边图复制或泄露给每候选特征装配。
+func modelUserFeatures(user *UserFeatureVector) *UserFeatureVector {
+	if user == nil {
+		return nil
+	}
+	projected := *user
+	projected.IntersectionEdges = nil
+	return &projected
 }
 
 // ---------------------------------------------------------------------------

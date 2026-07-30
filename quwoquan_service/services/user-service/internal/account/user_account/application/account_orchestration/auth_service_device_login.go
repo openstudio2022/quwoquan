@@ -14,6 +14,7 @@ import (
 	rtobs "quwoquan_service/runtime/observability"
 	sessiongenerated "quwoquan_service/services/user-service/generated/account/account_session"
 	"quwoquan_service/services/user-service/generated/account/user_account"
+	sessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
 	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
 	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
@@ -29,7 +30,7 @@ func (s *AuthService) LoginWithOneTap(
 	appVersion string,
 	agreementVersion string,
 	privacyVersion string,
-) (_ *LoginResult, err error) {
+) (_ *sessionapp.AuthSessionGrant, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithOneTap",
 		attribute.String("platform", strings.TrimSpace(platform)))
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -139,7 +140,7 @@ func (s *AuthService) LoginAnonymously(
 	deviceFingerprintHash string,
 	platform string,
 	appVersion string,
-) (_ *LoginResult, err error) {
+) (_ *sessionapp.AuthSessionGrant, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginAnonymously",
 		attribute.String("platform", platform))
 	defer func() { rtobs.EndSpan(span, err) }()
@@ -385,12 +386,7 @@ func hashInstallID(installID string) string {
 }
 
 func normalizePhoneCredentialKey(phone string) string {
-	trimmed := strings.TrimSpace(phone)
-	if trimmed == "" {
-		return ""
-	}
-	replacer := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "")
-	return replacer.Replace(trimmed)
+	return credentialmodel.NormalizePhoneCredentialKey(phone)
 }
 
 func maskPhoneForDisplay(phone string) string {

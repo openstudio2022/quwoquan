@@ -27,9 +27,12 @@ final class AlphaFollowingSubjectFacet
   Future<FollowingSubjectSlice> listFollowingSubjects(
     ListFollowingSubjectsQuery query,
   ) async {
-    final type = query.subjectType?.trim() ?? '';
     final filtered = _items
-        .where((item) => type.isEmpty || item.subjectType == type)
+        .where(
+          (item) =>
+              query.subjectType == null ||
+              item.subjectType == query.subjectType,
+        )
         .toList(growable: false);
     final start = int.tryParse(query.cursor?.trim() ?? '') ?? 0;
     final safeStart = start.clamp(0, filtered.length);

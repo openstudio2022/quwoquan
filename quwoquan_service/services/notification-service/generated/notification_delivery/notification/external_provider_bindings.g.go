@@ -7,26 +7,24 @@ const ExternalProviderBindingOwner = "notification-service"
 const ExternalProviderBindingObject = "notification.notification_delivery.notification"
 
 type ExternalProviderBinding struct {
-	State string
-	AdapterID string
-	EndpointRef string
+	State                   string
+	AdapterID               string
+	EndpointRef             string
 	EndpointEnvironmentKeys map[string]string
-	SecretEnvironmentKeys []string
-	TimeoutMilliseconds int
-	RequiredRedisScenes []string
+	SecretEnvironmentKeys   []string
+	TimeoutMilliseconds     int
+	RequiredRedisScenes     []string
 }
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport_fixture",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport_fixture",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -35,14 +33,12 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"beta": {
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -51,14 +47,12 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"gamma": {
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -67,14 +61,12 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"prod": {
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -85,7 +77,9 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 
 func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {
 	byCapability, ok := ExternalProviderBindings[environment]
-	if !ok { return ExternalProviderBinding{}, false }
+	if !ok {
+		return ExternalProviderBinding{}, false
+	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }

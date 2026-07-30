@@ -41,7 +41,7 @@ func TestLearningEventDedupe(t *testing.T) {
 			"feedRequestId":       "frq_dedupe_case",
 			"rank":                1,
 			"modelBucket":         "rule",
-			"modelVersion":        "",
+			"modelChannel":        "",
 			"modelReleaseId":      "",
 			"featureSnapshotAt":   "2026-07-19T07:59:59.500Z",
 			"userFeatureSnapshot": map[string]any{"totalEvents": 3},

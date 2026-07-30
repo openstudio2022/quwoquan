@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import ipaddress
 import json
 import os
 import secrets
 import shlex
-import socket
-import ssl
 import stat
 import subprocess
 import sys
@@ -196,7 +193,6 @@ def open_local_acceptance_session(
     target_name: str,
     profile: str = "",
     subject: str | None = None,
-    resolve_host: str = "127.0.0.1",
     timeout_seconds: float = 30.0,
     deployment_work_root: str | Path | None = None,
 ) -> LocalAcceptanceSession:
@@ -208,11 +204,10 @@ def open_local_acceptance_session(
     """
 
     _require_local_environment(environment, target_name)
-    _require_loopback(resolve_host)
     normalized_base = base_url.rstrip("/") + "/"
     parsed = urlparse(normalized_base)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("local environment auth base URL must be an absolute HTTP(S) URL")
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("local environment auth base URL must be an absolute HTTPS URL")
     if subject is None:
         owner_id, persona_id = _local_acceptance_principal(
             environment,
@@ -278,7 +273,6 @@ def request_local_environment_json(
     *,
     path: str,
     session: LocalAcceptanceSession,
-    resolve_host: str = "127.0.0.1",
     method: str = "GET",
     body: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
@@ -301,10 +295,9 @@ def request_local_environment_json(
         request_headers[name] = value
     if payload is not None:
         request_headers["Content-Type"] = "application/json"
-    status, response = _loopback_json_request(
+    status, response = _trusted_json_request(
         method=method,
         url=base_url.rstrip("/") + normalized_path,
-        resolve_host=resolve_host,
         body=payload,
         headers=request_headers,
         timeout_seconds=timeout_seconds,
@@ -314,47 +307,33 @@ def request_local_environment_json(
     return response
 
 
-def _loopback_json_request(
+def _trusted_json_request(
     *,
     method: str,
     url: str,
-    resolve_host: str,
     body: bytes | None,
     headers: dict[str, str],
     timeout_seconds: float,
 ) -> tuple[int, dict[str, Any]]:
-    _require_loopback(resolve_host)
     target_host = urlparse(url).hostname
     if not target_host:
         raise ValueError("local environment request URL has no hostname")
-    original_getaddrinfo = socket.getaddrinfo
-
-    def getaddrinfo(host: str | bytes | None, *args: Any, **kwargs: Any) -> Any:
-        if host == target_host:
-            return original_getaddrinfo(resolve_host, *args, **kwargs)
-        return original_getaddrinfo(host, *args, **kwargs)
-
     req = request.Request(url, data=body, headers=headers, method=method)
     opener = request.build_opener(
         request.ProxyHandler({}),
-        request.HTTPSHandler(context=ssl._create_unverified_context()),
     )
-    socket.getaddrinfo = getaddrinfo
     try:
-        try:
-            with opener.open(
-                req,
-                timeout=max(1.0, timeout_seconds),
-            ) as response:
-                status = int(response.status)
-                raw = response.read().decode("utf-8", errors="replace")
-        except error.HTTPError as exc:
-            status = int(exc.code)
-            raw = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        with opener.open(
+            req,
+            timeout=max(1.0, timeout_seconds),
+        ) as response:
+            status = int(response.status)
+            raw = response.read().decode("utf-8", errors="replace")
+    except error.HTTPError as exc:
+        status = int(exc.code)
+        raw = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"local environment request transport failed: {type(exc).__name__}") from exc
-    finally:
-        socket.getaddrinfo = original_getaddrinfo
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -362,15 +341,6 @@ def _loopback_json_request(
     if not isinstance(parsed, dict):
         raise RuntimeError(f"local environment request {method} returned non-object JSON HTTP {status}")
     return status, parsed
-
-
-def _require_loopback(resolve_host: str) -> None:
-    try:
-        address = ipaddress.ip_address(resolve_host)
-    except ValueError as exc:
-        raise ValueError("local environment resolve host must be an IP address") from exc
-    if not address.is_loopback:
-        raise ValueError("local environment auth only permits a loopback resolve host")
 
 
 def _require_local_environment(environment: str, target_name: str) -> None:

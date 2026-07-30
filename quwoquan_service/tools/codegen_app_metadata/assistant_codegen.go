@@ -441,20 +441,21 @@ func renderAssistantRuntimeEnumsDart(catalog *assistantEnumCatalog) string {
 		b.WriteString("  }\n")
 		b.WriteString("}\n\n")
 
-		b.WriteString(fmt.Sprintf("%s parse%s(String raw) {\n", enumDef.Name, enumDef.Name))
-		b.WriteString("  switch (raw.trim()) {\n")
-		defaultName := assistantEnumDefault(enumDef.Name)
-		for _, value := range enumDef.Values {
-			if value.Wire == "" {
-				continue
+		if defaultName, hasDefault := assistantEnumDeclaredDefault(enumDef); hasDefault {
+			b.WriteString(fmt.Sprintf("%s parse%s(String raw) {\n", enumDef.Name, enumDef.Name))
+			b.WriteString("  switch (raw.trim()) {\n")
+			for _, value := range enumDef.Values {
+				if value.Wire == "" {
+					continue
+				}
+				b.WriteString(fmt.Sprintf("    case %q:\n", value.Wire))
+				b.WriteString(fmt.Sprintf("      return %s.%s;\n", enumDef.Name, value.Name))
 			}
-			b.WriteString(fmt.Sprintf("    case %q:\n", value.Wire))
-			b.WriteString(fmt.Sprintf("      return %s.%s;\n", enumDef.Name, value.Name))
+			b.WriteString("    default:\n")
+			b.WriteString(fmt.Sprintf("      return %s.%s;\n", enumDef.Name, defaultName))
+			b.WriteString("  }\n")
+			b.WriteString("}\n\n")
 		}
-		b.WriteString("    default:\n")
-		b.WriteString(fmt.Sprintf("      return %s.%s;\n", enumDef.Name, defaultName))
-		b.WriteString("  }\n")
-		b.WriteString("}\n\n")
 
 		b.WriteString(fmt.Sprintf("extension %sX on %s {\n", enumDef.Name, enumDef.Name))
 		b.WriteString("  String get wireName {\n")
@@ -543,22 +544,18 @@ func validateAssistantEnumDefaults(catalog *assistantEnumCatalog) error {
 			}
 			wireOwners[value.Wire] = value.Name
 		}
-		defaultName := assistantEnumDefault(enumDef.Name)
-		for _, value := range enumDef.Values {
-			if value.Name == defaultName {
-				defaultName = ""
-				break
-			}
-		}
-		if defaultName != "" {
-			return fmt.Errorf(
-				"assistant enum %s is missing parser default value %s",
-				enumDef.Name,
-				defaultName,
-			)
-		}
 	}
 	return nil
+}
+
+func assistantEnumDeclaredDefault(enumDef assistantEnumDef) (string, bool) {
+	defaultName := assistantEnumDefault(enumDef.Name)
+	for _, value := range enumDef.Values {
+		if value.Name == defaultName {
+			return defaultName, true
+		}
+	}
+	return "", false
 }
 
 func assistantSubagentPlanExtraFields(schema *assistantSubagentPlanSchema) []assistantFieldDef {

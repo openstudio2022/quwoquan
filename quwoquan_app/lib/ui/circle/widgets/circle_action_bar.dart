@@ -3,6 +3,8 @@ import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CircleJoinPolicy;
 
 /// 圈子首屏 CTA：主=加入圈子/已加入/审批中，次=进入讨论（高保口径 #4 圈子主动作是加入）。
 ///
@@ -15,7 +17,7 @@ class CircleActionBar extends StatelessWidget {
     required this.isDark,
     required this.role,
     required this.joinStatus,
-    this.joinPolicy = 'open',
+    this.joinPolicy = CircleJoinPolicy.open,
     this.onJoinCircle,
     this.onEnterDiscussion,
   });
@@ -23,7 +25,7 @@ class CircleActionBar extends StatelessWidget {
   final bool isDark;
   final CircleRole role;
   final String joinStatus;
-  final String joinPolicy;
+  final CircleJoinPolicy joinPolicy;
   final VoidCallback? onJoinCircle;
   final VoidCallback? onEnterDiscussion;
 
@@ -34,9 +36,11 @@ class CircleActionBar extends StatelessWidget {
     ).withValues(alpha: isDark ? 0.22 : 0.14);
     final neutralFill = AppColors.iosProfileSurface(context);
     final neutralForeground = AppColors.iosLabel(context);
-    final joinLabel = joinPolicy == 'approval'
-        ? CommunityText.circleJoinApproval
-        : CommunityText.joinCircle;
+    final joinLabel = switch (joinPolicy) {
+      CircleJoinPolicy.open => CommunityText.joinCircle,
+      CircleJoinPolicy.approval => CommunityText.circleJoinApproval,
+      CircleJoinPolicy.inviteOnly => CommunityText.circleJoinInviteOnly,
+    };
     final isManager = role == CircleRole.owner || role == CircleRole.admin;
     final isMemberLike =
         joinStatus == 'joined' && (isManager || role == CircleRole.member);
@@ -75,7 +79,9 @@ class CircleActionBar extends StatelessWidget {
       primary = ObjectAction(
         label: joinLabel,
         icon: CupertinoIcons.person_add,
-        onPressed: onJoinCircle,
+        onPressed: joinPolicy == CircleJoinPolicy.inviteOnly
+            ? null
+            : onJoinCircle,
         style: ProfileIosActionStyle.filled,
       );
     }

@@ -17,16 +17,40 @@ class CloudErrorMapper {
     String? requestPath,
     String? retryAfter,
   }) {
-    final code = _readCode(body);
+    return fromDecodedStatusCode(
+      statusCode,
+      body: _decodeJsonBody(body),
+      requestPath: requestPath,
+      retryAfter: retryAfter,
+    );
+  }
+
+  /// Maps an HTTP failure whose JSON body has already been decoded by the
+  /// shared, cancellable Cloud decoder.
+  ///
+  /// Generated operations use this entrypoint so a large error response does
+  /// not synchronously decode the same body several times on the UI isolate.
+  static CloudException fromDecodedStatusCode(
+    int statusCode, {
+    Object? body,
+    String? requestPath,
+    String? retryAfter,
+  }) {
+    final code = _readCodeFromDecoded(body);
     final domainErrorCode = DomainErrorCodeRegistry.fromCode(code);
-    final runtimeResponse = _readRuntimeErrorResponse(
+    final runtimeResponse = _readRuntimeErrorResponseFromDecoded(
       body,
       transportStatus: statusCode,
     );
-    final runtimeFailure = runtimeFailureFromStatusCode(
+    final runtimeFailure = _runtimeFailureFromDecodedStatusCode(
       statusCode,
       body: body,
       requestPath: requestPath,
+      parsedResponse: runtimeResponse,
+    );
+    final userMessage = _parsedUserMessageFromDecodedBody(
+      body,
+      runtimeResponse,
     );
     final suffix = requestPath == null ? '' : ' ($requestPath)';
     final retryDelay = _parseRetryAfter(retryAfter);
@@ -38,7 +62,7 @@ class CloudErrorMapper {
         code: code,
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
-        userMessage: parsedUserMessage(body),
+        userMessage: userMessage,
         requestId: runtimeResponse?.requestId,
         traceId: runtimeResponse?.traceId,
         retryAfter: retryDelay,
@@ -52,7 +76,7 @@ class CloudErrorMapper {
         code: code,
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
-        userMessage: parsedUserMessage(body),
+        userMessage: userMessage,
         requestId: runtimeResponse?.requestId,
         traceId: runtimeResponse?.traceId,
         retryAfter: retryDelay,
@@ -66,7 +90,7 @@ class CloudErrorMapper {
         code: code,
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
-        userMessage: parsedUserMessage(body),
+        userMessage: userMessage,
         requestId: runtimeResponse?.requestId,
         traceId: runtimeResponse?.traceId,
         retryAfter: retryDelay,
@@ -80,7 +104,7 @@ class CloudErrorMapper {
         code: code,
         domainErrorCode: domainErrorCode,
         runtimeFailure: runtimeFailure,
-        userMessage: parsedUserMessage(body),
+        userMessage: userMessage,
         requestId: runtimeResponse?.requestId,
         traceId: runtimeResponse?.traceId,
         retryAfter: retryDelay,
@@ -93,7 +117,7 @@ class CloudErrorMapper {
       code: code,
       domainErrorCode: domainErrorCode,
       runtimeFailure: runtimeFailure,
-      userMessage: parsedUserMessage(body),
+      userMessage: userMessage,
       requestId: runtimeResponse?.requestId,
       traceId: runtimeResponse?.traceId,
       retryAfter: retryDelay,
@@ -295,12 +319,38 @@ class CloudErrorMapper {
     String? body,
     String? requestPath,
   }) {
-    final parsedResponse = _readRuntimeErrorResponse(
+    return runtimeFailureFromDecodedStatusCode(
+      statusCode,
+      body: _decodeJsonBody(body),
+      requestPath: requestPath,
+    );
+  }
+
+  static RuntimeFailure runtimeFailureFromDecodedStatusCode(
+    int statusCode, {
+    Object? body,
+    String? requestPath,
+  }) {
+    final parsedResponse = _readRuntimeErrorResponseFromDecoded(
       body,
       transportStatus: statusCode,
     );
+    return _runtimeFailureFromDecodedStatusCode(
+      statusCode,
+      body: body,
+      requestPath: requestPath,
+      parsedResponse: parsedResponse,
+    );
+  }
+
+  static RuntimeFailure _runtimeFailureFromDecodedStatusCode(
+    int statusCode, {
+    required Object? body,
+    required String? requestPath,
+    required RuntimeErrorResponse? parsedResponse,
+  }) {
     if (parsedResponse != null) return parsedResponse.failure;
-    final code = _readCode(body) ?? _codeFromStatus(statusCode);
+    final code = _readCodeFromDecoded(body) ?? _codeFromStatus(statusCode);
     return RuntimeFailure(
       code: code,
       transportStatus: statusCode,
@@ -326,40 +376,32 @@ class CloudErrorMapper {
     );
   }
 
-  /// Parse structured error code from the response body JSON {"code": "DOMAIN.KIND.reason"}.
-  static String? _readCode(String? body) {
-    if (body == null || body.isEmpty) return null;
-    if (!body.contains('"code"')) return null;
-    try {
-      final map = jsonDecode(body);
-      if (map is Map<String, dynamic>) {
-        final code = map['code'];
-        if (code is String && code.isNotEmpty) return code;
-        // Nested under "error" field
-        final err = map['error'];
-        if (err is Map<String, dynamic>) {
-          final c = err['code'];
-          if (c is String && c.isNotEmpty) return c;
+  static String? _readCodeFromDecoded(Object? body) {
+    if (body is Map<String, dynamic>) {
+      final code = body['code'];
+      if (code is String && code.isNotEmpty) return code;
+      // Nested under "error" field.
+      final error = body['error'];
+      if (error is Map<String, dynamic>) {
+        final nestedCode = error['code'];
+        if (nestedCode is String && nestedCode.isNotEmpty) {
+          return nestedCode;
         }
       }
-    } catch (_) {
-      // If JSON decode fails, fall back to null rather than crashing.
     }
     return null;
   }
 
-  static RuntimeErrorResponse? _readRuntimeErrorResponse(
-    String? body, {
+  static RuntimeErrorResponse? _readRuntimeErrorResponseFromDecoded(
+    Object? body, {
     int? transportStatus,
   }) {
-    if (body == null || body.isEmpty || !body.contains('"code"')) return null;
     try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map<String, dynamic> &&
-          decoded['location'] is Map &&
-          decoded['context'] is Map) {
+      if (body is Map<String, dynamic> &&
+          body['location'] is Map &&
+          body['context'] is Map) {
         return RuntimeErrorResponse.fromJson(
-          decoded,
+          body,
           transportStatus: transportStatus,
         );
       }
@@ -370,40 +412,55 @@ class CloudErrorMapper {
   }
 
   static String? parsedUserMessage(String? body) {
-    final parsed = _readRuntimeErrorResponse(body);
-    final userMessage = parsed?.userMessage.trim() ?? '';
+    return _parsedUserMessageFromDecoded(_decodeJsonBody(body));
+  }
+
+  static String? _parsedUserMessageFromDecoded(Object? body) {
+    return _parsedUserMessageFromDecodedBody(
+      body,
+      _readRuntimeErrorResponseFromDecoded(body),
+    );
+  }
+
+  static String? _parsedUserMessageFromDecodedBody(
+    Object? body,
+    RuntimeErrorResponse? parsedResponse,
+  ) {
+    final userMessage = parsedResponse?.userMessage.trim() ?? '';
     if (userMessage.isNotEmpty) {
       return userMessage;
     }
-    if (body == null || body.isEmpty) {
+    if (body is! Map<String, dynamic>) {
       return null;
     }
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is! Map<String, dynamic>) {
-        return null;
-      }
-      final direct = _firstNonEmptyString(decoded, const <String>[
+    final direct = _firstNonEmptyString(body, const <String>[
+      'userMessage',
+      'user_message',
+      'message',
+      'reasonMessage',
+    ]);
+    if (direct != null) {
+      return direct;
+    }
+    final error = body['error'];
+    if (error is Map<String, dynamic>) {
+      return _firstNonEmptyString(error, const <String>[
         'userMessage',
         'user_message',
         'message',
         'reasonMessage',
       ]);
-      if (direct != null) {
-        return direct;
-      }
-      final error = decoded['error'];
-      if (error is Map<String, dynamic>) {
-        return _firstNonEmptyString(error, const <String>[
-          'userMessage',
-          'user_message',
-          'message',
-          'reasonMessage',
-        ]);
-      }
-    } catch (_) {
-      return null;
     }
+    return null;
+  }
+}
+
+Object? _decodeJsonBody(String? body) {
+  if (body == null || body.isEmpty) return null;
+  try {
+    return jsonDecode(body);
+  } catch (_) {
+    // Malformed error bodies retain the historical status-code fallback.
     return null;
   }
 }

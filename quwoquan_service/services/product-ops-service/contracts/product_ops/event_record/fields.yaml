@@ -1,9 +1,9 @@
+description: EventRecord 固定九字段公共信封；eventType 专属字段只由 event_catalog.yaml 的 typed extension 定义拥有。
 fields:
 - name: logType
   source: logType
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -12,8 +12,7 @@ fields:
 - name: eventType
   source: eventType
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -22,8 +21,7 @@ fields:
 - name: sessionId
   source: sessionId
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: SENSITIVE
   log_policy: mask
   api_exposure: read_write
@@ -32,8 +30,7 @@ fields:
 - name: pageName
   source: pageName
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -42,8 +39,7 @@ fields:
 - name: occurredAt
   source: occurredAt
   type: timestamp
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -52,8 +48,7 @@ fields:
 - name: deviceManufacturer
   source: deviceManufacturer
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -62,8 +57,7 @@ fields:
 - name: deviceModel
   source: deviceModel
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -72,8 +66,7 @@ fields:
 - name: appVersion
   source: appVersion
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
@@ -82,391 +75,41 @@ fields:
 - name: networkClass
   source: networkClass
   type: string
-  constraints:
-  - NOT_NULL
+  constraints: [NOT_NULL]
   classification: PUBLIC
   log_policy: allow
   api_exposure: read_write
   ops_exposure: read
   role: append_only_fact
-- name: durationMs
-  source: durationMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: result
-  source: result
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: callType
-  source: callType
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: participantCount
-  source: participantCount
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: connectTimeMs
-  source: connectTimeMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: mediaConnected
-  source: mediaConnected
-  type: bool
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: reconnectCount
-  source: reconnectCount
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: disconnectReason
-  source: disconnectReason
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: networkQuality
-  source: networkQuality
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: failReasonCode
-  source: failReasonCode
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: errorCode
-  source: errorCode
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: operationId
-  source: operationId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: httpStatus
-  source: httpStatus
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: callStack
-  source: callStack
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: SENSITIVE
-  log_policy: redacted
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: tClickToFirstFrameMs
-  source: tClickToFirstFrameMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: tFirstFrameToShellMs
-  source: tFirstFrameToShellMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: tShellToContentMs
-  source: tShellToContentMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: tClickToContentMs
-  source: tClickToContentMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: hasError
-  source: hasError
-  type: bool
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: readyMs
-  source: readyMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: ttffMs
-  source: ttffMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: rebufferCount
-  source: rebufferCount
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: rebufferMs
-  source: rebufferMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: seekCount
-  source: seekCount
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: seekFailureCount
-  source: seekFailureCount
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: seekCommandMaxMs
-  source: seekCommandMaxMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: seekSettleMaxMs
-  source: seekSettleMaxMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: droppedFrames
-  source: droppedFrames
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: processedVideoFrames
-  source: processedVideoFrames
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: audioUnderrunCount
-  source: audioUnderrunCount
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: rendererMode
-  source: rendererMode
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: decoderQueueMode
-  source: decoderQueueMode
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: decoderFallbackEnabled
-  source: decoderFallbackEnabled
-  type: bool
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: seekEvidenceSource
-  source: seekEvidenceSource
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: declaredDurationMs
-  source: declaredDurationMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: observedDurationMs
-  source: observedDurationMs
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: durationMismatch
-  source: durationMismatch
-  type: bool
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: playbackMode
-  source: playbackMode
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
+types:
+  EventRecordBatchRequest:
+    description: 产品事件批次请求体；单项字段由本对象固定信封与 event_catalog.yaml typed extension 联合约束。
+    fields:
+    - name: events
+      source: events
+      type: '[]object'
+      constraints: [NOT_NULL, MIN_ITEMS_1]
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: write
+      ops_exposure: none
+  RuntimeLogBatchRequest:
+    description: App 运行诊断批次请求体；单项为 RuntimeLogService 严格校验并归一化的结构化诊断记录。
+    fields:
+    - name: records
+      source: records
+      type: '[]object'
+      constraints: [NOT_NULL, MIN_ITEMS_1]
+      classification: SENSITIVE
+      log_policy: metadata_only
+      api_exposure: write
+      ops_exposure: none
+typed_extensions:
+  catalog: event_catalog.yaml
+  discriminator: eventType
+  definitions_key: extension_fields
+  required_by_event_key: required_extensions
+  optional_by_event_key: optional_extensions
+  wire_encoding: flattened
+  unknown_field_policy: reject
 unique_constraints: []

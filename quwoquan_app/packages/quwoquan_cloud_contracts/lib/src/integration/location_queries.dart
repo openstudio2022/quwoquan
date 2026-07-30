@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/integration/location_queries.requests.g.dart';
 
 /// Typed location projection shared by Remote and alpha adapters.
 final class LocationPoiDto {
@@ -57,35 +58,9 @@ final class LocationPoiDto {
   }
 }
 
-final class NearbyLocationQueryParams {
-  const NearbyLocationQueryParams({
-    this.latitude,
-    this.longitude,
-    this.radiusMeters,
-    this.limit = 20,
-  });
 
-  final double? latitude;
-  final double? longitude;
-  final int? radiusMeters;
-  final int limit;
-}
 
-final class LocationSearchQueryParams {
-  const LocationSearchQueryParams({
-    required this.query,
-    this.cityCode,
-    this.latitude,
-    this.longitude,
-    this.limit = 20,
-  });
 
-  final String query;
-  final String? cityCode;
-  final double? latitude;
-  final double? longitude;
-  final int limit;
-}
 
 final class LocationPoiListSlice {
   LocationPoiListSlice(Iterable<LocationPoiDto> items)
@@ -104,43 +79,9 @@ abstract interface class LocationSearchReader {
   Future<LocationPoiListSlice> searchLocations(LocationSearchQueryParams query);
 }
 
-CloudOperationRequestPayload encodeNearbyLocationQuery(
-  NearbyLocationQueryParams query,
-) {
-  if (query.limit <= 0) {
-    throw ArgumentError.value(query.limit, 'limit', 'must be positive');
-  }
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (query.latitude != null) 'lat': '${query.latitude}',
-      if (query.longitude != null) 'lng': '${query.longitude}',
-      if (query.radiusMeters != null) 'radiusMeters': '${query.radiusMeters}',
-      'limit': '${query.limit}',
-    },
-  );
-}
 
-CloudOperationRequestPayload encodeLocationSearchQuery(
-  LocationSearchQueryParams query,
-) {
-  final normalizedQuery = query.query.trim();
-  if (normalizedQuery.isEmpty) {
-    throw ArgumentError.value(query.query, 'query', 'must not be empty');
-  }
-  if (query.limit <= 0) {
-    throw ArgumentError.value(query.limit, 'limit', 'must be positive');
-  }
-  final cityCode = query.cityCode?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'q': normalizedQuery,
-      if (cityCode.isNotEmpty) 'cityCode': cityCode,
-      if (query.latitude != null) 'lat': '${query.latitude}',
-      if (query.longitude != null) 'lng': '${query.longitude}',
-      'limit': '${query.limit}',
-    },
-  );
-}
+
+
 
 LocationPoiListSlice decodeLocationPoiListSlice(Object? response) {
   if (response is! Map<Object?, Object?>) {

@@ -6,6 +6,7 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	commenttransport "quwoquan_service/services/content-service/generated/content/comment/transport"
+	behaviortransport "quwoquan_service/services/content-service/generated/content/content_behavior_fact/transport"
 	reactiontransport "quwoquan_service/services/content-service/generated/content/content_reaction/transport"
 	intersectionvisittransport "quwoquan_service/services/content-service/generated/content/intersection_visit_state/transport"
 	outboundsharetransport "quwoquan_service/services/content-service/generated/content/outbound_share_fact/transport"
@@ -23,6 +24,7 @@ import (
 
 var generatedOperationResolvers = []func(*http.Request) (string, bool){
 	commenttransport.ResolveOperation,
+	behaviortransport.ResolveOperation,
 	reactiontransport.ResolveOperation,
 	intersectionvisittransport.ResolveOperation,
 	outboundsharetransport.ResolveOperation,
@@ -331,10 +333,10 @@ func (h *ContentHandler) handleGetActiveFilterCatalog(w http.ResponseWriter, r *
 
 type GeneratedGetFeedParams = posttransport.GeneratedGetFeedParams
 
-func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetFeedParams {
-	return posttransport.BindGeneratedGetFeedParams(r, defaultLimit)
+func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error) {
+	return posttransport.BindGeneratedGetFeedParams(r)
 }
 
-func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
-	return posttransport.BindGeneratedWritableBodyFromRequest(r, operation)
+func BindGeneratedRequestBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
+	return posttransport.BindGeneratedRequestBodyFromRequest(r, operation)
 }

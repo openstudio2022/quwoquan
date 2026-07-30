@@ -34,6 +34,11 @@ func main() {
 	}
 	contractGraph := source.Graph()
 
+	sharedTypes, err := loadSharedTypes(contractGraph)
+	if err != nil {
+		exitErr(fmt.Errorf("load shared types: %w", err))
+	}
+
 	// Pre-pass: merge events from all sources with same domain_pkg → one events.g.go per pkg.
 	if err := generateMergedEventConstants(manifest, contractGraph); err != nil {
 		exitErr(fmt.Errorf("gen events: %w", err))
@@ -63,6 +68,7 @@ func main() {
 			source:       src,
 			storage:      storage,
 			fields:       fields,
+			sharedTypes:  sharedTypes,
 			migrationSeq: migrationSeq,
 		}
 		ctx.normalizeRootFields()
@@ -281,6 +287,9 @@ type FieldDef struct {
 	Type        string   `yaml:"type"`
 	Constraints []string `yaml:"constraints"`
 	APIExposure string   `yaml:"api_exposure"`
+	// Nullable is how composite types in `types:` blocks express optionality;
+	// entity fields use the NULLABLE constraint instead.
+	Nullable bool `yaml:"nullable"`
 }
 
 func loadStorageYAML(contractGraph *graph.ContractGraph, path string) (*StorageYAML, error) {
@@ -289,6 +298,22 @@ func loadStorageYAML(contractGraph *graph.ContractGraph, path string) (*StorageY
 		return nil, err
 	}
 	return &s, nil
+}
+
+// loadSharedTypes reads the cross-service composite types so that a field
+// declaring `type: TagHeatWindow` becomes a nested struct instead of silently
+// degrading to string, which is what the scalar fallback used to do.
+func loadSharedTypes(contractGraph *graph.ContractGraph) (map[string]EntityFieldsDef, error) {
+	var shared struct {
+		Types map[string]EntityFieldsDef `yaml:"types"`
+	}
+	if err := contractGraph.DecodeDocumentYAML("_shared/types.yaml", &shared); err != nil {
+		return nil, err
+	}
+	if shared.Types == nil {
+		shared.Types = make(map[string]EntityFieldsDef)
+	}
+	return shared.Types, nil
 }
 
 func loadFieldsYAML(contractGraph *graph.ContractGraph, path string) (*FieldsYAML, error) {
@@ -333,7 +358,22 @@ type genContext struct {
 	source       Source
 	storage      *StorageYAML
 	fields       *FieldsYAML
+	sharedTypes  map[string]EntityFieldsDef
 	migrationSeq int
+}
+
+// compositeType resolves a field type name to its composite definition. Local
+// `types:` blocks win over `_shared/types.yaml` so a service can keep a private
+// shape without reserving the shared name.
+func (c *genContext) compositeType(typeName string) (EntityFieldsDef, bool) {
+	if typeName == "" {
+		return EntityFieldsDef{}, false
+	}
+	if definition, ok := c.fields.Types[typeName]; ok && len(definition.Fields) > 0 {
+		return definition, true
+	}
+	definition, ok := c.sharedTypes[typeName]
+	return definition, ok && len(definition.Fields) > 0
 }
 
 func (c *genContext) normalizeRootFields() {

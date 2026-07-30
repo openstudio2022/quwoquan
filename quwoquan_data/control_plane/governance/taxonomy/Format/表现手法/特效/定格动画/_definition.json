@@ -2,6 +2,7 @@
   "label": "定格动画",
   "labelEn": "Stop Motion",
   "description": "定格动画特效",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

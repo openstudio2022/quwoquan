@@ -22,7 +22,7 @@ type InvitationStore interface {
 	FindByLinkCode(ctx context.Context, linkCode string) (*invitationmodel.Invitation, error)
 	ListByInviter(
 		ctx context.Context,
-		inviterSubAccountID string,
+		inviterPersonaID string,
 		status string,
 		limit int,
 		offset int,
@@ -34,6 +34,6 @@ type InvitationStore interface {
 type PersonaOwnerReader interface {
 	ResolveOwnerAccountID(
 		ctx context.Context,
-		subAccountID string,
+		personaID string,
 	) (accountID string, found bool, err error)
 }

@@ -140,7 +140,7 @@ void main() {
       expect(telemetry.events.every((event) => event.succeeded), isTrue);
 
       await _writeRemoteEvidence(<String, Object?>{
-        'schema': 'profile-proposal-remote-api-evidence-v1',
+        'schema': 'profile-proposal-remote-api-evidence',
         'status': 'passed',
         'proposalId': proposalId,
         'createReplayed': createReplay.replayed,

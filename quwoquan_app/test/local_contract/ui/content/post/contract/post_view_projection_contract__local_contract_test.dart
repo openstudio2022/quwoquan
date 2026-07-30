@@ -435,18 +435,18 @@ void main() {
           'title: 成都出发峨眉山周末自驾周末短途（夏季）\n'
           'template: journal\n'
           'markdownDialect: qwq-rich-md\n'
-          'coverImage: asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg\n'
+          'coverImage: asset://data_asset_chuanxi_emeishan_weekend_cover\n'
           '---\n\n'
           '# 成都出发峨眉山周末自驾周末短途（夏季）\n\n'
           '## 周末动线\n\n'
           '出发地成都，这个周末我去 峨眉山：Day1 走核心，Day2 上午补点后返程。\n\n'
           ':::figure id="fig1" layout="fullWidth" caption="周末动线"\n'
-          'asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg\n'
+          'asset://data_asset_chuanxi_emeishan_weekend_cover\n'
           ':::\n\n'
           '## 交通方式\n\n'
           '交通方式选 自驾；单程耗时 1 小时。\n\n'
           ':::figure id="fig2" layout="wrapRight" caption="交通方式"\n'
-          'asset://data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg_2\n'
+          'asset://data_asset_chuanxi_emeishan_weekend_detail_2\n'
           ':::\n';
       final raw = Map<String, dynamic>.from(minArticle)
         ..['articleMarkdown'] = dataArticleMarkdown
@@ -459,21 +459,19 @@ void main() {
           'articleMarkdownDigest': 'sha256:test',
           'assets': <Map<String, dynamic>>[
             {
-              'assetId':
-                  'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg',
+              'assetId': 'data_asset_chuanxi_emeishan_weekend_cover',
               'kind': 'image',
               'scope': 'cold_start',
               'publicSliceKey':
-                  'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/cover.jpg',
+                  'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/cover.jpg',
               'caption': '封面',
             },
             {
-              'assetId':
-                  'data_asset_media_image_post_chuanxi_v2__________v1_cover_jpg_2',
+              'assetId': 'data_asset_chuanxi_emeishan_weekend_detail_2',
               'kind': 'image',
               'scope': 'cold_start',
               'publicSliceKey':
-                  'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/detail-2.jpg',
+                  'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/detail-2.jpg',
               'caption': '配图2',
             },
           ],
@@ -499,7 +497,7 @@ void main() {
             .map((node) => node.imageUrl),
         contains(
           resolvedMedia(
-            'media/image/s/archived-image/post/chuanxi-v2-emeishan-weekend/v1/cover.jpg',
+            'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/cover.jpg',
           ),
         ),
       );

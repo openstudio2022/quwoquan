@@ -47,7 +47,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 		t,
 		http.MethodPatch,
 		"/user/profile",
-		`{"nickname":"search_projection_v2","avatarAssetId":"ua_profile_search_projection","avatarUrl":"https://cdn.example.com/profile-search.png?v=2"}`,
+		`{"nickname":"search_projection_updated","avatarAssetId":"ua_profile_search_projection","avatarUrl":"https://cdn.example.com/profile-search-updated.png"}`,
 		authHeadersForPersona(ownerID, personaID),
 	)
 	if update.Code != http.StatusOK {
@@ -67,7 +67,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 	).Scan(&nickname); err != nil {
 		t.Fatalf("read committed profile: %v", err)
 	}
-	if nickname != "search_projection_v2" {
+	if nickname != "search_projection_updated" {
 		t.Fatalf("profile fact was not committed before ES relay: %q", nickname)
 	}
 	if err := pgPool.QueryRow(
@@ -183,7 +183,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 	}
 }
 
-func TestUserRegisteredCreatesDurableProfileSearchProjectionCoordinate(t *testing.T) {
+func TestAnonymousRegistrationCreatesDurablePersonaProfileSearchProjectionCoordinate(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	login := doRequest(
@@ -213,11 +213,11 @@ func TestUserRegisteredCreatesDurableProfileSearchProjectionCoordinate(t *testin
 		 WHERE user_id=$1`,
 		ownerID,
 	).Scan(&eventType, &profileVersion, &published); err != nil {
-		t.Fatalf("read UserRegistered search checkpoint: %v", err)
+		t.Fatalf("read initial Persona profile search checkpoint: %v", err)
 	}
-	if eventType != "UserRegistered" || profileVersion != 1 || published {
+	if eventType != "UserProfileUpdated" || profileVersion != 1 || published {
 		t.Fatalf(
-			"unexpected UserRegistered search checkpoint: event=%q version=%d published=%v",
+			"unexpected initial Persona profile search checkpoint: event=%q version=%d published=%v",
 			eventType,
 			profileVersion,
 			published,

@@ -46,7 +46,7 @@ Widget _wrap({
         ),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'persona_forward',
+          personaId: 'persona_forward',
           ownerUserId: 'fixture_user_current',
           displayName: '转发测试分身',
           avatarUrl: '',
@@ -74,7 +74,7 @@ void main() {
 
       final card = payload.toMessageCardCommand(message: '请看看');
 
-      expect(card.kind, kind.name);
+      expect(card.kind, kind.wire);
       expect(card.title, payload.title);
       expect(card.subtitle, payload.subtitle);
       expect(card.thumbnailUrl, payload.thumbnailUrl);
@@ -362,7 +362,7 @@ void main() {
     expect(repository.lastConversationId, 'conv_0');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '一起看看');
-    expect(repository.lastCard?.kind, 'profileQr');
+    expect(repository.lastCard?.kind, 'profile_qr');
     expect(repository.lastCard?.message, '一起看看');
     expect(repository.writer.lastCommand?.senderDisplayNameSnapshot, '转发测试分身');
     await tester.pump(const Duration(seconds: 4));

@@ -1,4 +1,3 @@
-version: 1
 # 搜索 SLI/SLO 声明（单一真相源：本文件 + searchmetrics 指标）。
 # 延迟分位数来自 histogram（search_retrieve_duration_seconds_bucket），禁止用算术
 # 平均代替分位数。告警规则落在单一源 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
@@ -84,7 +83,6 @@ ab:
 # baseline=日常稳态，peak=业务高峰，spike=突发（营销/热点）。RPS/并发为单 search-service
 # 实例可承载目标；弹性靠水平扩实例 + ES 数据节点/副本，不靠单实例堆叠。
 load_model:
-  version: 1
   traffic_classes:
     suggest:
       description: 输入即时联想；App 本地优先，云侧轻量联想可选

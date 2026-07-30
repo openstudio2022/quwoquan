@@ -15,20 +15,24 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 
+	"quwoquan_service/generated/linktemplates"
 	rtobs "quwoquan_service/runtime/observability"
 	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/user-service/generated/account/user_account"
 	event "quwoquan_service/services/user-service/internal/account/user_account/domain/user/event"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
+	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
 )
 
 type ProfileService struct {
-	profiles userrepo.UserProfileStore
-	personas PersonaStore
-	pcache   ProfileSnapshotCache
-	events   UserEventPublisher
-	sync     UserSyncStream
+	profiles  userrepo.UserProfileStore
+	personas  PersonaStore
+	commands  personaports.PersonaCommandStore
+	projector userrepo.PersonaProfileProjector
+	pcache    ProfileSnapshotCache
+	events    UserEventPublisher
+	sync      UserSyncStream
 
 	regionTags           RegionTagResolver
 	profileTags          ProfileTagValidator
@@ -73,29 +77,39 @@ func WithProfileTagValidator(validator ProfileTagValidator) ProfileServiceOption
 func NewProfileService(
 	profiles userrepo.UserProfileStore,
 	personas PersonaStore,
+	commands personaports.PersonaCommandStore,
+	projector userrepo.PersonaProfileProjector,
 	pcache ProfileSnapshotCache,
 	events UserEventPublisher,
 	sync UserSyncStream,
 	options ...ProfileServiceOption,
-) *ProfileService {
+) (*ProfileService, error) {
+	if profiles == nil || personas == nil || commands == nil || projector == nil ||
+		pcache == nil {
+		return nil, errors.New(
+			"ProfileService requires account reader, Persona reader/commands/projector and cache",
+		)
+	}
 	events = requireUserEventPublisher(events)
 	service := &ProfileService{
-		profiles:             profiles,
-		personas:             personas,
-		pcache:               pcache,
-		events:               events,
-		sync:                 sync,
-		regionTags:           PathRegionTagResolver{},
-		profileTags:          PathProfileTagValidator{},
-		qrTokenSecret:        defaultProfileQRTokenSecret(),
-		qrTokenTTL:           365 * 24 * time.Hour,
+		profiles:      profiles,
+		personas:      personas,
+		commands:      commands,
+		projector:     projector,
+		pcache:        pcache,
+		events:        events,
+		sync:          sync,
+		regionTags:    PathRegionTagResolver{},
+		profileTags:   PathProfileTagValidator{},
+		qrTokenSecret: defaultProfileQRTokenSecret(),
+		qrTokenTTL:    365 * 24 * time.Hour,
 	}
 	for _, option := range options {
 		if option != nil {
 			option(service)
 		}
 	}
-	return service
+	return service, nil
 }
 
 func (s *ProfileService) GetProfile(ctx context.Context, userID string) (snap *model.FullSnapshot, err error) {
@@ -137,25 +151,6 @@ func (s *ProfileService) UpdateProfile(
 		attribute.String("user.id", userID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	commandStore, ok := s.profiles.(userrepo.UserProfileCommandStore)
-	if !ok {
-		return nil, generated.AppErrorFromInternalError(
-			"profile command store is not configured",
-		)
-	}
-	profileCommandMeta := userrepo.UserProfileCommandMeta{
-		IdempotencyKey: meta.IdempotencyKey,
-		CommandDigest:  meta.CommandDigest,
-	}
-	if _, replayed, replayErr := commandStore.ReplayUserProfileCommand(
-		ctx,
-		profileCommandMeta,
-	); replayErr != nil {
-		return nil, mapUserProfileCommandError(replayErr)
-	} else if replayed {
-		return s.profiles.FindByID(ctx, userID)
-	}
-
 	profile, err := s.profiles.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -163,31 +158,39 @@ func (s *ProfileService) UpdateProfile(
 	if profile == nil {
 		return nil, generated.AppErrorFromUserNotFound("user not found: " + userID)
 	}
+	persona, err := s.personas.FindActiveByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if persona == nil {
+		return nil, generated.AppErrorFromInternalError(
+			"active Persona is required for public profile mutation",
+		)
+	}
 
-	// 昵称已不再要求全局唯一（唯一性由 userId/subAccountId/userHandle 承担）；
-	// 用户主动改名后置 nicknameCustomized=true，本人主页据此不再展示编辑画笔。
+	// 昵称已不再要求全局唯一（唯一性由 userId/personaId/userHandle 承担）；
+	// 用户主动改名后置 nicknameCustomized=true。公开资料只写 active Persona，
+	// UserAccount 的同名字段由 durable projector 物化为只读投影。
 	// nickname 与 displayName 互为别名：编辑页可能任一字段携带新昵称。
-	nicknameChanged := false
 	newNickname := ""
 	if command.Nickname != nil && strings.TrimSpace(*command.Nickname) != "" {
 		newNickname = strings.TrimSpace(*command.Nickname)
 	} else if command.DisplayName != nil && strings.TrimSpace(*command.DisplayName) != "" {
 		newNickname = strings.TrimSpace(*command.DisplayName)
 	}
-	if newNickname != "" && newNickname != strings.TrimSpace(profile.Nickname) {
-		profile.Nickname = newNickname
-		profile.NicknameCustomized = true
-		nicknameChanged = true
+	if newNickname != "" && newNickname != strings.TrimSpace(persona.DisplayName) {
+		persona.DisplayName = newNickname
+		persona.NicknameCustomized = true
 	}
-	oldAvatarURL := strings.TrimSpace(profile.AvatarURL)
-	oldAvatarAssetID := strings.TrimSpace(profile.AvatarAssetID)
-	oldAvatarVersion := profile.AvatarVersion
+	oldAvatarURL := strings.TrimSpace(persona.AvatarURL)
+	oldAvatarAssetID := strings.TrimSpace(persona.AvatarMediaAssetID)
+	oldAvatarVersion := persona.AvatarVersion
 	avatarChanged := false
 	if command.AvatarAssetID != nil {
 		assetID := strings.TrimSpace(*command.AvatarAssetID)
 		if assetID != "" {
-			profile.AvatarAssetID = assetID
-			profile.AvatarURL = profileMediaURL("profile_avatar", assetID)
+			persona.AvatarMediaAssetID = assetID
+			persona.AvatarURL = profileMediaURL("profile_avatar", assetID)
 		}
 	}
 	if command.AvatarURL != nil {
@@ -195,26 +198,26 @@ func (s *ProfileService) UpdateProfile(
 		if isLocalProfileMediaReference(nextAvatarURL) {
 			return nil, generated.AppErrorFromProfileInvalidMediaAsset("avatarUrl must be uploaded before PATCH")
 		}
-		if strings.TrimSpace(profile.AvatarAssetID) == "" && nextAvatarURL != "" {
+		if strings.TrimSpace(persona.AvatarMediaAssetID) == "" && nextAvatarURL != "" {
 			return nil, generated.AppErrorFromProfileInvalidMediaAsset("avatarAssetId is required for avatar update")
 		}
 		if nextAvatarURL != "" {
-			profile.AvatarURL = nextAvatarURL
+			persona.AvatarURL = nextAvatarURL
 		}
 	}
-	if strings.TrimSpace(profile.AvatarURL) != oldAvatarURL || strings.TrimSpace(profile.AvatarAssetID) != oldAvatarAssetID {
+	if strings.TrimSpace(persona.AvatarURL) != oldAvatarURL ||
+		strings.TrimSpace(persona.AvatarMediaAssetID) != oldAvatarAssetID {
 		avatarChanged = true
-		profile.AvatarVersion++
-		if profile.AvatarVersion <= 0 {
-			profile.AvatarVersion = 1
+		persona.AvatarVersion++
+		if persona.AvatarVersion <= 0 {
+			persona.AvatarVersion = 1
 		}
 	}
-	backgroundChanged := false
 	if command.BackgroundAssetID != nil {
 		assetID := strings.TrimSpace(*command.BackgroundAssetID)
 		if assetID != "" {
-			profile.BackgroundAssetID = assetID
-			profile.BackgroundURL = profileMediaURL("profile_cover", assetID)
+			persona.BackgroundMediaAssetID = assetID
+			persona.BackgroundURL = profileMediaURL("profile_cover", assetID)
 		}
 	}
 	if command.BackgroundURL != nil {
@@ -222,26 +225,25 @@ func (s *ProfileService) UpdateProfile(
 		if isLocalProfileMediaReference(nb) {
 			return nil, generated.AppErrorFromProfileInvalidMediaAsset("backgroundUrl must be uploaded before PATCH")
 		}
-		if strings.TrimSpace(profile.BackgroundAssetID) == "" && nb != "" {
+		if strings.TrimSpace(persona.BackgroundMediaAssetID) == "" && nb != "" {
 			return nil, generated.AppErrorFromProfileInvalidMediaAsset("backgroundAssetId is required for cover update")
 		}
-		if nb != strings.TrimSpace(profile.BackgroundURL) {
-			profile.BackgroundURL = nb
-			backgroundChanged = true
+		if nb != strings.TrimSpace(persona.BackgroundURL) {
+			persona.BackgroundURL = nb
 		}
 	}
 	if command.Bio != nil {
 		if len([]rune(*command.Bio)) > 60 {
 			return nil, generated.AppErrorFromInvalidArgument("bio exceeds 60 characters")
 		}
-		profile.Bio = *command.Bio
+		persona.Bio = *command.Bio
 	}
 	if command.Gender != nil {
 		gender := strings.TrimSpace(*command.Gender)
 		if !isValidProfileGender(gender) {
 			return nil, generated.AppErrorFromInvalidArgument("invalid gender")
 		}
-		profile.Gender = gender
+		persona.Gender = gender
 	}
 	if command.BirthDate != nil {
 		birthDate, err := normalizeProfileBirthDate(*command.BirthDate, time.Now())
@@ -249,9 +251,9 @@ func (s *ProfileService) UpdateProfile(
 			return nil, generated.AppErrorFromInvalidArgument(err.Error())
 		}
 		if birthDate == "" {
-			profile.BirthDate = nil
+			persona.BirthDate = nil
 		} else {
-			profile.BirthDate = &birthDate
+			persona.BirthDate = &birthDate
 		}
 	}
 	if command.RegionTagRef != nil {
@@ -264,18 +266,16 @@ func (s *ProfileService) UpdateProfile(
 		if err != nil {
 			return nil, generated.AppErrorFromProfileInvalidRegion(err.Error())
 		}
-		profile.RegionCode = regionTagRef
-		profile.Region = region
+		persona.RegionTagRef = regionTagRef
+		persona.Region = region
 	} else if command.Region != nil {
 		if strings.TrimSpace(*command.Region) != "" {
 			return nil, generated.AppErrorFromProfileInvalidRegion("regionTagRef is required")
 		}
-		profile.Region = ""
-		profile.RegionCode = ""
+		persona.Region = ""
+		persona.RegionTagRef = ""
 	}
-	var tagProjection userrepo.UserProfileTagProjection
-	tagProjectionRequired := false
-	if nextTags, ok := profileIdentityTagsFromUpdate(command, parsePgTextArray(profile.IdentityTags)); ok {
+	if nextTags, ok := profileIdentityTagsFromUpdate(command, persona.IdentityTags); ok {
 		if err := validateProfileTagRefs(nextTags); err != nil {
 			return nil, generated.AppErrorFromProfileInvalidTagRef(err.Error())
 		}
@@ -306,74 +306,51 @@ func (s *ProfileService) UpdateProfile(
 			}
 			return nil, generated.AppErrorFromProfileInvalidTagRef(err.Error())
 		}
-		profile.IdentityTags = encodeStringArray(nextTags)
-		tagRefs := make([]string, 0, len(interestRefs)+1)
-		if occupationTagRef != "" {
-			tagRefs = append(tagRefs, occupationTagRef)
+		persona.IdentityTags = nextTags
+		persona.TaxonomyReleaseID = expectedTaxonomyReleaseID
+	}
+	if command.ProfileVisibility != nil {
+		switch strings.TrimSpace(*command.ProfileVisibility) {
+		case "public":
+			persona.IsPrivate = false
+		case "private":
+			persona.IsPrivate = true
+		default:
+			return nil, generated.AppErrorFromInvalidArgument(
+				"profileVisibility must be public or private",
+			)
 		}
-		tagRefs = append(tagRefs, interestRefs...)
-		tagProjection.TagRefs = tagRefs
-		tagProjection.TaxonomyReleaseID = expectedTaxonomyReleaseID
-		tagProjectionRequired = true
 	}
-
-	// 任一资料字段变更都递增 profileVersion，供端侧增量校验与缓存失效。
-	profile.ProfileVersion++
-	if profile.ProfileVersion <= 0 {
-		profile.ProfileVersion = 1
-	}
-	profile.UpdatedAt = time.Now().UTC()
-
-	var projection *userrepo.UserProfileTagProjection
-	if tagProjectionRequired {
-		tagProjection.UserID = profile.UserID
-		profileVersion := int64(profile.ProfileVersion)
-		tagProjection.ProfileVersion = profileVersion
-		tagProjection.OccurredAt = profile.UpdatedAt
-		tagProjection.EventID = profileTagProjectionEventID(
-			profile.UserID,
-			profileVersion,
-		)
-		projection = &tagProjection
-	}
-	searchProjections := []userrepo.UserProfileSearchProjection{{
-		UserID:         profile.UserID,
-		ProfileVersion: int64(profile.ProfileVersion),
-		EventType:      event.UserProfileUpdated,
-		OccurredAt:     profile.UpdatedAt,
-	}}
-	if avatarChanged {
-		searchProjections = append(
-			searchProjections,
-			userrepo.UserProfileSearchProjection{
-				UserID:         profile.UserID,
-				ProfileVersion: int64(profile.ProfileVersion),
-				EventType:      event.UserAvatarUpdated,
-				OccurredAt:     profile.UpdatedAt,
-			},
-		)
-	}
-	commandResult, err := commandStore.CommitUserProfileCommand(
+	persona.InheritsProfileFromOwner = false
+	persona.LastProfileSyncSource = "persona_edit"
+	now := time.Now().UTC()
+	persona.LastProfileSyncAt = &now
+	normalizePersonaPersistence(persona)
+	commandResult, err := s.commands.CommitMutation(
 		ctx,
-		profile,
-		projection,
-		searchProjections,
-		profileCommandMeta,
+		persona,
+		personaports.PersonaUpdatedEvent,
+		meta,
 	)
 	if err != nil {
-		return nil, mapUserProfileCommandError(err)
+		return nil, mapPersonaProfileCommandError(err)
 	}
-	if commandResult.Replayed {
-		return s.profiles.FindByID(ctx, userID)
+	profile, err = s.projector.Project(
+		ctx,
+		commandResult.PersonaID,
+		commandResult.Version,
+	)
+	if err != nil {
+		return nil, generated.AppErrorFromInternalError(
+			fmt.Sprintf("project committed Persona profile: %v", err),
+		)
 	}
-
-	// 把继承自 owner 基线的展示字段同步到当前激活分身，
-	// 保证本人主页（读取 persona.displayName/avatar/background）保存后立即回显。
-	s.propagateOwnerProfileToActivePersona(ctx, userID, profile, nicknameChanged, avatarChanged, backgroundChanged)
-
 	_ = s.pcache.Del(ctx, userID)
+	if commandResult.Replayed {
+		return profile, nil
+	}
 	updatedAt := profile.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00")
-	identityTags := parsePgTextArray(profile.IdentityTags)
+	identityTags := append([]string(nil), persona.IdentityTags...)
 	occupationTagRef := firstTagWithPrefix(identityTags, profileOccupationRootTagRef+"/")
 	interestRefs := interestTagRefs(identityTags)
 	if err := s.events.PublishUserEvent(ctx, event.UserProfileUpdated, userID, userID, map[string]any{
@@ -393,7 +370,7 @@ func (s *ProfileService) UpdateProfile(
 	}); err != nil {
 		return nil, err
 	}
-	if profile.AvatarVersion != oldAvatarVersion {
+	if avatarChanged && profile.AvatarVersion != oldAvatarVersion {
 		avatarPayload := map[string]any{
 			"userId":         profile.UserID,
 			"avatarAssetId":  profile.AvatarAssetID,
@@ -414,13 +391,13 @@ func (s *ProfileService) UpdateProfile(
 	return profile, nil
 }
 
-func mapUserProfileCommandError(err error) error {
+func mapPersonaProfileCommandError(err error) error {
 	switch {
-	case errors.Is(err, userrepo.ErrUserProfileVersionConflict):
+	case errors.Is(err, personaports.ErrPersonaVersionConflict):
 		return generated.AppErrorFromProfileVersionConflict(err.Error())
-	case errors.Is(err, userrepo.ErrUserProfileIdempotencyConflict):
+	case errors.Is(err, personaports.ErrPersonaIdempotencyConflict):
 		return generated.AppErrorFromProfileIdempotencyConflict(err.Error())
-	case errors.Is(err, userrepo.ErrUserProfileCommandMetaRequired):
+	case errors.Is(err, personaports.ErrPersonaCommandMetaRequired):
 		return generated.AppErrorFromInvalidArgument(err.Error())
 	default:
 		return err
@@ -448,45 +425,39 @@ func (s *ProfileService) GetEditSnapshot(ctx context.Context, userID string, cre
 	if profile == nil {
 		return nil, generated.AppErrorFromUserNotFound("user not found: " + userID)
 	}
-	persona, _ := s.personas.FindActiveByUserID(ctx, userID)
-	subAccountID := userID
-	displayName := strings.TrimSpace(profile.Nickname)
-	userHandle := ""
-	avatarURL := profile.AvatarURL
-	avatarAssetID := profile.AvatarAssetID
-	avatarVersion := profile.AvatarVersion
-	backgroundURL := profile.BackgroundURL
-	backgroundAssetID := profile.BackgroundAssetID
-	if persona != nil {
-		subAccountID = strings.TrimSpace(persona.SubAccountID)
-		userHandle = resolvedPersonaUserHandle(persona)
-		if strings.TrimSpace(persona.DisplayName) != "" {
-			displayName = strings.TrimSpace(persona.DisplayName)
-		}
-		if strings.TrimSpace(persona.AvatarURL) != "" {
-			avatarURL = persona.AvatarURL
-			avatarVersion = resolvedPersonaAvatarVersion(persona)
-		}
-		if strings.TrimSpace(persona.BackgroundURL) != "" {
-			backgroundURL = persona.BackgroundURL
-		}
+	persona, err := s.personas.FindActiveByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
+	if persona == nil {
+		return nil, generated.AppErrorFromInternalError(
+			"active Persona is required for profile edit snapshot",
+		)
+	}
+	personaID := strings.TrimSpace(persona.PersonaID)
+	displayName := strings.TrimSpace(persona.DisplayName)
+	userHandle := resolvedPersonaUserHandle(persona)
+	avatarURL := strings.TrimSpace(persona.AvatarURL)
+	avatarAssetID := strings.TrimSpace(persona.AvatarMediaAssetID)
+	avatarVersion := resolvedPersonaAvatarVersion(persona)
+	backgroundURL := strings.TrimSpace(persona.BackgroundURL)
+	backgroundAssetID := strings.TrimSpace(persona.BackgroundMediaAssetID)
 	if userHandle == "" {
-		userHandle = subAccountID
+		userHandle = personaID
 	}
-	tags := parsePgTextArray(profile.IdentityTags)
+	tags := append([]string(nil), persona.IdentityTags...)
 	birthDate := ""
-	if profile.BirthDate != nil {
-		birthDate = strings.TrimSpace(*profile.BirthDate)
+	if persona.BirthDate != nil {
+		birthDate = strings.TrimSpace(*persona.BirthDate)
 	}
 	versionedAvatarURL := avatarURLWithVersion(avatarURL, avatarVersion)
-	qrCard, err := s.buildProfileQRCard(ctx, profile.UserID, subAccountID, userHandle, versionedAvatarURL, defaultString(displayName, profile.UserID), strings.TrimSpace(profile.Region))
+	qrCard, err := s.buildProfileQRCard(ctx, profile.UserID, personaID, userHandle, versionedAvatarURL, defaultString(displayName, profile.UserID), strings.TrimSpace(persona.Region))
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"ownerUserId":       profile.UserID,
-		"subAccountId":      subAccountID,
+		"personaId":         personaID,
 		"avatarUrl":         versionedAvatarURL,
 		"avatarAssetId":     avatarAssetID,
 		"avatarVersion":     avatarVersion,
@@ -494,18 +465,18 @@ func (s *ProfileService) GetEditSnapshot(ctx context.Context, userID string, cre
 		"backgroundAssetId": backgroundAssetID,
 		"nickname":          defaultString(displayName, profile.UserID),
 		"displayName":       defaultString(displayName, profile.UserID),
-		"gender":            defaultString(profile.Gender, "unspecified"),
+		"gender":            defaultString(persona.Gender, "unspecified"),
 		"birthDate":         birthDate,
-		"region":            strings.TrimSpace(profile.Region),
-		"regionTagRef":      strings.TrimSpace(profile.RegionCode),
+		"region":            strings.TrimSpace(persona.Region),
+		"regionTagRef":      strings.TrimSpace(persona.RegionTagRef),
 		"userHandle":        userHandle,
-		"bio":               profile.Bio,
+		"bio":               persona.Bio,
 		"identityTags":      tags,
 		"occupationTagRef":  firstTagWithPrefix(tags, profileOccupationRootTagRef+"/"),
 		"interestTagRefs":   interestTagRefs(tags),
 		"phoneCredential":   phoneCredentialSummary(credentials),
 		"qrCard":            qrCard,
-		"updatedAt":         defaultTime(profile.UpdatedAt).Format(time.RFC3339),
+		"updatedAt":         defaultTime(persona.UpdatedAt).Format(time.RFC3339),
 	}, nil
 }
 
@@ -521,66 +492,24 @@ func (s *ProfileService) GetQRCard(ctx context.Context, userID string) (_ map[st
 	if profile == nil {
 		return nil, generated.AppErrorFromUserNotFound("user not found: " + userID)
 	}
-	persona, _ := s.personas.FindActiveByUserID(ctx, userID)
-	handle := userID
-	displayName := defaultString(profile.Nickname, profile.UserID)
-	avatarURL := profile.AvatarURL
-	avatarVersion := profile.AvatarVersion
-	if persona != nil {
-		handle = resolvedPersonaUserHandle(persona)
-		if strings.TrimSpace(persona.DisplayName) != "" {
-			displayName = strings.TrimSpace(persona.DisplayName)
-		}
-		if strings.TrimSpace(persona.AvatarURL) != "" {
-			avatarURL = persona.AvatarURL
-			avatarVersion = resolvedPersonaAvatarVersion(persona)
-		}
+	persona, err := s.personas.FindActiveByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
+	if persona == nil {
+		return nil, generated.AppErrorFromInternalError(
+			"active Persona is required for profile QR card",
+		)
+	}
+	handle := resolvedPersonaUserHandle(persona)
+	displayName := defaultString(persona.DisplayName, profile.UserID)
+	avatarURL := persona.AvatarURL
+	avatarVersion := resolvedPersonaAvatarVersion(persona)
 	if strings.TrimSpace(handle) == "" {
 		handle = userID
 	}
-	subAccountID := userID
-	if persona != nil && strings.TrimSpace(persona.SubAccountID) != "" {
-		subAccountID = strings.TrimSpace(persona.SubAccountID)
-	}
-	return s.buildProfileQRCard(ctx, profile.UserID, subAccountID, handle, avatarURLWithVersion(avatarURL, avatarVersion), displayName, strings.TrimSpace(profile.Region))
-}
-
-// propagateOwnerProfileToActivePersona 把 owner 基线变更同步到当前激活分身的继承字段。
-// 仅在分身仍继承（InheritsProfileFromOwner 或该字段未被 override）时覆盖，避免破坏分身自定义。
-func (s *ProfileService) propagateOwnerProfileToActivePersona(
-	ctx context.Context,
-	userID string,
-	profile *model.UserProfile,
-	nicknameChanged, avatarChanged, backgroundChanged bool,
-) {
-	if s.personas == nil || (!nicknameChanged && !avatarChanged && !backgroundChanged) {
-		return
-	}
-	active, err := s.personas.FindActiveByUserID(ctx, userID)
-	if err != nil || active == nil {
-		return
-	}
-	overridden := parseProfileFieldList(active.OverriddenProfileFields)
-	changed := false
-	if nicknameChanged && !containsField(overridden, "displayName") {
-		active.DisplayName = profile.Nickname
-		changed = true
-	}
-	if avatarChanged && !containsField(overridden, "avatarUrl") {
-		if active.AvatarURL != profile.AvatarURL || active.AvatarVersion != profile.AvatarVersion {
-			active.AvatarURL = profile.AvatarURL
-			active.AvatarVersion = profile.AvatarVersion
-			changed = true
-		}
-	}
-	if backgroundChanged && !containsField(overridden, "backgroundUrl") {
-		active.BackgroundURL = profile.BackgroundURL
-		changed = true
-	}
-	if changed {
-		_ = s.personas.Update(ctx, active)
-	}
+	personaID := strings.TrimSpace(persona.PersonaID)
+	return s.buildProfileQRCard(ctx, profile.UserID, personaID, handle, avatarURLWithVersion(avatarURL, avatarVersion), displayName, strings.TrimSpace(persona.Region))
 }
 
 func profileIdentityTagsFromUpdate(command ProfileUpdateCommand, current []string) ([]string, bool) {
@@ -664,24 +593,6 @@ func dedupeStrings(values []string) []string {
 	return result
 }
 
-func profileTagProjectionEventID(userID string, profileVersion int64) string {
-	digest := sha256.Sum256(
-		[]byte(fmt.Sprintf("%s\x00profile-tags\x00%d", userID, profileVersion)),
-	)
-	return fmt.Sprintf("profile-tags-%x", digest[:16])
-}
-
-func encodeStringArray(values []string) string {
-	normalized := dedupeStrings(values)
-	if len(normalized) == 0 {
-		return "{}"
-	}
-	for i, value := range normalized {
-		normalized[i] = `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
-	}
-	return "{" + strings.Join(normalized, ",") + "}"
-}
-
 func firstTagWithPrefix(tags []string, prefix string) string {
 	for _, tag := range tags {
 		if strings.HasPrefix(strings.TrimSpace(tag), prefix) {
@@ -717,15 +628,15 @@ func phoneCredentialSummary(credentials []ProfileCredentialView) map[string]any 
 	return nil
 }
 
-func (s *ProfileService) buildProfileQRCard(ctx context.Context, ownerUserID, subAccountID, handle, avatarURL, displayName, region string) (map[string]any, error) {
+func (s *ProfileService) buildProfileQRCard(ctx context.Context, ownerUserID, personaID, handle, avatarURL, displayName, region string) (map[string]any, error) {
 	resolvedHandle := strings.TrimSpace(handle)
 	if resolvedHandle == "" {
-		resolvedHandle = strings.TrimSpace(subAccountID)
+		resolvedHandle = strings.TrimSpace(personaID)
 	}
 	if resolvedHandle == "" {
 		return nil, generated.AppErrorFromProfileQrTokenInvalid("profile handle is empty")
 	}
-	rawToken, token, err := s.ensureProfileQRToken(ctx, ownerUserID, subAccountID, resolvedHandle, "v1")
+	rawToken, token, err := s.ensureProfileQRToken(ctx, ownerUserID, personaID, resolvedHandle)
 	if err != nil {
 		return nil, err
 	}
@@ -735,7 +646,6 @@ func (s *ProfileService) buildProfileQRCard(ctx context.Context, ownerUserID, su
 		"publicProfileUrl": publicURL,
 		"qrPayload":        qrPayload,
 		"qrTokenId":        token.TokenID,
-		"styleVersion":     token.StyleVersion,
 		"avatarUrl":        strings.TrimSpace(avatarURL),
 		"displayName":      strings.TrimSpace(displayName),
 		"region":           strings.TrimSpace(region),
@@ -769,23 +679,19 @@ func (s *ProfileService) ResolveProfileQRToken(ctx context.Context, handle, rawT
 		return nil, generated.AppErrorFromProfileQrTokenInvalid("qr token handle mismatch")
 	}
 	return map[string]any{
-		"subAccountId":     strings.TrimSpace(token.SubAccountID),
+		"personaId":        strings.TrimSpace(token.PersonaID),
 		"userHandle":       strings.TrimSpace(token.UserHandle),
 		"publicProfileUrl": s.profilePublicURL(token.UserHandle),
 		"scanStatus":       "accepted",
 	}, nil
 }
 
-func (s *ProfileService) ensureProfileQRToken(ctx context.Context, ownerUserID, subAccountID, handle, styleVersion string) (string, *model.ProfileQrToken, error) {
+func (s *ProfileService) ensureProfileQRToken(ctx context.Context, ownerUserID, personaID, handle string) (string, *model.ProfileQrToken, error) {
 	if s.qrTokens == nil {
 		return "", nil, generated.AppErrorFromProfileQrTokenInvalid("profile qr token store unavailable")
 	}
 	now := time.Now().UTC()
-	resolvedStyle := strings.TrimSpace(styleVersion)
-	if resolvedStyle == "" {
-		resolvedStyle = "v1"
-	}
-	token, err := s.qrTokens.FindActiveByOwnerAndHandle(ctx, ownerUserID, handle, resolvedStyle)
+	token, err := s.qrTokens.FindActiveByOwnerAndHandle(ctx, ownerUserID, handle)
 	if err != nil {
 		return "", nil, err
 	}
@@ -793,7 +699,7 @@ func (s *ProfileService) ensureProfileQRToken(ctx context.Context, ownerUserID, 
 	if token != nil && token.ExpiresAt != nil {
 		expiresAt = token.ExpiresAt.UTC()
 	}
-	rawToken := s.profileQRRawToken(ownerUserID, subAccountID, handle, resolvedStyle, expiresAt)
+	rawToken := s.profileQRRawToken(ownerUserID, personaID, handle, expiresAt)
 	tokenHash := profileQRTokenHash(rawToken)
 	if token != nil && (token.ExpiresAt == nil || now.Before(token.ExpiresAt.UTC())) {
 		changed := false
@@ -801,8 +707,8 @@ func (s *ProfileService) ensureProfileQRToken(ctx context.Context, ownerUserID, 
 			token.TokenHash = tokenHash
 			changed = true
 		}
-		if strings.TrimSpace(token.SubAccountID) != strings.TrimSpace(subAccountID) {
-			token.SubAccountID = strings.TrimSpace(subAccountID)
+		if strings.TrimSpace(token.PersonaID) != strings.TrimSpace(personaID) {
+			token.PersonaID = strings.TrimSpace(personaID)
 			changed = true
 		}
 		if changed {
@@ -813,14 +719,13 @@ func (s *ProfileService) ensureProfileQRToken(ctx context.Context, ownerUserID, 
 		return rawToken, token, nil
 	}
 	token = &model.ProfileQrToken{
-		TokenID:      "pqr_" + shortTokenID(tokenHash),
-		TokenHash:    tokenHash,
-		OwnerUserID:  strings.TrimSpace(ownerUserID),
-		SubAccountID: strings.TrimSpace(subAccountID),
-		UserHandle:   strings.TrimSpace(handle),
-		StyleVersion: resolvedStyle,
-		Status:       "active",
-		ExpiresAt:    &expiresAt,
+		TokenID:     "pqr_" + shortTokenID(tokenHash),
+		TokenHash:   tokenHash,
+		OwnerUserID: strings.TrimSpace(ownerUserID),
+		PersonaID:   strings.TrimSpace(personaID),
+		UserHandle:  strings.TrimSpace(handle),
+		Status:      "active",
+		ExpiresAt:   &expiresAt,
 	}
 	if err := s.qrTokens.Create(ctx, token); err != nil {
 		return "", nil, err
@@ -828,12 +733,11 @@ func (s *ProfileService) ensureProfileQRToken(ctx context.Context, ownerUserID, 
 	return rawToken, token, nil
 }
 
-func (s *ProfileService) profileQRRawToken(ownerUserID, subAccountID, handle, styleVersion string, expiresAt time.Time) string {
+func (s *ProfileService) profileQRRawToken(ownerUserID, personaID, handle string, expiresAt time.Time) string {
 	payload := strings.Join([]string{
 		strings.TrimSpace(ownerUserID),
-		strings.TrimSpace(subAccountID),
+		strings.TrimSpace(personaID),
 		strings.TrimSpace(handle),
-		strings.TrimSpace(styleVersion),
 		expiresAt.UTC().Format(time.RFC3339),
 	}, "|")
 	mac := hmac.New(sha256.New, s.qrTokenSecret)
@@ -842,7 +746,8 @@ func (s *ProfileService) profileQRRawToken(ownerUserID, subAccountID, handle, st
 }
 
 func (s *ProfileService) profilePublicURL(handle string) string {
-	return strings.TrimRight(s.publicProfileBaseURL, "/") + "/u/" + url.PathEscape(strings.TrimSpace(handle))
+	return strings.TrimRight(s.publicProfileBaseURL, "/") +
+		linktemplates.UserWebPath(handle)
 }
 
 func profileQRTokenHash(rawToken string) string {
@@ -904,15 +809,6 @@ func defaultTime(value time.Time) time.Time {
 		return time.Now().UTC()
 	}
 	return value.UTC()
-}
-
-func containsField(fields []string, target string) bool {
-	for _, f := range fields {
-		if strings.TrimSpace(f) == target {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *ProfileService) GetStats(ctx context.Context, userID string) (_ map[string]any, err error) {

@@ -48,15 +48,15 @@ client_projection:
     nullable: false
     source: anonymousRetentionPolicy
     default: ''''''
-  - name: activeSub
+  - name: activePersona
     dart_type: Map<String, dynamic>
     nullable: true
-    source: activeSub
+    source: activePersona
     default: 'null'
-  - name: subAccountCount
+  - name: personaCount
     dart_type: int
     nullable: false
-    source: subAccountCount
+    source: personaCount
     default: '0'
   - name: sessionRememberTtlSeconds
     dart_type: int

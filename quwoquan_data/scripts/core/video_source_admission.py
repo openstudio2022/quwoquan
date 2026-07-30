@@ -118,10 +118,10 @@ def verify_video_commercial_admission(
 ) -> list[str]:
     policy = _video_policy(registry)
     issues: list[str] = []
-    if policy.get("admissionPolicyRevision") != "sourced-video-attribution-v1":
+    if policy.get("admissionPolicyRevision") != "sourced-video-attribution":
         issues.append(
             "lanePolicies.video.admissionPolicyRevision must be "
-            "sourced-video-attribution-v1"
+            "sourced-video-attribution"
         )
     evidence = {
         str(value)

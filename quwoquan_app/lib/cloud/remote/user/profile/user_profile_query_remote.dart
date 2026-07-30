@@ -26,7 +26,7 @@ final class RemoteUserProfileQueryFacet
   final UserProfileQueryInvocationContextFactory invocationContext;
 
   @override
-  Future<SubAccountProfileProjection> getMeProfile(GetMeProfileQuery query) {
+  Future<PersonaProfileProjection> getMeProfile(GetMeProfileQuery query) {
     return client.userUserAccountGetMeProfile(
       query,
       context: invocationContext(
@@ -87,14 +87,14 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<SubAccountProfileProjection> getSubAccountProfile(
-    GetSubAccountProfileQuery query,
+  Future<PersonaProfileProjection> getPersonaProfile(
+    GetPersonaProfileQuery query,
   ) {
-    return client.userUserAccountGetSubAccountProfile(
+    return client.userUserAccountGetPersonaProfile(
       query,
       context: invocationContext(
-        UserRequestPageIds.getSubAccountProfile,
-        AppCloudOperationIds.userUserAccountGetSubAccountProfile,
+        UserRequestPageIds.getPersonaProfile,
+        AppCloudOperationIds.userUserAccountGetPersonaProfile,
       ),
     );
   }

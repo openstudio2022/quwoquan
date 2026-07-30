@@ -2,7 +2,7 @@
 services:
   product-ops-service:
     profiles: ["commercial-observability"]
-    image: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_IMAGE:-localhost/quwoquan_service_product-ops-service:latest}"
+    image: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_IMAGE:?fixed product-ops-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/product-ops-service/build/Dockerfile
@@ -15,7 +15,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_PRODUCT_OPS_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       PRODUCT_OPS_SERVICE_ADDR: ":18086"
       MONGO_URI: mongodb://mongodb:27017
       POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable

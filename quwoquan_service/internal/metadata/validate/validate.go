@@ -10,7 +10,10 @@ import (
 	contractopenapi "quwoquan_service/internal/metadata/openapi"
 )
 
-var typedBindingIdentifier = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+var (
+	typedBindingIdentifier        = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
+	runtimeFacadeMethodIdentifier = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
+)
 
 type Profile string
 
@@ -62,7 +65,9 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 
 	operationIDs := map[string]string{}
 	transportKeys := map[string]string{}
+	operationCountByObject := map[string]int{}
 	for _, operation := range contractGraph.Operations {
+		operationCountByObject[operation.ObjectID]++
 		if previous, exists := operationIDs[operation.ID]; exists {
 			issues = append(issues, issue(
 				"CONTRACT.DUPLICATE.OPERATION_ID",
@@ -108,6 +113,10 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 		if profile == ProfileCommercial {
 			issues = append(
 				issues,
+				validateRequestBindings(operation)...,
+			)
+			issues = append(
+				issues,
 				validateCommercialOperation(
 					operation,
 					objectsByID,
@@ -116,6 +125,64 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				)...,
 			)
 		}
+	}
+	runtimeEntrypointIDs := map[string]string{}
+	runtimeEntrypointKeys := map[string]string{}
+	for _, entrypoint := range contractGraph.RuntimeEntrypoints {
+		if previous, exists := runtimeEntrypointIDs[entrypoint.ID]; exists {
+			issues = append(issues, issue(
+				"CONTRACT.DUPLICATE.RUNTIME_ENTRYPOINT_ID",
+				entrypoint.SourcePath,
+				"runtime entrypoint id %q is also declared by %s",
+				entrypoint.ID,
+				previous,
+			))
+		} else {
+			runtimeEntrypointIDs[entrypoint.ID] = entrypoint.SourcePath
+		}
+		object, exists := objectsByID[entrypoint.ObjectID]
+		if !exists {
+			issues = append(issues, issue(
+				"CONTRACT.REFERENCE.UNKNOWN_RUNTIME_ENTRYPOINT_OWNER",
+				entrypoint.SourcePath,
+				"runtime entrypoint %q references unknown object %q",
+				entrypoint.ID,
+				entrypoint.ObjectID,
+			))
+		} else if object.Kind != ast.ObjectKindRuntimeSession {
+			issues = append(issues, issue(
+				"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_OWNER_KIND",
+				entrypoint.SourcePath,
+				"runtime entrypoint %q owner %q has kind %q, want runtime_session",
+				entrypoint.ID,
+				entrypoint.ObjectID,
+				object.Kind,
+			))
+		}
+		if operationCountByObject[entrypoint.ObjectID] != 0 {
+			issues = append(issues, issue(
+				"CONTRACT.RUNTIME_ENTRYPOINT.HTTP_DUAL_TRACK",
+				entrypoint.SourcePath,
+				"object %q must own either HTTP api_routes or runtime_entrypoints, not both",
+				entrypoint.ObjectID,
+			))
+		}
+		key := entrypoint.ObjectID + "\x00" + entrypoint.RuntimeKind + "\x00" + entrypoint.Phase
+		if previous, exists := runtimeEntrypointKeys[key]; exists {
+			issues = append(issues, issue(
+				"CONTRACT.DUPLICATE.RUNTIME_ENTRYPOINT",
+				entrypoint.SourcePath,
+				"runtime entrypoint %q duplicates the object/kind/phase owned by %s",
+				entrypoint.ID,
+				previous,
+			))
+		} else {
+			runtimeEntrypointKeys[key] = entrypoint.ID
+		}
+		issues = append(
+			issues,
+			validateRuntimeEntrypoint(entrypoint, object)...,
+		)
 	}
 	projectionIDs := map[string]string{}
 	for _, projection := range contractGraph.Projections {
@@ -138,10 +205,83 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 	}
 	if profile == ProfileCommercial {
 		issues = append(issues, validateBusinessObjectMaps(contractGraph)...)
+		issues = append(issues, validateMetadataGovernance(contractGraph)...)
 	}
 
 	sortIssues(issues)
 	return issues
+}
+
+func validateRuntimeEntrypoint(
+	entrypoint ast.RuntimeEntrypoint,
+	object ast.Object,
+) []Issue {
+	var issues []Issue
+	if !typedBindingIdentifier.MatchString(entrypoint.LocalID) {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_NAME",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q name must be a typed identifier",
+			entrypoint.ID,
+		))
+	}
+	if entrypoint.RuntimeKind != "middleware" {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_KIND",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q kind %q must be middleware",
+			entrypoint.ID,
+			entrypoint.RuntimeKind,
+		))
+	}
+	if entrypoint.Phase != "post_authorization_pre_owner_proxy" {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_PHASE",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q phase %q must be post_authorization_pre_owner_proxy",
+			entrypoint.ID,
+			entrypoint.Phase,
+		))
+	}
+	if entrypoint.ApplicationKind != ast.OperationKindSession {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_APPLICATION_KIND",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q application.kind %q must be session",
+			entrypoint.ID,
+			entrypoint.ApplicationKind,
+		))
+	}
+	if !typedBindingIdentifier.MatchString(entrypoint.Facet) ||
+		!strings.HasSuffix(entrypoint.Facet, "Facade") {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_FACADE",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q facet %q must be a typed *Facade identifier",
+			entrypoint.ID,
+			entrypoint.Facet,
+		))
+	}
+	if !runtimeFacadeMethodIdentifier.MatchString(entrypoint.FacadeMethod) {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_METHOD",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q method %q must be a lower-camel identifier",
+			entrypoint.ID,
+			entrypoint.FacadeMethod,
+		))
+	}
+	if entrypoint.SessionOwner == "" || entrypoint.SessionOwner != object.Name {
+		issues = append(issues, issue(
+			"CONTRACT.RUNTIME_ENTRYPOINT.INVALID_SESSION_OWNER",
+			entrypoint.SourcePath,
+			"runtime entrypoint %q session_owner %q must equal canonical owner %q",
+			entrypoint.ID,
+			entrypoint.SessionOwner,
+			object.Name,
+		))
+	}
+	return bindIssueSubject(entrypoint.ID, issues)
 }
 
 // All 执行 ContractGraph 交叉校验，并在 commercial profile 下强制消费版本化 schema。
@@ -668,6 +808,32 @@ func validateCommercialOperation(
 			operation.ID,
 		))
 	}
+	if pagination := operation.Pagination; pagination != nil {
+		if pagination.DefaultItems <= 0 || pagination.MaximumItems <= 0 {
+			issues = append(issues, issue(
+				"CONTRACT.OPERATION.INVALID_PAGINATION_BUDGET",
+				operation.SourcePath,
+				"operation %q pagination default_items and maximum_items must be positive",
+				operation.ID,
+			))
+		} else if pagination.DefaultItems > pagination.MaximumItems {
+			issues = append(issues, issue(
+				"CONTRACT.OPERATION.INVALID_PAGINATION_BUDGET",
+				operation.SourcePath,
+				"operation %q pagination default_items must not exceed maximum_items",
+				operation.ID,
+			))
+		}
+	}
+	if responseAdmission := operation.ResponseAdmission; responseAdmission != nil &&
+		responseAdmission.MaximumBodyBytes < 1024 {
+		issues = append(issues, issue(
+			"CONTRACT.OPERATION.INVALID_RESPONSE_ADMISSION_BUDGET",
+			operation.SourcePath,
+			"operation %q response maximum_body_bytes must be at least 1024",
+			operation.ID,
+		))
+	}
 	unsafeMethod := operation.Method == "POST" ||
 		operation.Method == "PUT" ||
 		operation.Method == "PATCH" ||
@@ -747,14 +913,12 @@ func validateClientContract(operation ast.Operation) []Issue {
 		return nil
 	}
 	if contract.DartImport == "" ||
-		contract.RequestType == "" ||
 		contract.ResponseType == "" ||
-		contract.RequestEncoder == "" ||
 		contract.ResponseDecoder == "" {
 		return []Issue{issue(
 			"CONTRACT.OPERATION.INVALID_CLIENT_CONTRACT",
 			operation.SourcePath,
-			"operation %q client_contract must declare import, request/response types and codecs",
+			"operation %q client_contract must declare response import, type and decoder; request ABI is generated from request_entity",
 			operation.ID,
 		)}
 	}

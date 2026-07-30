@@ -9,7 +9,7 @@ CloudOperationInvocationContext _circleOperationInvocationContext(
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
-  final personaId = persona?.subAccountId.trim() ?? '';
+  final personaId = persona?.personaId.trim() ?? '';
   return CloudOperationInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,

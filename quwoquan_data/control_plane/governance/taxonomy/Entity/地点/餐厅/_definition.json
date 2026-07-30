@@ -2,6 +2,7 @@
   "label": "餐厅",
   "labelEn": "Restaurant",
   "description": "餐饮经营业态分类（与 Topic/美食餐饮/菜系 正交：此处按经营形式分，非饮食流派）",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -196,6 +196,76 @@ void main() {
       expect(telemetry.events.single.succeeded, isTrue);
     });
 
+    test('GetFeed 生成预算在发网前限制页长并下传响应体上限', () async {
+      final operation =
+          appCloudOperationContracts[AppCloudOperationIds.contentPostGetFeed]!;
+      final transport = _RecordingTransport(
+        response: const <String, dynamic>{'items': <dynamic>[]},
+      );
+      final executor = AppGeneratedCloudOperationExecutor(
+        environment: CloudRuntimeEnvironment(
+          environment: CloudEnvironment.gamma,
+          gatewayBaseUri: Uri.parse('https://api.example.test'),
+        ),
+        transport: transport,
+        headerFactory: CloudOperationHeaderFactory(
+          clientContextProvider: clientContext,
+          now: () => fixedNow,
+        ),
+        telemetrySink: _RecordingTelemetry(),
+        now: () => fixedNow,
+      );
+      final context = CloudOperationInvocationContext(
+        surfaceId: 'homeFeed',
+        clientPageId: 'homeFeed',
+        actor: const CloudOperationActorContext(personaId: 'persona-1'),
+        deadlineAt: fixedNow.add(const Duration(seconds: 1)),
+      );
+
+      await executor.send<Object?>(
+        operation,
+        context: context,
+        responseDecoder: (value) => value,
+        requestEncoder: () => const CloudOperationRequestPayload(
+          queryParameters: <String, String>{'limit': '20'},
+        ),
+      );
+
+      expect(operation.paginationDefaultItems, 20);
+      expect(operation.paginationMaximumItems, 20);
+      expect(operation.maximumResponseBodyBytes, 2 * 1024 * 1024);
+      expect(
+        transport.request!.maximumResponseBodyBytes,
+        operation.maximumResponseBodyBytes,
+      );
+
+      final rejectedTransport = _RecordingTransport(response: null);
+      await expectLater(
+        AppGeneratedCloudOperationExecutor(
+          environment: executor.environment,
+          transport: rejectedTransport,
+          headerFactory: executor.headerFactory,
+          telemetrySink: _RecordingTelemetry(),
+          now: () => fixedNow,
+        ).send<Object?>(
+          operation,
+          context: context,
+          responseDecoder: (value) => value,
+          requestEncoder: () => const CloudOperationRequestPayload(
+            queryParameters: <String, String>{'limit': '21'},
+          ),
+        ),
+        throwsA(
+          isA<CloudException>().having(
+            (error) => error.runtimeFailure.code,
+            'code',
+            'APP.CONTRACT.invalid_response',
+          ),
+        ),
+      );
+      expect(rejectedTransport.requests, isEmpty);
+    });
+
     test('请求成功后立即释放 operation deadline timer', () {
       fakeAsync((clock) {
         final executor = AppGeneratedCloudOperationExecutor(
@@ -413,7 +483,7 @@ void main() {
       expect(rejectedTransport.requests, isEmpty);
     });
 
-    test('仅合并 generated If-Match，拒绝业务请求编码器注入 runtime header', () async {
+    test('仅合并 generated 业务 header，拒绝编码器注入 runtime header', () async {
       final transport = _RecordingTransport(
         response: const <String, dynamic>{},
       );
@@ -446,14 +516,15 @@ void main() {
         executableUpdateCircleGroupOperation,
         context: commandInvocation,
         responseDecoder: (value) => value,
-        requestEncoder: () => encodeUpdateCircleGroupCommand(
-          UpdateCircleGroupCommand(
-            circleId: 'circle-1',
-            groupId: 'group-1',
-            expectedVersion: 7,
-            name: 'updated group',
-          ),
-        ),
+        requestEncoder: () =>
+            encodeCircleCircleGroupUpdateCircleGroupGeneratedRequest(
+              UpdateCircleGroupCommand(
+                circleId: 'circle-1',
+                groupId: 'group-1',
+                expectedVersion: 7,
+                name: 'updated group',
+              ),
+            ),
       );
 
       expect(transport.request!.headers['If-Match'], '"7"');
@@ -462,6 +533,63 @@ void main() {
         'circle-group-update-1',
       );
       expect(transport.request!.headers['X-Client-Persona-Id'], 'persona-1');
+
+      await executor.send<Object?>(
+        appCloudOperationContracts[AppCloudOperationIds.contentPostGetFeed]!,
+        context: CloudOperationInvocationContext(
+          surfaceId: 'homeFeed',
+          clientPageId: 'content.feed.list',
+          routeId: 'homeFeed',
+          deadlineAt: fixedNow.add(const Duration(seconds: 1)),
+          actor: const CloudOperationActorContext(personaId: 'persona-1'),
+        ),
+        responseDecoder: (value) => value,
+        requestEncoder: () => const CloudOperationRequestPayload(
+          headers: <String, String>{'X-Blocked-Keywords': 'spam'},
+        ),
+      );
+      expect(transport.request!.headers['X-Blocked-Keywords'], 'spam');
+
+      final requiredHeaderTransport = _RecordingTransport(response: null);
+      final requiredHeaderExecutor = AppGeneratedCloudOperationExecutor(
+        environment: executor.environment,
+        transport: requiredHeaderTransport,
+        headerFactory: executor.headerFactory,
+        telemetrySink: _RecordingTelemetry(),
+        now: () => fixedNow,
+      );
+      await expectLater(
+        requiredHeaderExecutor.send<Object?>(
+          _commerciallyReady(
+            appCloudOperationContracts[AppCloudOperationIds
+                .contentPostGetFeed]!,
+            requestHeaderBindings: const <CloudOperationRequestBinding>[
+              CloudOperationRequestBinding(
+                name: 'X-Blocked-Keywords',
+                field: 'blockedKeywords',
+                required: true,
+              ),
+            ],
+          ),
+          context: CloudOperationInvocationContext(
+            surfaceId: 'homeFeed',
+            clientPageId: 'content.feed.list',
+            routeId: 'homeFeed',
+            deadlineAt: fixedNow.add(const Duration(seconds: 1)),
+            actor: const CloudOperationActorContext(personaId: 'persona-1'),
+          ),
+          responseDecoder: (value) => value,
+          requestEncoder: _emptyRequestEncoder,
+        ),
+        throwsA(
+          isA<CloudException>().having(
+            (error) => error.runtimeFailure.code,
+            'code',
+            'APP.CONTRACT.invalid_response',
+          ),
+        ),
+      );
+      expect(requiredHeaderTransport.requests, isEmpty);
 
       final rejectedTransport = _RecordingTransport(response: null);
       final rejectedExecutor = AppGeneratedCloudOperationExecutor(
@@ -937,7 +1065,10 @@ void main() {
   });
 }
 
-CloudOperationContract _commerciallyReady(CloudOperationContract source) {
+CloudOperationContract _commerciallyReady(
+  CloudOperationContract source, {
+  List<CloudOperationRequestBinding>? requestHeaderBindings,
+}) {
   return CloudOperationContract(
     canonicalOperationId: source.canonicalOperationId,
     localOperationId: source.localOperationId,
@@ -976,6 +1107,11 @@ CloudOperationContract _commerciallyReady(CloudOperationContract source) {
     availabilityPercent: source.availabilityPercent,
     requestEntity: source.requestEntity,
     requestBodyKind: source.requestBodyKind,
+    requestPathBindings: source.requestPathBindings,
+    requestQueryBindings: source.requestQueryBindings,
+    requestHeaderBindings:
+        requestHeaderBindings ?? source.requestHeaderBindings,
+    requestInjectedBindings: source.requestInjectedBindings,
     responseEntity: source.responseEntity,
     responseBody: source.responseBody,
     responseBodyKind: source.responseBodyKind,

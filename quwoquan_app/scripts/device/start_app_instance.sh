@@ -346,6 +346,7 @@ values = {
     ),
     "RECOVERY_BASE_URL": handoff["recoveryBaseUrl"],
     "PUBLIC_WEB_BASE_URL": handoff["publicWebBaseUrl"],
+    "APP_DOWNLOAD_BASE_URL": handoff["appDownloadBaseUrl"],
 }
 for key, value in values.items():
     print(f"{key}={shlex.quote(str(value))}")
@@ -385,6 +386,7 @@ export QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST="$RUNTIME_CONFIG_DIGEST"
 export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
 export QWQ_APP_RECOVERY_BASE_URL="$RECOVERY_BASE_URL"
 export QWQ_APP_PUBLIC_WEB_URL="$PUBLIC_WEB_BASE_URL"
+export QWQ_APP_DOWNLOAD_BASE_URL="$APP_DOWNLOAD_BASE_URL"
 export QWQ_LAUNCH_HANDOFF_JSON="$HANDOFF_JSON"
 if [[ -t 0 && -e /dev/tty ]]; then
   export QWQ_APP_INSTANCE_PRESERVE_TTY="${QWQ_APP_INSTANCE_PRESERVE_TTY:-1}"
@@ -469,6 +471,7 @@ try:
         "gatewayBaseUrl": defines.get("CLOUD_GATEWAY_BASE_URL", ""),
         "legalBaseUrl": defines.get("APP_LEGAL_BASE_URL", ""),
         "publicWebBaseUrl": defines.get("PUBLIC_WEB_BASE_URL", ""),
+        "appDownloadBaseUrl": defines.get("APP_DOWNLOAD_BASE_URL", ""),
         "runtimeConfigDigest": handoff["runtimeConfigDigest"],
         "dartDefinesDigest": handoff["dartDefinesDigest"],
         "recoveryBaseUrl": handoff["recoveryBaseUrl"],

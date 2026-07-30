@@ -14,7 +14,7 @@ import (
 	invitationports "quwoquan_service/services/user-service/internal/account/invitation/domain/ports"
 )
 
-const invitationColumns = `id, inviter_sub_account_id, inviter_owner_account_id,
+const invitationColumns = `id, inviter_persona_id, inviter_owner_account_id,
 channel, link_code, COALESCE(invitee_phone_hash, ''), status, expire_at,
 generated_at, delivered_at, viewed_at, accepted_at, converted_at`
 
@@ -47,7 +47,7 @@ func (store *PostgresStore) Generate(
 	if _, err := tx.Exec(
 		ctx,
 		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		"invitation:"+candidate.InviterSubAccountID,
+		"invitation:"+candidate.InviterPersonaID,
 	); err != nil {
 		return nil, false, err
 	}
@@ -55,10 +55,10 @@ func (store *PostgresStore) Generate(
 		existing, err := scanInvitation(tx.QueryRow(
 			ctx,
 			`SELECT `+invitationColumns+` FROM invite_records
-			 WHERE inviter_sub_account_id=$1 AND channel=$2
+			 WHERE inviter_persona_id=$1 AND channel=$2
 			   AND invitee_phone_hash=$3 AND status='generated'
 			 FOR UPDATE`,
-			candidate.InviterSubAccountID,
+			candidate.InviterPersonaID,
 			candidate.Channel,
 			candidate.InviteePhoneHash,
 		))
@@ -76,8 +76,8 @@ func (store *PostgresStore) Generate(
 	if err := tx.QueryRow(
 		ctx,
 		`SELECT COUNT(*) FROM invite_records
-		 WHERE inviter_sub_account_id=$1 AND generated_at >= date_trunc('day', $2::timestamptz)`,
-		candidate.InviterSubAccountID,
+		 WHERE inviter_persona_id=$1 AND generated_at >= date_trunc('day', $2::timestamptz)`,
+		candidate.InviterPersonaID,
 		candidate.GeneratedAt,
 	).Scan(&todayCount); err != nil {
 		return nil, false, err
@@ -88,12 +88,12 @@ func (store *PostgresStore) Generate(
 	if _, err := tx.Exec(
 		ctx,
 		`INSERT INTO invite_records (
-		 id, inviter_sub_account_id, inviter_owner_account_id, channel, link_code,
+		 id, inviter_persona_id, inviter_owner_account_id, channel, link_code,
 		 invitee_phone_hash, status, expire_at, generated_at, delivered_at,
 		 viewed_at, accepted_at, converted_at
 		) VALUES ($1,$2,$3,$4,$5,NULLIF($6,''),$7,$8,$9,$10,$11,$12,$13)`,
 		candidate.ID,
-		candidate.InviterSubAccountID,
+		candidate.InviterPersonaID,
 		candidate.InviterOwnerAccountID,
 		candidate.Channel,
 		candidate.LinkCode,
@@ -135,13 +135,13 @@ func (store *PostgresStore) FindByLinkCode(
 
 func (store *PostgresStore) ListByInviter(
 	ctx context.Context,
-	inviterSubAccountID string,
+	inviterPersonaID string,
 	status string,
 	limit int,
 	offset int,
 ) ([]invitationmodel.Invitation, error) {
-	query := `SELECT ` + invitationColumns + ` FROM invite_records WHERE inviter_sub_account_id=$1`
-	arguments := []any{strings.TrimSpace(inviterSubAccountID)}
+	query := `SELECT ` + invitationColumns + ` FROM invite_records WHERE inviter_persona_id=$1`
+	arguments := []any{strings.TrimSpace(inviterPersonaID)}
 	if status != "" {
 		query += ` AND status=$2 ORDER BY generated_at DESC LIMIT $3 OFFSET $4`
 		arguments = append(arguments, strings.TrimSpace(status), limit, offset)
@@ -243,7 +243,7 @@ func scanInvitation(row rowScanner) (*invitationmodel.Invitation, error) {
 	record := &invitationmodel.Invitation{}
 	err := row.Scan(
 		&record.ID,
-		&record.InviterSubAccountID,
+		&record.InviterPersonaID,
 		&record.InviterOwnerAccountID,
 		&record.Channel,
 		&record.LinkCode,

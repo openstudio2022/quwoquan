@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"quwoquan_service/runtime/accountrestriction"
 )
 
 const UserAccountClosedEventName = "UserAccountClosed"
@@ -101,6 +103,17 @@ type UserAccountClosedApplyResult struct {
 	Replayed bool
 }
 
+var ErrUserAccountRestrictionProjectionConflict = errors.New(
+	"circle user account restriction projection conflict",
+)
+
+type UserAccountRestrictionProjectionResult struct {
+	Replayed bool
+	Stale    bool
+	Terminal bool
+	Affected int64
+}
+
 // UserAccountClosedProjection 的注销规则：
 //   - Circle/Group membership（含 pending 申请）保留最小审计壳，主体 ID
 //     不可逆匿名化，角色降为 member，状态置 removed，活跃度与贡献归零；
@@ -118,4 +131,11 @@ type UserAccountClosedProjection interface {
 		ctx context.Context,
 		event UserAccountClosedEvent,
 	) (UserAccountClosedApplyResult, error)
+}
+
+type UserAccountRestrictionProjection interface {
+	Apply(
+		ctx context.Context,
+		event accountrestriction.Event,
+	) (UserAccountRestrictionProjectionResult, error)
 }

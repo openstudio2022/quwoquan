@@ -17,6 +17,7 @@ from generated.recommendation.recommendation_model_release.models.request_respon
 )
 from api.metrics import observe_score_value
 from features.transformer import build_candidate_features
+from features.intersection_feature_encoder import append_intersection_features
 
 try:
     import lightgbm as lgb
@@ -43,37 +44,8 @@ USER_NUMERIC = [
     "engagementRate", "totalLikes", "totalShares", "totalEvents",
 ]
 CONTEXT_NUMERIC = ["requestHour", "requestDayOfWeek"]
-# W7 交集特征（registry v5）：user 侧事实计数 + 候选侧事实强度。affinity 通道为
-# advisory：候选级 affinity 仅在 intersectionConfidenceLabel 存在时计入（与 Go
-# ranking fusion 同语义）。三处消费方（本文件 / train.py / train_multiobjective.py）
-# 必须与 verify_feature_consistency.py 的交集特征清单同步。
-INTERSECTION_USER_NUMERIC = [
-    "sharedFolloweesCount", "sharedCircleCount", "coCommentedCount",
-    "coVisitedEntityCount", "followeeInObjectActive", "followeeViewingActive",
-    "affinityIntersectionScore",
-]
-INTERSECTION_CLASS_MAP = {"fact": 2, "affinity": 1}
-
-
-def _append_intersection_features(
-    features: list[float], item: dict, user: dict
-) -> None:
-    """Append intersection features (user 7 + item 4 = 11 dims)."""
-    for f in INTERSECTION_USER_NUMERIC:
-        features.append(float(user.get(f, 0) or 0))
-    features.append(float(item.get("intersectionFactStrength", 0) or 0))
-    features.append(float(item.get("intersectionFreshness", 0) or 0))
-    candidate_affinity = float(item.get("affinityIntersectionScore", 0) or 0)
-    if not str(item.get("intersectionConfidenceLabel", "") or "").strip():
-        candidate_affinity = 0.0
-    features.append(candidate_affinity)
-    features.append(
-        float(INTERSECTION_CLASS_MAP.get(str(item.get("intersectionClass", "") or ""), 0))
-    )
-
-
 def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[float]:
-    """Must align with train.py _extract_features (45 dims)."""
+    """Must align with train.py _extract_features."""
     features: list[float] = []
     for f in ITEM_NUMERIC:
         features.append(float(row.get(f, 0) or 0))
@@ -123,7 +95,7 @@ def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[
     content_type = row.get("contentType", "")
     features.append(float(type_ener.get(content_type, 0)))
 
-    _append_intersection_features(features, row, user_feat)
+    append_intersection_features(features, row, user_feat, row)
 
     return features
 
@@ -203,11 +175,11 @@ class ContentFeedScorer:
 
     def __init__(self):
         self._model, self._model_release_id = _load_model_from_registry()
-        self._model_version = "lgb" if self._model else "rule"
+        self._scorer_kind = "lgb" if self._model else "rule"
 
     @property
-    def model_version(self) -> str:
-        return self._model_version
+    def scorer_kind(self) -> str:
+        return self._scorer_kind
 
     @property
     def model_release_id(self) -> str | None:
@@ -215,7 +187,7 @@ class ContentFeedScorer:
 
     def reload(self):
         self._model, self._model_release_id = _load_model_from_registry()
-        self._model_version = "lgb" if self._model else "rule"
+        self._scorer_kind = "lgb" if self._model else "rule"
 
     def score(self, req: ModelScoreRequest) -> ModelScoreResponse:
         rows = build_candidate_features(req)
@@ -238,7 +210,7 @@ class ContentFeedScorer:
                 boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost * 0.1
                 detail["sessionTagBoost"] = boost
-                observe_score_value(self._model_version, sc)
+                observe_score_value(self._scorer_kind, sc)
                 if content_id in exposed_ids or content_id in negative_ids:
                     sc -= 1000.0
                     detail["filtered"] = 1.0
@@ -251,7 +223,7 @@ class ContentFeedScorer:
                 boost = sum(float(tag_weights.get(t, 0)) for t in row.get("tagRefs", []))
                 sc += boost
                 detail["sessionTagBoost"] = boost
-                observe_score_value(self._model_version, sc)
+                observe_score_value(self._scorer_kind, sc)
                 if content_id in exposed_ids or content_id in negative_ids:
                     sc -= 1000.0
                     detail["filtered"] = 1.0

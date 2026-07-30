@@ -1,6 +1,7 @@
 /// Accepted ContractGraph 生成的纯 Dart ABI。
 library;
 
+export 'src/canonical_sha256_digest.dart';
 export 'src/assistant/assistant_contracts.dart';
 export 'src/chat/conversation_contracts.dart';
 export 'src/chat/conversation_membership_contracts.dart';
@@ -37,6 +38,7 @@ export 'src/entity/homepage_queries.dart';
 export 'src/entity/homepage_commands.dart'
     hide HomepageDetailProjection, decodeHomepageDetail;
 export 'src/entity/homepage_review_contracts.dart';
+export 'src/generated/circle_contract_enums.g.dart';
 export 'src/generated/operation_contracts.g.dart';
 export 'src/integration/location_queries.dart';
 export 'src/notification/app_message_contracts.dart';
@@ -47,6 +49,7 @@ export 'src/rtc/call_session_contracts.dart';
 export 'src/search/hot_query_contracts.dart';
 export 'src/search/recent_search_contracts.dart';
 export 'src/generated/search_feedback_event_type.g.dart';
+export 'src/generated/user_contract_enums.g.dart';
 export 'src/search/search_feedback_contracts.dart';
 export 'src/search/search_query_contracts.dart';
 export 'src/structured_value.dart';

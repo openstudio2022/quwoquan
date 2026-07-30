@@ -67,6 +67,7 @@ business_rules:
 - reviewer 必须具备 TrustSafety 权限且写入不可篡改审计
 - aggregate、command receipt 与 outbox 必须在同一 PostgreSQL transaction 提交
 lifecycle:
+  state_field: status
   states:
   - pending
   - reviewing

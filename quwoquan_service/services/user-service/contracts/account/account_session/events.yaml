@@ -1,10 +1,11 @@
 events:
 - name: AccountSessionAuthenticated
   producer: user-service
-  consumers:
-  - user-account-projector
-  channel: transactional_outbox
-  description: 首次成功认证触发 UserAccount provision；重复消费按 authentication subject 去重。
+  consumers: []
+  channel: transactional_audit
+  no_consumer_reason: UserAccount provision is completed synchronously by the login application flow; the persisted session event currently has no relay.
+  description: 首次成功认证与 UserAccount 同步 provision 的持久化审计事实；当前不声明未装配的异步 projector。
+  payload_entity: AccountSession
   payload_fields:
   - sessionId
   - authenticationSubject
@@ -13,11 +14,10 @@ events:
   - issuedAt
 - name: AccountSessionRevoked
   producer: user-service
-  consumers:
-  - realtime-service
-  - notification-service
-  - user-account-projector
-  channel: transactional_outbox
+  consumers: []
+  channel: transactional_audit
+  no_consumer_reason: Session revocation is enforced by the authoritative session store; the persisted event currently has no relay.
+  payload_entity: AccountSession
   payload_fields:
   - sessionId
   - accountId

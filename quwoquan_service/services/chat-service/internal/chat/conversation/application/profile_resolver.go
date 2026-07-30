@@ -6,6 +6,7 @@ import (
 
 // ProfileSnapshot is display data resolved from the user domain for chat members.
 type ProfileSnapshot struct {
+	UserHandle    string
 	DisplayName   string
 	AvatarURL     string
 	AvatarAssetID string

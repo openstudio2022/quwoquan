@@ -22,9 +22,11 @@ import (
 	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/streaming"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/notificationclient"
+	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 )
 
 func assistantAPIRequest(
@@ -148,6 +150,7 @@ func assertAssistantTerminalSnapshotPublicShape(
 			"processId":              true,
 			"scope":                  true,
 			"stage":                  true,
+			"actionCode":             true,
 			"status":                 true,
 			"order":                  true,
 			"summary":                true,
@@ -559,7 +562,7 @@ func TestAssistantRunPersistsTrustedTransportContextWithoutEchoingIt(t *testing.
 	request.Header.Set("X-Client-Surface-Id", surfaceID)
 	request.Header.Set("X-Client-Route-Id", routeID)
 	request.Header.Set("X-Client-Operation-Id", operationID)
-	request.Header.Set("X-Client-Sub-Account-Id", personaID)
+	request.Header.Set("X-Client-Persona-Id", personaID)
 	request.Header.Set("X-Trace-Id", traceID)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -1210,7 +1213,7 @@ func (credential integrationServiceCredentials) AuthorizationHeader(
 
 func integrationNotificationCommandWriter(
 	t *testing.T,
-) application.NotificationAppMessageCommandWriter {
+) ports.NotificationAppMessageCommandWriter {
 	t.Helper()
 	baseURL := strings.TrimSpace(os.Getenv("QWQ_TEST_NOTIFICATION_BASE_URL"))
 	token := strings.TrimSpace(os.Getenv("QWQ_TEST_SERVICE_AUTH_TOKEN"))
@@ -1255,7 +1258,7 @@ func integrationNotificationCommandWriter(
 
 func integrationDeliveryPolicyReader(
 	t *testing.T,
-) application.AssistantDeliveryPolicyReader {
+) ports.AssistantDeliveryPolicyReader {
 	t.Helper()
 	const userID = "lease-user"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1277,7 +1280,7 @@ func integrationDeliveryPolicyReader(
 		})
 	}))
 	t.Cleanup(server.Close)
-	client, err := application.NewUserDeliveryPolicyClient(
+	client, err := orchestration.NewUserDeliveryPolicyClient(
 		server.URL,
 		integrationServiceCredentials("integration-user-policy-token"),
 		server.Client(),
@@ -1294,16 +1297,16 @@ func TestSkillSubscriptionCronLeaseNoDuplicate(t *testing.T) {
 	resetIntegrationState(t)
 	ctx := context.Background()
 	service := newIntegrationAssistantService(
-		application.WithNotificationAppMessageCommandWriter(
+		orchestration.WithNotificationAppMessageCommandWriter(
 			integrationNotificationCommandWriter(t),
 		),
-		application.WithAssistantDeliveryPolicyReader(
+		orchestration.WithAssistantDeliveryPolicyReader(
 			integrationDeliveryPolicyReader(t),
 		),
-		application.WithAgentLoop(application.NewAgentLoop(
+		orchestration.WithAgentLoop(orchestration.NewAgentLoop(
 			integrationChatMentionSkillRuntime{},
-			application.ReactRuntime{
-				Model: application.DeterministicModelProvider{},
+			orchestration.ReactRuntime{
+				Model: modeldouble.DeterministicModelProvider{},
 			},
 			nil,
 		)),

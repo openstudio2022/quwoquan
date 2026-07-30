@@ -49,7 +49,7 @@ func TestContactRelationshipLifecycle_SearchMutualBlockUnblock(t *testing.T) {
 	if search.Code != http.StatusOK {
 		t.Fatalf("search contact: expected 200, got %d: %s", search.Code, search.Body.String())
 	}
-	assertSearchItemsContainSubAccount(
+	assertSearchItemsContainPersona(
 		t,
 		parseJSON(t, search),
 		"sa_contact_lifecycle_target",
@@ -58,7 +58,7 @@ func TestContactRelationshipLifecycle_SearchMutualBlockUnblock(t *testing.T) {
 	follow := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/sa_contact_lifecycle_target/follow",
+		"/user/personas/sa_contact_lifecycle_target/follow",
 		`{"source":"search","clientRequestId":"contact-life-follow-a"}`,
 		viewerHeaders,
 	)
@@ -68,7 +68,7 @@ func TestContactRelationshipLifecycle_SearchMutualBlockUnblock(t *testing.T) {
 	followBack := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/sa_contact_lifecycle_viewer/follow",
+		"/user/personas/sa_contact_lifecycle_viewer/follow",
 		`{"source":"followers","clientRequestId":"contact-life-follow-b"}`,
 		targetHeaders,
 	)
@@ -89,7 +89,7 @@ func TestContactRelationshipLifecycle_SearchMutualBlockUnblock(t *testing.T) {
 	block := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/sa_contact_lifecycle_target/block",
+		"/user/personas/sa_contact_lifecycle_target/block",
 		"",
 		viewerHeaders,
 	)
@@ -109,7 +109,7 @@ func TestContactRelationshipLifecycle_SearchMutualBlockUnblock(t *testing.T) {
 	unblock := doRequest(
 		t,
 		http.MethodDelete,
-		"/user/sub-accounts/sa_contact_lifecycle_target/block",
+		"/user/personas/sa_contact_lifecycle_target/block",
 		"",
 		viewerHeaders,
 	)
@@ -128,14 +128,14 @@ func TestContactRelationshipLifecycle_SearchMutualBlockUnblock(t *testing.T) {
 
 func contactLifecycleCapability(
 	t *testing.T,
-	targetSubAccountID string,
+	targetPersonaID string,
 	headers map[string]string,
 ) map[string]any {
 	t.Helper()
 	recorder := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/"+targetSubAccountID+"/relationship/capability",
+		"/user/personas/"+targetPersonaID+"/relationship/capability",
 		"",
 		headers,
 	)

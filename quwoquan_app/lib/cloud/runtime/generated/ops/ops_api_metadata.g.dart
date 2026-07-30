@@ -21,6 +21,7 @@ class OpsApiMetadata {
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AssignExperimentVariant': '/ops/experiments/{experimentId}/assignment',
+    'GetAccountEnforcementCase': '/control-plane/product/account-enforcement-cases/{caseId}',
     'GetAppRecoveryVersion': '/ops/app-recovery/version',
     'GetConfigSnapshot': '/control-plane/platform/configs/snapshot',
     'GetEventDrilldown': '/ops/events/drilldown',
@@ -35,6 +36,8 @@ class OpsApiMetadata {
     'ListConfigInstanceReports': '/control-plane/platform/configs/instances',
     'ListExperiments': '/control-plane/product/experiments',
     'ListServiceConfigs': '/control-plane/platform/configs',
+    'OpenAccountAppealCase': '/control-plane/product/account-enforcement-cases/appeal',
+    'OpenAccountModerationCase': '/control-plane/product/account-enforcement-cases/moderation',
     'RecordVisit': '/ops/visits',
     'ReportConfigInstance': '/control-plane/platform/configs/instances/{instanceId}:report',
     'ReportEventBatch': '/ops/events',
@@ -43,11 +46,14 @@ class OpsApiMetadata {
     'ReportStartupEventBatch': '/ops/startup-events',
     'ResolveEffectiveConfig': '/control-plane/platform/configs/resolve',
     'ResolveEffectiveConfigForInstance': '/control-plane/platform/configs/resolve-for-instance',
+    'RetryAccountEnforcementDelivery': '/control-plane/product/account-enforcement-cases/{caseId}:retry-delivery',
+    'ReviewAccountEnforcementCase': '/control-plane/product/account-enforcement-cases/{caseId}:review',
     'UpdateExperimentRollout': '/control-plane/product/experiments/{experimentId}:rollout',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AssignExperimentVariant': 'POST',
+    'GetAccountEnforcementCase': 'GET',
     'GetAppRecoveryVersion': 'GET',
     'GetConfigSnapshot': 'GET',
     'GetEventDrilldown': 'GET',
@@ -62,6 +68,8 @@ class OpsApiMetadata {
     'ListConfigInstanceReports': 'GET',
     'ListExperiments': 'GET',
     'ListServiceConfigs': 'GET',
+    'OpenAccountAppealCase': 'POST',
+    'OpenAccountModerationCase': 'POST',
     'RecordVisit': 'POST',
     'ReportConfigInstance': 'POST',
     'ReportEventBatch': 'POST',
@@ -70,12 +78,15 @@ class OpsApiMetadata {
     'ReportStartupEventBatch': 'POST',
     'ResolveEffectiveConfig': 'GET',
     'ResolveEffectiveConfigForInstance': 'GET',
+    'RetryAccountEnforcementDelivery': 'POST',
+    'ReviewAccountEnforcementCase': 'POST',
     'UpdateExperimentRollout': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'AssignExperimentVariant': 'required',
+    'GetAccountEnforcementCase': 'required',
     'GetAppRecoveryVersion': 'optional',
     'GetConfigSnapshot': 'required',
     'GetEventDrilldown': 'required',
@@ -90,6 +101,8 @@ class OpsApiMetadata {
     'ListConfigInstanceReports': 'required',
     'ListExperiments': 'required',
     'ListServiceConfigs': 'required',
+    'OpenAccountAppealCase': 'required',
+    'OpenAccountModerationCase': 'required',
     'RecordVisit': 'required',
     'ReportConfigInstance': 'required',
     'ReportEventBatch': 'required',
@@ -98,6 +111,8 @@ class OpsApiMetadata {
     'ReportStartupEventBatch': 'optional',
     'ResolveEffectiveConfig': 'required',
     'ResolveEffectiveConfigForInstance': 'required',
+    'RetryAccountEnforcementDelivery': 'required',
+    'ReviewAccountEnforcementCase': 'required',
     'UpdateExperimentRollout': 'required',
   };
 
@@ -112,6 +127,7 @@ class OpsApiMetadata {
   };
 
   static const String assignExperimentVariantOperation = 'AssignExperimentVariant';
+  static const String getAccountEnforcementCaseOperation = 'GetAccountEnforcementCase';
   static const String getAppRecoveryVersionOperation = 'GetAppRecoveryVersion';
   static const String getConfigSnapshotOperation = 'GetConfigSnapshot';
   static const String getEventDrilldownOperation = 'GetEventDrilldown';
@@ -126,6 +142,8 @@ class OpsApiMetadata {
   static const String listConfigInstanceReportsOperation = 'ListConfigInstanceReports';
   static const String listExperimentsOperation = 'ListExperiments';
   static const String listServiceConfigsOperation = 'ListServiceConfigs';
+  static const String openAccountAppealCaseOperation = 'OpenAccountAppealCase';
+  static const String openAccountModerationCaseOperation = 'OpenAccountModerationCase';
   static const String recordVisitOperation = 'RecordVisit';
   static const String reportConfigInstanceOperation = 'ReportConfigInstance';
   static const String reportEventBatchOperation = 'ReportEventBatch';
@@ -134,12 +152,20 @@ class OpsApiMetadata {
   static const String reportStartupEventBatchOperation = 'ReportStartupEventBatch';
   static const String resolveEffectiveConfigOperation = 'ResolveEffectiveConfig';
   static const String resolveEffectiveConfigForInstanceOperation = 'ResolveEffectiveConfigForInstance';
+  static const String retryAccountEnforcementDeliveryOperation = 'RetryAccountEnforcementDelivery';
+  static const String reviewAccountEnforcementCaseOperation = 'ReviewAccountEnforcementCase';
   static const String updateExperimentRolloutOperation = 'UpdateExperimentRollout';
 
   static const String assignExperimentVariantPathTemplate = '/ops/experiments/{experimentId}/assignment';
   static String assignExperimentVariantPath({required String experimentId}) {
     return _fillPath(assignExperimentVariantPathTemplate, <String, String>{
       'experimentId': experimentId,
+    });
+  }
+  static const String getAccountEnforcementCasePathTemplate = '/control-plane/product/account-enforcement-cases/{caseId}';
+  static String getAccountEnforcementCasePath({required String caseId}) {
+    return _fillPath(getAccountEnforcementCasePathTemplate, <String, String>{
+      'caseId': caseId,
     });
   }
   static const String getAppRecoveryVersionPath = '/ops/app-recovery/version';
@@ -166,6 +192,8 @@ class OpsApiMetadata {
   static const String listConfigInstanceReportsPath = '/control-plane/platform/configs/instances';
   static const String listExperimentsPath = '/control-plane/product/experiments';
   static const String listServiceConfigsPath = '/control-plane/platform/configs';
+  static const String openAccountAppealCasePath = '/control-plane/product/account-enforcement-cases/appeal';
+  static const String openAccountModerationCasePath = '/control-plane/product/account-enforcement-cases/moderation';
   static const String recordVisitPath = '/ops/visits';
   static const String reportConfigInstancePathTemplate = '/control-plane/platform/configs/instances/{instanceId}:report';
   static String reportConfigInstancePath({required String instanceId}) {
@@ -179,6 +207,18 @@ class OpsApiMetadata {
   static const String reportStartupEventBatchPath = '/ops/startup-events';
   static const String resolveEffectiveConfigPath = '/control-plane/platform/configs/resolve';
   static const String resolveEffectiveConfigForInstancePath = '/control-plane/platform/configs/resolve-for-instance';
+  static const String retryAccountEnforcementDeliveryPathTemplate = '/control-plane/product/account-enforcement-cases/{caseId}:retry-delivery';
+  static String retryAccountEnforcementDeliveryPath({required String caseId}) {
+    return _fillPath(retryAccountEnforcementDeliveryPathTemplate, <String, String>{
+      'caseId': caseId,
+    });
+  }
+  static const String reviewAccountEnforcementCasePathTemplate = '/control-plane/product/account-enforcement-cases/{caseId}:review';
+  static String reviewAccountEnforcementCasePath({required String caseId}) {
+    return _fillPath(reviewAccountEnforcementCasePathTemplate, <String, String>{
+      'caseId': caseId,
+    });
+  }
   static const String updateExperimentRolloutPathTemplate = '/control-plane/product/experiments/{experimentId}:rollout';
   static String updateExperimentRolloutPath({required String experimentId}) {
     return _fillPath(updateExperimentRolloutPathTemplate, <String, String>{

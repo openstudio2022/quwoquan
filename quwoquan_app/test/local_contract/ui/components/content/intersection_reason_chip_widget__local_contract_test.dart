@@ -133,7 +133,7 @@ Widget _routedChip(Widget chip, {required ContentBehaviorTracker tracker}) {
         builder: (context, state) => Center(child: chip),
       ),
       GoRoute(
-        path: '/user/:username',
+        path: '/user/:userHandle',
         builder: (context, state) => const Text('user-profile-route'),
       ),
     ],

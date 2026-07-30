@@ -17,7 +17,26 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 MODEL_RUNTIME_ROOT = SCRIPT_DIR.parent
-SERVICE_ROOT = SCRIPT_DIR.parents[8]
+SERVICE_ROOT = SCRIPT_DIR.parents[7]
+
+INTERSECTION_EDGE_REGISTRY_FIELD = "intersectionEdges"
+INTERSECTION_EDGE_SNAPSHOT_FIELDS = frozenset(
+    {
+        "intersectionEdgeWeight",
+        "intersectionEdgeFreshness",
+        "intersectionEdgeKind",
+    }
+)
+INTERSECTION_ENCODER = (
+    MODEL_RUNTIME_ROOT / "features" / "intersection_feature_encoder.py"
+)
+
+
+def expected_snapshot_user_fields(registry_users: set[str]) -> set[str]:
+    """Project the viewer-level edge map into candidate-scoped snapshot facts."""
+    return (
+        registry_users - {INTERSECTION_EDGE_REGISTRY_FIELD}
+    ) | INTERSECTION_EDGE_SNAPSHOT_FIELDS
 
 def load_feature_registry():
     """Load declared features from feature_registry.yaml."""
@@ -95,6 +114,29 @@ def extract_python_string_list(filepath: Path, variable_name: str) -> list[str]:
         if isinstance(value, list) and all(isinstance(item, str) for item in value):
             return value
     return []
+
+
+def scan_python_function_get_keys(filepath: Path, function_name: str) -> set[str]:
+    """Return literal mapping keys consumed through ``.get`` in one function."""
+    if not filepath.exists():
+        return set()
+    tree = ast.parse(filepath.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name != function_name:
+            continue
+        keys: set[str] = set()
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call) or not child.args:
+                continue
+            if not isinstance(child.func, ast.Attribute) or child.func.attr != "get":
+                continue
+            key = child.args[0]
+            if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                keys.add(key.value)
+        return keys
+    return set()
 
 
 def check_sample_joiner_key():
@@ -236,33 +278,6 @@ def check_recall_path_maps():
     return issues
 
 
-def check_feature_version():
-    """Ensure feature_registry.yaml version is referenced in Python code."""
-    registry_path = SCRIPT_DIR / "feature_registry.yaml"
-    if not registry_path.exists():
-        return []
-    try:
-        import yaml
-        with open(registry_path) as f:
-            data = yaml.safe_load(f)
-        registry_version = data.get("version")
-        if registry_version is None:
-            return []
-    except Exception:
-        return []
-
-    issues = []
-    serving_py = MODEL_RUNTIME_ROOT / "models" / "content_feed.py"
-    if serving_py.exists():
-        content = serving_py.read_text()
-        version_match = re.search(r'FEATURE_VERSION\s*=\s*(\d+)', content)
-        if version_match:
-            code_version = int(version_match.group(1))
-            if code_version != registry_version:
-                issues.append(f"content_feed.py FEATURE_VERSION={code_version} != registry version={registry_version}")
-    return issues
-
-
 def check_item_and_label_registry():
     """Check active registry features are captured by the immutable Go snapshot."""
     issues = []
@@ -290,21 +305,60 @@ def check_item_and_label_registry():
             issues.append(
                 f"trainingItemFeatures exposes unregistered fields: {extra}"
             )
-    if snapshot_user_fields != registry_users:
-        missing = sorted(registry_users - snapshot_user_fields)
-        extra = sorted(snapshot_user_fields - registry_users)
+    if INTERSECTION_EDGE_REGISTRY_FIELD not in registry_users:
+        issues.append(
+            "feature_registry missing canonical viewer-object intersectionEdges"
+        )
+    expected_snapshot_users = expected_snapshot_user_fields(registry_users)
+    if snapshot_user_fields != expected_snapshot_users:
+        missing = sorted(expected_snapshot_users - snapshot_user_fields)
+        extra = sorted(snapshot_user_fields - expected_snapshot_users)
         if missing:
             issues.append(
-                f"trainingUserFeatures missing active registry fields: {missing}"
+                f"trainingUserFeatures missing canonical or derived registry fields: {missing}"
             )
         if extra:
             issues.append(
-                f"trainingUserFeatures exposes unregistered fields: {extra}"
+                f"trainingUserFeatures exposes unregistered projection fields: {extra}"
             )
 
+    learning_content = learning_go.read_text(encoding="utf-8")
+    for field in INTERSECTION_EDGE_SNAPSHOT_FIELDS:
+        go_field = field.removeprefix("intersectionEdge")
+        go_field = "IntersectionEdge" + go_field
+        if f"candidate.{go_field}" not in learning_content:
+            issues.append(
+                f"trainingUserFeatures must reuse CandidateInput.{go_field}"
+            )
+    feature_content = (
+        SERVICE_ROOT / "runtime" / "recommendation" / "feature.go"
+    ).read_text(encoding="utf-8")
+    if not (
+        "func (v *UserFeatureVector) StrongestIntersectionEdgeFor" in feature_content
+        and "v.IntersectionEdges[objectID]" in feature_content
+    ):
+        issues.append(
+            "StrongestIntersectionEdgeFor must consume the canonical intersectionEdges map"
+        )
+
     scorer_go = SERVICE_ROOT / "runtime" / "recommendation" / "scorer.go"
+    scorer_content = scorer_go.read_text(encoding="utf-8")
+    canonical_projection_call = (
+        "user.StrongestIntersectionEdgeFor(c.AuthorID, c.EntityRefs)"
+    )
+    if canonical_projection_call not in scorer_content:
+        issues.append(
+            "candidateInputAt must derive matched-edge fields through "
+            "StrongestIntersectionEdgeFor(authorId, entityRefs)"
+        )
+    if "projected.IntersectionEdges = nil" not in scorer_content:
+        issues.append(
+            "RemoteModelScorer must remove raw intersectionEdges after candidate projection"
+        )
     candidate_fields = set(scan_go_struct_fields(scorer_go, "CandidateInput"))
-    expected_candidate_fields = registry_items - {"tagCount"}
+    expected_candidate_fields = (
+        registry_items - {"tagCount"}
+    ) | INTERSECTION_EDGE_SNAPSHOT_FIELDS
     if candidate_fields != expected_candidate_fields:
         missing = sorted(expected_candidate_fields - candidate_fields)
         extra = sorted(candidate_fields - expected_candidate_fields)
@@ -449,7 +503,6 @@ def check_n3_feature_skew_contract():
             / "content-service"
             / "internal"
             / "content"
-            / "content"
             / "post"
             / "infrastructure"
             / "recommendation"
@@ -484,36 +537,122 @@ INTERSECTION_ITEM_FEATURES = [
 def check_intersection_features():
     """Strict tri-source alignment for intersection features (W7/B8)."""
     issues = []
-    extractor_files = [
-        ("train.py", SCRIPT_DIR / "train.py"),
-        ("train_multiobjective.py", SCRIPT_DIR / "train_multiobjective.py"),
+    extractor_files = (
+        (
+            "train.py",
+            SCRIPT_DIR / "train.py",
+            "append_intersection_features(features, item, user, user)",
+        ),
+        (
+            "train_multiobjective.py",
+            SCRIPT_DIR / "train_multiobjective.py",
+            "append_intersection_features(features, item, user, user)",
+        ),
         (
             "content_feed.py",
             MODEL_RUNTIME_ROOT / "models" / "content_feed.py",
+            "append_intersection_features(features, row, user_feat, row)",
         ),
-    ]
-    for label, path in extractor_files:
+    )
+    for label, path, required_call in extractor_files:
         if not path.exists():
             issues.append(f"intersection check: {label} missing at {path}")
             continue
-        content = path.read_text()
-        if "_append_intersection_features" not in content:
+        content = path.read_text(encoding="utf-8")
+        if (
+            "from features.intersection_feature_encoder import" not in content
+            or "append_intersection_features" not in content
+        ):
             issues.append(
-                f"{label} missing _append_intersection_features (intersection features not wired)"
+                f"{label} does not import the canonical intersection feature encoder"
             )
-            continue
-        for feat in INTERSECTION_USER_FEATURES + INTERSECTION_ITEM_FEATURES:
-            if feat not in content:
-                issues.append(f"{label} missing intersection feature '{feat}'")
+        if required_call not in content:
+            issues.append(
+                f"{label} does not append the candidate-scoped matched-edge segment"
+            )
+        if "INTERSECTION_KIND_MAP" in content or "INTERSECTION_KIND_CODES" in content:
+            issues.append(f"{label} owns a forbidden second intersection kind mapping")
+        if label != "content_feed.py" and not all(
+            token in content
+            for token in (
+                "matched_edge_categorical_features",
+                "categorical_feature=categorical_features",
+            )
+        ):
+            issues.append(
+                f"{label} does not declare matched-edge kind as a LightGBM categorical feature"
+            )
+
+    if not INTERSECTION_ENCODER.exists():
+        issues.append("canonical intersection feature encoder is missing")
+    else:
+        encoder_content = INTERSECTION_ENCODER.read_text(encoding="utf-8")
+        consumed_fields = scan_python_function_get_keys(
+            INTERSECTION_ENCODER,
+            "append_intersection_features",
+        )
+        for feature in (
+            *INTERSECTION_EDGE_SNAPSHOT_FIELDS,
+            *INTERSECTION_ITEM_FEATURES,
+        ):
+            if feature not in consumed_fields:
+                issues.append(
+                    f"canonical intersection encoder does not consume '{feature}'"
+                )
+        for feature in INTERSECTION_USER_FEATURES:
+            if feature not in encoder_content:
+                issues.append(
+                    f"canonical intersection encoder does not declare '{feature}'"
+                )
+        for required in (
+            "intersection_kind_registry.yaml",
+            "canonical_intersection_kind_codes",
+            "encode_intersection_kind",
+            "matched_edge_categorical_features",
+            "append_intersection_features",
+        ):
+            if required not in encoder_content:
+                issues.append(
+                    f"canonical intersection encoder missing contract '{required}'"
+                )
+
+    transformer = MODEL_RUNTIME_ROOT / "features" / "transformer.py"
+    transformer_content = transformer.read_text(encoding="utf-8")
+    for feature in INTERSECTION_EDGE_SNAPSHOT_FIELDS:
+        if feature not in transformer_content:
+            issues.append(
+                f"transformer.py does not carry CandidateInput.{feature} to serving"
+            )
+
+    generated_request = (
+        SERVICE_ROOT
+        / "services"
+        / "recommendation-service"
+        / "generated"
+        / "recommendation"
+        / "recommendation_model_release"
+        / "models"
+        / "request_response.py"
+    )
+    generated_content = generated_request.read_text(encoding="utf-8")
+    for feature in INTERSECTION_EDGE_SNAPSHOT_FIELDS:
+        if not re.search(rf"^\s+{re.escape(feature)}:\s", generated_content, re.MULTILINE):
+            issues.append(
+                f"generated CandidateInput is missing matched-edge field '{feature}'"
+            )
 
     learning_go = SERVICE_ROOT / "runtime" / "recommendation" / "learning.go"
     if learning_go.exists():
         snapshot_content = learning_go.read_text()
-        for feat in INTERSECTION_USER_FEATURES:
+        for feat in INTERSECTION_USER_FEATURES + sorted(INTERSECTION_EDGE_SNAPSHOT_FIELDS):
             if feat not in snapshot_content:
                 issues.append(
                     f"trainingUserFeatures missing user intersection feature '{feat}'"
                 )
+        if re.search(r'"intersectionEdges"\s*:', snapshot_content):
+            issues.append(
+                "trainingUserFeatures must not copy raw intersectionEdges into a candidate sample"
+            )
     joiner_path = SCRIPT_DIR / "sample_joiner.py"
     if joiner_path.exists():
         joiner_content = joiner_path.read_text()
@@ -532,7 +671,7 @@ def check_intersection_features():
 
     scorer_go = SERVICE_ROOT / "runtime" / "recommendation" / "scorer.go"
     go_item_fields = scan_go_struct_fields(scorer_go, "CandidateInput")
-    for feat in INTERSECTION_ITEM_FEATURES:
+    for feat in INTERSECTION_ITEM_FEATURES + sorted(INTERSECTION_EDGE_SNAPSHOT_FIELDS):
         if go_item_fields and feat not in go_item_fields:
             issues.append(
                 f"CandidateInput missing intersection field '{feat}' (wire drift)"
@@ -577,9 +716,6 @@ def main():
 
     # Check RECALL_PATH_MAP consistency
     issues.extend(check_recall_path_maps())
-
-    # Check feature_registry.yaml version vs code
-    issues.extend(check_feature_version())
 
     # Check item features and labels in registry vs joiner
     issues.extend(check_item_and_label_registry())

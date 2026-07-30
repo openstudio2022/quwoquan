@@ -191,7 +191,7 @@ Future<ProviderContainer> _pumpDialogPageWithCompletedTurn(
         ),
         activePersonaContextProvider.overrideWith(
           (ref) async => ActivePersonaContextViewData.fallback(
-            subAccountId: 'persona_assistant_uat',
+            personaId: 'persona_assistant_uat',
             ownerUserId: 'user_assistant_uat',
             displayName: '私助验收用户',
             avatarUrl: '',
@@ -303,7 +303,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_assistant_uat',
-    activeSubAccountId: 'persona_assistant_uat',
+    activePersonaId: 'persona_assistant_uat',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -418,26 +418,26 @@ class _RecordingLearningFactAppendFacet
   _RecordingLearningFactAppendFacet({this.reportError});
 
   final Object? reportError;
-  final List<AppendAssistantLearningFactRequest> facts =
-      <AppendAssistantLearningFactRequest>[];
+  final List<AssistantLearningFactAppendCommand> facts =
+      <AssistantLearningFactAppendCommand>[];
 
   @override
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AppendAssistantLearningFactRequest request,
+  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+    required AssistantLearningFactAppendCommand request,
   }) async {
     facts.add(request);
     final error = reportError;
     if (error != null) {
       throw error;
     }
-    return AssistantLearningFactReceipt(
+    return AssistantLearningFactAppendReceipt(
       eventId: request.eventId,
-      eventVersion: request.eventVersion,
       accepted: true,
       deduplicated: false,
       appendSequence: facts.length,
-      payloadDigest: 'uat_recording',
-      recordedAt: DateTime.now().toUtc().toIso8601String(),
+      payloadDigest:
+          '0000000000000000000000000000000000000000000000000000000000000000',
+      recordedAt: DateTime.now().toUtc(),
     );
   }
 }
@@ -488,7 +488,7 @@ class _EmptyHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   }) async {
     return null;

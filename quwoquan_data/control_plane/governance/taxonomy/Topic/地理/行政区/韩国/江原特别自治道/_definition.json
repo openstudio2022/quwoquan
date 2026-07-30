@@ -1,0 +1,12 @@
+{
+  "label": "江原特别自治道",
+  "labelEn": "Gangwon",
+  "description": "东海岸与雪季运动核心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

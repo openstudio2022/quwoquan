@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 RUNTIME_TOPOLOGY="$ROOT/quwoquan_ops/environments/gamma/runtime.yaml"
 TARGET="gamma-local"
+READINESS_RECEIPT="${DATA_RELEASE_READINESS_RECEIPT:-}"
 
 if [[ -z "${QWQ_RUN_ROOT:-}" ]]; then
   QWQ_RUN_ROOT="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
@@ -26,19 +27,44 @@ if [[ ! -f "$RUNTIME_TOPOLOGY" ]]; then
   echo "[local-gamma:search-api] GATE_BLOCK: gamma runtime topology is missing" >&2
   exit 2
 fi
-
-GATEWAY_BASE_URL="$(python3 - "$RUNTIME_TOPOLOGY" <<'PY'
-import json
+if [[ -z "$READINESS_RECEIPT" ]]; then
+  echo "[local-gamma:search-api] GATE_BLOCK: DATA_RELEASE_READINESS_RECEIPT is required" >&2
+  exit 2
+fi
+if ! PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - \
+  "$READINESS_RECEIPT" <<'PY'
 import sys
-from pathlib import Path
+
+from quwoquan_ops.cli.lib.release_video_delivery import (
+    ReleaseVideoDeliveryError,
+    load_release_content_identity,
+    resolve_readiness_path,
+)
 
 try:
-    runtime = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    value = str(runtime["publicBases"]["api"]).strip()
-except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
-    raise SystemExit(f"invalid gamma runtime topology: {exc}")
+    load_release_content_identity(
+        resolve_readiness_path(sys.argv[1]),
+        expected_environment="gamma",
+    )
+except (ReleaseVideoDeliveryError, ValueError) as exc:
+    raise SystemExit(f"GATE_BLOCK: {exc}") from exc
+PY
+then
+  echo "[local-gamma:search-api] GATE_BLOCK: canonical Data readiness receipt is invalid" >&2
+  exit 2
+fi
+
+GATEWAY_BASE_URL="$(PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
+
+value = str(
+    get_target(load_environment_topology(), "gamma-local")["publicBases"]["api"]
+).strip()
 if not value:
-    raise SystemExit("invalid gamma runtime topology: publicBases.api is empty")
+    raise SystemExit("resolved gamma-local publicBases.api is empty")
 print(value)
 PY
 )"
@@ -98,22 +124,49 @@ PY
 fi
 
 if [[ "$health_status" -eq 0 && "$api_status" -eq 0 ]]; then
-  if ! python3 - "$GATEWAY_BASE_URL" "$TAG_FILTER_EVIDENCE" <<'PY'
+  if ! PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 - \
+    "$GATEWAY_BASE_URL" "$TAG_FILTER_EVIDENCE" "$READINESS_RECEIPT" <<'PY'
 import json
-import socket
-import ssl
 import sys
 import urllib.request
 
-base_url, output_path = sys.argv[1:3]
-original_getaddrinfo = socket.getaddrinfo
-host = "api.gamma.quwoquan.com"
+from quwoquan_ops.cli.lib.release_video_delivery import (
+    ReleaseVideoDeliveryError,
+    load_release_content_identity,
+    resolve_readiness_path,
+)
 
-def resolve_local(value, *args, **kwargs):
-    return original_getaddrinfo("127.0.0.1" if value == host else value, *args, **kwargs)
-
-socket.getaddrinfo = resolve_local
-context = ssl._create_unverified_context()
+base_url, output_path, readiness_value = sys.argv[1:4]
+try:
+    identity = load_release_content_identity(
+        resolve_readiness_path(readiness_value),
+        expected_environment="gamma",
+    )
+except (ReleaseVideoDeliveryError, ValueError) as exc:
+    raise SystemExit(f"GATE_BLOCK: {exc}") from exc
+image_post_ids = {
+    str(binding.get("postId") or "").strip()
+    for binding in identity["postBindings"]
+    if binding.get("contentType") == "image"
+    and str(binding.get("postId") or "").strip()
+}
+if not image_post_ids:
+    raise SystemExit(
+        "GATE_BLOCK: canonical Data import receipt has no release-bound image postId"
+    )
+tag_to_image_posts = {}
+for post_id in sorted(image_post_ids):
+    for tag_ref in identity["postTagRefs"].get(post_id) or []:
+        tag_to_image_posts.setdefault(str(tag_ref), set()).add(post_id)
+if not tag_to_image_posts:
+    raise SystemExit(
+        "GATE_BLOCK: canonical Data payload has no tag bound to a release image post"
+    )
+positive_tag = next(
+    (value for value in sorted(tag_to_image_posts) if "摄影" in value),
+    sorted(tag_to_image_posts)[0],
+)
+expected_object_ids = tag_to_image_posts[positive_tag]
 
 def search(tags):
     request = urllib.request.Request(
@@ -128,28 +181,44 @@ def search(tags):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, context=context, timeout=20) as response:
+    with urllib.request.urlopen(request, timeout=20) as response:
         return json.load(response)
 
-positive = search(["photography"])
-negative = search(["no-such-tag"])
+positive = search([positive_tag])
+negative = search(["__qwq_missing_release_tag__"])
+positive_hits = positive.get("hits")
+positive_hit_ids = {
+    str(hit.get("objectId") or "").strip()
+    for hit in positive_hits or []
+    if isinstance(hit, dict) and str(hit.get("objectId") or "").strip()
+}
+matched_object_ids = sorted(positive_hit_ids & expected_object_ids)
 if (
     not positive.get("requestId")
-    or not positive.get("hits")
-    or positive["hits"][0].get("objectId") != "fixture_photo_001"
+    or not isinstance(positive_hits, list)
+    or not matched_object_ids
     or not negative.get("requestId")
     or negative.get("hits")
 ):
-    raise SystemExit("Gamma tag filter positive/negative assertions failed")
+    raise SystemExit(
+        "Gamma release-bound tag filter positive/negative assertions failed"
+    )
 
 with open(output_path, "w", encoding="utf-8") as output:
     json.dump(
         {
-            "schema": "search-tag-filter-remote-evidence-v1",
+            "schema": "search-tag-filter-remote-evidence",
             "status": "passed",
+            "releaseId": identity["releaseId"],
+            "manifestDigest": identity["manifestDigest"],
+            "importRunId": identity["importRunId"],
+            "verifyRunId": identity["verifyRunId"],
+            "readinessReceiptRef": identity["readinessReceiptRef"],
+            "positiveTagRef": positive_tag,
             "positiveRequestId": positive["requestId"],
-            "positiveHitCount": len(positive["hits"]),
-            "positiveObjectId": positive["hits"][0]["objectId"],
+            "positiveHitCount": len(positive_hits),
+            "expectedObjectIds": sorted(expected_object_ids),
+            "matchedObjectIds": matched_object_ids,
             "negativeRequestId": negative["requestId"],
             "negativeHitCount": len(negative["hits"]),
         },
@@ -185,7 +254,7 @@ if path.is_file():
 Path(report_path).write_text(
     json.dumps(
         {
-            "schema": "search-remote-api-uat-report-v1",
+            "schema": "search-remote-api-uat-report",
             "status": status,
             "target": "gamma-local",
             "evidenceClass": "api_integration_remote",

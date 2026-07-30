@@ -6,6 +6,7 @@ import "context"
 // MemberService 会在此基础上补 profile 快照并生成联系人行。
 type SocialContactSeed struct {
 	UserID          string
+	UserHandle      string
 	DisplayName     string
 	AvatarURL       string
 	Bio             string

@@ -69,6 +69,12 @@ collections:
         canonicalEntityId: 1
         publishedAt: -1
       sparse: true
+    - name: idx_posts_geo_visited
+      keys:
+        geoTagRef: 1
+        visitedAt: -1
+      sparse: true
+      description: 「同地同期到访」交集召回：按行政区 tagRef + 作者声明到访时间取交，只覆盖同时具备两者的带定位发布
     - name: idx_posts_publish_intent
       keys:
         authorId: 1
@@ -127,20 +133,6 @@ collections:
       key:
         _id: hashed
       description: 按 _id 哈希分片，均匀分布
-  deleted_post_tombstones:
-    entity: DeletedPostTombstone
-    indexes:
-    - name: idx_tombstone_post
-      keys:
-        postId: 1
-      unique: true
-    - name: idx_tombstone_deleted_at
-      keys:
-        deletedAt: -1
-    - name: idx_tombstone_expire
-      keys:
-        expireAt: 1
-      expireAfterSeconds: 0
   post_command_receipts:
     entity: Post
     description: Post command 幂等结果；与聚合版本和 outbox 在同一 Mongo transaction 提交
@@ -193,75 +185,6 @@ collections:
       keys:
         expiresAt: 1
       expireAfterSeconds: 0
-  user_account_closed_inbox:
-    entity: UserAccountClosedProjectionInbox
-    role: append_only
-    description: Content（含 recommendation-engine）按 eventId+digest 幂等清理的 durable inbox。
-    indexes:
-    - name: idx_user_account_closed_completed
-      keys:
-        completedAt: -1
-  user_account_closed_failures:
-    entity: UserAccountClosedProjectionFailure
-    role: append_only
-    description: pending reclaim 有限重试状态；只保存 source stream/message reference、
-      event/error digest、attempts 与时间戳，禁止保存 payload 或主体标识。普通重试记录按
-      expireAt 回收；terminal DLQ marker 必须移除 expireAt，直到受控 recovery 释放 source
-      PEL，禁止让 TTL 自动恢复带原始 payload 的消费。
-    indexes:
-    - name: idx_user_account_closed_failure_expire
-      keys:
-        expireAt: 1
-      expireAfterSeconds: 0
-  user_account_closed_search_work:
-    entity: UserAccountClosedSearchWork
-    role: projection
-    description: Content 搜索文档删除工作项；外部索引成功后才推进 inbox 完成。
-    indexes:
-    - name: idx_user_account_closed_search_work
-      keys:
-        eventId: 1
-        doneAt: 1
-        _id: 1
-    - name: idx_user_account_closed_search_work_expire
-      keys:
-        expireAt: 1
-      expireAfterSeconds: 0
-  user_account_closed_media_artifact_work:
-    entity: UserAccountClosedMediaArtifactWork
-    role: projection
-    description: 账户关闭后公开媒体 slice、资产专属派生前缀和无引用私有对象的耐久清理工作；
-      仅保存内部 object key，公共 slice 必须先物理撤销，私有 CAS 仅在剩余引用为零时删除。
-    indexes:
-    - name: idx_user_account_closed_media_artifact_work
-      keys:
-        eventId: 1
-        doneAt: 1
-        _id: 1
-    - name: idx_user_account_closed_media_artifact_work_expire
-      keys:
-        expireAt: 1
-      expireAfterSeconds: 0
-  closed_account_subjects:
-    entity: ClosedAccountAudit
-    role: append_only
-    description: 不含账号原始标识的注销事件审计摘要，不作为写入防复活查询源。
-    indexes:
-    - name: idx_closed_account_event_digest
-      keys:
-        eventDigest: 1
-      unique: true
-  closed_account_subject_tombstones:
-    entity: ClosedAccountSubjectTombstone
-    role: append_only
-    description: '按独立密钥 HMAC-SHA256(subjectId) 标识的永久防复活栅栏；不得保存原始 userId/personaId，不设 TTL。所有推荐状态写入、训练和
-      replay 冻结必须先检查。
-
-      '
-    indexes:
-    - name: idx_closed_account_subject_closed_at
-      keys:
-        closedAt: -1
 redis_cache:
 - key: cache:post:{postId}
   ttl_seconds: 300

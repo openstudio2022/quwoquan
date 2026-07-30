@@ -58,3 +58,27 @@ def test_tag_snapshot_closure_rejects_unmaterialized_consumer_ref(
 
     assert report["status"] == "failed"
     assert {issue["code"] for issue in report["issues"]} == {"dangling_tag_ref"}
+
+
+def test_entity_creator_profile_must_belong_to_creator_reference_closure(
+    tmp_path: Path,
+) -> None:
+    canonical = tmp_path / "publish"
+    entity = canonical / "entities/地点/景区/甲"
+    _write(entity / "_entity.json", {"creatorProfileId": "creator_a"})
+    _write(entity / "creator.refs.json", {"creatorRefs": []})
+    _write(
+        canonical / "creators/creator_a/_creator.json",
+        {"creatorId": "creator_a"},
+    )
+
+    report = validate_canonical_publish(canonical)
+
+    assert report["status"] == "failed"
+    assert any(
+        issue["code"] == "entity_creator_closure_missing"
+        for issue in report["issues"]
+    )
+
+    _write(entity / "creator.refs.json", {"creatorRefs": ["creator_a"]})
+    assert validate_canonical_publish(canonical)["status"] == "passed"

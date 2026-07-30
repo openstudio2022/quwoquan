@@ -1,0 +1,13 @@
+{
+  "label": "穷游",
+  "labelEn": "Shoestring",
+  "description": "极致压缩住宿与交通成本，人均单日花费处于最低档",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

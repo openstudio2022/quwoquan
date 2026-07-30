@@ -55,7 +55,7 @@ def _review_counts(execution_id: str, carrier: str) -> tuple[int, int, int]:
         verdict = homepage_quota_verdict(
             SimpleNamespace(
                 execution_id=execution_id,
-                spec=store.load_spec(execution_id),
+                spec=store.load_spec_model(execution_id),
             )
         )
         if not verdict.passed:

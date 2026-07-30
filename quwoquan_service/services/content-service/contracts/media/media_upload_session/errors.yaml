@@ -10,6 +10,9 @@ errors:
   kind: USER
   reason: media_file_too_large
   http_status: 413
+  emitted_by:
+  - surface: http
+    operations: [InitMediaUpload]
   recovery_action: surface
   dart_const: mediaFileTooLarge
   go_const: ErrMediaFileTooLarge
@@ -20,6 +23,9 @@ errors:
   kind: USER
   reason: media_type_unsupported
   http_status: 415
+  emitted_by:
+  - surface: http
+    operations: [InitMediaUpload]
   recovery_action: surface
   dart_const: mediaTypeUnsupported
   go_const: ErrMediaTypeUnsupported
@@ -30,6 +36,9 @@ errors:
   kind: USER
   reason: media_upload_session_expired
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [CompleteMediaUpload]
   recovery_action: retry
   recovery_after_seconds: 0
   dart_const: mediaUploadSessionExpired

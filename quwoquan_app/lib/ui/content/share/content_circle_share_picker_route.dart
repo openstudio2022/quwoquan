@@ -62,13 +62,13 @@ class _ContentCircleSharePickerRouteState
     }
     final persona = await ref.read(activePersonaContextProvider.future);
     final page = await widget.membershipQuery.listPersonaCircles(
-      PersonaCircleListQuery(personaId: persona.subAccountId, limit: 100),
+      PersonaCircleListQuery(personaId: persona.personaId, limit: 100),
     );
     final circles = page.items
         .map(circleDtoFromPersonaCircleSummary)
         .toList(growable: false);
     final active = circles
-        .where((circle) => circle.status.trim().toLowerCase() == 'active')
+        .where((circle) => circle.status == CircleStatus.active)
         .toList(growable: false);
     active.sort((a, b) => a.name.compareTo(b.name));
     return active;

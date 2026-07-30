@@ -13,8 +13,8 @@ api_routes:
   path: /ops/events
   operation: ReportEventBatch
   actor: persona_or_device
-  request_fields:
-  - events
+  request_entity: EventRecordBatchRequest
+  request_body_kind: object
   response_fields:
   - acceptedCount
   - duplicateBatch
@@ -37,7 +37,6 @@ api_routes:
     max_attempts: 2
     idempotency: required
   error_codes:
-  - OPS.USER.unauthorized
   - OPS.USER.event_batch_invalid
   - OPS.USER.idempotency_key_invalid
   - OPS.SYSTEM.logstore_unavailable
@@ -66,16 +65,17 @@ api_routes:
   path: /ops/runtime-logs/summary
   operation: GetRuntimeLogSummary
   actor: account
-  query_params:
-  - signal
-  - severity
-  - errorCode
-  - fingerprint
-  - sourceType
-  - service
-  - appVersion
-  - from
-  - to
+  request_bindings:
+    query:
+    - {name: signal, field: signal, required: false}
+    - {name: severity, field: severity, required: false}
+    - {name: errorCode, field: errorCode, required: false}
+    - {name: fingerprint, field: fingerprint, required: false}
+    - {name: sourceType, field: sourceType, required: false}
+    - {name: service, field: service, required: false}
+    - {name: appVersion, field: appVersion, required: false}
+    - {name: from, field: from, required: false}
+    - {name: to, field: to, required: false}
   application:
     kind: query
     facet: RuntimeLogQueryFacet
@@ -134,18 +134,21 @@ api_routes:
   path: /ops/runtime-logs/drilldown
   operation: GetRuntimeLogDrilldown
   actor: account
-  query_params:
-  - signal
-  - severity
-  - errorCode
-  - fingerprint
-  - sourceType
-  - service
-  - appVersion
-  - from
-  - to
-  - limit
-  - revealCorrelation
+  request_bindings:
+    query:
+    - {name: signal, field: signal, required: false}
+    - {name: severity, field: severity, required: false}
+    - {name: errorCode, field: errorCode, required: false}
+    - {name: fingerprint, field: fingerprint, required: false}
+    - {name: sourceType, field: sourceType, required: false}
+    - {name: service, field: service, required: false}
+    - {name: appVersion, field: appVersion, required: false}
+    - {name: actorHash, field: actorHash, required: false}
+    - {name: messageContains, field: messageContains, required: false}
+    - {name: from, field: from, required: false}
+    - {name: to, field: to, required: false}
+    - {name: limit, field: limit, required: false}
+    - {name: revealCorrelation, field: revealCorrelation, required: false}
   application:
     kind: query
     facet: RuntimeLogQueryFacet
@@ -196,8 +199,8 @@ api_routes:
   path: /ops/runtime-logs
   operation: ReportRuntimeLogBatch
   actor: persona_or_device
-  request_fields:
-  - records
+  request_entity: RuntimeLogBatchRequest
+  request_body_kind: object
   response_fields:
   - acceptedCount
   - duplicateBatch
@@ -294,16 +297,17 @@ api_routes:
   path: /ops/events/summary
   operation: GetEventSummary
   actor: account
-  query_params:
-  - logType
-  - eventType
-  - pageName
-  - appVersion
-  - networkClass
-  - result
-  - errorCode
-  - from
-  - to
+  request_bindings:
+    query:
+    - {name: logType, field: logType, required: false}
+    - {name: eventType, field: eventType, required: false}
+    - {name: pageName, field: pageName, required: false}
+    - {name: appVersion, field: appVersion, required: false}
+    - {name: networkClass, field: networkClass, required: false}
+    - {name: result, field: result, required: false}
+    - {name: errorCode, field: errorCode, required: false}
+    - {name: from, field: from, required: false}
+    - {name: to, field: to, required: false}
   application:
     kind: query
     facet: EventAnalyticsQueryFacade
@@ -363,19 +367,20 @@ api_routes:
   path: /ops/events/drilldown
   operation: GetEventDrilldown
   actor: account
-  query_params:
-  - logType
-  - eventType
-  - pageName
-  - appVersion
-  - networkClass
-  - result
-  - errorCode
-  - sessionId
-  - from
-  - to
-  - limit
-  - revealSession
+  request_bindings:
+    query:
+    - {name: logType, field: logType, required: false}
+    - {name: eventType, field: eventType, required: false}
+    - {name: pageName, field: pageName, required: false}
+    - {name: appVersion, field: appVersion, required: false}
+    - {name: networkClass, field: networkClass, required: false}
+    - {name: result, field: result, required: false}
+    - {name: errorCode, field: errorCode, required: false}
+    - {name: sessionId, field: sessionId, required: false}
+    - {name: from, field: from, required: false}
+    - {name: to, field: to, required: false}
+    - {name: limit, field: limit, required: false}
+    - {name: revealSession, field: revealSession, required: false}
   application:
     kind: query
     facet: EventAnalyticsQueryFacade

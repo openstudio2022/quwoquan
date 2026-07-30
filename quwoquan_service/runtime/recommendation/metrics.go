@@ -6,6 +6,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"quwoquan_service/runtime/boundedrecord"
 )
 
 // Prometheus counters that mirror the atomic EngagementMetrics, enabling
@@ -14,8 +16,56 @@ var (
 	feedTerminalTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "recommendation",
 		Name:      "feed_terminal_total",
-		Help:      "Feed request terminal outcomes by bounded outcome and failure stage.",
-	}, []string{"request_class", "outcome", "failure_stage"})
+		Help:      "Feed request terminal outcomes by bounded outcome, empty reason and failure stage.",
+	}, []string{"request_class", "outcome", "empty_reason", "failure_stage"})
+
+	rankedFeedWindowPayloadBytes = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "recommendation",
+		Name:      "ranked_feed_window_payload_bytes",
+		Help:      "Uncompressed RankedFeedWindow JSON bytes by bounded operation.",
+		Buckets: []float64{
+			64 * 1024,
+			128 * 1024,
+			256 * 1024,
+			512 * 1024,
+			1024 * 1024,
+			1536 * 1024,
+			RankedFeedWindowMaxPayloadBytes,
+		},
+	}, []string{"operation"})
+
+	rankedFeedWindowCreateTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "recommendation",
+		Name:      "ranked_feed_window_create_total",
+		Help:      "RankedFeedWindow create attempts by bounded result.",
+	}, []string{"result"})
+
+	rankedFeedWindowQuotaEvictionsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "recommendation",
+		Name:      "ranked_feed_window_quota_evictions_total",
+		Help:      "RankedFeedWindow keys evicted by the per-subject active-window hard quota.",
+	})
+
+	rankedFeedWindowShardLiveRecords = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "recommendation",
+		Name:      "ranked_feed_window_shard_live_records",
+		Help:      "Exact live RankedFeedWindow records in the touched fixed quota shard.",
+		Buckets:   []float64{1, 8, 16, 32, 64, 96, 128},
+	})
+
+	rankedFeedWindowShardLiveBytes = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "recommendation",
+		Name:      "ranked_feed_window_shard_live_bytes",
+		Help:      "Exact live RankedFeedWindow payload bytes in the touched fixed quota shard.",
+		Buckets: []float64{
+			8 * 1024 * 1024,
+			16 * 1024 * 1024,
+			32 * 1024 * 1024,
+			64 * 1024 * 1024,
+			96 * 1024 * 1024,
+			128 * 1024 * 1024,
+		},
+	})
 
 	engImpressionTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "rec",
@@ -332,7 +382,12 @@ func RecordPipelineResult(modelUsed string, isEmpty bool) {
 // RecordFeedTerminal records exactly one service-level feed terminal outcome.
 // Both labels are closed enums so request/user/content identifiers can never
 // enter the metric cardinality.
-func RecordFeedTerminal(requestClass FeedRequestClass, outcome FeedTerminalOutcome, stage FailureStage) {
+func RecordFeedTerminal(
+	requestClass FeedRequestClass,
+	outcome FeedTerminalOutcome,
+	emptyReason FeedTerminalEmptyReason,
+	stage FailureStage,
+) {
 	switch requestClass {
 	case FeedRequestClassInitialRecommend,
 		FeedRequestClassContinuation,
@@ -346,21 +401,59 @@ func RecordFeedTerminal(requestClass FeedRequestClass, outcome FeedTerminalOutco
 	default:
 		outcome = FeedTerminalFailure
 	}
-	switch stage {
-	case FailureStageNone,
-		FailureStageRecallAllFailed,
-		FailureStageRecallPartialFailed,
-		FailureStageRecallPartialFailedEmpty,
-		FailureStageRecallEmptyOutput,
-		FailureStageScorerUnavailable,
-		FailureStageScorerEmptyOutput,
-		FailureStageActiveSupplyMissing,
-		FailureStageHydrationFullMiss,
-		FailureStageExposureExhausted:
-	default:
-		stage = FailureStageNone
+	emptyReason = normalizeFeedTerminalEmptyReason(emptyReason)
+	if outcome != FeedTerminalEmpty {
+		emptyReason = FeedTerminalEmptyReasonNone
+	} else if emptyReason == FeedTerminalEmptyReasonNone {
+		// A missing reason on an empty terminal is an instrumentation contract
+		// violation. Keep cardinality bounded while making the invalid state
+		// visible as failure rather than silently claiming a healthy empty page.
+		outcome = FeedTerminalFailure
 	}
-	feedTerminalTotal.WithLabelValues(string(requestClass), string(outcome), string(stage)).Inc()
+	stage = normalizeFailureStage(stage)
+	feedTerminalTotal.WithLabelValues(
+		string(requestClass),
+		string(outcome),
+		string(emptyReason),
+		string(stage),
+	).Inc()
+}
+
+func recordRankedFeedWindowPayload(operation string, size int) {
+	switch operation {
+	case "create", "load":
+	default:
+		operation = "load"
+	}
+	if size < 0 {
+		size = 0
+	}
+	rankedFeedWindowPayloadBytes.WithLabelValues(operation).Observe(float64(size))
+}
+
+func recordRankedFeedWindowCreate(result string) {
+	switch result {
+	case "created", "winner", "payload_rejected", "atomic_unavailable",
+		"shard_key_rejected", "shard_byte_rejected",
+		"repair_bound_rejected", "error":
+	default:
+		result = "error"
+	}
+	rankedFeedWindowCreateTotal.WithLabelValues(result).Inc()
+}
+
+func recordRankedFeedWindowShardUsage(result boundedrecord.Result) {
+	if !result.UsageMeasured {
+		return
+	}
+	rankedFeedWindowShardLiveRecords.Observe(float64(result.LiveRecords))
+	rankedFeedWindowShardLiveBytes.Observe(float64(result.LiveBytes))
+}
+
+func recordRankedFeedWindowQuotaEvictions(count int64) {
+	if count > 0 {
+		rankedFeedWindowQuotaEvictionsTotal.Add(float64(count))
+	}
 }
 
 // RecordModelTimeoutMetric increments the model timeout counter.

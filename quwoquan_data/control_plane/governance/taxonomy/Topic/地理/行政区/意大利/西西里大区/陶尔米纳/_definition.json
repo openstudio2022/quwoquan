@@ -1,0 +1,12 @@
+{
+  "label": "陶尔米纳",
+  "labelEn": "Taormina",
+  "description": "埃特纳火山海景古镇",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

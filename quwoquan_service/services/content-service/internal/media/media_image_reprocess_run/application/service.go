@@ -408,7 +408,7 @@ func (w *Worker) processOneUnderLease(ctx context.Context, run *reprocessmodel.R
 		outcome, err := w.processor.Process(ctx, mediaprocessing.ProcessRequest{
 			AssetID: asset.ID(), AssetVersion: asset.Version() + 1,
 			SourceObjectKey: asset.ObjectKey(), MediaType: asset.MediaType(),
-			ContentType: asset.ContentType(), FileSize: asset.FileSize(),
+			MimeType: asset.MimeType(), FileSize: asset.FileSize(),
 		})
 		if err != nil {
 			var rejected *mediaprocessing.RejectionError

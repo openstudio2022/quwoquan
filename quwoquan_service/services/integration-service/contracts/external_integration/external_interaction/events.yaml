@@ -1,32 +1,4 @@
 events:
-- name: ExternalInteractionAccepted
-  description: integration-service 已可靠接收外部交互请求，并写入 outbox。
-  producer: integration-service
-  consumers:
-  - user-service
-  - notification-service
-  - platform-ops
-  channel: event_store
-  payload_fields:
-  - requestId
-  - operation
-  - idempotencyKey
-  - status
-  - acceptedAt
-- name: ExternalInteractionAttemptRecorded
-  description: provider attempt ledger 已记录一次外部供应商调用。
-  producer: integration-service
-  consumers:
-  - platform-ops
-  channel: event_store
-  payload_fields:
-  - requestId
-  - operation
-  - provider
-  - status
-  - latencyMs
-  - normalizedError
-  - recoveryAction
 - name: ExternalInteractionResultReported
   description: 已记录的 provider attempt 通过 durable event relay 输出；只表示 provider
     接受或拒绝，不表示终端设备已展示或已送达。
@@ -36,7 +8,9 @@ events:
   - notification-service
   - platform-ops
   channel: event_store
+  payload_entity: ExternalInteractionResultReportedEvent
   payload_fields:
+  - eventId
   - attemptId
   - requestId
   - operation
@@ -46,16 +20,3 @@ events:
   - normalizedError
   - recoveryAction
   - occurredAt
-- name: ExternalInteractionDeadLettered
-  description: 外部交互超过重试上限或不可恢复失败，进入死信。
-  producer: integration-service
-  consumers:
-  - platform-ops
-  channel: event_store
-  payload_fields:
-  - deadLetterId
-  - requestId
-  - operation
-  - finalError
-  - recoveryAction
-  - createdAt

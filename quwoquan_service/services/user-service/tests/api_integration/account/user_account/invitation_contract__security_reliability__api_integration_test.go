@@ -16,7 +16,7 @@ func TestInvitationGenerateResolveAndAccept(t *testing.T) {
 		t,
 		http.MethodPost,
 		"/user/invites",
-		`{"subAccountId":"sa_invite","channel":"direct","inviteePhone":"13800138000"}`,
+		`{"personaId":"sa_invite","channel":"direct","inviteePhone":"13800138000"}`,
 		authHeadersForPersona("invite_owner", "sa_invite"),
 	)
 	if generated.Code != http.StatusCreated {
@@ -82,7 +82,7 @@ func TestInvitationGenerateIsIdempotentAndOwnerScoped(t *testing.T) {
 	createTestProfile(t, "invite_spoof_owner", "invite_spoof_owner")
 	createTestPersonaFull(t, "invite_idem_persona", "invite_idem_owner", "sa_invite_idem", "Invite", "open", true, true)
 
-	payload := `{"subAccountId":"sa_invite_idem","channel":"direct","inviteePhone":"13800138001"}`
+	payload := `{"personaId":"sa_invite_idem","channel":"direct","inviteePhone":"13800138001"}`
 	first := doRequest(t, http.MethodPost, "/user/invites", payload, authHeadersForPersona("invite_idem_owner", "sa_invite_idem"))
 	second := doRequest(t, http.MethodPost, "/user/invites", payload, authHeadersForPersona("invite_idem_owner", "sa_invite_idem"))
 	if first.Code != http.StatusCreated || second.Code != http.StatusCreated {
@@ -100,7 +100,7 @@ func TestInvitationGenerateIsIdempotentAndOwnerScoped(t *testing.T) {
 	listed := doRequest(
 		t,
 		http.MethodGet,
-		"/user/invites?subAccountId=sa_invite_idem",
+		"/user/invites?personaId=sa_invite_idem",
 		"",
 		authHeadersForPersona("invite_idem_owner", "sa_invite_idem"),
 	)

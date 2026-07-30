@@ -33,6 +33,16 @@ final class RemoteAppCredentialBindingCommandWriter
   final CredentialBindingInvocationContextFactory invocationContext;
 
   @override
+  Future<AuthSessionGrant> completeFederatedPhoneBinding(
+    CompleteFederatedPhoneBindingCommand command,
+  ) => client.userCredentialBindingCompleteFederatedPhoneBinding(
+    command,
+    context: invocationContext(
+      UserRequestPageIds.completeFederatedPhoneBinding,
+    ),
+  );
+
+  @override
   Future<CredentialBindingCommandResult> bindPhoneCredential(
     BindPhoneCredentialCommand command,
   ) => client.userCredentialBindingBindPhoneCredential(

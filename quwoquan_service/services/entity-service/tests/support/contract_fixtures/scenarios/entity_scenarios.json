@@ -232,7 +232,7 @@
                 "ownerUserId": "fixture_user_owner",
                 "ownerDisplayNameSnapshot": "契约摄影社主理人",
                 "ownerAvatarUrlSnapshot": "",
-                "evidenceSnapshotId": "circle:fixture_circle_photo:members:v1"
+                "evidenceSnapshotId": "circle:fixture_circle_photo:members"
               }
             ],
             "sourceRefs": [
@@ -248,7 +248,7 @@
             "manifestJson": "quwoquan_data/entities/地点/景区/西湖景区/manifest.json",
             "mappingHelper": "quwoquan_data/scripts/build/homepage.py::homepage_introduction_seed_from_triplet"
           },
-          "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "address": "浙江省杭州市西湖区",
           "geo": {
             "lat": 30.2431,
@@ -264,7 +264,7 @@
               "ownerUserId": "fixture_user_owner",
               "ownerDisplayNameSnapshot": "契约摄影社主理人",
               "ownerAvatarUrlSnapshot": "",
-              "evidenceSnapshotId": "circle:fixture_circle_photo:members:v1"
+              "evidenceSnapshotId": "circle:fixture_circle_photo:members"
             }
           ],
           "impactSummary": {
@@ -280,7 +280,7 @@
                 "primaryText": "这里打动的人",
                 "subtitleText": "9 位同趣用户关注西湖景区",
                 "impactId": "impact:homepage_sight_west_lake:interest",
-                "evidenceSnapshotId": "impact:homepage_sight_west_lake:v1",
+                "evidenceSnapshotId": "impact:homepage_sight_west_lake:interest",
                 "countObjectKind": "user",
                 "iconKey": "sparkles"
               }
@@ -727,7 +727,7 @@
                 "primaryText": "这里打动的人",
                 "subtitleText": "3 位校友与新东方有共同经历",
                 "impactId": "impact:fixture_homepage_school_neworiental:identity",
-                "evidenceSnapshotId": "impact:fixture_homepage_school_neworiental:v1",
+                "evidenceSnapshotId": "impact:fixture_homepage_school_neworiental:identity",
                 "countObjectKind": "user",
                 "iconKey": "sparkles"
               }

@@ -4,6 +4,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
 TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
@@ -99,7 +101,7 @@ def test_extract_page_text_dispatches_by_registry_extractor():
         fetch_mod._static_official_plaintext = orig_official
 
 
-def test_baidu_baike_html_adapter_fetches_public_entry_text(monkeypatch):
+def test_baidu_baike_html_adapter_obeys_non_fetchable_registry(monkeypatch):
     body = (
         "<html><head><title>嵊州越剧小镇_百度百科</title></head>"
         "<body><h1>嵊州越剧小镇</h1>"
@@ -115,20 +117,17 @@ def test_baidu_baike_html_adapter_fetches_public_entry_text(monkeypatch):
 
     monkeypatch.setattr(payload_mod, "_http_get_bytes", fake_get)
 
-    result = payload_mod.fetch_source_payload(
-        "https://baike.baidu.com/item/%E5%B5%8A%E5%B7%9E%E8%B6%8A%E5%89%A7%E5%B0%8F%E9%95%87",
-        source={
-            "sourceKind": "baidu_baike",
-            "sourceTitle": "嵊州越剧小镇",
-            "extractor": "baidu_baike_html",
-        },
-    )
+    with pytest.raises(RuntimeError, match="marked fetchable=false"):
+        payload_mod.fetch_source_payload(
+            "https://baike.baidu.com/item/%E5%B5%8A%E5%B7%9E%E8%B6%8A%E5%89%A7%E5%B0%8F%E9%95%87",
+            source={
+                "sourceKind": "baidu_baike",
+                "sourceTitle": "嵊州越剧小镇",
+                "extractor": "baidu_baike_html",
+            },
+        )
 
-    assert result["runtime"]["rawFormat"] == "baidu_baike_html"
-    assert "嵊州越剧小镇位于test-region-a嵊州市" in result["text"]
-    assert "位置" in result["text"] and "test-region-a嵊州市" in result["text"]
-    assert len(requested_urls) == 1
-    assert requested_urls[0].startswith("https://baike.baidu.com/item/")
+    assert requested_urls == []
 
 
 def test_generic_html_extractor_preserves_inline_images_as_figures():

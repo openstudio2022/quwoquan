@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/core/media/media_load_failure_cache.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -20,7 +21,7 @@ export 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 
 const int appImageDecodeMaxPhysicalExtent = 2048;
 
-class AppAvatarImage extends StatelessWidget {
+class AppAvatarImage extends ConsumerWidget {
   const AppAvatarImage({
     super.key,
     required this.imageUrl,
@@ -41,10 +42,13 @@ class AppAvatarImage extends StatelessWidget {
   final void Function(Object error)? onLoadFailed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return AppCachedNetworkImage(
       imageUrl: imageUrl,
-      imageUrlCandidates: resolveAvatarImageUrlCandidates(imageUrl),
+      imageUrlCandidates: resolveAvatarImageUrlCandidates(
+        imageUrl,
+        endpointConfig: ref.watch(mediaEndpointConfigProvider),
+      ),
       width: size,
       height: size,
       fit: fit,
@@ -124,9 +128,10 @@ class AppCachedNetworkImage extends ConsumerWidget {
     this.imageBuilder,
   });
 
-  List<String> get _processedUrlCandidates {
+  List<String> _processedUrlCandidates(MediaEndpointConfig? endpointConfig) {
     final rawCandidates =
-        imageUrlCandidates ?? _resolveImplicitCandidates(imageUrl);
+        imageUrlCandidates ??
+        _resolveImplicitCandidates(imageUrl, endpointConfig: endpointConfig);
     final processed = <String>[];
     for (final candidate in rawCandidates) {
       final normalized = candidate.trim();
@@ -153,15 +158,24 @@ class AppCachedNetworkImage extends ConsumerWidget {
     return processed;
   }
 
-  static List<String> _resolveImplicitCandidates(String raw) {
+  static List<String> _resolveImplicitCandidates(
+    String raw, {
+    MediaEndpointConfig? endpointConfig,
+  }) {
     final normalized = raw.trim();
     if (normalized.isEmpty) {
       return const <String>[];
     }
     if (_looksLikeAvatarMedia(normalized)) {
-      return resolveAvatarImageUrlCandidates(normalized);
+      return resolveAvatarImageUrlCandidates(
+        normalized,
+        endpointConfig: endpointConfig,
+      );
     }
-    return resolveContentMediaUrlCandidates(normalized);
+    return resolveContentMediaUrlCandidates(
+      normalized,
+      endpointConfig: endpointConfig,
+    );
   }
 
   static bool _looksLikeAvatarMedia(String raw) {
@@ -173,7 +187,9 @@ class AppCachedNetworkImage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final candidates = _processedUrlCandidates;
+    final candidates = _processedUrlCandidates(
+      ref.watch(mediaEndpointConfigProvider),
+    );
     if (candidates.isEmpty) {
       return _ImageLoadFailureReporter(
         onReport: () =>

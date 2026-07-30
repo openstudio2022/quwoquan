@@ -2,6 +2,7 @@
   "label": "目的地避雷",
   "labelEn": "Destination Warning",
   "description": "旅行目的地踩坑提醒",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

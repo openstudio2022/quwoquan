@@ -2,6 +2,10 @@
   "label": "手作",
   "labelEn": "Handcraft",
   "description": "喜欢手工、DIY 与创意制作",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/旅行/玩法/手作工坊"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

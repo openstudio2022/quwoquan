@@ -19,6 +19,8 @@ from quwoquan_ops.cli.lib.port_manifest import (
 def main() -> int:
     manifest = load_port_manifest()
     issues = validate_port_manifest(manifest)
+    if "fixture-gateway" in manifest.get("roles", {}):
+        issues.append("retired environment role fixture-gateway must not be canonical")
     if issues:
         print("[verify_local_env_port_manifest] FAIL")
         for issue in issues:

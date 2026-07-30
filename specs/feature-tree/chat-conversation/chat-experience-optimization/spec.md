@@ -32,7 +32,7 @@
 
 - [`chat-detail-avatar-display`](./chat-detail-avatar-display/spec.md)：展示对方的版本化头像，点击可进入用户主页，缓存加载不得阻塞会话打开。
 - [`chat-group-admin-govern`](./chat-group-admin-govern/spec.md)：确认弹窗必须屏幕上下左右居中。
-- [`chat-list-local-cache`](./chat-list-local-cache/spec.md)：会话对象缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `Conversation` 为准。
+- [`chat-list-local-cache`](./chat-list-local-cache/spec.md)：会话对象缓存遵守 runtime-client-foundation 的本地缓存规则，只从 chat-service canonical Conversation projection 派生且不维护对象策略台账。
 - [`chat-list-ui-polish`](./chat-list-ui-polish/spec.md)：`@我` 和 `未读` 的角标数量来自同一模型，并在阅读后按统一规则递减。
 
 ## 5. 能力要求

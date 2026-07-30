@@ -23,6 +23,7 @@ fields:
   - name: problemClass
     source: problemClass
     dart_type: String
+    enum_ref: ProblemClass
     json_key: problemClass
   - name: goal
     source: goal
@@ -61,6 +62,7 @@ fields:
   - name: mode
     source: mode
     dart_type: String
+    enum_ref: SkillMode
     json_key: mode
   - name: timeoutMs
     source: timeoutMs
@@ -82,14 +84,17 @@ fields:
   - name: stopPolicy
     source: stopPolicy
     dart_type: String
+    enum_ref: StopPolicy
     json_key: stopPolicy
   - name: searchIntensity
     source: searchIntensity
     dart_type: String
+    enum_ref: SearchIntensity
     json_key: searchIntensity
   - name: providerPolicy
     source: providerPolicy
     dart_type: String
+    enum_ref: ProviderPolicy
     json_key: providerPolicy
   - name: freshnessHoursMax
     source: freshnessHoursMax

@@ -22,7 +22,7 @@ void main() {
       expect(_otp.trim(), isNotEmpty);
       await launchProviderLogin($);
 
-      if (find.byType(PhoneNumberField).evaluate().isEmpty) {
+      if (find.byType(LoginPhoneField).evaluate().isEmpty) {
         await $(find.text(FoundationText.loginOtherMethodFallback)).tap();
         await $(
           find.text(FoundationText.loginMethodPhone),
@@ -31,7 +31,7 @@ void main() {
       }
 
       final phoneField = find.descendant(
-        of: find.byType(PhoneNumberField),
+        of: find.byType(LoginPhoneField),
         matching: find.byType(CupertinoTextField),
       );
       await $(phoneField).enterText(_phone.trim());

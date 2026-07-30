@@ -197,7 +197,7 @@ def test_environment_preflight_reads_fresh_key_for_each_probe(monkeypatch, tmp_p
     key_file = _key_file(tmp_path, monkeypatch, "crsr_" + "a" * 32)
     monkeypatch.setattr(python_runtime, "runtime_report", lambda: {"ready": True})
     monkeypatch.setattr(
-        python_network,
+        python_runtime,
         "check_network_endpoints",
         lambda **kwargs: {"checked": True, "skipped": False, "ready": True, "endpoints": [], "issues": []},
     )

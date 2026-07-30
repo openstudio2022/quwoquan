@@ -29,12 +29,21 @@ func TestPrimaryPersonaSeedIsDeterministicAndOwnedByProfile(t *testing.T) {
 		t.Fatalf("primary Persona seed must be deterministic")
 	}
 	if first.UserID != input.UserID ||
-		first.SubAccountID != input.UserID ||
+		first.PersonaID != input.UserID ||
 		!first.IsPrimary ||
 		!first.IsActive ||
 		first.Status != "active" ||
-		first.IsolationLevel != "open" ||
-		len(first.Phone) != 20 {
+		first.IsolationLevel != "open" {
 		t.Fatalf("unexpected primary Persona seed: %+v", first)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(firstJSON, &payload); err != nil {
+		t.Fatalf("decode first Persona: %v", err)
+	}
+	if _, exists := payload["phone"]; exists {
+		t.Fatal("Persona seed must not contain phone plaintext")
+	}
+	if _, exists := payload["email"]; exists {
+		t.Fatal("Persona seed must not contain email plaintext")
 	}
 }

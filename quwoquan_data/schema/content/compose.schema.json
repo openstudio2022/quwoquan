@@ -62,7 +62,7 @@
     "authorId": { "type": "string" },
     "creatorProfileId": { "type": "string" },
     "creatorArchetype": { "type": "string" },
-    "creatorProfileVersion": { "type": "string" },
+    "creatorProfileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "creatorDisclosure": {
       "type": "object",
       "required": ["type", "displayText", "visible"],

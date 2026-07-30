@@ -68,6 +68,8 @@ class CloudContractHandoffTest(unittest.TestCase):
                 "invariantTarget": "",
                 "actorRequirement": "persona",
                 "concurrency": {"versionPrecondition": "if_match"},
+                "pagination": {"defaultItems": 20, "maximumItems": 20},
+                "responseAdmission": {"maximumBodyBytes": 2097152},
                 "sourcePath": "sample/thing/operations.yaml",
             }
         ]
@@ -179,6 +181,14 @@ class CloudContractHandoffTest(unittest.TestCase):
         self.assertEqual(
             lock["appExposedOperations"][0]["concurrency"],
             {"versionPrecondition": "if_match"},
+        )
+        self.assertEqual(
+            lock["appExposedOperations"][0]["pagination"],
+            {"defaultItems": 20, "maximumItems": 20},
+        )
+        self.assertEqual(
+            lock["appExposedOperations"][0]["responseAdmission"],
+            {"maximumBodyBytes": 2097152},
         )
         self.assertFalse((self.root / "leases/app-cloud-handoff.lock").exists())
 

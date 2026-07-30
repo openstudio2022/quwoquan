@@ -1,0 +1,63 @@
+description: PushDelivery 防腐层引用与其五类领域事件载荷的唯一字段真相源。
+fields:
+- name: endpointRef
+  source: endpointRef
+  type: string
+  constraints: [PK, NOT_NULL]
+  classification: SECRET
+  log_policy: hash
+  api_exposure: write
+  ops_exposure: none
+  role: transport_only
+  reference: true
+- name: deliveryKey
+  source: deliveryKey
+  type: string
+  constraints: [PK, NOT_NULL]
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: write
+  ops_exposure: read
+  role: transport_only
+types:
+  PushDeliveryQueuedEvent:
+    fields:
+    - {name: requestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: action, type: enum, enum_ref: PushDeliveryAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: endpointRef, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: hash, api_exposure: none, ops_exposure: none}
+    - {name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: callType, type: enum, enum_ref: CallType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: queuedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  PushDeliveryProviderAttemptedEvent:
+    fields:
+    - {name: requestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: provider, type: enum, enum_ref: ExternalInteractionProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: providerRequestDigest, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: status, type: enum, enum_ref: ExternalInteractionAttemptStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: latencyMs, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: normalizedError, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+  PushDeliverySucceededEvent:
+    fields:
+    - {name: requestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: action, type: enum, enum_ref: PushDeliveryAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: provider, type: enum, enum_ref: ExternalInteractionProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: providerRequestDigest, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: status, type: enum, enum_ref: ExternalInteractionAttemptStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+  PushDeliveryFailedEvent:
+    fields:
+    - {name: requestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: action, type: enum, enum_ref: PushDeliveryAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: provider, type: enum, enum_ref: ExternalInteractionProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: normalizedError, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: recoveryAction, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+  PushEndpointInvalidationRequestedEvent:
+    fields:
+    - {name: endpointRef, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: hash, api_exposure: none, ops_exposure: none}
+    - {name: endpointKind, type: enum, enum_ref: DevicePushEndpointKind, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: normalizedError, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: requestedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}

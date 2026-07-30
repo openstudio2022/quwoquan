@@ -19,8 +19,9 @@ def _provider_report(
 ) -> dict[str, object]:
     return {
         "schema": "provider-conformance-readiness",
-        "version": 1,
         "evidenceCount": 9,
+        "executableSourceCount": 9,
+        "sourceCoverageIssues": [],
         "issues": issues or [],
         "readiness": {
             environment: {
@@ -56,19 +57,53 @@ def _deploy_args(report_dir: Path) -> argparse.Namespace:
         stage="gray-initial",
         step="5",
         service="content-service",
-        from_image="sha256:before",
-        to_image="sha256:after",
-        from_config="config-before",
-        to_config="config-after",
+        from_candidate_digest=f"sha256:{'1' * 64}",
+        to_candidate_digest=f"sha256:{'2' * 64}",
+        release_evidence_ref=f"ghcr.io/quwoquan/release-evidence@sha256:{'3' * 64}",
         cloud_provider="aliyun",
         dry_run="true",
+        reuse_package=False,
         release_manifest="/tmp/release-manifest.json",
         prometheus_url="",
+        promotion_deadline_epoch=0,
+        hard_deadline_epoch=0,
+        rollback_budget_seconds=300,
         report_dir=str(report_dir),
     )
 
 
 class StackctlProviderReadinessContractTest(unittest.TestCase):
+    def test_sanitizer_accepts_only_canonical_positive_provider_evidence(self) -> None:
+        canonical = _provider_report("prod", ready=True)
+        report, passed = stackctl._sanitized_provider_readiness_report(
+            "prod",
+            child_exit_code=0,
+            child_stdout=json.dumps(canonical),
+        )
+        self.assertTrue(passed)
+        self.assertEqual(report["status"], "passed")
+        self.assertEqual(report["evidenceCount"], 9)
+
+        historical = dict(canonical)
+        historical["version"] = 1
+        report, passed = stackctl._sanitized_provider_readiness_report(
+            "prod",
+            child_exit_code=0,
+            child_stdout=json.dumps(historical),
+        )
+        self.assertFalse(passed)
+        self.assertEqual(report["status"], "gate_block")
+
+        empty = dict(canonical)
+        empty["evidenceCount"] = 0
+        report, passed = stackctl._sanitized_provider_readiness_report(
+            "prod",
+            child_exit_code=0,
+            child_stdout=json.dumps(empty),
+        )
+        self.assertFalse(passed)
+        self.assertEqual(report["status"], "gate_block")
+
     def test_provider_conformance_matrix_derives_all_cells_from_actual_bindings(self) -> None:
         args = argparse.Namespace(
             matrix=True,
@@ -87,15 +122,17 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             prod_binding_preflight_receipt_ref="",
             prod_adapter_health_receipt_ref="",
         )
+        runner = mock.Mock()
+        runner.main.return_value = 0
         with mock.patch.object(
-            stackctl.provider_conformance_runner,
-            "main",
-            return_value=0,
-        ) as runner:
+            stackctl,
+            "_provider_conformance_runner",
+            return_value=runner,
+        ):
             result = stackctl.command_provider_conformance(args)
 
         self.assertEqual(result["exitCode"], 0)
-        runner.assert_called_once_with(
+        runner.main.assert_called_once_with(
             [
                 "--matrix",
                 "--capability-id",
@@ -125,14 +162,19 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                     mock.patch.object(stackctl, "run", side_effect=run_provider),
                     mock.patch.object(
                         stackctl,
-                        "command_package",
-                        return_value={"exitCode": 0, "details": [], "reportDir": ""},
+                        "can_reuse_package",
+                        return_value=(True, "candidate ready"),
                     ),
                     mock.patch.object(stackctl, "_selected_verify_commands", return_value=[]),
                     mock.patch.object(
                         stackctl,
                         "command_content_readiness",
                         return_value={"exitCode": 0, "details": [], "reportDir": ""},
+                    ),
+                    mock.patch.object(
+                        stackctl,
+                        "_inspect_distribution_for_target",
+                        return_value=({"status": "passed", "issues": []}, report_dir, True),
                     ),
                     mock.patch.object(stackctl, "_selected_profile_commands", return_value=[]),
                     mock.patch.object(
@@ -215,7 +257,7 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             self.assertNotIn("secret.invalid", json.dumps(report))
             self.assertNotIn("top-secret", json.dumps(report))
 
-    def test_gray_initial_provider_preflight_precedes_package_even_for_dry_run(self) -> None:
+    def test_gray_initial_provider_preflight_precedes_fixed_package_validation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             report_dir = Path(temporary) / "report"
             release_manifest = Path(temporary) / "release-manifest.json"
@@ -250,19 +292,49 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 mock.patch.object(
                     stackctl,
                     "_deployable_release_manifest",
-                    return_value=(release_manifest, "sha256:manifest", {}),
+                    return_value=(
+                        release_manifest,
+                        f"sha256:{'4' * 64}",
+                        {
+                            "images": {
+                                "content-service": {
+                                    "repository": "ghcr.io/quwoquan/content-service",
+                                    "transportRef": "ghcr.io/quwoquan/content-service:release-test",
+                                }
+                            }
+                        },
+                    ),
                 ),
-                mock.patch.object(stackctl, "_load_release_state", return_value={}),
+                mock.patch.object(
+                    stackctl,
+                    "_fetch_hosted_release_ledger_projection",
+                    return_value=(
+                        {
+                            "to_candidate_digest": f"sha256:{'1' * 64}",
+                            "to_release_evidence_ref": (
+                                f"ghcr.io/quwoquan/release-evidence@sha256:{'5' * 64}"
+                            ),
+                            "to_image_transport_tag": "release-before",
+                            "last_good_candidate_digest": f"sha256:{'1' * 64}",
+                        },
+                        None,
+                    ),
+                ),
                 mock.patch.object(
                     stackctl,
                     "_validate_release_transition",
                     return_value=("advance", 0),
                 ),
+                mock.patch.object(
+                    stackctl,
+                    "_materialize_release_evidence_configuration",
+                    side_effect=ValueError("fixed prod package unavailable"),
+                ),
                 mock.patch.object(stackctl, "_write_summary_bundle"),
             ):
                 result = stackctl.command_deploy(_deploy_args(report_dir))
 
-            self.assertEqual(result["exitCode"], 1)
+            self.assertEqual(result["exitCode"], 2)
             self.assertEqual(
                 invocations[0],
                 [
@@ -272,7 +344,8 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                     "prod",
                 ],
             )
-            self.assertEqual(invocations[1][:3], ["python3", "quwoquan_ops/cli/stackctl.py", "package"])
+            self.assertEqual(len(invocations), 1)
+            self.assertIn("fixed prod package unavailable", result["details"][0])
 
     def test_gray_initial_dry_run_cannot_bypass_failed_provider_readiness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

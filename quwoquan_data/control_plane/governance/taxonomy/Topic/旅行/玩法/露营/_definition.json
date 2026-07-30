@@ -2,11 +2,12 @@
   "label": "露营",
   "labelEn": "Camping",
   "description": "野外露营与户外扎营过夜体验",
+  "axisRole": "topic",
+  "createdAt": "2026-06-28T00:00:00+08:00",
+  "updatedAt": "2026-06-28T00:00:00+08:00",
   "aliases": [
     "营地",
     "野营",
     "扎营"
-  ],
-  "createdAt": "2026-06-28T00:00:00+08:00",
-  "updatedAt": "2026-06-28T00:00:00+08:00"
+  ]
 }

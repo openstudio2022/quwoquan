@@ -385,7 +385,7 @@ def _desired_refs(value: Mapping[str, Any]) -> dict[str, list[str]]:
     }
 
 
-def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
+def _release_integrity(release_id: str, root: Path) -> dict[str, Any]:
     contract = _json(payload_file(root, "desired_state.json"))
     refs = _desired_refs(contract)
     stats: dict[str, Any] = {
@@ -398,6 +398,16 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
         "creatorCount": len(refs["creators"]),
         "tagCount": len(refs["tags"]),
     }
+    for post_ref in refs["posts"]:
+        manifest = _json(
+            payload_file(root, f"objects/posts/{post_ref}/manifest.json")
+        )
+        if _is_image_post(manifest):
+            stats["imageCount"] += 1
+        elif _is_video_post(manifest):
+            stats["videoCount"] += 1
+        else:
+            stats["articleCount"] += 1
     consistency = scan_release_contract(
         contract,
         publish_root=paths.PUBLISH_ROOT,
@@ -416,6 +426,8 @@ def _release_v3_integrity(release_id: str, root: Path) -> dict[str, Any]:
         issues.append(f"{release_id}: release.json schema must be quwoquan_data.release")
     if str(header.get("releaseId") or "") != release_id:
         issues.append(f"{release_id}: release.json releaseId mismatch")
+    if header.get("sourceOwner") != "qwq_data":
+        issues.append(f"{release_id}: release.json sourceOwner must be qwq_data")
     if str(contract.get("releaseId") or "") != release_id:
         issues.append(f"{release_id}: desired_state.json releaseId mismatch")
 
@@ -488,7 +500,7 @@ def scan_release_integrity(release_id: str) -> dict[str, Any]:
         issues.append(f"{release_id}: release directory not found")
         return {"schema": REPORT_SCHEMA, "releaseId": release_id, "passed": False, "issues": issues, "stats": stats}
     if payload_file(root, "desired_state.json").is_file():
-        return _release_v3_integrity(release_id, root)
+        return _release_integrity(release_id, root)
 
     issues.append(f"{release_id}: payload/desired_state.json is required")
     return {"schema": REPORT_SCHEMA, "releaseId": release_id, "passed": False, "issues": issues, "stats": stats}

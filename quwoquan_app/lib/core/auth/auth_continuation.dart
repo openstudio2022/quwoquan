@@ -179,32 +179,32 @@ class OpenHomepageReviewComposerContinuation extends AuthContinuation {
 class OpenHomepageOwnerConversationContinuation extends AuthContinuation {
   const OpenHomepageOwnerConversationContinuation({
     required this.homepageId,
-    required this.ownerSubAccountId,
+    required this.ownerPersonaId,
   });
 
   final String homepageId;
-  final String ownerSubAccountId;
+  final String ownerPersonaId;
 }
 
 /// 续接「关注用户主页」。
 class FollowProfileContinuation extends AuthContinuation {
-  const FollowProfileContinuation({required this.subAccountId});
+  const FollowProfileContinuation({required this.personaId});
 
-  final String subAccountId;
+  final String personaId;
 }
 
 /// 续接「向用户主页打招呼」。
 class GreetProfileContinuation extends AuthContinuation {
-  const GreetProfileContinuation({required this.subAccountId});
+  const GreetProfileContinuation({required this.personaId});
 
-  final String subAccountId;
+  final String personaId;
 }
 
 /// 续接「打开或创建与用户的正式私信会话」。
 class OpenDirectConversationContinuation extends AuthContinuation {
-  const OpenDirectConversationContinuation({required this.subAccountId});
+  const OpenDirectConversationContinuation({required this.personaId});
 
-  final String subAccountId;
+  final String personaId;
 }
 
 /// 续接「从用户主页发起 1v1 通话」。
@@ -245,13 +245,11 @@ class OpenHomeChannelContinuation extends AuthContinuation {
 /// 游客首启兴趣在登录成功后恢复同一稳定行为 intent。
 class SubmitOnboardingInterestContinuation extends AuthContinuation {
   const SubmitOnboardingInterestContinuation({
-    required this.catalogVersion,
     required this.taxonomyReleaseId,
     required this.clientEventId,
     required this.tagRefs,
   });
 
-  final String catalogVersion;
   final String taxonomyReleaseId;
   final String clientEventId;
   final List<String> tagRefs;

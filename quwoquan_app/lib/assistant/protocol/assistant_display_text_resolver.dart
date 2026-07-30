@@ -146,18 +146,14 @@ abstract final class AssistantDisplayTextResolver {
 
   static String extractDisplayMarkdownFromStructuredText(String raw) {
     final parsed = LlmResponseParser.parse(raw);
-    if (!parsed.ok || parsed.json == null) return '';
-    final payload = parsed.json!;
-    final turn = tryParseAssistantTurnOutput(payload);
+    final turn = parsed.turn;
     if (turn == null) return '';
     return projectTurn(turn).markdown;
   }
 
   static String extractPlainTextFromStructuredText(String raw) {
     final parsed = LlmResponseParser.parse(raw);
-    if (!parsed.ok || parsed.json == null) return '';
-    final payload = parsed.json!;
-    final turn = tryParseAssistantTurnOutput(payload);
+    final turn = parsed.turn;
     if (turn == null) return '';
     return projectTurn(turn).plainText;
   }
@@ -420,9 +416,7 @@ abstract final class AssistantDisplayTextResolver {
   }
 
   static bool hasStructuredPrefixLeak(String raw) {
-    final strippedXml = _stripXmlToolCalls(
-      raw,
-    ).trimLeft();
+    final strippedXml = _stripXmlToolCalls(raw).trimLeft();
     if (strippedXml.isEmpty) return false;
     return _stripLeadingStructuredFragments(strippedXml) != strippedXml.trim();
   }

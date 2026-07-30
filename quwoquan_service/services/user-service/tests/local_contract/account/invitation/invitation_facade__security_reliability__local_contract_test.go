@@ -75,7 +75,7 @@ func TestInvitationLifecycleExpiresBeforeDeliveryAndAcceptIsIdempotent(t *testin
 func validInvitation(now time.Time) *invitationmodel.Invitation {
 	return &invitationmodel.Invitation{
 		ID:                    "invitation-1",
-		InviterSubAccountID:   "persona-owner",
+		InviterPersonaID:      "persona-owner",
 		InviterOwnerAccountID: "account-owner",
 		Channel:               "direct",
 		LinkCode:              "link-code",
@@ -89,9 +89,9 @@ type invitationPersonaOwners map[string]string
 
 func (owners invitationPersonaOwners) ResolveOwnerAccountID(
 	_ context.Context,
-	subAccountID string,
+	personaID string,
 ) (string, bool, error) {
-	owner, found := owners[subAccountID]
+	owner, found := owners[personaID]
 	return owner, found, nil
 }
 

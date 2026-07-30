@@ -6,15 +6,14 @@ import (
 )
 
 type ProfileQrToken struct {
-	TokenID      string     `json:"-" db:"token_id"`
-	TokenHash    string     `json:"-" db:"token_hash"`
-	OwnerUserID  string     `json:"-" db:"owner_user_id"`
-	SubAccountID string     `json:"-" db:"sub_account_id"`
-	UserHandle   string     `json:"-" db:"user_handle"`
-	StyleVersion string     `json:"-" db:"style_version"`
-	Status       string     `json:"-" db:"status"`
-	ExpiresAt    *time.Time `json:"-" db:"expires_at"`
-	RevokedAt    *time.Time `json:"-" db:"revoked_at"`
-	CreatedAt    time.Time  `json:"-" db:"created_at"`
-	UpdatedAt    time.Time  `json:"-" db:"updated_at"`
+	TokenID     string     `json:"-" db:"token_id"`
+	TokenHash   string     `json:"-" db:"token_hash"`
+	OwnerUserID string     `json:"-" db:"owner_user_id"`
+	PersonaID   string     `json:"-" db:"persona_id"`
+	UserHandle  string     `json:"-" db:"user_handle"`
+	Status      string     `json:"-" db:"status"`
+	ExpiresAt   *time.Time `json:"-" db:"expires_at"`
+	RevokedAt   *time.Time `json:"-" db:"revoked_at"`
+	CreatedAt   time.Time  `json:"-" db:"created_at"`
+	UpdatedAt   time.Time  `json:"-" db:"updated_at"`
 }

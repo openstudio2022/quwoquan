@@ -2,7 +2,7 @@ package local_contract
 
 import (
 	"encoding/json"
-	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/streaming"
 	"testing"
 	"time"
 
@@ -42,7 +42,7 @@ func TestRuntimeFoundationSmoke(t *testing.T) {
 	}
 
 	envelope, err := streaming.NewEnvelope(
-		string(AssistantStreamEventRunStarted),
+		string(assistantstreaming.AssistantStreamEventRunStarted),
 		1,
 		map[string]string{"turnId": turnID},
 	)

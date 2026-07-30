@@ -4,51 +4,120 @@ package api_integration
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 )
 
 func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T) {
 	ctx := context.Background()
 	db := requireMongoDB(t)
 	const environment = "api-integration-active-supply"
+	const releaseID = "rel_api_integration_active_supply"
+	const contentID = "active_supply_video_001"
+	const manifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	collection := db.Collection("data_release_state")
+	posts := db.Collection("posts")
+	feed := db.Collection("rm_discovery_feed")
+	premium := db.Collection("rm_premium_pool")
 	if _, err := collection.DeleteMany(ctx, bson.M{"environment": environment}); err != nil {
 		t.Fatalf("delete release state: %v", err)
 	}
 	t.Cleanup(func() {
 		_, _ = collection.DeleteMany(context.Background(), bson.M{"environment": environment})
+		_, _ = posts.DeleteMany(context.Background(), bson.M{"_id": contentID})
+		_, _ = feed.DeleteMany(context.Background(), bson.M{"postId": contentID})
+		_, _ = premium.DeleteMany(context.Background(), bson.M{"contentId": contentID})
 	})
 
-	reader := persistence.NewMongoActiveSupplyReader(db, environment)
-	active, err := reader.HasActiveSupply(ctx)
+	reader := persistence.NewMongoActiveSupplyReader(
+		db,
+		environment,
+		persistence.WithPremiumPlayableSupplyReader(
+			recinfra.NewMongoPremiumPoolCandidateReader(db),
+		),
+	)
+	snapshot, err := reader.ActiveSupplySnapshot(ctx)
 	if err != nil {
-		t.Fatalf("HasActiveSupply missing: %v", err)
+		t.Fatalf("ActiveSupplySnapshot missing: %v", err)
 	}
-	if active {
+	if snapshot.Ready() {
 		t.Fatal("environment without data_release_state must not report active supply")
 	}
 
 	if _, err := collection.InsertMany(ctx, []any{
 		bson.M{
-			"environment": environment, "sourceOwner": "inactive",
-			"status": "inactive", "activeReleaseId": "rel_inactive",
+			"environment": environment, "sourceOwner": "other_owner",
+			"status": "active", "activeReleaseId": "rel_wrong_owner",
+			"manifestDigest": manifestDigest,
 		},
 		bson.M{
 			"environment": environment, "sourceOwner": "qwq_data",
-			"status": "active", "activeReleaseId": "rel_active",
+			"status": "active", "activeReleaseId": "rel_empty",
+			"manifestDigest": manifestDigest,
 		},
 	}); err != nil {
 		t.Fatalf("insert release states: %v", err)
 	}
 
-	active, err = reader.HasActiveSupply(ctx)
+	snapshot, err = reader.ActiveSupplySnapshot(ctx)
 	if err != nil {
-		t.Fatalf("HasActiveSupply active: %v", err)
+		t.Fatalf("ActiveSupplySnapshot empty release: %v", err)
 	}
-	if !active {
-		t.Fatal("environment-scoped active release must report available supply")
+	if snapshot.Ready() {
+		t.Fatalf("zero-count release must not report ready supply: %+v", snapshot)
+	}
+
+	if _, err := collection.UpdateOne(ctx,
+		bson.M{"environment": environment, "sourceOwner": "qwq_data"},
+		bson.M{"$set": bson.M{
+			"activeReleaseId": releaseID,
+			"manifestDigest":  manifestDigest,
+			"counts":          bson.M{"postsUpserted": 120, "feedUpserted": 120},
+		}},
+	); err != nil {
+		t.Fatalf("activate non-empty release: %v", err)
+	}
+	now := time.Now().UTC()
+	if _, err := posts.InsertOne(ctx, bson.M{
+		"_id": contentID, "sourceOwner": "qwq_data", "releaseId": releaseID,
+		"manifestDigest":  manifestDigest,
+		"lifecycleStatus": "active", "status": "published", "visibility": "public",
+		"moderationStatus": "approved", "contentIdentity": "work", "contentType": "video",
+		"videoUrl": "https://media.example.test/video.mp4", "durationMs": int64(1000),
+	}); err != nil {
+		t.Fatalf("seed active release post: %v", err)
+	}
+	if _, err := feed.InsertOne(ctx, bson.M{
+		"postId": contentID, "sourceOwner": "qwq_data", "releaseId": releaseID,
+		"manifestDigest":  manifestDigest,
+		"lifecycleStatus": "active", "status": "published", "visibility": "public",
+		"contentIdentity": "work", "contentType": "video",
+	}); err != nil {
+		t.Fatalf("seed active release discovery projection: %v", err)
+	}
+	if _, err := premium.InsertOne(ctx, bson.M{
+		"contentId": contentID, "scope": "global", "status": "active",
+		"eligibilityState": "eligible", "qualityAdmission": "approved",
+		"qualityScore": 0.95, "expiresAt": now.Add(time.Hour), "takedownEjected": false,
+	}); err != nil {
+		t.Fatalf("seed active release premium projection: %v", err)
+	}
+
+	snapshot, err = reader.ActiveSupplySnapshot(ctx)
+	if err != nil {
+		t.Fatalf("ActiveSupplySnapshot active: %v", err)
+	}
+	if !snapshot.Ready() {
+		t.Fatalf("environment-scoped release-bound snapshot must be ready: %+v", snapshot)
+	}
+	if snapshot.ActiveReleaseID != releaseID || snapshot.SourceOwner != "qwq_data" ||
+		snapshot.Status != "active" || snapshot.ManifestDigest != manifestDigest ||
+		snapshot.ReadbackStatus != "passed" || snapshot.Posts != 1 ||
+		snapshot.DiscoveryPosts != 1 || snapshot.PremiumPlayableVideos != 1 {
+		t.Fatalf("active supply snapshot mismatch: %+v", snapshot)
 	}
 }

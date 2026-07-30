@@ -38,6 +38,8 @@ func contentDomainErrorsPaths() []string {
 		"content/content/comment/errors.yaml",
 		"content/content/content_reaction/errors.yaml",
 		"content/content/deleted_post_tombstone/errors.yaml",
+		"content/content/profile_interaction_activity_view/errors.yaml",
+		"content/content/profile_interaction_read_fact/errors.yaml",
 		"content/media/filter_catalog_release/errors.yaml",
 		"content/media/media_asset/errors.yaml",
 		"content/media/media_image_reprocess_run/errors.yaml",

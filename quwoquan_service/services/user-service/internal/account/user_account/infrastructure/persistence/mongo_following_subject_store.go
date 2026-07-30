@@ -20,6 +20,11 @@ type MongoFollowingSubjectStore struct {
 	collection *mongo.Collection
 }
 
+const (
+	followingSubjectIdentityIndex = "idx_following_subject_viewer_subject"
+	followingSubjectChangedIndex  = "idx_following_subject_viewer_type_changed"
+)
+
 func NewMongoFollowingSubjectStore(database *mongo.Database) *MongoFollowingSubjectStore {
 	if database == nil {
 		return &MongoFollowingSubjectStore{}
@@ -33,22 +38,25 @@ func (s *MongoFollowingSubjectStore) EnsureIndexes(ctx context.Context) error {
 	if s == nil || s.collection == nil {
 		return nil
 	}
+	if err := s.migratePersonaIdentity(ctx); err != nil {
+		return err
+	}
 	_, err := s.collection.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
 			Keys: bson.D{
-				{Key: "viewerSubAccountId", Value: 1},
+				{Key: "viewerPersonaId", Value: 1},
 				{Key: "subjectType", Value: 1},
 				{Key: "subjectId", Value: 1},
 			},
-			Options: options.Index().SetName("idx_following_subject_viewer_subject").SetUnique(true),
+			Options: options.Index().SetName(followingSubjectIdentityIndex).SetUnique(true),
 		},
 		{
 			Keys: bson.D{
-				{Key: "viewerSubAccountId", Value: 1},
+				{Key: "viewerPersonaId", Value: 1},
 				{Key: "subjectType", Value: 1},
 				{Key: "latestChangedAt", Value: -1},
 			},
-			Options: options.Index().SetName("idx_following_subject_viewer_type_changed"),
+			Options: options.Index().SetName(followingSubjectChangedIndex),
 		},
 	})
 	return err
@@ -66,9 +74,9 @@ func (s *MongoFollowingSubjectStore) UpsertFollow(
 	}
 	now := time.Now().UTC()
 	filter := bson.M{
-		"viewerSubAccountId": personaID,
-		"subjectType":        subjectType,
-		"subjectId":          subjectID,
+		"viewerPersonaId": personaID,
+		"subjectType":     subjectType,
+		"subjectId":       subjectID,
 		"$or": bson.A{
 			bson.M{"sourceVersion": bson.M{"$lt": sourceVersion}},
 			bson.M{"sourceVersion": bson.M{"$exists": false}},
@@ -81,10 +89,10 @@ func (s *MongoFollowingSubjectStore) UpsertFollow(
 			"updatedAt":     now,
 		},
 		"$setOnInsert": bson.M{
-			"viewerSubAccountId": personaID,
-			"subjectType":        subjectType,
-			"subjectId":          subjectID,
-			"unreadChangeCount":  int64(0),
+			"viewerPersonaId":   personaID,
+			"subjectType":       subjectType,
+			"subjectId":         subjectID,
+			"unreadChangeCount": int64(0),
 		},
 	}
 	_, err := s.collection.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
@@ -108,10 +116,10 @@ func (s *MongoFollowingSubjectStore) RemoveFollow(
 		return errors.New("following subject store is unavailable")
 	}
 	_, err := s.collection.DeleteOne(ctx, bson.M{
-		"viewerSubAccountId": personaID,
-		"subjectType":        subjectType,
-		"subjectId":          subjectID,
-		"sourceVersion":      bson.M{"$lte": sourceVersion},
+		"viewerPersonaId": personaID,
+		"subjectType":     subjectType,
+		"subjectId":       subjectID,
+		"sourceVersion":   bson.M{"$lte": sourceVersion},
 	})
 	if err != nil {
 		return fmt.Errorf("remove following subject: %w", err)
@@ -129,9 +137,9 @@ func (s *MongoFollowingSubjectStore) ApplyVisit(
 		return errors.New("following subject store is unavailable")
 	}
 	_, err := s.collection.UpdateOne(ctx, bson.M{
-		"viewerSubAccountId": personaID,
-		"subjectType":        subjectType,
-		"subjectId":          subjectID,
+		"viewerPersonaId": personaID,
+		"subjectType":     subjectType,
+		"subjectId":       subjectID,
 	}, bson.M{
 		"$max": bson.M{"lastVisitedAt": visitedAt.UTC()},
 		"$set": bson.M{
@@ -158,7 +166,7 @@ func (s *MongoFollowingSubjectStore) List(
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	filter := bson.M{"viewerSubAccountId": strings.TrimSpace(personaID)}
+	filter := bson.M{"viewerPersonaId": strings.TrimSpace(personaID)}
 	if subjectType = strings.TrimSpace(subjectType); subjectType != "" {
 		filter["subjectType"] = subjectType
 	}

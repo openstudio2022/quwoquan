@@ -7,7 +7,6 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
-import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 void main() {
   group('IntersectionActionKeys', () {
@@ -26,11 +25,9 @@ void main() {
       expect(IntersectionActionKeys.askAssistant, 'ask_assistant');
       // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯常量。
       expect(IntersectionActionKeys.joinTopicRoom, 'join_topic_room');
-      expect(IntersectionActionKeys.startCompanion, 'start_companion');
-      expect(IntersectionActionKeys.joinTrip, 'join_trip');
-      expect(IntersectionActionKeys.joinMeetup, 'join_meetup');
+      expect(IntersectionActionKeys.startGathering, 'start_gathering');
+      expect(IntersectionActionKeys.joinGathering, 'join_gathering');
       expect(IntersectionActionKeys.meetNearby, 'meet_nearby');
-      expect(IntersectionActionKeys.startVoiceRoom, 'start_voice_room');
       expect(IntersectionActionKeys.expressInterest, 'express_interest');
       expect(IntersectionActionKeys.viewOfficialDeals, 'view_official_deals');
       expect(IntersectionActionKeys.bookTicket, 'book_ticket');
@@ -52,11 +49,9 @@ void main() {
         IntersectionActionKeys.createFollowup,
         IntersectionActionKeys.askAssistant,
         IntersectionActionKeys.joinTopicRoom,
-        IntersectionActionKeys.startCompanion,
-        IntersectionActionKeys.joinTrip,
-        IntersectionActionKeys.joinMeetup,
+        IntersectionActionKeys.startGathering,
+        IntersectionActionKeys.joinGathering,
         IntersectionActionKeys.meetNearby,
-        IntersectionActionKeys.startVoiceRoom,
         IntersectionActionKeys.expressInterest,
         IntersectionActionKeys.viewOfficialDeals,
         IntersectionActionKeys.bookTicket,
@@ -65,47 +60,56 @@ void main() {
       expect(endpointConstants, intersectionActionKeys.toSet());
     });
 
-    test('isCompanionAction：仅同行/线下约伴类（dispatch==companion）驱动「有人同行」', () {
-      // dispatch==companion：真正的同行 / 行程 / 线下局 / 实时附近。
+    test('isGatheringAction：仅同行/线下约伴类（dispatch==gathering）驱动「有人同行」', () {
+      // dispatch==gathering：真正的同行 / 线下局 / 实时附近。
       expect(
-        IntersectionActionKeys.isCompanionAction('start_companion'),
+        IntersectionActionKeys.isGatheringAction('start_gathering'),
         isTrue,
       );
-      expect(IntersectionActionKeys.isCompanionAction('join_trip'), isTrue);
-      expect(IntersectionActionKeys.isCompanionAction('join_meetup'), isTrue);
-      expect(IntersectionActionKeys.isCompanionAction('meet_nearby'), isTrue);
+      expect(
+        IntersectionActionKeys.isGatheringAction('join_gathering'),
+        isTrue,
+      );
+      expect(IntersectionActionKeys.isGatheringAction('meet_nearby'), isTrue);
       // trim 容错。
       expect(
-        IntersectionActionKeys.isCompanionAction(' start_companion '),
+        IntersectionActionKeys.isGatheringAction(' start_gathering '),
         isTrue,
       );
-      // M0.7 语义修正：话题房 / 语音房 / 心动（dispatch==connect）不再误标为同行。
+      // M0.7 语义修正：话题房 / 心动（dispatch==connect）不再误标为同行。
       expect(
-        IntersectionActionKeys.isCompanionAction('join_topic_room'),
+        IntersectionActionKeys.isGatheringAction('join_topic_room'),
         isFalse,
       );
       expect(
-        IntersectionActionKeys.isCompanionAction('start_voice_room'),
-        isFalse,
-      );
-      expect(
-        IntersectionActionKeys.isCompanionAction('express_interest'),
+        IntersectionActionKeys.isGatheringAction('express_interest'),
         isFalse,
       );
       // 私信（dispatch==message）与轻连接 / 助手类均非同行。
       expect(
-        IntersectionActionKeys.isCompanionAction('message_person'),
+        IntersectionActionKeys.isGatheringAction('message_person'),
         isFalse,
       );
       expect(
-        IntersectionActionKeys.isCompanionAction('follow_person'),
+        IntersectionActionKeys.isGatheringAction('follow_person'),
         isFalse,
       );
       expect(
-        IntersectionActionKeys.isCompanionAction('ask_assistant'),
+        IntersectionActionKeys.isGatheringAction('ask_assistant'),
         isFalse,
       );
-      expect(IntersectionActionKeys.isCompanionAction(''), isFalse);
+      expect(IntersectionActionKeys.isGatheringAction(''), isFalse);
+      // 已退役 actionKey（registry.actionKeyMigrations）不得被端侧继续识别，
+      // 否则云侧改名后端侧仍会渲染出无承接页的入口。
+      for (final retired in <String>[
+        'start_companion',
+        'join_trip',
+        'join_meetup',
+        'start_voice_room',
+      ]) {
+        expect(IntersectionActionKeys.isGatheringAction(retired), isFalse);
+        expect(intersectionActionKeys, isNot(contains(retired)));
+      }
     });
 
     test('isAssistant：仅助手类（ask_assistant / create_followup）才打开小艺', () {
@@ -125,13 +129,13 @@ void main() {
       expect(IntersectionActionKeys.isCommerce('view_official_deals'), isTrue);
       expect(IntersectionActionKeys.isCommerce('book_ticket'), isTrue);
       expect(IntersectionActionKeys.isCommerce('book_hotel'), isTrue);
-      expect(IntersectionActionKeys.isCommerce('start_companion'), isFalse);
+      expect(IntersectionActionKeys.isCommerce('start_gathering'), isFalse);
       expect(IntersectionActionKeys.isCommerce('open_route'), isFalse);
       expect(IntersectionActionKeys.isCommerce(''), isFalse);
     });
 
     test('分类判定委托 codegen dispatch，端无第二真相源（M0.7）', () {
-      // 端 isAssistant / isCompanionAction 必须与 codegen actionKeyMeta.dispatch 完全一致，
+      // 端 isAssistant / isGatheringAction 必须与 codegen actionKeyMeta.dispatch 完全一致，
       // 证明端不再手写重社交/助手枚举（守 R06 / R24 单一真相源）。
       for (final key in intersectionActionKeys) {
         final meta = intersectionActionKeyMeta[key];
@@ -142,8 +146,8 @@ void main() {
           reason: '$key dispatch=${meta.dispatch}',
         );
         expect(
-          IntersectionActionKeys.isCompanionAction(key),
-          meta.dispatch == 'companion',
+          IntersectionActionKeys.isGatheringAction(key),
+          meta.dispatch == 'gathering',
           reason: '$key dispatch=${meta.dispatch}',
         );
         expect(
@@ -156,36 +160,6 @@ void main() {
       for (final meta in intersectionActionKeyMeta.values) {
         expect(intersectionActionDispatchKeys, contains(meta.dispatch));
       }
-    });
-  });
-
-  group('交集行动按钮文案 UI-SSOT 与 codegen 闭集对齐（§23 去桥接）', () {
-    test(
-      'DiscoveryFeedText.intersectionActionLabels 键集 == codegen actionKey 闭集',
-      () {
-        // 每个注册表 actionKey 必须有 UI 文案，且不得有 codegen 闭集之外的孤儿文案。
-        expect(
-          DiscoveryFeedText.intersectionActionLabels.keys.toSet(),
-          intersectionActionKeys.toSet(),
-        );
-      },
-    );
-
-    test('每个 actionKey 文案非空', () {
-      for (final key in intersectionActionKeys) {
-        expect(
-          DiscoveryFeedText.intersectionActionLabel(key).trim(),
-          isNotEmpty,
-          reason: key,
-        );
-      }
-    });
-
-    test('未知 actionKey 回退助手解释文案', () {
-      expect(
-        DiscoveryFeedText.intersectionActionLabel('unknown_future_action'),
-        DiscoveryFeedText.intersectionActionLabels['ask_assistant'],
-      );
     });
   });
 }

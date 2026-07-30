@@ -15,11 +15,6 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 )
 
-type RateLimitSetter interface {
-	SetRate(ratePerSecond int)
-	Rate() int
-}
-
 type ConfigSyncLoopOptions struct {
 	BaseURL               string
 	ServiceName           string
@@ -31,7 +26,24 @@ type ConfigSyncLoopOptions struct {
 	ReleaseManifestDigest string
 	InstanceID            string
 	HotStore              *HotConfigStore
-	RateLimiter           RateLimitSetter
+}
+
+// ValidateImageIdentity requires one explicit immutable release identity.
+// Exact source/OCI refs are verified by the environment assembly gate; the
+// process boundary rejects absent, mutable, or package-template identities.
+func ValidateImageIdentity(value string) error {
+	identity := strings.TrimSpace(value)
+	if identity == "" {
+		return fmt.Errorf("IMAGE_VERSION is required")
+	}
+	if strings.ContainsAny(identity, " \t\r\n") {
+		return fmt.Errorf("IMAGE_VERSION must be one canonical token")
+	}
+	switch strings.ToLower(identity) {
+	case "latest", "down", "package-required", "source-provenance-required":
+		return fmt.Errorf("IMAGE_VERSION is not immutable: %s", identity)
+	}
+	return nil
 }
 
 // StartReleaseConfigAttestation 启动已在本进程完成 config load + validation 后的
@@ -44,6 +56,9 @@ func StartReleaseConfigAttestation(
 	configVersion string,
 	imageVersion string,
 ) {
+	if err := ValidateImageIdentity(imageVersion); err != nil {
+		panic("controlplane release identity: " + err.Error())
+	}
 	instanceID := strings.TrimSpace(os.Getenv("SERVICE_INSTANCE_ID"))
 	if instanceID == "" {
 		hostname, err := os.Hostname()
@@ -78,6 +93,9 @@ func StartReleaseConfigAttestation(
 }
 
 func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
+	if err := ValidateImageIdentity(opts.ImageVersion); err != nil {
+		panic("controlplane config sync release identity: " + err.Error())
+	}
 	baseURL := strings.TrimSpace(opts.BaseURL)
 	if baseURL == "" {
 		if isProductionConfigSyncEnvironment(opts.AppEnv) {
@@ -105,15 +123,6 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 	// 热配置变更后无需重启即生效；未命中回退 codegen 静态 baseline。
 	if opts.HotStore != nil {
 		rterr.SetUserMessageResolver(NewErrorMessageResolver(opts.HotStore))
-	}
-
-	applyRuntimeSettings := func() {
-		if opts.HotStore == nil {
-			return
-		}
-		if opts.RateLimiter != nil {
-			opts.RateLimiter.SetRate(opts.HotStore.GetInt("sys.gateway.rate_limit.per_user_rps", opts.RateLimiter.Rate()))
-		}
 	}
 
 	resolvePollInterval := func() time.Duration {
@@ -168,8 +177,6 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 		if opts.HotStore != nil {
 			effectiveHash = opts.HotStore.Apply(response.Values)
 		}
-		applyRuntimeSettings()
-
 		report := InstanceConfigReport{
 			ID:                    opts.InstanceID,
 			Environment:           opts.AppEnv,

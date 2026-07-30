@@ -3,12 +3,13 @@ events:
   description: 助手执行开始
   producer: assistant-service
   consumers: []
+  no_consumer_reason: aggregate_event_journal_only
   channel: event_store
   payload_entity: AssistantRun
   payload_fields:
   - _id
   - userId
-  - subAccountId
+  - personaId
   - personaContextVersion
   - conversationId
   - skillId
@@ -24,7 +25,7 @@ events:
   payload_fields:
   - _id
   - userId
-  - subAccountId
+  - personaId
   - personaContextVersion
   - status
   - toolsCalled
@@ -37,7 +38,9 @@ events:
   description: Tool 被调用
   producer: assistant-service
   consumers: []
+  no_consumer_reason: aggregate_event_journal_only
   channel: event_store
+  payload_entity: AssistantToolCallEventPayload
   payload_fields:
   - runId
   - userId
@@ -50,6 +53,7 @@ events:
   consumers:
   - recommendation-engine
   channel: direct
+  payload_entity: AssistantSuggestedActionClickEventPayload
   payload_fields:
   - runId
   - userId

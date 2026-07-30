@@ -6,6 +6,8 @@ errors:
   kind: USER
   reason: unauthorized
   http_status: 401
+  emitted_by:
+  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: none
   dart_const: unauthorized
   go_const: ErrUnauthorized
@@ -16,6 +18,8 @@ errors:
   kind: USER
   reason: forbidden
   http_status: 403
+  emitted_by:
+  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: none
   dart_const: forbidden
   go_const: ErrForbidden
@@ -26,6 +30,8 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: none
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
@@ -36,6 +42,8 @@ errors:
   kind: SYSTEM
   reason: scoring_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [ScoreRecommendationCandidates, BatchScoreRecommendationCandidates]}
   recovery_action: retry
   recovery_after_seconds: 1
   dart_const: scoringFailed

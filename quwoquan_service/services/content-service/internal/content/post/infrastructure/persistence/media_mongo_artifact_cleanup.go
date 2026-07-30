@@ -12,8 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	mediaprocessing "quwoquan_service/services/content-service/internal/content/post/application/media/processing"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/accountclosure"
-	"quwoquan_service/services/content-service/internal/content/post/infrastructure/mediaobjectfence"
+	mediamodel "quwoquan_service/services/content-service/internal/content/post/domain/media/model"
 )
 
 func (s *MongoMediaStore) PrepareMediaAssetArtifactCleanup(
@@ -50,29 +49,43 @@ func (s *MongoMediaStore) PrepareMediaAssetArtifactCleanup(
 	if document.ArtifactsDeletedAt != nil {
 		return mediaprocessing.ArtifactCleanupWork{}, true, nil
 	}
-	projected := accountclosure.NewMediaArtifactWorkDocument(
+	historicalImageArtifacts := make(
+		[]mediaprocessing.ImageArtifactSource,
+		0,
+		len(document.ImageDescriptorRevisions),
+	)
+	for _, revision := range document.ImageDescriptorRevisions {
+		historicalImageArtifacts = append(
+			historicalImageArtifacts,
+			mediaprocessing.ImageArtifactSource{
+				NormalizedObjectKey: revision.Descriptor.ImageNormalizedObjectKey,
+				PublicSliceKey:      revision.Descriptor.ImagePublicSliceKey,
+			},
+		)
+	}
+	projected := mediaprocessing.PlanArtifactCleanup(
 		eventID,
-		accountclosure.MediaArtifactClosureRow{
-			ID:                           document.ID,
+		mediaprocessing.ArtifactCleanupSource{
+			AssetID:                      document.ID,
 			ObjectKey:                    document.ObjectKey,
 			ImageNormalizedObjectKey:     document.ImageNormalizedObjectKey,
 			ImagePublicSliceKey:          document.ImagePublicSliceKey,
 			VideoPublicSliceKey:          document.VideoPublicSliceKey,
 			CoverPublicSliceKey:          document.CoverPublicSliceKey,
 			PreviewTrackManifestSliceKey: document.PreviewTrackManifestSliceKey,
-			ImageDescriptorRevisions:     document.ImageDescriptorRevisions,
+			HistoricalImageArtifacts:     historicalImageArtifacts,
 		},
 	)
 	privateObjectKeys, err := s.reclaimableDiscardedMediaObjectKeys(
 		ctx,
-		projected.ID,
+		projected.WorkID,
 		projected.PrivateObjectKeys,
 	)
 	if err != nil {
 		return mediaprocessing.ArtifactCleanupWork{}, false, err
 	}
 	return mediaprocessing.ArtifactCleanupWork{
-		WorkID:            projected.ID,
+		WorkID:            projected.WorkID,
 		PublicSliceKeys:   projected.PublicSliceKeys,
 		PublicPrefixes:    projected.PublicPrefixes,
 		PrivateObjectKeys: privateObjectKeys,
@@ -99,7 +112,7 @@ func (s *MongoMediaStore) reclaimableDiscardedMediaObjectKeys(
 			continue
 		}
 		seen[key] = struct{}{}
-		if mediaobjectfence.IsContentAddressedObjectKey(key) {
+		if mediamodel.IsContentAddressedObjectKey(key) {
 			claimed, err := s.objectFences.ClaimUnreferencedDeletion(
 				ctx,
 				key,

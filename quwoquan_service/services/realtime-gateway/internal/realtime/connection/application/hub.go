@@ -20,8 +20,8 @@ const (
 	// authority check, but must recover promptly so cross-node eviction keeps
 	// its low-latency path.
 	accountSecurityRelayReconnectDelay = time.Second
-	// defaultMaxConnectionsPerPersona 对齐 events.yaml ConnectionReplaced：
-	// 超过 per-persona 上限时踢掉最早连接。
+	// 超过 per-persona 上限时直接踢掉本节点最早连接。Connection 是运行时会话，
+	// 该替换动作没有跨服务领域消费者，因此不发布伪领域事件。
 	defaultMaxConnectionsPerPersona = 5
 )
 

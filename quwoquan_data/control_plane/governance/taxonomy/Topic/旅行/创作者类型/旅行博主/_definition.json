@@ -1,9 +1,0 @@
-{
-  "tagRef": "Topic/旅行/创作者类型/旅行博主",
-  "label": "旅行博主",
-  "labelEn": "travel blogger",
-  "description": "以旅行叙事、行程分享为主的创作者类型标签。",
-  "createdAt": "2026-07-14T00:00:00Z",
-  "updatedAt": "2026-07-14T00:00:00Z",
-  "schema": "quwoquan.tag.definition"
-}

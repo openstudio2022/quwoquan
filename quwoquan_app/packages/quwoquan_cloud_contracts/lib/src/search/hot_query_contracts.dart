@@ -1,16 +1,7 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/search/hot_query_contracts.requests.g.dart';
 
-/// 搜索默认页热词查询。数据来自 search-service term-heat 读模型，
-/// 客户端不维护第二套业务词表。
-final class ListHotQueriesQuery {
-  ListHotQueriesQuery({this.limit = 10}) {
-    if (limit <= 0 || limit > 20) {
-      throw ArgumentError.value(limit, 'limit', 'must be between 1 and 20');
-    }
-  }
 
-  final int limit;
-}
 
 final class HotQuery {
   const HotQuery({required this.query, required this.relevance});
@@ -29,11 +20,7 @@ abstract interface class SearchHotQueryReader {
   Future<HotQuerySlice> listHotQueries(ListHotQueriesQuery query);
 }
 
-CloudOperationRequestPayload encodeListHotQueriesQuery(
-  ListHotQueriesQuery query,
-) => CloudOperationRequestPayload(
-  queryParameters: <String, String>{'limit': '${query.limit}'},
-);
+
 
 HotQuerySlice decodeHotQuerySlice(Object? value) {
   final Object? rawItems = switch (value) {

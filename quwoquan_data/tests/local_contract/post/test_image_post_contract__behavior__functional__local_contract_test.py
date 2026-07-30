@@ -190,6 +190,7 @@ def test_image_materialize_is_structured_only():
 
     manifest = read_json(post_dir / "manifest.json")
     assert manifest["contentType"] == "image"
+    assert manifest["contentIdentity"] == "work"
     assert manifest["title"] == ""
     assert manifest["caption"] == ""
     assert len(manifest["assets"]) == 2
@@ -267,7 +268,8 @@ def test_image_source_contract_rejects_retired_alias_keys():
         )
     except RuntimeError as exc:
         assert "sourceCollectionId" in str(exc)
-        assert "rightsAuditStatus" in str(exc)
+        assert "collectionPageUrl" in str(exc)
+        assert "license proof" in str(exc)
     else:
         raise AssertionError("retired image source aliases must be rejected")
 

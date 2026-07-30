@@ -267,7 +267,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         _isOwnerLike) {
       return false;
     }
-    return (detail.ownerSubAccountId ?? detail.ownerUserId ?? '')
+    return (detail.ownerPersonaId ?? detail.ownerUserId ?? '')
         .trim()
         .isNotEmpty;
   }
@@ -588,7 +588,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         child: _HomepageEmptyState(
           icon: CupertinoIcons.person_3_fill,
           title: ObjectHomepageText.homepageInterestCircleEmptyTitle,
-          description: ObjectHomepageText.homepageInterestCircleEmptyDescription,
+          description:
+              ObjectHomepageText.homepageInterestCircleEmptyDescription,
         ),
       );
     }

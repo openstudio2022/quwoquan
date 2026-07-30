@@ -1,20 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+/// wire 编解码用例只需要一个稳定的发布号；发布身份的真相源是 tag-service，
+/// 不是端侧编译常量。
+const String _taxonomyReleaseId = 'tag-taxonomy-contract-fixture';
 
 void main() {
   group('TagCatalog generated client contracts', () {
     test('encodes commercial App queries without exposing wire maps', () {
-      final resolve = encodeResolveTagQuery(
+      final resolve = encodeTagTagNodeViewResolveTagGeneratedRequest(
         ResolveTagQuery(tagRef: ' Topic/旅行 '),
       );
-      final children = encodeListTagChildrenQuery(
+      final children = encodeTagTagNodeViewListTagChildrenGeneratedRequest(
         ListTagChildrenQuery(parentTagRef: 'Topic/旅行', limit: 30),
       );
-      final validation = encodeValidateTagRefsQuery(
+      final validation = encodeTagTagNodeViewValidateTagRefsGeneratedRequest(
         ValidateTagRefsQuery(
           expectedTaxonomyReleaseId:
-              ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+              _taxonomyReleaseId,
           tagRefs: const ['Topic/旅行', 'Place/中国'],
         ),
       );
@@ -26,7 +29,7 @@ void main() {
       });
       expect(validation.body, {
         'expectedTaxonomyReleaseId':
-            ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+            _taxonomyReleaseId,
         'tagRefs': ['Topic/旅行', 'Place/中国'],
       });
     });
@@ -59,7 +62,7 @@ void main() {
       });
       final validation = decodeTagValidationResult({
         'taxonomyReleaseId':
-            ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+            _taxonomyReleaseId,
         'valid': ['Topic/旅行'],
         'invalid': ['Topic/不存在'],
       });
@@ -68,7 +71,7 @@ void main() {
       expect(children.items.single.parentTagRef, 'Topic/旅行');
       expect(
         validation.taxonomyReleaseId,
-        ContentUIConfig.onboardingInterestCatalog.taxonomyReleaseId,
+        _taxonomyReleaseId,
       );
       expect(validation.valid, ['Topic/旅行']);
       expect(validation.invalid, ['Topic/不存在']);
@@ -128,6 +131,46 @@ void main() {
       expect(
         () => decodeTagFeedbackAck(<String, Object?>{}),
         throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('Tag feedback action is a metadata-owned typed enum', () {
+      final request = ReportTagFeedbackCommand(
+        tagRef: ' Topic/旅行 ',
+        action: TagFeedbackAction.correct,
+      );
+
+      expect(
+        encodeTagTagFeedbackReportTagFeedbackGeneratedRequest(request).body,
+        <String, Object?>{'tagRef': 'Topic/旅行', 'action': 'correct'},
+      );
+    });
+
+    test('Every feedback action encodes to its own wire value', () {
+      final encoded = <String>{};
+      for (final action in TagFeedbackAction.values) {
+        final body =
+            encodeTagTagFeedbackReportTagFeedbackGeneratedRequest(
+                  ReportTagFeedbackCommand(tagRef: 'Topic/旅行', action: action),
+                ).body
+                as Map<String, Object?>;
+        expect(body['action'], action.wireValue);
+        expect(encoded.add(action.wireValue), isTrue);
+      }
+    });
+
+    test('Tag feedback carries a negative action, not only positive ones', () {
+      // 只有 click/ignore/correct 时，用户无法把推错的标签压下去：
+      // ignore 只回到无偏好，correct 不改特征。
+      expect(TagFeedbackAction.values, contains(TagFeedbackAction.dislike));
+      expect(
+        encodeTagTagFeedbackReportTagFeedbackGeneratedRequest(
+          ReportTagFeedbackCommand(
+            tagRef: 'Topic/摄影/器材/无人机',
+            action: TagFeedbackAction.dislike,
+          ),
+        ).body,
+        <String, Object?>{'tagRef': 'Topic/摄影/器材/无人机', 'action': 'dislike'},
       );
     });
   });

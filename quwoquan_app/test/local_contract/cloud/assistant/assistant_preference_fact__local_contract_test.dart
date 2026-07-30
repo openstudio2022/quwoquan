@@ -7,11 +7,16 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
+import '../../../support/assistant_remote_test_support.dart';
+
 void main() {
   test('Remote 偏好 Facet 使用 metadata 路径并完成设置、列表、遗忘与恢复', () async {
     final transport = _PreferenceClient();
+    final httpClient = CloudHttpClient(client: transport);
     final repository = RemoteAssistantRepository(
-      httpClient: CloudHttpClient(client: transport),
+      httpClient: httpClient,
+      operationClient: buildAssistantRemoteTestOperationClient(httpClient),
+      conversationInvocationContext: assistantRemoteTestInvocationContext,
       consentActorScope: 'assistant-preference-test',
     );
 
@@ -62,8 +67,13 @@ void main() {
   });
 
   test('Remote 偏好 Facet 保留 canonical preference_not_found', () async {
+    final httpClient = CloudHttpClient(
+      client: _PreferenceClient(statusCode: 404),
+    );
     final repository = RemoteAssistantRepository(
-      httpClient: CloudHttpClient(client: _PreferenceClient(statusCode: 404)),
+      httpClient: httpClient,
+      operationClient: buildAssistantRemoteTestOperationClient(httpClient),
+      conversationInvocationContext: assistantRemoteTestInvocationContext,
       consentActorScope: 'assistant-preference-test',
     );
 

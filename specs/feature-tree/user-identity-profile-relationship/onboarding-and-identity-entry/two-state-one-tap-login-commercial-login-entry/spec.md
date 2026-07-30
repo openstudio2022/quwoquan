@@ -102,6 +102,7 @@
 - otp mismatch 清空验证码并允许立即重新输入，otp expired 进入重新获取；两者均不重置仍有效的重发冷却截止时间。
 - 每个 USER.AUTH 错误码都有 recovery.action、disruptionLevel、双语文案与唯一 LoginErrorSurface。
 - RuntimeErrorResponse 不向客户端返回 debugMessage、authCode、token、secret 或 provider 原始 URL。
+- 登录产品漏斗与运维失败事件分轨；运维事件以 `sourceCode/failureKind/recoveryAction/copyKey/feedbackSurface/requestId/traceId` 还原错误与用户提示，任一事件均不得包含手机号、OTP、binding ticket、token 或 provider 原始票据。
 
 <a id="req-011"></a>
 ### REQ-011 真机与灰度商用证据
@@ -145,6 +146,8 @@
 
 - 社交登录只消费 `account_session` 的判别结果；`phoneBindingRequired` 只携带短期一次性 binding ticket，不得携带完整 session。
 - binding ticket 范围内发送 `bind_phone` OTP，完成 binding ticket、OTP challenge、手机号唯一性与 consent 校验后，由 `credential_binding` 原子返回 `AuthSessionGrant`。
+- 社交首登手机号若已属于另一账号，必须返回 `USER.AUTH.credential_conflict` 与“这个手机号已绑定其他账号”，不得自动恢复旧账号、合并账号或签发 session；ticket 与 challenge 保持可恢复状态，用户可更换手机号继续。
+- 已登录账号在设置页执行 `BindPhoneCredential` 时继续使用不带社交 ticket 的 `bind_phone` challenge；社交 completion 只接受与自身 ticket 精确关联的 challenge，两条流程不得互相冒充。
 - 用户返回、ticket 过期、进程重启或绑定失败均回到可操作登录态，不进入 Shell、不消费原动作 continuation。
 
 ## 4. 契约引用
@@ -187,6 +190,7 @@
 - GIVEN 社交身份尚未绑定手机号。
 - WHEN provider 票据校验成功并完成 `bind_phone` OTP。
 - THEN binding ticket 被一次性消费，手机号与社交凭证归属同一 OwnerAccount，并且只在绑定成功后返回 `AuthSessionGrant`。
+- AND 若手机号已属于另一 OwnerAccount，则返回 `credential_conflict`，不创建、不合并、不签 session；更换手机号后仍可继续完成本次绑定。
 
 <a id="gwt-011"></a>
 ### GWT-011 真机与灰度商用证据

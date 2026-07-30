@@ -8,6 +8,7 @@
     "status",
     "phase",
     "planDigest",
+    "gitBranch",
     "gitCommitSha",
     "sourceDigest",
     "entityCatalogDigest",
@@ -36,6 +37,7 @@
       ]
     },
     "planDigest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+    "gitBranch": { "type": ["string", "null"], "minLength": 1 },
     "gitCommitSha": {
       "type": ["string", "null"],
       "pattern": "^[a-f0-9]{40,64}$"

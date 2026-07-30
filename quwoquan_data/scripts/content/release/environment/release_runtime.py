@@ -90,6 +90,7 @@ def sync_media(*, release: Path, destination: str, run: Path) -> None:
         payload_root(release),
         Path(destination),
         object_digests=release_media_public_slices(release),
+        prune_unselected=True,
     )
     write_json(run / "media-sync.json", report)
     if report["failed"] or report["issues"]:

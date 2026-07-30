@@ -46,14 +46,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-    expect(
-      find.text(ProfileText.careerInterestUnsavedTitle),
-      findsOneWidget,
-    );
-    expect(
-      find.text(ProfileText.careerInterestUnsavedMessage),
-      findsOneWidget,
-    );
+    expect(find.text(ProfileText.careerInterestUnsavedTitle), findsOneWidget);
+    expect(find.text(ProfileText.careerInterestUnsavedMessage), findsOneWidget);
     final dialog = find.byType(CupertinoAlertDialog);
     expect(
       find.descendant(
@@ -250,7 +244,7 @@ class _CareerProfileEditQuery implements ProfileEditQuery {
   Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
     return const ProfileEditSnapshotData(
       ownerUserId: 'owner-1',
-      subAccountId: 'persona-1',
+      personaId: 'persona-1',
       avatarUrl: '',
       avatarAssetId: '',
       avatarVersion: 0,

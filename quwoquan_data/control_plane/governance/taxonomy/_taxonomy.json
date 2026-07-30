@@ -16,7 +16,7 @@
       "id": "Topic/摄影",
       "group": "Topic",
       "label": "摄影",
-      "count": 30
+      "count": 70
     },
     {
       "id": "Topic/历史文化",
@@ -58,19 +58,13 @@
       "id": "Topic/亲子育儿",
       "group": "Topic",
       "label": "亲子育儿",
-      "count": 12
+      "count": 11
     },
     {
       "id": "Topic/旅行",
       "group": "Topic",
       "label": "旅行",
-      "count": 89
-    },
-    {
-      "id": "Topic/文史文化",
-      "group": "Topic",
-      "label": "文史文化",
-      "count": 17
+      "count": 93
     },
     {
       "id": "Topic/二次元",
@@ -88,7 +82,7 @@
       "id": "Topic/事件",
       "group": "Topic",
       "label": "事件",
-      "count": 7
+      "count": 11
     },
     {
       "id": "Topic/影视娱乐",
@@ -107,12 +101,6 @@
       "group": "Topic",
       "label": "住宿",
       "count": 106
-    },
-    {
-      "id": "Topic/季节",
-      "group": "Topic",
-      "label": "季节",
-      "count": 1
     },
     {
       "id": "Topic/游戏电竞",
@@ -148,7 +136,7 @@
       "id": "Topic/话题",
       "group": "Topic",
       "label": "话题",
-      "count": 7
+      "count": 12
     },
     {
       "id": "Topic/职场效率",
@@ -166,7 +154,7 @@
       "id": "Topic/美食餐饮",
       "group": "Topic",
       "label": "美食餐饮",
-      "count": 132
+      "count": 131
     },
     {
       "id": "Topic/运动",
@@ -178,7 +166,7 @@
       "id": "Topic/地理",
       "group": "Topic",
       "label": "地理",
-      "count": 3541
+      "count": 4122
     },
     {
       "id": "Topic/购物消费",
@@ -208,7 +196,7 @@
       "id": "Topic/时间",
       "group": "Topic",
       "label": "时间",
-      "count": 70
+      "count": 49
     },
     {
       "id": "Topic/金融理财",
@@ -256,7 +244,7 @@
       "id": "Audience/创作者",
       "group": "Audience",
       "label": "创作者",
-      "count": 22
+      "count": 25
     },
     {
       "id": "Audience/圈子",
@@ -292,7 +280,7 @@
       "id": "Format/视觉风格",
       "group": "Format",
       "label": "视觉风格",
-      "count": 23
+      "count": 31
     },
     {
       "id": "Format/内容角度",
@@ -340,7 +328,7 @@
       "id": "Entity/商品",
       "group": "Entity",
       "label": "商品",
-      "count": 58
+      "count": 49
     },
     {
       "id": "Entity/人物",
@@ -361,14 +349,14 @@
       "count": 15
     }
   ],
-  "totalCount": 5296,
+  "totalCount": 5891,
   "stats": {
     "byGroup": {
-      "Topic": 4423,
-      "Audience": 312,
-      "Format": 250,
-      "Entity": 311
+      "Topic": 5016,
+      "Audience": 315,
+      "Format": 258,
+      "Entity": 302
     }
   },
-  "generatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "generatedAt": "2026-07-28T14:30:11.970796+00:00"
 }

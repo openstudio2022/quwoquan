@@ -69,18 +69,54 @@ func newServer(
 	svc := application.NewSearchService(backend)
 	// nil TermHeatProvider => base ranking + empty relatedTerms; the AB bucket is
 	// still assigned so the envelope carries experimentBucket.
-	decorator := application.NewRankingDecorator(nil, application.NewExperiments(application.ExperimentConfig{}), 0, nil)
+	experiments, err := application.NewExperiments(application.ExperimentConfig{
+		Enabled: true,
+		Buckets: []application.ExperimentBucket{{
+			Name:      application.BucketControl,
+			WeightPct: 100,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("NewExperiments() error = %v", err)
+	}
+	decorator := application.NewRankingDecorator(nil, experiments, 0, nil)
 	return httpadapter.NewHandler(svc, decorator, nil).Routes()
 }
 
 func postSearch(t *testing.T, handler http.Handler, body string) (*httptest.ResponseRecorder, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/search", bytes.NewBufferString(body))
+	req.Header.Set("X-Session-Id", "search-api-integration-session")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	var parsed map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &parsed)
 	return rec, parsed
+}
+
+func TestSearchEndpointRejectsAnonymousRequestWithoutStableSession(t *testing.T) {
+	native := rtsearch.NewSliceBackend([]rtsearch.Document{{
+		ObjectType: rtsearch.ObjectTypeContentPost,
+		ObjectID:   "post_native",
+		Title:      "大理古城漫步",
+		Visibility: "public",
+	}})
+	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
+	request := httptest.NewRequest(http.MethodPost, "/search", bytes.NewBufferString(`{"query":"大理"}`))
+	request.Header.Set("X-Request-Id", "search-request-without-session")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if got := toString(parsed["code"]); got != "SEARCH.USER.invalid_argument" {
+		t.Fatalf("error code=%q body=%s", got, response.Body.String())
+	}
 }
 
 func hitCount(parsed map[string]any) int {
@@ -100,17 +136,20 @@ func TestSearchEndpointESBackedHits(t *testing.T) {
 	if hitCount(parsed) == 0 {
 		t.Fatalf("expected ES-backed hits, got: %s", rec.Body.String())
 	}
-	if parsed["rankingVersion"] != application.RankingVersion {
-		t.Fatalf("missing rankingVersion: %#v", parsed["rankingVersion"])
+	if _, exists := parsed["rankingVersion"]; exists {
+		t.Fatalf("retired rankingVersion returned: %#v", parsed["rankingVersion"])
 	}
 	if strings.TrimSpace(toString(parsed["requestId"])) == "" {
 		t.Fatalf("missing requestId")
 	}
 	hits, _ := parsed["hits"].([]any)
 	hit, _ := hits[0].(map[string]any)
-	payload, _ := hit["payload"].(map[string]any)
-	if toString(payload["coverUrl"]) != "https://cdn.example/post_es.webp" {
-		t.Fatalf("ES presentation payload was not round-tripped: %#v", hit)
+	content, _ := hit["content"].(map[string]any)
+	if toString(content["coverUrl"]) != "https://cdn.example/post_es.webp" {
+		t.Fatalf("ES typed content projection was not round-tripped: %#v", hit)
+	}
+	if _, exists := hit["payload"]; exists {
+		t.Fatalf("retired untyped payload returned: %#v", hit)
 	}
 }
 
@@ -287,7 +326,7 @@ func TestSearchEndpointAppliesTagFilterWithPositiveAndNegativeCases(t *testing.T
 	}
 }
 
-func TestSearchEndpointCarriesRankingEnvelope(t *testing.T) {
+func TestSearchEndpointCarriesCanonicalAttribution(t *testing.T) {
 	// The commercial envelope must surface experimentBucket + per-hit ranking
 	// transparency (rankReasons/rankPosition) so AB attribution + explanation
 	// work end to end, even without the Mongo heat read model wired.

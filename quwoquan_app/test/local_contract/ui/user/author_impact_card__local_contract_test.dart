@@ -347,9 +347,9 @@ void main() {
                   ),
                 ),
                 GoRoute(
-                  path: '/user/:username',
+                  path: '/user/:userHandle',
                   builder: (_, state) =>
-                      Text('USER:${state.pathParameters['username']}'),
+                      Text('USER:${state.pathParameters['userHandle']}'),
                 ),
               ],
             ),

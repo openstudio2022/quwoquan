@@ -4,6 +4,7 @@ import '../structured_value.dart';
 import 'homepage_models.dart';
 
 export 'homepage_models.dart';
+part '../generated/requests/entity/homepage_queries.requests.g.dart';
 
 /// Homepage 查询目标不存在时的纯契约失败。
 ///
@@ -51,96 +52,6 @@ abstract interface class HomepageIntroductionQuery {
     String homepageId, {
     CloudOperationCancellationSignal? cancellation,
   });
-}
-
-final class HomepageSearchQuery {
-  const HomepageSearchQuery({
-    required this.query,
-    this.homepageType,
-    this.city,
-    this.status,
-    this.cursor,
-    this.limit = 20,
-  });
-
-  final String query;
-  final String? homepageType;
-  final String? city;
-  final String? status;
-  final String? cursor;
-  final int limit;
-}
-
-final class HomepageByIdQuery {
-  const HomepageByIdQuery({required this.homepageId});
-
-  final String homepageId;
-}
-
-final class HomepageObjectPageBundleQuery {
-  const HomepageObjectPageBundleQuery({
-    required this.homepageId,
-    this.referralSource,
-    this.feedRequestId,
-    this.recommendationTraceId,
-    this.experimentBucket,
-    this.rolloutCohort,
-  });
-
-  final String homepageId;
-  final String? referralSource;
-  final String? feedRequestId;
-  final String? recommendationTraceId;
-  final String? experimentBucket;
-  final String? rolloutCohort;
-}
-
-CloudOperationRequestPayload encodeHomepageSearchQuery(
-  HomepageSearchQuery query,
-) {
-  final value = _requiredText(query.query, 'query');
-  _validateLimit(query.limit);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'query': value,
-      if (_optionalText(query.homepageType) case final homepageType?)
-        'homepageType': homepageType,
-      if (_optionalText(query.city) case final city?) 'city': city,
-      if (_optionalText(query.status) case final status?) 'status': status,
-      if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
-      'limit': '${query.limit}',
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeHomepageByIdQuery(HomepageByIdQuery query) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'homepageId': _requiredText(query.homepageId, 'homepageId'),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeHomepageObjectPageBundleQuery(
-  HomepageObjectPageBundleQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'homepageId': _requiredText(query.homepageId, 'homepageId'),
-    },
-    queryParameters: <String, String>{
-      if (_optionalText(query.referralSource) case final value?)
-        'referralSource': value,
-      if (_optionalText(query.feedRequestId) case final value?)
-        'feedRequestId': value,
-      if (_optionalText(query.recommendationTraceId) case final value?)
-        'recommendationTraceId': value,
-      if (_optionalText(query.experimentBucket) case final value?)
-        'experimentBucket': value,
-      if (_optionalText(query.rolloutCohort) case final value?)
-        'rolloutCohort': value,
-    },
-  );
 }
 
 HomepageSearchSlice decodeHomepageSearchSlice(Object? response) {
@@ -297,7 +208,7 @@ HomepageDetailProjection _decodeHomepageDetail(Map<Object?, Object?> item) {
     city: _optionalText(item['city']),
     location: _optionalStructuredObject(item['location'], 'location'),
     ownerUserId: _optionalText(item['ownerUserId']),
-    ownerSubAccountId: _optionalText(item['ownerSubAccountId']),
+    ownerPersonaId: _optionalText(item['ownerPersonaId']),
     viewerFollowsHomepage:
         _optionalBool(item['viewerFollowsHomepage']) ?? false,
     followerCount: _optionalInt(item['followerCount']) ?? 0,
@@ -532,8 +443,4 @@ DateTime? _optionalDateTime(Object? value, String name) {
   final parsed = DateTime.tryParse(text);
   if (parsed == null) throw FormatException('$name must be RFC3339');
   return parsed.toUtc();
-}
-
-void _validateLimit(int limit) {
-  if (limit <= 0) throw ArgumentError.value(limit, 'limit', 'must be positive');
 }

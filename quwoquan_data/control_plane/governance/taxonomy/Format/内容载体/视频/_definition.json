@@ -2,6 +2,7 @@
   "label": "视频",
   "labelEn": "Video",
   "description": "以动态影像为主的内容载体形式",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

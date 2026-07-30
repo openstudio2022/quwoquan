@@ -211,7 +211,7 @@ func (projection *MongoProjection) ApplyUserAccountClosed(
 			}
 			cleanup, cleanupErr := projection.cleanupClosedSubjects(
 				txCtx,
-				event.SubjectIDs(),
+				event,
 			)
 			if cleanupErr != nil {
 				return nil, cleanupErr
@@ -251,10 +251,14 @@ func (projection *MongoProjection) ApplyUserAccountClosed(
 
 func (projection *MongoProjection) cleanupClosedSubjects(
 	ctx context.Context,
-	subjects []string,
+	event application.UserAccountClosedEvent,
 ) (cleanupResult, error) {
+	subjects := event.SubjectIDs()
 	requestIDs, terms, err := projection.closedQueryInventory(ctx, subjects)
 	if err != nil {
+		return cleanupResult{}, err
+	}
+	if err := finalizeSearchAccountRestrictionClosure(ctx, projection.db, event); err != nil {
 		return cleanupResult{}, err
 	}
 	feedbackClauses := bson.A{

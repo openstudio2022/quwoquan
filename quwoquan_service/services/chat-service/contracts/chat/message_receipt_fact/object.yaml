@@ -1,5 +1,9 @@
 kind: append_only_fact
-description: MessageReceiptFact 的领域对象契约。
+description: 'MessageReceiptFact 是 receiptEnabled 会话中某 Persona 对单条 Message 的不可变已读事实。
+
+  它与 read watermark、命令回执在同一事务追加；对同一 messageId + userId 只允许一个事实。
+
+  '
 identity:
   fields:
   - _id
@@ -7,7 +11,7 @@ identity:
 access:
   commands: append_only_sink
   cross_context: event_only
-  queries: none
+  queries: named_reader
 relationships:
 - access: event
   cardinality: N:1
@@ -36,3 +40,13 @@ relationships:
   reference_fields:
   - userId
   target_object: user.Persona
+capabilities:
+- append_only
+- queryable
+business_rules:
+- messageId + userId 在全局唯一；相同已读命令重放不得追加第二个事实
+- conversationId 必须与 Message.conversationId 一致，userId 必须是该 Conversation 的 active Persona 成员
+- 仅 receiptEnabled=true 的 Conversation 追加逐消息回执；否则只推进 ConversationUserState.readSeq
+- readAt 由服务端可信时钟产生且不得早于 Message.timestamp
+lifecycle:
+  immutable: true

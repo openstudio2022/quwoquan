@@ -93,7 +93,7 @@ def _apply_writing_intent_override(brief, override):
         "authorId",
         "creatorProfileId",
         "creatorArchetype",
-        "creatorProfileVersion",
+        "creatorProfileDigest",
         "creatorDisclosure",
         "experienceClaimMode",
         "authorQualitySignals",

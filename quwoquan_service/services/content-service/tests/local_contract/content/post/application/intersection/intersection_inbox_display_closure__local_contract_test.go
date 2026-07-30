@@ -86,7 +86,7 @@ func TestIntersectionService_DimensionDrilldownMatchesSummaryTally(t *testing.T)
 		FreshAt:           now.Add(-time.Hour).Format(time.RFC3339),
 		IntersectionPoints: []IntersectionPointView{
 			{PointID: "p_rel", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedCircle", Visibility: "public", Count: 1},
-			{PointID: "p_loc", PointClass: "fact", Dimension: "location", SourceRef: "coVisitedEntity", Visibility: "public", Count: 1},
+			{PointID: "p_loc", PointClass: "fact", Dimension: "location", SourceRef: "coWishlistedEntity", Visibility: "public", Count: 1},
 			{PointID: "p_con", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Visibility: "public", Count: 1},
 		},
 	}

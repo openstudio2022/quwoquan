@@ -103,13 +103,15 @@ FOR UPDATE`, idempotencyKey).Scan(&existingID, &existingFingerprint)
 	if _, err := tx.Exec(ctx, `
 INSERT INTO authentication_challenges (
   challenge_id, account_id, purpose, channel, phone_hash, code_hash,
+  binding_ticket_id,
   status, failed_attempts, expires_at, created_at, consumed_at,
   completion_fingerprint, idempotency_key, creation_fingerprint,
   version, updated_at
 ) VALUES (
   $1, NULLIF($2, ''), $3, $4, NULLIF($5, ''), $6,
-  $7, $8, $9, $10, NULL,
-  NULL, $11, $12, $13, $14
+  NULLIF($7, ''),
+  $8, $9, $10, $11, NULL,
+  NULL, $12, $13, $14, $15
 )`,
 		state.ID,
 		state.AccountID,
@@ -117,6 +119,7 @@ INSERT INTO authentication_challenges (
 		state.Channel,
 		state.DestinationHash,
 		state.SecretRef,
+		state.BindingTicketRef,
 		state.Status,
 		state.AttemptCount,
 		state.ExpiresAt,

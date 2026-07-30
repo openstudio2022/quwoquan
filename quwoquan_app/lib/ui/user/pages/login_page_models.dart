@@ -1,5 +1,7 @@
 part of 'login_page.dart';
 
+const Object _loginUnset = Object();
+
 Map<String, dynamic> buildLoginTelemetryPayload({
   required String environment,
   required String platform,
@@ -7,254 +9,98 @@ Map<String, dynamic> buildLoginTelemetryPayload({
   String provider = '',
   Map<String, dynamic> raw = const <String, dynamic>{},
 }) {
-  final normalizedProvider = _loginTelemetryProvider(
-    action: action,
-    provider: provider,
-    state: raw['state']?.toString() ?? '',
-  );
-  final rawErrorCode = raw['code']?.toString().trim() ?? '';
-  final errorCode = rawErrorCode.isEmpty ? null : rawErrorCode;
-  final rawDuration = raw['durationMs'];
-  final durationMs = rawDuration is num && rawDuration.isFinite
-      ? rawDuration.round().clamp(0, 600000)
-      : null;
-  String? safeEnumField(String key) {
+  String? safeString(String key, {int maxLength = 128}) {
     final value = raw[key]?.toString().trim() ?? '';
-    if (value.isEmpty || value.length > 64) return null;
-    return RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value) ? value : null;
+    if (value.isEmpty || value.length > maxLength) return null;
+    return value;
   }
 
-  final entryMode = safeEnumField('entryMode');
-  final primaryAction = safeEnumField('primaryAction');
-  final transitionFrom = safeEnumField('transitionFrom');
-  final transitionTo = safeEnumField('transitionTo');
-  final capabilityReason = safeEnumField('capabilityReason');
+  int? safeInt(String key) {
+    final value = raw[key];
+    if (value is! num || !value.isFinite) return null;
+    return value.round().clamp(0, 600000);
+  }
+
+  final normalizedProvider = provider.trim().toLowerCase().replaceAll('-', '_');
   return <String, dynamic>{
     'environment': environment,
     'platform': platform,
-    'provider': normalizedProvider,
-    'stage': action,
-    'result': _loginTelemetryResult(action),
-    'errorCode': ?errorCode,
-    'durationMs': ?durationMs,
-    'entryMode': ?entryMode,
-    'primaryAction': ?primaryAction,
-    'transitionFrom': ?transitionFrom,
-    'transitionTo': ?transitionTo,
-    'capabilityReason': ?capabilityReason,
+    'action': action,
+    if (normalizedProvider.isNotEmpty) 'provider': normalizedProvider,
+    'flowId': ?safeString('flowId'),
+    'entryMode': ?safeString('entryMode'),
+    'step': ?safeString('step'),
+    'fromStep': ?safeString('fromStep'),
+    'toStep': ?safeString('toStep'),
+    'otpPurpose': ?safeString('otpPurpose'),
+    'consentState': ?safeString('consentState'),
+    'result': ?safeString('result'),
+    'sourceCode': ?safeString('sourceCode'),
+    'failureKind': ?safeString('failureKind'),
+    'recoveryAction': ?safeString('recoveryAction'),
+    'copyKey': ?safeString('copyKey'),
+    'feedbackSurface': ?safeString('feedbackSurface'),
+    'requestId': ?safeString('requestId'),
+    'traceId': ?safeString('traceId'),
+    'countdownBucket': ?safeString('countdownBucket'),
+    'dismissPolicy': ?safeString('dismissPolicy'),
+    'durationMs': ?safeInt('durationMs'),
+    'attemptIndex': ?safeInt('attemptIndex'),
+    if (raw['motionReduced'] is bool)
+      'motionReduced': raw['motionReduced'] as bool,
   };
-}
-
-String _loginTelemetryProvider({
-  required String action,
-  required String provider,
-  required String state,
-}) {
-  final normalized = provider.trim().toLowerCase().replaceAll('-', '_');
-  if (const <String>{
-    'phone',
-    'wechat',
-    'qq',
-    'alipay',
-    'one_tap',
-    'refresh_token',
-  }.contains(normalized)) {
-    return normalized;
-  }
-  if (action.contains('otp') || action.contains('phone')) {
-    return 'phone';
-  }
-  if (state == LoginEntryKind.carrierPhone.name) {
-    return 'one_tap';
-  }
-  if (state == LoginEntryKind.returningAccount.name) {
-    return 'refresh_token';
-  }
-  return 'none';
-}
-
-String _loginTelemetryResult(String action) {
-  if (action.contains('cancelled') || action.contains('dismissed')) {
-    return 'cancelled';
-  }
-  if (action.contains('failed') || action.contains('unavailable')) {
-    return 'failure';
-  }
-  if (action.contains('success') || action.contains('succeeded')) {
-    return 'success';
-  }
-  if (action.contains('clicked') ||
-      action.contains('entered') ||
-      action.contains('requested')) {
-    return 'attempt';
-  }
-  if (action.contains('resolved')) {
-    return 'resolved';
-  }
-  return 'observed';
 }
 
 enum LoginSurfaceMode { page, inline }
 
-enum LoginEntryKind {
+enum LoginStep {
   resolving,
-  returningAccount,
-  carrierPhone,
-  phoneOtp,
-  submitting,
+  oneTap,
+  phoneEntry,
+  otp,
+  socialAuthorizing,
+  socialFailed,
+  socialPhoneEntry,
+  socialPhoneOtp,
+  blocked,
+  completing,
 }
 
-enum LoginPrimaryAction {
-  none,
-  continueSession,
-  carrierOneTap,
-  requestOtp,
-  verifyOtp,
-  phoneReauth,
-  socialReauth,
-}
-
-enum LoginPhoneOtpPhase {
+enum LoginOperation {
   idle,
-  editing,
-  invalid,
-  valid,
-  sendingCode,
-  codeSent,
-  codeEditing,
-  codeComplete,
-  loggingIn,
-  success,
-  codeError,
-  codeExpired,
-  rateLimited,
-  sendFailed,
-  loginLocked,
-  accountSuspended,
-  accountDeleted,
+  sendingOtp,
+  verifyingOtp,
+  openingProvider,
+  exchangingTicket,
+  completingBinding,
 }
 
-enum LoginErrorSurface {
-  phoneField,
-  otpField,
-  agreement,
-  socialMethod,
-  topLevel,
-  fallbackNotice,
-  accountBlocked,
-  silent,
+enum LoginConsentState { unchecked, accepted, confirming }
+
+enum OtpChallengeState { none, active, resendAvailable, expired, rateLimited }
+
+enum LoginOtpPurpose { login, bindPhone }
+
+enum LoginEntryMode { resolving, rememberedSession, carrier, phone, social }
+
+enum LoginFeedbackSurface { phone, otp, page, social, silent }
+
+enum LoginFailureOrigin {
+  otpSend,
+  otpVerify,
+  oneTap,
+  returningSession,
+  social,
+  phoneBinding,
 }
 
-enum LoginFailureOrigin { otpSend, otpLogin, oneTap, returningSession, social }
-
-class LoginPhoneOtpState {
-  const LoginPhoneOtpState({
-    required this.phase,
-    this.phone = '',
-    this.maskedPhone = '',
-    this.code = '',
-    this.message = '',
-    this.expiresInSeconds = 0,
-    this.retryAfterSeconds = 0,
-    this.resendSeconds = 0,
-    this.otpWasDelivered = false,
-  });
-
-  const LoginPhoneOtpState.idle() : this(phase: LoginPhoneOtpPhase.idle);
-
-  final LoginPhoneOtpPhase phase;
-  final String phone;
-  final String maskedPhone;
-  final String code;
-  final String message;
-  final int expiresInSeconds;
-  final int retryAfterSeconds;
-  final int resendSeconds;
-  final bool otpWasDelivered;
-
-  bool get isBusy =>
-      phase == LoginPhoneOtpPhase.sendingCode ||
-      phase == LoginPhoneOtpPhase.loggingIn;
-
-  bool get isSuccess => phase == LoginPhoneOtpPhase.success;
-
-  bool get isPhoneEditable => !isBusy && !isSuccess;
-
-  bool get isCodeDisabled =>
-      isBusy || isSuccess || phase == LoginPhoneOtpPhase.codeExpired;
-
-  /// 此手机号当前路径走不通（账号被限制/注销，或登录被锁定）：
-  /// 不允许在原号上无效重试提交，但必须给"换个手机号 / 换其他方式"出口。
-  bool get isBlocked =>
-      phase == LoginPhoneOtpPhase.loginLocked ||
-      phase == LoginPhoneOtpPhase.accountSuspended ||
-      phase == LoginPhoneOtpPhase.accountDeleted;
-
-  bool get canSendCode =>
-      _isValidMainlandPhone(phone) &&
-      !isBusy &&
-      !isSuccess &&
-      !isBlocked &&
-      resendSeconds <= 0;
-
-  bool get canLogin =>
-      _isValidMainlandPhone(phone) &&
-      code.length == 6 &&
-      !isBusy &&
-      !isSuccess &&
-      !isBlocked &&
-      phase != LoginPhoneOtpPhase.codeExpired;
-
-  String get primaryLabel {
-    if (phase == LoginPhoneOtpPhase.sendingCode) {
-      return FoundationText.loginSendOtpSubmitting;
-    }
-    if (phase == LoginPhoneOtpPhase.loggingIn) {
-      return FoundationText.loginSubmitting;
-    }
-    if (phase == LoginPhoneOtpPhase.success) {
-      return FoundationText.loginSuccess;
-    }
-    // 账号此路不通：主按钮收敛为"换个手机号登录"出口，不诱导无效重试。
-    if (isBlocked) {
-      return FoundationText.loginSwitchPhone;
-    }
-    // 验证码已过期且已清码：主按钮语义=重新获取验证码（文案与行为一致）。
-    if (phase == LoginPhoneOtpPhase.codeExpired) {
-      return FoundationText.loginOtpResend;
-    }
-    if (_showsCode) {
-      return FoundationText.loginPhoneSubmit;
-    }
-    return FoundationText.loginSendOtp;
-  }
-
-  bool get _showsCode =>
-      otpWasDelivered && phase != LoginPhoneOtpPhase.codeExpired && !isBlocked;
-
-  LoginPhoneOtpState copyWith({
-    LoginPhoneOtpPhase? phase,
-    String? phone,
-    String? maskedPhone,
-    String? code,
-    String? message,
-    int? expiresInSeconds,
-    int? retryAfterSeconds,
-    int? resendSeconds,
-    bool? otpWasDelivered,
-  }) {
-    return LoginPhoneOtpState(
-      phase: phase ?? this.phase,
-      phone: phone ?? this.phone,
-      maskedPhone: maskedPhone ?? this.maskedPhone,
-      code: code ?? this.code,
-      message: message ?? this.message,
-      expiresInSeconds: expiresInSeconds ?? this.expiresInSeconds,
-      retryAfterSeconds: retryAfterSeconds ?? this.retryAfterSeconds,
-      resendSeconds: resendSeconds ?? this.resendSeconds,
-      otpWasDelivered: otpWasDelivered ?? this.otpWasDelivered,
-    );
-  }
+enum LoginPendingIntent {
+  oneTap,
+  sendOtp,
+  resendOtp,
+  socialWechat,
+  socialQq,
+  socialAlipay,
 }
 
 class LoginAccountHint {
@@ -266,25 +112,12 @@ class LoginAccountHint {
     this.nicknameCustomized = false,
   });
 
-  factory LoginAccountHint.fromMap(Map<String, dynamic>? map) {
-    final data = map ?? const <String, dynamic>{};
-    return LoginAccountHint(
-      displayName: data['displayName']?.toString().trim() ?? '',
-      maskedPhone: data['maskedPhone']?.toString().trim() ?? '',
-      avatarUrl: data['avatarUrl']?.toString().trim() ?? '',
-      identityOrigin: data['identityOrigin']?.toString().trim() ?? '',
-      nicknameCustomized: data['nicknameCustomized'] == true,
-    );
-  }
-
   final String displayName;
   final String maskedPhone;
   final String avatarUrl;
   final String identityOrigin;
   final bool nicknameCustomized;
 
-  /// 返回账号卡片必须包含用户能够识别的具体线索。系统默认昵称、单独头像、
-  /// identityOrigin 都不能独立构成返回账号入口。
   bool get hasConcreteIdentifier =>
       (nicknameCustomized && displayName.trim().isNotEmpty) ||
       maskedPhone.trim().isNotEmpty;
@@ -306,271 +139,404 @@ class CarrierPhoneHint {
   final LoginAccountHint? accountHint;
 }
 
-String _digitsOnly(String value) {
-  return value.replaceAll(RegExp(r'\D'), '');
-}
-
-bool _isValidMainlandPhone(String value) {
-  final digits = _digitsOnly(value);
-  return RegExp(r'^1[3-9]\d{9}$').hasMatch(digits);
-}
-
-/// 仅当本机记住的是合法完整手机号时返回其规整后的数字串，否则返回空串。
-String _validFullPhoneOrEmpty(String value) {
-  final digits = _digitsOnly(value);
-  return _isValidMainlandPhone(digits) ? digits : '';
-}
-
-String _maskPhone(String value) {
-  final digits = _digitsOnly(value);
-  if (digits.length != 11) {
-    return value;
-  }
-  return '${digits.substring(0, 3)}****${digits.substring(7)}';
-}
-
-/// 登录错误的 UI 行为表达：仅承载就近视觉状态（phase）、重发倒计时、是否清码。
-/// 展示文案不再由本地按 code 覆盖；统一走云端 userMessage 优先（见 resolveLoginErrorMessage）。
-class LoginErrorPresentation {
-  const LoginErrorPresentation({
-    required this.phase,
-    required this.recoveryAction,
-    required this.disruptionLevel,
-    this.resendSeconds,
-    this.clearCode = false,
-  });
-
-  final LoginPhoneOtpPhase phase;
-  final RuntimeRecoveryAction recoveryAction;
-  final UserDisruptionLevel disruptionLevel;
-  final int? resendSeconds;
-  final bool clearCode;
-}
-
 class LoginFeedback {
   const LoginFeedback({
-    required this.cloudError,
-    required this.presentation,
-    required this.surface,
     required this.message,
-    required this.origin,
-    this.code,
+    required this.copyKey,
+    required this.surface,
+    required this.recoveryAction,
+    this.cloudError,
+    this.sourceCode,
+    this.failureKind,
+    this.requestId,
+    this.traceId,
+    this.retryAfterSeconds = 0,
+    this.clearOtp = false,
+    this.shakeOtp = false,
+    this.preserveOtp = false,
   });
 
-  final CloudException cloudError;
-  final UserErrorCode? code;
-  final LoginErrorPresentation presentation;
-  final LoginErrorSurface surface;
   final String message;
-  final LoginFailureOrigin origin;
+  final String copyKey;
+  final LoginFeedbackSurface surface;
+  final String recoveryAction;
+  final CloudException? cloudError;
+  final String? sourceCode;
+  final String? failureKind;
+  final String? requestId;
+  final String? traceId;
+  final int retryAfterSeconds;
+  final bool clearOtp;
+  final bool shakeOtp;
+  final bool preserveOtp;
 
-  bool get isSilent =>
-      surface == LoginErrorSurface.silent ||
-      presentation.recoveryAction == RuntimeRecoveryAction.absorb ||
-      presentation.disruptionLevel == UserDisruptionLevel.silent;
+  bool get isSilent => surface == LoginFeedbackSurface.silent;
 
-  Map<String, dynamic> get telemetry {
-    final failure = cloudError.runtimeFailure;
-    final errorType = failure.context.attributes
-        .where((attribute) => attribute.key == 'errorType')
-        .map((attribute) => attribute.value.trim())
-        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
-    return <String, dynamic>{
-      if ((cloudError.code ?? '').isNotEmpty) 'code': cloudError.code,
-      'failureKind': failure.kind.name,
-      if (errorType.isNotEmpty) 'errorType': errorType,
-      'recovery': presentation.recoveryAction.name,
-      'disruption': presentation.disruptionLevel.name,
-      'surface': surface.name,
-      'operation': origin.name,
-      if ((cloudError.requestId ?? '').isNotEmpty)
-        'requestId': cloudError.requestId,
-      if ((cloudError.traceId ?? '').isNotEmpty) 'traceId': cloudError.traceId,
-    };
+  bool get blocksAccountLogin =>
+      sourceCode == UserErrorCode.accountSuspended.code ||
+      sourceCode == UserErrorCode.accountDeleted.code ||
+      sourceCode == UserErrorCode.loginLocked.code;
+
+  Map<String, dynamic> get telemetry => <String, dynamic>{
+    if ((sourceCode ?? '').isNotEmpty) 'sourceCode': sourceCode,
+    if ((failureKind ?? '').isNotEmpty) 'failureKind': failureKind,
+    if (recoveryAction.isNotEmpty) 'recoveryAction': recoveryAction,
+    'copyKey': copyKey,
+    'feedbackSurface': surface.name,
+    if ((requestId ?? '').isNotEmpty) 'requestId': requestId,
+    if ((traceId ?? '').isNotEmpty) 'traceId': traceId,
+  };
+}
+
+class LoginFlowState {
+  const LoginFlowState({
+    required this.step,
+    required this.flowId,
+    this.operation = LoginOperation.idle,
+    this.consentState = LoginConsentState.unchecked,
+    this.otpChallengeState = OtpChallengeState.none,
+    this.otpPurpose = LoginOtpPurpose.login,
+    this.entryMode = LoginEntryMode.resolving,
+    this.phone = '',
+    this.maskedPhone = '',
+    this.code = '',
+    this.challengeId = '',
+    this.provider = '',
+    this.bindingTicket = '',
+    this.resendDeadline,
+    this.bindingDeadline,
+    this.feedback,
+    this.otpShakeSerial = 0,
+    this.otpFocusSerial = 0,
+    this.attemptIndex = 0,
+  });
+
+  factory LoginFlowState.resolving(String flowId) =>
+      LoginFlowState(step: LoginStep.resolving, flowId: flowId);
+
+  final LoginStep step;
+  final String flowId;
+  final LoginOperation operation;
+  final LoginConsentState consentState;
+  final OtpChallengeState otpChallengeState;
+  final LoginOtpPurpose otpPurpose;
+  final LoginEntryMode entryMode;
+  final String phone;
+  final String maskedPhone;
+  final String code;
+  final String challengeId;
+  final String provider;
+  final String bindingTicket;
+  final DateTime? resendDeadline;
+  final DateTime? bindingDeadline;
+  final LoginFeedback? feedback;
+  final int otpShakeSerial;
+  final int otpFocusSerial;
+  final int attemptIndex;
+
+  bool get isBusy => operation != LoginOperation.idle;
+
+  bool get isOtpStep =>
+      step == LoginStep.otp || step == LoginStep.socialPhoneOtp;
+
+  bool get isSocialBindingStep =>
+      step == LoginStep.socialPhoneEntry || step == LoginStep.socialPhoneOtp;
+
+  bool get isRootStep =>
+      step == LoginStep.resolving ||
+      step == LoginStep.oneTap ||
+      step == LoginStep.phoneEntry;
+
+  bool get showsConsent =>
+      step == LoginStep.oneTap || step == LoginStep.phoneEntry;
+
+  bool get canEditPhone => !isBusy && !isOtpStep;
+
+  bool get canEditOtp => !isBusy && isOtpStep;
+
+  bool get hasValidPhone => _isValidMainlandPhone(phone);
+
+  int remainingResendSeconds(DateTime now) {
+    final deadline = resendDeadline;
+    if (deadline == null) return 0;
+    final milliseconds = deadline.difference(now).inMilliseconds;
+    if (milliseconds <= 0) return 0;
+    return (milliseconds / Duration.millisecondsPerSecond).ceil();
   }
+
+  LoginFlowState copyWith({
+    LoginStep? step,
+    LoginOperation? operation,
+    LoginConsentState? consentState,
+    OtpChallengeState? otpChallengeState,
+    LoginOtpPurpose? otpPurpose,
+    LoginEntryMode? entryMode,
+    String? phone,
+    String? maskedPhone,
+    String? code,
+    String? challengeId,
+    String? provider,
+    String? bindingTicket,
+    Object? resendDeadline = _loginUnset,
+    Object? bindingDeadline = _loginUnset,
+    Object? feedback = _loginUnset,
+    int? otpShakeSerial,
+    int? otpFocusSerial,
+    int? attemptIndex,
+  }) {
+    return LoginFlowState(
+      step: step ?? this.step,
+      flowId: flowId,
+      operation: operation ?? this.operation,
+      consentState: consentState ?? this.consentState,
+      otpChallengeState: otpChallengeState ?? this.otpChallengeState,
+      otpPurpose: otpPurpose ?? this.otpPurpose,
+      entryMode: entryMode ?? this.entryMode,
+      phone: phone ?? this.phone,
+      maskedPhone: maskedPhone ?? this.maskedPhone,
+      code: code ?? this.code,
+      challengeId: challengeId ?? this.challengeId,
+      provider: provider ?? this.provider,
+      bindingTicket: bindingTicket ?? this.bindingTicket,
+      resendDeadline: identical(resendDeadline, _loginUnset)
+          ? this.resendDeadline
+          : resendDeadline as DateTime?,
+      bindingDeadline: identical(bindingDeadline, _loginUnset)
+          ? this.bindingDeadline
+          : bindingDeadline as DateTime?,
+      feedback: identical(feedback, _loginUnset)
+          ? this.feedback
+          : feedback as LoginFeedback?,
+      otpShakeSerial: otpShakeSerial ?? this.otpShakeSerial,
+      otpFocusSerial: otpFocusSerial ?? this.otpFocusSerial,
+      attemptIndex: attemptIndex ?? this.attemptIndex,
+    );
+  }
+}
+
+class LoginFlowController extends ChangeNotifier {
+  LoginFlowController({required String flowId})
+    : _state = LoginFlowState.resolving(flowId);
+
+  LoginFlowState _state;
+  bool _terminalClaimed = false;
+
+  LoginFlowState get state => _state;
+  bool get terminalClaimed => _terminalClaimed;
+
+  void replace(LoginFlowState next) {
+    if (_terminalClaimed || identical(next, _state)) return;
+    _state = next;
+    notifyListeners();
+  }
+
+  void refresh() {
+    if (!_terminalClaimed) notifyListeners();
+  }
+
+  bool tryClaimTerminal() {
+    if (_terminalClaimed) return false;
+    _terminalClaimed = true;
+    return true;
+  }
+}
+
+LoginFeedback accountSuspensionLoginFeedback({required String locale}) {
+  final code = UserErrorCode.accountSuspended;
+  return LoginFeedback(
+    message: code.messageForLocale(locale),
+    copyKey: 'loginAccountSuspended',
+    surface: LoginFeedbackSurface.page,
+    recoveryAction: 'openSupport',
+    sourceCode: code.code,
+    failureKind: RuntimeFailureKind.auth.name,
+  );
+}
+
+LoginFeedback accountSuspensionSupportUnavailableFeedback() {
+  return LoginFeedback(
+    message: FoundationText.loginAccountSuspensionSupportUnavailable,
+    copyKey: 'loginAccountSuspensionSupportUnavailable',
+    surface: LoginFeedbackSurface.page,
+    recoveryAction: 'retrySupport',
+    sourceCode: UserErrorCode.accountSuspended.code,
+    failureKind: RuntimeFailureKind.auth.name,
+  );
 }
 
 LoginFeedback loginFeedbackForError(
   Object error, {
   required LoginFailureOrigin origin,
   required String locale,
-  required String entryId,
-  required String surfaceId,
   int retryAfterSeconds = 0,
-  String? fallbackMessage,
 }) {
   final cloudError = error is CloudException
       ? error
       : CloudErrorMapper.fromException(error);
   final rawCode = cloudError.code;
   final code = rawCode == null ? null : UserErrorCode.fromCode(rawCode);
-  final failure = cloudError.runtimeFailure;
-  final presentation = loginErrorPresentationForCode(
-    code,
-    failure: failure,
-    sending: origin == LoginFailureOrigin.otpSend,
-    retryAfterSeconds: retryAfterSeconds,
-    entryId: entryId,
-    surfaceId: surfaceId,
-  );
-  return LoginFeedback(
-    cloudError: cloudError,
-    code: code,
-    presentation: presentation,
-    surface: loginErrorSurfaceForCode(code, origin: origin),
-    origin: origin,
-    message: resolveLoginErrorMessage(
-      cloudError,
-      code,
-      sending: origin == LoginFailureOrigin.otpSend,
-      locale: locale,
-      fallbackMessage: fallbackMessage,
-    ),
-  );
-}
+  final failureKind = cloudError.runtimeFailure.kind.name;
+  final recoverySeconds = cloudError.runtimeFailure.recovery.afterSeconds;
+  final retrySeconds = retryAfterSeconds > 0
+      ? retryAfterSeconds
+      : recoverySeconds > 0
+      ? recoverySeconds
+      : 0;
 
-LoginErrorSurface loginErrorSurfaceForCode(
-  UserErrorCode? code, {
-  required LoginFailureOrigin origin,
-}) {
+  LoginFeedback feedback({
+    required String message,
+    required String copyKey,
+    required LoginFeedbackSurface surface,
+    required String recoveryAction,
+    bool clearOtp = false,
+    bool shakeOtp = false,
+    bool preserveOtp = false,
+    int? afterSeconds,
+  }) {
+    return LoginFeedback(
+      message: message,
+      copyKey: copyKey,
+      surface: surface,
+      recoveryAction: recoveryAction,
+      cloudError: cloudError,
+      sourceCode: rawCode,
+      failureKind: failureKind,
+      requestId: cloudError.requestId,
+      traceId: cloudError.traceId,
+      retryAfterSeconds: afterSeconds ?? retrySeconds,
+      clearOtp: clearOtp,
+      shakeOtp: shakeOtp,
+      preserveOtp: preserveOtp,
+    );
+  }
+
   return switch (code) {
-    UserErrorCode.socialProviderCancelled => LoginErrorSurface.silent,
+    UserErrorCode.socialProviderCancelled => feedback(
+      message: '',
+      copyKey: 'socialAuthorizationCancelled',
+      surface: LoginFeedbackSurface.silent,
+      recoveryAction: 'return',
+    ),
+    UserErrorCode.otpMismatch => feedback(
+      message: FoundationText.loginOtpMismatch,
+      copyKey: 'loginOtpMismatch',
+      surface: LoginFeedbackSurface.otp,
+      recoveryAction: 'reenterOtp',
+      clearOtp: true,
+      shakeOtp: true,
+    ),
+    UserErrorCode.otpExpired || UserErrorCode.challengeConsumed => feedback(
+      message: FoundationText.loginOtpExpired,
+      copyKey: 'loginOtpExpired',
+      surface: LoginFeedbackSurface.otp,
+      recoveryAction: 'resendOtp',
+      clearOtp: true,
+      afterSeconds: 0,
+    ),
+    UserErrorCode.otpAttemptsExceeded ||
+    UserErrorCode.otpRateLimited => feedback(
+      message: FoundationText.loginOtpRateLimited,
+      copyKey: 'loginOtpRateLimited',
+      surface: LoginFeedbackSurface.otp,
+      recoveryAction: 'waitThenResendOtp',
+      clearOtp: true,
+      afterSeconds: retrySeconds > 0 ? retrySeconds : 60,
+    ),
+    UserErrorCode.otpProviderFailed => feedback(
+      message: FoundationText.loginOtpSendFailed,
+      copyKey: 'loginOtpSendFailed',
+      surface: LoginFeedbackSurface.phone,
+      recoveryAction: 'resendOtp',
+      afterSeconds: 0,
+    ),
+    UserErrorCode.credentialConflict => feedback(
+      message: FoundationText.loginPhoneCredentialConflict,
+      copyKey: 'loginPhoneCredentialConflict',
+      surface: LoginFeedbackSurface.phone,
+      recoveryAction: 'changePhone',
+      clearOtp: true,
+    ),
     UserErrorCode.wechatAuthFailed ||
     UserErrorCode.alipayAuthFailed ||
     UserErrorCode.qqAuthFailed ||
-    UserErrorCode.socialProviderUnavailable ||
-    UserErrorCode.appleAuthFailed ||
-    UserErrorCode.passkeyAuthFailed => LoginErrorSurface.socialMethod,
-    UserErrorCode.consentRequired => LoginErrorSurface.agreement,
-    UserErrorCode.accountSuspended ||
-    UserErrorCode.accountDeleted ||
-    UserErrorCode.loginLocked => LoginErrorSurface.accountBlocked,
-    UserErrorCode.otpMismatch ||
-    UserErrorCode.otpAttemptsExceeded ||
-    UserErrorCode.otpExpired ||
-    UserErrorCode.otpRateLimited ||
-    UserErrorCode.otpProviderFailed ||
-    UserErrorCode.rateLimited => LoginErrorSurface.otpField,
-    UserErrorCode.carrierUnavailable ||
-    UserErrorCode.carrierProviderTimeout ||
-    UserErrorCode.carrierTokenInvalid ||
-    UserErrorCode.carrierPhoneMismatch ||
-    UserErrorCode.tokenExpired => LoginErrorSurface.topLevel,
-    _ => switch (origin) {
-      LoginFailureOrigin.otpSend ||
-      LoginFailureOrigin.otpLogin => LoginErrorSurface.otpField,
-      LoginFailureOrigin.social => LoginErrorSurface.socialMethod,
-      _ => LoginErrorSurface.topLevel,
-    },
-  };
-}
-
-LoginErrorPresentation loginErrorPresentationForCode(
-  UserErrorCode? code, {
-  RuntimeFailureBase? failure,
-  required bool sending,
-  int retryAfterSeconds = 0,
-  String entryId = 'login',
-  String surfaceId = 'LoginPage',
-}) {
-  final decision = failure == null
-      ? const RuntimeRecoveryDecision(
-          action: RuntimeRecoveryAction.surface,
-          disruptionLevel: UserDisruptionLevel.inlineCard,
-          policyId: 'login.local-fallback',
-        )
-      : const DefaultRuntimeRecoveryPolicy().decide(
-          failure,
-          EntryContext(
-            kind: 'login',
-            entryId: entryId,
-            actorType: 'guest',
-            actorId: '',
-            surfaceId: surfaceId,
-          ),
-          BoundaryContext(
-            boundary: 'login',
-            stage: 'authentication',
-            remainingBudget: 0,
-          ),
-        );
-  final retrySeconds = retryAfterSeconds > 0 ? retryAfterSeconds : 60;
-  return switch (code) {
-    UserErrorCode.otpMismatch => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.codeError,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
+    UserErrorCode.socialProviderUnavailable => feedback(
+      message: FoundationText.loginSocialAuthorizationFailed,
+      copyKey: 'loginSocialAuthorizationFailed',
+      surface: LoginFeedbackSurface.social,
+      recoveryAction: 'retryAuthorization',
     ),
-    UserErrorCode.otpExpired => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.codeExpired,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: 0,
-      clearCode: true,
+    UserErrorCode.consentRequired => feedback(
+      message: FoundationText.loginAgreementRequired,
+      copyKey: 'loginAgreementRequired',
+      surface: LoginFeedbackSurface.page,
+      recoveryAction: 'showConsentSheet',
     ),
-    UserErrorCode.otpAttemptsExceeded => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.codeExpired,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: retrySeconds,
-      clearCode: true,
+    UserErrorCode.accountSuspended => feedback(
+      // Account restriction copy is always local/generated. A response body
+      // must never surface moderation reason, evidence, case id, or raw detail.
+      message: UserErrorCode.accountSuspended.messageForLocale(locale),
+      copyKey: 'loginAccountSuspended',
+      surface: LoginFeedbackSurface.page,
+      recoveryAction: 'openSupport',
     ),
-    UserErrorCode.otpRateLimited ||
-    UserErrorCode.rateLimited => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.rateLimited,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: retrySeconds,
+    UserErrorCode.accountDeleted => feedback(
+      message: resolveLoginErrorMessage(
+        cloudError,
+        code,
+        sending: false,
+        locale: locale,
+      ),
+      copyKey: 'loginAccountDeleted',
+      surface: LoginFeedbackSurface.page,
+      recoveryAction: 'changeMethod',
     ),
-    // 登录被锁定属于"此号当前不可登录"，不是发码倒计时：不占用重发倒计时，
-    // 主按钮收敛为"换个手机号登录"，message 说明锁定原因/时长。
-    UserErrorCode.loginLocked => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.loginLocked,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: 0,
+    UserErrorCode.loginLocked => feedback(
+      message: resolveLoginErrorMessage(
+        cloudError,
+        code,
+        sending: false,
+        locale: locale,
+      ),
+      copyKey: 'loginAccountTemporarilyLocked',
+      surface: LoginFeedbackSurface.page,
+      recoveryAction: 'waitThenChangeMethod',
     ),
-    UserErrorCode.accountSuspended => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.accountSuspended,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: 0,
+    _
+        when origin == LoginFailureOrigin.otpVerify ||
+            origin == LoginFailureOrigin.phoneBinding =>
+      feedback(
+        message: FoundationText.loginOtpVerifyUnavailable,
+        copyKey: 'loginOtpVerifyUnavailable',
+        surface: LoginFeedbackSurface.otp,
+        recoveryAction: 'retryVerifyOtp',
+        preserveOtp: true,
+      ),
+    _ when origin == LoginFailureOrigin.otpSend => feedback(
+      message: FoundationText.loginOtpSendFailed,
+      copyKey: 'loginOtpSendFailed',
+      surface: LoginFeedbackSurface.phone,
+      recoveryAction: 'resendOtp',
     ),
-    UserErrorCode.accountDeleted => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.accountDeleted,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: 0,
+    _ when origin == LoginFailureOrigin.social => feedback(
+      message: FoundationText.loginSocialAuthorizationFailed,
+      copyKey: 'loginSocialAuthorizationFailed',
+      surface: LoginFeedbackSurface.social,
+      recoveryAction: 'retryAuthorization',
     ),
-    UserErrorCode.otpProviderFailed ||
-    UserErrorCode.carrierUnavailable ||
-    UserErrorCode.carrierProviderTimeout ||
-    UserErrorCode.carrierTokenInvalid ||
-    UserErrorCode.carrierPhoneMismatch => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.sendFailed,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: 0,
-    ),
-    UserErrorCode.consentRequired => LoginErrorPresentation(
-      phase: LoginPhoneOtpPhase.codeError,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-    ),
-    _ => LoginErrorPresentation(
-      phase: sending
-          ? LoginPhoneOtpPhase.sendFailed
-          : LoginPhoneOtpPhase.codeError,
-      recoveryAction: decision.action,
-      disruptionLevel: decision.disruptionLevel,
-      resendSeconds: sending ? 0 : null,
+    _ => feedback(
+      message: resolveLoginErrorMessage(
+        cloudError,
+        code,
+        sending: false,
+        locale: locale,
+      ),
+      copyKey: 'loginUnavailable',
+      surface: LoginFeedbackSurface.page,
+      recoveryAction: 'changeMethod',
     ),
   };
 }
 
-/// userMessage 优先单路径：展示文案唯一真相源是云端随响应下发的 userMessage
-/// （可经 control-plane 热配置 override）。离线/缺失时回退 codegen 错误码 baseline
-/// （同源 errors.yaml），仍无则用通用兜底。不再按 code 维护第二套本地文案。
 String resolveLoginErrorMessage(
   CloudException? error,
   UserErrorCode? code, {
@@ -579,109 +545,35 @@ String resolveLoginErrorMessage(
   String? fallbackMessage,
 }) {
   final cloudMessage = error?.userMessage?.trim() ?? '';
-  if (cloudMessage.isNotEmpty) {
-    return cloudMessage;
-  }
+  if (cloudMessage.isNotEmpty) return cloudMessage;
   final baseline = code?.messageForLocale(locale).trim() ?? '';
-  if (baseline.isNotEmpty) {
-    return baseline;
-  }
+  if (baseline.isNotEmpty) return baseline;
   final fallback = fallbackMessage?.trim() ?? '';
-  if (fallback.isNotEmpty) {
-    return fallback;
-  }
-  final failureKind = error?.runtimeFailure.kind;
-  if (failureKind == RuntimeFailureKind.network ||
-      failureKind == RuntimeFailureKind.timeout) {
-    return FoundationText.loginNetworkUnavailable;
-  }
-  if (failureKind == RuntimeFailureKind.unavailable ||
-      failureKind == RuntimeFailureKind.internal) {
-    return FoundationText.loginServiceUnavailable;
+  if (fallback.isNotEmpty) return fallback;
+  final kind = error?.runtimeFailure.kind;
+  if (!sending &&
+      (kind == RuntimeFailureKind.network ||
+          kind == RuntimeFailureKind.timeout ||
+          kind == RuntimeFailureKind.unavailable)) {
+    return FoundationText.loginOtpVerifyUnavailable;
   }
   return sending
       ? FoundationText.loginOtpSendFailed
-      : FoundationText.loginFailed;
+      : FoundationText.loginServiceUnavailable;
 }
 
-class LoginEntryPresentation {
-  const LoginEntryPresentation({
-    required this.kind,
-    this.accountHint,
-    this.carrierHint,
-    this.phoneOtpState,
-    this.feedback,
-    this.message = '',
-    this.primaryAction = LoginPrimaryAction.none,
-    this.primaryProvider = '',
-    this.quickLoginPhone = '',
-  });
+String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 
-  const LoginEntryPresentation.resolving()
-    : this(kind: LoginEntryKind.resolving);
+bool _isValidMainlandPhone(String value) =>
+    RegExp(r'^1[3-9]\d{9}$').hasMatch(_digitsOnly(value));
 
-  final LoginEntryKind kind;
-  final LoginAccountHint? accountHint;
-  final CarrierPhoneHint? carrierHint;
-  final LoginPhoneOtpState? phoneOtpState;
-  final LoginFeedback? feedback;
-  final String message;
+String _validFullPhoneOrEmpty(String value) {
+  final digits = _digitsOnly(value);
+  return _isValidMainlandPhone(digits) ? digits : '';
+}
 
-  final LoginPrimaryAction primaryAction;
-  final String primaryProvider;
-
-  /// returning 态本机记住的完整手机号（仅手机号登录方式持有）。
-  ///
-  /// 过期 returning 用户点「短信验证码登录」时据此只预填手机号；
-  /// 为空（无完整号 / 三方登录）则进入空号手动输入态。发码始终需要显式点击。
-  final String quickLoginPhone;
-
-  LoginPrimaryAction get resolvedPrimaryAction {
-    if (primaryAction != LoginPrimaryAction.none) return primaryAction;
-    if (kind != LoginEntryKind.phoneOtp) return LoginPrimaryAction.none;
-    final state = phoneOtpState ?? const LoginPhoneOtpState.idle();
-    return state._showsCode && state.phase != LoginPhoneOtpPhase.codeExpired
-        ? LoginPrimaryAction.verifyOtp
-        : LoginPrimaryAction.requestOtp;
-  }
-
-  bool get hasExecutableRecovery => switch (resolvedPrimaryAction) {
-    LoginPrimaryAction.continueSession ||
-    LoginPrimaryAction.carrierOneTap ||
-    LoginPrimaryAction.phoneReauth ||
-    LoginPrimaryAction.socialReauth => true,
-    _ => false,
-  };
-
-  bool get canSubmit => switch (resolvedPrimaryAction) {
-    LoginPrimaryAction.continueSession ||
-    LoginPrimaryAction.carrierOneTap ||
-    LoginPrimaryAction.phoneReauth ||
-    LoginPrimaryAction.socialReauth => true,
-    LoginPrimaryAction.requestOtp =>
-      phoneOtpState?.canSendCode == true || phoneOtpState?.isBlocked == true,
-    LoginPrimaryAction.verifyOtp => phoneOtpState?.canLogin == true,
-    LoginPrimaryAction.none => false,
-  };
-
-  String get primaryLabel {
-    if (kind == LoginEntryKind.submitting) {
-      return FoundationText.loginSubmitting;
-    }
-    return switch (resolvedPrimaryAction) {
-      LoginPrimaryAction.continueSession => FoundationText.loginContinue,
-      LoginPrimaryAction.carrierOneTap => FoundationText.loginOneTapPrimary,
-      LoginPrimaryAction.phoneReauth =>
-        FoundationText.loginReturningSmsPrimary,
-      LoginPrimaryAction.socialReauth => switch (primaryProvider) {
-        'wechat' => FoundationText.loginUseWechat,
-        'qq' => FoundationText.loginUseQq,
-        'alipay' => FoundationText.loginUseAlipay,
-        _ => FoundationText.loginOtherMethodFallback,
-      },
-      LoginPrimaryAction.requestOtp || LoginPrimaryAction.verifyOtp =>
-        phoneOtpState?.primaryLabel ?? FoundationText.loginSendOtp,
-      LoginPrimaryAction.none => FoundationText.loginOtherMethodFallback,
-    };
-  }
+String _maskPhone(String value) {
+  final digits = _digitsOnly(value);
+  if (digits.length != 11) return value;
+  return '${digits.substring(0, 3)}****${digits.substring(7)}';
 }

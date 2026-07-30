@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show SubAccountProfileViewData;
+    show PersonaProfileViewData;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -38,11 +38,10 @@ class ProfileState {
     this.worksFailure,
     this.isFollowing = false,
     this.capability,
-    this.optimisticFollowOverride,
   });
 
   final String userId;
-  final SubAccountProfileViewData? profile;
+  final PersonaProfileViewData? profile;
   final CreationSubTab activeSubTab;
   final CreationWorkFormat activeWorkFormat;
   final CreationVisibility activeVisibility;
@@ -61,33 +60,28 @@ class ProfileState {
 
   /// 关系能力位投影（null = 未载入）
   final RelationshipCapabilityDto? capability;
-  final bool? optimisticFollowOverride;
 
   bool get isLoading => isIdentityLoading || isWorksLoading;
 
-  /// 兼容只读取一个错误的旧消费方；新页面必须分别消费身份与作品状态。
-  RuntimeFailureBase? get failure => identityFailure ?? worksFailure;
-
   /// 结构化首屏错误文案（null = 无错误）。
-  String? get errorMessage =>
-      failure == null ? null : runtimeFailureDisplayMessage(failure!).trim();
+  String? get errorMessage {
+    final firstFailure = identityFailure ?? worksFailure;
+    return firstFailure == null
+        ? null
+        : runtimeFailureDisplayMessage(firstFailure).trim();
+  }
 
   /// 首屏聚合是否失败（用于错误态分支：重试 / 降级提示）。
   bool get hasLoadError => identityFailure != null || worksFailure != null;
 
   bool get hasCacheFallback => hasLoadError && profile != null;
 
-  RelationshipCapabilityDto? get displayCapability {
-    final base = capability;
-    final override = optimisticFollowOverride;
-    if (base == null || override == null) {
-      return base;
-    }
-    return _copyCapabilityWithFollowState(base, override);
-  }
+  /// 仅暴露服务端确认的 canonical capability；本地关注意图由
+  /// [isFollowing] 单独表达，不得改写或补算动作矩阵。
+  RelationshipCapabilityDto? get displayCapability => capability;
 
   ProfileState copyWith({
-    SubAccountProfileViewData? profile,
+    PersonaProfileViewData? profile,
     CreationSubTab? activeSubTab,
     CreationWorkFormat? activeWorkFormat,
     CreationVisibility? activeVisibility,
@@ -103,9 +97,7 @@ class ProfileState {
     RuntimeFailureBase? worksFailure,
     bool? isFollowing,
     RelationshipCapabilityDto? capability,
-    bool? optimisticFollowOverride,
     bool clearCapability = false,
-    bool clearOptimisticFollowOverride = false,
     bool clearIdentityFailure = false,
     bool clearWorksFailure = false,
   }) {
@@ -131,9 +123,6 @@ class ProfileState {
           : (worksFailure ?? this.worksFailure),
       isFollowing: isFollowing ?? this.isFollowing,
       capability: clearCapability ? null : (capability ?? this.capability),
-      optimisticFollowOverride: clearOptimisticFollowOverride
-          ? null
-          : (optimisticFollowOverride ?? this.optimisticFollowOverride),
     );
   }
 }
@@ -179,34 +168,25 @@ class ProfileNotifier extends Notifier<ProfileState> {
   }
 
   void _syncFollowStateFromShared(UserRelationshipState relationshipState) {
-    final targetSubAccountId = state.profile?.subAccountId.isNotEmpty == true
-        ? state.profile!.subAccountId
+    final targetPersonaId = state.profile?.personaId.isNotEmpty == true
+        ? state.profile!.personaId
         : _userId;
-    if (!relationshipState.hasRelationshipStateFor(targetSubAccountId)) {
+    if (!relationshipState.hasRelationshipStateFor(targetPersonaId)) {
       return;
     }
-    final sharedFollowing = relationshipState.isFollowing(targetSubAccountId);
-    final capability = state.capability;
-    final shouldOverride =
-        capability != null && capability.viewerFollowsTarget != sharedFollowing;
-    if (state.isFollowing == sharedFollowing &&
-        ((!shouldOverride && state.optimisticFollowOverride == null) ||
-            state.optimisticFollowOverride == sharedFollowing)) {
+    final sharedFollowing = relationshipState.isFollowing(targetPersonaId);
+    if (state.isFollowing == sharedFollowing) {
       return;
     }
-    state = state.copyWith(
-      isFollowing: sharedFollowing,
-      optimisticFollowOverride: shouldOverride ? sharedFollowing : null,
-      clearOptimisticFollowOverride: !shouldOverride,
-    );
+    state = state.copyWith(isFollowing: sharedFollowing);
   }
 
-  bool? _pendingFollowIntent(String subAccountId) {
+  bool? _pendingFollowIntent(String personaId) {
     for (final entry
         in ref.read(clientStateSyncOutboxProvider).entries.reversed) {
       if (entry.objectType == 'profile' &&
           entry.intentType == 'follow' &&
-          entry.objectId == subAccountId) {
+          entry.objectId == personaId) {
         return entry.desiredBoolValue;
       }
     }
@@ -399,8 +379,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
           .getUserHomepageBundle(_userId);
       if (!_identityWaitController.complete(generation) || !ref.mounted) return;
       final profile = bundle.profileWithStats;
-      final subAccountId = profile.subAccountId.isNotEmpty
-          ? profile.subAccountId
+      final personaId = profile.personaId.isNotEmpty
+          ? profile.personaId
           : _userId;
       final bundleCapability = bundle.relationshipCapability;
       final reconcileCap = ref
@@ -408,32 +388,24 @@ class ProfileNotifier extends Notifier<ProfileState> {
           .reconcilesCapabilityWithSharedRelationshipState;
       final sharedFollowing = ref
           .read(userRelationshipStateProvider)
-          .isFollowing(subAccountId);
-      final pendingFollowIntent = _pendingFollowIntent(subAccountId);
-      bool? optimisticFollowOverride;
-      if (bundleCapability != null && reconcileCap) {
-        final desiredFollowing = pendingFollowIntent ?? sharedFollowing;
-        if (desiredFollowing != bundleCapability.viewerFollowsTarget) {
-          optimisticFollowOverride = desiredFollowing;
-        }
-      }
-      final seededFollowing =
-          optimisticFollowOverride ??
-          pendingFollowIntent ??
-          bundleCapability?.viewerFollowsTarget ??
-          sharedFollowing;
+          .isFollowing(personaId);
+      final pendingFollowIntent = _pendingFollowIntent(personaId);
+      final seededFollowing = reconcileCap
+          ? pendingFollowIntent ?? sharedFollowing
+          : pendingFollowIntent ??
+                bundleCapability?.viewerFollowsTarget ??
+                sharedFollowing;
       state = state.copyWith(
         profile: profile,
         isIdentityLoading: false,
         isIdentitySlow: false,
         isFollowing: seededFollowing,
         capability: bundleCapability,
-        optimisticFollowOverride: optimisticFollowOverride,
         clearIdentityFailure: true,
       );
       ref
           .read(userRelationshipStateProvider.notifier)
-          .setFollowing(subAccountId, seededFollowing);
+          .setFollowing(personaId, seededFollowing);
     } catch (error) {
       if (!_identityWaitController.complete(generation) || !ref.mounted) return;
       final failure = CloudErrorMapper.runtimeFailureFromException(error);
@@ -515,7 +487,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
         .read(pageLifecycleObservabilityProvider)
         .recordPageState(
           pageName: 'profile',
-          route: AppRoutePaths.userProfile(username: _userId),
+          route: AppRoutePaths.userProfile(userHandle: _userId),
           surface: 'user_profile',
           phase: phase,
           source: source,
@@ -532,8 +504,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
 
   Future<void> _loadRelationshipCapability() async {
     try {
-      final targetUserId = state.profile?.subAccountId.isNotEmpty == true
-          ? state.profile!.subAccountId
+      final targetUserId = state.profile?.personaId.isNotEmpty == true
+          ? state.profile!.personaId
           : _userId;
       final seededFollowing = ref
           .read(userRelationshipStateProvider)
@@ -550,11 +522,8 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final effectiveFollowing =
           pendingFollowIntent ??
           (reconcileCap ? seededFollowing : cap.viewerFollowsTarget);
-      if (reconcileCap && effectiveFollowing != cap.viewerFollowsTarget) {
-        state = state.copyWith(optimisticFollowOverride: effectiveFollowing);
-      }
-      final latestTargetId = state.profile?.subAccountId.isNotEmpty == true
-          ? state.profile!.subAccountId
+      final latestTargetId = state.profile?.personaId.isNotEmpty == true
+          ? state.profile!.personaId
           : _userId;
       if (latestTargetId != targetUserId) {
         return;
@@ -562,31 +531,18 @@ class ProfileNotifier extends Notifier<ProfileState> {
       ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowing(targetUserId, effectiveFollowing);
-      state = state.copyWith(
-        capability: cap,
-        isFollowing: effectiveFollowing,
-        optimisticFollowOverride: effectiveFollowing == cap.viewerFollowsTarget
-            ? null
-            : effectiveFollowing,
-        clearOptimisticFollowOverride:
-            effectiveFollowing == cap.viewerFollowsTarget,
-      );
+      state = state.copyWith(capability: cap, isFollowing: effectiveFollowing);
     } catch (error) {
       if (!ref.mounted) {
         return;
       }
-      final targetUserId = state.profile?.subAccountId.isNotEmpty == true
-          ? state.profile!.subAccountId
+      final targetUserId = state.profile?.personaId.isNotEmpty == true
+          ? state.profile!.personaId
           : _userId;
       final seededFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(targetUserId);
-      state = state.copyWith(
-        isFollowing: seededFollowing,
-        optimisticFollowOverride: state.capability == null
-            ? null
-            : seededFollowing,
-      );
+      state = state.copyWith(isFollowing: seededFollowing);
       _recordProfileState(
         phase: 'capabilityFallback',
         source: 'relationshipState',
@@ -622,18 +578,18 @@ class ProfileNotifier extends Notifier<ProfileState> {
   }
 
   Future<void> toggleFollow() async {
-    final subAccountId = state.profile?.subAccountId.isNotEmpty == true
-        ? state.profile!.subAccountId
+    final personaId = state.profile?.personaId.isNotEmpty == true
+        ? state.profile!.personaId
         : _userId;
     final relationshipState = ref.read(userRelationshipStateProvider);
-    final wasFollowing = relationshipState.hasRelationshipStateFor(subAccountId)
-        ? relationshipState.isFollowing(subAccountId)
+    final wasFollowing = relationshipState.hasRelationshipStateFor(personaId)
+        ? relationshipState.isFollowing(personaId)
         : state.isFollowing;
     final nextFollowing = !wasFollowing;
     await ref
         .read(userRelationshipStateProvider.notifier)
         .setFollowingWithSync(
-          subAccountId,
+          personaId,
           currentFollowing: wasFollowing,
           shouldFollow: nextFollowing,
           sourceSurface: AppUiSurfaces.userProfile,
@@ -648,26 +604,23 @@ class ProfileNotifier extends Notifier<ProfileState> {
             action: nextFollowing ? 'follow_user' : 'unfollow_user',
             pageName: 'ProfilePage',
             targetType: 'user',
-            targetKey: subAccountId,
+            targetKey: personaId,
           ),
     );
-    state = state.copyWith(
-      isFollowing: nextFollowing,
-      optimisticFollowOverride: state.capability == null ? null : nextFollowing,
-    );
+    state = state.copyWith(isFollowing: nextFollowing);
   }
 
   Future<GreetingRequestDto> sendGreeting({
     String? requestMessage,
     String source = 'profile',
   }) async {
-    final targetUserId = state.profile?.subAccountId.isNotEmpty == true
-        ? state.profile!.subAccountId
+    final targetUserId = state.profile?.personaId.isNotEmpty == true
+        ? state.profile!.personaId
         : _userId;
     final greeting = await ref
         .read(greetingRepositoryProvider)
         .sendGreeting(
-          targetSubAccountId: targetUserId,
+          targetPersonaId: targetUserId,
           requestMessage: requestMessage,
           source: source,
         );
@@ -686,21 +639,13 @@ class ProfileNotifier extends Notifier<ProfileState> {
             targetKey: targetUserId,
           ),
     );
-    final capability = state.capability;
-    if (capability != null) {
-      state = state.copyWith(
-        capability: capability.copyWith(
-          canGreet: false,
-          hasPendingGreeting: true,
-        ),
-      );
-    }
+    await _loadRelationshipCapability();
     return greeting;
   }
 
   Future<ChatConversationCreatedDto> openOrCreateDirectConversation() async {
-    final targetUserId = state.profile?.subAccountId.isNotEmpty == true
-        ? state.profile!.subAccountId
+    final targetUserId = state.profile?.personaId.isNotEmpty == true
+        ? state.profile!.personaId
         : _userId;
     final result = await ref
         .read(chatConversationRepositoryProvider)
@@ -709,7 +654,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
           initialMemberIds: <String>[targetUserId],
         );
     if (ref.mounted) {
-      _promoteFormalConversation(result.conversationId);
+      await _loadRelationshipCapability();
     }
     return result;
   }
@@ -721,46 +666,14 @@ class ProfileNotifier extends Notifier<ProfileState> {
         .read(greetingRepositoryProvider)
         .replyGreeting(requestId);
     if (ref.mounted) {
-      _promoteFormalConversation(result.conversationId);
+      await _loadRelationshipCapability();
     }
     return result;
   }
 
   void markFormalConversationAvailable({String? conversationId}) {
-    _promoteFormalConversation(conversationId);
+    unawaited(_loadRelationshipCapability());
   }
-
-  void _promoteFormalConversation(String? conversationId) {
-    final capability = state.capability;
-    if (capability == null) {
-      return;
-    }
-    state = state.copyWith(
-      capability: capability.copyWith(
-        hasFormalConversation: true,
-        hasPendingGreeting: false,
-        canOpenConversation: true,
-        canSendMessage: true,
-        canGreet: false,
-      ),
-    );
-  }
-}
-
-RelationshipCapabilityDto _copyCapabilityWithFollowState(
-  RelationshipCapabilityDto capability,
-  bool isFollowing,
-) {
-  return RelationshipCapabilityDto.fromFollowFlags(
-    viewerId: capability.viewerSubAccountId,
-    targetId: capability.targetSubAccountId,
-    isFollowing: isFollowing,
-    isFollowedBy: capability.targetFollowsViewer,
-    isBlocked: capability.isBlocked,
-    isBlockedBy: capability.isBlockedBy,
-    hasFormalConversation: capability.hasFormalConversation,
-    hasPendingGreeting: capability.hasPendingGreeting,
-  );
 }
 
 RuntimeFailure _profileTimeoutFailure(String area) {

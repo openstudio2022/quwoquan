@@ -385,14 +385,14 @@ func TestClaimCASStopsAfterThreeAttemptsAndMaterialRules(t *testing.T) {
 	invalid := validCreateCommand()
 	invalid.BusinessLicenseURL = ""
 	if _, err := facade.Create(commandContext("claim-material"), invalid); !hasCode(
-		err, generated.ErrClaimMaterialMissing,
+		err, claimgenerated.ErrClaimMaterialMissing,
 	) {
 		t.Fatalf("basic claim without proof must fail: %v", err)
 	}
 	verified := validCreateCommand()
 	verified.ClaimTier = claimmodel.ClaimTierVerified
 	if _, err := facade.Create(commandContext("claim-verified-material"), verified); !hasCode(
-		err, generated.ErrClaimMaterialMissing,
+		err, claimgenerated.ErrClaimMaterialMissing,
 	) {
 		t.Fatalf("verified claim requires identity pair: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestClaimHomepageGate(t *testing.T) {
 	}{
 		"missing": {"hp-missing", generated.ErrHomepageNotFound},
 		"offline": {"hp-offline", generated.ErrHomepageOffline},
-		"claimed": {"hp-claimed", generated.ErrAlreadyClaimed},
+		"claimed": {"hp-claimed", claimgenerated.ErrAlreadyClaimed},
 	} {
 		t.Run(name, func(t *testing.T) {
 			command := validCreateCommand()

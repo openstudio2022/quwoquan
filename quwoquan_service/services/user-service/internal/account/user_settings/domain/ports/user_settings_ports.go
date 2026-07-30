@@ -79,7 +79,7 @@ type GetAppearanceSettingsSlice struct {
 	Source                     model.AppearanceSource `json:"source"`
 	OwnerDefaultThemeMode      model.ThemeMode        `json:"ownerDefaultThemeMode"`
 	OwnerDefaultFontSizePreset model.FontSizePreset   `json:"ownerDefaultFontSizePreset"`
-	HasSubAccountOverride      bool                   `json:"hasSubAccountOverride"`
+	HasPersonaOverride         bool                   `json:"hasPersonaOverride"`
 	Version                    int64                  `json:"version"`
 	UpdatedAt                  time.Time              `json:"updatedAt"`
 }

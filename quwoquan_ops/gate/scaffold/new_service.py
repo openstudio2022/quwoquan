@@ -253,6 +253,9 @@ resources:
 kind: Deployment
 metadata:
   name: {service}
+  annotations:
+    quwoquan.io/config-version: package-required
+    quwoquan.io/image-version: package-required
 spec:
   replicas: 1
   selector:
@@ -262,6 +265,9 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: {service}
+      annotations:
+        quwoquan.io/config-version: package-required
+        quwoquan.io/image-version: package-required
     spec:
       containers:
         - name: {service}
@@ -272,6 +278,23 @@ spec:
           envFrom:
             - secretRef:
                 name: {service}-runtime-secrets
+          env:
+            - name: SERVICE_NAME
+              value: {service}
+            - name: APP_ENV
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['quwoquan.io/environment']
+            - name: CONFIG_ROOT
+              value: /etc/qwq/config
+            - name: CONFIG_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['quwoquan.io/config-version']
+            - name: IMAGE_VERSION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['quwoquan.io/image-version']
           volumeMounts:
             - name: runtime-config
               mountPath: /etc/qwq/config/{service}.yaml
@@ -296,6 +319,7 @@ spec:
 ''',
         "deploy/compose.yaml": f'''services:
   {service}:
+    image: "${{QWQ_COMPOSE_{service.upper().replace('-', '_')}_IMAGE:?fixed {service} image reference is required}}"
     build:
       context: ../../..
       dockerfile: quwoquan_service/services/{service}/build/Dockerfile
@@ -304,6 +328,7 @@ spec:
       APP_ENV: "${{QWQ_COMPOSE_ENV:-alpha}}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${{QWQ_COMPOSE_{service.upper().replace('-', '_')}_CONFIG_VERSION:?config version is required}}"
+      IMAGE_VERSION: "${{QWQ_COMPOSE_IMAGE_VERSION:?immutable image identity is required}}"
     volumes:
       - ${{QWQ_COMPOSE_CONFIG_ROOT:?config root is required}}:/etc/qwq-config:ro
     ports:

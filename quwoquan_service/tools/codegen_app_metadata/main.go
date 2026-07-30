@@ -157,7 +157,7 @@ func main() {
 	}
 	// discovery_feed projection: services/content-service/contracts/content/post/projections/
 	feedProjPath := filepath.Join(postDir, "projections", "discovery_feed.yaml")
-	projection, err := readProjection(feedProjPath)
+	projection, err := readValidatedProjection(feedProjPath, shared.Enums)
 	if err != nil {
 		exitErr(err)
 	}
@@ -178,7 +178,6 @@ func main() {
 	feedRoute := findRoute(service.APIRoutes, "GetFeed")
 	getPostRoute := findRoute(service.APIRoutes, "GetPost")
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
-	writableFields := findWritableFields(service.APIRoutes, "SubmitPostPublication")
 	likeRoutes := buildMutationRoutes(service.APIRoutes,
 		[]string{"LikePost", "UnlikePost", "FavoritePost", "UnfavoritePost"})
 
@@ -192,7 +191,6 @@ func main() {
 		feedRoute,
 		getPostRoute,
 		feedDefaultLimit,
-		writableFields,
 		likeRoutes,
 	)
 	metaPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "content", "content_metadata.g.dart")
@@ -222,9 +220,8 @@ func main() {
 	// 3a. 生成 content_errors.g.dart（ContentErrorCode enum + messages）。
 	// content 域错误码按对象目录拆分登记，此处按固定顺序合并为域级客户端枚举；
 	// code 必须全域唯一（由 verify_error_code_endcloud_parity 与 codegen 共同锁定）。
-	if errsDef, err := readMergedErrors(contentDomainErrorsPaths(metadataDir)); err == nil {
-		out := renderContentErrorsDart(errsDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_errors.g.dart"), out)
+	if err := writeContentErrorsDart(metadataDir, appDir); err != nil {
+		exitErr(err)
 	}
 
 	// 3a2. 生成 chat_errors.g.dart（ChatErrorCode enum + messages）
@@ -243,12 +240,36 @@ func main() {
 			renderSimpleErrorsDart("AssistantErrorCode", "assistant/assistant/assistant_run/errors.yaml", "找私助暂时不可用，请稍后重试", assistantErrs),
 		)
 	}
-	if circleErrs, err := readErrors(filepath.Join(metadataDir, "circle", "circle_management", "circle", "errors.yaml")); err == nil {
-		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_errors.g.dart"),
-			renderSimpleErrorsDart("CircleErrorCode", "circle/circle_management/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
-		)
+	circleErrorsPath := filepath.Join(
+		metadataDir,
+		"circle",
+		"circle_management",
+		"circle",
+		"errors.yaml",
+	)
+	circleErrs, err := readErrors(circleErrorsPath)
+	if err != nil {
+		exitErr(fmt.Errorf("read Circle errors metadata: %w", err))
 	}
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_errors.g.dart"),
+		renderSimpleErrorsDart("CircleErrorCode", "circle/circle_management/circle/errors.yaml", "圈子服务异常，请稍后重试", circleErrs),
+	)
+	circleMembershipErrorsPath := filepath.Join(
+		metadataDir,
+		"circle",
+		"circle_management",
+		"circle_membership",
+		"errors.yaml",
+	)
+	circleMembershipErrs, err := readErrors(circleMembershipErrorsPath)
+	if err != nil {
+		exitErr(fmt.Errorf("read CircleMembership errors metadata: %w", err))
+	}
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "circle", "generated", "circle_membership_errors.g.dart"),
+		renderSimpleErrorsDart("CircleMembershipErrorCode", "circle/circle_management/circle_membership/errors.yaml", "圈子成员关系暂时不可用，请稍后重试", circleMembershipErrs),
+	)
 	if entityErrs, err := readMergedErrors([]string{
 		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage", "errors.yaml"),
 		filepath.Join(metadataDir, "entity", "entity_homepage", "homepage_claim_request", "errors.yaml"),
@@ -296,11 +317,18 @@ func main() {
 		)
 	}
 
-	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）
-	if behDef, err := readBehaviors(filepath.Join(postDir, "behaviors.yaml")); err == nil {
-		out := renderContentBehaviorsDart(behDef)
-		writeFile(filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_behaviors.g.dart"), out)
+	// 3b. 生成 content_behaviors.g.dart（ContentBehaviorTracker）。
+	// 行为事实是独立对象（content_behavior_fact），不是 post 的子文档：一次行为事件的
+	// 生命周期与可见性与被作用的帖子无关，因此契约归 content_behavior_fact 而非 post。
+	behaviorsPath := filepath.Join(metadataDir, "content", "content", "content_behavior_fact", "behaviors.yaml")
+	behDef, err := readBehaviors(behaviorsPath)
+	if err != nil {
+		exitErr(fmt.Errorf("read content behaviors.yaml: %w", err))
 	}
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_behaviors.g.dart"),
+		renderContentBehaviorsDart(behDef),
+	)
 
 	// 3c. 生成 content_privacy_policy.g.dart（sanitizeForLog）
 	if privDef, err := readPrivacy(filepath.Join(postDir, "privacy.yaml")); err == nil {
@@ -425,8 +453,11 @@ func main() {
 
 	// 2c. 生成 integration/external_integration/location projections（无 base_class 的 standalone DTO，如 LocationPoiDto）
 	for _, projectionPath := range metadataDocumentPaths("integration/external_integration/location/projections", ".yaml") {
-		p, err := readProjection(projectionPath)
-		if err != nil || len(p.ClientProjection.Fields) == 0 {
+		p, err := readValidatedProjection(projectionPath, shared.Enums)
+		if err != nil {
+			exitErr(err)
+		}
+		if len(p.ClientProjection.Fields) == 0 {
 			continue
 		}
 		if p.ClientProjection.BaseClass != "" {
@@ -451,7 +482,7 @@ func main() {
 		if filepath.Base(projectionPath) == "discovery_feed.yaml" {
 			continue // already handled above
 		}
-		p, err := readProjection(projectionPath)
+		p, err := readValidatedProjection(projectionPath, shared.Enums)
 		if err != nil {
 			exitErr(err)
 		}
@@ -468,14 +499,6 @@ func main() {
 	}
 
 	writeFile(filepath.Join(contentGenDir, "content_dtos.dart"), renderContentDtosBarrelDart())
-	postWireFieldTypes := make(map[string]string, len(post.Fields))
-	for _, f := range post.Fields {
-		postWireFieldTypes[f.Name] = strings.TrimSpace(f.Type)
-	}
-	writeContentPostMutationWires(filepath.Join(contentGenDir, "content_post_mutation_wires.g.dart"), service, postWireFieldTypes)
-	if err := writeEntityHomepageMutationWiresFromMetadata(metadataDir, appDir); err != nil {
-		exitErr(err)
-	}
 
 	// 3b. 生成其他 domain projections（无 base_class 的 standalone DTO，如 chat inbox）。
 	// 用户域 Auth/Invite/Greeting 等 wire 读模型见：
@@ -486,8 +509,11 @@ func main() {
 		if filepath.Base(filepath.Dir(path)) != "projections" {
 			continue
 		}
-		p, readErr := readProjection(path)
-		if readErr != nil || len(p.ClientProjection.Fields) == 0 {
+		p, readErr := readValidatedProjection(path, shared.Enums)
+		if readErr != nil {
+			exitErr(readErr)
+		}
+		if len(p.ClientProjection.Fields) == 0 {
 			continue
 		}
 		if strings.TrimSpace(p.ClientProjection.BaseClass) != "" {
@@ -548,9 +574,6 @@ func main() {
 		exitErr(err)
 	}
 	if err := writeImpactHelpTypeMetadata(appDir, metadataDir); err != nil {
-		exitErr(err)
-	}
-	if err := writeRtcRequestWires(appDir, metadataDir); err != nil {
 		exitErr(err)
 	}
 	// RTC 客户端 errors；Service 产物由领域 codegen 所有。
@@ -620,18 +643,72 @@ func main() {
 			renderSearchFeedbackEventTypeDart(feedbackEventTypes),
 		)
 	}
+	canonicalCircleFields, canonicalCircleFieldsErr := readFields(filepath.Join(
+		metadataDir,
+		"circle",
+		"circle_management",
+		"circle",
+		"fields.yaml",
+	))
+	if canonicalCircleFieldsErr != nil {
+		exitErr(fmt.Errorf("read canonical Circle fields: %w", canonicalCircleFieldsErr))
+	}
+	circleMembershipFields, circleMembershipFieldsErr := readFields(filepath.Join(
+		metadataDir,
+		"circle",
+		"circle_management",
+		"circle_membership",
+		"fields.yaml",
+	))
+	if circleMembershipFieldsErr != nil {
+		exitErr(fmt.Errorf("read PersonaCircleSlice fields: %w", circleMembershipFieldsErr))
+	}
+	circleEnumRefs, circleEnumRefsErr := personaCircleSliceEnumRefs(
+		canonicalCircleFields,
+		circleMembershipFields,
+	)
+	if circleEnumRefsErr != nil {
+		exitErr(circleEnumRefsErr)
+	}
+	if circleContractEnums, renderErr := renderCircleContractEnumsDart(shared.Enums, circleEnumRefs); renderErr != nil {
+		exitErr(renderErr)
+	} else {
+		writeFile(
+			filepath.Join(
+				appDir,
+				"packages",
+				"quwoquan_cloud_contracts",
+				"lib",
+				"src",
+				"generated",
+				"circle_contract_enums.g.dart",
+			),
+			circleContractEnums,
+		)
+	}
+	if userContractEnums, renderErr := renderSharedContractEnumsDart(
+		shared.Enums,
+		[]string{"FollowSubjectKind"},
+	); renderErr != nil {
+		exitErr(renderErr)
+	} else {
+		writeFile(
+			filepath.Join(
+				appDir,
+				"packages",
+				"quwoquan_cloud_contracts",
+				"lib",
+				"src",
+				"generated",
+				"user_contract_enums.g.dart",
+			),
+			userContractEnums,
+		)
+	}
 	if searchObjects != nil {
 		writeFile(
 			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "search", "search_registry.g.dart"),
 			renderSearchRegistryDart(searchObjects),
-		)
-	}
-	if circleWireKeysOut, err := renderCircleWriteWireWritableKeysDart(metadataDir); err != nil {
-		exitErr(err)
-	} else {
-		writeFile(
-			filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "circle", "circle_write_wire_writable_keys.g.dart"),
-			circleWireKeysOut,
 		)
 	}
 	if err := generateAssistantRuntimeArtifacts(metadataDir, appDir); err != nil {
@@ -640,10 +717,35 @@ func main() {
 	if err := generateAssistantCloudApiWireDart(metadataDir, appDir); err != nil {
 		exitErr(err)
 	}
-	writeGeneratedOperationContracts(appDir, activeContractLock)
+	requestArtifacts, err := writeGeneratedOperationRequests(
+		appDir,
+		activeContractLock,
+	)
+	if err != nil {
+		exitErr(err)
+	}
+	if err := writeGeneratedOperationContracts(
+		appDir,
+		activeContractLock,
+		requestArtifacts,
+	); err != nil {
+		exitErr(err)
+	}
 	if err := writeGeneratedManifest(generatedManifestPath); err != nil {
 		exitErr(err)
 	}
+}
+
+func writeContentErrorsDart(metadataDir string, appDir string) error {
+	errorsDefinition, err := readMergedErrors(contentDomainErrorsPaths(metadataDir))
+	if err != nil {
+		return fmt.Errorf("read Content errors metadata: %w", err)
+	}
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "content", "generated", "content_errors.g.dart"),
+		renderContentErrorsDart(errorsDefinition),
+	)
+	return nil
 }
 
 func removeRetiredGeneratedOutputs(appDir string) {
@@ -674,6 +776,7 @@ func removeRetiredGeneratedOutputs(appDir string) {
 		filepath.Join("lib", "cloud", "runtime", "generated", "user", "persona_update_request_dto.g.dart"),
 		filepath.Join("lib", "cloud", "runtime", "generated", "user", "user_profile_stats_wire_dto.g.dart"),
 		filepath.Join("lib", "cloud", "runtime", "generated", "content", "post_search_item_view_dto.g.dart"),
+		filepath.Join("lib", "cloud", "runtime", "generated", "rtc", "rtc_request_wires.g.dart"),
 		filepath.Join("lib", "cloud", "runtime", "generated", "user", "profile_interaction_activity_wire_dto.g.dart"),
 		filepath.Join("lib", "assistant", "generated", "enums", "assistant_runtime_enums.g.dart"),
 	}

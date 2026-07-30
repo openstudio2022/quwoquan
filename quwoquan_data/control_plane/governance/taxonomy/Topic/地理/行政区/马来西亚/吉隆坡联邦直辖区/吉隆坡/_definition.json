@@ -1,0 +1,12 @@
+{
+  "label": "吉隆坡",
+  "labelEn": "Kuala Lumpur",
+  "description": "双子塔与多元文化都市",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

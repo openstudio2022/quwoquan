@@ -123,11 +123,11 @@
         "title": "⑤ 引擎按 policy × segment 归因 QPS",
         "type": "timeseries",
         "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
-        "description": "每个被服务请求归因到其解析出的 policyVersion 与人群 segment（rec.pipeline.requests_by_policy_total）；这是策略元数据化 + 人群定向真正生效到引擎的端到端证据。",
+        "description": "每个被服务请求归因到其生效的 policyDigest 与人群 segment（rec.pipeline.requests_by_policy_total）；这是策略元数据化 + 人群定向真正生效到引擎的端到端证据。",
         "targets": [
           {
-            "expr": "sum(rate(rec_pipeline_requests_by_policy_total[5m])) by (policy_version, segment)",
-            "legendFormat": "{{ policy_version }} / {{ segment }}"
+            "expr": "sum(rate(rec_pipeline_requests_by_policy_total[5m])) by (policy_digest, segment)",
+            "legendFormat": "{{ policy_digest }} / {{ segment }}"
           }
         ]
       },

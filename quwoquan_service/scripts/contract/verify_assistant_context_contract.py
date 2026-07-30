@@ -137,14 +137,29 @@ def main() -> int:
     assert_field(failures, entities, "CitationDestination", "url", "string")
 
     routes = route_map(operations)
-    for operation in ("SearchXiaoquResults", "ReportPageContext"):
+    expected_request_entities = {
+        "SearchXiaoquResults": "AssistantSearchXiaoquRequestWire",
+        "ReportPageContext": "AssistantReportPageContextRequestWire",
+    }
+    for operation, expected_entity in expected_request_entities.items():
         route = routes.get(operation)
         if not isinstance(route, dict):
             failures.append(f"operations.yaml missing operation {operation}")
             continue
-        request_fields = route.get("request_fields")
-        if not isinstance(request_fields, list) or "contextSnapshot" not in request_fields:
-            failures.append(f"{operation}: request_fields must include contextSnapshot")
+        request_entity = route.get("request_entity")
+        if request_entity != expected_entity:
+            failures.append(
+                f"{operation}: request_entity {request_entity!r}, "
+                f"want {expected_entity!r}"
+            )
+            continue
+        assert_field(
+            failures,
+            entities,
+            expected_entity,
+            "contextSnapshot",
+            "AssistantContextSnapshot",
+        )
 
     if failures:
         print(

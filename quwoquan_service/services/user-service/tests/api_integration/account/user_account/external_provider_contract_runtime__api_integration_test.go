@@ -259,7 +259,7 @@ func qqAuthorizationTicket(accessToken, openID string) string {
 	if err != nil {
 		panic(err)
 	}
-	return string(payload)
+	return "qq_mobile_v1." + base64.RawURLEncoding.EncodeToString(payload)
 }
 
 func writeJSON(writer http.ResponseWriter, value any) {
@@ -287,6 +287,20 @@ func TestExternalProviderContractRuntime_ProductionClientExchangesAllProviders(t
 		}
 		if identity.CredentialKey == "" || identity.AvatarURL == "" {
 			t.Fatalf("unexpected %s identity: %#v", item.name, identity)
+		}
+	}
+}
+
+func TestExternalProviderContractRuntime_QqRejectsNoncanonicalTicketShapes(t *testing.T) {
+	if externalProviderRuntime == nil {
+		t.Fatal("external provider contract runtime is not initialized")
+	}
+	raw := `{"accessToken":"qq-access","openId":"qq-open"}`
+	wrongPrefix := "qq_mobile_v2." + base64.RawURLEncoding.EncodeToString([]byte(raw))
+	malformedCanonical := "qq_mobile_v1." + base64.RawURLEncoding.EncodeToString([]byte(raw[:len(raw)-1]))
+	for _, ticket := range []string{raw, wrongPrefix, malformedCanonical} {
+		if _, err := externalProviderRuntime.qq.Verify(context.Background(), ticket); err == nil {
+			t.Fatalf("noncanonical or malformed QQ ticket must be rejected: %q", ticket)
 		}
 	}
 }

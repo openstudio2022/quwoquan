@@ -40,32 +40,32 @@ void main() {
     },
   );
 
-  test('CreateConversation carries the stable command idempotency key', () async {
-    final executor = _RecordingExecutor(response: _conversationWire());
-    final writer = RemoteChatConversationCommandWriter(
-      client: GeneratedCloudOperationClient(executor),
-      invocationContext: _commandContext,
-    );
+  test(
+    'CreateConversation carries the stable command idempotency key',
+    () async {
+      final executor = _RecordingExecutor(response: _conversationWire());
+      final writer = RemoteChatConversationCommandWriter(
+        client: GeneratedCloudOperationClient(executor),
+        invocationContext: _commandContext,
+      );
 
-    final created = await writer.createConversation(
-      ChatCreateConversationCommand(
-        type: 'group',
+      final created = await writer.createConversation(
+        ChatCreateConversationCommand(type: 'group', title: '契约群聊'),
         idempotencyKey: 'conversation-create-1',
-        title: '契约群聊',
-      ),
-    );
+      );
 
-    expect(
-      executor.operation?.canonicalOperationId,
-      AppCloudOperationIds.chatConversationCreateConversation,
-    );
-    expect(executor.context?.idempotencyKey, 'conversation-create-1');
-    expect(executor.body, <String, Object?>{
-      'type': 'group',
-      'title': '契约群聊',
-    });
-    expect(created.id, 'conversation-1');
-  });
+      expect(
+        executor.operation?.canonicalOperationId,
+        AppCloudOperationIds.chatConversationCreateConversation,
+      );
+      expect(executor.context?.idempotencyKey, 'conversation-create-1');
+      expect(executor.body, <String, Object?>{
+        'type': 'group',
+        'title': '契约群聊',
+      });
+      expect(created.id, 'conversation-1');
+    },
+  );
 }
 
 CloudOperationInvocationContext _context(String clientPageId) {
@@ -130,8 +130,6 @@ Map<String, Object?> _conversationWire() => <String, Object?>{
   'circleGroupId': '',
   'entityId': '',
   'originType': 'ad_hoc_group',
-  'bindingType': 'none',
-  'lifecyclePolicy': 'persistent',
   'maxSeq': 8,
   'memberCount': 2,
   'membersRosterRevision': 3,

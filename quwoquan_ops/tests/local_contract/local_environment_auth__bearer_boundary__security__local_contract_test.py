@@ -45,7 +45,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         with (
             mock.patch.object(
                 local_environment_auth,
-                "_load_acceptance_principal",
+                "_local_acceptance_principal",
                 return_value=("fixture_user_current", "fixture_user_current"),
             ),
             mock.patch.object(local_environment_auth, "prepare_local_environment_auth", return_value=auth),
@@ -353,13 +353,12 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
                 subject="../../shared-actor",
             )
 
-    def test_non_loopback_transport_is_rejected_before_a_request(self) -> None:
-        with self.assertRaisesRegex(ValueError, "loopback"):
+    def test_non_https_authority_is_rejected_before_issuing_session(self) -> None:
+        with self.assertRaisesRegex(ValueError, "HTTPS"):
             local_environment_auth.open_local_acceptance_session(
-                "https://api.gamma.quwoquan.com:19000",
+                "http://127.0.0.1:19000",
                 environment="gamma",
                 target_name="gamma-local",
-                resolve_host="10.0.0.1",
             )
 
     def test_acceptance_session_rejects_invalid_issuer_response(self) -> None:
@@ -371,7 +370,7 @@ class LocalEnvironmentAuthBearerBoundarySecurityLocalContractTest(unittest.TestC
         with (
             mock.patch.object(
                 local_environment_auth,
-                "_load_acceptance_principal",
+                "_local_acceptance_principal",
                 return_value=("fixture_user_current", "fixture_user_current"),
             ),
             mock.patch.object(local_environment_auth, "prepare_local_environment_auth", return_value=auth),

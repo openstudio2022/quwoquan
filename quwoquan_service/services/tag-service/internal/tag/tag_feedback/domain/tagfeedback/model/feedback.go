@@ -15,10 +15,14 @@ var (
 	ErrIdempotencyConflict = errors.New("tag feedback idempotency key reused with a different command")
 )
 
+// validActions 与 tag_feedback/fields.yaml 的 TagFeedbackAction 同集。
+// dislike 是唯一的负向取值：ignore 只清除既有偏好，correct 只标记推荐错误，
+// 两者都无法表达「不要再给我这个标签」。
 var validActions = map[string]struct{}{
 	"click":   {},
 	"ignore":  {},
 	"correct": {},
+	"dislike": {},
 }
 
 // Feedback 是一条事实记录。

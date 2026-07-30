@@ -149,6 +149,71 @@
               "persona_or_device"
             ]
           },
+          "request_entity": {
+            "type": "string",
+            "minLength": 1
+          },
+          "request_body_kind": {
+            "enum": ["object", "none"]
+          },
+          "request_bindings": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              },
+              "query": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              },
+              "header": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              },
+              "injected": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/requestBinding" }
+              }
+            }
+          },
+          "request_constants": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "body"
+            ],
+            "properties": {
+              "body": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number",
+                        "integer",
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "auth": false,
           "auth_required": false,
           "security": {
@@ -430,6 +495,39 @@
               }
             }
           },
+          "pagination": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "default_items",
+              "maximum_items"
+            ],
+            "properties": {
+              "default_items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              },
+              "maximum_items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 300
+              }
+            }
+          },
+          "response_admission": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "maximum_body_bytes"
+            ],
+            "properties": {
+              "maximum_body_bytes": {
+                "type": "integer",
+                "minimum": 1024
+              }
+            }
+          },
           "concurrency": {
             "type": "object",
             "additionalProperties": false,
@@ -536,9 +634,7 @@
             "additionalProperties": false,
             "required": [
               "dart_import",
-              "request_type",
               "response_type",
-              "request_encoder",
               "response_decoder"
             ],
             "properties": {
@@ -546,35 +642,66 @@
                 "type": "string",
                 "pattern": "^\\.\\./(?:[a-z0-9_]+/)+[a-z0-9_]+\\.dart$"
               },
-              "request_type": {
-                "type": "string",
-                "pattern": "^[A-Z][A-Za-z0-9]*$"
-              },
               "response_type": {
                 "type": "string",
                 "pattern": "^(void|[A-Z][A-Za-z0-9]*)$"
               },
-              "request_encoder": {
-                "type": "string",
-                "pattern": "^[a-z][A-Za-z0-9]*$"
-              },
               "response_decoder": {
                 "type": "string",
                 "pattern": "^[a-z][A-Za-z0-9]*$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "runtime_entrypoints": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "phase",
+          "application"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]+$"
+          },
+          "kind": {
+            "const": "middleware"
+          },
+          "phase": {
+            "const": "post_authorization_pre_owner_proxy"
+          },
+          "application": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "facet",
+              "method",
+              "session_owner"
+            ],
+            "properties": {
+              "kind": {
+                "const": "session"
               },
-              "path_bindings": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string",
-                  "minLength": 1
-                }
+              "facet": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*Facade$"
               },
-              "query_bindings": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string",
-                  "minLength": 1
-                }
+              "method": {
+                "type": "string",
+                "pattern": "^[a-z][A-Za-z0-9]*$"
+              },
+              "session_owner": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
               }
             }
           }
@@ -664,6 +791,18 @@
             "minLength": 1
           }
         }
+      }
+    }
+  },
+  "$defs": {
+    "requestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "field"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "field": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
       }
     }
   }

@@ -201,21 +201,14 @@ final class SearchHitPayloadSocialRelation extends SearchHitPayload {
 
   @override
   Map<String, Object?> toWireMap() => <String, Object?>{
-    'subAccountId': item.subAccountId,
-    'username': item.username,
+    'personaId': item.personaId,
+    'userHandle': item.userHandle,
     'displayName': item.displayName,
     'avatarUrl': ?item.avatarUrl,
     'avatarVersion': item.avatarVersion,
     'headline': ?item.headline,
     'chatAvailable': item.chatAvailable,
-    'relationshipCapability': <String, Object?>{
-      'relationState': item.relationshipCapability.relationState,
-      'canFollow': item.relationshipCapability.canFollow,
-      'canUnfollow': item.relationshipCapability.canUnfollow,
-      'canOpenConversation': item.relationshipCapability.canOpenConversation,
-      'canStartVoiceCall': item.relationshipCapability.canStartVoiceCall,
-      'canStartVideoCall': item.relationshipCapability.canStartVideoCall,
-    },
+    'relationshipCapability': item.relationshipCapability.toWireMap(),
   };
 }
 

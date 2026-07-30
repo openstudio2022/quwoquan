@@ -2,6 +2,7 @@
   "label": "业主邻里",
   "labelEn": "Neighborhood HOA",
   "description": "小区与楼盘业主类社群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

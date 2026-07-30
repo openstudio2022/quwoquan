@@ -2,6 +2,10 @@
   "label": "考研",
   "labelEn": "Postgraduate Entrance Exam",
   "description": "硕士研究生考试备考",
+  "axisRole": "topic",
+  "sameAsRefs": [
+    "Audience/用户/兴趣偏好/校园/考研"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

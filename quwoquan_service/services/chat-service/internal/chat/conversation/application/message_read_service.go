@@ -130,9 +130,9 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 		}
 		if conv.ReceiptEnabled {
 			// MessageReceiptFact：dedupe key (messageId,userId) 由唯一索引保证。
-			receiptErr := s.receipts.CreateReceipt(
+			receiptErr := s.receiptFacts.AppendReceiptFact(
 				txCtx,
-				&messagemodel.MessageReceipt{
+				&messagemodel.MessageReceiptFact{
 					ID:             generateID(),
 					MessageID:      req.MessageId,
 					ConversationID: req.ConversationId,
@@ -143,7 +143,7 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 			if receiptErr != nil &&
 				!errors.Is(
 					receiptErr,
-					messagemodel.ErrMessageReceiptAlreadyExists,
+					messagemodel.ErrMessageReceiptFactAlreadyExists,
 				) {
 				return receiptErr
 			}
@@ -172,7 +172,7 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 	})
 }
 
-func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId, viewerID string) (_ []messagemodel.MessageReceipt, err error) {
+func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId, viewerID string) (_ []messagemodel.MessageReceiptFact, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.GetReceipts",
 		attribute.String("conversation.id", conversationId),
 		attribute.String("message.id", messageId))
@@ -191,5 +191,5 @@ func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messag
 		return nil, generated.AppErrorFromMessageNotFound("receipt target does not belong to conversation")
 	}
 
-	return s.receipts.ListReceiptsByMessage(ctx, messageId)
+	return s.receiptFacts.ListReceiptFactsByMessage(ctx, messageId)
 }

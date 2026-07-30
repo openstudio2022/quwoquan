@@ -43,7 +43,7 @@
 
 
 - [`career-interest-profile-editor`](./career-interest-profile-editor/spec.md)：职业与兴趣入口不依赖端侧完整枚举。
-- [`owner-subaccount-homepage-unification`](./owner-subaccount-homepage-unification/spec.md)：统一 owner/Persona 主页，同时保持点赞、评论与浏览列表的既有行为。
+- [`owner-persona-homepage-unification`](./owner-persona-homepage-unification/spec.md)：统一 owner/Persona 主页，同时保持点赞、评论与浏览列表的既有行为。
 - [`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)：我的主页首屏展示真实档案与一致统计，production 仅经 generated Remote Facet，alpha/test 由隔离装配注入。
 
 ## 5. 能力要求
@@ -79,7 +79,7 @@
 
 - 他人主页首屏 CTA 固定为关注和私信，我的主页首屏 CTA 固定为管理分身和编辑资料。
 - 首屏模块顺序为身份区、CTA、交集、影响力、Tab、双列内容流；不再首屏展示粉丝/浏览/点赞数据面板。
-- 他人主页模块命名为我与TA的交集、TA的影响力；我的主页模块命名为我的连接、我的影响力。
+- 他人主页模块命名为我与TA的交集、TA的影响力；我的主页模块命名为我的交集、我的影响力（禁止「我的连接」：与交集域收件箱口径冲突，见 [`intersection-unified-experience` REQ-005](../../object-homepage-network/intersection-unified-experience/spec.md#req-005)）。
 - 作品二级筛选仅为全部、图片、视频、文字
 - 底层 article 不改数据模型
 - 圈子统计入口进入三 Tab 详情页。
@@ -167,7 +167,7 @@
 - WHEN 参与者发起“四类主页体系中的用户主页首屏高保统一”对应动作。
 - THEN 他人主页首屏 CTA 固定为关注和私信，我的主页首屏 CTA 固定为管理分身和编辑资料。
 - THEN 首屏模块顺序为身份区、CTA、交集、影响力、Tab、双列内容流；不再首屏展示粉丝/浏览/点赞数据面板。
-- THEN 他人主页模块命名为我与TA的交集、TA的影响力；我的主页模块命名为我的连接、我的影响力。
+- THEN 他人主页模块命名为我与TA的交集、TA的影响力；我的主页模块命名为我的交集、我的影响力。
 - THEN 作品二级筛选仅为全部、图片、视频、文字
 - AND 底层 article 不改数据模型
 - AND 圈子统计入口进入三 Tab 详情页。

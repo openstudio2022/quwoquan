@@ -6,23 +6,16 @@ description: 'ContentReaction 对象专属错误码。共享错误码唯一定�
 
   '
 errors:
-- code: CONTENT.USER.comment_like_duplicate
+- code: CONTENT.USER.content_reaction_target_not_found
   kind: USER
-  reason: comment_like_duplicate
-  http_status: 409
+  reason: content_reaction_target_not_found
+  http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [LikePost, UnlikePost, ReactToComment]
   recovery_action: surface
-  dart_const: commentLikeDuplicate
-  go_const: ErrCommentLikeDuplicate
+  dart_const: contentReactionTargetNotFound
+  go_const: ErrContentReactionTargetNotFound
   user_message:
-    zh: 已经点过赞了
-    en: Already liked
-- code: CONTENT.USER.comment_reaction_forbidden
-  kind: USER
-  reason: comment_reaction_forbidden
-  http_status: 403
-  recovery_action: surface
-  dart_const: commentReactionForbidden
-  go_const: ErrCommentReactionForbidden
-  user_message:
-    zh: 当前无法评价这条评论
-    en: Not allowed to react to this comment
+    zh: 互动目标不存在或已失效
+    en: The reaction target is missing or unavailable

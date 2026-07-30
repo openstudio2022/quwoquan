@@ -224,8 +224,9 @@ class _FlippableCreateSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'create-test-token',
+      refreshToken: 'create-test-refresh-token',
       ownerId: 'create-test-owner',
-      activeSubAccountId: 'create-test-persona',
+      activePersonaId: 'create-test-persona',
     );
   }
 }

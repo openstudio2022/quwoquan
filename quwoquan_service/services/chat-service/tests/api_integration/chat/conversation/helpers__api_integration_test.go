@@ -32,7 +32,7 @@ func chatStoragePorts(store *persistence.MongoChatStore) application.ChatStorage
 		MessageProjection:        store,
 		Members:                  store,
 		UserStates:               store,
-		Receipts:                 store,
+		ReceiptFacts:             store,
 		ConversationCommands: persistence.NewMongoAggregateCommandStore(
 			mongoDB, "conversations_command_receipts", "conversations_outbox",
 		),
@@ -136,7 +136,7 @@ func doPost(t *testing.T, path, payload, userId string, expectedStatus int) map[
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
 	req.Header.Set("X-Client-Account-Id", userId)
-	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
 	req.Header.Set("X-Client-Persona-Id", userId)
 	req = req.WithContext(operation.WithContext(req.Context(), operation.Context{
 		OperationID: "api_integration." + strings.Trim(path, "/"),
@@ -208,7 +208,7 @@ func doGet(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	req.Header.Set("X-Client-User-Id", userId)
-	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	var result map[string]any
@@ -221,7 +221,7 @@ func doPatch(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	req := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
-	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -236,7 +236,7 @@ func doPut(t *testing.T, path, payload, userId string) (int, map[string]any) {
 	req := httptest.NewRequest(http.MethodPut, path, strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
-	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -250,7 +250,7 @@ func doDelete(t *testing.T, path, userId string) (int, map[string]any) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodDelete, path, nil)
 	req.Header.Set("X-Client-User-Id", userId)
-	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)

@@ -14,11 +14,43 @@ import (
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
+	if strings.Contains(filepath.ToSlash(path), "/posts/") &&
+		strings.HasSuffix(path, "manifest.json") &&
+		strings.Contains(content, `"contentType"`) &&
+		!strings.Contains(content, `"contentIdentity"`) {
+		// Canonical fixture manifests model data-engineering output. Tests that
+		// exercise a missing identity must bypass this fixture authoring helper.
+		content = strings.Replace(content, "{", `{"contentIdentity":"work",`, 1)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "posts/article/攻略/缺少身份/1/manifest.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{
+		"contentType":"article",
+		"entityRefs":[],
+		"tagRefs":[],
+		"publishTitle":"缺少身份",
+		"publishAngle":"攻略",
+		"publishSeq":1,
+		"publishedAt":"2026-07-30T00:00:00Z"
+	}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadPosts(root, nil)
+	if err == nil || !strings.Contains(err.Error(), "contentIdentity is required") {
+		t.Fatalf("expected missing contentIdentity rejection, got %v", err)
 	}
 }
 
@@ -751,6 +783,20 @@ func TestBindPostAssetURLsRejectsIdentityOwnerAndRightsDrift(t *testing.T) {
 func TestLoadReleaseMediaAssetsRejectsPrivateCASAndAcceptsCanonicalPublicSlice(t *testing.T) {
 	releaseRoot := t.TempDir()
 	path := filepath.Join(releaseRoot, "payload/media_manifest.json")
+	writeFile(
+		t,
+		filepath.Join(
+			releaseRoot,
+			"payload/objects/posts/image/画报/杭州西湖/1/rights_snapshots/a.json",
+		),
+		`{
+			"assetId":"杭州西湖_cover_三潭印月",
+			"manifestAsset":{
+				"assetId":"杭州西湖_cover_三潭印月",
+				"sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+			}
+		}`,
+	)
 	validDocument := `{
 		"schema":"quwoquan_data.release_media_manifest",
 		"releaseId":"release-a",

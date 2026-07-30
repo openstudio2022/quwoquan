@@ -38,8 +38,6 @@ class PersonaFormPage extends ConsumerStatefulWidget {
 class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
   late final TextEditingController _displayNameController;
   late final TextEditingController _purposeController;
-  late final TextEditingController _phoneController;
-  late final TextEditingController _emailController;
   late PersonaIsolationLevel _isolationLevel;
   bool _saving = false;
 
@@ -51,8 +49,6 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
       text: persona?.displayName ?? '',
     )..addListener(() => setState(() {}));
     _purposeController = TextEditingController();
-    _phoneController = TextEditingController(text: persona?.phone ?? '');
-    _emailController = TextEditingController(text: persona?.email ?? '');
     _isolationLevel = persona == null
         ? PersonaIsolationLevel.open
         : PersonaIsolationLevel.fromWire(persona.isolationLevel);
@@ -62,8 +58,6 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
   void dispose() {
     _displayNameController.dispose();
     _purposeController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
     super.dispose();
   }
 
@@ -89,10 +83,8 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
         Navigator.of(context).pop(PersonaFormResult(createdPersona: created));
       } else {
         await widget.notifier.updatePersona(
-          widget.persona!.subAccountId,
+          widget.persona!.personaId,
           displayName: displayName,
-          phone: _phoneController.text.trim(),
-          email: _emailController.text.trim(),
           isolationLevel: _isolationLevel.wireValue,
         );
         if (!mounted) return;
@@ -282,7 +274,7 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
                   isDark: isDark,
                   label: ProfileText.editProfileNicknameLabel,
                   controller: _displayNameController,
-                  placeholder: ProfileText.profileSubAccountNamePlaceholder,
+                  placeholder: ProfileText.profilePersonaNamePlaceholder,
                 ),
                 if (widget.isCreate) ...<Widget>[
                   divider,
@@ -309,33 +301,6 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
               ],
             ),
           ),
-          if (!widget.isCreate) ...<Widget>[
-            SizedBox(height: AppSpacing.interGroupMd),
-            SettingsInsetGroupedSection(
-              isDark: isDark,
-              header: ProfileText.personaFormContactSection,
-              density: SettingsInsetSectionDensity.compact,
-              child: Column(
-                children: <Widget>[
-                  _textFieldRow(
-                    isDark: isDark,
-                    label: ProfileText.personaPhoneLabel,
-                    controller: _phoneController,
-                    placeholder: ProfileText.personaPhoneLabel,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  divider,
-                  _textFieldRow(
-                    isDark: isDark,
-                    label: ProfileText.personaEmailLabel,
-                    controller: _emailController,
-                    placeholder: ProfileText.personaEmailLabel,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                ],
-              ),
-            ),
-          ],
           SizedBox(height: AppSpacing.interGroupMd),
           SettingsInsetGroupedSection(
             isDark: isDark,
@@ -346,19 +311,19 @@ class _PersonaFormPageState extends ConsumerState<PersonaFormPage> {
                 _isolationOptionRow(
                   isDark: isDark,
                   level: PersonaIsolationLevel.open,
-                  description: ProfileText.profileSubAccountOpenDescription,
+                  description: ProfileText.profilePersonaOpenDescription,
                 ),
                 divider,
                 _isolationOptionRow(
                   isDark: isDark,
                   level: PersonaIsolationLevel.semi,
-                  description: ProfileText.profileSubAccountSemiDescription,
+                  description: ProfileText.profilePersonaSemiDescription,
                 ),
                 divider,
                 _isolationOptionRow(
                   isDark: isDark,
                   level: PersonaIsolationLevel.strict,
-                  description: ProfileText.profileSubAccountStrictDescription,
+                  description: ProfileText.profilePersonaStrictDescription,
                 ),
               ],
             ),

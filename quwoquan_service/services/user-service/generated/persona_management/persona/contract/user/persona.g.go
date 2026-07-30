@@ -6,13 +6,18 @@ import (
 )
 
 type Persona struct {
-	SubAccountID                string     `json:"subAccountId" db:"sub_account_id"`
+	PersonaID                   string     `json:"personaId" db:"persona_id"`
 	UserID                      string     `json:"userId" db:"user_id"`
 	DisplayName                 string     `json:"displayName" db:"display_name"`
+	NicknameCustomized          bool       `json:"nicknameCustomized" db:"nickname_customized"`
 	UserHandle                  string     `json:"userHandle" db:"user_handle"`
-	Phone                       string     `json:"phone" db:"phone"`
-	Email                       string     `json:"email" db:"email"`
 	Bio                         string     `json:"bio" db:"bio"`
+	IdentityTags                []string   `json:"identityTags" db:"identity_tags"`
+	TaxonomyReleaseID           string     `json:"-" db:"taxonomy_release_id"`
+	Gender                      string     `json:"gender" db:"gender"`
+	BirthDate                   *string    `json:"birthDate" db:"birth_date"`
+	Region                      string     `json:"region" db:"region"`
+	RegionTagRef                string     `json:"regionTagRef" db:"region_tag_ref"`
 	AvatarMediaAssetID          string     `json:"avatarMediaAssetId" db:"avatar_media_asset_id"`
 	AvatarURL                   string     `json:"avatarUrl" db:"avatar_url"`
 	AvatarVersion               int        `json:"avatarVersion" db:"avatar_version"`

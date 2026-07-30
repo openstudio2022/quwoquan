@@ -181,6 +181,9 @@ func (s *ModerationService) ReviewPostModerationCase(
 		if !found {
 			return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
 		}
+		if postErr := requireModerationCasePost(caseItem, command.PostID); postErr != nil {
+			return PostModerationCaseCommandResult{}, postErr
+		}
 		if caseItem.Status() == moderationmodel.StatusReviewed {
 			if strings.TrimSpace(caseItem.ReviewerID()) == strings.TrimSpace(command.ReviewerID) {
 				return moderationResult(caseItem, true), nil
@@ -255,6 +258,9 @@ func (s *ModerationService) DecidePostModerationCase(
 		}
 		if !found {
 			return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
+		}
+		if postErr := requireModerationCasePost(caseItem, command.PostID); postErr != nil {
+			return PostModerationCaseCommandResult{}, postErr
 		}
 		if targetStatus != "" && caseItem.Status() == targetStatus {
 			if strings.TrimSpace(caseItem.ReviewerID()) == strings.TrimSpace(command.ReviewerID) {
@@ -339,6 +345,9 @@ func (s *ModerationService) SupersedePostModerationCase(
 		}
 		if !found {
 			return PostModerationCaseCommandResult{}, moderationCaseNotFound(command.CaseID)
+		}
+		if postErr := requireModerationCasePost(caseItem, command.PostID); postErr != nil {
+			return PostModerationCaseCommandResult{}, postErr
 		}
 		if caseItem.Status() == moderationmodel.StatusSuperseded {
 			return moderationResult(caseItem, true), nil
@@ -463,6 +472,19 @@ func (s *ModerationService) load(
 		return nil, false, unavailable(err)
 	}
 	return caseItem, found, nil
+}
+
+func requireModerationCasePost(
+	caseItem *moderationmodel.PostModerationCase,
+	postID string,
+) error {
+	normalizedPostID := strings.TrimSpace(postID)
+	if normalizedPostID == "" || caseItem == nil || caseItem.PostID() != normalizedPostID {
+		return contentgenerated.AppErrorFromInvalidArgument(
+			"postId does not identify the moderation case target",
+		)
+	}
+	return nil
 }
 
 func (s *ModerationService) commit(

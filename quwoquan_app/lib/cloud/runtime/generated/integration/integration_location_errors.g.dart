@@ -7,7 +7,7 @@ enum IntegrationLocationErrorCode {
   locationPermissionRequired,
   upstreamTimeout,
   locationProviderUnavailable,
-  internalError,
+  locationInternalError,
   unknown;
 
   /// 枚举对应的云端错误码字符串，与 fromCode 互为逆变换
@@ -23,8 +23,8 @@ enum IntegrationLocationErrorCode {
         return 'INTEGRATION.MIDDLEWARE.upstream_timeout';
       case IntegrationLocationErrorCode.locationProviderUnavailable:
         return 'INTEGRATION.MIDDLEWARE.location_provider_unavailable';
-      case IntegrationLocationErrorCode.internalError:
-        return 'INTEGRATION.SYSTEM.internal_error';
+      case IntegrationLocationErrorCode.locationInternalError:
+        return 'INTEGRATION.SYSTEM.location_internal_error';
       case IntegrationLocationErrorCode.unknown:
         return '';
     }
@@ -43,8 +43,8 @@ enum IntegrationLocationErrorCode {
         return IntegrationLocationErrorCode.upstreamTimeout;
       case 'INTEGRATION.MIDDLEWARE.location_provider_unavailable':
         return IntegrationLocationErrorCode.locationProviderUnavailable;
-      case 'INTEGRATION.SYSTEM.internal_error':
-        return IntegrationLocationErrorCode.internalError;
+      case 'INTEGRATION.SYSTEM.location_internal_error':
+        return IntegrationLocationErrorCode.locationInternalError;
       default:
         return IntegrationLocationErrorCode.unknown;
     }
@@ -61,7 +61,7 @@ class IntegrationLocationErrorMessages {
     IntegrationLocationErrorCode.locationPermissionRequired: '请在设置中为本应用开启定位权限',
     IntegrationLocationErrorCode.upstreamTimeout: '位置服务响应超时，请稍后重试',
     IntegrationLocationErrorCode.locationProviderUnavailable: '位置服务暂不可用，请稍后重试',
-    IntegrationLocationErrorCode.internalError: '位置服务异常，请稍后重试',
+    IntegrationLocationErrorCode.locationInternalError: '位置服务异常，请稍后重试',
   };
 
   static const Map<IntegrationLocationErrorCode, String> en = <IntegrationLocationErrorCode, String>{
@@ -70,6 +70,6 @@ class IntegrationLocationErrorMessages {
     IntegrationLocationErrorCode.locationPermissionRequired: 'Please enable location permission for this app in Settings',
     IntegrationLocationErrorCode.upstreamTimeout: 'Location upstream timed out, please retry',
     IntegrationLocationErrorCode.locationProviderUnavailable: 'Location provider is temporarily unavailable, please retry',
-    IntegrationLocationErrorCode.internalError: 'Location service internal error',
+    IntegrationLocationErrorCode.locationInternalError: 'Location service internal error',
   };
 }

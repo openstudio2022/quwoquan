@@ -1,0 +1,12 @@
+{
+  "label": "攀牙府",
+  "labelEn": "Phang Nga Province",
+  "description": "喀斯特海湾与国家公园区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

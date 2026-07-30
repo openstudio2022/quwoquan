@@ -47,7 +47,7 @@ class AuthorImpactCard extends ConsumerWidget {
       summary.total <= 0 ||
       summary.items.every((item) => item.primaryText.trim().isEmpty);
 
-  /// 打动明细分页拉取闭包：经 Provider 注入仓库，按 (subAccountId, impactId) 取真实分页。
+  /// 打动明细分页拉取闭包：经 Provider 注入仓库，按 (personaId, impactId) 取真实分页。
   /// 延迟到 sheet 打开时才 `ref.read`，构建期不触达 Provider。
   AuthorImpactEvidenceFetcher _evidenceFetcher(
     WidgetRef ref,
@@ -60,7 +60,7 @@ class AuthorImpactCard extends ConsumerWidget {
           ),
         )
         .listAuthorImpactEvidence(
-          subAccountId: summary.authorId,
+          personaId: summary.authorId,
           impactId: item.impactId,
           evidenceSnapshotId: item.evidenceSnapshotId,
           cursor: cursor,

@@ -16,6 +16,9 @@ SERVICE_ROOT = (
     REPO_ROOT / "quwoquan_service/services/entity-service"
 )
 APP_ENTITY_ROOT = REPO_ROOT / "quwoquan_app/lib/ui/entity"
+HOMEPAGE_FIELDS = (
+    SERVICE_ROOT / "contracts/entity_homepage/homepage/fields.yaml"
+)
 
 FORBIDDEN_SERVICE = {
     "HomepageStateSnapshot": "单文档 homepage_state 快照",
@@ -79,6 +82,30 @@ def main() -> int:
         for symbol, reason in FORBIDDEN_APP.items():
             if symbol in text:
                 issues.append(f"{relative}: 回归 {reason}: {symbol}")
+
+    if HOMEPAGE_FIELDS.is_file():
+        fields_text = HOMEPAGE_FIELDS.read_text(encoding="utf-8")
+        aggregate_fields = fields_text.split("\ntypes:", maxsplit=1)[0]
+        if "\n  role: projection" in aggregate_fields:
+            issues.append(
+                "entity homepage 聚合根顶层字段重新混入 role: projection"
+            )
+        shell_marker = "  HomepageShellView:"
+        shell_start = fields_text.find(shell_marker)
+        if shell_start < 0:
+            issues.append("缺少 HomepageShellView typed read model")
+        else:
+            shell_tail = fields_text[shell_start + len(shell_marker) :]
+            next_type = shell_tail.find("\n  HomepageReviewSummaryView:")
+            shell_text = shell_tail if next_type < 0 else shell_tail[:next_type]
+            for retired in ("type: object", "type: '[]object'"):
+                if retired in shell_text:
+                    issues.append(
+                        "HomepageShellView 重新以内联裸类型复制投影: "
+                        f"{retired}"
+                    )
+    else:
+        issues.append("缺少 entity homepage canonical fields.yaml")
 
     if issues:
         print("[entity-homepage-object-mainline] FAIL")

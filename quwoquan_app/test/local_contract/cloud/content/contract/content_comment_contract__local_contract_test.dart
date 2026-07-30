@@ -68,7 +68,7 @@ void main() {
     });
 
     test('typed command 只编码业务载荷', () {
-      final payload = encodeCreateContentCommentCommand(
+      final payload = encodeContentCommentCreateCommentGeneratedRequest(
         CreateContentCommentCommand(
           postId: 'post-1',
           content: '端云对象闭环',
@@ -102,9 +102,9 @@ void main() {
     });
 
     test('创建评论 operation 声明频控的结构化恢复语义', () {
-      final operation = appCloudOperationContracts[
-        AppCloudOperationIds.contentCommentCreateComment
-      ];
+      final operation =
+          appCloudOperationContracts[AppCloudOperationIds
+              .contentCommentCreateComment];
 
       expect(operation, isNotNull);
       expect(

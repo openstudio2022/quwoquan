@@ -25,7 +25,7 @@ void main() {
       _statusHost(repository: repository, telemetry: telemetry),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
     await tester.pump();
@@ -40,7 +40,7 @@ void main() {
     );
     await tester.enterText(find.byType(CupertinoTextField), '地址已经变更');
     await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(repository.createCalls, 1);
     expect(repository.lastDraft?.reason, 'incorrect_info');
@@ -64,12 +64,12 @@ void main() {
       _statusHost(repository: repository, telemetry: telemetry),
     );
     await tester.tap(find.byKey(const ValueKey<String>('open-status-report')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.tap(
       find.text(ObjectHomepageText.homepageStatusReportReasonOffline),
     );
     await tester.tap(find.text(ObjectHomepageText.homepageStatusReportSubmit));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.byType(AppFormErrorCard), findsOneWidget);
     expect(
@@ -130,7 +130,7 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     final loginContext = tester.element(
       find.byKey(const ValueKey<String>('status-login-close')),
@@ -142,7 +142,7 @@ void main() {
       LoginDismissPolicy.safeFallback.name,
     );
     await tester.tap(find.byKey(const ValueKey<String>('status-login-close')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.pump();
 
     expect(find.text('STATUS_SAFE_DETAIL'), findsOneWidget);
@@ -157,13 +157,32 @@ Widget _statusHost({
   required HomepageFacetSet repository,
   required RecordingAppTelemetryRecorder telemetry,
 }) {
+  final router = GoRouter(
+    initialLocation: AppRoutePaths.home,
+    routes: <RouteBase>[
+      GoRoute(path: AppRoutePaths.home, builder: (_, _) => const _StatusHost()),
+      GoRoute(
+        path: AppRoutePaths.homepageStatusReportPathTemplate.replaceAll(
+          '{id}',
+          ':id',
+        ),
+        builder: (_, _) =>
+            const HomepageStatusReportPage(homepageId: _homepageId),
+      ),
+      GoRoute(
+        path: AppRoutePaths.loginPathTemplate,
+        builder: (_, _) => const Text('UNEXPECTED_LOGIN'),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       homepageFacetSetProvider.overrideWithValue(repository),
       appTelemetryReporterProvider.overrideWithValue(telemetry),
     ],
-    child: const MaterialApp(home: _StatusHost()),
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -185,11 +204,8 @@ class _StatusHostState extends State<_StatusHost> {
           TextButton(
             key: const ValueKey<String>('open-status-report'),
             onPressed: () async {
-              final result = await Navigator.of(context).push<bool>(
-                CupertinoPageRoute<bool>(
-                  builder: (_) =>
-                      const HomepageStatusReportPage(homepageId: _homepageId),
-                ),
+              final result = await context.push<bool>(
+                AppRoutePaths.homepageStatusReport(id: _homepageId),
               );
               if (mounted) {
                 setState(() => _result = result);
@@ -233,8 +249,9 @@ class _AuthenticatedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'entity-test-token',
+    refreshToken: 'entity-test-refresh-token',
     ownerId: 'fixture_user_current',
-    activeSubAccountId: 'fixture_user_current',
+    activePersonaId: 'fixture_user_current',
   );
 }
 
@@ -242,4 +259,11 @@ class _GuestSession extends AuthSessionController {
   @override
   AuthSessionState build() =>
       const AuthSessionState(status: AuthSessionStatus.guest);
+}
+
+Future<void> _pumpUi(WidgetTester tester) async {
+  await tester.pump();
+  for (var frame = 0; frame < 6; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }

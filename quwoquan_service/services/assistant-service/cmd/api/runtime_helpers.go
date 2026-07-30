@@ -45,44 +45,17 @@ func searchHTTPClient(ms int) *http.Client {
 	)
 }
 
-func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
-	_ = configVersion
-	if strings.TrimSpace(imageVersion) == "" {
-		return nil
-	}
-	min := strings.TrimSpace(cfg.Config.MinImageVersion)
-	max := strings.TrimSpace(cfg.Config.MaxImageVersion)
-	if min != "" && compareSemver(imageVersion, min) < 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s < min_image_version=%s", imageVersion, min)
-	}
-	if max != "" && compareSemver(imageVersion, max) > 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s > max_image_version=%s", imageVersion, max)
+func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
+	fileVersion := strings.TrimSpace(cfg.Config.Version)
+	environmentVersion := strings.TrimSpace(configVersion)
+	if environmentVersion != "" && fileVersion != "" && fileVersion != environmentVersion {
+		return fmt.Errorf(
+			"CONFIG_VERSION mismatch: env=%s file=%s",
+			environmentVersion,
+			fileVersion,
+		)
 	}
 	return nil
-}
-
-func compareSemver(a, b string) int {
-	ap := parseSemver(a)
-	bp := parseSemver(b)
-	for i := 0; i < 3; i++ {
-		if ap[i] < bp[i] {
-			return -1
-		}
-		if ap[i] > bp[i] {
-			return 1
-		}
-	}
-	return 0
-}
-
-func parseSemver(raw string) [3]int {
-	trimmed := strings.TrimPrefix(strings.TrimSpace(raw), "v")
-	parts := strings.Split(trimmed, ".")
-	out := [3]int{}
-	for i := 0; i < len(parts) && i < 3; i++ {
-		out[i], _ = strconv.Atoi(parts[i])
-	}
-	return out
 }
 
 func buildRedisRouter(cfg config) (*rtredis.Router, error) {

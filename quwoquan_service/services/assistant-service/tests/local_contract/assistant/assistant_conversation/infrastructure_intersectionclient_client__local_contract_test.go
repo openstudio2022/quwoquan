@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 )
 
@@ -154,7 +154,7 @@ func TestResolveAuthorizedIntersectionEvidenceRejectsStaleOrForgedReferences(t *
 		"persona-1",
 		[]assistant.AssistantIntersectionEvidenceRef{stale},
 	)
-	if !errors.Is(err, application.ErrIntersectionEvidenceNotFound) {
+	if !errors.Is(err, orchestration.ErrIntersectionEvidenceNotFound) {
 		t.Fatalf("stale reference error = %v, want not found", err)
 	}
 }

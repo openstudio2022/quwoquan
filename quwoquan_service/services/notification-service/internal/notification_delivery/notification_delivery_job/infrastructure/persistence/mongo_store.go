@@ -15,6 +15,7 @@ import (
 	"quwoquan_service/internal/platform/reliabletaskmongo"
 	rtid "quwoquan_service/runtime/id"
 	"quwoquan_service/runtime/reliabletask"
+	jobapplication "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/application"
 	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
@@ -48,27 +49,65 @@ type notificationDeliveryJobEventDocument struct {
 // 权威集合；state、command receipt 与 object outbox 始终在同一事务中提交。
 type MongoNotificationDeliveryJobStore struct {
 	*reliabletaskmongo.Store
-	db          *mongo.Database
-	jobs        *mongo.Collection
-	receipts    *mongo.Collection
-	outbox      *mongo.Collection
-	resultInbox *mongo.Collection
+	db           *mongo.Database
+	jobs         *mongo.Collection
+	receipts     *mongo.Collection
+	outbox       *mongo.Collection
+	resultInbox  *mongo.Collection
+	restrictions jobapplication.AccountRestrictionReader
 }
 
-func NewMongoNotificationDeliveryJobStore(db *mongo.Database) *MongoNotificationDeliveryJobStore {
+func NewMongoNotificationDeliveryJobStore(
+	db *mongo.Database,
+	restrictions jobapplication.AccountRestrictionReader,
+) *MongoNotificationDeliveryJobStore {
+	if db == nil || restrictions == nil {
+		panic(
+			"notification delivery store requires MongoDB and account restriction reader",
+		)
+	}
 	return &MongoNotificationDeliveryJobStore{
-		Store:       reliabletaskmongo.NewNotificationDeliveryJobs(db),
-		db:          db,
-		jobs:        db.Collection(notificationDeliveryJobCollection),
-		receipts:    db.Collection(notificationDeliveryJobReceiptCollection),
-		outbox:      db.Collection(notificationDeliveryJobOutboxCollection),
-		resultInbox: db.Collection(externalResultInboxCollection),
+		Store:        reliabletaskmongo.NewNotificationDeliveryJobs(db),
+		db:           db,
+		jobs:         db.Collection(notificationDeliveryJobCollection),
+		receipts:     db.Collection(notificationDeliveryJobReceiptCollection),
+		outbox:       db.Collection(notificationDeliveryJobOutboxCollection),
+		resultInbox:  db.Collection(externalResultInboxCollection),
+		restrictions: restrictions,
 	}
 }
 
 func (s *MongoNotificationDeliveryJobStore) EnsureIndexes(ctx context.Context) error {
 	if err := s.Store.EnsureIndexes(ctx); err != nil {
 		return err
+	}
+	// Provider attempt/result truth belongs to integration.ExternalInteractionAttemptFact.
+	// Remove the former denormalized job fields before accepting traffic so an old
+	// document cannot silently remain a second authority after the model migration.
+	if _, err := s.jobs.UpdateMany(
+		ctx,
+		bson.M{"$or": bson.A{
+			bson.M{"provider": bson.M{"$exists": true}},
+			bson.M{"providerRequestDigest": bson.M{"$exists": true}},
+			bson.M{"providerResultStatus": bson.M{"$exists": true}},
+			bson.M{"providerResultAt": bson.M{"$exists": true}},
+			bson.M{"cancellationProvider": bson.M{"$exists": true}},
+			bson.M{"cancellationProviderRequestDigest": bson.M{"$exists": true}},
+			bson.M{"cancellationProviderResultStatus": bson.M{"$exists": true}},
+			bson.M{"cancellationProviderResultAt": bson.M{"$exists": true}},
+		}},
+		bson.M{"$unset": bson.M{
+			"provider":                          "",
+			"providerRequestDigest":             "",
+			"providerResultStatus":              "",
+			"providerResultAt":                  "",
+			"cancellationProvider":              "",
+			"cancellationProviderRequestDigest": "",
+			"cancellationProviderResultStatus":  "",
+			"cancellationProviderResultAt":      "",
+		}},
+	); err != nil {
+		return fmt.Errorf("remove legacy notification provider state: %w", err)
 	}
 	if _, err := s.jobs.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
@@ -193,6 +232,20 @@ func (s *MongoNotificationDeliveryJobStore) CreateNotification(
 	ctx context.Context,
 	record reliabletask.NotificationOutboxRecord,
 ) (reliabletask.NotificationOutboxRecord, error) {
+	if s.restrictions == nil {
+		return reliabletask.NotificationOutboxRecord{}, errors.New(
+			"notification account restriction projection is not configured",
+		)
+	}
+	restricted, err := s.restrictions.RestrictedSubjects(ctx, record.RecipientIDs)
+	if err != nil {
+		return reliabletask.NotificationOutboxRecord{}, err
+	}
+	if len(restricted) > 0 {
+		record.AccountRestricted = true
+		record.RestrictionSuppressed = true
+		record.Status = reliabletask.NotificationStatusCancelled
+	}
 	if strings.TrimSpace(record.NotificationID) == "" {
 		jobID, err := rtid.Generate(rtid.PrefixNotificationDeliveryJob)
 		if err != nil {
@@ -217,7 +270,7 @@ func (s *MongoNotificationDeliveryJobStore) CreateNotification(
 	}
 
 	var created reliabletask.NotificationOutboxRecord
-	err := s.RunInTransaction(ctx, func(txCtx context.Context) error {
+	err = s.RunInTransaction(ctx, func(txCtx context.Context) error {
 		var createErr error
 		created, createErr = s.Store.CreateNotification(txCtx, record)
 		if createErr != nil {
@@ -236,7 +289,9 @@ func (s *MongoNotificationDeliveryJobStore) ClaimNotification(
 	now time.Time,
 ) (*reliabletask.NotificationOutboxRecord, error) {
 	filter := bson.M{
-		"nextAttemptAt": bson.M{"$lte": now.UTC()},
+		"nextAttemptAt":         bson.M{"$lte": now.UTC()},
+		"accountRestricted":     bson.M{"$ne": true},
+		"restrictionSuppressed": bson.M{"$ne": true},
 		"$or": bson.A{
 			bson.M{"status": reliabletask.NotificationStatusPending},
 			bson.M{"status": reliabletask.NotificationStatusRetryWait},

@@ -1,5 +1,4 @@
 schema: quwoquan.content_source_registry
-version: 2
 
 allowedValues:
   lanes: [homepage, article, image, video]
@@ -51,7 +50,6 @@ allowedValues:
 # 判定权重在 works_classification.yaml；此处只声明"来源类别 → 专业度先验"映射（单一真相源）。
 # 缺失 sourceClass 走 default；内容实测信号(score_source_markdown/结构/图片)会进一步调整。
 sourceTierSignals:
-  version: 1
   default:
     baseTier: tier4_casual
     worksAffinity: neutral
@@ -147,7 +145,9 @@ lanePolicies:
       - wikidata
       - osm_poi
       - encyclopedia_search
-    forbiddenHomepageSources:
+    # 只约束正文底稿（source plan / source unit / writing pack / primaryEvidenceRef）。
+    # 结构化事实字段的准入见 structuredFactsPolicy，两者不共用来源闭集。
+    forbiddenNarrativeSources:
       - wikivoyage
       - baike_360
       - official_site
@@ -155,6 +155,31 @@ lanePolicies:
       - portal
       - media
       - ota
+    # 结构化事实与正文底稿的证据要求本质不同：营业时间、票价、建议游玩时长、
+    # 海拔与官网这类字段是可逐条核验的单值事实，百科词条恰恰最不可靠也最不及时，
+    # 而官网与政府文旅门户是这些字段的第一手发布方。因此结构化事实单独放开受审计
+    # 的官方来源，正文底稿仍锁在三百科闭集。
+    structuredFactsPolicy:
+      revision: audited-official-structured-facts
+      fields:
+        - openingHours
+        - ticketPriceRange
+        - recommendedDurationMinutes
+        - bestSeasonTagRefs
+        - altitudeMeters
+        - officialWebsite
+      allowedSourceClasses:
+        - encyclopedia
+        - official_site
+        - government_tourism
+      minIndependentSources: 1
+      requiresFactSourceProvenance: true
+      narrativeBodyRemainsEncyclopediaOnly: true
+      promptFacts:
+        - 结构化事实字段可以用官网与政府/文旅门户作为独立证据源，正文底稿不可以。
+        - 每条结构化事实必须逐字段落 factSources：sourceId、sourceClass、抓取 URL、观测时间与置信度，缺任一项该字段不发布。
+        - 官方来源与百科冲突时以官方来源为准，并保留冲突记录；不得静默取其一。
+        - 官网与政府门户的准入只覆盖 fields 列出的字段，不得借此把官方文案改写进正文或 keyFacts。
     rankingSignals:
       - authority
       - entity_match
@@ -200,7 +225,7 @@ lanePolicies:
   video:
     discoveryAllowed: true
     publishRequiresAssetRights: true
-    admissionPolicyRevision: sourced-video-attribution-v1
+    admissionPolicyRevision: sourced-video-attribution
     requiredEvidence:
       - directly_downloadable_asset
       - media_probe
@@ -321,19 +346,25 @@ common:
       sourceClass: official_site
       lanes: []
       defaultRole: reference_only
+      structuredFactsRole: audited_evidence
       fetchMode: html
       rightsPolicy: official_terms_required
       rateLimit: conservative
-      promptFacts: [实体官网或品牌官网不得进入实体主页正文来源链]
+      promptFacts:
+        - 实体官网或品牌官网不得进入实体主页正文来源链
+        - 可作为营业时间、票价、建议时长、海拔与官网地址的受审计结构化事实证据源，必须逐字段留 factSources
     - sourceId: government_tourism
       platform: 政务文旅
       sourceClass: government_tourism
       lanes: []
       defaultRole: reference_only
+      structuredFactsRole: audited_evidence
       fetchMode: html
       rightsPolicy: official_terms_required
       rateLimit: conservative
-      promptFacts: [政府或文旅站点不得进入实体主页正文来源链]
+      promptFacts:
+        - 政府或文旅站点不得进入实体主页正文来源链
+        - 可作为营业时间、票价、建议时长、海拔与最佳季节的受审计结构化事实证据源，必须逐字段留 factSources
   article:
     - sourceId: official_article
       platform: 官方文章

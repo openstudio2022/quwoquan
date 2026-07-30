@@ -133,7 +133,7 @@ func TestEvaluateAndRecordABAdmission_RecordsValidity(t *testing.T) {
 
 func TestBuildABExperimentReport_CommercialTemplateAllowsPromotion(t *testing.T) {
 	obs := ABExperimentObservation{
-		ExperimentID:  "rec_home_premium_v2",
+		ExperimentID:  "rec_home_premium",
 		ControlBucket: "control",
 		Buckets: []BucketObservation{
 			{

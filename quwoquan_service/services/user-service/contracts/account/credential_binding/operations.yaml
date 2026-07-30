@@ -1,345 +1,345 @@
 description: CredentialBinding 对象专属 command packet。
 api_routes:
-- method: GET
-  path: /owner/credentials
-  operation: ListCredentials
-  actor: account
-  application:
-    kind: query
-    facet: CredentialQueryFacade
-    method: listCredentials
-    reader: ListCredentialsReader
-    slice: ListCredentialsSlice
-  description: 查看当前账号已绑定的 active 凭证列表（脱敏，不返回 credentialKey）
-  response_entity: CredentialBinding
-  response_fields:
-  - id
-  - credentialType
-  - displayLabel
-  - isActive
-  - boundAt
-  - version
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 800
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_credentials_list
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-  commercial:
-    status: ready
-  client_contract:
-    dart_import: ../user/credential_binding_contracts.dart
-    request_type: ListCredentialsQuery
-    response_type: ListCredentialsSlice
-    request_encoder: encodeListCredentialsQuery
-    response_decoder: decodeListCredentialsSlice
-- method: POST
-  path: /owner/credentials/phone/bind
-  operation: BindPhoneCredential
-  actor: account
-  application:
-    kind: command
-    facet: CredentialCommandFacade
-    method: bindPhoneCredential
-    aggregate_owner: CredentialBinding
-    mutation_target: CredentialBinding
-    invariant_target: CredentialBinding
-  description: 绑定手机号；必须先通过 SendOtp(sourceOperation=bind_phone) 下发并校验 OTP
-  request_fields:
-  - phone
-  - otpCode
-  - displayLabel
-  response_entity: CredentialBindingCommandResult
-  response_fields:
-  - credentialType
-  - isActive
-  - version
-  - idempotentReplay
-  - displayLabel
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - USER.USER.invalid_argument
-  - USER.USER.unauthorized
-  - USER.AUTH.otp_expired
-  - USER.AUTH.otp_mismatch
-  - USER.AUTH.otp_attempts_exceeded
-  - USER.AUTH.challenge_consumed
-  - USER.AUTH.credential_conflict
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: SECRET
-    response_classification: SECRET
-    log_policy: none
-  telemetry:
-    metric: user_credential_phone_bind
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/credential_binding_contracts.dart
-    request_type: BindPhoneCredentialCommand
-    response_type: CredentialBindingCommandResult
-    request_encoder: encodeBindPhoneCredentialCommand
-    response_decoder: decodeCredentialBindingCommandResult
-- method: POST
-  path: /auth/login/social/phone/complete
-  operation: CompleteFederatedPhoneBinding
-  actor: none
-  application:
-    kind: command
-    facet: CredentialCommandFacade
-    method: completeFederatedPhoneBinding
-    aggregate_owner: CredentialBinding
-    mutation_target: CredentialBinding
-    invariant_target: CredentialBinding
-  description: 消费一次性社交 binding ticket 与 bind_phone OTP，原子创建或恢复账号、绑定社交和手机号凭证并签发会话
-  request_fields:
-  - bindingTicket
-  - phone
-  - otpCode
-  - challengeId
-  - deviceId
-  - platform
-  - appVersion
-  - agreementVersion
-  - privacyVersion
-  response_fields:
-  - accessToken
-  - refreshToken
-  - ownerId
-  - activeSub
-  - subAccountCount
-  - accountState
-  - identityOrigin
-  - logicalShard
-  - anonymousRetentionPolicy
-  - accountHint
-  - sessionRememberTtlSeconds
-  authorization:
-    principal: public
-    ownership_policy: federated_phone_binding_ticket_holder
-  commercial:
-    status: blocked
-    block_reason: prod federated providers and real-device binding evidence are not injected
-    gap_id: R_AUTH_001
-    target_story: four-environment-commercial-login-maturity
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - USER.USER.invalid_argument
-  - USER.AUTH.consent_required
-  - USER.AUTH.otp_expired
-  - USER.AUTH.otp_mismatch
-  - USER.AUTH.otp_attempts_exceeded
-  - USER.AUTH.challenge_consumed
-  - USER.AUTH.credential_conflict
-  - USER.AUTH.account_suspended
-  - USER.AUTH.account_deleted
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: SECRET
-    response_classification: SECRET
-    log_policy: none
-  telemetry:
-    metric: user_federated_phone_binding_complete
-    trace: true
-    attributes:
-    - environment
-    - platform
-    - provider
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1500
-    availability_percent: 99.9
-  security:
-    auth_mode: public
-    principal: public
-    token_transport: none
-    anonymous_policy: allow
-    visibility: private
-  client_contract:
-    dart_import: ../user/credential_binding_contracts.dart
-    request_type: CompleteFederatedPhoneBindingCommand
-    response_type: AuthSessionGrant
-    request_encoder: encodeCompleteFederatedPhoneBindingCommand
-    response_decoder: decodeAuthSessionGrant
-- method: POST
-  path: /owner/credentials/carrier-phone/bind
-  operation: BindCarrierPhoneCredential
-  actor: account
-  application:
-    kind: command
-    facet: CredentialCommandFacade
-    method: bindCarrierPhoneCredential
-    aggregate_owner: CredentialBinding
-    mutation_target: CredentialBinding
-    invariant_target: CredentialBinding
-  description: 绑定运营商本机号码；App 只上传 carrierToken，服务端置换真实手机号并写入 carrier_phone 凭证
-  request_fields:
-  - vendor
-  - carrierToken
-  - deviceId
-  - platform
-  - displayLabel
-  response_entity: CredentialBindingCommandResult
-  response_fields:
-  - credentialType
-  - isActive
-  - version
-  - idempotentReplay
-  - displayLabel
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - USER.USER.invalid_argument
-  - USER.USER.unauthorized
-  - USER.AUTH.carrier_token_invalid
-  - USER.AUTH.carrier_unavailable
-  - USER.AUTH.carrier_provider_timeout
-  - USER.AUTH.credential_conflict
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: SECRET
-    response_classification: SECRET
-    log_policy: none
-  telemetry:
-    metric: user_credential_carrier_phone_bind
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 1500
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/credential_binding_contracts.dart
-    request_type: BindCarrierPhoneCredentialCommand
-    response_type: CredentialBindingCommandResult
-    request_encoder: encodeBindCarrierPhoneCredentialCommand
-    response_decoder: decodeCredentialBindingCommandResult
-- method: DELETE
-  path: /owner/credentials/{credentialType}
-  operation: UnbindCredential
-  actor: account
-  application:
-    kind: command
-    facet: CredentialCommandFacade
-    method: unbindCredential
-    aggregate_owner: CredentialBinding
-    mutation_target: CredentialBinding
-    invariant_target: CredentialBinding
-  description: 解绑凭证（不能解绑最后一个）
-  response_entity: CredentialBindingCommandResult
-  response_fields:
-  - credentialType
-  - isActive
-  - version
-  - idempotentReplay
-  - displayLabel
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-    principal: owner
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: none
-    max_attempts: 1
-    idempotency: none
-  error_codes:
-  - USER.USER.invalid_argument
-  - USER.USER.unauthorized
-  - USER.AUTH.last_credential
-  - USER.USER.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_credential_unbind
-    trace: true
-    attributes:
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  client_contract:
-    dart_import: ../user/credential_binding_contracts.dart
-    request_type: UnbindCredentialCommand
-    response_type: CredentialBindingCommandResult
-    request_encoder: encodeUnbindCredentialCommand
-    response_decoder: decodeCredentialBindingCommandResult
+  - method: GET
+    path: /owner/credentials
+    operation: ListCredentials
+    actor: account
+    application:
+      kind: query
+      facet: CredentialQueryFacade
+      method: listCredentials
+      reader: ListCredentialsReader
+      slice: ListCredentialsSlice
+    description: 查看当前账号已绑定的 active 凭证列表（脱敏，不返回 credentialKey）
+    response_entity: CredentialBinding
+    response_fields:
+      - id
+      - credentialType
+      - displayLabel
+      - isActive
+      - boundAt
+      - version
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_credentials_list
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    commercial:
+      status: ready
+    client_contract:
+      dart_import: ../user/credential_binding_contracts.dart
+      response_type: ListCredentialsSlice
+      response_decoder: decodeListCredentialsSlice
+    request_entity: ListCredentialsQuery
+    request_body_kind: none
+  - method: POST
+    path: /owner/credentials/phone/bind
+    operation: BindPhoneCredential
+    actor: account
+    application:
+      kind: command
+      facet: CredentialCommandFacade
+      method: bindPhoneCredential
+      aggregate_owner: CredentialBinding
+      mutation_target: CredentialBinding
+      invariant_target: CredentialBinding
+    description: 绑定手机号；必须先通过 SendOtp(sourceOperation=bind_phone) 下发并校验 OTP
+    response_entity: CredentialBindingCommandResult
+    response_fields:
+      - credentialType
+      - isActive
+      - version
+      - idempotentReplay
+      - displayLabel
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.AUTH.otp_expired
+      - USER.AUTH.otp_mismatch
+      - USER.AUTH.otp_attempts_exceeded
+      - USER.AUTH.challenge_consumed
+      - USER.AUTH.credential_conflict
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_credential_phone_bind
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/credential_binding_contracts.dart
+      response_type: CredentialBindingCommandResult
+      response_decoder: decodeCredentialBindingCommandResult
+    request_entity: BindPhoneCredentialCommand
+    request_body_kind: object
+  - method: POST
+    path: /auth/login/social/phone/complete
+    operation: CompleteFederatedPhoneBinding
+    actor: none
+    application:
+      kind: command
+      facet: CredentialCommandFacade
+      method: completeFederatedPhoneBinding
+      aggregate_owner: CredentialBinding
+      mutation_target: CredentialBinding
+      invariant_target: CredentialBinding
+    description: 消费一次性社交 binding ticket 与 bind_phone OTP，原子创建账号、绑定社交和手机号凭证并签发会话；手机号已有 owner 时返回 credential_conflict，禁止自动合并账号
+    response_fields:
+      - accessToken
+      - refreshToken
+      - ownerId
+      - activePersona
+      - personaCount
+      - accountState
+      - identityOrigin
+      - logicalShard
+      - anonymousRetentionPolicy
+      - accountHint
+      - sessionRememberTtlSeconds
+    authorization:
+      principal: public
+      ownership_policy: federated_phone_binding_ticket_holder
+    commercial:
+      status: blocked
+      block_reason: prod federated providers and real-device binding evidence are not injected
+      gap_id: R_AUTH_001
+      target_story: four-environment-commercial-login-maturity
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.AUTH.consent_required
+      - USER.AUTH.otp_expired
+      - USER.AUTH.otp_mismatch
+      - USER.AUTH.otp_attempts_exceeded
+      - USER.AUTH.challenge_consumed
+      - USER.AUTH.credential_conflict
+      - USER.AUTH.account_suspended
+      - USER.AUTH.account_deleted
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_federated_phone_binding_complete
+      trace: true
+      attributes:
+        - environment
+        - platform
+        - provider
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+    client_contract:
+      dart_import: ../user/credential_binding_contracts.dart
+      response_type: AuthSessionGrant
+      response_decoder: decodeAuthSessionGrant
+    request_entity: CompleteFederatedPhoneBindingCommand
+    request_body_kind: object
+  - method: POST
+    path: /owner/credentials/carrier-phone/bind
+    operation: BindCarrierPhoneCredential
+    actor: account
+    application:
+      kind: command
+      facet: CredentialCommandFacade
+      method: bindCarrierPhoneCredential
+      aggregate_owner: CredentialBinding
+      mutation_target: CredentialBinding
+      invariant_target: CredentialBinding
+    description: 绑定运营商本机号码；App 只上传 carrierToken，服务端置换真实手机号并写入 carrier_phone 凭证
+    response_entity: CredentialBindingCommandResult
+    response_fields:
+      - credentialType
+      - isActive
+      - version
+      - idempotentReplay
+      - displayLabel
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.AUTH.carrier_token_invalid
+      - USER.AUTH.carrier_unavailable
+      - USER.AUTH.carrier_provider_timeout
+      - USER.AUTH.credential_conflict
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_credential_carrier_phone_bind
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 1500
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/credential_binding_contracts.dart
+      response_type: CredentialBindingCommandResult
+      response_decoder: decodeCredentialBindingCommandResult
+    request_entity: BindCarrierPhoneCredentialCommand
+    request_body_kind: object
+  - method: DELETE
+    path: /owner/credentials/{credentialType}
+    operation: UnbindCredential
+    request_bindings:
+      path:
+        - name: credentialType
+          field: credentialType
+    actor: account
+    application:
+      kind: command
+      facet: CredentialCommandFacade
+      method: unbindCredential
+      aggregate_owner: CredentialBinding
+      mutation_target: CredentialBinding
+      invariant_target: CredentialBinding
+    description: 解绑凭证（不能解绑最后一个）
+    response_entity: CredentialBindingCommandResult
+    response_fields:
+      - credentialType
+      - isActive
+      - version
+      - idempotentReplay
+      - displayLabel
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.invalid_argument
+      - USER.USER.unauthorized
+      - USER.AUTH.last_credential
+      - USER.USER.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_credential_unbind
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../user/credential_binding_contracts.dart
+      response_type: CredentialBindingCommandResult
+      response_decoder: decodeCredentialBindingCommandResult
+    request_entity: UnbindCredentialCommand
+    request_body_kind: none

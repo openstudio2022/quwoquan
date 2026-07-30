@@ -2,10 +2,12 @@ import '../operation_request_payload.dart';
 
 export 'conversation_contracts.dart'
     show ChatConversationBatchSlice, decodeChatConversationBatchSlice;
+part '../generated/requests/chat/contact_contracts.requests.g.dart';
 
 final class ChatContact {
   const ChatContact({
-    required this.contactId,
+    required this.userId,
+    required this.userHandle,
     required this.displayName,
     required this.avatarUrl,
     required this.bio,
@@ -19,11 +21,10 @@ final class ChatContact {
     required this.matchedField,
     required this.source,
     required this.isStarred,
-    this.userId,
-    this.candidateSource,
   });
 
-  final String contactId;
+  final String userId;
+  final String userHandle;
   final String displayName;
   final String avatarUrl;
   final String lastInteraction;
@@ -37,8 +38,6 @@ final class ChatContact {
   final String matchedField;
   final String source;
   final bool isStarred;
-  final String? userId;
-  final String? candidateSource;
 }
 
 final class ChatContactPageSlice {
@@ -73,27 +72,6 @@ abstract interface class ChatInboxQuery {
   Future<ChatInboxPageSlice> listInbox(ChatListInboxQuery query);
 }
 
-final class ChatListContactsQuery {
-  ChatListContactsQuery({this.cursor, this.limit = 20}) {
-    _validateLimit(limit, 100);
-  }
-
-  final String? cursor;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListContactsQuery(
-  ChatListContactsQuery query,
-) {
-  final cursor = _optionalNonBlankText(query.cursor);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'limit': '${query.limit}',
-      if (cursor case final value?) 'cursor': value,
-    },
-  );
-}
-
 ChatContactPageSlice decodeChatContactPageSlice(Object? response) {
   final root = _expectObject(response, 'ListContacts response');
   _expectOnlyKeys(root, const <String>{
@@ -101,31 +79,11 @@ ChatContactPageSlice decodeChatContactPageSlice(Object? response) {
     'nextCursor',
   }, 'ListContacts response');
   return ChatContactPageSlice(
-    items: _requiredList(root['items'], 'ListContacts response.items')
-        .map((item) => _decodeContact(item, allowCandidateFields: false))
-        .toList(growable: false),
+    items: _requiredList(
+      root['items'],
+      'ListContacts response.items',
+    ).map(_decodeContact).toList(growable: false),
     nextCursor: _optionalText(root['nextCursor'], 'nextCursor'),
-  );
-}
-
-final class ChatListGroupCandidatesQuery {
-  ChatListGroupCandidatesQuery({this.conversationId, this.limit = 100}) {
-    _validateLimit(limit, 100);
-  }
-
-  final String? conversationId;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListGroupCandidatesQuery(
-  ChatListGroupCandidatesQuery query,
-) {
-  final conversationId = _optionalNonBlankText(query.conversationId);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'limit': '${query.limit}',
-      if (conversationId case final value?) 'conversationId': value,
-    },
   );
 }
 
@@ -136,9 +94,10 @@ ChatContactPageSlice decodeChatGroupCandidatePageSlice(Object? response) {
     'nextCursor',
   }, 'ListGroupCandidates response');
   return ChatContactPageSlice(
-    items: _requiredList(root['items'], 'ListGroupCandidates response.items')
-        .map((item) => _decodeContact(item, allowCandidateFields: true))
-        .toList(growable: false),
+    items: _requiredList(
+      root['items'],
+      'ListGroupCandidates response.items',
+    ).map(_decodeContact).toList(growable: false),
     nextCursor: _optionalText(root['nextCursor'], 'nextCursor'),
   );
 }
@@ -184,27 +143,6 @@ final class ChatInboxPageSlice {
   final String? nextCursor;
 }
 
-final class ChatListInboxQuery {
-  ChatListInboxQuery({this.cursor, this.limit = 50}) {
-    _validateLimit(limit, 100);
-  }
-
-  final String? cursor;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListInboxQuery(
-  ChatListInboxQuery query,
-) {
-  final cursor = _optionalNonBlankText(query.cursor);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'limit': '${query.limit}',
-      if (cursor case final value?) 'cursor': value,
-    },
-  );
-}
-
 ChatInboxPageSlice decodeChatInboxPageSlice(Object? response) {
   final root = _expectObject(response, 'ListInbox response');
   _expectOnlyKeys(root, const <String>{
@@ -225,6 +163,7 @@ final class ChatContactHomeItem {
     required this.id,
     required this.kind,
     required this.objectId,
+    required this.userHandle,
     required this.title,
     required this.subtitle,
     required this.avatarUrl,
@@ -247,6 +186,7 @@ final class ChatContactHomeItem {
   final String id;
   final String kind;
   final String objectId;
+  final String userHandle;
   final String title;
   final String subtitle;
   final String avatarUrl;
@@ -270,33 +210,6 @@ final class ChatContactHomePageSlice {
   const ChatContactHomePageSlice({required this.items});
 
   final List<ChatContactHomeItem> items;
-}
-
-final class ChatListContactHomeQuery {
-  ChatListContactHomeQuery({this.filter = 'all', this.limit = 50}) {
-    if (!const <String>{'all', 'mutual', 'circle', 'group'}.contains(filter)) {
-      throw ArgumentError.value(
-        filter,
-        'filter',
-        'unsupported contact-home filter',
-      );
-    }
-    _validateLimit(limit, 100);
-  }
-
-  final String filter;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListContactHomeQuery(
-  ChatListContactHomeQuery query,
-) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'filter': query.filter,
-      'limit': '${query.limit}',
-    },
-  );
 }
 
 ChatContactHomePageSlice decodeChatContactHomePageSlice(Object? response) {
@@ -336,40 +249,6 @@ final class ChatSelectableGroupConversationPageSlice {
 
   final List<ChatSelectableGroupConversation> items;
   final String? nextCursor;
-}
-
-final class ChatListSelectableGroupConversationsQuery {
-  ChatListSelectableGroupConversationsQuery({
-    this.query,
-    this.source,
-    this.cursor,
-    this.limit = 50,
-  }) {
-    if (source != null && source != 'group' && source != 'circle') {
-      throw ArgumentError.value(source, 'source', 'must be group or circle');
-    }
-    _validateLimit(limit, 50);
-  }
-
-  final String? query;
-  final String? source;
-  final String? cursor;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListSelectableGroupConversationsQuery(
-  ChatListSelectableGroupConversationsQuery query,
-) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'limit': '${query.limit}',
-      if (_optionalNonBlankText(query.query) case final value?) 'query': value,
-      if (_optionalNonBlankText(query.source) case final value?)
-        'source': value,
-      if (_optionalNonBlankText(query.cursor) case final value?)
-        'cursor': value,
-    },
-  );
 }
 
 ChatSelectableGroupConversationPageSlice
@@ -421,36 +300,6 @@ decodeChatSelectableGroupConversationPageSlice(Object? response) {
   );
 }
 
-final class ChatListSelectableGroupContactMembersQuery {
-  ChatListSelectableGroupContactMembersQuery({
-    required String conversationId,
-    this.query,
-    this.cursor,
-    this.limit = 100,
-  }) : conversationId = _requiredText(conversationId, 'conversationId') {
-    _validateLimit(limit, 100);
-  }
-
-  final String conversationId;
-  final String? query;
-  final String? cursor;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListSelectableGroupContactMembersQuery(
-  ChatListSelectableGroupContactMembersQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': query.conversationId},
-    queryParameters: <String, String>{
-      'limit': '${query.limit}',
-      if (_optionalNonBlankText(query.query) case final value?) 'query': value,
-      if (_optionalNonBlankText(query.cursor) case final value?)
-        'cursor': value,
-    },
-  );
-}
-
 ChatContactPageSlice decodeChatSelectableGroupContactMemberPageSlice(
   Object? response,
 ) {
@@ -479,8 +328,8 @@ ChatContactPageSlice decodeChatSelectableGroupContactMemberPageSlice(
                 'Selectable group contact member',
               );
               return ChatContact(
-                contactId: _requiredText(item['contactId'], 'contactId'),
                 userId: _requiredText(item['userId'], 'userId'),
+                userHandle: _requiredString(item['userHandle'], 'userHandle'),
                 displayName: _requiredString(
                   item['displayName'],
                   'displayName',
@@ -534,20 +383,13 @@ void _expectOnlyKeys(
   }
 }
 
-ChatContact _decodeContact(
-  Object? value, {
-  required bool allowCandidateFields,
-}) {
+ChatContact _decodeContact(Object? value) {
   final item = _expectObject(value, 'Chat contact');
-  _expectOnlyKeys(
-    item,
-    allowCandidateFields ? _groupCandidateKeys : _contactKeys,
-    'Chat contact',
-  );
+  _expectOnlyKeys(item, _contactKeys, 'Chat contact');
   final userId = _requiredText(item['userId'], 'userId');
   return ChatContact(
-    contactId: userId,
     userId: userId,
+    userHandle: _requiredString(item['userHandle'], 'userHandle'),
     displayName: _requiredString(item['displayName'], 'displayName'),
     avatarUrl: _requiredString(item['avatarUrl'], 'avatarUrl'),
     bio: _requiredString(item['bio'], 'bio'),
@@ -564,9 +406,6 @@ ChatContact _decodeContact(
     matchedField: '',
     source: _requiredString(item['source'], 'source'),
     isStarred: _requiredBool(item['isStarred'], 'isStarred'),
-    candidateSource: allowCandidateFields
-        ? _requiredString(item['source'], 'source')
-        : null,
   );
 }
 
@@ -610,6 +449,7 @@ ChatContactHomeItem _decodeContactHomeItem(Object? value) {
     id: _requiredText(item['id'], 'id'),
     kind: _requiredText(item['kind'], 'kind'),
     objectId: _requiredText(item['objectId'], 'objectId'),
+    userHandle: _requiredString(item['userHandle'], 'userHandle'),
     title: _requiredString(item['title'], 'title'),
     subtitle: _requiredString(item['subtitle'], 'subtitle'),
     avatarUrl: _requiredString(item['avatarUrl'], 'avatarUrl'),
@@ -669,11 +509,6 @@ String? _optionalText(Object? value, String field) {
   return normalized.isEmpty ? null : normalized;
 }
 
-String? _optionalNonBlankText(String? value) {
-  final normalized = value?.trim();
-  return normalized == null || normalized.isEmpty ? null : normalized;
-}
-
 bool _requiredBool(Object? value, String field) {
   if (value is! bool) {
     throw FormatException('$field must be a boolean');
@@ -723,14 +558,9 @@ List<String> _requiredStringList(Object? value, String field) {
   return List<String>.unmodifiable(value.cast<String>());
 }
 
-void _validateLimit(int limit, int maximum) {
-  if (limit < 1 || limit > maximum) {
-    throw ArgumentError.value(limit, 'limit', 'must be in 1..$maximum');
-  }
-}
-
 const Set<String> _contactKeys = <String>{
   'userId',
+  'userHandle',
   'displayName',
   'avatarUrl',
   'bio',
@@ -740,8 +570,6 @@ const Set<String> _contactKeys = <String>{
   'source',
   'isStarred',
 };
-
-const Set<String> _groupCandidateKeys = <String>{..._contactKeys};
 
 const Set<String> _inboxKeys = <String>{
   'id',
@@ -765,6 +593,7 @@ const Set<String> _contactHomeKeys = <String>{
   'kind',
   'objectId',
   'userId',
+  'userHandle',
   'conversationId',
   'circleId',
   'circleGroupId',
@@ -793,8 +622,8 @@ const Set<String> _selectableGroupConversationKeys = <String>{
 };
 
 const Set<String> _selectableGroupContactMemberKeys = <String>{
-  'contactId',
   'userId',
+  'userHandle',
   'displayName',
   'avatarUrl',
   'relationState',

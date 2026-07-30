@@ -1,0 +1,12 @@
+{
+  "label": "黑森林",
+  "labelEn": "Black Forest",
+  "description": "森林山地与湖泊景观区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

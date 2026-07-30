@@ -13,12 +13,13 @@ import (
 )
 
 type modelData struct {
-	Package    string
-	EntityName string
-	MetaSource string
-	Fields     []modelFieldData
-	NeedsTime  bool
-	NeedsJSON  bool
+	Package     string
+	EntityName  string
+	MetaSource  string
+	Fields      []modelFieldData
+	NestedTypes []nestedTypeData
+	NeedsTime   bool
+	NeedsJSON   bool
 }
 
 type modelFieldData struct {
@@ -26,6 +27,12 @@ type modelFieldData struct {
 	GoType  string
 	JSONTag string
 	DBTag   string
+}
+
+type nestedTypeData struct {
+	Name        string
+	Description string
+	Fields      []modelFieldData
 }
 
 func generateModels(ctx *genContext) error {
@@ -92,13 +99,14 @@ func generatePGModel(ctx *genContext, entityName string, table TableDef) error {
 	var fields []modelFieldData
 	needsTime := false
 	needsJSON := false
+	nested := newNestedCollector(ctx)
 
 	for _, col := range table.Columns {
 		camelName := codegen.SnakeToCamel(col.Name)
 		goName := codegen.SnakeToGoName(col.Name)
 
 		field := fieldMap[camelName]
-		goType := resolveGoType(ctx, entityName, camelName, field, col)
+		goType := resolveGoType(ctx, nested, entityName, camelName, field, col)
 
 		jsonTag := camelName
 		if field.APIExposure == "drop" {
@@ -120,7 +128,8 @@ func generatePGModel(ctx *genContext, entityName string, table TableDef) error {
 		})
 	}
 
-	return writeModel(ctx, entityName, dir, fields, needsTime, needsJSON)
+	nestedTypes, nestedNeedsTime := nested.materialize()
+	return writeModel(ctx, entityName, dir, fields, nestedTypes, needsTime || nestedNeedsTime, needsJSON)
 }
 
 func generateMongoModel(ctx *genContext, entityName string) error {
@@ -145,11 +154,12 @@ func generateMongoModel(ctx *genContext, entityName string) error {
 
 	var fields []modelFieldData
 	needsTime := false
+	nested := newNestedCollector(ctx)
 
 	for _, f := range entityFields.Fields {
 		goName := codegen.CamelToGoName(f.Name)
 		notNull := hasConstraint(f.Constraints, "NOT_NULL") || hasConstraint(f.Constraints, "PK")
-		goType := fieldTypeToGoType(ctx, entityName, f.Name, f.Type, notNull)
+		goType := fieldTypeToGoType(nested, f.Name, f.Type, notNull)
 
 		jsonTag := f.Name
 		if f.Name == "_id" {
@@ -171,17 +181,25 @@ func generateMongoModel(ctx *genContext, entityName string) error {
 		})
 	}
 
-	return writeModel(ctx, entityName, dir, fields, needsTime, false)
+	nestedTypes, nestedNeedsTime := nested.materialize()
+	return writeModel(ctx, entityName, dir, fields, nestedTypes, needsTime || nestedNeedsTime, false)
 }
 
-func writeModel(ctx *genContext, entityName, dir string, fields []modelFieldData, needsTime, needsJSON bool) error {
+func writeModel(
+	ctx *genContext,
+	entityName, dir string,
+	fields []modelFieldData,
+	nestedTypes []nestedTypeData,
+	needsTime, needsJSON bool,
+) error {
 	data := modelData{
-		Package:    "model",
-		EntityName: entityName,
-		MetaSource: ctx.source.Metadata,
-		Fields:     fields,
-		NeedsTime:  needsTime,
-		NeedsJSON:  needsJSON,
+		Package:     "model",
+		EntityName:  entityName,
+		MetaSource:  ctx.source.Metadata,
+		Fields:      fields,
+		NestedTypes: nestedTypes,
+		NeedsTime:   needsTime,
+		NeedsJSON:   needsJSON,
 	}
 
 	tmpl, err := template.New("model").Parse(modelTemplate)
@@ -205,7 +223,13 @@ func writeModel(ctx *genContext, entityName, dir string, fields []modelFieldData
 	return os.WriteFile(path, formatted, 0644)
 }
 
-func resolveGoType(ctx *genContext, entityName, camelName string, field FieldDef, col ColumnDef) string {
+func resolveGoType(
+	ctx *genContext,
+	nested *nestedCollector,
+	entityName, camelName string,
+	field FieldDef,
+	col ColumnDef,
+) string {
 	if overrides, ok := ctx.source.TypeOverrides[entityName]; ok {
 		if goType, ok := overrides[camelName]; ok {
 			return goType
@@ -215,13 +239,93 @@ func resolveGoType(ctx *genContext, entityName, camelName string, field FieldDef
 	notNull := col.IsNotNull() || col.IsPK()
 
 	if field.Type != "" {
-		return fieldTypeToGoType(ctx, entityName, camelName, field.Type, notNull)
+		return fieldTypeToGoType(nested, camelName, field.Type, notNull)
 	}
 
 	return sqlTypeToGoModel(col.Type, camelName, notNull)
 }
 
-func fieldTypeToGoType(_ *genContext, _, fieldName, fieldType string, notNull bool) string {
+// nestedCollector turns composite field types into generated structs. Composite
+// types are discovered lazily while fields are walked, and a composite may
+// reference another composite, so materialize keeps draining the queue until it
+// stops growing.
+type nestedCollector struct {
+	ctx   *genContext
+	queue []string
+	seen  map[string]bool
+}
+
+func newNestedCollector(ctx *genContext) *nestedCollector {
+	return &nestedCollector{ctx: ctx, seen: make(map[string]bool)}
+}
+
+func (n *nestedCollector) require(typeName string) bool {
+	if n == nil {
+		return false
+	}
+	if _, ok := n.ctx.compositeType(typeName); !ok {
+		return false
+	}
+	if !n.seen[typeName] {
+		n.seen[typeName] = true
+		n.queue = append(n.queue, typeName)
+	}
+	return true
+}
+
+func (n *nestedCollector) materialize() ([]nestedTypeData, bool) {
+	if n == nil {
+		return nil, false
+	}
+	var result []nestedTypeData
+	needsTime := false
+	for cursor := 0; cursor < len(n.queue); cursor++ {
+		typeName := n.queue[cursor]
+		definition, ok := n.ctx.compositeType(typeName)
+		if !ok {
+			continue
+		}
+		var fields []modelFieldData
+		for _, f := range definition.Fields {
+			notNull := !f.Nullable && !hasConstraint(f.Constraints, "NULLABLE")
+			goType := fieldTypeToGoType(n, f.Name, f.Type, notNull)
+			if strings.Contains(goType, "time.Time") {
+				needsTime = true
+			}
+			fields = append(fields, modelFieldData{
+				GoName:  codegen.CamelToGoName(f.Name),
+				GoType:  goType,
+				JSONTag: f.Name,
+				DBTag:   fmt.Sprintf(`bson:"%s"`, f.Name),
+			})
+		}
+		result = append(result, nestedTypeData{
+			Name:        typeName,
+			Description: firstLine(definition.Description),
+			Fields:      fields,
+		})
+	}
+	return result, needsTime
+}
+
+func firstLine(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.IndexByte(trimmed, '\n'); idx >= 0 {
+		return strings.TrimSpace(trimmed[:idx])
+	}
+	return trimmed
+}
+
+func fieldTypeToGoType(nested *nestedCollector, fieldName, fieldType string, notNull bool) string {
+	if nested.require(fieldType) {
+		if notNull {
+			return fieldType
+		}
+		return "*" + fieldType
+	}
 	switch fieldType {
 	case "string", "enum":
 		return "string"
@@ -302,6 +406,16 @@ import (
 {{- end}}
 )
 {{end}}
+{{- range .NestedTypes}}
+{{if .Description}}// {{.Name}} {{.Description}}
+{{end -}}
+type {{.Name}} struct {
+{{- range .Fields}}
+	{{.GoName}} {{.GoType}} ` + "`" + `json:"{{.JSONTag}}" {{.DBTag}}` + "`" + `
+{{- end}}
+}
+
+{{end -}}
 type {{.EntityName}} struct {
 {{- range .Fields}}
 	{{.GoName}} {{.GoType}} ` + "`" + `json:"{{.JSONTag}}" {{.DBTag}}` + "`" + `

@@ -7,20 +7,20 @@ const ExternalProviderBindingOwner = "content-service"
 const ExternalProviderBindingObject = "content.content.post"
 
 type ExternalProviderBinding struct {
-	State string
-	AdapterID string
-	EndpointRef string
+	State                   string
+	AdapterID               string
+	EndpointRef             string
 	EndpointEnvironmentKeys map[string]string
-	SecretEnvironmentKeys []string
-	TimeoutMilliseconds int
-	RequiredRedisScenes []string
+	SecretEnvironmentKeys   []string
+	TimeoutMilliseconds     int
+	RequiredRedisScenes     []string
 }
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"content.embedding.generation": {
-			State: "enabled",
-			AdapterID: "ext.embed.protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.embed.protocol_fixture",
 			EndpointRef: "environment_binding:content.embedding_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_FIXTURE_ENDPOINT",
@@ -29,26 +29,23 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_EMBEDDING_FIXTURE_API_KEY",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport_fixture",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport_fixture",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
 			},
 		},
 		"runtime.object.storage": {
-			State: "enabled",
-			AdapterID: "infra.minio.object_storage",
+			State:       "enabled",
+			AdapterID:   "infra.minio.object_storage",
 			EndpointRef: "environment_binding:content.object_storage",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_OSS_ENDPOINT",
@@ -58,14 +55,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_OSS_ACCESS_KEY_SECRET",
 			},
 			TimeoutMilliseconds: 5000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 	"beta": {
 		"content.embedding.generation": {
-			State: "enabled",
-			AdapterID: "ext.embed.protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "ext.embed.protocol_fixture",
 			EndpointRef: "environment_binding:content.embedding_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_FIXTURE_ENDPOINT",
@@ -74,26 +70,23 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_EMBEDDING_FIXTURE_API_KEY",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
 			},
 		},
 		"runtime.object.storage": {
-			State: "enabled",
-			AdapterID: "infra.minio.object_storage",
+			State:       "enabled",
+			AdapterID:   "infra.minio.object_storage",
 			EndpointRef: "environment_binding:content.object_storage",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_OSS_ENDPOINT",
@@ -103,48 +96,41 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_OSS_ACCESS_KEY_SECRET",
 			},
 			TimeoutMilliseconds: 5000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 	"gamma": {
 		"content.embedding.generation": {
-			State: "enabled",
-			AdapterID: "ext.embed.protocol_fixture",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			State:                   "enabled",
+			AdapterID:               "ext.embed.protocol_fixture",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     1000,
+			RequiredRedisScenes:     []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
 			},
 		},
 		"runtime.object.storage": {
-			State: "enabled",
-			AdapterID: "infra.minio.object_storage",
+			State:       "enabled",
+			AdapterID:   "infra.minio.object_storage",
 			EndpointRef: "environment_binding:content.object_storage",
 			EndpointEnvironmentKeys: map[string]string{
-				"bucket": "CONTENT_OSS_BUCKET",
-				"ca_file": "CONTENT_OSS_CA_FILE",
-				"cdn_domain": "CONTENT_CDN_DOMAIN",
-				"endpoint": "CONTENT_OSS_ENDPOINT",
-				"media_upload": "CONTENT_MEDIA_UPLOAD_BASE_URL",
-				"region": "CONTENT_OSS_REGION",
+				"bucket":                  "CONTENT_OSS_BUCKET",
+				"endpoint":                "CONTENT_OSS_ENDPOINT",
+				"media_delivery_base_url": "CONTENT_MEDIA_DELIVERY_BASE_URL",
+				"media_upload":            "CONTENT_MEDIA_UPLOAD_BASE_URL",
+				"region":                  "CONTENT_OSS_REGION",
 			},
 			SecretEnvironmentKeys: []string{
 				"CONTENT_OSS_ACCESS_KEY_ID",
@@ -152,14 +138,13 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_CDN_SIGN_KEY",
 			},
 			TimeoutMilliseconds: 5000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 	"prod": {
 		"content.embedding.generation": {
-			State: "enabled",
-			AdapterID: "ext.embed.openai_compatible",
+			State:       "enabled",
+			AdapterID:   "ext.embed.openai_compatible",
 			EndpointRef: "environment_binding:content.embedding",
 			EndpointEnvironmentKeys: map[string]string{
 				"endpoint": "CONTENT_EMBEDDING_ENDPOINT",
@@ -168,34 +153,30 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_EMBEDDING_API_KEY",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
 			},
 		},
 		"runtime.object.storage": {
-			State: "enabled",
-			AdapterID: "ext.oss.s3_compatible",
+			State:       "enabled",
+			AdapterID:   "ext.oss.s3_compatible",
 			EndpointRef: "environment_binding:content.object_storage",
 			EndpointEnvironmentKeys: map[string]string{
-				"bucket": "CONTENT_OSS_BUCKET",
-				"ca_file": "CONTENT_OSS_CA_FILE",
-				"cdn_domain": "CONTENT_CDN_DOMAIN",
-				"endpoint": "CONTENT_OSS_ENDPOINT",
-				"media_upload": "CONTENT_MEDIA_UPLOAD_BASE_URL",
-				"region": "CONTENT_OSS_REGION",
+				"bucket":                  "CONTENT_OSS_BUCKET",
+				"endpoint":                "CONTENT_OSS_ENDPOINT",
+				"media_delivery_base_url": "CONTENT_MEDIA_DELIVERY_BASE_URL",
+				"media_upload":            "CONTENT_MEDIA_UPLOAD_BASE_URL",
+				"region":                  "CONTENT_OSS_REGION",
 			},
 			SecretEnvironmentKeys: []string{
 				"CONTENT_OSS_ACCESS_KEY_ID",
@@ -203,15 +184,16 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"CONTENT_CDN_SIGN_KEY",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 	},
 }
 
 func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {
 	byCapability, ok := ExternalProviderBindings[environment]
-	if !ok { return ExternalProviderBinding{}, false }
+	if !ok {
+		return ExternalProviderBinding{}, false
+	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }

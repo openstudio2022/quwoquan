@@ -3,14 +3,17 @@ from __future__ import annotations
 import fcntl
 import os
 import secrets
+import shutil
 import stat
-import subprocess
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
+from .environment_topology import get_target, load_environment_topology
 from .output_paths import deployment_target_path, deployment_work_root, remove_deployment_tree
+from .public_domain_tls import certificate_paths
 
 
 _SECRET_KEYS = ("access_key_id", "access_key_secret", "cdn_sign_key")
@@ -24,7 +27,8 @@ class LocalEnvironmentObjectStorage:
     host_endpoint: str
     work_root: Path
     secret_path: Path
-    ca_path: Path
+    certificate_path: Path
+    private_key_path: Path
 
 
 def prepare_local_environment_object_storage(
@@ -32,21 +36,24 @@ def prepare_local_environment_object_storage(
     environment: str,
     target_name: str,
     edge_port: int,
-    public_host: str,
-    local_host: str,
     environment_prefix: str,
     bucket: str = "chat-media",
     region: str = "cn-local-1",
 ) -> LocalEnvironmentObjectStorage:
-    """Prepare target-isolated MinIO credentials and a trusted local TLS chain."""
+    """Prepare MinIO credentials and the target's public DNS-01 certificate."""
     if environment not in {"alpha", "beta", "gamma"}:
         raise ValueError(f"unsupported local object-storage environment: {environment}")
     if not target_name.endswith("-local"):
         raise ValueError(f"local object-storage target must end with -local: {target_name}")
     if not isinstance(edge_port, int) or not 0 < edge_port <= 65535:
         raise ValueError("object-storage edge port must be a valid TCP port")
-    if not public_host or not local_host or not environment_prefix:
-        raise ValueError("object-storage host names and environment prefix are required")
+    if not environment_prefix:
+        raise ValueError("object-storage environment prefix is required")
+    public_bases = get_target(load_environment_topology(), target_name)["publicBases"]
+    public_upload_base = str(public_bases["mediaUpload"])
+    public_host = urlparse(public_upload_base).hostname or ""
+    if not public_host:
+        raise ValueError(f"{target_name} mediaUpload role has no public host")
 
     work_root = deployment_work_root(target_name)
     secret_path = deployment_target_path(
@@ -60,12 +67,12 @@ def prepare_local_environment_object_storage(
         "object-storage",
     )
     secret_values = _load_or_create_secrets(secret_path)
-    ca_path = _load_or_create_tls(
+    source_certificate, source_private_key = certificate_paths(target_name)
+    certificate_path, private_key_path = _materialize_public_tls(
         certificate_root,
         target_name=target_name,
-        public_host=public_host,
-        local_host=local_host,
-        environment=environment,
+        source_certificate=source_certificate,
+        source_private_key=source_private_key,
     )
     prefix = environment_prefix.rstrip("_")
     endpoint = f"{public_host}:{edge_port}"
@@ -75,19 +82,18 @@ def prepare_local_environment_object_storage(
             f"{prefix}_OBJECT_STORAGE_BUCKET": bucket,
             f"{prefix}_OBJECT_STORAGE_REGION": region,
             f"{prefix}_OBJECT_STORAGE_TLS_DIR": str(certificate_root / "minio"),
-            f"{prefix}_OBJECT_STORAGE_CA_FILE": str(ca_path),
             f"{prefix}_OBJECT_STORAGE_ENDPOINT": endpoint,
             f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": secret_values["access_key_id"],
             f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": secret_values[
                 "access_key_secret"
             ],
-            f"{prefix}_OBJECT_STORAGE_CDN_DOMAIN": endpoint,
             f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": secret_values["cdn_sign_key"],
         },
-        host_endpoint=f"https://{local_host}:{edge_port}",
+        host_endpoint=f"https://{public_host}:{edge_port}",
         work_root=work_root,
         secret_path=secret_path,
-        ca_path=ca_path,
+        certificate_path=certificate_path,
+        private_key_path=private_key_path,
     )
 
 
@@ -136,26 +142,27 @@ def _read_secret_file(path: Path) -> dict[str, str]:
     return values
 
 
-def _load_or_create_tls(
+def _materialize_public_tls(
     root: Path,
     *,
     target_name: str,
-    public_host: str,
-    local_host: str,
-    environment: str,
-) -> Path:
-    ca_path = root / "ca.crt"
-    private_key = root / "ca.key"
+    source_certificate: Path,
+    source_private_key: Path,
+) -> tuple[Path, Path]:
     server_cert = root / "minio" / "public.crt"
     server_key = root / "minio" / "private.key"
     root.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(root.parent, 0o700)
     with _exclusive_lock(root.parent / ".object-storage-tls.lock"):
-        if all(path.is_file() for path in (ca_path, private_key, server_cert, server_key)):
+        if (
+            server_cert.is_file()
+            and server_key.is_file()
+            and server_cert.read_bytes() == source_certificate.read_bytes()
+            and server_key.read_bytes() == source_private_key.read_bytes()
+        ):
             _require_mode(root, 0o700, "object-storage certificate directory")
-            _require_mode(private_key, 0o600, "object-storage CA key")
             _require_mode(server_key, 0o600, "object-storage server key")
-            return ca_path
+            return server_cert, server_key
         if root.exists():
             remove_deployment_tree(
                 target_name,
@@ -166,77 +173,14 @@ def _load_or_create_tls(
             staged = Path(temp_dir)
             minio_dir = staged / "minio"
             minio_dir.mkdir(mode=0o700)
-            extension = staged / "server.ext"
-            extension.write_text(
-                "subjectAltName="
-                f"DNS:object-storage,DNS:{public_host},DNS:{local_host}\n"
-                "extendedKeyUsage=serverAuth\nkeyUsage=digitalSignature,keyEncipherment\n",
-                encoding="utf-8",
-            )
-            _run_openssl(
-                [
-                    "req",
-                    "-x509",
-                    "-new",
-                    "-nodes",
-                    "-newkey",
-                    "rsa:2048",
-                    "-sha256",
-                    "-days",
-                    "30",
-                    "-subj",
-                    f"/CN=QWQ {environment.title()} Local Object Storage CA",
-                    "-keyout",
-                    str(staged / "ca.key"),
-                    "-out",
-                    str(staged / "ca.crt"),
-                ]
-            )
-            _run_openssl(
-                [
-                    "req",
-                    "-new",
-                    "-nodes",
-                    "-newkey",
-                    "rsa:2048",
-                    "-subj",
-                    f"/CN={public_host}",
-                    "-keyout",
-                    str(minio_dir / "private.key"),
-                    "-out",
-                    str(staged / "server.csr"),
-                ]
-            )
-            _run_openssl(
-                [
-                    "x509",
-                    "-req",
-                    "-sha256",
-                    "-days",
-                    "30",
-                    "-in",
-                    str(staged / "server.csr"),
-                    "-CA",
-                    str(staged / "ca.crt"),
-                    "-CAkey",
-                    str(staged / "ca.key"),
-                    "-CAcreateserial",
-                    "-extfile",
-                    str(extension),
-                    "-out",
-                    str(minio_dir / "public.crt"),
-                ]
-            )
-            for path in (staged / "server.csr", staged / "ca.srl", extension):
-                path.unlink(missing_ok=True)
+            shutil.copyfile(source_certificate, minio_dir / "public.crt")
+            shutil.copyfile(source_private_key, minio_dir / "private.key")
             os.chmod(staged, 0o700)
             os.chmod(minio_dir, 0o700)
-            os.chmod(staged / "ca.key", 0o600)
-            os.chmod(staged / "ca.crt", 0o644)
             os.chmod(minio_dir / "private.key", 0o600)
             os.chmod(minio_dir / "public.crt", 0o644)
             os.replace(staged, root)
-        return ca_path
+        return server_cert, server_key
 
 
 @contextmanager
@@ -248,18 +192,6 @@ def _exclusive_lock(path: Path):
     finally:
         fcntl.flock(descriptor, fcntl.LOCK_UN)
         os.close(descriptor)
-
-
-def _run_openssl(arguments: list[str]) -> None:
-    result = subprocess.run(
-        ["openssl", *arguments],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError("failed to generate local object-storage TLS material")
 
 
 def _require_mode(path: Path, expected: int, label: str) -> None:

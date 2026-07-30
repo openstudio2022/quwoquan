@@ -11,11 +11,11 @@
 
 ## 2. Story 协作与状态流
 
-- [`circle-homepage-intersection-redesign`](./circle-homepage-intersection-redesign/spec.md)：标题统一为「圈子打动的人」，文案口径与 intersection-definition §17 一致。
+- [`circle-homepage-intersection-redesign`](./circle-homepage-intersection-redesign/spec.md)：标题统一为「圈子打动的人」，文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 - [`entity-homepage-intersection-redesign`](./entity-homepage-intersection-redesign/spec.md)：定义“实体主页交集重做”的可观察主路径、失败语义及父能力交接。
-- [`home-recommend-intersection-redesign`](./home-recommend-intersection-redesign/spec.md)：spotlight 文案口径与 intersection-definition §17 一致。
+- [`home-recommend-intersection-redesign`](./home-recommend-intersection-redesign/spec.md)：spotlight 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 - [`intersection-algorithm-closure`](./intersection-algorithm-closure/spec.md)：ranking-signal-fusion spec 登记 intersection fact/affinity 权重入口。
-- [`intersection-sentence-unification`](./intersection-sentence-unification/spec.md)：seed、服务响应与展示口径均与 intersection-definition §17 及本 Story Display Contract 一致。
+- [`intersection-sentence-unification`](./intersection-sentence-unification/spec.md)：seed、服务响应与展示口径均与 `intersection_kind_registry.yaml` 及本 Story Display Contract 一致。
 - [`object-homepage-gamma-real-data-closure`](./object-homepage-gamma-real-data-closure/spec.md)：metadata 与 compose 静态契约通过。
 - [`user-profile-intersection-redesign`](./user-profile-intersection-redesign/spec.md)：他人/我的主页二级过滤同一实现。
 
@@ -36,6 +36,21 @@
 - 关联要求：`REQ-001`
 - 影响 Story：[`circle-homepage-intersection-redesign`](./circle-homepage-intersection-redesign/spec.md)、[`entity-homepage-intersection-redesign`](./entity-homepage-intersection-redesign/spec.md)、[`home-recommend-intersection-redesign`](./home-recommend-intersection-redesign/spec.md)、[`intersection-algorithm-closure`](./intersection-algorithm-closure/spec.md)、[`intersection-sentence-unification`](./intersection-sentence-unification/spec.md)、[`object-homepage-gamma-real-data-closure`](./object-homepage-gamma-real-data-closure/spec.md)、[`user-profile-intersection-redesign`](./user-profile-intersection-redesign/spec.md)
 - 关联验收：`SIT-001`
+
+<a id="dec-002"></a>
+### DEC-002 垂类扩展只允许「vertical + objectKind + taxonomy 子树 + 事实生产者」四件套
+
+- 决策：新增一个垂类 = 注册一个 `vertical` 值 + 注册若干 `objectKind`（每个必须映射到已有 homepage 类型或已有对象，且 `routeId` 在 `app_routes.yaml` 真实存在）+ 建一棵 taxonomy 子树 + 建一个事实生产者（把原始素材或行为转成 tagRef 与对象引用）。**禁止新增 kind、dimension、actionKey，禁止端侧引入任何垂类分支。**
+- 理由：`kind + vertical + objectKind` 是正交三元组。垂类的差异化应体现在**事实的丰富度**，而不是结构分叉。一旦为垂类开 kind，同一件事就有 general 与垂类两套句子与两套排序权重（第二真相源），并且端侧不得不按 `vertical` 分叉渲染，垂类数量与端侧分支数线性绑定。
+- 推论：旅行摄影**零新 kind**，三类事实各自归位到已登记的通用 kind 或推荐通道。
+  - 同地到访 = 已登记的 `coVisitedEntity` / `followeeVisited`，只缺 `post.visitedAt` + `geoTagRef` 生产者，不缺 kind。
+  - 同器材 = 已 active 的 `sharedEntityAttention`，`gear` objectKind 已指向 `homepageDetail`，把器材注册为 homepage 类型即成立。
+  - 光线窗口 / 焦段 / 曝光参数**不做成交集句**。`objectKind=tag` 只有 `count` 角色且 `routeId` 为空，硬做会产出不可导航的主对象。这些事实的价值在推荐召回与内容理解（`recommend_feature` 通道），登记在 `recommendationOnlyFacts`。
+- 被否决方案：为旅行摄影新增 `sameGearUsed` / `sharedPhotoSpot` / `sameLightWindow` 等 `travel.*` 私有 kind；或在端侧按 `vertical` 分支渲染垂类专属卡片与专属页面。
+- 约束与影响：契约与四条禁令（`forbidNewKind` / `forbidNewDimension` / `forbidNewActionKey` / `forbidClientVerticalBranch`）登记在 `intersection_kind_registry.yaml` 的 `verticalExtensionContract`，并由 `verify_intersection_kind_registry.py` 阻断：每个非 general 垂类必须登记 `objectKinds` / `taxonomyRoots` / `factProducers` / `instantiatedKinds` / `newKinds`，`newKinds` 必须为空，且任何 kind 名不得带垂类前缀。端侧 `IntersectionTargetNavigator` 继续只按 `actionKeyMeta.dispatch` / `targetAvailability` 分发。
+- 关联要求：`REQ-005`
+- 影响 Story：[`intersection-algorithm-closure`](./intersection-algorithm-closure/spec.md)、[`intersection-sentence-unification`](./intersection-sentence-unification/spec.md)
+- 关联验收：`SIT-005`
 
 ## 5. 失败与恢复
 

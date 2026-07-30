@@ -9,6 +9,11 @@ api_routes:
   path: /assistant/search/xiaoqu
   operation: SearchXiaoquResults
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: search query still belongs to AssistantRun instead of an object-owned search slice, and Prod public-search Provider conformance is unproven
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantSearchQueryFacade
@@ -17,14 +22,7 @@ api_routes:
     slice: AssistantSearchResultView
   description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
   request_entity: AssistantSearchXiaoquRequestWire
-  request_fields:
-  - userQuery
-  - searchIntensity
-  - subAccountId
-  - personaContextVersion
-  - sourceSurfaceId
-  - fromGlobalSearch
-  - contextSnapshot
+  request_body_kind: object
   response_entity: AssistantSearchResultView
   reliability:
     timeout_ms: 15000
@@ -64,6 +62,11 @@ api_routes:
   path: /assistant/conversations/{conversationId}/runs
   operation: StartAssistantRun
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantRun domain/store/HTTP adapter remain co-owned by AssistantConversation, and Prod model Provider conformance is unproven
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: command
     facet: AssistantRunCommandFacade
@@ -73,14 +76,10 @@ api_routes:
     invariant_target: AssistantRun
   description: 统一启动助手执行；流式结果是该 Run 的 transport，不存在 CreateTurn/StreamTurn 第二主线
   request_entity: AssistantStartRunRequest
-  request_fields:
-  - turnType
-  - skillId
-  - domainId
-  - input
-  - trigger
-  - clientRequestId
-  - contextSnapshot
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: conversationId, field: conversationId}
   response_entity: AssistantTurnEnvelope
   success_status: 201
   reliability:
@@ -127,6 +126,11 @@ api_routes:
   path: /assistant/runs/{runId}
   operation: GetAssistantRun
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantRun domain model, Mongo store and HTTP adapter remain physically co-owned by AssistantConversation
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantTurnQueryFacade
@@ -134,6 +138,9 @@ api_routes:
     reader: AssistantRunReader
     slice: AssistantTurnEnvelope
   description: 读取已启动助手 Run 的当前信封；终态 answer/process/citation/failure/policy 只来自无 TTL terminalSnapshot。
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
   response_entity: AssistantTurnEnvelope
   reliability:
     timeout_ms: 1500
@@ -172,6 +179,11 @@ api_routes:
   path: /assistant/conversations/{conversationId}/turns
   operation: ListConversationTurns
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantRun transcript reader and Mongo slice remain physically co-owned by AssistantConversation
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantTurnQueryFacade
@@ -179,9 +191,12 @@ api_routes:
     reader: AssistantRunReader
     slice: AssistantTurnListView
   description: owner 会话内终态轮次及 terminalSnapshot 列表；createdAt desc keyset 分页，是 transcript、过程/引用恢复与续聊的唯一数据源。
-  query_params:
-  - limit
-  - cursor
+  request_bindings:
+    path:
+    - {name: conversationId, field: conversationId}
+    query:
+    - {name: limit, field: limit, required: false}
+    - {name: cursor, field: cursor, required: false}
   response_entity: AssistantTurnListView
   reliability:
     timeout_ms: 1500
@@ -221,6 +236,11 @@ api_routes:
   path: /assistant/runs/{runId}/cancel
   operation: CancelAssistantRun
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantRun cancel aggregate/store/HTTP adapter remain physically co-owned by AssistantConversation
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: command
     facet: AssistantRunCommandFacade
@@ -229,6 +249,9 @@ api_routes:
     mutation_target: AssistantRun
     invariant_target: AssistantRun
   description: 取消运行中的助手 Run（running→cancelled CAS 并中断执行）；已终态取消幂等返回当前信封，不报错。
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
   response_entity: AssistantTurnEnvelope
   reliability:
     timeout_ms: 1500
@@ -267,6 +290,11 @@ api_routes:
   path: /assistant/runs/{runId}/events
   operation: StreamAssistantRunEvents
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantRun event journal and SSE adapter remain physically co-owned by AssistantConversation
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantRunEventTransport
@@ -274,8 +302,11 @@ api_routes:
     reader: AssistantRunEventReader
     slice: AssistantStreamEvent
   description: 已启动助手 Run 的只读 SSE 事件 transport；journal 过期后的终态重放必须由 terminalSnapshot 生成，不是第二条创建或执行主线。
-  query_params:
-  - resumeToken
+  request_bindings:
+    path:
+    - {name: runId, field: runId}
+    query:
+    - {name: resumeToken, field: resumeToken, required: false}
   response_entity: AssistantStreamEvent
   transport: sse
   reliability:
@@ -318,6 +349,11 @@ api_routes:
   path: /assistant/page-context
   operation: ReportPageContext
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: page-context command is still modeled as an AssistantRun mutation instead of an object-owned PageContext aggregate
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: command
     facet: AssistantContextCommandFacade
@@ -327,8 +363,7 @@ api_routes:
     invariant_target: AssistantRun
   description: 页面上下文上报
   request_entity: AssistantReportPageContextRequestWire
-  request_fields:
-  - contextSnapshot
+  request_body_kind: object
   response_entity: PageContextAck
   reliability:
     timeout_ms: 1500
@@ -339,6 +374,7 @@ api_routes:
   error_codes:
   - ASSISTANT.USER.run_invalid_argument
   - ASSISTANT.USER.unauthorized
+  - ASSISTANT.SYSTEM.page_context_unavailable
   privacy:
     request_classification: SENSITIVE
     response_classification: INTERNAL
@@ -366,6 +402,11 @@ api_routes:
   path: /assistant/personalization
   operation: GetEntryPersonalization
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: entry personalization read model is still declared and implemented under AssistantRun rather than its owning object
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantPersonalizationQueryFacade
@@ -373,14 +414,9 @@ api_routes:
     reader: AssistantEntryPersonalizationReader
     slice: AssistantEntryPersonalizationView
   description: 私助半屏入口的欢迎语、chips 与建议行云下发
-  query_params:
-  - source
-  - pageType
-  - tab
-  - dimension
-  - objectId
-  - objectType
-  - experienceLevel
+  request_bindings:
+    query:
+    - {name: pageType, field: pageType, required: false}
   response_entity: AssistantEntryPersonalizationView
   reliability:
     timeout_ms: 1500
@@ -417,6 +453,11 @@ api_routes:
   path: /assistant/suggested-actions
   operation: GetSuggestedActions
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: suggested-action read model is still declared and implemented under AssistantRun rather than its owning object
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantSuggestionQueryFacade
@@ -424,9 +465,10 @@ api_routes:
     reader: AssistantSuggestedActionReader
     slice: SuggestedActionListView
   description: 获取当前页面建议操作
-  query_params:
-  - pageType
-  - objectId
+  request_bindings:
+    query:
+    - {name: pageType, field: pageType, required: true}
+    - {name: objectId, field: objectId, required: false}
   response_entity: SuggestedActionListView
   reliability:
     timeout_ms: 1500
@@ -460,46 +502,15 @@ api_routes:
     token_transport: bearer
     anonymous_policy: deny
     visibility: private
-- method: GET
-  path: /assistant/skills
-  operation: ListSkills
-  actor: none
-  application:
-    kind: query
-    facet: AssistantSkillCatalogQueryFacade
-    method: listSkills
-    reader: AssistantSkillCatalogReader
-    slice: AssistantSkillCatalogListView
-  description: 可用 Skill 列表（技能目录）
-  query_params:
-  - limit
-  response_entity: AssistantSkillCatalogListView
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - ASSISTANT.SYSTEM.run_storage_unavailable
-  privacy:
-    request_classification: PUBLIC
-    response_classification: PUBLIC
-    log_policy: metadata_only
-  telemetry:
-    metric: assistant_skill_catalog_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 300
-    availability_percent: 99.9
 - method: POST
   path: /assistant/skills/creation-suggest
   operation: SuggestCreationAssistance
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: creation assistance remains embedded in AssistantRun and Prod model/grounding Provider conformance is unproven
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantCreationQueryFacade
@@ -512,12 +523,7 @@ api_routes:
 
     '
   request_entity: AssistantCreationSuggestRequest
-  request_fields:
-  - draftTitle
-  - draftSummary
-  - bodyDigest
-  - boundCircleIds
-  - primaryHomepageId
+  request_body_kind: object
   response_entity: AssistantCreationSuggestResponse
   reliability:
     timeout_ms: 10000
@@ -557,6 +563,11 @@ api_routes:
   path: /assistant/tasks
   operation: ListAssistantTasks
   actor: persona
+  commercial:
+    status: blocked
+    block_reason: AssistantTask has no object-owned contract/source/store boundary and remains embedded in AssistantRun
+    gap_id: ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   application:
     kind: query
     facet: AssistantPersonalDataQueryFacade
@@ -564,9 +575,10 @@ api_routes:
     reader: AssistantTaskReader
     slice: AssistantUserTaskListView
   description: 用户助手任务/待办列表（日程 tab 等）
-  query_params:
-  - limit
-  - status
+  request_bindings:
+    query:
+    - {name: limit, field: limit, required: false}
+    - {name: status, field: status, required: false}
   response_entity: AssistantUserTaskListView
   reliability:
     timeout_ms: 1500

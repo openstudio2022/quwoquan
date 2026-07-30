@@ -39,7 +39,7 @@ type S3PresignClient struct {
 }
 
 // NewS3PresignClient creates a real S3/MinIO/R2 presign client.
-func NewS3PresignClient(cfg OSSConfig) *S3PresignClient {
+func NewS3PresignClient(cfg ObjectStorageConfig) *S3PresignClient {
 	opts := s3.Options{
 		Region:      cfg.Region,
 		Credentials: credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.AccessKeySecret, ""),

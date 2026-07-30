@@ -22,7 +22,6 @@ const (
 
 type AppendCommand struct {
 	EventID           string
-	EventVersion      int
 	FactType          FactType
 	AssistantTurnID   string
 	TriggerMessageID  string
@@ -63,7 +62,6 @@ type TrustedContext struct {
 type Fact struct {
 	StorageID         string    `bson:"_id" json:"-"`
 	EventID           string    `bson:"eventId" json:"eventId"`
-	EventVersion      int       `bson:"eventVersion" json:"eventVersion"`
 	FactType          FactType  `bson:"factType" json:"factType"`
 	PayloadDigest     string    `bson:"payloadDigest" json:"payloadDigest"`
 	AppendSequence    int64     `bson:"appendSequence" json:"appendSequence"`
@@ -104,7 +102,6 @@ type Fact struct {
 
 type Receipt struct {
 	EventID        string    `bson:"eventId" json:"eventId"`
-	EventVersion   int       `bson:"eventVersion" json:"eventVersion"`
 	Accepted       bool      `bson:"accepted" json:"accepted"`
 	Deduplicated   bool      `bson:"-" json:"deduplicated"`
 	AppendSequence int64     `bson:"appendSequence" json:"appendSequence"`
@@ -114,7 +111,6 @@ type Receipt struct {
 
 type RedactedPayload struct {
 	EventID           string    `bson:"eventId" json:"eventId"`
-	EventVersion      int       `bson:"eventVersion" json:"eventVersion"`
 	AppendSequence    int64     `bson:"appendSequence" json:"appendSequence"`
 	FactType          FactType  `bson:"factType" json:"factType"`
 	UserID            string    `bson:"userId" json:"userId"`
@@ -159,8 +155,8 @@ func Build(
 	command.DomainID = strings.TrimSpace(command.DomainID)
 	trusted.UserID = strings.TrimSpace(trusted.UserID)
 	trusted.PersonaID = strings.TrimSpace(trusted.PersonaID)
-	if command.EventID == "" || command.EventVersion <= 0 {
-		return Fact{}, errors.New("eventId and positive eventVersion are required")
+	if command.EventID == "" {
+		return Fact{}, errors.New("eventId is required")
 	}
 	if command.AssistantTurnID == "" ||
 		command.ReferralSource == "" ||
@@ -185,9 +181,8 @@ func Build(
 	}
 
 	fact := Fact{
-		StorageID:         Identity(command.EventID, command.EventVersion),
+		StorageID:         Identity(command.EventID),
 		EventID:           command.EventID,
-		EventVersion:      command.EventVersion,
 		FactType:          command.FactType,
 		UserID:            trusted.UserID,
 		PersonaID:         trusted.PersonaID,
@@ -285,8 +280,8 @@ func Build(
 	return fact, nil
 }
 
-func Identity(eventID string, eventVersion int) string {
-	return fmt.Sprintf("%s:%d", strings.TrimSpace(eventID), eventVersion)
+func Identity(eventID string) string {
+	return strings.TrimSpace(eventID)
 }
 
 func Digest(fact Fact) string {
@@ -312,7 +307,6 @@ func Digest(fact Fact) string {
 func (fact Fact) RedactedPayload() RedactedPayload {
 	return RedactedPayload{
 		EventID:           fact.EventID,
-		EventVersion:      fact.EventVersion,
 		AppendSequence:    fact.AppendSequence,
 		FactType:          fact.FactType,
 		UserID:            fact.UserID,

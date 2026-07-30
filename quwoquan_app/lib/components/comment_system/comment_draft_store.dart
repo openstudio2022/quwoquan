@@ -44,7 +44,7 @@ class CommentDraft {
 class CommentDraftStore {
   CommentDraftStore._();
 
-  static const String _keyPrefix = 'comment_draft:v2:';
+  static const String _keyPrefix = 'comment_draft:';
 
   static String _actorPrefix(String actorScope) {
     final normalized = actorScope.trim().isEmpty ? 'guest' : actorScope.trim();

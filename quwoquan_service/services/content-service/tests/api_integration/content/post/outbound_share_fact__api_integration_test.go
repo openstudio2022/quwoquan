@@ -22,7 +22,7 @@ func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
 	if postID == "" {
 		t.Fatal("missing postId")
 	}
-	requestBody := []byte(`{"channel":"system_share_sheet","destinationKind":"contact","destination":"private-recipient@example.com","referralId":"referral-api-1","deliverySucceeded":true,"providerReceiptId":"provider-receipt-secret"}`)
+	requestBody := []byte(`{"channel":"system_share","destinationKind":"external_app","destination":"private-recipient@example.com","referralId":"referral-api-1","deliverySucceeded":true,"providerReceiptId":"provider-receipt-secret","clientConfirmedAt":"2026-07-28T20:00:00Z"}`)
 
 	perform := func() map[string]any {
 		request := httptest.NewRequest(
@@ -32,7 +32,7 @@ func TestCreateOutboundSharePersistsFactReceiptAndOutbox(t *testing.T) {
 		)
 		request.Header.Set("Content-Type", "application/json")
 		request.Header.Set("X-Client-User-Id", "outbound-share-actor")
-		request.Header.Set("X-Client-Sub-Account-Id", "outbound-share-actor")
+		request.Header.Set("X-Client-Persona-Id", "outbound-share-actor")
 		request.Header.Set("Idempotency-Key", "outbound-share-api-1")
 		recorder := httptest.NewRecorder()
 		testHandler.ServeHTTP(recorder, request)

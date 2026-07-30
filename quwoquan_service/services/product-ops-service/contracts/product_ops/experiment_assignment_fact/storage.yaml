@@ -21,8 +21,8 @@ tables:
       type: VARCHAR(32)
       constraints:
       - NOT_NULL
-    - name: policy_version
-      type: VARCHAR(64)
+    - name: experiment_revision
+      type: BIGINT
       constraints:
       - NOT_NULL
     - name: assigned_at
@@ -42,10 +42,6 @@ tables:
     - name: uq_assignment_subject
       columns:
       - experiment_id
-      - policy_version
+      - experiment_revision
       - subject_key
-shared_outbox:
-  table: product_ops_outbox
-  source: ops/product_ops/experiment/storage.yaml#tables.product_ops_outbox
-  atomicity: assignment fact 与 ExperimentAssigned event 在同一 PostgreSQL transaction 提交
 role: append_only

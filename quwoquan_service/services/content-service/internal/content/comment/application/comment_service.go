@@ -654,12 +654,15 @@ func mapDomainError(err error) error {
 		return commenterrors.AppErrorFromCommentForbiddenDelete(err.Error())
 	case errors.Is(err, commentmodel.ErrAttachmentLimitExceeded):
 		return commenterrors.AppErrorFromCommentAttachmentLimitExceeded(err.Error())
+	case errors.Is(err, commentmodel.ErrCommentTooLong):
+		return commenterrors.AppErrorFromCommentTooLong(err.Error())
 	case errors.Is(err, commentmodel.ErrModerationForbidden):
 		return commenterrors.AppErrorFromCommentModerationForbidden(err.Error())
 	case errors.Is(err, commentmodel.ErrInvalidStatusTransition):
 		return commenterrors.AppErrorFromCommentStatusTransitionInvalid(err.Error())
-	case errors.Is(err, commentmodel.ErrInvalidReplyTarget),
-		errors.Is(err, commentmodel.ErrInvalidComment),
+	case errors.Is(err, commentmodel.ErrInvalidReplyTarget):
+		return commenterrors.AppErrorFromCommentParentInvalid(err.Error())
+	case errors.Is(err, commentmodel.ErrInvalidComment),
 		errors.Is(err, commentmodel.ErrInvalidMutationClock):
 		return invalidArgument(err.Error())
 	default:

@@ -2,6 +2,7 @@
   "label": "开学季",
   "labelEn": "Back to School",
   "description": "开学季的准备与氛围",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

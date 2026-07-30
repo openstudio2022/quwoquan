@@ -1,0 +1,3 @@
+role: authoritative
+events: []
+description: AccountAppealIntake 当前以 User PostgreSQL 同步 claim contract 为跨域边界，不声明不存在的消息 producer 或第二份审核事实。

@@ -4,7 +4,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('实体主页 generated operation ABI', () {
     test('查询编码只输出 metadata 声明的 path 与 query', () {
-      final search = encodeHomepageSearchQuery(
+      final search = encodeEntityHomepageSearchHomepagesGeneratedRequest(
         const HomepageSearchQuery(
           query: '普陀山',
           homepageType: 'sight',
@@ -20,7 +20,7 @@ void main() {
         'limit': '20',
       });
 
-      final bundle = encodeHomepageObjectPageBundleQuery(
+      final bundle = encodeEntityHomepageGetObjectPageBundleGeneratedRequest(
         const HomepageObjectPageBundleQuery(
           homepageId: 'homepage-1',
           referralSource: 'search',
@@ -37,13 +37,14 @@ void main() {
     });
 
     test('地点提升候选将 canonical source place identity 送到命令', () {
-      final request = encodeSuggestHomepageCandidateCommand(
-        SuggestHomepageCandidateCommand(
-          title: '断桥残雪',
-          homepageType: 'sight',
-          sourcePlaceId: 'place_0123456789abcdef',
-        ),
-      );
+      final request =
+          encodeEntityHomepageSuggestHomepageCandidateGeneratedRequest(
+            SuggestHomepageCandidateCommand(
+              title: '断桥残雪',
+              homepageType: 'sight',
+              sourcePlaceId: 'place_0123456789abcdef',
+            ),
+          );
 
       expect(request.body, <String, Object?>{
         'title': '断桥残雪',

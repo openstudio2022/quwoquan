@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
@@ -14,6 +15,7 @@ import (
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 )
 
@@ -23,6 +25,7 @@ func buildContentHTTPServer(
 	addr string,
 	instanceID string,
 	handler http.Handler,
+	feedConfig feedRuntimeConfig,
 	healthChecker *rthealth.Checker,
 	accessTokenConfig rtauth.TokenConfig,
 	accountSecurityAuthority rtauth.AccountSecurityAuthority,
@@ -45,10 +48,19 @@ func buildContentHTTPServer(
 		log.Fatalf("device ticket verifier invalid: %v", err)
 	}
 
+	contentDescriptors := operationsecurity.ForDomain("content")
+	feedAdmissionPolicy := contentFeedAdmissionPolicy(
+		contentDescriptors,
+		feedConfig,
+	)
 	sensitiveOperationGuard := httpadapter.RequireSensitiveOperationPrincipal(handler)
-	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
-		operationsecurity.ForDomain("content"),
+	admissionGuard := rtgov.OperationAdmissionMiddleware(
+		[]rtgov.OperationAdmissionPolicy{feedAdmissionPolicy},
+		writeContentFeedAdmissionRejection,
 	)(sensitiveOperationGuard)
+	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
+		contentDescriptors,
+	)(admissionGuard)
 
 	outerMux := http.NewServeMux()
 	outerMux.Handle("/metrics", rtmetrics.Handler())
@@ -76,8 +88,6 @@ func buildContentHTTPServer(
 		exceptionLogger,
 	)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 
 	return &http.Server{
 		Addr: addr,
@@ -85,11 +95,51 @@ func buildContentHTTPServer(
 			AccessTokenVerifier:      accessVerifier,
 			DeviceTicketVerifier:     deviceTicketVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(corsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+}
+
+func contentFeedAdmissionPolicy(
+	descriptors []rtauth.OperationSecurityDescriptor,
+	feedConfig feedRuntimeConfig,
+) rtgov.OperationAdmissionPolicy {
+	operationID := ""
+	for _, descriptor := range descriptors {
+		if descriptor.Method != contentgenerated.RouteGetFeedMethod ||
+			descriptor.PathTemplate != contentgenerated.RouteGetFeedPath {
+			continue
+		}
+		if operationID != "" {
+			panic("content feed operation descriptor is not unique")
+		}
+		operationID = descriptor.CanonicalOperationID
+	}
+	if operationID == "" {
+		panic("content feed operation descriptor is missing")
+	}
+	return rtgov.OperationAdmissionPolicy{
+		CanonicalOperationID: operationID,
+		InflightLimiter:      rtgov.NewInflightLimiter(feedConfig.MaxInflight),
+	}
+}
+
+func writeContentFeedAdmissionRejection(
+	w http.ResponseWriter,
+	r *http.Request,
+	reason rtgov.OperationAdmissionRejection,
+) {
+	const retryAfterSeconds = 1
+	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+	rterr.WriteHTTPError(
+		w,
+		contentgenerated.AppErrorFromFeedCapacityUnavailable(
+			"content feed owner concurrency exhausted: "+string(reason),
+		).WithRecoveryDirective("retry", "snackbar", retryAfterSeconds),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
 }
 
 func contentLivenessHandler(w http.ResponseWriter, request *http.Request) {

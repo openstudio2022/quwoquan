@@ -1,0 +1,12 @@
+{
+  "label": "布宜诺斯艾利斯",
+  "labelEn": "Buenos Aires",
+  "description": "探戈与欧陆风貌之都",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

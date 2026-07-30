@@ -6,7 +6,7 @@ mixin _RemoteAssistantXiaoquSearch on _RemoteAssistantRepositoryBase
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     // 不再本地合成"假搜索摘要"；空 query、非 2xx、解码失败或空回显一律抛

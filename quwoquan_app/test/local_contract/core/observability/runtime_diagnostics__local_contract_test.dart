@@ -64,6 +64,39 @@ void main() {
     });
   });
 
+  test(
+    'frame timing reports clean batches for an unbiased denominator',
+    () async {
+      final buffer = InMemoryRuntimeLogBuffer();
+      final recorder = _CapturingTelemetryRecorder();
+      final pageContext = AppPageContextStore.instance..setPageName('home');
+      final experience = AppPageExperienceTracker(pageContextStore: pageContext)
+        ..attachReporter(recorder);
+      final diagnostics = AppRuntimeDiagnostics(
+        logger(buffer),
+        pageContextStore: pageContext,
+        pageExperienceTracker: experience,
+        frameBatchSize: 2,
+        jankThreshold: const Duration(milliseconds: 50),
+      );
+
+      diagnostics.recordFrameDuration(const Duration(milliseconds: 16));
+      diagnostics.recordFrameDuration(const Duration(milliseconds: 20));
+      await _settle();
+
+      expect(await buffer.pending(), isEmpty);
+      final productRecord = recorder.records.single;
+      expect(productRecord.eventType, 'app_frame_jank_outcome');
+      expect(productRecord.extensions, <String, Object?>{
+        'sampledFrames': 2,
+        'jankyFrames': 0,
+        'worstFrameMs': 20,
+        'jankThresholdMs': 50,
+        'result': 'ok',
+      });
+    },
+  );
+
   test('anr watchdog reports only real event-loop stalls', () async {
     final base = DateTime.utc(2026, 7, 19, 10);
     final buffer = InMemoryRuntimeLogBuffer(now: () => base);

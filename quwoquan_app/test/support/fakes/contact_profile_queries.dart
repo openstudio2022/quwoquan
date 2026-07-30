@@ -13,12 +13,12 @@ final class ContactProfileQueryFake implements ProfileQuery {
     this.searchError,
   });
 
-  final SubAccountProfileViewData? profile;
+  final PersonaProfileViewData? profile;
   final List<SocialRelationSearchItemView> searchItems;
   final Object? searchError;
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+  Future<PersonaProfileViewData> getUserProfile(String userId) async {
     final value = profile;
     if (value == null) {
       throw StateError('profile not configured');
@@ -39,9 +39,7 @@ final class ContactProfileQueryFake implements ProfileQuery {
   }
 
   @override
-  Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
-  ) {
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(String personaId) {
     throw UnimplementedError();
   }
 
@@ -49,7 +47,6 @@ final class ContactProfileQueryFake implements ProfileQuery {
   Future<UserProfileStatsViewData> getUserStats(String userId) {
     throw UnimplementedError();
   }
-
 }
 
 final class ContactProfileEditQueryFake implements ProfileEditQuery {
@@ -82,12 +79,10 @@ final class ContactProfileEditQueryFake implements ProfileEditQuery {
 final class ContactPersonaQueryFake implements PersonaQuery {
   ContactPersonaQueryFake({required this.profile});
 
-  final SubAccountProfileViewData profile;
+  final PersonaProfileViewData profile;
 
   @override
-  Future<SubAccountProfileViewData> getSubAccountProfile(
-    String subAccountId,
-  ) async {
+  Future<PersonaProfileViewData> getPersonaProfile(String personaId) async {
     return profile;
   }
 
@@ -98,7 +93,7 @@ final class ContactPersonaQueryFake implements PersonaQuery {
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
+    String personaId,
   ) {
     throw UnimplementedError();
   }

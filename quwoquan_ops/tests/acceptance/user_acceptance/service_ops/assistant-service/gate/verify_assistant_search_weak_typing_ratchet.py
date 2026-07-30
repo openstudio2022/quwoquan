@@ -195,7 +195,6 @@ def main() -> int:
         print(
             json.dumps(
                 {
-                    "version": 1,
                     "buckets": buckets,
                     "informational_metrics": info,
                 },
@@ -225,7 +224,6 @@ def main() -> int:
             return 1
         payload = {
             "_governance": existing_governance,
-            "version": 1,
             "buckets": current,
             "notes": "Ratchet: any increase in map_string_dynamic or dynamic_keyword per bucket fails CI until baseline is intentionally updated.",
         }

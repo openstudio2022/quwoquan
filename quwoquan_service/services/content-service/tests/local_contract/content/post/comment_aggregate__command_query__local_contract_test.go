@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,6 +58,24 @@ func TestCommentAggregateRejectsNonOwnerDeleteAndPin(t *testing.T) {
 	aggregate, found, loadErr = store.Load(context.Background(), created.ID)
 	if loadErr != nil || !found || aggregate.Version() != created.Version {
 		t.Fatalf("denied pin must not advance aggregate: found=%v version=%d err=%v", found, aggregate.Version(), loadErr)
+	}
+}
+
+func TestCommentAggregateMapsRuneLimitToOwnedErrorCode(t *testing.T) {
+	service, store := newCommentAggregateService()
+	_, err := service.CreateComment(
+		commandmeta.WithIdempotencyKey(context.Background(), "comment-too-long"),
+		commentapp.CreateCommentCommand{
+			PostID:  "post-comment-owner",
+			ActorID: "persona-comment-author",
+			Content: strings.Repeat("界", commentmodel.MaxContentRunes+1),
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), contentgenerated.ErrCommentTooLong.Error()) {
+		t.Fatalf("oversized comment must return the Comment-owned code, got %v", err)
+	}
+	if len(store.OutboxEvents()) != 0 {
+		t.Fatalf("rejected oversized comment must not emit facts: %+v", store.OutboxEvents())
 	}
 }
 

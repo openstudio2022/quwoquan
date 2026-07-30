@@ -5,7 +5,7 @@
 /// 执行方式：
 ///   ```
 ///   API_CONTRACT_ENV=gamma \
-///   GAMMA_BASE_URL=https://gamma-api.quwoquan.com \
+///   GAMMA_BASE_URL=https://api.gamma.quwoquan.com \
 ///   make test-api-contract-chat
 ///
 ///   # 或直接执行本文件：
@@ -133,7 +133,7 @@ void main() {
     _session = await LocalGammaAnonymousSession.login(
       client: _client,
       baseUrl: _apiBase,
-      subject: 'chat-api-contract-v1',
+      subject: 'chat-api-contract',
     );
     _apiAvailable = true;
   });

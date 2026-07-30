@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 
@@ -20,6 +21,8 @@ class ChatContactsRow {
     required this.displayName,
     required this.avatarUrl,
     required this.subtitle,
+    this.personaId,
+    this.userHandle,
     this.relationState = 'not_following',
     this.source = '',
     this.isStarred = false,
@@ -32,6 +35,8 @@ class ChatContactsRow {
   final String displayName;
   final String avatarUrl;
   final String subtitle;
+  final String? personaId;
+  final String? userHandle;
   final String relationState;
   final String source;
   final bool isStarred;
@@ -40,7 +45,10 @@ class ChatContactsRow {
 
   bool get isMutualFollow => relationState == 'mutual';
 
-  factory ChatContactsRow.fromContactDto(ChatContactRowDto dto) {
+  factory ChatContactsRow.fromContactDto(
+    ChatContactRowDto dto, {
+    MediaEndpointConfig? mediaEndpointConfig,
+  }) {
     var sub = '';
     for (final raw in [dto.bio, dto.metFrom, dto.lastInteraction]) {
       final t = raw.trim();
@@ -60,8 +68,13 @@ class ChatContactsRow {
     return ChatContactsRow(
       kind: ChatContactsRowKind.user,
       id: dto.userId,
+      personaId: dto.userId.trim().isEmpty ? null : dto.userId.trim(),
+      userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
       displayName: dto.displayName,
-      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        dto.avatarUrl,
+        endpointConfig: mediaEndpointConfig,
+      ),
       subtitle: sub,
       relationState: dto.relationState,
       source: source,
@@ -69,7 +82,10 @@ class ChatContactsRow {
     );
   }
 
-  factory ChatContactsRow.fromContactHomeDto(ContactHomeRowDto dto) {
+  factory ChatContactsRow.fromContactHomeDto(
+    ContactHomeRowDto dto, {
+    MediaEndpointConfig? mediaEndpointConfig,
+  }) {
     final kind = switch (dto.kind) {
       'circle' => ChatContactsRowKind.circle,
       'group' => ChatContactsRowKind.group,
@@ -78,8 +94,13 @@ class ChatContactsRow {
     return ChatContactsRow(
       kind: kind,
       id: dto.id.isNotEmpty ? dto.id : dto.objectId,
+      personaId: dto.userId.trim().isEmpty ? null : dto.userId.trim(),
+      userHandle: dto.userHandle.trim().isEmpty ? null : dto.userHandle.trim(),
       displayName: dto.title,
-      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
+      avatarUrl: resolveAvatarImageUrl(
+        dto.avatarUrl,
+        endpointConfig: mediaEndpointConfig,
+      ),
       subtitle: dto.subtitle.trim().isNotEmpty
           ? dto.subtitle.trim()
           : dto.summaryIntersections.take(2).join(' · '),
@@ -133,10 +154,14 @@ class ChatContactsRow {
         context.push(AppRoutePaths.chatDetail(id: conversationId ?? id));
         break;
       case ChatContactsRowKind.user:
+        final handle = userHandle?.trim() ?? '';
+        if (handle.isEmpty) {
+          return;
+        }
         context.push(
-          AppRoutePaths.userProfile(username: id),
+          AppRoutePaths.userProfile(userHandle: handle),
           extra: UserProfileRouteExtra(
-            subAccountId: id,
+            personaId: personaId,
             avatar: avatarUrl,
             displayName: displayName,
           ),

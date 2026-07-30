@@ -14,10 +14,18 @@ def canonical_asset_manifest_row(
     mime_type: str,
     object_key: str,
 ) -> dict[str, Any]:
-    row = {**raw, "objectKey": object_key}
-    if str(raw.get("kind") or "").strip() == "image" or mime_type.startswith(
-        "image/"
-    ):
+    normalized_mime = str(mime_type or "").strip().lower()
+    is_image = (
+        str(raw.get("kind") or "").strip() == "image"
+        or normalized_mime.startswith("image/")
+    )
+    row = {
+        **raw,
+        "objectKey": object_key,
+        "mimeType": normalized_mime,
+    }
+    if is_image:
+        row["kind"] = "image"
         row["perceptualHash"] = perceptual_hash(asset_source)
     return row
 

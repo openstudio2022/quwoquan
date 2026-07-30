@@ -2,6 +2,7 @@
   "label": "播客",
   "labelEn": "Podcast",
   "description": "音频播客节目",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

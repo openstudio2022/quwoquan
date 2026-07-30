@@ -1,0 +1,93 @@
+description: ContentBehaviorFact 的持久化公共骨架；行为专属 payload 与闭集由同目录 behaviors.yaml 拥有。
+fields:
+  - name: clientEventId
+    type: string
+    constraints: [PK, NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: personaId
+    type: string
+    constraints: [NULLABLE]
+    classification: PERSONAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: deviceActorId
+    type: string
+    constraints: [NULLABLE]
+    classification: PII
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+  - name: sessionId
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+  - name: contentId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: action
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: feedRequestId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: occurredAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: write
+    ops_exposure: read
+    role: append_only_fact
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+    role: append_only_fact
+types:
+  ReportContentBehaviorsRequest:
+    description: 批量行为命令；每项结构由 behaviors.yaml 的 wire_schema 定义。
+    fields:
+      - name: events
+        type: '[]object'
+        constraints: [NOT_NULL, MIN_ITEMS_1]
+        classification: SENSITIVE
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
+  ReportContentBehaviorsCommand:
+    fields:
+      - name: events
+        type: '[]object'
+        client_dart_type: List<ContentBehaviorEventWire>
+        client_wire: toWireMap

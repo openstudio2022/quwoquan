@@ -21,7 +21,7 @@ void main() {
       await RtcCallEntryCoordinator(lifecycleWriter: writer).initiate(intent);
 
       final command = writer.initiateCommands.single;
-      expect(command.callType, 'video');
+      expect(command.callType, CallType.video);
       expect(command.inviteeIds, const <String>['target-persona']);
       expect(command.conversationId, isNull);
       expect(command.circleId, isNull);
@@ -185,7 +185,7 @@ void main() {
       ).initiate(intent, selectedInviteeIds: const <String>['member-1']);
 
       final command = writer.initiateCommands.single;
-      expect(command.callType, 'video');
+      expect(command.callType, CallType.video);
       expect(command.conversationId, 'conversation-circle');
       expect(command.circleId, 'circle-1');
     });
@@ -218,9 +218,18 @@ RelationshipCapabilityDto _capability({
   bool isBlockedBy = false,
 }) {
   return RelationshipCapabilityDto(
-    viewerSubAccountId: 'viewer-persona',
-    targetSubAccountId: 'target-persona',
+    viewerPersonaId: 'viewer-persona',
+    targetPersonaId: 'target-persona',
     relationState: relationState,
+    canFollow: false,
+    canUnfollow: false,
+    canFollowBack: false,
+    canGreet: false,
+    canOpenConversation: false,
+    canCreateDirectConversation: false,
+    canSendMessage: false,
+    hasPendingGreeting: false,
+    hasFormalConversation: false,
     canStartVoiceCall: canStartVoiceCall,
     canStartVideoCall: canStartVideoCall,
     isBlocked: isBlocked,
@@ -243,7 +252,7 @@ final class _RecordingCallLifecycleWriter
       session: CallSessionDto(
         callId: 'call-${initiateCommands.length}',
         callType: command.callType,
-        status: 'ringing',
+        status: CallStatus.ringing,
         initiatorId: 'viewer-persona',
         conversationId: command.conversationId,
         circleId: command.circleId,

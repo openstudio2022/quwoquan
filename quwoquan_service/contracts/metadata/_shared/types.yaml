@@ -16,6 +16,17 @@ types:
       - { name: cursor, type: string, nullable: true }
       - { name: limit, type: int, default: 20, min: 1, max: 100 }
 
+  TagHeatWindow:
+    description: |
+      标签的热度生效窗口。seasonal / campaign 标签必须声明，其余状态为 null。
+      窗口只表达「什么时候该被加权」，不表达可用性：窗口之外标签仍可解析、仍可作为
+      历史内容的标签，只是不再获得热度加权。用可用性表达窗口会让去年拍的春季照片
+      在今年春天之外变成无标签内容。
+    fields:
+      - { name: startAt, type: timestamp }
+      - { name: endAt, type: timestamp }
+      - { name: recurrence, type: enum, values: [once, annual] }
+
 enums:
   ContentType: [image, video, micro, article]
   IntersectionDimension: [identity, location, content, interest, relationship]
@@ -25,24 +36,28 @@ enums:
   PostStatus: [pending_review, published, rejected, deleted]
   Visibility: [public, private]
   AssistantUsePolicy: [inherit, exclude]
-  CitationDestinationKind: [internal, external]
   PostSourceType: [original, repost, quote]
-  DistributionState: [active, removed, cascade_deleted]
-  TombstoneLookupResult: [deleted, not_found]
   ModerationStatus: [pending, approved, rejected]
   PostModerationCaseStatus: [pending, reviewed, approved, rejected, superseded]
   MediaUploadSessionStatus: [pending, completed, aborted]
-  MediaStatus: [uploaded, processing, ready, failed]
-  MediaType: [image, video, audio]
+  # file 会完成为正式 MediaAsset，并被 chat attachment / circle storage 引用；
+  # 它不是仅存在于上传传输层的临时载荷类型。
+  MediaType: [image, video, audio, file]
+  MediaAssetStatus: [processing, ready, rejected, deleted]
+  MediaAssetAccessPolicy: [owner_only, referenced_post, public]
+  MediaVideoCodec: [h264]
+  MediaContainer: [mp4]
+  MediaAudioCodec: [aac]
   MediaCoverStrategy: [first_frame, manual]
-  MediaAssetSourceKind: [user_upload, ai_generated, cold_start_crawl, remote_import]
-  UserStatus: [active, suspended, deleted]
+  FilterCatalogReleaseStatus: [staged, active, retired]
+  MediaImageReprocessRunStatus: [running, paused, rolling_back, completed, failed, rolled_back]
+  MediaOriginalAccessPurpose: [view, save]
+  MediaOriginalAccessOutcome: [granted, denied, rate_limited]
   Gender: [male, female, other, unspecified]
   # 个人主页「生活」Tab 子分类：足迹/书影音/味蕾/爱物
-  LifeItemCategory: [footprint, soul, taste, private]
   ConversationType: [direct, group, encrypted]
   MessageType: [text, image, video, audio, file, card, system_call_log, system_announcement]
-  MessageStatus: [sent, delivered, read, recalled]
+  MessageStatus: [sent, recalled]
   CircleStatus: [active, archived, deleted]
   CircleMemberRole: [owner, admin, member]
   CircleVisibility: [public, private, invite_only]
@@ -67,7 +82,10 @@ enums:
   # 地点类主页类型与数据工程 Entity/地点 一级类型试点 scope 对齐（裁决 6）：
   # 景区→sight，其余按 entity_type_taxonomy.PILOT_PRIMARY_TYPES 补齐
   # （博物馆/遗址/古镇/宗教场所/打卡地/自然景观/公园/温泉/主题乐园）。
-  HomepageType: [vehicle, hotel, restaurant, sight, university, travel_photo, museum, heritage_site, ancient_town, religious_site, check_in_spot, natural_landscape, park, hot_spring, theme_park]
+  # transport_hub/city/route/photo_spot/gear 是旅行垂类的下钻宾语，承载
+  # intersection_kind_registry.verticalExtensionContract 要求的「objectKind 必须映射到
+  # 已有 homepage 类型」；它们不在数据发布试点 scope 内，只能由 user_suggested/owner_created 产生。
+  HomepageType: [vehicle, hotel, restaurant, sight, university, travel_photo, museum, heritage_site, ancient_town, religious_site, check_in_spot, natural_landscape, park, hot_spring, theme_park, transport_hub, city, route, photo_spot, gear]
   HomepageSourceType: [official_seed, imported, user_suggested, owner_created]
   HomepageClaimStatus: [unclaimed, pending_review, claimed, rejected]
   HomepageClaimTier: [basic, verified]
@@ -82,27 +100,20 @@ enums:
   ReportStatus: [pending, reviewing, resolved, dismissed]
   ReportResolution: [warn, delete_content, suspend_user, ban, dismiss]
   NotificationType: [social, content, circle, system, assistant]
-  RunStatus: [running, completed, failed, cancelled]
+  RunStatus: [queued, running, completed, failed, cancelled]
   RunTriggerType: [user_query, suggested_action, skill_select, global_search_handoff]
-  InteractionEventType: [query, response, feedback, action_click, skill_trigger, tool_call, error]
-  FeedbackType: [thumbs_up, thumbs_down, rating, text]
-  AssistantPreferenceScope: [session, long_term]
-  AssistantPreferenceKind: [response_style, reply_length, tone, language]
-  AssistantPreferenceSourceType: [explicit_rewrite, management]
-  AssistantPreferenceStatus: [active, revoked]
   BehaviorEventType: [impression, click, dwell, like, dislike, undo_dislike, hide_author, hide_content_type, report, share, comment, intersection_expand, intersection_feedback, wishlist_add, wishlist_remove, skip, follow, join_circle, leave_circle, add_contact, author_view, entity_page_view, tag_click, content_depth, play_progress, effective_play, assistant_interest, onboarding_interest]
-  Platform: [ios, android, ohos, web]
   LocationProvider: [baidu, amap]
-  ExternalInteractionOperation: [sms_otp.send, push_delivery.send, one_tap_phone.resolve, webhook.deliver]
+  ExternalInteractionOperation: [sms_otp.send, push_delivery.send]
   ExternalInteractionStatus: [accepted, pending_dispatch, processing, sent_unconfirmed, delivered, failed, dead_letter]
+  ExternalInteractionAttemptStatus: [sent_unconfirmed, delivered, failed]
   ExternalInteractionSensitivity: [public, private, secret]
-  ExternalInteractionProvider: [mock_sms, aliyun_sms, tencent_sms, apns, fcm, vendor_push, webhook]
-  SmsOtpDeliveryStatus: [queued, sent_unconfirmed, delivered, failed]
+  ExternalInteractionProvider: [aliyun_sms, local_sms_recorder, push_dispatch, apns_voip, fcm, local_push_recorder]
   OneTapLoginHintState: [registered, new_phone, unavailable]
-  PushProvider: [apns, fcm, vendor_push, mock_push]
-  PushDeliveryStatus: [queued, sent_unconfirmed, delivered, failed, dead_letter]
+  # user owns endpoint registration and integration owns provider delivery;
+  # the endpoint kind crossing that boundary therefore has one shared owner.
+  DevicePushEndpointKind: [apns_voip, fcm]
   PushDeliveryAction: [ring, cancel]
-  PushFailureDisposition: [none, transient, permanent]
   SearchScope: [all, content, social_relation, messages, circles]
   SearchFeedbackEventType: [impression, click, dwell, refine, zero_result, degrade]
   ProfileVisibility: [public, friends, private]
@@ -112,41 +123,78 @@ enums:
   TransportType: [websocket, long_poll]
   CallType: [audio, video]
   CallStatus: [initiated, ringing, connecting, in_call, ended]
-  EndReason: [normal, cancelled, rejected, no_answer, error, timeout, last_leave]
+  EndReason: [normal, cancelled, rejected, no_answer, error, timeout, last_leave, account_closed, account_suspended]
   ParticipantRole: [initiator, invitee]
   ParticipantStatus: [invited, ringing, connecting, connected, left, timeout]
   TrustRelation: [known, possibly_unknown]
   CallInviteStatus: [pending, ringing, accepted, declined, expired, cancelled]
-  ConnectionQuality: [excellent, good, poor, unavailable]
   IsolationLevel: [open, semi, strict]
-  CredentialType: [phone, wechat, apple, passkey]
-  DiscoveryStatus: [pending, processing, completed, dismissed]
-  InviteChannel: [link, qrcode, contact, sms]
+  AccountState: [anonymous, active, suspended, closed]
+  CredentialType: [anonymous_device, phone, carrier_phone, federated_slot_a, federated_slot_b, federated_slot_c, apple, passkey]
   GreetingRequestStatus: [pending, replied, ignored, blocked, cancelled, expired]
   GreetingRequestSource: [profile, recommendation, group_member, invite]
-  ConversationOriginType: [direct_init, greeting_reply, ad_hoc_group, circle_default_group, circle_self_built_group, organization_node_group, homepage_related_group, assistant_invited]
-  ConversationBindingType: [none, circle, circle_group, organization_node, homepage_related_group]
-  ConversationLifecyclePolicy: [persistent, temporary, dissolvable, bound_to_circle, bound_to_organization_node]
+  ConversationOriginType: [direct_init, greeting_reply, ad_hoc_group, circle_group]
+  ConversationStatus: [active, dissolved]
+  MessageCardKind: [profile_qr, content_post, user_profile, entity_profile, circle, rtc_call_log]
   RelationshipState: [self, not_following, following, followed_by, mutual]
-  ContactSource: [mutual, following, conversation, contact_discovery, circle, group]
-  ProfileSubjectType: [user, persona]
-  FollowingSubjectType: [user, circle, homepage]
-  FollowSubjectType: [homepage, circle, location]
+  ProfileOwnerKind: [account, persona]
+  FollowSubjectKind: [persona, homepage, circle, location]
   SubjectFollowState: [following, unfollowed]
-  DevicePushEndpointKind: [apns_voip, fcm]
-  DeviceRegistrationStatus: [active, revoked, stale]
-  ProfileSyncApplyScope: [current_subject_only, owner_only, all_sub_accounts, selected_subjects]
-  ProfileSyncSource: [owner_edit, sub_account_edit, manual_sync, initial_inherit]
+  ProfileSyncApplyScope: [current_subject_only, owner_only, all_personas, selected_subjects]
+  ProfileSyncSource: [owner_edit, persona_edit, manual_sync, initial_inherit]
   InteractionActivityType: [like, comment, share]
   InteractionDirection: [received, sent]
   CommentReactionType: [none, like, dislike]
   ThemeModeSetting: [system, light, dark]
   FontSizePreset: [xs, sm, md, lg, xl]
+  FeedPreference: [recommend, chronological]
   AppearanceSource: [owner_default, sub_override, system_default]
-  AppearanceApplyScope: [all_accounts, current_sub_account, inherit_owner_default]
-  PersonaStatus: [active, retired]
+  AppearanceApplyScope: [all_accounts, current_persona, inherit_owner_default]
+  PersonaStatus: [active, inactive, retired]
   PersonaLifecycleAction: [retire]
   PersonaLifecycleGuardReason: [allowed, blocked_primary_persona, blocked_last_persona, blocked_active_persona, blocked_retired_persona, quota_reached]
+  # 标签生命周期。active / trending / seasonal / campaign 都是可用状态，只有 deprecated
+  # 不可用：可用性判定必须走 tag-service 的 lifecycle.IsUsable，禁止在调用方写
+  # `status == "active"`——那会把趋势标签、季节标签与活动标签一起误判成停用。
+  # trending 热度由运营或离线任务写入，seasonal / campaign 必须带 heatWindow 说明生效窗口。
+  TagLifecycleStatus: [active, trending, seasonal, campaign, deprecated]
+  # 结构化事实字段闭集。与 content_source_registry 的
+  # lanePolicies.homepage.structuredFactsPolicy.fields 必须一致：
+  # 放开官方来源的范围就是这个列表，扩列表等于扩信源政策。
+  HomepageStructuredFactField:
+    - openingHours
+    - ticketPriceRange
+    - recommendedDurationMinutes
+    - bestSeasonTagRefs
+    - altitudeMeters
+    - officialWebsite
+  # 结构化事实允许的来源类别。正文底稿仍锁三百科；官网与政府/文旅门户只在此处放开。
+  HomepageStructuredFactSourceClass: [encyclopedia, official_site, government_tourism]
+  # 对象关系边类型闭集。此前 edgeType 是无约束 String，词表分裂成两个互不相交的半边：
+  # 物化器只写 semantic_co_mention/tag_overlap/geo_proximity，端侧 switch 只认
+  # author_of/posted_to_circle/... —— 两边都在消费自己那半，谁也不会报错。收敛为闭集后，
+  # 生产方与消费方都从这里取值，parity 由 verify_object_relation_edge_type_contract.py 守。
+  # 顺序有意义：断言边（第一方记录直接得出）→ 空间边（实体间地理关系）→ 计算边（信号派生、TTL 退场）。
+  ObjectRelationEdgeType:
+    - author_of
+    - posted_to_circle
+    - reshared_to_circle
+    - mentions_entity
+    - comment_about_entity
+    - circle_under_entity
+    - member_of
+    - review_of
+    # located_in/part_of 是地理包含（景点在城市里、子景区属于景区），near 是实体间
+    # 邻近断言，route_stop 是路线经停。geo_proximity 与 near 不是同一件事：前者是
+    # conditionProfile.regions 相同算出来的共现信号，后者是断言两个实体在空间上挨着。
+    - located_in
+    - part_of
+    - near
+    - route_stop
+    - semantic_co_mention
+    - tag_overlap
+    - geo_proximity
+    - behavior_co_engagement
 
 classifications:
   PUBLIC: 公开数据

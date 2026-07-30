@@ -1,70 +1,63 @@
+# spec_ref: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/reliability-policy-control/spec.md#gwt-002
 from __future__ import annotations
 
-import importlib.util
 import json
-import os
 import subprocess
-import sys
 import unittest
 from pathlib import Path
 from unittest import mock
 
-
-ROOT = Path(__file__).resolve().parents[4]
-SCRIPT = ROOT / "quwoquan_ops" / "cli" / "prod" / "resolve_prod_release_state.py"
-
-_SPEC = importlib.util.spec_from_file_location("resolve_prod_release_state", SCRIPT)
-assert _SPEC and _SPEC.loader
-resolve_prod_release_state = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = resolve_prod_release_state
-_SPEC.loader.exec_module(resolve_prod_release_state)
+from quwoquan_ops.cli.prod import resolve_prod_release_state as resolver
 
 
-class ResolveProdReleaseStateTest(unittest.TestCase):
-    def test_resolve_prod_host_prefers_env(self) -> None:
-        with mock.patch.dict(os.environ, {"PROD_SSH_HOST": "203.0.113.20"}, clear=False):
-            host = resolve_prod_release_state._resolve_prod_host({})
-        self.assertEqual(host, "203.0.113.20")
+class ResolveProdReleaseStateTransportTest(unittest.TestCase):
+    def test_fetch_uses_only_the_hosted_release_ledger_authority(self) -> None:
+        payload = {
+            "schema": "prod-hosted-release-readback",
+            "authority": "prod-hosted-service-plane",
+            "state": {},
+            "receipt": {},
+            "receiptRef": "",
+        }
 
-    def test_resolve_prod_host_uses_management_endpoint(self) -> None:
-        with mock.patch.dict(os.environ, {}, clear=True):
-            with mock.patch.object(
-                resolve_prod_release_state,
-                "prod_management_ssh_host",
-                return_value="198.51.100.10",
-            ):
-                host = resolve_prod_release_state._resolve_prod_host({})
-        self.assertEqual(host, "198.51.100.10")
+        def write_readback(
+            argv: list[str],
+            **_: object,
+        ) -> subprocess.CompletedProcess[str]:
+            output = Path(argv[argv.index("--output-path") + 1])
+            output.write_text(json.dumps(payload), encoding="utf-8")
+            return subprocess.CompletedProcess(argv, 0, "", "")
 
-    def test_run_remote_probe_parses_success_payload(self) -> None:
-        access = resolve_prod_release_state.ServicePlaneAccess(
-            host="203.0.113.20",
-            account="prod-service-svc",
-            ssh_key_secret="PROD_SERVICE_SSH_KEY",
-            instance_suffix="prod",
-            services=("content-service",),
+        with mock.patch.object(
+            resolver.subprocess,
+            "run",
+            side_effect=write_readback,
+        ) as mocked_run:
+            resolved = resolver._fetch_hosted_readback()
+
+        self.assertEqual(resolved, payload)
+        command = mocked_run.call_args.args[0]
+        self.assertEqual(
+            command[0:2],
+            ["bash", "quwoquan_ops/cli/prod/sync_prod_plane_stack.sh"],
         )
-        payload = {"container": "quwoquan-service-prod_content-service_1", "from_image": "img-v1", "from_config": "cfg-v1"}
+        self.assertEqual(
+            command[command.index("--operation") + 1],
+            "release-ledger-fetch",
+        )
+        self.assertEqual(command[command.index("--service") + 1], "prod-stack")
+        self.assertNotIn("ssh", command)
+
+    def test_fetch_failure_is_gate_block(self) -> None:
         completed = subprocess.CompletedProcess(
-            args=["ssh"],
-            returncode=0,
-            stdout=json.dumps(payload),
-            stderr="",
+            ["bash"],
+            2,
+            "",
+            "authority unavailable",
         )
-        with (
-            mock.patch.dict(
-                os.environ,
-                {"PROD_SERVICE_SSH_KEY": "-----BEGIN OPENSSH PRIVATE KEY-----\nfake\n-----END OPENSSH PRIVATE KEY-----"},
-                clear=False,
-            ),
-            mock.patch.object(resolve_prod_release_state.subprocess, "run", return_value=completed) as mocked_run,
-        ):
-            resolved = resolve_prod_release_state._run_remote_probe(access)
-        self.assertEqual(resolved["from_image"], "img-v1")
-        self.assertEqual(resolved["from_config"], "cfg-v1")
-        self.assertEqual(resolved["source_host"], "203.0.113.20")
-        self.assertEqual(resolved["source_account"], "prod-service-svc")
-        mocked_run.assert_called_once()
+        with mock.patch.object(resolver.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(resolver.GateBlockError, "fetch failed"):
+                resolver._fetch_hosted_readback()
 
 
 if __name__ == "__main__":

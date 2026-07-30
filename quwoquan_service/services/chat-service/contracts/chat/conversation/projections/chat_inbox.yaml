@@ -55,7 +55,8 @@ fields:
 - name: lastMessagePreview
   type: string
 - name: lastMessageType
-  type: string
+  type: enum
+  enum_ref: MessageType
   description: 最近一条消息类型，用于列表副标题 icon
 - name: lastMessageTime
   type: timestamp

@@ -5,61 +5,27 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// 对应 GET /user/{userId}/relationship/capability
 /// 端侧消费方：用户主页动作矩阵、RTC 门禁、私信/打招呼入口
 class RelationshipCapabilityDto {
-  RelationshipCapabilityDto({
-    required this.viewerSubAccountId,
-    required this.targetSubAccountId,
-    String? relationState,
-    bool? canFollow,
-    bool? canUnfollow,
-    bool? canFollowBack,
-    bool? canGreet,
-    bool? canCreateDirectConversation,
-    bool? canSendMessage,
-    bool? canOpenConversation,
-    bool? hasPendingGreeting,
-    bool? hasFormalConversation,
-    bool? canStartVoiceCall,
-    bool? canStartVideoCall,
-    bool? isBlocked,
-    bool? isBlockedBy,
-  }) : relationState = _normalizeRelationState(
-         relationState ?? 'not_following',
-       ),
-       canFollow =
-           canFollow ??
-           _defaultCanFollow(
-             _normalizeRelationState(relationState ?? 'not_following'),
-           ),
-       canUnfollow =
-           canUnfollow ??
-           _defaultCanUnfollow(
-             _normalizeRelationState(relationState ?? 'not_following'),
-           ),
-       canFollowBack =
-           canFollowBack ??
-           _defaultCanFollowBack(
-             _normalizeRelationState(relationState ?? 'not_following'),
-           ),
-       canGreet =
-           canGreet ??
-           _defaultCanGreet(
-             _normalizeRelationState(relationState ?? 'not_following'),
-             isBlocked: isBlocked ?? false,
-             isBlockedBy: isBlockedBy ?? false,
-           ),
-       canCreateDirectConversation = canCreateDirectConversation ?? false,
-       canSendMessage = canSendMessage ?? false,
-       canOpenConversation =
-           canOpenConversation ?? canCreateDirectConversation ?? false,
-       hasPendingGreeting = hasPendingGreeting ?? false,
-       hasFormalConversation = hasFormalConversation ?? false,
-       canStartVoiceCall = canStartVoiceCall ?? false,
-       canStartVideoCall = canStartVideoCall ?? false,
-       isBlocked = isBlocked ?? false,
-       isBlockedBy = isBlockedBy ?? false;
+  const RelationshipCapabilityDto({
+    required this.viewerPersonaId,
+    required this.targetPersonaId,
+    required this.relationState,
+    required this.canFollow,
+    required this.canUnfollow,
+    required this.canFollowBack,
+    required this.canGreet,
+    required this.canCreateDirectConversation,
+    required this.canSendMessage,
+    required this.canOpenConversation,
+    required this.hasPendingGreeting,
+    required this.hasFormalConversation,
+    required this.canStartVoiceCall,
+    required this.canStartVideoCall,
+    required this.isBlocked,
+    required this.isBlockedBy,
+  });
 
-  final String viewerSubAccountId;
-  final String targetSubAccountId;
+  final String viewerPersonaId;
+  final String targetPersonaId;
 
   /// 统一关系态：self | not_following | following | followed_by | mutual
   final String relationState;
@@ -86,62 +52,23 @@ class RelationshipCapabilityDto {
   bool get viewerFollowsTarget => isFollowing || isMutual;
   bool get targetFollowsViewer => isFollowedBy || isMutual;
 
-  static String _normalizeRelationState(String raw) {
-    switch (raw) {
-      case 'self':
-        return 'self';
-      case 'mutual':
-        return 'mutual';
-      case 'following':
-        return 'following';
-      case 'followed_by':
-        return 'followed_by';
-      case 'not_following':
-      default:
-        return 'not_following';
-    }
-  }
-
-  static bool _defaultCanFollow(String relationState) {
-    return relationState == 'not_following' || relationState == 'followed_by';
-  }
-
-  static bool _defaultCanUnfollow(String relationState) {
-    return relationState == 'following' || relationState == 'mutual';
-  }
-
-  static bool _defaultCanFollowBack(String relationState) {
-    return relationState == 'followed_by';
-  }
-
-  static bool _defaultCanGreet(
-    String relationState, {
-    required bool isBlocked,
-    required bool isBlockedBy,
-  }) {
-    if (isBlocked ||
-        isBlockedBy ||
-        relationState == 'self' ||
-        relationState == 'mutual') {
-      return false;
-    }
-    return true;
-  }
-
   factory RelationshipCapabilityDto.fromRelationshipCapabilityWire(
     RelationshipCapabilityWireDto w,
   ) {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: w.viewerSubAccountId,
-      targetSubAccountId: w.targetSubAccountId,
-      relationState: w.relationState,
-      canFollow: w.canFollow,
-      canUnfollow: w.canUnfollow,
-      canFollowBack: w.canFollowBack,
+      viewerPersonaId: w.viewerPersonaId,
+      targetPersonaId: w.targetPersonaId,
+      relationState: _requiredWireValue(w.relationState, 'relationState'),
+      canFollow: _requiredWireValue(w.canFollow, 'canFollow'),
+      canUnfollow: _requiredWireValue(w.canUnfollow, 'canUnfollow'),
+      canFollowBack: _requiredWireValue(w.canFollowBack, 'canFollowBack'),
       canGreet: w.canGreet,
       canCreateDirectConversation: w.canCreateDirectConversation,
       canSendMessage: w.canSendMessage,
-      canOpenConversation: w.canOpenConversation,
+      canOpenConversation: _requiredWireValue(
+        w.canOpenConversation,
+        'canOpenConversation',
+      ),
       hasPendingGreeting: w.hasPendingGreeting,
       hasFormalConversation: w.hasFormalConversation,
       canStartVoiceCall: w.canStartVoiceCall,
@@ -155,8 +82,8 @@ class RelationshipCapabilityDto {
     RelationshipCapabilityResult result,
   ) {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: result.viewerSubAccountId,
-      targetSubAccountId: result.targetSubAccountId,
+      viewerPersonaId: result.viewerPersonaId,
+      targetPersonaId: result.targetPersonaId,
       relationState: result.relationState,
       canFollow: result.canFollow,
       canUnfollow: result.canUnfollow,
@@ -175,99 +102,67 @@ class RelationshipCapabilityDto {
   }
 
   factory RelationshipCapabilityDto.fromMap(Map<String, dynamic> map) {
+    _requireCanonicalCapabilityMap(map);
     return RelationshipCapabilityDto.fromRelationshipCapabilityWire(
       RelationshipCapabilityWireDto.fromMap(map),
     );
   }
 
-  /// 本地推导：由关注/被关注布尔量合成 [RelationshipCapabilityDto]（Mock 与乐观 UI 更新）。
-  factory RelationshipCapabilityDto.fromFollowFlags({
-    required String viewerId,
-    required String targetId,
-    required bool isFollowing,
-    required bool isFollowedBy,
-    bool isSelf = false,
-    bool isBlocked = false,
-    bool isBlockedBy = false,
-    bool hasFormalConversation = false,
-    bool hasPendingGreeting = false,
-  }) {
-    final isMutual = isFollowing && isFollowedBy;
-    final relationState = isSelf
-        ? 'self'
-        : isMutual
-        ? 'mutual'
-        : isFollowing
-        ? 'following'
-        : isFollowedBy
-        ? 'followed_by'
-        : 'not_following';
+  Map<String, Object?> toWireMap() => <String, Object?>{
+    'viewerPersonaId': viewerPersonaId,
+    'targetPersonaId': targetPersonaId,
+    'relationState': relationState,
+    'canFollow': canFollow,
+    'canUnfollow': canUnfollow,
+    'canFollowBack': canFollowBack,
+    'canGreet': canGreet,
+    'canOpenConversation': canOpenConversation,
+    'canCreateDirectConversation': canCreateDirectConversation,
+    'canSendMessage': canSendMessage,
+    'hasPendingGreeting': hasPendingGreeting,
+    'hasFormalConversation': hasFormalConversation,
+    'canStartVoiceCall': canStartVoiceCall,
+    'canStartVideoCall': canStartVideoCall,
+    'isBlocked': isBlocked,
+    'isBlockedBy': isBlockedBy,
+  };
+}
 
-    final blocked = isBlocked || isBlockedBy;
-    final canCreateDirect = !blocked && isMutual;
-    final canSend = !blocked && (isMutual || hasFormalConversation);
-    final canGreet =
-        !blocked &&
-        !isSelf &&
-        !isMutual &&
-        !hasPendingGreeting &&
-        !hasFormalConversation;
-
-    return RelationshipCapabilityDto(
-      viewerSubAccountId: viewerId,
-      targetSubAccountId: targetId,
-      relationState: relationState,
-      canGreet: canGreet,
-      canCreateDirectConversation: canCreateDirect,
-      canSendMessage: canSend,
-      canOpenConversation: canCreateDirect || hasFormalConversation,
-      hasPendingGreeting: hasPendingGreeting,
-      hasFormalConversation: hasFormalConversation,
-      canStartVoiceCall: !blocked && isMutual,
-      canStartVideoCall: !blocked && isMutual,
-      isBlocked: isBlocked,
-      isBlockedBy: isBlockedBy,
-    );
+T _requiredWireValue<T>(T? value, String field) {
+  if (value == null) {
+    throw FormatException('RelationshipCapabilityWire.$field is required');
   }
+  return value;
+}
 
-  RelationshipCapabilityDto copyWith({
-    String? viewerSubAccountId,
-    String? targetSubAccountId,
-    String? relationState,
-    bool? canFollow,
-    bool? canUnfollow,
-    bool? canFollowBack,
-    bool? canGreet,
-    bool? canCreateDirectConversation,
-    bool? canSendMessage,
-    bool? canOpenConversation,
-    bool? hasPendingGreeting,
-    bool? hasFormalConversation,
-    bool? canStartVoiceCall,
-    bool? canStartVideoCall,
-    bool? isBlocked,
-    bool? isBlockedBy,
-  }) {
-    return RelationshipCapabilityDto(
-      viewerSubAccountId: viewerSubAccountId ?? this.viewerSubAccountId,
-      targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
-      relationState: relationState ?? this.relationState,
-      canFollow: canFollow ?? this.canFollow,
-      canUnfollow: canUnfollow ?? this.canUnfollow,
-      canFollowBack: canFollowBack ?? this.canFollowBack,
-      canGreet: canGreet ?? this.canGreet,
-      canCreateDirectConversation:
-          canCreateDirectConversation ?? this.canCreateDirectConversation,
-      canSendMessage: canSendMessage ?? this.canSendMessage,
-      canOpenConversation: canOpenConversation ?? this.canOpenConversation,
-      hasPendingGreeting: hasPendingGreeting ?? this.hasPendingGreeting,
-      hasFormalConversation:
-          hasFormalConversation ?? this.hasFormalConversation,
-      canStartVoiceCall: canStartVoiceCall ?? this.canStartVoiceCall,
-      canStartVideoCall: canStartVideoCall ?? this.canStartVideoCall,
-      isBlocked: isBlocked ?? this.isBlocked,
-      isBlockedBy: isBlockedBy ?? this.isBlockedBy,
-    );
+void _requireCanonicalCapabilityMap(Map<String, dynamic> map) {
+  for (final field in const <String>[
+    'viewerPersonaId',
+    'targetPersonaId',
+    'relationState',
+  ]) {
+    if (map[field] is! String) {
+      throw FormatException('RelationshipCapabilityWire.$field is required');
+    }
+  }
+  for (final field in const <String>[
+    'canFollow',
+    'canUnfollow',
+    'canFollowBack',
+    'canGreet',
+    'canOpenConversation',
+    'canCreateDirectConversation',
+    'canSendMessage',
+    'hasPendingGreeting',
+    'hasFormalConversation',
+    'canStartVoiceCall',
+    'canStartVideoCall',
+    'isBlocked',
+    'isBlockedBy',
+  ]) {
+    if (map[field] is! bool) {
+      throw FormatException('RelationshipCapabilityWire.$field is required');
+    }
   }
 }
 
@@ -290,7 +185,7 @@ class RemoteRelationshipCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     final result = await query.getRelationshipCapability(
-      GetRelationshipCapabilityQuery(targetSubAccountId: targetUserId),
+      GetRelationshipCapabilityQuery(targetPersonaId: targetUserId),
     );
     return RelationshipCapabilityDto.fromContract(result);
   }

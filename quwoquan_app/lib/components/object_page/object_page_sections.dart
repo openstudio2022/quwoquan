@@ -716,8 +716,16 @@ class ObjectRelationRibbon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 未登记的 edgeType 说明服务端词表已漂移；宁可整条边不展示，也不给用户一句
+    // 错的关系描述。
     final usable = edges
-        .where((edge) => edge.edgeType.trim().isNotEmpty)
+        .map(
+          (edge) => (
+            edge: edge,
+            type: ObjectRelationEdgeType.tryParse(edge.edgeType),
+          ),
+        )
+        .where((entry) => entry.type != null)
         .take(maxVisible)
         .toList(growable: false);
     if (usable.isEmpty) {
@@ -759,7 +767,7 @@ class ObjectRelationRibbon extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.intraGroupSm),
           ...usable.map(
-            (edge) => Padding(
+            (entry) => Padding(
               padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
               child: Row(
                 children: <Widget>[
@@ -774,7 +782,7 @@ class ObjectRelationRibbon extends StatelessWidget {
                   SizedBox(width: AppSpacing.intraGroupSm),
                   Expanded(
                     child: Text(
-                      _edgeLabel(edge),
+                      _edgeLabel(entry.edge, entry.type!),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -793,18 +801,25 @@ class ObjectRelationRibbon extends StatelessWidget {
     );
   }
 
-  static String _edgeLabel(ObjectRelationEdge edge) {
-    final verb = switch (edge.edgeType.trim()) {
-      'author_of' => '创作了',
-      'posted_to_circle' => '发布到圈子',
-      'reshared_to_circle' => '转发到圈子',
-      'mentions_entity' => '提到了这个主页',
-      'comment_about_entity' => '评论了这个主页',
-      'circle_under_entity' => '圈子围绕这个主页',
-      'member_of' => '成员关系',
-      'co_tagged' => '共同标签',
-      'review_of' => '口碑评价',
-      _ => edge.edgeType,
+  static String _edgeLabel(ObjectRelationEdge edge, ObjectRelationEdgeType type) {
+    // 穷举 switch 是这里的目的：新增边类型必须在此给出中文关系措辞，否则编译不过。
+    final verb = switch (type) {
+      ObjectRelationEdgeType.authorOf => '创作了',
+      ObjectRelationEdgeType.postedToCircle => '发布到圈子',
+      ObjectRelationEdgeType.resharedToCircle => '转发到圈子',
+      ObjectRelationEdgeType.mentionsEntity => '提到了这个主页',
+      ObjectRelationEdgeType.commentAboutEntity => '评论了这个主页',
+      ObjectRelationEdgeType.circleUnderEntity => '圈子围绕这个主页',
+      ObjectRelationEdgeType.memberOf => '成员关系',
+      ObjectRelationEdgeType.reviewOf => '口碑评价',
+      ObjectRelationEdgeType.locatedIn => '位于',
+      ObjectRelationEdgeType.partOf => '属于',
+      ObjectRelationEdgeType.near => '就在附近',
+      ObjectRelationEdgeType.routeStop => '是路线上的一站',
+      ObjectRelationEdgeType.semanticCoMention => '常被一起提到',
+      ObjectRelationEdgeType.tagOverlap => '共同标签',
+      ObjectRelationEdgeType.geoProximity => '同一区域',
+      ObjectRelationEdgeType.behaviorCoEngagement => '常被一起浏览',
     };
     final source = edge.sourceObjectType.isEmpty
         ? edge.sourceObjectId

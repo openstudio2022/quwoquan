@@ -9,10 +9,10 @@ import (
 	"quwoquan_service/internal/testsupport/contractsview"
 )
 
-func TestValidateAssistantEnumDefaultsRejectsMissingParserDefault(t *testing.T) {
+func TestStrictOnlyAssistantEnumDoesNotRequireParserFallback(t *testing.T) {
 	t.Parallel()
 
-	err := validateAssistantEnumDefaults(&assistantEnumCatalog{
+	catalog := &assistantEnumCatalog{
 		Enums: []assistantEnumDef{
 			{
 				Name: "AssistantPreferenceScope",
@@ -22,13 +22,16 @@ func TestValidateAssistantEnumDefaultsRejectsMissingParserDefault(t *testing.T) 
 				},
 			},
 		},
-	})
-	if err == nil {
-		t.Fatal("expected missing parser default to be rejected")
 	}
-	if !strings.Contains(err.Error(), "AssistantPreferenceScope") ||
-		!strings.Contains(err.Error(), "unknown") {
-		t.Fatalf("unexpected error: %v", err)
+	if err := validateAssistantEnumDefaults(catalog); err != nil {
+		t.Fatalf("strict-only enum rejected: %v", err)
+	}
+	rendered := renderAssistantRuntimeEnumsDart(catalog)
+	if !strings.Contains(rendered, "parseAssistantPreferenceScopeStrict") {
+		t.Fatalf("strict parser missing:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "AssistantPreferenceScope parseAssistantPreferenceScope(") {
+		t.Fatalf("strict-only enum must not generate a fallback parser:\n%s", rendered)
 	}
 }
 
@@ -52,6 +55,7 @@ func TestValidateAssistantEnumDefaultsAcceptsDeclaredParserDefault(t *testing.T)
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/runtime-governance/spec.md#sit-002
 func TestGenerateAssistantRuntimeEnumsGoWritesAndChecksExplicitServiceOutput(
 	t *testing.T,
 ) {

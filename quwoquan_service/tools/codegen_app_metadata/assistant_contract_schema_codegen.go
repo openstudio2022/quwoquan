@@ -33,6 +33,7 @@ type assistantContractField struct {
 	Default  interface{} `yaml:"default"`
 	Ref      string      `yaml:"ref"`
 	EnumRef  string      `yaml:"enum_ref"`
+	Strict   bool        `yaml:"strict"`
 }
 
 type assistantContractIndex struct {
@@ -506,6 +507,9 @@ func assistantRenderFromJsonValue(field assistantContractField, schema *assistan
 	case "list<map>":
 		return fmt.Sprintf("_assistantMapList(json['%s'])", field.Name)
 	case "enum":
+		if field.Strict || (field.Required && field.Default == nil) {
+			return fmt.Sprintf("parse%sStrict((json['%s'] as String?)?.trim() ?? '')", field.EnumRef, field.Name)
+		}
 		return fmt.Sprintf("parse%s((json['%s'] as String?)?.trim() ?? %q)", field.EnumRef, field.Name, assistantDefaultString(field.Default))
 	case "object":
 		if field.Ref != "" {

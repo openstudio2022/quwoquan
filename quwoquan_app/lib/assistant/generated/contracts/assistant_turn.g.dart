@@ -105,10 +105,10 @@ class AssistantTurnAskUserFields {
 
 class AssistantTurnDecisionPayload {
   const AssistantTurnDecisionPayload({
-    this.nextAction = AssistantNextAction.unknown,
+    required this.nextAction,
     this.confidence = 0,
     this.reasoning = "",
-    this.problemClass = "",
+    this.problemClass = "general",
   });
 
   final AssistantNextAction nextAction;
@@ -125,10 +125,10 @@ class AssistantTurnDecisionPayload {
 
   factory AssistantTurnDecisionPayload.fromJson(Map<String, dynamic> json) {
     return AssistantTurnDecisionPayload(
-      nextAction: parseAssistantNextAction((json['nextAction'] as String?)?.trim() ?? ""),
+      nextAction: parseAssistantNextActionStrict((json['nextAction'] as String?)?.trim() ?? ''),
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       reasoning: (json['reasoning'] as String?)?.trim() ?? "",
-      problemClass: (json['problemClass'] as String?)?.trim() ?? "",
+      problemClass: (json['problemClass'] as String?)?.trim() ?? "general",
     );
   }
 }
@@ -479,8 +479,8 @@ class AssistantTurnSelfCheckFields {
 
 class AssistantTurnToolCall {
   const AssistantTurnToolCall({
-    this.toolName = "",
-    this.arguments = const <String, dynamic>{},
+    required this.toolName,
+    required this.arguments,
   });
 
   final String toolName;
@@ -638,10 +638,10 @@ class AssistantTurnUnderstandingSnapshotFields {
 class AssistantTurnOutput {
   const AssistantTurnOutput({
     required this.contractId,
-    this.decision = const AssistantTurnDecisionPayload(),
-    this.messageKind = AssistantMessageKind.unknown,
+    required this.decision,
+    required this.messageKind,
     this.userMarkdown = "",
-    this.result = const AssistantTurnResult(),
+    required this.result,
     this.displayState = const AssistantDisplayState(),
     this.evidence = const <AssistantTurnEvidenceItem>[],
     this.reasoningBasis = const <AssistantTurnReasoningBasisItem>[],
@@ -751,10 +751,10 @@ class AssistantTurnOutput {
   factory AssistantTurnOutput.fromJson(Map<String, dynamic> json) {
     return AssistantTurnOutput(
       contractId: (json['contractId'] as String?)?.trim() ?? "",
-      decision: json['decision'] is Map ? AssistantTurnDecisionPayload.fromJson((json['decision'] as Map).cast<String, dynamic>()) : const AssistantTurnDecisionPayload(),
-      messageKind: parseAssistantMessageKind((json['messageKind'] as String?)?.trim() ?? ""),
+      decision: json['decision'] is Map ? AssistantTurnDecisionPayload.fromJson((json['decision'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field decision is missing')),
+      messageKind: parseAssistantMessageKindStrict((json['messageKind'] as String?)?.trim() ?? ''),
       userMarkdown: (json['userMarkdown'] as String?)?.trim() ?? "",
-      result: json['result'] is Map ? AssistantTurnResult.fromJson((json['result'] as Map).cast<String, dynamic>()) : const AssistantTurnResult(),
+      result: json['result'] is Map ? AssistantTurnResult.fromJson((json['result'] as Map).cast<String, dynamic>()) : (throw FormatException('required object field result is missing')),
       displayState: json['displayState'] is Map ? AssistantDisplayState.fromJson((json['displayState'] as Map).cast<String, dynamic>()) : const AssistantDisplayState(),
       evidence: (json['evidence'] as List?)?.whereType<Map>().map((item) => AssistantTurnEvidenceItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnEvidenceItem>[],
       reasoningBasis: (json['reasoningBasis'] as List?)?.whereType<Map>().map((item) => AssistantTurnReasoningBasisItem.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnReasoningBasisItem>[],

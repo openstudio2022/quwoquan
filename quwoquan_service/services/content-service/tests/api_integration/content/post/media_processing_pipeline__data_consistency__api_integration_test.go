@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-001
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-004
+// spec_ref: specs/feature-tree/runtime/runtime-media/spec.md#sit-002
 package api_integration
 
 import (
@@ -176,16 +177,17 @@ func TestMediaProcessingWorkerNormalizesAssetsAndProjectsDeliveryDescriptors(t *
 }
 
 type mediaProcessingHarness struct {
-	bucket     string
-	s3Client   *s3.Client
-	presigner  *runtimemedia.S3PresignClient
-	gateway    *mediainfra.ObjectGateway
-	mediaStore *persistence.MongoMediaStore
-	service    *mediaapp.MediaService
-	uploads    *uploadsessionapp.UseCases
-	worker     *mediaprocessing.Worker
-	processor  mediaprocessing.Processor
-	sequence   int
+	bucket           string
+	s3Client         *s3.Client
+	presigner        *runtimemedia.S3PresignClient
+	gateway          *mediainfra.ObjectGateway
+	mediaStore       *persistence.MongoMediaStore
+	service          *mediaapp.MediaService
+	uploads          *uploadsessionapp.UseCases
+	uploadHTTPClient *http.Client
+	worker           *mediaprocessing.Worker
+	processor        mediaprocessing.Processor
+	sequence         int
 }
 
 func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessingHarness {
@@ -225,12 +227,17 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 	if _, err := s3Client.CreateBucket(ctx, &s3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
 		t.Fatalf("create MinIO bucket: %v", err)
 	}
-	presigner := runtimemedia.NewS3PresignClient(runtimemedia.OSSConfig{
+	presigner := runtimemedia.NewS3PresignClient(runtimemedia.ObjectStorageConfig{
 		Endpoint: baseEndpoint, Bucket: bucket, Region: region,
 		AccessKeyID: accessKey, AccessKeySecret: secretKey,
 	})
+	uploadAuthority, trustedUploadPresigner := newTLSPresignedUploadAuthority(
+		t,
+		baseEndpoint,
+		presigner,
+	)
 	gateway, err := mediainfra.NewObjectGateway(mediainfra.ObjectGatewayConfig{
-		Bucket: bucket, CDNDomain: "cdn.media-processing.test",
+		Bucket: bucket, MediaDeliveryBaseURL: "https://cdn.media-processing.test",
 		CDNSignKey: "media-processing-sign-key", DeliveryTTL: time.Hour,
 	}, presigner)
 	if err != nil {
@@ -253,9 +260,9 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 	}
 	uploadGateway, err := uploadsessionstorage.NewGateway(
 		uploadsessionstorage.Config{
-			Bucket: bucket,
+			Bucket: bucket, UploadBaseURL: uploadAuthority.URL,
 		},
-		presigner,
+		trustedUploadPresigner,
 	)
 	if err != nil {
 		t.Fatalf("build media upload session gateway: %v", err)
@@ -263,8 +270,9 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 	uploads := uploadsessionapp.NewUseCases(uploadStore, uploadGateway)
 	service := mediaapp.NewMediaService(mediaapp.BindDataPorts(mediaStore), gateway)
 	processor, err := mediaprocinfra.NewFFmpegMediaProcessor(presigner, mediaprocinfra.Config{
-		Bucket:     bucket,
-		JobTimeout: 3 * time.Minute,
+		Bucket:        bucket,
+		JobTimeout:    3 * time.Minute,
+		EnableHLSCMAF: true,
 	})
 	if err != nil {
 		t.Fatalf("build ffmpeg processor: %v", err)
@@ -273,15 +281,16 @@ func newMediaProcessingHarness(t *testing.T, ctx context.Context) *mediaProcessi
 		mediaStore, mediaStore, mediaStore, processor, service, mediaStore,
 	)
 	return &mediaProcessingHarness{
-		bucket:     bucket,
-		s3Client:   s3Client,
-		presigner:  presigner,
-		gateway:    gateway,
-		mediaStore: mediaStore,
-		service:    service,
-		uploads:    uploads,
-		worker:     worker,
-		processor:  processor,
+		bucket:           bucket,
+		s3Client:         s3Client,
+		presigner:        presigner,
+		gateway:          gateway,
+		mediaStore:       mediaStore,
+		service:          service,
+		uploads:          uploads,
+		uploadHTTPClient: uploadAuthority.Client(),
+		worker:           worker,
+		processor:        processor,
 	}
 }
 
@@ -361,7 +370,7 @@ func (h *mediaProcessingHarness) uploadVisualMedia(
 	sourcePath string,
 	label string,
 	mediaType string,
-	contentType string,
+	mimeType string,
 ) string {
 	t.Helper()
 	h.sequence++
@@ -378,7 +387,7 @@ func (h *mediaProcessingHarness) uploadVisualMedia(
 		"media-processing-init-"+label,
 	)
 	init, err := h.uploads.Init(initContext, uploadsessionapp.InitCommand{
-		OwnerID: owner, MediaType: mediaType, ContentType: contentType,
+		OwnerID: owner, MediaType: mediaType, MimeType: mimeType,
 		FileSize: int64(len(payload)), ExpectedSHA256: digestHex,
 	})
 	if err != nil {
@@ -390,10 +399,10 @@ func (h *mediaProcessingHarness) uploadVisualMedia(
 	if err != nil {
 		t.Fatalf("build presigned PUT: %v", err)
 	}
-	request.Header.Set("Content-Type", contentType)
+	request.Header.Set("Content-Type", mimeType)
 	request.Header.Set("X-Amz-Checksum-Sha256", base64.StdEncoding.EncodeToString(digest[:]))
 	request.Header.Set("X-Amz-Meta-Sha256", digestHex)
-	response, err := http.DefaultClient.Do(request)
+	response, err := h.uploadHTTPClient.Do(request)
 	if err != nil {
 		t.Fatalf("PUT %s %s bytes: %v", label, mediaType, err)
 	}
@@ -458,7 +467,12 @@ func (h *mediaProcessingHarness) requireReadyAsset(
 		descriptor.VerifiedDurationMs <= 0 ||
 		descriptor.PreviewTrackVersion != 1 ||
 		descriptor.VideoPublicSliceKey == "" || descriptor.CoverPublicSliceKey == "" ||
-		descriptor.PreviewTrackManifestSliceKey == "" {
+		descriptor.PreviewTrackManifestSliceKey == "" ||
+		descriptor.HLSCMAFDescriptorVersion != 1 ||
+		descriptor.HLSCMAFDescriptorSliceKey == "" ||
+		descriptor.HLSCMAFMasterManifestSliceKey == "" ||
+		descriptor.HLSCMAFRenditionCount < 1 ||
+		descriptor.HLSCMAFRenditionCount > 4 {
 		t.Fatalf("ready descriptor violates the delivery contract: %+v", descriptor)
 	}
 	return asset
@@ -491,8 +505,8 @@ func (h *mediaProcessingHarness) requireReadyImage(
 		descriptor.ImageLQIP == "" ||
 		descriptor.ImageContentProfile == "" ||
 		descriptor.DerivativePolicyVersion <= 0 ||
-		(descriptor.ImageDeliveryContentType != "image/jpeg" &&
-			descriptor.ImageDeliveryContentType != "image/png") {
+		(descriptor.ImageDeliveryMimeType != "image/jpeg" &&
+			descriptor.ImageDeliveryMimeType != "image/png") {
 		t.Fatalf("ready image descriptor violates the delivery contract: %+v", descriptor)
 	}
 	return asset
@@ -557,6 +571,7 @@ func (h *mediaProcessingHarness) assertDeliveryArtifacts(
 			t.Fatalf("preview sprite %q is missing: %v", sprite.PublicSliceKey, err)
 		}
 	}
+	h.assertHLSCMAFArtifacts(t, ctx, asset)
 
 	// 交付 mp4 必须真实可解且已归一（faststart + h264/aac），复检产物本体
 	// 而不是只信 descriptor。
@@ -596,6 +611,129 @@ func (h *mediaProcessingHarness) assertDeliveryArtifacts(
 	}
 	if codecs["video"] != "h264" || codecs["audio"] != "aac" {
 		t.Fatalf("delivery mp4 is not normalized h264/aac: %v", codecs)
+	}
+}
+
+func (h *mediaProcessingHarness) assertHLSCMAFArtifacts(
+	t *testing.T,
+	ctx context.Context,
+	asset *mediamodel.MediaAsset,
+) {
+	t.Helper()
+	delivery := asset.VideoProcessingDescriptor()
+	descriptorBody, err := h.presigner.GetObject(
+		ctx,
+		h.bucket,
+		delivery.HLSCMAFDescriptorSliceKey,
+	)
+	if err != nil {
+		t.Fatalf("download HLS/CMAF descriptor: %v", err)
+	}
+	defer descriptorBody.Close()
+	var descriptor struct {
+		Schema                 string `json:"schema"`
+		AssetID                string `json:"assetId"`
+		AssetVersion           int64  `json:"assetVersion"`
+		DescriptorVersion      int    `json:"descriptorVersion"`
+		Protocol               string `json:"protocol"`
+		SegmentFormat          string `json:"segmentFormat"`
+		SegmentDurationMS      int    `json:"segmentDurationMs"`
+		MasterManifestSliceKey string `json:"masterManifestSliceKey"`
+		FallbackVideoSliceKey  string `json:"fallbackVideoSliceKey"`
+		VideoCodec             string `json:"videoCodec"`
+		AudioCodec             string `json:"audioCodec"`
+		Renditions             []struct {
+			ID               string `json:"id"`
+			Width            int    `json:"width"`
+			Height           int    `json:"height"`
+			VideoBitrateBPS  int    `json:"videoBitrateBps"`
+			AudioBitrateBPS  int    `json:"audioBitrateBps"`
+			PlaylistSliceKey string `json:"playlistSliceKey"`
+		} `json:"renditions"`
+	}
+	if err := json.NewDecoder(descriptorBody).Decode(&descriptor); err != nil {
+		t.Fatalf("decode HLS/CMAF descriptor: %v", err)
+	}
+	if descriptor.Schema != "quwoquan.content.hls_cmaf_descriptor" ||
+		descriptor.AssetID != asset.ID() ||
+		descriptor.AssetVersion != asset.Snapshot().ProcessingVersion ||
+		descriptor.DescriptorVersion != delivery.HLSCMAFDescriptorVersion ||
+		descriptor.Protocol != "hls" ||
+		descriptor.SegmentFormat != "cmaf" ||
+		descriptor.SegmentDurationMS != 2000 ||
+		descriptor.MasterManifestSliceKey != delivery.HLSCMAFMasterManifestSliceKey ||
+		descriptor.FallbackVideoSliceKey != delivery.VideoPublicSliceKey ||
+		descriptor.VideoCodec != "h264" || descriptor.AudioCodec != "aac" ||
+		len(descriptor.Renditions) != delivery.HLSCMAFRenditionCount {
+		t.Fatalf("HLS/CMAF descriptor violates the asset/version contract: %+v", descriptor)
+	}
+	requireMimeType := func(key string, want string) {
+		t.Helper()
+		head, headErr := h.s3Client.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: aws.String(h.bucket),
+			Key:    aws.String(key),
+		})
+		if headErr != nil {
+			t.Fatalf("HLS/CMAF artifact %q is missing: %v", key, headErr)
+		}
+		if got := aws.ToString(head.ContentType); got != want {
+			t.Fatalf("HLS/CMAF artifact %q content-type=%q, want %q", key, got, want)
+		}
+	}
+	requireMimeType(delivery.HLSCMAFDescriptorSliceKey, "application/json")
+	requireMimeType(
+		delivery.HLSCMAFMasterManifestSliceKey,
+		"application/vnd.apple.mpegurl",
+	)
+	for _, rendition := range descriptor.Renditions {
+		if rendition.ID == "" || rendition.Width <= 0 || rendition.Height <= 0 ||
+			rendition.VideoBitrateBPS <= 0 || rendition.AudioBitrateBPS <= 0 {
+			t.Fatalf("HLS/CMAF rendition is incomplete: %+v", rendition)
+		}
+		requireMimeType(rendition.PlaylistSliceKey, "application/vnd.apple.mpegurl")
+		playlistBody, getErr := h.presigner.GetObject(
+			ctx,
+			h.bucket,
+			rendition.PlaylistSliceKey,
+		)
+		if getErr != nil {
+			t.Fatalf("download rendition playlist %q: %v", rendition.PlaylistSliceKey, getErr)
+		}
+		playlist, readErr := io.ReadAll(playlistBody)
+		playlistBody.Close()
+		if readErr != nil {
+			t.Fatalf("read rendition playlist %q: %v", rendition.PlaylistSliceKey, readErr)
+		}
+		if !bytes.Contains(playlist, []byte("#EXT-X-MAP")) ||
+			!bytes.Contains(playlist, []byte("#EXT-X-INDEPENDENT-SEGMENTS")) ||
+			!bytes.Contains(playlist, []byte("#EXT-X-ENDLIST")) {
+			t.Fatalf("rendition playlist %q is not validated CMAF VOD: %s", rendition.PlaylistSliceKey, playlist)
+		}
+		playlistPrefix := rendition.PlaylistSliceKey[:strings.LastIndex(rendition.PlaylistSliceKey, "/")]
+		initName := ""
+		segmentFound := false
+		for _, line := range strings.Split(string(playlist), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#EXT-X-MAP:URI=\"") && strings.HasSuffix(line, "\"") {
+				initName = strings.TrimSuffix(
+					strings.TrimPrefix(line, "#EXT-X-MAP:URI=\""),
+					"\"",
+				)
+			}
+			if !strings.HasSuffix(line, ".m4s") {
+				continue
+			}
+			requireMimeType(playlistPrefix+"/"+line, "video/iso.segment")
+			segmentFound = true
+			break
+		}
+		if !segmentFound {
+			t.Fatalf("rendition playlist %q has no CMAF media segment", rendition.PlaylistSliceKey)
+		}
+		if initName == "" {
+			t.Fatalf("rendition playlist %q has no CMAF init segment", rendition.PlaylistSliceKey)
+		}
+		requireMimeType(playlistPrefix+"/"+initName, "video/mp4")
 	}
 }
 

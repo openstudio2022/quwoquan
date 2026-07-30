@@ -16,7 +16,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'visual-access',
     refreshToken: 'visual-refresh',
     ownerId: 'visual-owner',
-    activeSubAccountId: 'visual-persona',
+    activePersonaId: 'visual-persona',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'visual-install',
@@ -30,9 +30,8 @@ void main() {
 
   testWidgets('我的举报浅色 iOS 页面视觉基线', (tester) async {
     await _setPhoneSurface(tester);
-    // 视觉基线只验证行高与层级；使用稳定的相对时间窗口，避免固定日期跨过
-    // ContentTimeLabel 的 7 天边界后从“N天前”变为绝对日期而产生伪 diff。
-    final now = DateTime.now().subtract(const Duration(days: 2));
+    // 固定为跨年历史日期，避免运行时钟跨过相对时间阈值后污染 golden。
+    final now = DateTime.utc(2024, 7, 20);
     final query = AlphaContentReportQueryAdapter(<ContentMyReportItem>[
       ContentMyReportItem(
         id: 'report-1',

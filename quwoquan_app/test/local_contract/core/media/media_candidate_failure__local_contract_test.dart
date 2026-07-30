@@ -93,7 +93,7 @@ void main() {
 
     test('classifies AVFoundation NSURL failures by transport category', () {
       const candidate =
-          'https://alpha-video.localhost:17100/media/video/s/sample.mp4';
+          'https://cdn.alpha.example.invalid:17100/media/video/s/sample.mp4';
       expect(
         classifyMediaCandidateLoadFailure(
           Exception(

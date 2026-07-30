@@ -2,8 +2,7 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ProfileSocialRelationRowWireDto {
-  final String subAccountId;
-  final String username;
+  final String personaId;
   final String userHandle;
   final String displayName;
   final String avatarUrl;
@@ -14,8 +13,7 @@ class ProfileSocialRelationRowWireDto {
   final Map<String, dynamic>? relationshipCapability;
 
   ProfileSocialRelationRowWireDto({
-    this.subAccountId = '',
-    this.username = '',
+    this.personaId = '',
     this.userHandle = '',
     this.displayName = '',
     this.avatarUrl = '',
@@ -28,8 +26,7 @@ class ProfileSocialRelationRowWireDto {
 
   factory ProfileSocialRelationRowWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileSocialRelationRowWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? '',
-      username: m['username']?.toString() ?? '',
+      personaId: m['personaId']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
@@ -43,8 +40,7 @@ class ProfileSocialRelationRowWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'subAccountId': subAccountId,
-      'username': username,
+      'personaId': personaId,
       'userHandle': userHandle,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
@@ -57,8 +53,7 @@ class ProfileSocialRelationRowWireDto {
   }
 
   ProfileSocialRelationRowWireDto copyWith({
-    String? subAccountId,
-    String? username,
+    String? personaId,
     String? userHandle,
     String? displayName,
     String? avatarUrl,
@@ -69,8 +64,7 @@ class ProfileSocialRelationRowWireDto {
     Map<String, dynamic>? relationshipCapability,
   }) {
     return ProfileSocialRelationRowWireDto(
-      subAccountId: subAccountId ?? this.subAccountId,
-      username: username ?? this.username,
+      personaId: personaId ?? this.personaId,
       userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,

@@ -16,6 +16,30 @@ from quwoquan_ops.cli import stackctl
 
 
 class StackctlInspectRemoteFailureTest(unittest.TestCase):
+    def test_alpha_logs_use_the_content_release_state_truth(self) -> None:
+        with TemporaryDirectory() as directory:
+            process_dir = Path(directory)
+            observability_root = process_dir / "observability"
+            (process_dir / "content-release.json").write_text(
+                json.dumps(
+                    {
+                        "target": "alpha-local",
+                        "workload": "content-release",
+                        "runRoot": str(process_dir / "run"),
+                        "observabilityRoot": str(observability_root),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                stackctl,
+                "target_process_dir",
+                return_value=process_dir,
+            ):
+                result = stackctl._local_runtime_log_root("alpha-local")
+
+        self.assertEqual(result, observability_root / "logs" / "service")
+
     def test_prod_runtime_failure_propagates_to_report_and_exit_code(self) -> None:
         runtime_failure = {
             "error": "inspect command failed",

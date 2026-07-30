@@ -38,7 +38,7 @@ type MessageService struct {
 	members           MemberStore
 	userStates        UserStateStore
 	userStateCommands AggregateCommandStore
-	receipts          ReceiptStore
+	receiptFacts      ReceiptFactStore
 	projection        ConversationMessageProjector
 	cache             ConversationCache
 	publisher         EventPublisher
@@ -70,7 +70,7 @@ func NewMessageService(
 		members:           storage.Members,
 		userStates:        storage.UserStates,
 		userStateCommands: storage.UserStateCommands,
-		receipts:          storage.Receipts,
+		receiptFacts:      storage.ReceiptFacts,
 		projection:        storage.MessageProjection,
 		cache:             cache,
 		publisher:         publisher,
@@ -175,7 +175,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	}
 
 	events := []MessageOutboxEvent{{
-		EventID:        msg.ID + ":v1:" + messageevent.MessageSent,
+		EventID:        msg.ID + ":" + messageevent.MessageSent,
 		EventType:      messageevent.MessageSent,
 		ConversationID: req.ConversationId,
 		ActorID:        req.SenderId,
@@ -197,7 +197,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	if !isAssistantGeneratedMessage(req) {
 		if assistantMember, ok := s.mentionedAssistantMember(ctx, req.ConversationId, msg.Mentions); ok {
 			events = append(events, MessageOutboxEvent{
-				EventID:        msg.ID + ":v1:" + messageevent.AssistantMentioned,
+				EventID:        msg.ID + ":" + messageevent.AssistantMentioned,
 				EventType:      messageevent.AssistantMentioned,
 				ConversationID: req.ConversationId,
 				ActorID:        req.SenderId,
@@ -348,7 +348,7 @@ func (s *MessageService) SendAnnouncementSystemMessage(
 		Message:       msg,
 		CommandDigest: commandDigest,
 		Events: []MessageOutboxEvent{{
-			EventID:        msg.ID + ":v1:" + messageevent.MessageSent,
+			EventID:        msg.ID + ":" + messageevent.MessageSent,
 			EventType:      messageevent.MessageSent,
 			ConversationID: conversationID,
 			ActorID:        senderID,
@@ -364,6 +364,93 @@ func (s *MessageService) SendAnnouncementSystemMessage(
 	if err != nil {
 		if errors.Is(err, messagemodel.ErrMessageIdempotencyConflict) {
 			// 同一公告命令重试：消息已写入，视为触达完成。
+			return nil
+		}
+		return err
+	}
+	if err := s.projection.ProjectCommittedMessage(ctx, committed.Message); err != nil {
+		return err
+	}
+	return s.cache.InvalidateConversation(ctx, conversationID)
+}
+
+// SendGreetingOpeningMessage 把打招呼时写下的那句话落成会话首条消息。
+//
+// 为什么必须服务端写：破冰的语义是「A 先说了一句话，B 同意后这句话成为对话开头」。
+// 若不落库，B 同意后打开的是空会话，A 说过的话凭空消失，B 也无从判断该回什么——
+// 整条 打招呼 → 同意 → 私信 链路在成功的那一刻丢掉了唯一的上下文。
+//
+// 与 SendMessage 的差别只在通行判定：此刻 GreetingRequest 还没提交为 replied，
+// 关系投影里 A 仍是陌生人，公开路径的 ensureMessageAllowed 必然拒绝。回复动作
+// 本身就是对方的同意证据，因此这里跳过关系门，但保留消息主线的
+// seq 分配 / 幂等 / outbox / 未读投影，不另建第二条写路径。
+//
+// 发送者是打招呼的发起者（不是系统），因为这句话确实是他写的；
+// clientMsgID 由调用方按 greetingId 派生，重放只会命中同一条消息。
+func (s *MessageService) SendGreetingOpeningMessage(
+	ctx context.Context,
+	conversationID, requesterID, content, clientMsgID string,
+) error {
+	conversationID = strings.TrimSpace(conversationID)
+	requesterID = strings.TrimSpace(requesterID)
+	clientMsgID = strings.TrimSpace(clientMsgID)
+	content = strings.TrimSpace(content)
+	if conversationID == "" || requesterID == "" || clientMsgID == "" {
+		return generated.AppErrorFromMessageInvalid(
+			"greeting opening message requires conversationId, requesterId and clientMsgId",
+		)
+	}
+	if content == "" {
+		// 打招呼可以不带话（fields.yaml 的 requestMessage 可空）：没有话就没有首条消息，
+		// 不得替用户编造一句问候。
+		return nil
+	}
+	req := SendMessageRequest{
+		ConversationId: conversationID,
+		SenderId:       requesterID,
+		Type:           "text",
+		Content:        content,
+		ClientMsgId:    clientMsgID,
+	}
+	if _, err := validateMessageCommand(req); err != nil {
+		return err
+	}
+	commandDigest, err := sendMessageCommandDigest(req)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	msg := messagemodel.Message{
+		ID:              generateID(),
+		ConversationID:  conversationID,
+		ClientMessageID: clientMsgID,
+		SenderID:        requesterID,
+		Type:            req.Type,
+		Content:         req.Content,
+		Status:          "sent",
+		Timestamp:       now,
+		Version:         1,
+	}
+	committed, err := s.messages.CommitMessage(ctx, MessageCommit{
+		Message:       msg,
+		CommandDigest: commandDigest,
+		Events: []MessageOutboxEvent{{
+			EventID:        msg.ID + ":" + messageevent.MessageSent,
+			EventType:      messageevent.MessageSent,
+			ConversationID: conversationID,
+			ActorID:        requesterID,
+			Payload: map[string]any{
+				"conversationId": conversationID,
+				"type":           msg.Type,
+				"content":        msg.Content,
+				"clientMsgId":    clientMsgID,
+				"senderId":       requesterID,
+			},
+		}},
+	})
+	if err != nil {
+		if errors.Is(err, messagemodel.ErrMessageIdempotencyConflict) {
+			// 同一次回复重放：首条消息已落库，视为已完成。
 			return nil
 		}
 		return err
@@ -399,10 +486,13 @@ func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, 
 	if req.Card == nil {
 		return nil, generated.AppErrorFromMessageInvalid("card message requires card")
 	}
-	kind := strings.TrimSpace(req.Card.Kind)
+	kind := messagemodel.MessageCardKind(strings.TrimSpace(req.Card.Kind))
 	title := strings.TrimSpace(req.Card.Title)
 	if kind == "" || title == "" {
 		return nil, generated.AppErrorFromMessageInvalid("card kind and title are required")
+	}
+	if !kind.Valid() {
+		return nil, generated.AppErrorFromMessageInvalid("unsupported card kind")
 	}
 	if len([]rune(title)) > messageCardTitleRuneLimit {
 		return nil, generated.AppErrorFromMessageInvalid("card title exceeds 120 Unicode code points")

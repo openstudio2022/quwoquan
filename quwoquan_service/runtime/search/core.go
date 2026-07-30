@@ -163,9 +163,8 @@ type DegradeSignal struct {
 }
 
 type Provenance struct {
-	Provider     string    `json:"provider"`
-	IndexVersion string    `json:"indexVersion,omitempty"`
-	GeneratedAt  time.Time `json:"generatedAt"`
+	Provider    string    `json:"provider"`
+	GeneratedAt time.Time `json:"generatedAt"`
 }
 
 type QuerySafety struct {
@@ -245,9 +244,8 @@ func Execute(req Request, docs []Document) Response {
 	query := strings.TrimSpace(req.Query)
 	interpreted := Analyze(query, req.ObjectTypes)
 	provenance := Provenance{
-		Provider:     "canonical_search",
-		IndexVersion: "runtime-search-v1",
-		GeneratedAt:  time.Now().UTC(),
+		Provider:    "canonical_search",
+		GeneratedAt: time.Now().UTC(),
 	}
 	safety := CheckQuerySafety(query)
 	if safety.Blocked {

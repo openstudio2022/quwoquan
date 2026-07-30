@@ -68,7 +68,7 @@ func TestContract_InviteToCall(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	resp := doPost(t, "/rtc/calls",
-		`{"callType":"audio","inviteeIds":["user_inv_b"],"circleId":"circle_001"}`,
+		`{"callType":"audio","inviteeIds":["user_inv_b"],"circleId":"circle_001","maxParticipants":32}`,
 		"user_inv_001", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
@@ -91,7 +91,7 @@ func TestContract_MultiPartyJoinLeave(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	resp := doPost(t, "/rtc/calls",
-		`{"callType":"video","inviteeIds":["user_mp_b","user_mp_c"],"circleId":"circle_multi"}`,
+		`{"callType":"video","inviteeIds":["user_mp_b","user_mp_c"],"circleId":"circle_multi","maxParticipants":32}`,
 		"user_mp_001", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
@@ -144,7 +144,7 @@ func TestContract_MaxParticipantsLimit(t *testing.T) {
 	inviteeJSON += "]"
 
 	resp := doPost(t, "/rtc/calls",
-		fmt.Sprintf(`{"callType":"audio","inviteeIds":%s,"circleId":"circle_limit"}`, inviteeJSON),
+		fmt.Sprintf(`{"callType":"audio","inviteeIds":%s,"circleId":"circle_limit","maxParticipants":32}`, inviteeJSON),
 		"user_limit_initiator", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
@@ -154,9 +154,11 @@ func TestContract_MaxParticipantsLimit(t *testing.T) {
 	}
 	doPost(t, "/rtc/calls/"+callID+"/join", `{}`, "user_limit_initiator", http.StatusOK)
 
-	code, _ := doPostAny(t, "/rtc/calls/"+callID+"/invite",
+	code, body := doPostAny(t, "/rtc/calls/"+callID+"/invite",
 		`{"inviteeIds":["user_over_limit_1","user_over_limit_2"]}`, "user_limit_initiator")
-	_ = code
+	if code != http.StatusConflict || body["code"] != "RTC.USER.call_full" {
+		t.Fatalf("33rd participant boundary = %d/%v", code, body)
+	}
 }
 
 func TestContract_ResponseShape_HasRequiredFields(t *testing.T) {

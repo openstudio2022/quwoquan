@@ -37,10 +37,6 @@ type IncomingCallDeliveryJob struct {
 	CancelledAt                               *time.Time `bson:"cancelledAt,omitempty" json:"cancelledAt,omitempty"`
 	ExternalInteractionID                     string     `bson:"externalInteractionId,omitempty" json:"externalInteractionId,omitempty"`
 	ExternalInteractionAcceptedAt             *time.Time `bson:"externalInteractionAcceptedAt,omitempty" json:"externalInteractionAcceptedAt,omitempty"`
-	Provider                                  string     `bson:"provider,omitempty" json:"provider,omitempty"`
-	ProviderRequestDigest                     string     `bson:"providerRequestDigest,omitempty" json:"providerRequestDigest,omitempty"`
-	ProviderResultStatus                      string     `bson:"providerResultStatus,omitempty" json:"providerResultStatus,omitempty"`
-	ProviderResultAt                          *time.Time `bson:"providerResultAt,omitempty" json:"providerResultAt,omitempty"`
 	CancellationEventID                       string     `bson:"cancellationEventId,omitempty" json:"cancellationEventId,omitempty"`
 	CancellationEventType                     string     `bson:"cancellationEventType,omitempty" json:"cancellationEventType,omitempty"`
 	CancellationActorID                       string     `bson:"cancellationActorId,omitempty" json:"-"`
@@ -50,15 +46,13 @@ type IncomingCallDeliveryJob struct {
 	CancellationExternalInteractionID         string     `bson:"cancellationExternalInteractionId,omitempty" json:"cancellationExternalInteractionId,omitempty"`
 	CancellationExternalInteractionAcceptedAt *time.Time `bson:"cancellationExternalInteractionAcceptedAt,omitempty" json:"cancellationExternalInteractionAcceptedAt,omitempty"`
 	CancellationPushSubmittedAt               *time.Time `bson:"cancellationPushSubmittedAt,omitempty" json:"cancellationPushSubmittedAt,omitempty"`
-	CancellationProvider                      string     `bson:"cancellationProvider,omitempty" json:"cancellationProvider,omitempty"`
-	CancellationProviderRequestDigest         string     `bson:"cancellationProviderRequestDigest,omitempty" json:"cancellationProviderRequestDigest,omitempty"`
-	CancellationProviderResultStatus          string     `bson:"cancellationProviderResultStatus,omitempty" json:"cancellationProviderResultStatus,omitempty"`
-	CancellationProviderResultAt              *time.Time `bson:"cancellationProviderResultAt,omitempty" json:"cancellationProviderResultAt,omitempty"`
 	AckRaceCount                              int        `bson:"ackRaceCount" json:"ackRaceCount"`
 	LastAckRaceAt                             *time.Time `bson:"lastAckRaceAt,omitempty" json:"lastAckRaceAt,omitempty"`
 	Version                                   int64      `bson:"version" json:"version"`
 	CreatedAt                                 time.Time  `bson:"createdAt" json:"createdAt"`
 	UpdatedAt                                 time.Time  `bson:"updatedAt" json:"updatedAt"`
+	AccountRestricted                         bool       `bson:"accountRestricted,omitempty" json:"-"`
+	RestrictionSuppressed                     bool       `bson:"restrictionSuppressed,omitempty" json:"-"`
 }
 
 type ExternalInteractionResultEvent struct {

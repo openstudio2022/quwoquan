@@ -1,0 +1,10 @@
+{
+  "label": "同行人",
+  "labelEn": "Travel Party",
+  "description": "出行的人群构成；与旅行主题正交：主题=去做什么，同行人=和谁去",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00",
+  "expectedSize": 7
+}

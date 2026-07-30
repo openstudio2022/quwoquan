@@ -21,7 +21,6 @@ type RawBehaviorEvent struct {
 	ContentID              string    `bson:"contentId"`
 	Action                 string    `bson:"action"`
 	ContentType            string    `bson:"contentType,omitempty"`
-	CatalogVersion         string    `bson:"catalogVersion,omitempty"`
 	TaxonomyReleaseID      string    `bson:"taxonomyReleaseId,omitempty"`
 	Tags                   []string  `bson:"tagRefs,omitempty"`
 	Duration               float64   `bson:"duration,omitempty"`
@@ -36,8 +35,7 @@ type RawBehaviorEvent struct {
 	Position               int       `bson:"position,omitempty"`
 	CommentLength          int       `bson:"commentLength,omitempty"`
 	ChannelID              string    `bson:"channelId,omitempty"`
-	RankingVersion         string    `bson:"rankingVersion,omitempty"`
-	ReasonVersion          string    `bson:"reasonVersion,omitempty"`
+	PolicyDigest           string    `bson:"policyDigest,omitempty"`
 	RecallPath             string    `bson:"recallPath,omitempty"`
 	ContentVertical        string    `bson:"contentVertical,omitempty"`
 	SupplySource           string    `bson:"supplySource,omitempty"`

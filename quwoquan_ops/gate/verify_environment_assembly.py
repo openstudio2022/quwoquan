@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -16,6 +18,91 @@ from quwoquan_ops.cli.lib.environment_topology import (
 from quwoquan_ops.cli.lib.content_release_readiness import (
     load_content_release_readiness_policy,
 )
+from quwoquan_ops.cli.lib.immutable_image_composition import (
+    compose_image_environment_key,
+    first_party_service_names,
+)
+
+
+def _first_party_compose_files() -> dict[str, Path]:
+    files = {
+        path.parents[1].name: path
+        for path in (
+            ROOT / "quwoquan_service" / "services"
+        ).glob("*/deploy/compose.yaml")
+    }
+    files["platform-ops-service"] = (
+        ROOT
+        / "quwoquan_service"
+        / "control-plane"
+        / "platform-ops"
+        / "deploy"
+        / "compose.yaml"
+    )
+    return dict(sorted(files.items()))
+
+
+def validate_first_party_image_composition_contract() -> list[str]:
+    """Every first-party workload must consume one explicit immutable identity."""
+
+    compose_files = _first_party_compose_files()
+    discovered = set(first_party_service_names(ROOT))
+    issues: list[str] = []
+    if set(compose_files) != discovered:
+        issues.append(
+            "first-party compose/config owners differ: "
+            f"compose={sorted(compose_files)} config={sorted(discovered)}"
+        )
+    for owner, compose_file in compose_files.items():
+        relative = compose_file.relative_to(ROOT)
+        if not compose_file.is_file():
+            issues.append(f"{relative} is missing")
+            continue
+        raw = compose_file.read_text(encoding="utf-8")
+        if ":latest" in raw:
+            issues.append(f"{relative} contains mutable :latest")
+        if "QWQ_COMPOSE_IMAGE_VERSION:-" in raw:
+            issues.append(f"{relative} contains a fallback IMAGE_VERSION")
+        try:
+            document = yaml.safe_load(raw)
+        except yaml.YAMLError as exc:
+            issues.append(f"{relative} is invalid YAML: {exc}")
+            continue
+        services = document.get("services") if isinstance(document, dict) else None
+        if not isinstance(services, dict) or not services:
+            issues.append(f"{relative} has no services")
+            continue
+        expected_image_key = compose_image_environment_key(owner)
+        first_party_workloads = 0
+        for workload, spec in services.items():
+            if not isinstance(spec, dict) or "build" not in spec:
+                continue
+            first_party_workloads += 1
+            image = str(spec.get("image") or "")
+            if not image.startswith(f"${{{expected_image_key}:?") or not image.endswith(
+                "}"
+            ):
+                issues.append(
+                    f"{relative} workload {workload} must require {expected_image_key}"
+                )
+            environment = spec.get("environment")
+            image_version = (
+                environment.get("IMAGE_VERSION")
+                if isinstance(environment, dict)
+                else None
+            )
+            if (
+                not isinstance(image_version, str)
+                or not image_version.startswith("${QWQ_COMPOSE_IMAGE_VERSION:?")
+                or not image_version.endswith("}")
+            ):
+                issues.append(
+                    f"{relative} workload {workload} must require "
+                    "QWQ_COMPOSE_IMAGE_VERSION"
+                )
+        if first_party_workloads == 0:
+            issues.append(f"{relative} has no first-party build workload")
+    return issues
 
 
 def validate_service_build_image_contract() -> list[str]:
@@ -83,11 +170,21 @@ def validate_service_build_image_contract() -> list[str]:
         ("ALPINE_BASE_IMAGE", "alpine_base_image"),
         ("PYTHON_BASE_IMAGE", "python_base_image"),
     ):
+        governed_output = (
+            f"{image_variable}: "
+            f"${{{{ steps.base_images.outputs.{output} }}}}"
+        )
+        shell_build_arg = f'--build-arg "{image_variable}=${image_variable}"'
+        action_build_arg = (
+            f"{image_variable}="
+            f"${{{{ steps.base_images.outputs.{output} }}}}"
+        )
         if (
-            f"{image_variable}: ${{{{ steps.base_images.outputs.{output} }}}}"
-            not in service_pipeline
-            or f'--build-arg "{image_variable}=${image_variable}"'
-            not in service_pipeline
+            governed_output not in service_pipeline
+            or (
+                shell_build_arg not in service_pipeline
+                and action_build_arg not in service_pipeline
+            )
         ):
             issues.append(
                 f"service pipeline must pass {image_variable} to release image builds"
@@ -98,6 +195,7 @@ def validate_service_build_image_contract() -> list[str]:
 def main() -> int:
     manifest = load_environment_topology()
     issues = validate_environment_topology(manifest)
+    issues.extend(validate_first_party_image_composition_contract())
     issues.extend(validate_service_build_image_contract())
     try:
         content_readiness = load_content_release_readiness_policy()

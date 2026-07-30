@@ -2,6 +2,7 @@
   "label": "景区附近",
   "labelEn": "Near Scenic Area",
   "description": "邻近景区",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

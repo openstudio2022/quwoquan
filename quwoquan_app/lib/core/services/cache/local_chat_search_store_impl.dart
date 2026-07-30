@@ -11,6 +11,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
 
   static final LocalChatSearchStore shared = LocalChatSearchStore();
   static bool _ffiInitialized = false;
+  static const int _schemaVersion = 1;
 
   final String? _databasePath;
   final DatabaseFactory? _databaseFactory;
@@ -115,7 +116,6 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     final displayNameRaw = contact.displayName.trim();
     final displayName = displayNameRaw.isNotEmpty ? displayNameRaw : contactId;
     final nickname = contact.nickname.trim();
-    final username = contact.username.trim();
     final subtitle = contact.subtitle.trim();
     final headline = contact.headline.trim();
     final remark = contact.remark.trim();
@@ -127,10 +127,10 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     final searchableText = _searchableText(<Object?>[
       displayName,
       nickname,
-      username,
       subtitle,
       headline,
       remark,
+      contact.userHandle,
       contactId,
     ]);
     batch.insert('chat_contacts', <String, Object?>{
@@ -138,7 +138,6 @@ class LocalChatSearchStore implements LocalChatSearchReader {
       'contact_id': contactId,
       'display_name': displayName,
       'nickname': nickname,
-      'username': username,
       'subtitle': subtitle,
       'headline': headline,
       'remark': remark,
@@ -188,7 +187,6 @@ class LocalChatSearchStore implements LocalChatSearchReader {
           final matchedField = _matchedField(query, <String, String>{
             'displayName': _string(row['display_name']),
             'nickname': _string(row['nickname']),
-            'username': _string(row['username']),
             'subtitle': _string(row['subtitle']),
             'headline': _string(row['headline']),
             'remark': _string(row['remark']),
@@ -720,7 +718,7 @@ class LocalChatSearchStore implements LocalChatSearchReader {
     batch.insert('search_namespaces', <String, Object?>{
       'namespace_key': namespace.key,
       'owner_user_id': namespace.ownerUserId,
-      'sub_account_id': namespace.subAccountId,
+      'persona_id': namespace.personaId,
       'subject_type': namespace.subjectType,
       'persona_context_version': namespace.personaContextVersion,
       'updated_at': updatedAt,
@@ -785,41 +783,12 @@ class LocalChatSearchStore implements LocalChatSearchReader {
       return factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 3,
+          version: _schemaVersion,
           onCreate: _onCreate,
-          onUpgrade: _onUpgrade,
         ),
       );
     }
-    return openDatabase(
-      path,
-      version: 3,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
-  }
-
-  Future<void> _onUpgrade(
-    Database database,
-    int oldVersion,
-    int newVersion,
-  ) async {
-    if (oldVersion >= 3) {
-      return;
-    }
-    await _dropAllTables(database);
-    await _onCreate(database, newVersion);
-  }
-
-  Future<void> _dropAllTables(Database database) async {
-    await database.execute('DROP TABLE IF EXISTS chat_sync_state');
-    await database.execute('DROP TABLE IF EXISTS chat_messages_fts');
-    await database.execute('DROP TABLE IF EXISTS chat_messages');
-    await database.execute('DROP TABLE IF EXISTS chat_conversations_fts');
-    await database.execute('DROP TABLE IF EXISTS chat_conversations');
-    await database.execute('DROP TABLE IF EXISTS chat_contacts_fts');
-    await database.execute('DROP TABLE IF EXISTS chat_contacts');
-    await database.execute('DROP TABLE IF EXISTS search_namespaces');
+    return openDatabase(path, version: _schemaVersion, onCreate: _onCreate);
   }
 
   Future<String> _resolveDatabasePath() async {
@@ -855,8 +824,6 @@ class LocalChatSearchStore implements LocalChatSearchReader {
         return _string(payload['displayName']);
       case 'nickname':
         return _string(payload['nickname']);
-      case 'username':
-        return _string(payload['username']);
       case 'headline':
         return _string(payload['headline']);
       case 'remark':

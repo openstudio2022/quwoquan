@@ -606,7 +606,7 @@ func commentAPIRequest(
 		request.Header.Set("Content-Type", "application/json")
 	}
 	request.Header.Set("X-Client-User-Id", actorID)
-	request.Header.Set("X-Client-Sub-Account-Id", actorID)
+	request.Header.Set("X-Client-Persona-Id", actorID)
 	if method != http.MethodGet && method != http.MethodHead {
 		ensureIdempotencyHeader(request,
 			fmt.Sprintf("comment-%s-%d", t.Name(), helperRequestSequence.Add(1)))

@@ -1,80 +1,9 @@
 import '../operation_request_payload.dart';
-
-final class AssistantLearningFactAppendCommand {
-  AssistantLearningFactAppendCommand({
-    required String eventId,
-    required this.eventVersion,
-    required String factType,
-    required String assistantTurnId,
-    required String referralSource,
-    required String domainId,
-    String? triggerMessageId,
-    String? eventType,
-    String? feedbackType,
-    this.feedbackScore,
-    List<String> reasonCodes = const <String>[],
-    String? actionType,
-    String? suggestedActionId,
-    this.durationMs,
-    String? queryText,
-    String? answerText,
-    String? feedbackText,
-    String? correctionText,
-    required this.trainingEligible,
-    required this.occurredAt,
-  }) : eventId = _required(eventId, 'eventId'),
-       factType = _required(factType, 'factType'),
-       assistantTurnId = _required(assistantTurnId, 'assistantTurnId'),
-       referralSource = _required(referralSource, 'referralSource'),
-       domainId = _required(domainId, 'domainId'),
-       triggerMessageId = _optional(triggerMessageId),
-       eventType = _optional(eventType),
-       feedbackType = _optional(feedbackType),
-       reasonCodes = _normalizedList(reasonCodes),
-       actionType = _optional(actionType),
-       suggestedActionId = _optional(suggestedActionId),
-       queryText = _optional(queryText),
-       answerText = _optional(answerText),
-       feedbackText = _optional(feedbackText),
-       correctionText = _optional(correctionText) {
-    if (eventVersion <= 0) {
-      throw ArgumentError.value(
-        eventVersion,
-        'eventVersion',
-        'must be positive',
-      );
-    }
-    if (durationMs case final value? when value < 0) {
-      throw ArgumentError.value(value, 'durationMs', 'must not be negative');
-    }
-  }
-
-  final String eventId;
-  final int eventVersion;
-  final String factType;
-  final String assistantTurnId;
-  final String? triggerMessageId;
-  final String referralSource;
-  final String domainId;
-  final String? eventType;
-  final String? feedbackType;
-  final double? feedbackScore;
-  final List<String> reasonCodes;
-  final String? actionType;
-  final String? suggestedActionId;
-  final int? durationMs;
-  final String? queryText;
-  final String? answerText;
-  final String? feedbackText;
-  final String? correctionText;
-  final bool trainingEligible;
-  final DateTime occurredAt;
-}
+part '../generated/requests/assistant/assistant_contracts.requests.g.dart';
 
 final class AssistantLearningFactAppendReceipt {
   const AssistantLearningFactAppendReceipt({
     required this.eventId,
-    required this.eventVersion,
     required this.accepted,
     required this.deduplicated,
     required this.appendSequence,
@@ -83,7 +12,6 @@ final class AssistantLearningFactAppendReceipt {
   });
 
   final String eventId;
-  final int eventVersion;
   final bool accepted;
   final bool deduplicated;
   final int appendSequence;
@@ -91,68 +19,144 @@ final class AssistantLearningFactAppendReceipt {
   final DateTime recordedAt;
 }
 
-CloudOperationRequestPayload encodeAssistantLearningFactAppendCommand(
-  AssistantLearningFactAppendCommand command,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      'eventId': command.eventId,
-      'eventVersion': command.eventVersion,
-      'factType': command.factType,
-      'assistantTurnId': command.assistantTurnId,
-      if (command.triggerMessageId case final value?) 'triggerMessageId': value,
-      'referralSource': command.referralSource,
-      'domainId': command.domainId,
-      if (command.eventType case final value?) 'eventType': value,
-      if (command.feedbackType case final value?) 'feedbackType': value,
-      if (command.feedbackScore case final value?) 'feedbackScore': value,
-      if (command.reasonCodes.isNotEmpty) 'reasonCodes': command.reasonCodes,
-      if (command.actionType case final value?) 'actionType': value,
-      if (command.suggestedActionId case final value?)
-        'suggestedActionId': value,
-      if (command.durationMs case final value?) 'durationMs': value,
-      if (command.queryText case final value?) 'queryText': value,
-      if (command.answerText case final value?) 'answerText': value,
-      if (command.feedbackText case final value?) 'feedbackText': value,
-      if (command.correctionText case final value?) 'correctionText': value,
-      'trainingEligible': command.trainingEligible,
-      'occurredAt': command.occurredAt.toUtc().toIso8601String(),
-    },
-  );
-}
-
 AssistantLearningFactAppendReceipt decodeAssistantLearningFactAppendReceipt(
   Object? response,
 ) {
   final value = _object(response, 'AssistantLearningFactAppendReceipt');
+  if (value.containsKey('eventVersion')) {
+    throw const FormatException(
+      'AssistantLearningFactAppendReceipt.eventVersion is retired',
+    );
+  }
   return AssistantLearningFactAppendReceipt(
     eventId: _requiredField(value, 'eventId'),
-    eventVersion: _requiredInt(value, 'eventVersion'),
     accepted: _requiredBool(value, 'accepted'),
     deduplicated: _requiredBool(value, 'deduplicated'),
     appendSequence: _requiredInt(value, 'appendSequence'),
-    payloadDigest: _requiredField(value, 'payloadDigest'),
+    payloadDigest: _requiredSha256Digest(value, 'payloadDigest'),
     recordedAt: _requiredTimestamp(value, 'recordedAt'),
   );
 }
 
-final class AssistantSkillSubscriptionListQuery {
-  AssistantSkillSubscriptionListQuery({this.limit = 20, String? status})
-    : status = _optional(status) {
-    if (limit <= 0 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be in range [1,100]');
-    }
-  }
+/// AssistantConversation 的纯 Dart client projection。
+///
+/// 字段逐项对应 `assistant_conversation/fields.yaml`；ID、状态与时间戳采用
+/// fail-closed 解码，允许领域合同明确允许为空的 turn ID 与 summary 保持空串。
+final class AssistantConversationProjection {
+  const AssistantConversationProjection({
+    required this.conversationId,
+    required this.userId,
+    required this.state,
+    required this.activeTurnId,
+    required this.lastTurnId,
+    required this.summary,
+    required this.createdAt,
+    required this.updatedAt,
+  });
 
-  final int limit;
-  final String? status;
+  final String conversationId;
+  final String userId;
+  final String state;
+  final String activeTurnId;
+  final String lastTurnId;
+  final String summary;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 }
 
-final class AssistantSkillSubscriptionByIdQuery {
-  AssistantSkillSubscriptionByIdQuery({required String subscriptionId})
-    : subscriptionId = _required(subscriptionId, 'subscriptionId');
+/// AssistantConversation owner keyset page；`nextCursor == null` 表示末页。
+final class AssistantConversationListProjection {
+  const AssistantConversationListProjection({
+    required this.items,
+    required this.nextCursor,
+  });
 
-  final String subscriptionId;
+  final List<AssistantConversationProjection> items;
+  final String? nextCursor;
+}
+
+AssistantConversationProjection decodeAssistantConversation(Object? response) {
+  final value = _object(response, 'AssistantConversation');
+  return AssistantConversationProjection(
+    conversationId: _requiredField(value, 'conversationId'),
+    userId: _requiredField(value, 'userId'),
+    state: _requiredField(value, 'state'),
+    activeTurnId: _stringField(value, 'activeTurnId'),
+    lastTurnId: _stringField(value, 'lastTurnId'),
+    summary: _stringField(value, 'summary'),
+    createdAt: _requiredTimestamp(value, 'createdAt'),
+    updatedAt: _requiredTimestamp(value, 'updatedAt'),
+  );
+}
+
+AssistantConversationListProjection decodeAssistantConversationList(
+  Object? response,
+) {
+  final value = _object(response, 'AssistantConversationList');
+  final rawItems = value['items'];
+  if (rawItems is! List) {
+    throw const FormatException(
+      'AssistantConversationList.items must be a list',
+    );
+  }
+  return AssistantConversationListProjection(
+    items: rawItems
+        .map<AssistantConversationProjection>(decodeAssistantConversation)
+        .toList(growable: false),
+    nextCursor: _optionalField(value, 'nextCursor'),
+  );
+}
+
+/// SkillCatalog 的严格 client projection；仅承载 canonical 私有响应字段。
+final class AssistantSkillCatalogItemProjection {
+  const AssistantSkillCatalogItemProjection({
+    required this.skillId,
+    required this.displayName,
+    this.description,
+    this.category,
+    required this.requiresConsent,
+    this.iconHint,
+  });
+
+  final String skillId;
+  final String displayName;
+  final String? description;
+  final String? category;
+  final bool requiresConsent;
+  final String? iconHint;
+}
+
+final class AssistantSkillCatalogListProjection {
+  const AssistantSkillCatalogListProjection({required this.items});
+
+  final List<AssistantSkillCatalogItemProjection> items;
+}
+
+AssistantSkillCatalogListProjection decodeAssistantSkillCatalogList(
+  Object? response,
+) {
+  final value = _object(response, 'AssistantSkillCatalogListView');
+  final rawItems = value['items'];
+  if (rawItems is! List) {
+    throw const FormatException(
+      'AssistantSkillCatalogListView.items must be a list',
+    );
+  }
+  return AssistantSkillCatalogListProjection(
+    items: rawItems
+        .map((raw) {
+          final item = _object(raw, 'AssistantSkillCatalogItemView');
+          return AssistantSkillCatalogItemProjection(
+            skillId: _requiredField(item, 'skillId'),
+            displayName: _requiredField(item, 'displayName'),
+            description: _optionalField(item, 'description'),
+            category: _optionalField(item, 'category'),
+            requiresConsent: _requiredBool(item, 'requiresConsent'),
+            iconHint: _optionalField(item, 'iconHint'),
+          );
+        })
+        .toList(growable: false),
+  );
 }
 
 final class AssistantSkillSubscriptionSearchPlan {
@@ -223,40 +227,6 @@ final class AssistantSkillSubscriptionDestination {
   };
 }
 
-final class CreateAssistantSkillSubscriptionCommand {
-  CreateAssistantSkillSubscriptionCommand({
-    required String skillId,
-    required String domainId,
-    List<String> tagRefs = const <String>[],
-    required this.searchQueryPlan,
-    required this.trigger,
-    required this.destination,
-    required String clientRequestId,
-  }) : skillId = _required(skillId, 'skillId'),
-       domainId = _required(domainId, 'domainId'),
-       tagRefs = _normalizedList(tagRefs),
-       clientRequestId = _required(clientRequestId, 'clientRequestId');
-
-  final String skillId;
-  final String domainId;
-  final List<String> tagRefs;
-  final AssistantSkillSubscriptionSearchPlan searchQueryPlan;
-  final AssistantSkillSubscriptionTrigger trigger;
-  final AssistantSkillSubscriptionDestination destination;
-  final String clientRequestId;
-}
-
-final class UpdateAssistantSkillSubscriptionStatusCommand {
-  UpdateAssistantSkillSubscriptionStatusCommand({
-    required String subscriptionId,
-    required String status,
-  }) : subscriptionId = _required(subscriptionId, 'subscriptionId'),
-       status = _required(status, 'status');
-
-  final String subscriptionId;
-  final String status;
-}
-
 final class AssistantSkillSubscriptionOwner {
   const AssistantSkillSubscriptionOwner({
     required this.ownerType,
@@ -323,51 +293,6 @@ final class AssistantSkillSubscriptionListProjection {
   const AssistantSkillSubscriptionListProjection({required this.items});
 
   final List<AssistantSkillSubscriptionProjection> items;
-}
-
-CloudOperationRequestPayload encodeAssistantSkillSubscriptionListQuery(
-  AssistantSkillSubscriptionListQuery query,
-) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'limit': query.limit.toString(),
-      if (query.status case final value?) 'status': value,
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeAssistantSkillSubscriptionByIdQuery(
-  AssistantSkillSubscriptionByIdQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subscriptionId': query.subscriptionId},
-  );
-}
-
-CloudOperationRequestPayload encodeCreateAssistantSkillSubscriptionCommand(
-  CreateAssistantSkillSubscriptionCommand command,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      'skillId': command.skillId,
-      'domainId': command.domainId,
-      'tagRefs': command.tagRefs,
-      'searchQueryPlan': command.searchQueryPlan.toJson(),
-      'trigger': command.trigger.toJson(),
-      'destination': command.destination.toJson(),
-      'clientRequestId': command.clientRequestId,
-    },
-  );
-}
-
-CloudOperationRequestPayload
-encodeUpdateAssistantSkillSubscriptionStatusCommand(
-  UpdateAssistantSkillSubscriptionStatusCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subscriptionId': command.subscriptionId},
-    body: <String, Object?>{'status': command.status},
-  );
 }
 
 AssistantSkillSubscriptionProjection decodeAssistantSkillSubscription(
@@ -475,12 +400,28 @@ String? _optionalField(Map<String, Object?> value, String field) {
   return _optional(raw);
 }
 
+String _stringField(Map<String, Object?> value, String field) {
+  final raw = value[field];
+  if (raw is! String) {
+    throw FormatException('$field must be a string');
+  }
+  return raw.trim();
+}
+
 int _requiredInt(Map<String, Object?> value, String field) {
   final raw = value[field];
   if (raw is! num) {
     throw FormatException('$field must be a number');
   }
   return raw.toInt();
+}
+
+String _requiredSha256Digest(Map<String, Object?> value, String field) {
+  final digest = _requiredField(value, field);
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(digest)) {
+    throw FormatException('$field must be a lowercase SHA-256 digest');
+  }
+  return digest;
 }
 
 bool _requiredBool(Map<String, Object?> value, String field) {

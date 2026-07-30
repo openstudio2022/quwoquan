@@ -37,6 +37,28 @@ def domain_of(contracts: Path) -> str:
     return domain
 
 
+def owns_http_routes(contracts: Path) -> bool:
+    """Return whether the domain owns at least one HTTP operation snapshot.
+
+    Infrastructure-only domains such as api-edge may own errors, storage and an
+    internal facade while deliberately exposing no second HTTP API. They remain
+    ContractGraph contributors but must not be forced to publish an empty
+    OpenAPI truth source.
+    """
+    for operations in sorted(contracts.rglob("operations.yaml")):
+        payload = yaml.safe_load(operations.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"{operations} must contain a mapping")
+        routes = payload.get("api_routes", [])
+        if routes is None:
+            routes = []
+        if not isinstance(routes, list):
+            raise ValueError(f"{operations} api_routes must contain a list")
+        if routes:
+            return True
+    return False
+
+
 def atomic_write(target: Path, payload: bytes) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -71,7 +93,9 @@ def sync(view: Path) -> int:
                 f"domain {domain} must have exactly one domain-service OpenAPI owner; "
                 f"contributors={roots}"
             )
-        owners[domain] = service_owners[0]
+        owner = service_owners[0]
+        if owns_http_routes(owner):
+            owners[domain] = owner
 
     snapshots = {
         item.parent.name: item

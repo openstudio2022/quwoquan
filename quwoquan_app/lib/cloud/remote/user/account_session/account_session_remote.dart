@@ -26,21 +26,23 @@ final class RemoteAccountSessionCommandWriter
       );
 
   @override
-  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command) =>
-      client.userAccountSessionLoginWithWechat(
-        command,
-        context: invocationContext(UserRequestPageIds.loginWithWechat),
-      );
+  Future<FederatedLoginOutcome> loginWithWechat(
+    LoginWithWechatCommand command,
+  ) => client.userAccountSessionLoginWithWechat(
+    command,
+    context: invocationContext(UserRequestPageIds.loginWithWechat),
+  );
 
   @override
-  Future<AuthSessionGrant> loginWithAlipay(LoginWithAlipayCommand command) =>
-      client.userAccountSessionLoginWithAlipay(
-        command,
-        context: invocationContext(UserRequestPageIds.loginWithAlipay),
-      );
+  Future<FederatedLoginOutcome> loginWithAlipay(
+    LoginWithAlipayCommand command,
+  ) => client.userAccountSessionLoginWithAlipay(
+    command,
+    context: invocationContext(UserRequestPageIds.loginWithAlipay),
+  );
 
   @override
-  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command) =>
+  Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) =>
       client.userAccountSessionLoginWithQq(
         command,
         context: invocationContext(UserRequestPageIds.loginWithQq),

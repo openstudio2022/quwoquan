@@ -46,7 +46,7 @@ def _init_scorers() -> dict[str, Any]:
     multi_obj = MultiObjectiveScorer()
     canary_obj = MultiObjectiveScorer()
 
-    active_content = multi_obj if multi_obj.model_version != "rule" else content_feed
+    active_content = multi_obj if multi_obj.scorer_kind != "rule" else content_feed
 
     return {
         "content_feed": active_content,
@@ -75,7 +75,7 @@ def _reload_scorers():
 
 
 def _background_reload():
-    """Periodically check for new model versions."""
+    """Periodically check for newly activated model releases."""
     while True:
         time.sleep(_reload_interval_s)
         try:
@@ -98,7 +98,7 @@ class _RuntimeScorerRegistry:
         scorers = _get_scorers()
         if release == "challenger":
             challenger = scorers.get(f"_{scenario}_canary")
-            if challenger is not None and getattr(challenger, "model_version", "rule") != "rule":
+            if challenger is not None and getattr(challenger, "scorer_kind", "rule") != "rule":
                 return challenger
         return scorers.get(scenario)
 
@@ -106,10 +106,10 @@ class _RuntimeScorerRegistry:
         return tuple(sorted(key for key in _get_scorers() if not key.startswith("_")))
 
 
-def _capacity_score(body: ModelScoreRequest, model_version: str, compute: Any) -> ModelScoreResponse:
+def _capacity_score(body: ModelScoreRequest, scorer_kind: str, compute: Any) -> ModelScoreResponse:
     return score_with_capacity_controls(
         body,
-        model_version=model_version,
+        scorer_kind=scorer_kind,
         compute=compute,
     )
 

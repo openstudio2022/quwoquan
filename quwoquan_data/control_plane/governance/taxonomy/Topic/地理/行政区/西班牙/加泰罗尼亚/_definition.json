@@ -1,0 +1,12 @@
+{
+  "label": "加泰罗尼亚",
+  "labelEn": "Catalonia",
+  "description": "东北经济与建筑艺术区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

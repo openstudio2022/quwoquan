@@ -2,6 +2,7 @@ events:
 - name: FilterCatalogReleaseStaged
   producer: content-service
   consumers: []
+  no_consumer_reason: 目录 release 事实即审计存储；当前无独立事件投递链。
   channel: fact_collection
   payload_entity: FilterCatalogRelease
   payload_fields:
@@ -14,6 +15,7 @@ events:
 - name: FilterCatalogReleaseActivated
   producer: content-service
   consumers: []
+  no_consumer_reason: 激活事实由同一 aggregate/store 提供当前态读取；当前无独立事件投递链。
   channel: fact_collection
   payload_entity: FilterCatalogRelease
   payload_fields:
@@ -26,6 +28,7 @@ events:
 - name: FilterCatalogReleaseRolledBack
   producer: content-service
   consumers: []
+  no_consumer_reason: 回滚事实由同一 aggregate/store 提供当前态读取；当前无独立事件投递链。
   channel: fact_collection
   payload_entity: FilterCatalogRelease
   payload_fields:

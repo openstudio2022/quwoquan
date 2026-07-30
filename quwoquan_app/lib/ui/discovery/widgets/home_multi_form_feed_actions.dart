@@ -281,11 +281,12 @@ class _QualifiedImpressionGate extends StatefulWidget {
 }
 
 class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
-  static const Duration _sampleInterval = Duration(milliseconds: 250);
   static const double _qualifiedFraction = 0.5;
   static const Duration _qualifiedDuration = Duration(milliseconds: 1000);
 
-  Timer? _timer;
+  final HomeFeedImpressionSamplingClock _samplingClock =
+      HomeFeedImpressionSamplingClock.shared;
+  late final VoidCallback _samplingListener;
   Duration _visibleAccum = Duration.zero;
   double _peakFraction = 0;
   bool _everVisible = false;
@@ -294,7 +295,8 @@ class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(_sampleInterval, (_) => _sample());
+    _samplingListener = _sample;
+    _samplingClock.addListener(_samplingListener);
   }
 
   @override
@@ -306,15 +308,14 @@ class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
       _peakFraction = 0;
       _everVisible = false;
       _reported = false;
-      _timer ??= Timer.periodic(_sampleInterval, (_) => _sample());
+      _samplingClock.addListener(_samplingListener);
     }
   }
 
   @override
   void dispose() {
     _flushWeakVisibleIfNeeded(widget.onWeakVisible);
-    _timer?.cancel();
-    _timer = null;
+    _samplingClock.removeListener(_samplingListener);
     super.dispose();
   }
 
@@ -343,11 +344,10 @@ class _QualifiedImpressionGateState extends State<_QualifiedImpressionGate> {
       _visibleAccum = Duration.zero;
       return;
     }
-    _visibleAccum += _sampleInterval;
+    _visibleAccum += _samplingClock.interval;
     if (_visibleAccum >= _qualifiedDuration) {
       _reported = true;
-      _timer?.cancel();
-      _timer = null;
+      _samplingClock.removeListener(_samplingListener);
       widget.onQualified(fraction, _visibleAccum);
     }
   }

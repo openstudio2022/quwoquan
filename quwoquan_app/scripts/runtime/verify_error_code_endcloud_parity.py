@@ -40,6 +40,8 @@ CLIENT_DOMAINS = {
             "quwoquan_service/services/content-service/contracts/content/comment/errors.yaml",
             "quwoquan_service/services/content-service/contracts/content/content_reaction/errors.yaml",
             "quwoquan_service/services/content-service/contracts/content/deleted_post_tombstone/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/content/profile_interaction_activity_view/errors.yaml",
+            "quwoquan_service/services/content-service/contracts/content/profile_interaction_read_fact/errors.yaml",
             "quwoquan_service/services/content-service/contracts/media/filter_catalog_release/errors.yaml",
             "quwoquan_service/services/content-service/contracts/media/media_asset/errors.yaml",
             "quwoquan_service/services/content-service/contracts/media/media_original_access_fact/errors.yaml",
@@ -75,6 +77,10 @@ CLIENT_DOMAINS = {
     "circle": {
         "cloud": ["quwoquan_service/services/circle-service/contracts/circle_management/circle/errors.yaml"],
         "dart": "quwoquan_app/lib/cloud/circle/generated/circle_errors.g.dart",
+    },
+    "circle_membership": {
+        "cloud": ["quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/errors.yaml"],
+        "dart": "quwoquan_app/lib/cloud/circle/generated/circle_membership_errors.g.dart",
     },
     "entity": {
         "cloud": [

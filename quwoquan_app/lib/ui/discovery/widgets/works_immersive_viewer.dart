@@ -66,7 +66,6 @@ import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/di/video_preview_track_dependencies.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
@@ -88,6 +87,8 @@ import 'package:quwoquan_app/components/media/video/player/video_timeline_previe
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show ActivePersonaContextViewData;
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/works_viewer_article_hydration_admission.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/works_video_episode_identity.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
@@ -106,6 +107,7 @@ import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_brid
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
+import 'package:quwoquan_app/ui/discovery/models/works_viewer_state_budget.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer_observability.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer_paging.dart';
 part 'works_immersive_viewer_controls.dart';
@@ -124,16 +126,14 @@ class _WorksTrackingAttribution {
     required this.feedRequestId,
     required this.position,
     required this.channelId,
-    required this.rankingVersion,
-    required this.reasonVersion,
+    required this.policyDigest,
   });
 
   final ReferralSource referralSource;
   final String? feedRequestId;
   final int position;
   final String channelId;
-  final String? rankingVersion;
-  final String? reasonVersion;
+  final String? policyDigest;
 }
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
@@ -156,6 +156,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.source = 'featured',
     this.referralSource = ReferralSource.organicFeed,
     this.feedRequestId,
+    this.policyDigest,
     this.initialFeedPosition,
     this.rawPostsById = const <String, MediaViewerPostWireRow>{},
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
@@ -188,6 +189,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final String source;
   final ReferralSource referralSource;
   final String? feedRequestId;
+  final String? policyDigest;
   final int? initialFeedPosition;
   final Map<String, MediaViewerPostWireRow> rawPostsById;
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
@@ -202,8 +204,9 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
 }
 
 class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const int _tailPrefetchThreshold = 2;
+  static const int _maxOriginalImageAccessEntriesPerPost = 12;
   static const double _edgeDismissHotzoneWidth = AppSpacing.lg;
   static const double _edgeDismissMinDistance = 56;
   static const double _edgeDismissMinVelocity = 520;
@@ -225,17 +228,24 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   PostBaseDto? _activeTrackedPost;
   _WorksTrackingAttribution? _activeTrackingAttribution;
   final DateTime _viewerOpenedAt = DateTime.now();
-  final Map<String, Map<int, String>> _originalImageUrlsByPostId =
-      <String, Map<int, String>>{};
+  final Map<String, Map<int, WorksViewerOriginalImageAccess>>
+  _originalImageUrlsByPostId =
+      <String, Map<int, WorksViewerOriginalImageAccess>>{};
+  // 仅保存 canonical operation deadline 内的在途去重；finally 必须移除，
+  // 不作为跨请求、跨作品或跨会话缓存。
   final Set<String> _requestingOriginalMediaIds = <String>{};
   final Map<String, Map<String, Object?>> _hydratedRawPostsById =
       <String, Map<String, Object?>>{};
-  final Set<String> _hydratingArticleIds = <String>{};
+  // GetPost 严格串行且只保留最新可见文章；切换作品会 cooperative cancel
+  // 旧 operation，迟到结果不得进入 resident LRU。
+  final WorksViewerArticleHydrationAdmission _articleHydrationAdmission =
+      WorksViewerArticleHydrationAdmission();
   final Set<String> _failedArticleHydrationIds = <String>{};
   final Map<String, Object> _failedArticleHydrationErrorsById =
       <String, Object>{};
-  final Map<String, WorkBrowserItemDto> _workItemCache =
-      <String, WorkBrowserItemDto>{};
+  final WorksViewerLruCache<String, WorkBrowserItemDto> _workItemCache =
+      WorksViewerLruCache<String, WorkBrowserItemDto>();
+  late final WorksViewerPostStateWindow _postStateWindow;
   final ImmersiveGestureIntentController _gestureIntentController =
       ImmersiveGestureIntentController();
 
@@ -279,9 +289,42 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     setState(update);
   }
 
+  void _evictPostLocalState(String postId) {
+    _articleHydrationAdmission.cancelPost(postId);
+    _photoInnerIndex.remove(postId);
+    _articleInnerIndex.remove(postId);
+    _resolvedArticlePageCount.remove(postId);
+    _articlePaperThemeOverrides.remove(postId);
+    _videoInnerIndex.remove(postId);
+    _videoInnerIdentity.remove(postId);
+    _expandedCaptionPostIds.remove(postId);
+    _originalImageUrlsByPostId.remove(postId);
+    _hydratedRawPostsById.remove(postId);
+    _failedArticleHydrationIds.remove(postId);
+    _failedArticleHydrationErrorsById.remove(postId);
+    _workItemCache.remove(postId);
+  }
+
+  void _rememberPostLocalState(String postId) {
+    _postStateWindow.touch(postId);
+  }
+
+  void _retainPostLocalStateAround(List<PostBaseDto> posts, int visibleIndex) {
+    if (posts.isEmpty) {
+      return;
+    }
+    _postStateWindow.updateViewport(
+      itemCount: posts.length,
+      currentIndex: visibleIndex,
+      postIdAt: (index) => posts[index].id,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _postStateWindow = WorksViewerPostStateWindow(_evictPostLocalState);
     _gestureIntentController.addListener(_handleGestureIntentChanged);
     _feedPerformanceObservability = ref.read(
       feedPerformanceObservabilityProvider,
@@ -310,6 +353,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       final posts = _buildFeed();
       if (posts.isNotEmpty) {
         final initialIndex = _currentPage.clamp(0, posts.length - 1);
+        _retainPostLocalStateAround(posts, initialIndex);
         if (widget.initialCommentContext.shouldOpen &&
             _commentSplitPostId == null) {
           setState(() {
@@ -337,6 +381,24 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     // Canvas 再按 media identity 对齐并上报 binding，单纯重排不得误重启五秒窗口。
     _workItemCache.clear();
     _configureExternalEmptyDeadline();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final posts = _buildFeed();
+      _retainPostLocalStateAround(posts, _currentPage);
+    });
+  }
+
+  @override
+  void didHaveMemoryPressure() {
+    super.didHaveMemoryPressure();
+    final posts = _buildFeed();
+    final currentPostId = posts.isEmpty
+        ? null
+        : posts[_currentPage.clamp(0, posts.length - 1)].id;
+    _postStateWindow.handleMemoryPressure(currentPostId: currentPostId);
+    _workItemCache.clear();
   }
 
   @override
@@ -348,9 +410,11 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     AppToast.dismiss();
     _videoDurationWindowTimer?.cancel();
     _externalEmptyTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _gestureIntentController.removeListener(_handleGestureIntentChanged);
     _gestureIntentController.dispose();
     _pageController.dispose();
+    _articleHydrationAdmission.dispose();
     super.dispose();
   }
 

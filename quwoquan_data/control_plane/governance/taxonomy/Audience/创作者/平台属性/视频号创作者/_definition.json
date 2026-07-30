@@ -2,6 +2,7 @@
   "label": "视频号创作者",
   "labelEn": "WeChat Video Creator",
   "description": "主要在视频号平台活跃",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

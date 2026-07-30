@@ -51,13 +51,7 @@ api_routes:
     availability_percent: 99.9
   description: 校验 canonical digest、默认模板和路由引用后只追加一次 immutable release。
   request_entity: AssistantPolicyRelease
-  request_fields:
-  - policyId
-  - releaseVersion
-  - canonicalDigest
-  - defaultTemplateId
-  - templates
-  - routingRules
+  request_body_kind: object
   response_entity: AssistantPolicyRelease
   security:
     auth_mode: required

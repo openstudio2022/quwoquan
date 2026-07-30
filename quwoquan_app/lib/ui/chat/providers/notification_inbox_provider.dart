@@ -7,7 +7,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 final notificationInboxProvider = FutureProvider<List<AppMessage>>((ref) async {
   final query = ref.watch(appMessageQueryProvider);
   final slice = await query.listAppMessages(
-    const ListAppMessagesQuery(limit: 50),
+    ListAppMessagesQuery(limit: 50),
   );
   return slice.items;
 });
@@ -16,7 +16,7 @@ final notificationInboxProvider = FutureProvider<List<AppMessage>>((ref) async {
 final appMessageUnreadCountProvider = FutureProvider<int>((ref) async {
   final query = ref.watch(appMessageQueryProvider);
   final slice = await query.getUnreadCount(
-    const GetAppMessageUnreadCountQuery(),
+    GetAppMessageUnreadCountQuery(),
   );
   return slice.unreadCount;
 });

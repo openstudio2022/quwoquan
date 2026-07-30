@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ MATRIX_SCHEMA = "runtime-media-video-playback-t4-matrix-report"
 SCENARIO = "runtime_media.video_playback_t4"
 MATRIX_SCENARIO = "runtime_media.video_playback_t4_matrix"
 PRODUCTION_FORBIDDEN_TOKENS = frozenset({"fixture", "mock", "seed", "test"})
+SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 REQUIRED_MATRIX_KEYS = frozenset(
     {
         ("alpha-local", "local"),
@@ -118,7 +120,11 @@ def _validate_single_report(
     _require_string(report, "endedAt", issues, prefix=prefix)
 
     environment = _mapping(report.get("environment"))
-    target, _ = _validate_target(environment, issues, prefix=f"{prefix}.environment")
+    target, env = _validate_target(
+        environment,
+        issues,
+        prefix=f"{prefix}.environment",
+    )
     media_authority = _require_string(
         environment,
         "mediaVideoBaseUrl",
@@ -129,6 +135,43 @@ def _validate_single_report(
         issues.append(f"{prefix}.environment.mediaVideoBaseUrl 必须为 HTTPS authority")
     _require_string(environment, "commitSha", issues, prefix=f"{prefix}.environment")
     _require_string(environment, "configHash", issues, prefix=f"{prefix}.environment")
+
+    release = _mapping(report.get("release"))
+    release_prefix = f"{prefix}.release"
+    release_id = _require_string(release, "releaseId", issues, prefix=release_prefix)
+    if _require_string(release, "sourceOwner", issues, prefix=release_prefix) != "qwq_data":
+        issues.append(f"{release_prefix}.sourceOwner 必须为 qwq_data")
+    for digest_field in ("manifestDigest", "mediaManifestDigest"):
+        digest = _require_string(release, digest_field, issues, prefix=release_prefix)
+        if digest and SHA256_PATTERN.fullmatch(digest) is None:
+            issues.append(f"{release_prefix}.{digest_field} 必须为 sha256 digest")
+    _require_string(
+        release,
+        "importRunId",
+        issues,
+        prefix=release_prefix,
+    )
+    verify_run_id = _require_string(
+        release,
+        "verifyRunId",
+        issues,
+        prefix=release_prefix,
+    )
+    receipt_ref = _require_string(
+        release,
+        "readinessReceiptRef",
+        issues,
+        prefix=release_prefix,
+    )
+    if env and release_id and verify_run_id and receipt_ref:
+        expected_receipt_ref = (
+            f"env/{env}/runs/data-release/{release_id}/{verify_run_id}/"
+            "release-readiness.json"
+        )
+        if receipt_ref != expected_receipt_ref:
+            issues.append(
+                f"{release_prefix}.readinessReceiptRef 不是当前环境的 canonical receipt"
+            )
 
     media = _mapping(report.get("media"))
     public_slice_key = _require_string(media, "publicSliceKey", issues, prefix=f"{prefix}.media")
@@ -253,6 +296,7 @@ def validate_evidence_document(
         seen_keys: set[tuple[str, str]] = set()
         commits: set[str] = set()
         media_identities: set[tuple[str, int, str]] = set()
+        release_identities: set[tuple[str, str, str, str]] = set()
         prod_config_hashes: set[str] = set()
         prod_post_ids: set[str] = set()
         for index, report in enumerate(reports):
@@ -297,6 +341,15 @@ def validate_evidence_document(
             )
             if all((identity[0], identity[2])) and identity[1] > 0:
                 media_identities.add(identity)
+            release = _mapping(report.get("release"))
+            release_identity = (
+                _non_empty_string(release.get("releaseId")),
+                _non_empty_string(release.get("sourceOwner")),
+                _non_empty_string(release.get("manifestDigest")),
+                _non_empty_string(release.get("mediaManifestDigest")),
+            )
+            if all(release_identity):
+                release_identities.add(release_identity)
         missing = REQUIRED_MATRIX_KEYS - seen_keys
         for target, stage in sorted(missing):
             issues.append(f"matrix.reports 缺少 {target}/{stage} 证据")
@@ -307,6 +360,11 @@ def validate_evidence_document(
             issues.append("matrix.reports 必须绑定同一 commitSha")
         if len(media_identities) > 1:
             issues.append("matrix.reports 必须绑定同一 assetId/assetVersion/probeHash")
+        if len(release_identities) > 1:
+            issues.append(
+                "matrix.reports 必须绑定同一 releaseId/manifestDigest/"
+                "mediaManifestDigest/sourceOwner"
+            )
         if len(prod_config_hashes) > 1:
             issues.append("prod-hosted 三阶段必须绑定同一 production configHash")
         if len(prod_post_ids) > 1:

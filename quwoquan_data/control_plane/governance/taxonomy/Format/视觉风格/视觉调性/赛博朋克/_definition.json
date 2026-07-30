@@ -2,6 +2,7 @@
   "label": "赛博朋克",
   "labelEn": "Cyberpunk",
   "description": "霓虹未来感色彩",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

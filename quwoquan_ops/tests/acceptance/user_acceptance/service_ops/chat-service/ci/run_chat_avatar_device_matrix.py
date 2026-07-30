@@ -243,16 +243,30 @@ def default_media_url(env_name: str, override: str) -> str:
     return canonical
 
 
-def adb_reverse_if_needed(device: dict[str, Any], urls: list[str]) -> list[dict[str, Any]]:
+def adb_reverse_if_needed(
+    env_name: str,
+    device: dict[str, Any],
+    urls: list[str],
+) -> list[dict[str, Any]]:
     target = device["targetPlatform"].lower()
-    if not target.startswith("android"):
+    if env_name == "prod" or not target.startswith("android"):
         return []
     results = []
-    for url in urls:
-        parsed = urllib.parse.urlparse(url)
-        if parsed.hostname not in {"127.0.0.1", "localhost"} or not parsed.port:
-            continue
-        command = ["adb", "-s", device["id"], "reverse", f"tcp:{parsed.port}", f"tcp:{parsed.port}"]
+    ports = {
+        parsed.port or 443
+        for url in urls
+        if (parsed := urllib.parse.urlparse(url)).scheme in {"https", "wss"}
+        and parsed.hostname
+    }
+    for port in sorted(ports):
+        command = [
+            "adb",
+            "-s",
+            device["id"],
+            "reverse",
+            f"tcp:{port}",
+            f"tcp:{port}",
+        ]
         results.append(run_command(command, cwd=REPO_ROOT, timeout_seconds=20))
     return results
 
@@ -467,7 +481,11 @@ def main() -> int:
                     },
                 )
                 before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
-                reverse = adb_reverse_if_needed(device, [base_url, media_url])
+                reverse = adb_reverse_if_needed(
+                    env_name,
+                    device,
+                    [base_url, media_url],
+                )
                 probe = run_probe(
                     env_name,
                     base_url,

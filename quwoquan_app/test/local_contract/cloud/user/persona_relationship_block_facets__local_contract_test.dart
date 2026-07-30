@@ -7,13 +7,13 @@ void main() {
   group('PersonaRelationship block typed contract', () {
     test('BlockCommandResult 严格解析版本化结果', () {
       final result = decodeBlockCommandResult(<String, Object?>{
-        'targetSubAccountId': 'ps_target',
+        'targetPersonaId': 'ps_target',
         'blocked': true,
         'idempotentReplay': false,
         'updatedAt': '2026-07-19T12:00:00Z',
       });
 
-      expect(result.targetSubAccountId, 'ps_target');
+      expect(result.targetPersonaId, 'ps_target');
       expect(result.blocked, isTrue);
       expect(result.idempotentReplay, isFalse);
       expect(result.updatedAt, DateTime.utc(2026, 7, 19, 12));
@@ -23,7 +23,7 @@ void main() {
       final slice = decodeBlockedUserSlice(<String, Object?>{
         'items': <Object?>[
           <String, Object?>{
-            'targetSubAccountId': 'ps_target',
+            'targetPersonaId': 'ps_target',
             'displayName': '目标用户',
             'userHandle': 'target',
             'avatarUrl': '',
@@ -43,7 +43,7 @@ void main() {
         () => decodeBlockedUserSlice(<String, Object?>{
           'items': <Object?>[
             <String, Object?>{
-              'targetSubAccountId': 'ps_target',
+              'targetPersonaId': 'ps_target',
               'blockedAt': '2026-07-19T12:00:00Z',
             },
           ],
@@ -56,7 +56,7 @@ void main() {
   group('AlphaPersonaRelationshipFacet', () {
     test('block/list/unblock 共用同一状态且重复命令幂等', () async {
       final facet = AlphaPersonaRelationshipFacet();
-      final command = BlockUserCommand(targetSubAccountId: 'ps_target');
+      final command = BlockUserCommand(targetPersonaId: 'ps_target');
 
       final first = await facet.blockUser(command);
       final replay = await facet.blockUser(command);
@@ -66,10 +66,10 @@ void main() {
 
       expect(first.idempotentReplay, isFalse);
       expect(replay.idempotentReplay, isTrue);
-      expect(blocked.items.single.targetSubAccountId, 'ps_target');
+      expect(blocked.items.single.targetPersonaId, 'ps_target');
 
       final unblocked = await facet.unblockUser(
-        UnblockUserCommand(targetSubAccountId: 'ps_target'),
+        UnblockUserCommand(targetPersonaId: 'ps_target'),
       );
       final empty = await facet.listBlockedUsers(const ListBlockedUsersQuery());
 

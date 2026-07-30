@@ -27,12 +27,14 @@ type ConversationOwnerReader interface {
 }
 
 type SetPreferenceCommand struct {
-	UserID         string
-	Scope          string
-	ConversationID string
-	Kind           string
-	Value          string
-	SourceType     string
+	UserID               string
+	Scope                string
+	ConversationID       string
+	Kind                 string
+	Value                string
+	SourceType           string
+	SourceConversationID string
+	Confirmed            bool
 }
 
 type CommandFacade struct {
@@ -70,13 +72,15 @@ func (f *CommandFacade) SetPreference(
 	if userID == "" {
 		return preferencemodel.Fact{}, preferenceInvalidArgument("missing trusted persona")
 	}
-	scope, conversationID, kind, value, sourceType, normalizeErr :=
+	scope, conversationID, kind, value, sourceType, sourceConversationID, normalizeErr :=
 		preferencemodel.Normalize(
 			command.Scope,
 			command.ConversationID,
 			command.Kind,
 			command.Value,
 			command.SourceType,
+			command.SourceConversationID,
+			command.Confirmed,
 		)
 	if normalizeErr != nil {
 		return preferencemodel.Fact{}, preferenceInvalidArgument(normalizeErr.Error())
@@ -99,6 +103,25 @@ func (f *CommandFacade) SetPreference(
 			return preferencemodel.Fact{}, preferenceNotFound()
 		}
 	}
+	if preferencemodel.IsFactualKind(kind) &&
+		sourceType == preferencemodel.SourceConversationConfirmed {
+		if f == nil || f.conversations == nil {
+			return preferencemodel.Fact{}, preferenceStorageUnavailable(
+				"assistant conversation owner reader is not configured",
+			)
+		}
+		owned, ownerErr := f.conversations.OwnedConversationExists(
+			ctx,
+			userID,
+			sourceConversationID,
+		)
+		if ownerErr != nil {
+			return preferencemodel.Fact{}, preferenceStorageUnavailable(ownerErr.Error())
+		}
+		if !owned {
+			return preferencemodel.Fact{}, preferenceNotFound()
+		}
+	}
 	if f == nil || f.store == nil {
 		return preferencemodel.Fact{}, preferenceStorageUnavailable(
 			"assistant preference store is not configured",
@@ -108,15 +131,22 @@ func (f *CommandFacade) SetPreference(
 	if generateErr != nil {
 		return preferencemodel.Fact{}, preferenceStorageUnavailable(generateErr.Error())
 	}
+	now := f.now()
+	var confirmedAt *time.Time
+	if preferencemodel.IsFactualKind(kind) {
+		confirmedAt = &now
+	}
 	fact, storeErr := f.store.Upsert(ctx, preferenceports.UpsertInput{
-		PreferenceID:   preferenceID,
-		UserID:         userID,
-		Scope:          scope,
-		ConversationID: conversationID,
-		Kind:           kind,
-		Value:          value,
-		SourceType:     sourceType,
-		Now:            f.now(),
+		PreferenceID:         preferenceID,
+		UserID:               userID,
+		Scope:                scope,
+		ConversationID:       conversationID,
+		Kind:                 kind,
+		Value:                value,
+		SourceType:           sourceType,
+		SourceConversationID: sourceConversationID,
+		ConfirmedAt:          confirmedAt,
+		Now:                  now,
 	})
 	if storeErr != nil {
 		return preferencemodel.Fact{}, preferenceStorageUnavailable(storeErr.Error())

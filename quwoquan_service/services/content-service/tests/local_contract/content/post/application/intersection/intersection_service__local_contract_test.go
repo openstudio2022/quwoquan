@@ -318,7 +318,7 @@ func TestIntersectionService_ExposureRetainsButDemotesSeen(t *testing.T) {
 func TestIntersectionService_NegativeFeedbackFiltersFromFeed(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		displayReadyFactReason("a", "relationship", "commonContact", "u1", "person", "陆衡", 2, 0.9),
+		displayReadyFactReason("a", "relationship", "commonFollower", "u1", "person", "陆衡", 2, 0.9),
 		displayReadyFactReason("b", "content", "coCommented", "p1", "content", "摄影路线", 2, 0.8),
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
@@ -353,7 +353,7 @@ func TestIntersectionService_NegativeFeedbackFiltersFromFeed(t *testing.T) {
 func TestIntersectionService_NegativeFeedbackCooldownExpires(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	src := stubSource{facts: []IntersectionReasonView{
-		displayReadyFactReason("a", "relationship", "commonContact", "u1", "person", "陆衡", 2, 0.9),
+		displayReadyFactReason("a", "relationship", "commonFollower", "u1", "person", "陆衡", 2, 0.9),
 	}}
 	svc := NewIntersectionService(
 		newTestRouter(t),
@@ -524,7 +524,7 @@ func TestIntersectionService_MaxCandidateWindowCapsBeforeLimit(t *testing.T) {
 	src := stubSource{facts: []IntersectionReasonView{
 		displayReadyFactReason("a", "identity", "sharedFollowees", "u1", "person", "陆衡", 8, 0.9),
 		displayReadyFactReason("b", "content", "coCommented", "u2", "content", "摄影路线", 2, 0.8),
-		displayReadyFactReason("c", "relationship", "commonContact", "u3", "person", "周屿", 4, 0.7),
+		displayReadyFactReason("c", "relationship", "commonFollower", "u3", "person", "周屿", 4, 0.7),
 	}}
 	svc := NewIntersectionService(
 		newTestRouter(t),
@@ -604,11 +604,11 @@ func TestIntersectionService_SpotlightFiltersIncompleteDisplay(t *testing.T) {
 		// 人级但只有匿名代表人 → 不得进候选窗。
 		{IntersectionID: "person_no_actor", Dimension: "relationship", Strength: 0.8,
 			ActionTargetID: "u1", ObjectKind: "person", DisplayName: "一位用户",
-			IntersectionPoints: []IntersectionPointView{{PointID: "p_bad", PointClass: "fact", Dimension: "relationship", SourceRef: "commonContact", Count: 3, Visibility: "public"}}},
+			IntersectionPoints: []IntersectionPointView{{PointID: "p_bad", PointClass: "fact", Dimension: "relationship", SourceRef: "commonFollower", Count: 3, Visibility: "public"}}},
 		// 人级且展示证据完备 → 进候选窗。
-		displayReadyFactReason("person_ok", "relationship", "commonContact", "u2", "person", "林清越", 2, 0.7),
+		displayReadyFactReason("person_ok", "relationship", "commonFollower", "u2", "person", "林清越", 2, 0.7),
 		// 非人对象也要有结论句与可导航对象 → 进候选窗。
-		displayReadyFactReason("place_ok", "location", "coVisitedEntity", "e1", "place", "横竖影像馆取景地", 1, 0.6),
+		displayReadyFactReason("place_ok", "location", "coWishlistedEntity", "e1", "place", "横竖影像馆取景地", 1, 0.6),
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -648,7 +648,7 @@ func TestIntersectionService_ObjectIntersectionsEmptyObjectID(t *testing.T) {
 // 清单位置：specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md 附录 A。
 func TestEvidenceKindRank_MatchesWP1AppendixA(t *testing.T) {
 	appendixA := map[string]int{
-		// rank 5 · 联系人（最强人物锚点）
+		// rank 5 · 联系人（最强人物锚点；kind 当前 deferred，rank 契约位仍需固化）
 		"commonContact": 5,
 		// rank 10 · 关注关系人物
 		"sharedFollowees": 10, "commonFollower": 10,
@@ -692,15 +692,15 @@ func TestIntersectionService_RepresentativeActorPrefersClosestRelationship(t *te
 			IntersectionPoints: []IntersectionPointView{
 				{PointID: "circle", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedCircle", Label: "共同圈子", Count: 12, SampleText: "城市漫游圈", Visibility: "public"},
 				{PointID: "followee", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 9, SampleText: "周屿", Visibility: "public"},
-				{PointID: "contact", PointClass: "fact", Dimension: "relationship", SourceRef: "commonContact", Label: "共同联系人", Count: 8, SampleText: "林清越", Visibility: "public"},
+				{PointID: "contact", PointClass: "fact", Dimension: "relationship", SourceRef: "commonFollower", Label: "共同关注者", Count: 8, SampleText: "林清越", Visibility: "public"},
 				{PointID: "content", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同讨论", Count: 20, SampleText: "黄金投资圈", Visibility: "public"},
 			},
 			ActorEvidence: []IntersectionActorEvidenceView{
 				{
 					ActorID:       "u_lin",
 					DisplayName:   "林清越",
-					RelationLabel: "联系人",
-					SourceRef:     "commonContact",
+					RelationLabel: "关注你的人",
+					SourceRef:     "commonFollower",
 				},
 			},
 		},
@@ -719,10 +719,10 @@ func TestIntersectionService_RepresentativeActorPrefersClosestRelationship(t *te
 	if got.RepresentativeActor == nil || got.RepresentativeActor.DisplayName != "林清越" {
 		t.Fatalf("representativeActor should prefer closest contact evidence, got %+v", got.RepresentativeActor)
 	}
-	if got.RepresentativeActor.EvidenceRank != 5 {
-		t.Fatalf("contact evidence rank = %d, want 5", got.RepresentativeActor.EvidenceRank)
+	if got.RepresentativeActor.EvidenceRank != 10 {
+		t.Fatalf("closest evidence rank = %d, want 10", got.RepresentativeActor.EvidenceRank)
 	}
-	if got.PrimaryText != "联系人林清越等8人都是你和陆衡的共同联系人" {
+	if got.PrimaryText != "关注你的人林清越等9人也关注了「陆衡」" {
 		t.Fatalf("primaryText should use closest representative evidence, got %q", got.PrimaryText)
 	}
 }
@@ -734,7 +734,7 @@ func TestIntersectionService_ActorEvidenceContractHydratesCompleteList(t *testin
 			IntersectionID: "actor_evidence", IntersectionClass: "fact", Dimension: "relationship",
 			Strength: 0.92, ActionTargetID: "post_1", ObjectKind: "content", DisplayName: "川西雪山和校园摄影路线",
 			PointSummarySnapshotID: "snap_actor_evidence",
-			PrimaryText:            "联系人林清越等 2 人：1赞 1评",
+			PrimaryText:            "关注你的人林清越等 2 人：1赞 1评",
 			IntersectionPoints: []IntersectionPointView{
 				{PointID: "actors", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同评论", Count: 2, SampleText: "林清越、周屿", Visibility: "public"},
 			},
@@ -742,10 +742,10 @@ func TestIntersectionService_ActorEvidenceContractHydratesCompleteList(t *testin
 				{
 					ActorID:           "u_lin",
 					DisplayName:       "林清越",
-					RelationLabel:     "联系人",
-					RelationSourceRef: "contact",
+					RelationLabel:     "关注你的人",
+					RelationSourceRef: "follower",
 					SourcePointID:     "actors",
-					SourceRef:         "commonContact",
+					SourceRef:         "commonFollower",
 					ActionSummaryText: "点赞了这条记录",
 					LikeCount:         1,
 				},
@@ -783,11 +783,11 @@ func TestIntersectionService_ActorEvidenceContractHydratesCompleteList(t *testin
 		t.Fatalf("actor evidence len = %d, want 2", len(got.ActorEvidence))
 	}
 	first := got.ActorEvidence[0]
-	if first.RelationLabel != "联系人" || first.ActionSummaryText != "点赞了这条记录" {
+	if first.RelationLabel != "关注你的人" || first.ActionSummaryText != "点赞了这条记录" {
 		t.Fatalf("first actor evidence should keep source/action, got %+v", first)
 	}
-	if first.EvidenceRank != 5 {
-		t.Fatalf("first actor evidence rank = %d, want 5", first.EvidenceRank)
+	if first.EvidenceRank != 10 {
+		t.Fatalf("first actor evidence rank = %d, want 10", first.EvidenceRank)
 	}
 	if first.SortKey != 1 {
 		t.Fatalf("first actor sortKey = %d, want 1", first.SortKey)
@@ -798,7 +798,7 @@ func TestIntersectionService_ActorEvidenceContractHydratesCompleteList(t *testin
 	if first.Target == nil || first.Target.ObjectID != "u_lin" || first.Target.RouteID != "userProfile" {
 		t.Fatalf("first actor target should point to user profile, got %+v", first.Target)
 	}
-	if got.PrimaryText != "联系人林清越等2人赞过和评论过《川西雪山和校园摄影路线》" {
+	if got.PrimaryText != "关注你的人林清越等2人赞过和评论过《川西雪山和校园摄影路线》" {
 		t.Fatalf("bad preseeded raw stats text must be recomputed into SVO, got %q", got.PrimaryText)
 	}
 	if JoinedSpanText(got.PrimarySpans) != got.PrimaryText {
@@ -829,7 +829,7 @@ func TestIntersectionDisplayStatementRecomputesBadRawStatsText(t *testing.T) {
 				RelationLabel:     "联系人",
 				RelationSourceRef: "contact",
 				SourcePointID:     "actors",
-				SourceRef:         "commonContact",
+				SourceRef:         "commonFollower",
 				ActionSummaryText: "点赞了这条记录",
 				LikeCount:         1,
 			},
@@ -894,7 +894,7 @@ func TestIntersectionDisplayContextHostImplicitRemovesCurrentPostObject(t *testi
 				RelationLabel:     "联系人",
 				RelationSourceRef: "contact",
 				SourcePointID:     "actors",
-				SourceRef:         "commonContact",
+				SourceRef:         "commonFollower",
 				ActionSummaryText: "点赞了这条记录",
 				LikeCount:         1,
 			},
@@ -1120,10 +1120,12 @@ func TestIntersectionService_ExplainPipelineInstantiatesPrimaryText(t *testing.T
 		t.Fatalf("sharedFollowees should expose multiple actionHints from registry, got %+v", got.ActionHints)
 	}
 	secondHint := got.ActionHints[1]
+	// greet_person 的 dispatch 是 message：按钮文案「打招呼」必须承接到破冰会话，
+	// 而不是只跳对方主页（诚实红线，见注册表 actionKeys.greet_person）。
 	if secondHint.ActionKey != "greet_person" ||
 		secondHint.ActionTier != "light" ||
 		secondHint.TargetAvailability != "available" ||
-		secondHint.Dispatch != "navigate" {
+		secondHint.Dispatch != "message" {
 		t.Fatalf("second actionHint must hydrate actionKeyMeta from generated registry table, got %+v", secondHint)
 	}
 	wantGates := []string{"login", "greetPreference", "blocked"}
@@ -1211,10 +1213,10 @@ func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 		r.TimeBucket = bucket
 		return r
 	}
-	c := fresh(displayReadyFactReason("c", "location", "followeeVisited", "homepage_visit", "place", "横竖影像馆取景地", 5, 0.8), now.Add(-3*time.Hour), "last7Days")
+	c := fresh(displayReadyFactReason("c", "location", "coWishlistedEntity", "homepage_wishlist", "place", "横竖影像馆取景地", 5, 0.8), now.Add(-3*time.Hour), "last7Days")
 	src := stubSource{facts: []IntersectionReasonView{
 		fresh(displayReadyFactReason("a", "relationship", "sharedFollowees", "u1", "person", "林清越", 2, 0.9), now.Add(-1*time.Hour), "today"),
-		fresh(displayReadyFactReason("b", "relationship", "commonContact", "u2", "person", "周屿", 1, 0.7), now.Add(-2*time.Hour), "today"),
+		fresh(displayReadyFactReason("b", "relationship", "commonFollower", "u2", "person", "周屿", 1, 0.7), now.Add(-2*time.Hour), "today"),
 		c,
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
@@ -1244,7 +1246,7 @@ func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 		t.Fatalf("unexpected page 2: items=%+v hasMore=%v", page, hasMore)
 	}
 	page, _, _, err = svc.List(context.Background(), "viewer1", IntersectionListQuery{
-		SourceRef: "followeeVisited",
+		SourceRef: "coWishlistedEntity",
 		Limit:     10,
 	})
 	if err != nil {
@@ -1292,28 +1294,28 @@ func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
 			IntersectionID:     "bucket_today",
 			IntersectionClass:  "fact",
 			Dimension:          "location",
-			Kind:               "coVisitedEntity",
+			Kind:               "coWishlistedEntity",
 			ObjectKind:         "place",
 			ActionTargetID:     "place_today",
 			Strength:           0.8,
 			TimeBucket:         "today",
 			AnchorUserWeight:   0.1,
 			IntersectionPoints: points("bucket_today", "location", 1),
-			PrimaryText:        "你和王然等3位用户都去过「西湖」",
+			PrimaryText:        "你和王然等3位用户都想去「西湖」",
 			FreshAt:            now.Add(-2 * time.Hour).Format(time.RFC3339),
 		}, "「西湖」", "王然", "u_wang"),
 		withDisplayStatement(IntersectionReasonView{
 			IntersectionID:     "bucket_last7",
 			IntersectionClass:  "fact",
 			Dimension:          "location",
-			Kind:               "coVisitedEntity",
+			Kind:               "coWishlistedEntity",
 			ObjectKind:         "place",
 			ActionTargetID:     "place_last7",
 			Strength:           0.8,
 			TimeBucket:         "last7Days",
 			AnchorUserWeight:   0.9,
 			IntersectionPoints: points("bucket_last7", "location", 10),
-			PrimaryText:        "你和6位用户都去过「798艺术区」",
+			PrimaryText:        "你和6位用户都想去「798艺术区」",
 			FreshAt:            now.Add(-72 * time.Hour).Format(time.RFC3339),
 		}, "「798艺术区」", "顾南", "u_gu"),
 		withDisplayStatement(IntersectionReasonView{
@@ -1393,11 +1395,11 @@ func TestIntersectionService_ListDerivesExclusiveTimeBuckets(t *testing.T) {
 			IntersectionID:    id,
 			IntersectionClass: "fact",
 			Dimension:         "location",
-			Kind:              "coVisitedEntity",
+			Kind:              "coWishlistedEntity",
 			ObjectKind:        "place",
 			ActionTargetID:    id,
 			Strength:          0.5,
-			PrimaryText:       "你和3位用户都去过「西湖」",
+			PrimaryText:       "你和3位用户都想去「西湖」",
 			FreshAt:           fresh.Format(time.RFC3339),
 		}, "「西湖」", "王然", "u_wang")
 	}

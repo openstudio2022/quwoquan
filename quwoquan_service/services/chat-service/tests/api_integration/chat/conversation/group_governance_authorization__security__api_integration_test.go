@@ -59,7 +59,7 @@ func postExpectingError(t *testing.T, path, payload, userId string) (int, map[st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userId)
 	req.Header.Set("X-Client-Account-Id", userId)
-	req.Header.Set("X-Client-Sub-Account-Id", userId)
+	req.Header.Set("X-Client-Persona-Id", userId)
 	req.Header.Set("X-Client-Persona-Id", userId)
 	req = commandOperationContext(req, path, userId)
 	rec := httptest.NewRecorder()

@@ -1,4 +1,3 @@
-version: 1
 intents:
   攻略:
     tagRef: Format/内容角度/攻略

@@ -15,8 +15,6 @@ class GroupHomeDto {
   final String announcement;
   final List<String> capabilities;
   final String originType;
-  final String bindingType;
-  final String lifecyclePolicy;
   final bool canManageMembers;
   final bool canDissolve;
 
@@ -34,8 +32,6 @@ class GroupHomeDto {
     this.announcement = '',
     this.capabilities = const <String>[],
     this.originType = '',
-    this.bindingType = '',
-    this.lifecyclePolicy = '',
     this.canManageMembers = false,
     this.canDissolve = false,
   });
@@ -55,8 +51,6 @@ class GroupHomeDto {
       announcement: m['announcement']?.toString() ?? '',
       capabilities: _parseStringList(m['capabilities']) ?? const <String>[],
       originType: m['originType']?.toString() ?? '',
-      bindingType: m['bindingType']?.toString() ?? '',
-      lifecyclePolicy: m['lifecyclePolicy']?.toString() ?? '',
       canManageMembers: m['canManageMembers'] as bool? ?? false,
       canDissolve: m['canDissolve'] as bool? ?? false,
     );
@@ -77,8 +71,6 @@ class GroupHomeDto {
       'announcement': announcement,
       'capabilities': capabilities,
       'originType': originType,
-      'bindingType': bindingType,
-      'lifecyclePolicy': lifecyclePolicy,
       'canManageMembers': canManageMembers,
       'canDissolve': canDissolve,
     };
@@ -98,8 +90,6 @@ class GroupHomeDto {
     String? announcement,
     List<String>? capabilities,
     String? originType,
-    String? bindingType,
-    String? lifecyclePolicy,
     bool? canManageMembers,
     bool? canDissolve,
   }) {
@@ -117,8 +107,6 @@ class GroupHomeDto {
       announcement: announcement ?? this.announcement,
       capabilities: capabilities ?? this.capabilities,
       originType: originType ?? this.originType,
-      bindingType: bindingType ?? this.bindingType,
-      lifecyclePolicy: lifecyclePolicy ?? this.lifecyclePolicy,
       canManageMembers: canManageMembers ?? this.canManageMembers,
       canDissolve: canDissolve ?? this.canDissolve,
     );

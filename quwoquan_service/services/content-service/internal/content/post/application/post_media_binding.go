@@ -221,6 +221,10 @@ func ProjectBoundMediaAssets(
 				item["previewTrackVersion"] = asset.PreviewTrackVersion
 				item["previewTrackManifestUrl"] = asset.PreviewTrackManifestSliceKey
 			}
+			if asset.HLSCMAFDescriptorVersion > 0 {
+				item["hlsCmafDescriptorVersion"] = asset.HLSCMAFDescriptorVersion
+				item["hlsCmafMasterManifestUrl"] = asset.HLSCMAFMasterManifestSliceKey
+			}
 			mediaItems = append(mediaItems, item)
 			if firstVideoSlice == "" {
 				firstVideoSlice = publicSliceKey

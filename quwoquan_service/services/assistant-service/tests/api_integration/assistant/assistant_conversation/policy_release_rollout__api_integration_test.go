@@ -9,8 +9,9 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	releaseapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/application"
 	releasemodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/domain/model"
 	policymessaging "quwoquan_service/services/assistant-service/internal/assistant/assistant_policy_release/infrastructure/messaging"
@@ -36,26 +37,23 @@ func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
 	releases := releaseapplication.NewService(releaseStore, nil)
 	rollouts := rolloutapplication.NewService(rolloutStore, releases, nil)
 
-	for _, version := range []string{"v1", "v2"} {
-		release := policyReleaseForIntegration(version)
-		digest, err := releasemodel.Digest(release)
-		if err != nil {
-			t.Fatalf("digest release %s: %v", version, err)
-		}
-		release.CanonicalDigest = digest
+	for _, variant := range []string{"baseline", "candidate"} {
+		release := policyReleaseForIntegration(t, variant)
 		result, err := releases.Stage(
 			ctx,
-			"stage-"+version,
+			"stage-"+release.ReleaseDigest,
 			release,
 		)
 		if err != nil || result.Replayed {
-			t.Fatalf("stage %s result=%+v err=%v", version, result, err)
+			t.Fatalf("stage %s result=%+v err=%v", variant, result, err)
 		}
-		replay, err := releases.Stage(ctx, "stage-"+version, release)
+		replay, err := releases.Stage(ctx, "stage-"+release.ReleaseDigest, release)
 		if err != nil || !replay.Replayed {
-			t.Fatalf("replay %s result=%+v err=%v", version, replay, err)
+			t.Fatalf("replay %s result=%+v err=%v", variant, replay, err)
 		}
 	}
+	baselineDigest := policyReleaseForIntegration(t, "baseline").ReleaseDigest
+	candidateDigest := policyReleaseForIntegration(t, "candidate").ReleaseDigest
 
 	buckets := []rolloutmodel.BucketDefinition{{
 		Cohort:            "all",
@@ -63,59 +61,59 @@ func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
 	}}
 	first, err := rollouts.Activate(
 		ctx,
-		"activate-v1",
+		"activate-baseline",
 		rolloutapplication.ActivateInput{
 			PolicyID:          "assistant-default",
 			ExpectedRevision:  0,
 			BucketDefinitions: buckets,
 			Assignments: []rolloutmodel.CohortAssignment{{
-				Cohort:         "all",
-				ReleaseVersion: "v1",
+				Cohort:        "all",
+				ReleaseDigest: baselineDigest,
 			}},
 			ActivatedBy: "service:policy-publisher",
 		},
 	)
 	if err != nil {
-		t.Fatalf("activate v1: %v", err)
+		t.Fatalf("activate baseline: %v", err)
 	}
 	replayedFirst, err := rollouts.Activate(
 		ctx,
-		"activate-v1",
+		"activate-baseline",
 		rolloutapplication.ActivateInput{
 			PolicyID:          "assistant-default",
 			ExpectedRevision:  0,
 			BucketDefinitions: buckets,
 			Assignments: []rolloutmodel.CohortAssignment{{
-				Cohort:         "all",
-				ReleaseVersion: "v1",
+				Cohort:        "all",
+				ReleaseDigest: baselineDigest,
 			}},
 			ActivatedBy: "service:policy-publisher",
 		},
 	)
 	if err != nil || !replayedFirst.Replayed ||
 		replayedFirst.Rollout.Revision != first.Rollout.Revision {
-		t.Fatalf("replay v1 result=%+v err=%v", replayedFirst, err)
+		t.Fatalf("replay baseline result=%+v err=%v", replayedFirst, err)
 	}
 	second, err := rollouts.Activate(
 		ctx,
-		"activate-v2",
+		"activate-candidate",
 		rolloutapplication.ActivateInput{
 			PolicyID:          "assistant-default",
 			ExpectedRevision:  first.Rollout.Revision,
 			BucketDefinitions: buckets,
 			Assignments: []rolloutmodel.CohortAssignment{{
-				Cohort:         "all",
-				ReleaseVersion: "v2",
+				Cohort:        "all",
+				ReleaseDigest: candidateDigest,
 			}},
 			ActivatedBy: "service:policy-publisher",
 		},
 	)
 	if err != nil {
-		t.Fatalf("activate v2: %v", err)
+		t.Fatalf("activate candidate: %v", err)
 	}
 	rollback, err := rollouts.Rollback(
 		ctx,
-		"rollback-v2",
+		"rollback-candidate",
 		rolloutapplication.RollbackInput{
 			PolicyID:         "assistant-default",
 			ExpectedRevision: second.Rollout.Revision,
@@ -123,10 +121,10 @@ func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
 		},
 	)
 	if err != nil {
-		t.Fatalf("rollback v2: %v", err)
+		t.Fatalf("rollback candidate: %v", err)
 	}
 	if rollback.Rollout.Revision != 3 ||
-		rollback.Rollout.Assignments[0].ReleaseVersion != "v1" {
+		rollback.Rollout.Assignments[0].ReleaseDigest != baselineDigest {
 		t.Fatalf("rollback result=%+v", rollback)
 	}
 
@@ -134,7 +132,7 @@ func TestAssistantPolicyReleaseRolloutPersistsActivationAndRollback(
 	persisted, found, err := restarted.Get(ctx, "assistant-default")
 	if err != nil || !found ||
 		persisted.Revision != rollback.Rollout.Revision ||
-		persisted.Assignments[0].ReleaseVersion != "v1" {
+		persisted.Assignments[0].ReleaseDigest != baselineDigest {
 		t.Fatalf("persisted rollout=%+v found=%v err=%v", persisted, found, err)
 	}
 	releaseOutbox, err := integrationMongoDB.Collection(
@@ -207,17 +205,14 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 		t.Fatalf("ensure policy rollout indexes: %v", err)
 	}
 	releases := releaseapplication.NewService(releaseStore, nil)
-	for _, version := range []string{"v1", "v2"} {
-		release := policyReleaseForIntegration(version)
-		digest, err := releasemodel.Digest(release)
-		if err != nil {
-			t.Fatalf("digest release %s: %v", version, err)
-		}
-		release.CanonicalDigest = digest
-		if _, err := releases.Stage(ctx, "freeze-stage-"+version, release); err != nil {
-			t.Fatalf("stage release %s: %v", version, err)
+	for _, variant := range []string{"baseline", "candidate"} {
+		release := policyReleaseForIntegration(t, variant)
+		if _, err := releases.Stage(ctx, "freeze-stage-"+release.ReleaseDigest, release); err != nil {
+			t.Fatalf("stage release %s: %v", variant, err)
 		}
 	}
+	baselineDigest := policyReleaseForIntegration(t, "baseline").ReleaseDigest
+	candidateDigest := policyReleaseForIntegration(t, "candidate").ReleaseDigest
 	rollouts := rolloutapplication.NewService(rolloutStore, releases, nil)
 	buckets := []rolloutmodel.BucketDefinition{{
 		Cohort:            "all",
@@ -225,20 +220,20 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 	}}
 	firstActivation, err := rollouts.Activate(
 		ctx,
-		"freeze-activate-v1",
+		"freeze-activate-baseline",
 		rolloutapplication.ActivateInput{
 			PolicyID:          "assistant-default",
 			ExpectedRevision:  0,
 			BucketDefinitions: buckets,
 			Assignments: []rolloutmodel.CohortAssignment{{
-				Cohort:         "all",
-				ReleaseVersion: "v1",
+				Cohort:        "all",
+				ReleaseDigest: baselineDigest,
 			}},
 			ActivatedBy: "service:policy-publisher",
 		},
 	)
 	if err != nil {
-		t.Fatalf("activate v1: %v", err)
+		t.Fatalf("activate baseline: %v", err)
 	}
 
 	service := newIntegrationAssistantService(
@@ -261,26 +256,26 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 		conversation.ConversationID,
 		"policy-freeze-user",
 		"policy-freeze-persona",
-		"policy-freeze-v1",
+		"policy-freeze-baseline",
 	)
-	assertSelectedPolicyVersion(t, firstTurn, "v1", firstActivation.Rollout.Revision)
+	assertSelectedPolicyDigest(t, firstTurn, baselineDigest, firstActivation.Rollout.Revision)
 
 	secondActivation, err := rollouts.Activate(
 		ctx,
-		"freeze-activate-v2",
+		"freeze-activate-candidate",
 		rolloutapplication.ActivateInput{
 			PolicyID:          "assistant-default",
 			ExpectedRevision:  firstActivation.Rollout.Revision,
 			BucketDefinitions: buckets,
 			Assignments: []rolloutmodel.CohortAssignment{{
-				Cohort:         "all",
-				ReleaseVersion: "v2",
+				Cohort:        "all",
+				ReleaseDigest: candidateDigest,
 			}},
 			ActivatedBy: "service:policy-publisher",
 		},
 	)
 	if err != nil {
-		t.Fatalf("activate v2: %v", err)
+		t.Fatalf("activate candidate: %v", err)
 	}
 	secondTurn := createAndExecutePolicyTurn(
 		t,
@@ -288,13 +283,13 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 		conversation.ConversationID,
 		"policy-freeze-user",
 		"policy-freeze-persona",
-		"policy-freeze-v2",
+		"policy-freeze-candidate",
 	)
-	assertSelectedPolicyVersion(t, secondTurn, "v2", secondActivation.Rollout.Revision)
+	assertSelectedPolicyDigest(t, secondTurn, candidateDigest, secondActivation.Rollout.Revision)
 
 	rollback, err := rollouts.Rollback(
 		ctx,
-		"freeze-rollback-v2",
+		"freeze-rollback-candidate",
 		rolloutapplication.RollbackInput{
 			PolicyID:         "assistant-default",
 			ExpectedRevision: secondActivation.Rollout.Revision,
@@ -302,7 +297,7 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 		},
 	)
 	if err != nil {
-		t.Fatalf("rollback v2: %v", err)
+		t.Fatalf("rollback candidate: %v", err)
 	}
 	thirdTurn := createAndExecutePolicyTurn(
 		t,
@@ -312,20 +307,20 @@ func TestAssistantRunFreezesRealPolicySelectionAcrossActivationAndRollback(
 		"policy-freeze-persona",
 		"policy-freeze-after-rollback",
 	)
-	assertSelectedPolicyVersion(t, thirdTurn, "v1", rollback.Rollout.Revision)
+	assertSelectedPolicyDigest(t, thirdTurn, baselineDigest, rollback.Rollout.Revision)
 
 	persistedFirst, err := service.GetTurn(ctx, "policy-freeze-user", firstTurn.TurnID)
 	if err != nil {
 		t.Fatalf("reload frozen first turn: %v", err)
 	}
-	assertSelectedPolicyVersion(t, persistedFirst, "v1", firstActivation.Rollout.Revision)
+	assertSelectedPolicyDigest(t, persistedFirst, baselineDigest, firstActivation.Rollout.Revision)
 }
 
 func realFrozenPolicyResolver(
 	rollouts *rolloutapplication.Service,
-) application.AssistantServiceOption {
-	return application.WithFrozenPolicyResolver(
-		application.FrozenPolicyResolverFunc(func(
+) orchestration.AssistantServiceOption {
+	return orchestration.WithFrozenPolicyResolver(
+		ports.FrozenPolicyResolverFunc(func(
 			ctx context.Context,
 			policyID string,
 			personaID string,
@@ -344,7 +339,7 @@ func realFrozenPolicyResolver(
 			}
 			return assistant.AssistantFrozenPolicySelection{
 				PolicyID:        resolved.PolicyID,
-				ReleaseVersion:  resolved.ReleaseVersion,
+				ReleaseDigest:   resolved.ReleaseDigest,
 				Cohort:          resolved.Cohort,
 				RolloutRevision: resolved.RolloutRevision,
 				RuleID:          resolved.RuleID,
@@ -372,7 +367,7 @@ func realFrozenPolicyResolver(
 
 func createAndExecutePolicyTurn(
 	t *testing.T,
-	service *application.AssistantService,
+	service *orchestration.AssistantService,
 	conversationID string,
 	userID string,
 	personaID string,
@@ -404,40 +399,40 @@ func createAndExecutePolicyTurn(
 	return persisted
 }
 
-func assertSelectedPolicyVersion(
+func assertSelectedPolicyDigest(
 	t *testing.T,
 	turn assistant.AssistantTurn,
-	version string,
+	releaseDigest string,
 	revision int,
 ) {
 	t.Helper()
 	if turn.TerminalSnapshot == nil ||
 		turn.TerminalSnapshot.SelectedPolicyRef == nil ||
 		turn.TerminalSnapshot.SelectedPolicyRef.PolicyID != "assistant-default" ||
-		turn.TerminalSnapshot.SelectedPolicyRef.Version != version ||
+		turn.TerminalSnapshot.SelectedPolicyRef.ReleaseDigest != releaseDigest ||
 		turn.FrozenPolicySelection.RolloutRevision != revision {
 		t.Fatalf(
-			"turn=%+v selectedPolicy=%+v want version=%s revision=%d",
+			"turn=%+v selectedPolicy=%+v want releaseDigest=%s revision=%d",
 			turn,
 			turn.TerminalSnapshot,
-			version,
+			releaseDigest,
 			revision,
 		)
 	}
 }
 
-func policyReleaseForIntegration(version string) releasemodel.Release {
-	return releasemodel.Release{
+func policyReleaseForIntegration(t *testing.T, variant string) releasemodel.Release {
+	t.Helper()
+	release := releasemodel.Release{
 		PolicyID:          "assistant-default",
-		ReleaseVersion:    version,
 		DefaultTemplateID: "default",
 		Templates: []releasemodel.Template{{
 			TemplateID:      "default",
 			SkillID:         "fallback_general_search",
 			DomainID:        "assistant",
-			PromptPolicy:    "grounded answer " + version,
+			PromptPolicy:    "grounded answer " + variant,
 			AllowedTools:    []string{"app_search"},
-			SearchIntensity: "balanced",
+			SearchIntensity: "medium",
 		}},
 		LearningContextPolicy: releasemodel.LearningContextPolicy{
 			Enabled:                  true,
@@ -447,4 +442,10 @@ func policyReleaseForIntegration(version string) releasemodel.Release {
 			SnapshotTrainingEligible: false,
 		},
 	}
+	digest, err := releasemodel.Digest(release)
+	if err != nil {
+		t.Fatalf("digest release %s: %v", variant, err)
+	}
+	release.ReleaseDigest = digest
+	return release
 }

@@ -2,6 +2,7 @@
   "label": "50K以上",
   "labelEn": "Above 50K",
   "description": "月薪5万元以上",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

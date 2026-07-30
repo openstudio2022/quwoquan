@@ -165,7 +165,7 @@ categories:
         activation_policy: next_session
         fallback: false
         expiry: 2026-12-31
-      - key: content.feature_flags.ops.user.persona_management_v1
+      - key: content.feature_flags.ops.user.persona_management
         owner: user
         risk_level: medium
         reload_policy: hot

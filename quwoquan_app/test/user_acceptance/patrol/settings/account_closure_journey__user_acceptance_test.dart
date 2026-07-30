@@ -14,10 +14,10 @@
 ///     --dart-define=RUN_T4_PATROL=true \
 ///     --dart-define=QWQ_PATROL_SESSION_MODE=gamma_local_anonymous_runtime \
 ///     --dart-define=QWQ_PATROL_INSTALL_ID=account-closure-`date +%s` \
-///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://gamma-api.localhost:19000
+///     --dart-define=CLOUD_GATEWAY_BASE_URL=https://api.gamma.quwoquan.com:19000
 ///
 /// Prod 必须使用专门创建且允许永久注销的一次性账号，并注入 `TEST_AUTH_TOKEN`、
-/// `TEST_REFRESH_TOKEN`、`APP_CURRENT_OWNER_ID` 与 `APP_CURRENT_SUB_ACCOUNT_ID`；
+/// `TEST_REFRESH_TOKEN`、`APP_CURRENT_OWNER_ID` 与 `APP_CURRENT_PERSONA_ID`；
 /// 同时显式设置 `QWQ_ACCOUNT_CLOSURE_DISPOSABLE_ACK=true`。禁止使用
 /// `prod_sim_anonymous_runtime` 或任何日常验收账号。
 library;
@@ -250,7 +250,7 @@ Future<void> _expectClosedCredentialsRejected({
         clientPageId: clientPageId,
         actor: CloudOperationActorContext(
           accountId: closedSession.ownerId,
-          personaId: closedSession.activeSubAccountId,
+          personaId: closedSession.activePersonaId,
           deviceActorId: _installId,
         ),
       ),

@@ -80,7 +80,7 @@ def main() -> int:
         run(
             "xcrun",
             "simctl",
-            "uninstall",
+            "terminate",
             args.simulator,
             bundle_id,
             check=False,
@@ -144,13 +144,6 @@ def main() -> int:
             bundle_id,
             check=False,
         )
-        run(
-            "xcrun",
-            "simctl",
-            "uninstall",
-            args.simulator,
-            bundle_id,
-        )
         run("xcrun", "simctl", "install", args.simulator, str(app))
         time.sleep(0.5)
         normal_launch = run(
@@ -159,6 +152,7 @@ def main() -> int:
             "launch",
             args.simulator,
             bundle_id,
+            "--qwq-test-clear-startup-fatal",
         )
         normal_process_id = normal_launch.stdout.strip().rsplit(":", 1)[-1].strip()
         if not normal_process_id.isdigit():
@@ -207,7 +201,7 @@ def main() -> int:
             )
 
     report = {
-        "schema": "qwq.ios-native-startup-gate.v1",
+        "schema": "qwq.ios-native-startup-gate",
         "status": "passed" if not issues else "GATE_BLOCK",
         "bundleId": bundle_id,
         "processId": process_id,

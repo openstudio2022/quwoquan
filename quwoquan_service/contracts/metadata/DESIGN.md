@@ -117,6 +117,8 @@ tests/user_acceptance/<journey-or-story>/...
 
 UAT/DOM/SIT/GWT 只在所属 feature-tree 节点定义。真实测试以 `spec_ref` 直接绑定验收锚点；runner 将锚点、实际测试、环境、制品摘要和结果关联。测试数、通过率和 readiness 全部由证据计算，禁止 tracked coverage map、手写状态或 exact-path 清单。
 
+`qwq-contract coverage` 的结构阶段与累计 readiness 是两种不同口径：阶段分布互斥，`modeled`、`contractReady`、`implemented`、`commercialReady` 则按前置关系累计。静态 compiler 不得把源码或测试文件“存在”解释成测试通过；runner 尚未附加对象级结果证据时，`readinessEvidencePackets=0`，`implemented/commercialReady=0` 只表示运行证据未接入，不表示仓库中没有实现。runner 证据必须绑定当前对象、完整 operation ID 集与内容摘要；任何 operation 仍为 `commercial.status: blocked` 时，四环境或 UAT 证据不得把对象提升为 commercial-ready。
+
 ## 10. 治理门面
 
 `make verify-service-architecture` 是统一门面，内部组合 metadata、路径反向映射、DDD/CQRS、配置四环境、拓扑、外部能力和测试目录门禁。专项脚本是门面的内部实现，不形成第二套人工流程。

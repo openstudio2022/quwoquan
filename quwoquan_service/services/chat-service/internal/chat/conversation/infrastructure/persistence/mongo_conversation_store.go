@@ -45,7 +45,7 @@ var (
 	_ application.ConversationMessageProjector          = (*MongoChatStore)(nil)
 	_ application.MemberStore                           = (*MongoChatStore)(nil)
 	_ application.UserStateStore                        = (*MongoChatStore)(nil)
-	_ application.ReceiptStore                          = (*MongoChatStore)(nil)
+	_ application.ReceiptFactStore                      = (*MongoChatStore)(nil)
 )
 
 func NewMongoChatStore(db *mongo.Database) *MongoChatStore {

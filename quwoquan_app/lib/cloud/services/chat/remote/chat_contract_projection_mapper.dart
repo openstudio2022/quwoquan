@@ -99,8 +99,6 @@ final class ChatContractProjectionMapper {
       circleId: _optional(item.circleId),
       circleGroupId: _optional(item.circleGroupId),
       originType: item.originType,
-      bindingType: item.bindingType,
-      lifecyclePolicy: item.lifecyclePolicy,
       maxSeq: item.maxSeq,
       memberCount: item.memberCount,
       maxGroupSize: item.maxGroupSize,
@@ -140,8 +138,6 @@ final class ChatContractProjectionMapper {
       announcement: item.announcement,
       capabilities: item.capabilities,
       originType: item.originType,
-      bindingType: item.bindingType,
-      lifecyclePolicy: item.lifecyclePolicy,
       canManageMembers: item.canManageMembers,
       canDissolve: item.canDissolve,
     );
@@ -149,7 +145,8 @@ final class ChatContractProjectionMapper {
 
   ChatContactRowDto toContact(ChatContact item) {
     return ChatContactRowDto(
-      userId: item.userId ?? item.contactId,
+      userId: item.userId,
+      userHandle: item.userHandle,
       displayName: item.displayName,
       avatarUrl: item.avatarUrl,
       bio: item.bio,
@@ -167,6 +164,7 @@ final class ChatContractProjectionMapper {
       kind: item.kind,
       objectId: item.objectId,
       userId: item.userId ?? '',
+      userHandle: item.userHandle,
       conversationId: item.conversationId ?? '',
       circleId: item.circleId ?? '',
       circleGroupId: item.circleGroupId ?? '',
@@ -202,6 +200,7 @@ final class ChatContractProjectionMapper {
   ChatConversationMemberDto toMember(ChatConversationMember item) {
     return ChatConversationMemberDto(
       userId: item.userId,
+      userHandle: item.userHandle,
       displayName: item.displayName,
       avatarUrl: item.avatarUrl,
       role: item.role,

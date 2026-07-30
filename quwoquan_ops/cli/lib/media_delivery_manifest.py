@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -21,6 +21,7 @@ MANIFEST_PATH = (
     / "media_delivery_manifest.json"
 )
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_PUBLIC_SLICE_VERSION_RE = re.compile(r"(?:^|/)v([1-9][0-9]*)(?:/|$)")
 _MEDIA_BASE_KEY = {
     "avatar": "mediaAvatar",
     "image": "mediaImage",
@@ -68,6 +69,10 @@ def load_media_delivery_manifest(
             raise ValueError(f"{path} assets[{index}] publicSliceKey 重复")
         if not isinstance(version, int) or version <= 0:
             raise ValueError(f"{path} assets[{index}] version 必须是正整数")
+        if _public_slice_version(public_slice_key) != version:
+            raise ValueError(
+                f"{path} assets[{index}] publicSliceKey 版本段必须与 version 一致"
+            )
         if not _SHA256_RE.fullmatch(sha256):
             raise ValueError(f"{path} assets[{index}] sha256 必须是 sha256:hex")
         if "/" not in mime_type:
@@ -110,7 +115,22 @@ def build_media_delivery_url(
             f"{base_key} 必须是无 query/fragment 的 {scheme_label} public base"
         )
     public_slice_key = str(asset["publicSliceKey"]).lstrip("/")
-    return f"{raw_base}/{public_slice_key}?v={int(asset['version'])}"
+    public_origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+    version = int(asset["version"])
+    if _public_slice_version(public_slice_key) != version:
+        raise ValueError("publicSliceKey 版本段必须与资产 version 一致")
+    expected_role_path = "/" + "/".join(public_slice_key.split("/")[:2])
+    configured_role_path = parsed.path.rstrip("/")
+    shared_image_origin_paths = (
+        {"/media/image"}
+        if base_key == "mediaImage" and media_type in {"background", "attachment"}
+        else set()
+    )
+    if configured_role_path not in {"", expected_role_path, *shared_image_origin_paths}:
+        raise ValueError(
+            f"{base_key} path 与 publicSliceKey 媒体类型不一致"
+        )
+    return f"{public_origin}/{public_slice_key}"
 
 
 def _is_canonical_public_slice_key(value: str) -> bool:
@@ -121,3 +141,10 @@ def _is_canonical_public_slice_key(value: str) -> bool:
         segment and segment not in {".", ".."} and "\\" not in segment
         for segment in segments
     )
+
+
+def _public_slice_version(value: str) -> int | None:
+    matches = _PUBLIC_SLICE_VERSION_RE.findall(value)
+    if len(matches) != 1:
+        return None
+    return int(matches[0])

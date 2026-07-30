@@ -98,7 +98,7 @@ final class HomepageDetailProjection {
     this.city,
     this.location,
     this.ownerUserId,
-    this.ownerSubAccountId,
+    this.ownerPersonaId,
     this.viewerFollowsHomepage = false,
     this.followerCount = 0,
     this.averageRating,
@@ -140,7 +140,7 @@ final class HomepageDetailProjection {
   final String? city;
   final CloudStructuredObject? location;
   final String? ownerUserId;
-  final String? ownerSubAccountId;
+  final String? ownerPersonaId;
   final bool viewerFollowsHomepage;
   final int followerCount;
   final double? averageRating;

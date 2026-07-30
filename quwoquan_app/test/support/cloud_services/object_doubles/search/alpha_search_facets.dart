@@ -230,7 +230,6 @@ final class AlphaCanonicalSearchFacet implements CanonicalSearchQueryFacet {
     return CanonicalSearchResult(
       hits: hits,
       requestId: 'alpha_${digest.toString().substring(0, 16)}',
-      rankingVersion: 'alpha-fixture',
     );
   }
 

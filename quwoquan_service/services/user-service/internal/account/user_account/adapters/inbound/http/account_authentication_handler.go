@@ -19,11 +19,20 @@ func (h *UserHandler) handleSendOtp(w http.ResponseWriter, r *http.Request) {
 	platform := strings.TrimSpace(anyString(body["platform"]))
 	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
 	sourceOperation := strings.TrimSpace(anyString(body["sourceOperation"]))
+	bindingTicket := strings.TrimSpace(anyString(body["bindingTicket"]))
 	if phone == "" {
 		writeInvalidArg(w, r, "phone required")
 		return
 	}
-	result, err := h.auth.SendOtp(r.Context(), phone, deviceID, platform, appVersion, sourceOperation)
+	result, err := h.auth.SendOtp(
+		r.Context(),
+		phone,
+		deviceID,
+		platform,
+		appVersion,
+		sourceOperation,
+		bindingTicket,
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -128,6 +137,8 @@ func (h *UserHandler) handleFederatedLogin(
 	deviceID := strings.TrimSpace(anyString(body["deviceId"]))
 	platform := strings.TrimSpace(anyString(body["platform"]))
 	appVersion := strings.TrimSpace(anyString(body["appVersion"]))
+	agreementVersion := strings.TrimSpace(anyString(body["agreementVersion"]))
+	privacyVersion := strings.TrimSpace(anyString(body["privacyVersion"]))
 	if authCode == "" {
 		writeInvalidArg(w, r, primaryField+" required")
 		return
@@ -142,7 +153,15 @@ func (h *UserHandler) handleFederatedLogin(
 		)
 		return
 	}
-	result, err := login.Login(r.Context(), authCode, deviceID, platform, appVersion)
+	result, err := login.Login(
+		r.Context(),
+		authCode,
+		deviceID,
+		platform,
+		appVersion,
+		agreementVersion,
+		privacyVersion,
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

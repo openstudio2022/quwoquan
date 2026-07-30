@@ -4,9 +4,11 @@ class StartGroupPickableMember {
     required this.userId,
     required this.displayName,
     required this.avatarUrl,
+    this.userHandle = '',
   });
 
   final String userId;
+  final String userHandle;
   final String displayName;
   final String avatarUrl;
 }
@@ -18,11 +20,13 @@ class StartGroupFriendLetterRow {
     required this.userId,
     required this.avatarUrl,
     required this.letter,
+    this.userHandle = '',
     this.metFrom = '',
   });
 
   final String displayName;
   final String userId;
+  final String userHandle;
   final String avatarUrl;
   final String letter;
 

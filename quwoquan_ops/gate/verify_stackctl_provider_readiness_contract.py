@@ -61,10 +61,13 @@ def main() -> int:
 
     deploy = _function_source(source, tree, "_command_deploy_with_lock")
     preflight_call = deploy.find('_run_provider_readiness_preflight("prod", report_dir)')
-    package_action = deploy.find("package_cmd = [")
+    release_actions = (
+        deploy.find("_materialize_release_evidence_configuration("),
+        deploy.find("deploy_result = run("),
+    )
     if preflight_call < 0:
         issues.append("prod gray-initial deploy must invoke Provider readiness")
-    elif package_action < 0 or preflight_call > package_action:
+    elif any(action < 0 or preflight_call > action for action in release_actions):
         issues.append("prod Provider readiness must precede package or remote release actions")
     if 'if rollout_stage == "gray-initial":' not in deploy:
         issues.append("prod Provider readiness must be scoped to gray-initial")

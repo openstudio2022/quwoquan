@@ -2,6 +2,7 @@
   "label": "文化深度游",
   "labelEn": "Cultural Deep Tour",
   "description": "以历史文化体验为核心的深度旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

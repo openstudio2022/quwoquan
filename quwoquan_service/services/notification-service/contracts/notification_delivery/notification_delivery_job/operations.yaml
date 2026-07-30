@@ -7,333 +7,338 @@ incoming_call_slo:
   cancellation_convergence_p95_ms: 500
   availability_percent: 99.95
   alerts:
-  - consumer_lag_p95_ms > 500 for 5m
-  - no_ack_fallback_ratio > 0.20 for 10m
-  - external_interaction_accept_failure_ratio > 0.01 for 5m
+    - consumer_lag_p95_ms > 500 for 5m
+    - no_ack_fallback_ratio > 0.20 for 10m
+    - external_interaction_accept_failure_ratio > 0.01 for 5m
 commercial_defaults:
   status: blocked
-  block_reason: M2 Incoming Call 协调链已实现；Web Push、真实移动 provider delivered 与签名 delivery-result callback
-    仍待凭据化 release evidence
+  block_reason: M2 Incoming Call 协调链已实现；Web Push、真实移动 provider delivered 与签名 delivery-result callback 仍待凭据化 release evidence
   gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
   target_story: app-cloud-business-object-commercial-closure
 api_routes:
-- method: POST
-  path: /notifications/incoming-calls/presentation:ack
-  operation: AckIncomingCallPresentation
-  actor: persona
-  application:
-    kind: command
-    facet: NotificationDeliveryJobCommandFacade
-    method: ackIncomingCallPresentation
-    aggregate_owner: NotificationDeliveryJob
-    mutation_target: NotificationDeliveryJob
-    invariant_target: NotificationDeliveryJob
-  authorization:
-    principal: account
-    ownership_policy: target_persona_and_trusted_device
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: optional
-  error_codes:
-  - NOTIFICATION.USER.unauthorized
-  - NOTIFICATION.USER.invalid_argument
-  - NOTIFICATION.USER.delivery_not_found
-  - NOTIFICATION.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: notification_incoming_call_presentation_ack
-    trace: true
-    attributes:
-    - outcome
-    - status
-    - raced
-    - grace_bucket
-  slo:
-    latency_p95_ms: 100
-    availability_percent: 99.95
-  request_entity: AckIncomingCallPresentationCommand
-  request_fields:
-  - deliveryKey
-  response_entity: AckIncomingCallPresentationResult
-  response_body: AckIncomingCallPresentationResult
-  response_body_kind: object
-  client_contract:
-    dart_import: ../notification/incoming_call_delivery_contracts.dart
-    request_type: AckIncomingCallPresentationCommand
-    response_type: AckIncomingCallPresentationResultDto
-    request_encoder: encodeAckIncomingCallPresentationCommand
-    response_decoder: decodeAckIncomingCallPresentationResult
-  description: 当前 trusted persona/device 确认已展示 deliveryKey 对应来电；只允许 realtime_dispatched CAS 到 realtime_presented
-  security:
-    auth_mode: required
-    principal: account
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: private
-- method: GET
-  path: /internal/notifications/delivery-jobs/metrics
-  operation: GetNotificationDeliveryJobMetrics
-  actor: account
-  application:
-    kind: query
-    facet: NotificationDeliveryJobQueryFacade
-    method: getMetrics
-    reader: NotificationDeliveryJobMetricsReader
-    slice: NotificationDeliveryJobMetricsSnapshot
-  authorization:
-    principal: operator
-    scopes:
-    - ops.notification.read
-    permissions:
-    - notification.delivery.read
-    ownership_policy: operator_delivery_plane
-  commercial:
-    status: blocked
-    block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
-    gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
-    target_story: app-cloud-business-object-commercial-closure
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - NOTIFICATION.USER.unauthorized
-  - NOTIFICATION.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: notification_delivery_job_metrics_read
-    trace: true
-    attributes:
-    - outcome
-    - dead_job_bucket
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  response_body: NotificationDeliveryJobMetricsSnapshot
-  response_body_kind: object
-  description: operator 读取 DeliveryJob、recipient ledger 与 provider attempt 的权威指标快照。
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-- method: GET
-  path: /internal/notifications/delivery-jobs/incoming-call-timeline
-  operation: GetIncomingCallDeliveryTimeline
-  actor: account
-  application:
-    kind: query
-    facet: NotificationDeliveryJobQueryFacade
-    method: getIncomingCallTimeline
-    reader: IncomingCallDeliveryTimelineReader
-    slice: IncomingCallDeliveryTimeline
-  authorization:
-    principal: operator
-    scopes: [ops.notification.read]
-    permissions: [notification.delivery.read]
-    ownership_policy: operator_delivery_plane
-  commercial:
-    status: ready
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - NOTIFICATION.USER.unauthorized
-  - NOTIFICATION.USER.invalid_argument
-  - NOTIFICATION.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: notification_incoming_call_timeline_read
-    trace: true
-    attributes: [outcome, result_count]
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  query_params: [callId]
-  response_body: IncomingCallDeliveryTimeline
-  response_body_kind: object
-  description: operator 按 callId 读取设备摘要、202 acceptance、provider receipt、presentation ACK 与 cancel 时间线；响应不暴露原始 deviceId、deliveryKey、attemptId 或 provider request identifier。
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-- method: GET
-  path: /internal/notifications/delivery-jobs/dead-letters
-  operation: ListNotificationDeliveryJobDeadLetters
-  actor: account
-  application:
-    kind: query
-    facet: NotificationDeliveryJobQueryFacade
-    method: listDeadLetters
-    reader: NotificationDeliveryJobDeadLetterReader
-    slice: NotificationDeliveryJobDeadLetterSlice
-  authorization:
-    principal: operator
-    scopes:
-    - ops.notification.read
-    permissions:
-    - notification.delivery.read
-    ownership_policy: operator_delivery_plane
-  commercial:
-    status: blocked
-    block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
-    gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
-    target_story: app-cloud-business-object-commercial-closure
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - NOTIFICATION.USER.unauthorized
-  - NOTIFICATION.USER.invalid_argument
-  - NOTIFICATION.SYSTEM.storage_read_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: notification_delivery_job_dead_letter_list
-    trace: true
-    attributes:
-    - outcome
-    - result_count
-    - event_type
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  query_params:
-  - eventType
-  - limit
-  response_body: NotificationDeliveryJobDeadLetterSlice
-  response_body_kind: page
-  description: operator 查询已耗尽重试预算的 DeliveryJob。
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
-- method: POST
-  path: /internal/notifications/delivery-jobs/{jobId}:recover
-  operation: RecoverNotificationDeliveryJob
-  actor: account
-  application:
-    kind: command
-    facet: NotificationDeliveryJobCommandFacade
-    method: recoverDeadLetter
-    aggregate_owner: NotificationDeliveryJob
-    mutation_target: NotificationDeliveryJob
-    invariant_target: NotificationDeliveryJob
-  authorization:
-    principal: operator
-    scopes:
-    - ops.notification.write
-    permissions:
-    - notification.delivery.recover
-    ownership_policy: operator_delivery_plane
-  commercial:
-    status: blocked
-    block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
-    gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
-    target_story: app-cloud-business-object-commercial-closure
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - NOTIFICATION.USER.unauthorized
-  - NOTIFICATION.USER.invalid_argument
-  - NOTIFICATION.USER.idempotency_conflict
-  - NOTIFICATION.USER.delivery_not_found
-  - NOTIFICATION.SYSTEM.storage_write_failed
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: notification_delivery_job_recovery
-    trace: true
-    attributes:
-    - outcome
-    - attempt_epoch
-    - replayed
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  response_body: RecoverNotificationDeliveryJobResult
-  response_body_kind: object
-  description: 使用强制幂等回执将 dead DeliveryJob 推进到新的 attempt epoch。
-  security:
-    auth_mode: required
-    principal: operator
-    token_transport: bearer
-    anonymous_policy: deny
-    visibility: internal
+  - method: POST
+    path: /notifications/incoming-calls/presentation:ack
+    operation: AckIncomingCallPresentation
+    actor: persona
+    application:
+      kind: command
+      facet: NotificationDeliveryJobCommandFacade
+      method: ackIncomingCallPresentation
+      aggregate_owner: NotificationDeliveryJob
+      mutation_target: NotificationDeliveryJob
+      invariant_target: NotificationDeliveryJob
+    authorization:
+      principal: account
+      ownership_policy: target_persona_and_trusted_device
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: optional
+    error_codes:
+      - NOTIFICATION.USER.delivery_job_unauthorized
+      - NOTIFICATION.USER.delivery_job_invalid_argument
+      - NOTIFICATION.USER.delivery_job_not_found
+      - NOTIFICATION.SYSTEM.delivery_job_storage_write_failed
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_incoming_call_presentation_ack
+      trace: true
+      attributes:
+        - outcome
+        - status
+        - raced
+        - grace_bucket
+    slo:
+      latency_p95_ms: 100
+      availability_percent: 99.95
+    request_entity: AckIncomingCallPresentationCommand
+    request_body_kind: object
+    response_entity: AckIncomingCallPresentationResult
+    response_body: AckIncomingCallPresentationResult
+    response_body_kind: object
+    client_contract:
+      dart_import: ../notification/incoming_call_delivery_contracts.dart
+      response_type: AckIncomingCallPresentationResultDto
+      response_decoder: decodeAckIncomingCallPresentationResult
+    description: 当前 trusted persona/device 确认已展示 deliveryKey 对应来电；只允许 realtime_dispatched CAS 到 realtime_presented
+    security:
+      auth_mode: required
+      principal: account
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+  - method: GET
+    path: /internal/notifications/delivery-jobs/metrics
+    operation: GetNotificationDeliveryJobMetrics
+    actor: account
+    application:
+      kind: query
+      facet: NotificationDeliveryJobQueryFacade
+      method: getMetrics
+      reader: NotificationDeliveryJobMetricsReader
+      slice: NotificationDeliveryJobMetricsSnapshot
+    authorization:
+      principal: operator
+      scopes:
+        - ops.notification.read
+      permissions:
+        - notification.delivery.read
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: blocked
+      block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
+      gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.SYSTEM.delivery_job_storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_delivery_job_metrics_read
+      trace: true
+      attributes:
+        - outcome
+        - dead_job_bucket
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    response_body: NotificationDeliveryJobMetricsSnapshot
+    response_body_kind: object
+    description: operator 读取 DeliveryJob、recipient ledger 与 provider attempt 的权威指标快照。
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+  - method: GET
+    path: /internal/notifications/delivery-jobs/incoming-call-timeline
+    operation: GetIncomingCallDeliveryTimeline
+    actor: account
+    application:
+      kind: query
+      facet: NotificationDeliveryJobQueryFacade
+      method: getIncomingCallTimeline
+      reader: IncomingCallDeliveryTimelineReader
+      slice: IncomingCallDeliveryTimeline
+    authorization:
+      principal: operator
+      scopes: [ops.notification.read]
+      permissions: [notification.delivery.read]
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.delivery_job_invalid_argument
+      - NOTIFICATION.SYSTEM.delivery_job_storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_incoming_call_timeline_read
+      trace: true
+      attributes: [outcome, result_count]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_bindings:
+      query:
+        - name: callId
+          field: callId
+          required: true
+    response_body: IncomingCallDeliveryTimeline
+    response_body_kind: object
+    description: operator 按 callId 读取设备摘要、202 acceptance、provider receipt、presentation ACK 与 cancel 时间线；响应不暴露原始 deviceId、deliveryKey、attemptId 或 provider request identifier。
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+  - method: GET
+    path: /internal/notifications/delivery-jobs/dead-letters
+    operation: ListNotificationDeliveryJobDeadLetters
+    actor: account
+    application:
+      kind: query
+      facet: NotificationDeliveryJobQueryFacade
+      method: listDeadLetters
+      reader: NotificationDeliveryJobDeadLetterReader
+      slice: NotificationDeliveryJobDeadLetterSlice
+    authorization:
+      principal: operator
+      scopes:
+        - ops.notification.read
+      permissions:
+        - notification.delivery.read
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: blocked
+      block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
+      gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - NOTIFICATION.USER.delivery_job_invalid_argument
+      - NOTIFICATION.SYSTEM.delivery_job_storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_delivery_job_dead_letter_list
+      trace: true
+      attributes:
+        - outcome
+        - result_count
+        - event_type
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_bindings:
+      query:
+        - name: eventType
+          field: eventType
+          required: false
+        - name: limit
+          field: limit
+          required: false
+    response_body: NotificationDeliveryJobDeadLetterSlice
+    response_body_kind: page
+    description: operator 查询已耗尽重试预算的 DeliveryJob。
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
+  - method: POST
+    path: /internal/notifications/delivery-jobs/{jobId}:recover
+    operation: RecoverNotificationDeliveryJob
+    actor: account
+    application:
+      kind: command
+      facet: NotificationDeliveryJobCommandFacade
+      method: recoverDeadLetter
+      aggregate_owner: NotificationDeliveryJob
+      mutation_target: NotificationDeliveryJob
+      invariant_target: NotificationDeliveryJob
+    authorization:
+      principal: operator
+      scopes:
+        - ops.notification.write
+      permissions:
+        - notification.delivery.recover
+      ownership_policy: operator_delivery_plane
+    commercial:
+      status: blocked
+      block_reason: M2 Incoming Call 协调链已实现；Web Push 与真实 provider delivered/callback evidence 尚未收口
+      gap_id: NOTIFICATION_DELIVERY_JOB_GAMMA_PROVIDER
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - NOTIFICATION.USER.delivery_job_invalid_argument
+      - NOTIFICATION.USER.delivery_job_idempotency_conflict
+      - NOTIFICATION.USER.delivery_job_not_found
+      - NOTIFICATION.SYSTEM.delivery_job_storage_write_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: notification_delivery_job_recovery
+      trace: true
+      attributes:
+        - outcome
+        - attempt_epoch
+        - replayed
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    response_body: RecoverNotificationDeliveryJobResult
+    response_body_kind: object
+    description: 使用强制幂等回执将 dead DeliveryJob 推进到新的 attempt epoch。
+    request_bindings:
+      path:
+        - name: jobId
+          field: jobId
+    security:
+      auth_mode: required
+      principal: operator
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: internal
 consumers:
-- name: notification-service-worker
-  capabilities:
-  - lease
-  - dispatch
-  - retry
-  - dead_letter
-  - incoming_call_grace
-  - incoming_call_push
-- name: rtc-call-lifecycle-consumer
-  capabilities:
-  - consume_call_ringing
-  - consume_call_answered
-  - consume_call_ended
-  - replay
-- name: platform-ops
-  capabilities:
-  - inspect_delivery_job
-  - recover_delivery_job
+  - name: notification-service-worker
+    capabilities:
+      - lease
+      - dispatch
+      - retry
+      - dead_letter
+      - incoming_call_grace
+      - incoming_call_push
+  - name: rtc-call-lifecycle-consumer
+    capabilities:
+      - consume_call_ringing
+      - consume_call_answered
+      - consume_call_ended
+      - replay
+  - name: platform-ops
+    capabilities:
+      - inspect_delivery_job
+      - recover_delivery_job
 contract_test:
   service_side:
     real_engines:
       mongodb: testcontainers (mongo:7 replica set)
     mock_targets:
-    - integration-provider-endpoint
+      - integration-provider-endpoint
     scenarios:
-    - name: delivery_job_transactional_lifecycle
-      assertions:
-      - Notification and NotificationDeliveryJob are created in one MongoDB transaction
-      - lease and terminal transitions use optimistic version increments
-      - created dispatched dead-lettered and recovered events use aggregate-version dedupe
-    - name: delivery_job_idempotent_recovery
-      command: RecoverNotificationDeliveryJob
-      assertions:
-      - missing Idempotency-Key is rejected
-      - same key returns the persisted typed result with replayed true
-      - same key bound to another job returns NOTIFICATION.USER.idempotency_conflict
-      - a new key cannot recover a non-dead job
-      - state receipt and NotificationDeliveryJobRecovered outbox event commit atomically
-    - name: removed_delivery_route_unavailable
-      assertions:
-      - POST /internal/notifications/dead-letters/{id}/recovery returns 404
+      - name: delivery_job_transactional_lifecycle
+        assertions:
+          - Notification and NotificationDeliveryJob are created in one MongoDB transaction
+          - lease and terminal transitions use optimistic version increments
+          - created dispatched dead-lettered and recovered events use aggregate-version dedupe
+      - name: delivery_job_idempotent_recovery
+        command: RecoverNotificationDeliveryJob
+        assertions:
+          - missing Idempotency-Key is rejected
+          - same key returns the persisted typed result with replayed true
+          - same key bound to another job returns NOTIFICATION.USER.idempotency_conflict
+          - a new key cannot recover a non-dead job
+          - state receipt and NotificationDeliveryJobRecovered outbox event commit atomically
+      - name: removed_delivery_route_unavailable
+        assertions:
+          - POST /internal/notifications/dead-letters/{id}/recovery returns 404

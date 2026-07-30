@@ -31,7 +31,7 @@ func TestFollow_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_followee_1/follow",
+		"/user/personas/ps_followee_1/follow",
 		"",
 		authHeadersForPersona("follower_1", "ps_follower_1"),
 	)
@@ -69,14 +69,14 @@ func TestFollow_Idempotent(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_followee_2/follow",
+		"/user/personas/ps_followee_2/follow",
 		"",
 		authHeadersForPersona("follower_2", "ps_follower_2"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_followee_2/follow",
+		"/user/personas/ps_followee_2/follow",
 		"",
 		authHeadersForPersona("follower_2", "ps_follower_2"),
 	)
@@ -111,7 +111,7 @@ func TestFollow_ReconcilesDriftedCounters(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_followee_reconcile/follow",
+		"/user/personas/ps_followee_reconcile/follow",
 		"",
 		authHeadersForPersona("follower_reconcile", "ps_follower_reconcile"),
 	)
@@ -218,7 +218,7 @@ func TestFollow_CommandP95DoesNotScaleWithHundredThousandFollowers(
 		rec := doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/ps_scale_target/follow",
+			"/user/personas/ps_scale_target/follow",
 			"",
 			authHeadersForPersona(ownerID, personaID),
 		)
@@ -268,7 +268,7 @@ func TestUnfollow_Success(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_followee_3/follow",
+		"/user/personas/ps_followee_3/follow",
 		"",
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
@@ -280,7 +280,7 @@ func TestUnfollow_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/user/sub-accounts/ps_followee_3/follow",
+		"/user/personas/ps_followee_3/follow",
 		"",
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
@@ -309,7 +309,7 @@ func TestUnfollowWithoutExistingRelationshipReturnsIdempotentReceipt(t *testing.
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/user/sub-accounts/ps_unfollow_missing_target/follow",
+		"/user/personas/ps_unfollow_missing_target/follow",
 		`{"clientRequestId":"unfollow-missing-001"}`,
 		authHeadersForPersona("unfollow_missing_owner", "ps_unfollow_missing_owner"),
 	)
@@ -323,7 +323,7 @@ func TestUnfollowWithoutExistingRelationshipReturnsIdempotentReceipt(t *testing.
 }
 
 // TestFollow_ForgedActorPersonaRejected 越权负例：合法账号 token + body 伪造他人
-// persona 作为 actorSubAccountId，必须 403，且不得产生任何关系写入。
+// persona 作为 actorPersonaId，必须 403，且不得产生任何关系写入。
 func TestFollow_ForgedActorPersonaRejected(t *testing.T) {
 	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
@@ -337,8 +337,8 @@ func TestFollow_ForgedActorPersonaRejected(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_forge_target/follow",
-		`{"actorSubAccountId":"ps_forge_victim"}`,
+		"/user/personas/ps_forge_target/follow",
+		`{"actorPersonaId":"ps_forge_victim"}`,
 		authHeadersForPersona("forge_attacker", "ps_forge_attacker"),
 	)
 	if rec.Code != http.StatusForbidden {
@@ -385,16 +385,16 @@ func TestFollow_ExplicitActorOwnedPersonaAllowed(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_multi_target/follow",
-		`{"actorSubAccountId":"ps_multi_second"}`,
+		"/user/personas/ps_multi_target/follow",
+		`{"actorPersonaId":"ps_multi_second"}`,
 		authHeadersForPersona("multi_owner", "ps_multi_primary"),
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("owned second persona follow: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	body := parseJSON(t, rec)
-	if body["actorSubAccountId"] != "ps_multi_second" {
-		t.Fatalf("expected actorSubAccountId=ps_multi_second, got %#v", body)
+	if body["actorPersonaId"] != "ps_multi_second" {
+		t.Fatalf("expected actorPersonaId=ps_multi_second, got %#v", body)
 	}
 }
 
@@ -409,7 +409,7 @@ func TestFollow_RetiredExplicitActorRejected(t *testing.T) {
 	createTestPersonaFull(t, "retired_target_persona", "retired_target", "ps_retired_target", "retired_target", "default", true)
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE personas SET status = 'retired', retired_at = NOW() WHERE sub_account_id = $1`,
+		`UPDATE personas SET status = 'retired', retired_at = NOW() WHERE persona_id = $1`,
 		"ps_retired_old",
 	); err != nil {
 		t.Fatalf("retire persona fixture: %v", err)
@@ -418,8 +418,8 @@ func TestFollow_RetiredExplicitActorRejected(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_retired_target/follow",
-		`{"actorSubAccountId":"ps_retired_old"}`,
+		"/user/personas/ps_retired_target/follow",
+		`{"actorPersonaId":"ps_retired_old"}`,
 		authHeadersForPersona("retired_owner", "ps_retired_primary"),
 	)
 	if rec.Code != http.StatusForbidden {
@@ -438,14 +438,14 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_user_b/follow",
+		"/user/personas/ps_user_b/follow",
 		"",
 		authHeadersForPersona("user_a", "ps_user_a"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_user_a/follow",
+		"/user/personas/ps_user_a/follow",
 		"",
 		authHeadersForPersona("user_b", "ps_user_b"),
 	)
@@ -453,7 +453,7 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_user_b/relationship",
+		"/user/personas/ps_user_b/relationship",
 		"",
 		authHeadersForPersona("user_a", "ps_user_a"),
 	)
@@ -474,12 +474,12 @@ func TestListFollowing_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		uid := "target_" + string(rune('a'+i))
 		createTestProfile(t, uid, "target_"+string(rune('a'+i)))
-		subAccountID := "ps_" + uid
-		createTestPersonaFull(t, uid+"_persona", uid, subAccountID, uid, "default", true)
+		personaID := "ps_" + uid
+		createTestPersonaFull(t, uid+"_persona", uid, personaID, uid, "default", true)
 		doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/"+subAccountID+"/follow",
+			"/user/personas/"+personaID+"/follow",
 			"",
 			authHeadersForPersona("paginator", "ps_paginator"),
 		)
@@ -488,7 +488,7 @@ func TestListFollowing_Pagination(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_paginator/following?limit=3",
+		"/user/personas/ps_paginator/following?limit=3",
 		"",
 		authHeadersForPersona("paginator", "ps_paginator"),
 	)
@@ -522,14 +522,14 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 		doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/"+subjectID+"/follow",
+			"/user/personas/"+subjectID+"/follow",
 			"",
 			authHeadersForPersona("paginator_filtered", "ps_paginator_filtered"),
 		)
 	}
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE personas SET isolation_level = 'strict' WHERE sub_account_id = $1`,
+		`UPDATE personas SET isolation_level = 'strict' WHERE persona_id = $1`,
 		"ps_filtered_target_b",
 	); err != nil {
 		t.Fatalf("mark strict persona: %v", err)
@@ -537,7 +537,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_paginator_filtered/block",
+		"/user/personas/ps_paginator_filtered/block",
 		"",
 		authHeadersForPersona("filtered_target_c", "ps_filtered_target_c"),
 	)
@@ -548,7 +548,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_paginator_filtered/following?limit=3",
+		"/user/personas/ps_paginator_filtered/following?limit=3",
 		"",
 		authHeadersForPersona("paginator_filtered", "ps_paginator_filtered"),
 	)
@@ -569,14 +569,14 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected item payload: %#v", raw)
 		}
-		subAccountID := item["subAccountId"]
-		if subAccountID == "ps_filtered_target_b" || subAccountID == "ps_filtered_target_c" {
+		personaID := item["personaId"]
+		if personaID == "ps_filtered_target_b" || personaID == "ps_filtered_target_c" {
 			t.Fatalf("filtered targets should not leak into visible page, got %#v", item)
 		}
-		if _, exists := seen[subAccountID.(string)]; exists {
+		if _, exists := seen[personaID.(string)]; exists {
 			t.Fatalf("expected no duplicate visible items, got %#v", items)
 		}
-		seen[subAccountID.(string)] = struct{}{}
+		seen[personaID.(string)] = struct{}{}
 	}
 	snapshot := reltelemetry.Collector().Snapshot()
 	if snapshot[reltelemetry.MetricFilterMismatchCount] <= 0 {
@@ -599,7 +599,7 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	createTestPersonaFull(t, "viewer_owner_graph_persona", "viewer_owner_graph", "ps_viewer_owner_graph", "viewer_owner_graph", "default", true)
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE user_profiles SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
+		`UPDATE personas SET avatar_url = $1, avatar_version = $2 WHERE user_id = $3`,
 		"https://cdn.example.com/shared-owner-avatar.png",
 		6,
 		"shared_owner_graph",
@@ -610,14 +610,14 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_target_owner_graph/follow",
+		"/user/personas/ps_target_owner_graph/follow",
 		"",
 		authHeadersForPersona("shared_owner_graph", "ps_shared_owner_graph_1"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_target_owner_graph/follow",
+		"/user/personas/ps_target_owner_graph/follow",
 		"",
 		authHeadersForPersona("shared_owner_graph", "ps_shared_owner_graph_2"),
 	)
@@ -625,7 +625,7 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_target_owner_graph/followers?limit=10",
+		"/user/personas/ps_target_owner_graph/followers?limit=10",
 		"",
 		authHeadersForPersona("viewer_owner_graph", "ps_viewer_owner_graph"),
 	)
@@ -674,7 +674,7 @@ func TestListFollowRowsCarryViewerRelationshipCapability(t *testing.T) {
 		rec := doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/"+target+"/follow",
+			"/user/personas/"+target+"/follow",
 			"",
 			authHeadersForPersona("cap_viewer", "ps_cap_viewer"),
 		)
@@ -685,7 +685,7 @@ func TestListFollowRowsCarryViewerRelationshipCapability(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_cap_viewer/follow",
+		"/user/personas/ps_cap_viewer/follow",
 		"",
 		authHeadersForPersona("cap_mutual", "ps_cap_mutual"),
 	)
@@ -696,7 +696,7 @@ func TestListFollowRowsCarryViewerRelationshipCapability(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_cap_viewer/following?limit=10",
+		"/user/personas/ps_cap_viewer/following?limit=10",
 		"",
 		authHeadersForPersona("cap_viewer", "ps_cap_viewer"),
 	)
@@ -721,15 +721,15 @@ func TestListFollowRowsCarryViewerRelationshipCapability(t *testing.T) {
 		if !ok {
 			t.Fatalf("relationshipCapability must be an object, got %#v", capabilityRaw)
 		}
-		if capability["viewerSubAccountId"] != "ps_cap_viewer" {
+		if capability["viewerPersonaId"] != "ps_cap_viewer" {
 			t.Fatalf("capability viewer must be request viewer, got %#v", capability)
 		}
-		if capability["targetSubAccountId"] != item["subAccountId"] {
+		if capability["targetPersonaId"] != item["personaId"] {
 			t.Fatalf("capability target must match row subject, got %#v", capability)
 		}
-		switch item["subAccountId"] {
+		switch item["personaId"] {
 		case "ps_cap_mutual":
-			if capability["relationState"] != "mutual" || capability["isMutual"] != true {
+			if capability["relationState"] != "mutual" {
 				t.Fatalf("mutual row capability mismatch: %#v", capability)
 			}
 			if capability["canSendMessage"] != true {
@@ -768,7 +768,7 @@ func TestListFollowing_QueryFiltersWithinSubject(t *testing.T) {
 		)
 		if _, err := pgPool.Exec(
 			context.Background(),
-			`UPDATE personas SET user_handle=$1 WHERE sub_account_id=$2`,
+			`UPDATE personas SET user_handle=$1 WHERE persona_id=$2`,
 			uid,
 			"ps_"+uid,
 		); err != nil {
@@ -777,7 +777,7 @@ func TestListFollowing_QueryFiltersWithinSubject(t *testing.T) {
 		rec := doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/ps_"+uid+"/follow",
+			"/user/personas/ps_"+uid+"/follow",
 			"",
 			authHeadersForPersona("query_owner", "ps_query_owner"),
 		)
@@ -789,7 +789,7 @@ func TestListFollowing_QueryFiltersWithinSubject(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_query_owner/following?limit=10&query="+urlQueryEscape("旅行"),
+		"/user/personas/ps_query_owner/following?limit=10&query="+urlQueryEscape("旅行"),
 		"",
 		authHeadersForPersona("query_owner", "ps_query_owner"),
 	)
@@ -812,21 +812,21 @@ func TestListFollowing_QueryFiltersWithinSubject(t *testing.T) {
 		}
 	}
 
-	// username 子串匹配（不区分大小写）。
+	// userHandle 子串匹配（不区分大小写）。
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_query_owner/following?limit=10&query=BETA",
+		"/user/personas/ps_query_owner/following?limit=10&query=BETA",
 		"",
 		authHeadersForPersona("query_owner", "ps_query_owner"),
 	)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("query following by username: %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("query following by userHandle: %d %s", rec.Code, rec.Body.String())
 	}
 	result = parseJSON(t, rec)
 	items, _ = result["items"].([]any)
 	if len(items) != 1 {
-		t.Fatalf("expected 1 username match for BETA, got %#v", result)
+		t.Fatalf("expected 1 userHandle match for BETA, got %#v", result)
 	}
 }
 
@@ -853,7 +853,7 @@ func TestListFollowers_QueryFiltersWithinSubject(t *testing.T) {
 		rec := doRequest(
 			t,
 			http.MethodPost,
-			"/user/sub-accounts/ps_fanned_owner/follow",
+			"/user/personas/ps_fanned_owner/follow",
 			"",
 			authHeadersForPersona(uid, "ps_"+uid),
 		)
@@ -865,7 +865,7 @@ func TestListFollowers_QueryFiltersWithinSubject(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/user/sub-accounts/ps_fanned_owner/followers?limit=10&query="+urlQueryEscape("旅行"),
+		"/user/personas/ps_fanned_owner/followers?limit=10&query="+urlQueryEscape("旅行"),
 		"",
 		authHeadersForPersona("fanned_owner", "ps_fanned_owner"),
 	)
@@ -895,7 +895,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_block_owner_b/block",
+		"/user/personas/ps_block_owner_b/block",
 		"",
 		authHeadersForPersona("block_owner_a", "ps_block_owner_a"),
 	)
@@ -906,7 +906,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_block_owner_b/follow",
+		"/user/personas/ps_block_owner_b/follow",
 		"",
 		authHeadersForPersona("block_owner_a", "ps_block_owner_a"),
 	)
@@ -916,7 +916,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/ps_block_owner_a/follow",
+		"/user/personas/ps_block_owner_a/follow",
 		"",
 		authHeadersForPersona("block_owner_b", "ps_block_owner_b"),
 	)

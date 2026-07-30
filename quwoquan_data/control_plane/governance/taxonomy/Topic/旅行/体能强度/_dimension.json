@@ -1,0 +1,10 @@
+{
+  "label": "体能强度",
+  "labelEn": "Physical Intensity",
+  "description": "行程对体能的要求档次，用于避免把高强度线路推给低体能意愿用户",
+  "maxDepth": 2,
+  "pathPolicy": "any-depth",
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00",
+  "expectedSize": 4
+}

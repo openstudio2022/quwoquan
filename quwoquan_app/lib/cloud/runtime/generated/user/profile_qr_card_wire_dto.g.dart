@@ -5,7 +5,6 @@ class ProfileQrCardWireDto {
   final String publicProfileUrl;
   final String qrPayload;
   final String qrTokenId;
-  final String styleVersion;
   final String avatarUrl;
   final String avatarVersion;
   final String displayName;
@@ -17,7 +16,6 @@ class ProfileQrCardWireDto {
     this.publicProfileUrl = '',
     this.qrPayload = '',
     this.qrTokenId = '',
-    this.styleVersion = 'v1',
     this.avatarUrl = '',
     this.avatarVersion = '',
     this.displayName = '',
@@ -31,7 +29,6 @@ class ProfileQrCardWireDto {
       publicProfileUrl: m['publicProfileUrl']?.toString() ?? '',
       qrPayload: m['qrPayload']?.toString() ?? '',
       qrTokenId: m['qrTokenId']?.toString() ?? '',
-      styleVersion: m['styleVersion']?.toString() ?? 'v1',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: m['avatarVersion']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? '',
@@ -46,7 +43,6 @@ class ProfileQrCardWireDto {
       'publicProfileUrl': publicProfileUrl,
       'qrPayload': qrPayload,
       'qrTokenId': qrTokenId,
-      'styleVersion': styleVersion,
       'avatarUrl': avatarUrl,
       'avatarVersion': avatarVersion,
       'displayName': displayName,
@@ -60,7 +56,6 @@ class ProfileQrCardWireDto {
     String? publicProfileUrl,
     String? qrPayload,
     String? qrTokenId,
-    String? styleVersion,
     String? avatarUrl,
     String? avatarVersion,
     String? displayName,
@@ -72,7 +67,6 @@ class ProfileQrCardWireDto {
       publicProfileUrl: publicProfileUrl ?? this.publicProfileUrl,
       qrPayload: qrPayload ?? this.qrPayload,
       qrTokenId: qrTokenId ?? this.qrTokenId,
-      styleVersion: styleVersion ?? this.styleVersion,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       avatarVersion: avatarVersion ?? this.avatarVersion,
       displayName: displayName ?? this.displayName,

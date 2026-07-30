@@ -1,0 +1,12 @@
+{
+  "label": "圣彼得堡",
+  "labelEn": "Saint Petersburg",
+  "description": "冬宫与涅瓦河景观城",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

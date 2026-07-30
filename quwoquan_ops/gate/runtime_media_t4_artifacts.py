@@ -103,21 +103,146 @@ def _validate_range_artifact(
     if payload is None:
         return
 
-    actual_status: object = payload.get("rangeStatus")
-    actual_mime: object = payload.get("contentType")
-    actual_slice: object = payload.get("publicSliceKey")
-    checks = payload.get("checks")
-    if isinstance(checks, list):
-        actual_status = None
-        actual_mime = None
-        for check in checks:
-            if not isinstance(check, dict):
-                continue
-            if check.get("name") != "media-public-content-video-primary":
-                continue
-            actual_status = check.get("statusCode")
-            actual_mime = check.get("contentType")
-            break
+    if payload.get("schema") != "quwoquan_ops.release_video_delivery_evidence":
+        issues.append(
+            f"{prefix}.Range report 必须是 release-bound video delivery evidence"
+        )
+    if payload.get("status") != "passed":
+        issues.append(f"{prefix}.Range report.status 必须为 passed")
+
+    release = payload.get("release")
+    release = release if isinstance(release, dict) else {}
+    if release.get("sourceOwner") != "qwq_data":
+        issues.append(f"{prefix}.Range report.release.sourceOwner 必须为 qwq_data")
+    for field in ("manifestDigest", "mediaManifestDigest"):
+        if not re.fullmatch(
+            r"sha256:[0-9a-f]{64}",
+            str(release.get(field) or ""),
+        ):
+            issues.append(f"{prefix}.Range report.release.{field} 必须为 sha256 digest")
+    if not str(release.get("releaseId") or "").strip():
+        issues.append(f"{prefix}.Range report.release.releaseId 不能为空")
+    if not str(release.get("verifyRunId") or "").strip():
+        issues.append(f"{prefix}.Range report.release.verifyRunId 不能为空")
+
+    report_release = report.get("release")
+    report_release = report_release if isinstance(report_release, dict) else {}
+    for field in (
+        "releaseId",
+        "sourceOwner",
+        "manifestDigest",
+        "mediaManifestDigest",
+        "importRunId",
+        "verifyRunId",
+        "readinessReceiptRef",
+    ):
+        if release.get(field) != report_release.get(field):
+            issues.append(
+                f"{prefix}.Range report.release.{field} 与 T4 release 不一致"
+            )
+
+    delivery = payload.get("delivery")
+    delivery = delivery if isinstance(delivery, dict) else {}
+    playback = payload.get("playback")
+    playback = playback if isinstance(playback, dict) else {}
+    video = payload.get("video")
+    video = video if isinstance(video, dict) else {}
+    if delivery.get("tlsSystemTrust") is not True:
+        issues.append(f"{prefix}.Range report 未证明系统 TLS 信任链")
+    if delivery.get("fullStatus") != 200:
+        issues.append(f"{prefix}.Range report 未证明 HTTP 200 完整对象")
+    if delivery.get("rangeStatus") != 206:
+        issues.append(f"{prefix}.Range report 未证明 HTTP 206")
+    expected_cache_key = "/" + str(video.get("publicSliceKey") or "").lstrip("/")
+    if delivery.get("requestPath") != expected_cache_key or delivery.get(
+        "requestQuery"
+    ) not in {"", None}:
+        issues.append(f"{prefix}.Range report 公开 URL 不是唯一 path-version cache identity")
+    for field in ("cacheControl", "rangeCacheControl"):
+        directives = {
+            item.strip().lower()
+            for item in str(delivery.get(field) or "").split(",")
+            if item.strip()
+        }
+        if not {
+            "public",
+            "immutable",
+            "max-age=31536000",
+        }.issubset(directives) or "no-store" in directives:
+            issues.append(f"{prefix}.Range report.{field} 未证明 public immutable")
+    for field in ("corsAllowOrigin", "rangeCorsAllowOrigin"):
+        if delivery.get(field) != "*":
+            issues.append(f"{prefix}.Range report.{field} 未证明 public CORS")
+    for field in ("cacheKey", "rangeCacheKey"):
+        if delivery.get(field) != expected_cache_key:
+            issues.append(f"{prefix}.Range report.{field} 与 publicSliceKey 不一致")
+    signed_cache_control = {
+        item.strip().lower()
+        for item in str(delivery.get("signedQueryCacheControl") or "").split(",")
+        if item.strip()
+    }
+    if (
+        "no-store" not in signed_cache_control
+        or str(delivery.get("signedQueryCacheKey") or "")
+    ):
+        issues.append(f"{prefix}.Range report 未证明 signed query 与 public cache 隔离")
+    expected_bytes = video.get("expectedBytes")
+    if (
+        not isinstance(expected_bytes, int)
+        or isinstance(expected_bytes, bool)
+        or expected_bytes <= 0
+        or delivery.get("contentLength") != expected_bytes
+        or delivery.get("observedBytes") != expected_bytes
+    ):
+        issues.append(f"{prefix}.Range report 完整对象长度未绑定 immutable release")
+    expected_hash = str(video.get("expectedHash") or "")
+    if (
+        not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_hash)
+        or delivery.get("observedHash") != expected_hash
+    ):
+        issues.append(f"{prefix}.Range report 完整对象 hash 未绑定 immutable release")
+    etag = str(delivery.get("etag") or "").strip()
+    range_etag = str(delivery.get("rangeEtag") or "").strip()
+    if not etag or not range_etag or etag != range_etag:
+        issues.append(f"{prefix}.Range report 未证明稳定 ETag")
+    if not str(delivery.get("contentRange") or "").startswith("bytes 0-"):
+        issues.append(f"{prefix}.Range report 未证明 Content-Range")
+    duration_ms = playback.get("durationMs")
+    if (
+        not isinstance(duration_ms, int)
+        or isinstance(duration_ms, bool)
+        or duration_ms <= 0
+    ):
+        issues.append(f"{prefix}.Range report 未证明正数视频时长")
+    if playback.get("firstFrameDecoded") is not True:
+        issues.append(f"{prefix}.Range report 未证明服务侧解码首帧")
+
+    report_environment = report.get("environment")
+    report_environment = (
+        report_environment if isinstance(report_environment, dict) else {}
+    )
+    if payload.get("target") != report_environment.get("target"):
+        issues.append(f"{prefix}.Range report.target 与 T4 target 不一致")
+    report_media = report.get("media")
+    report_media = report_media if isinstance(report_media, dict) else {}
+    report_post = report.get("post")
+    report_post = report_post if isinstance(report_post, dict) else {}
+    for evidence_field, report_field in (
+        ("publicSliceKey", "publicSliceKey"),
+        ("assetId", "assetId"),
+        ("assetVersion", "assetVersion"),
+        ("expectedHash", "probeHash"),
+    ):
+        if video.get(evidence_field) != report_media.get(report_field):
+            issues.append(
+                f"{prefix}.Range report.video.{evidence_field} 与 T4 media 不一致"
+            )
+    if video.get("postId") != report_post.get("postId"):
+        issues.append(f"{prefix}.Range report.video.postId 与 T4 post 不一致")
+
+    actual_status: object = delivery.get("rangeStatus", payload.get("rangeStatus"))
+    actual_mime: object = delivery.get("mimeType", payload.get("contentType"))
+    actual_slice: object = video.get("publicSliceKey", payload.get("publicSliceKey"))
 
     if actual_status != 206:
         issues.append(f"{prefix}.Range report 未证明 HTTP 206")

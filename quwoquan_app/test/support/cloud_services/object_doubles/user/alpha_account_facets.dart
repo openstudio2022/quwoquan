@@ -23,18 +23,22 @@ final class AlphaAccountSessionFacet implements AccountSessionCommandWriter {
   );
 
   @override
-  Future<AuthSessionGrant> loginWithWechat(
+  Future<FederatedLoginOutcome> loginWithWechat(
     LoginWithWechatCommand command,
-  ) async => _issueSession(identityOrigin: 'wechat');
+  ) async => FederatedLoginOutcome.authenticated(
+    _issueSession(identityOrigin: 'wechat'),
+  );
 
   @override
-  Future<AuthSessionGrant> loginWithAlipay(
+  Future<FederatedLoginOutcome> loginWithAlipay(
     LoginWithAlipayCommand command,
-  ) async => _issueSession(identityOrigin: 'alipay');
+  ) async => FederatedLoginOutcome.authenticated(
+    _issueSession(identityOrigin: 'alipay'),
+  );
 
   @override
-  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command) async =>
-      _issueSession(identityOrigin: 'qq');
+  Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) async =>
+      FederatedLoginOutcome.authenticated(_issueSession(identityOrigin: 'qq'));
 
   @override
   Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async =>
@@ -100,10 +104,10 @@ final class AlphaAccountSessionFacet implements AccountSessionCommandWriter {
       anonymousRetentionPolicy: identityOrigin == 'anonymous_device'
           ? 'device_bound'
           : 'retained',
-      subAccountCount: 1,
+      personaCount: 1,
       sessionRememberTtlSeconds: _sessionRememberTtlSeconds,
-      activeSub: const ActivePersonaEnvelope(
-        subAccountId: 'alpha-persona-primary',
+      activePersona: const ActivePersonaEnvelope(
+        personaId: 'alpha-persona-primary',
       ),
       accountHint: accountHint,
     );

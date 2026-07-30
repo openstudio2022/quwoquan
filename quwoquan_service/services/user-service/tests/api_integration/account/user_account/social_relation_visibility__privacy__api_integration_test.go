@@ -32,7 +32,7 @@ func TestSocialRelationSearch_SemiPersonaOnlyUsesKnownHandlePath(t *testing.T) {
 	)
 	if _, err := pgPool.Exec(
 		context.Background(),
-		`UPDATE personas SET user_handle = $1 WHERE sub_account_id = $2`,
+		`UPDATE personas SET user_handle = $1 WHERE persona_id = $2`,
 		"known-semi-handle",
 		"sa_search_semi",
 	); err != nil {
@@ -49,7 +49,7 @@ func TestSocialRelationSearch_SemiPersonaOnlyUsesKnownHandlePath(t *testing.T) {
 	if fuzzy.Code != http.StatusOK {
 		t.Fatalf("fuzzy search: expected 200, got %d: %s", fuzzy.Code, fuzzy.Body.String())
 	}
-	assertSearchItemsExcludeSubAccount(t, parseJSON(t, fuzzy), "sa_search_semi")
+	assertSearchItemsExcludePersona(t, parseJSON(t, fuzzy), "sa_search_semi")
 
 	knownPath := doRequest(
 		t,
@@ -61,34 +61,34 @@ func TestSocialRelationSearch_SemiPersonaOnlyUsesKnownHandlePath(t *testing.T) {
 	if knownPath.Code != http.StatusOK {
 		t.Fatalf("known handle search: expected 200, got %d: %s", knownPath.Code, knownPath.Body.String())
 	}
-	assertSearchItemsContainSubAccount(t, parseJSON(t, knownPath), "sa_search_semi")
+	assertSearchItemsContainPersona(t, parseJSON(t, knownPath), "sa_search_semi")
 }
 
-func assertSearchItemsExcludeSubAccount(
+func assertSearchItemsExcludePersona(
 	t *testing.T,
 	body map[string]any,
-	subAccountID string,
+	personaID string,
 ) {
 	t.Helper()
 	for _, raw := range body["items"].([]any) {
 		item := raw.(map[string]any)
-		if item["subAccountId"] == subAccountID {
-			t.Fatalf("expected %q to be excluded from fuzzy discovery", subAccountID)
+		if item["personaId"] == personaID {
+			t.Fatalf("expected %q to be excluded from fuzzy discovery", personaID)
 		}
 	}
 }
 
-func assertSearchItemsContainSubAccount(
+func assertSearchItemsContainPersona(
 	t *testing.T,
 	body map[string]any,
-	subAccountID string,
+	personaID string,
 ) {
 	t.Helper()
 	for _, raw := range body["items"].([]any) {
 		item := raw.(map[string]any)
-		if item["subAccountId"] == subAccountID {
+		if item["personaId"] == personaID {
 			return
 		}
 	}
-	t.Fatalf("expected known-path result for %q, got %#v", subAccountID, body)
+	t.Fatalf("expected known-path result for %q, got %#v", personaID, body)
 }

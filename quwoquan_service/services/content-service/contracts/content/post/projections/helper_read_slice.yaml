@@ -1,0 +1,39 @@
+read_model: HelperReadSlice
+description: >-
+  GetHelperRead 的公开最小读模型。仅包含通过 published/public/approved
+  可见性门禁后的文章身份与摘要，不承载聚合状态或私有字段。
+source_entities:
+- Post
+consumers:
+- app
+client_projection:
+  dart_class: HelperReadSliceDto
+  base_class: ''
+  output_path: cloud/runtime/generated/content/helper_read_slice_dto.g.dart
+  strict: true
+  fields:
+  - name: postId
+    dart_type: String
+    nullable: false
+    source: postId
+    default: ''''''
+  - name: contentType
+    dart_type: String
+    nullable: false
+    source: contentType
+    default: ''''''
+  - name: title
+    dart_type: String
+    nullable: false
+    source: title
+    default: ''''''
+  - name: summary
+    dart_type: String
+    nullable: false
+    source: summary
+    default: ''''''
+fields:
+- {name: postId}
+- {name: contentType}
+- {name: title}
+- {name: summary}

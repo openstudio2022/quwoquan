@@ -8,7 +8,7 @@ attribution_params:
     key: utm_campaign
   - desc: 单次站外分享事实 id，与 content/content/outbound_share_fact CreateOutboundShare 追加事实及埋点对齐
     key: share_id
-  - desc: 邀请者 subAccountId，拉新归因，对齐 user/invite_record
+  - desc: 邀请者 personaId，拉新归因，对齐 user/invite_record
     key: inviter
   - desc: referralSource 语义来源标识（对齐端侧 ReferralSource）
     key: referral
@@ -75,17 +75,17 @@ entities:
   user:
     app_deep_link:
       host: user
-      path_template: '{username}'
+      path_template: '{userHandle}'
       scheme: quwoquan
-    description: 用户公开主页（路由键为 username）
+    description: 用户公开主页（路由键为 canonical userHandle）
     navigation:
       param_bindings:
-        username: username
+        userHandle: userHandle
       route_id: userProfile
     primary_params:
-    - username
+    - userHandle
     web:
-      path_template: u/{username}
+      path_template: u/{userHandle}
 
 # canonical search object type → 已登记 link template。codegen 以此生成站内
 # CitationDestination 的 deep link 与 route path；未知 object type 不产生可点击引用。
@@ -134,7 +134,7 @@ transfer_pages:
     query_rules:
     - desc: 目标实体类型（post / circle / user / entity_homepage）
       key: target_entity
-    - desc: 目标实体主键（postId / circleId / username / homepageId）
+    - desc: 目标实体主键（postId / circleId / userHandle / homepageId）
       key: target_id
     - desc: 可选，携带口令归因短码
       key: token

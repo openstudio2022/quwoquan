@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/profile_update_proposal_contracts.requests.g.dart';
 
 enum ProfileUpdateProposalSource { persona, assistant, external }
 
@@ -95,106 +96,6 @@ final class ProfileChangeSet {
   };
 }
 
-final class CreateProfileUpdateProposalCommand {
-  CreateProfileUpdateProposalCommand({
-    required String personaId,
-    required String proposalId,
-    required this.source,
-    required this.changes,
-    required String reason,
-    required List<String> evidenceRefs,
-    required List<String> impactScope,
-  }) : personaId = _required(personaId, 'personaId'),
-       proposalId = _required(proposalId, 'proposalId'),
-       reason = _required(reason, 'reason'),
-       evidenceRefs = _requiredStringSet(evidenceRefs, 'evidenceRefs'),
-       impactScope = _requiredStringSet(impactScope, 'impactScope') {
-    if (this.reason.runes.length > 1000) {
-      throw ArgumentError.value(reason, 'reason', 'max 1000 runes');
-    }
-    if (this.evidenceRefs.any(
-      (reference) =>
-          !reference.contains(':') ||
-          reference.startsWith(':') ||
-          reference.endsWith(':') ||
-          reference.contains(RegExp(r'\s')),
-    )) {
-      throw ArgumentError.value(
-        evidenceRefs,
-        'evidenceRefs',
-        'must contain typed kind:id references',
-      );
-    }
-    if (!_sameStrings(this.impactScope, changes.changedFields)) {
-      throw ArgumentError.value(
-        impactScope,
-        'impactScope',
-        'must exactly match ProfileChangeSet fields',
-      );
-    }
-  }
-
-  final String personaId;
-  final String proposalId;
-  final ProfileUpdateProposalSource source;
-  final ProfileChangeSet changes;
-  final String reason;
-  final List<String> evidenceRefs;
-  final List<String> impactScope;
-}
-
-final class ConfirmProfileUpdateProposalCommand {
-  ConfirmProfileUpdateProposalCommand({required String proposalId})
-    : proposalId = _required(proposalId, 'proposalId');
-
-  final String proposalId;
-}
-
-final class ApplyProfileUpdateProposalCommand {
-  ApplyProfileUpdateProposalCommand({required String proposalId})
-    : proposalId = _required(proposalId, 'proposalId');
-
-  final String proposalId;
-}
-
-final class RollbackProfileUpdateProposalCommand {
-  RollbackProfileUpdateProposalCommand({required String proposalId})
-    : proposalId = _required(proposalId, 'proposalId');
-
-  final String proposalId;
-}
-
-final class RejectProfileUpdateProposalCommand {
-  RejectProfileUpdateProposalCommand({required String proposalId})
-    : proposalId = _required(proposalId, 'proposalId');
-
-  final String proposalId;
-}
-
-final class ProfileUpdateProposalQuery {
-  ProfileUpdateProposalQuery({required String proposalId})
-    : proposalId = _required(proposalId, 'proposalId');
-
-  final String proposalId;
-}
-
-final class ProfileUpdateProposalListQuery {
-  ProfileUpdateProposalListQuery({
-    required String personaId,
-    String? cursor,
-    this.limit = 20,
-  }) : personaId = _required(personaId, 'personaId'),
-       cursor = _optional(cursor) {
-    if (limit < 1 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be in 1..100');
-    }
-  }
-
-  final String personaId;
-  final String? cursor;
-  final int limit;
-}
-
 final class ProfileUpdateProposalCommandResult {
   const ProfileUpdateProposalCommandResult({
     required this.proposalId,
@@ -278,60 +179,6 @@ abstract interface class ProfileUpdateProposalQueryReader {
   Future<ProfileUpdateProposalView> get(ProfileUpdateProposalQuery query);
   Future<ProfileUpdateProposalSlice> list(ProfileUpdateProposalListQuery query);
 }
-
-CloudOperationRequestPayload encodeCreateProfileUpdateProposalCommand(
-  CreateProfileUpdateProposalCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'personaId': command.personaId},
-  body: <String, Object?>{
-    'proposalId': command.proposalId,
-    'source': command.source.name,
-    'reason': command.reason,
-    'evidenceRefs': command.evidenceRefs,
-    'impactScope': command.impactScope,
-    ...command.changes.toWire(),
-  },
-);
-
-CloudOperationRequestPayload encodeConfirmProfileUpdateProposalCommand(
-  ConfirmProfileUpdateProposalCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'id': command.proposalId},
-);
-
-CloudOperationRequestPayload encodeApplyProfileUpdateProposalCommand(
-  ApplyProfileUpdateProposalCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'id': command.proposalId},
-);
-
-CloudOperationRequestPayload encodeRollbackProfileUpdateProposalCommand(
-  RollbackProfileUpdateProposalCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'id': command.proposalId},
-);
-
-CloudOperationRequestPayload encodeRejectProfileUpdateProposalCommand(
-  RejectProfileUpdateProposalCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'id': command.proposalId},
-);
-
-CloudOperationRequestPayload encodeProfileUpdateProposalQuery(
-  ProfileUpdateProposalQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'id': query.proposalId},
-);
-
-CloudOperationRequestPayload encodeProfileUpdateProposalListQuery(
-  ProfileUpdateProposalListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'personaId': query.personaId},
-  queryParameters: <String, String>{
-    if (query.cursor != null) 'cursor': query.cursor!,
-    'limit': query.limit.toString(),
-  },
-);
 
 ProfileUpdateProposalCommandResult decodeProfileUpdateProposalCommandResult(
   Object? value,
@@ -525,34 +372,9 @@ ProfileUpdateProposalStatus _status(Object? value) => switch (value) {
   _ => throw FormatException('unknown proposal status $value'),
 };
 
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
-}
-
 String? _optional(String? value) {
   final normalized = value?.trim() ?? '';
   return normalized.isEmpty ? null : normalized;
-}
-
-List<String> _requiredStringSet(List<String> values, String name) {
-  final normalized = values.map((value) => value.trim()).toSet().toList()
-    ..sort();
-  if (normalized.isEmpty ||
-      normalized.length != values.length ||
-      normalized.any((value) => value.isEmpty)) {
-    throw ArgumentError.value(values, name, 'must be a non-empty unique set');
-  }
-  return List<String>.unmodifiable(normalized);
-}
-
-bool _sameStrings(List<String> left, List<String> right) {
-  if (left.length != right.length) return false;
-  for (var index = 0; index < left.length; index++) {
-    if (left[index] != right[index]) return false;
-  }
-  return true;
 }
 
 String? _optionalPreservingEmpty(String? value) =>

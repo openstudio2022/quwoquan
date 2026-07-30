@@ -7,17 +7,17 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
 
 func TestReportedPageContextEntersTheNextTurnPrompt(t *testing.T) {
 	cache := rtredis.NewMemoryClient()
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		cache,
-		application.WithConversationRunStore(
+		orchestration.WithConversationRunStore(
 			persistence.NewMemoryConversationRunStore(),
 		),
 		testFrozenPolicyOption(),
@@ -76,7 +76,7 @@ func TestReportedPageContextEntersTheNextTurnPrompt(t *testing.T) {
 		len(turn.PageContext.PageObjects) != 1 {
 		t.Fatalf("turn page context = %#v", turn.PageContext)
 	}
-	prompt := application.FormatPageContextForPrompt(turn.PageContext)
+	prompt := orchestration.FormatPageContextForPrompt(turn.PageContext)
 	if !strings.Contains(prompt, "content.post:post-1") ||
 		!strings.Contains(prompt, "open_assistant_entry") {
 		t.Fatalf("page context prompt = %q", prompt)
@@ -99,7 +99,7 @@ func TestReportPageContextFailsClosedForUnknownObjectsAndMissingCache(
 			},
 		},
 	}
-	service := application.NewAssistantService(nil, rtredis.NewMemoryClient())
+	service := orchestration.NewAssistantService(nil, rtredis.NewMemoryClient())
 	_, err := service.ReportPageContext(
 		t.Context(),
 		"persona-page-context",
@@ -144,7 +144,7 @@ func TestReportPageContextFailsClosedForUnknownObjectsAndMissingCache(
 	}
 
 	input.ContextSnapshot.UserActions = nil
-	service = application.NewAssistantService(nil, nil)
+	service = orchestration.NewAssistantService(nil, nil)
 	_, err = service.ReportPageContext(
 		t.Context(),
 		"persona-page-context",
@@ -158,10 +158,10 @@ func TestReportPageContextFailsClosedForUnknownObjectsAndMissingCache(
 
 func TestMissingOrStalePageContextCannotEnterPrompt(t *testing.T) {
 	cache := rtredis.NewMemoryClient()
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		cache,
-		application.WithConversationRunStore(
+		orchestration.WithConversationRunStore(
 			persistence.NewMemoryConversationRunStore(),
 		),
 		testFrozenPolicyOption(),
@@ -192,7 +192,7 @@ func TestMissingOrStalePageContextCannotEnterPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateTurn() error = %v", err)
 	}
-	if turn.PageContext != nil || application.FormatPageContextForPrompt(turn.PageContext) != "" {
+	if turn.PageContext != nil || orchestration.FormatPageContextForPrompt(turn.PageContext) != "" {
 		t.Fatalf("missing page context entered prompt: %#v", turn.PageContext)
 	}
 

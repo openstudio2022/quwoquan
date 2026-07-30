@@ -29,13 +29,6 @@ import (
 const (
 	ObjectRelationEdgeCollection = "rm_object_relation_edges"
 
-	SemanticCoMentionEdgeType = "semantic_co_mention"
-	TagOverlapEdgeType        = "tag_overlap"
-	GeoProximityEdgeType      = "geo_proximity"
-	// BehaviorCoEngagementEdgeType 行为共现边（S1 触发物化）：rm_behavior_events
-	// 同用户短窗深度互动聚合。S0 只保留类型契约与物化接口。
-	BehaviorCoEngagementEdgeType = "behavior_co_engagement"
-
 	ObjectRelationEdgeTTL           = 14 * 24 * time.Hour
 	objectRelationEvidenceMax       = 3
 	objectRelationMinCoMention      = 1
@@ -44,18 +37,30 @@ const (
 	objectRelationConfidenceEpsilon = 0.01
 )
 
+// 边类型取值来自 runtime/recommendation 的 ObjectRelationEdgeType 闭集
+// （真相源 contracts/metadata/_shared/types.yaml）。这里保留别名是为了让本文件的
+// 物化逻辑读起来仍然短，但不再持有第二份词表。
+const (
+	SemanticCoMentionEdgeType = rtrec.EdgeTypeSemanticCoMention
+	TagOverlapEdgeType        = rtrec.EdgeTypeTagOverlap
+	GeoProximityEdgeType      = rtrec.EdgeTypeGeoProximity
+	// BehaviorCoEngagementEdgeType 行为共现边（S1 触发物化）：rm_behavior_events
+	// 同用户短窗深度互动聚合。S0 只保留类型契约与物化接口。
+	BehaviorCoEngagementEdgeType = rtrec.EdgeTypeBehaviorCoEngagement
+)
+
 // ObjectRelationEdgeDoc 是边表的存储契约（对齐
 // services/entity-service/contracts/entity_homepage/homepage/projections/object_relation_edge.yaml 的
 // 消费语义：edgeType/source/target/confidence/evidenceRefs）。
 type ObjectRelationEdgeDoc struct {
-	EdgeKey      string    `bson:"_id"`
-	EdgeType     string    `bson:"edgeType"`
-	SourceRef    string    `bson:"sourceRef"`
-	TargetRef    string    `bson:"targetRef"`
-	Confidence   float64   `bson:"confidence"`
-	EvidenceRefs []string  `bson:"evidenceRefs,omitempty"`
-	ComputedAt   time.Time `bson:"computedAt"`
-	ExpiresAt    time.Time `bson:"expiresAt"`
+	EdgeKey      string                       `bson:"_id"`
+	EdgeType     rtrec.ObjectRelationEdgeType `bson:"edgeType"`
+	SourceRef    string                       `bson:"sourceRef"`
+	TargetRef    string                       `bson:"targetRef"`
+	Confidence   float64                      `bson:"confidence"`
+	EvidenceRefs []string                     `bson:"evidenceRefs,omitempty"`
+	ComputedAt   time.Time                    `bson:"computedAt"`
+	ExpiresAt    time.Time                    `bson:"expiresAt"`
 }
 
 // ObjectRelationEdgeMaterializer 周期全量重算内容侧三类边（幂等覆盖写 +
@@ -102,11 +107,13 @@ func (m *ObjectRelationEdgeMaterializer) EnsureIndexes(ctx context.Context) erro
 }
 
 // MaterializeAll 全量重算内容侧三类边并覆盖写入。返回各类边数量。
-func (m *ObjectRelationEdgeMaterializer) MaterializeAll(ctx context.Context) (map[string]int, error) {
+func (m *ObjectRelationEdgeMaterializer) MaterializeAll(
+	ctx context.Context,
+) (map[rtrec.ObjectRelationEdgeType]int, error) {
 	if m == nil || m.edgeColl == nil {
 		return nil, nil
 	}
-	counts := map[string]int{}
+	counts := map[rtrec.ObjectRelationEdgeType]int{}
 	semantic, err := m.materializeSemanticCoMention(ctx)
 	if err != nil {
 		return counts, fmt.Errorf("semantic co-mention edges: %w", err)
@@ -339,15 +346,19 @@ func (m *ObjectRelationEdgeMaterializer) loadEntityProfiles(ctx context.Context)
 // sourceRef 查询单索引可达。_id 由 (edgeType, source, target) 确定，天然幂等。
 func (m *ObjectRelationEdgeMaterializer) upsertEdgePair(
 	ctx context.Context,
-	edgeType, refA, refB string,
+	edgeType rtrec.ObjectRelationEdgeType,
+	refA, refB string,
 	confidence float64,
 	evidence []string,
 ) error {
+	if _, ok := rtrec.ParseObjectRelationEdgeType(string(edgeType)); !ok {
+		return fmt.Errorf("edgeType %q is outside ObjectRelationEdgeType", edgeType)
+	}
 	now := m.now()
 	expires := now.Add(ObjectRelationEdgeTTL)
 	for _, pair := range [][2]string{{refA, refB}, {refB, refA}} {
 		doc := ObjectRelationEdgeDoc{
-			EdgeKey:      edgeType + "|" + pair[0] + "|" + pair[1],
+			EdgeKey:      string(edgeType) + "|" + pair[0] + "|" + pair[1],
 			EdgeType:     edgeType,
 			SourceRef:    pair[0],
 			TargetRef:    pair[1],
@@ -463,8 +474,13 @@ func (r *ObjectRelationEdgeReader) EdgesFrom(
 	if r == nil || r.coll == nil || strings.TrimSpace(sourceRef) == "" || limit <= 0 {
 		return nil, nil
 	}
+	// 只读闭集内的类型：端侧 switch 是穷举的，放行未登记的 edgeType 会让 UI 回落到
+	// 展示裸 wire 字符串，等于把词表漂移当成正常内容渲染出去。
 	cursor, err := r.coll.Find(ctx,
-		bson.M{"sourceRef": strings.TrimSpace(sourceRef)},
+		bson.M{
+			"sourceRef": strings.TrimSpace(sourceRef),
+			"edgeType":  bson.M{"$in": rtrec.ObjectRelationEdgeTypeStrings()},
+		},
 		options.Find().
 			SetSort(bson.D{{Key: "confidence", Value: -1}}).
 			SetLimit(int64(limit)),

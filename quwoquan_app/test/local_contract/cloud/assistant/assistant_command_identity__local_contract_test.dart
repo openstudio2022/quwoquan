@@ -14,6 +14,8 @@ import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemet
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import '../../../support/assistant_remote_test_support.dart';
+
 void main() {
   test(
     'assistant command body and Idempotency-Key share one stable identity',
@@ -22,6 +24,10 @@ void main() {
         <String, Object?>{
           'conversationId': 'conversation-1',
           'userId': 'user-1',
+          'state': 'active',
+          'activeTurnId': '',
+          'lastTurnId': '',
+          'summary': 'assistant test',
           'createdAt': '2026-07-24T09:00:00Z',
           'updatedAt': '2026-07-24T09:00:00Z',
         },
@@ -31,8 +37,11 @@ void main() {
           'createdAt': '2026-07-24T09:00:01Z',
         },
       ]);
+      final httpClient = CloudHttpClient(client: transport);
       final repository = RemoteAssistantRepository(
-        httpClient: CloudHttpClient(client: transport),
+        httpClient: httpClient,
+        operationClient: buildAssistantRemoteTestOperationClient(httpClient),
+        conversationInvocationContext: assistantRemoteTestInvocationContext,
         consentActorScope: 'assistant-command-identity-test',
       );
 
@@ -80,8 +89,11 @@ void main() {
 
   test('assistant command rejects an empty client request identity', () async {
     final transport = _AssistantCommandClient(const <Map<String, Object?>>[]);
+    final httpClient = CloudHttpClient(client: transport);
     final repository = RemoteAssistantRepository(
-      httpClient: CloudHttpClient(client: transport),
+      httpClient: httpClient,
+      operationClient: buildAssistantRemoteTestOperationClient(httpClient),
+      conversationInvocationContext: assistantRemoteTestInvocationContext,
       consentActorScope: 'assistant-command-identity-test',
     );
 
@@ -98,11 +110,11 @@ void main() {
       final transport = _AssistantCommandClient(<Map<String, Object?>>[
         <String, Object?>{
           'eventId': 'feedback:turn-1:useful',
-          'eventVersion': 1,
           'accepted': true,
           'deduplicated': false,
           'appendSequence': 7,
-          'payloadDigest': 'digest-1',
+          'payloadDigest':
+              '0000000000000000000000000000000000000000000000000000000000000000',
           'recordedAt': '2026-07-26T09:00:00Z',
         },
       ]);
@@ -132,30 +144,27 @@ void main() {
               idempotencyKey: idempotencyKey,
             ),
       );
-      const request = AppendAssistantLearningFactRequest(
+      final request = AssistantLearningFactAppendCommand(
         eventId: 'feedback:turn-1:useful',
-        eventVersion: 1,
-        factType: AssistantLearningFactType.userFeedback,
+        factType: AssistantLearningFactType.userFeedback.wireName,
         assistantTurnId: 'turn-1',
-        referralSource: AssistantReferralSource.assistantConversation,
+        referralSource: AssistantReferralSource.assistantConversation.wireName,
         domainId: 'assistant',
-        feedbackType: FeedbackType.useful,
+        feedbackType: FeedbackType.useful.wireName,
         actionType: 'useful',
         trainingEligible: false,
-        occurredAt: '2026-07-26T09:00:00Z',
+        occurredAt: DateTime.utc(2026, 7, 26, 9),
       );
 
       final receipt = await repository.appendUserFact(request: request);
 
       expect(receipt.accepted, isTrue);
       expect(receipt.eventId, request.eventId);
-      expect(receipt.eventVersion, request.eventVersion);
       final outbound = transport.requests.single;
       final body = jsonDecode(outbound.body) as Map<String, dynamic>;
       expect(outbound.url.path, '/assistant/learning/facts');
       expect(outbound.headers['Idempotency-Key'], request.eventId);
       expect(body['eventId'], request.eventId);
-      expect(body['eventVersion'], request.eventVersion);
       expect(body['factType'], 'user_feedback');
       expect(body['assistantTurnId'], request.assistantTurnId);
       expect(body['referralSource'], 'assistant_conversation');

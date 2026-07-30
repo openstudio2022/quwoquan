@@ -48,7 +48,6 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", choices=("beta", "gamma", "prod"), required=True)
     parser.add_argument("--base-url", required=True)
-    parser.add_argument("--resolve-host", default="")
     parser.add_argument(
         "--mode",
         choices=("read-only", "lifecycle"),
@@ -69,8 +68,6 @@ def _parse_args() -> argparse.Namespace:
         default=".qwq_output/env/repo/runs/content-report-feedback/report.json",
     )
     args = parser.parse_args()
-    if args.env in LOCAL_TARGETS and not args.resolve_host:
-        args.resolve_host = "127.0.0.1"
     return args
 
 
@@ -215,12 +212,10 @@ def main() -> int:
         reporter_session = build_reporter_session(
             environment=args.env,
             base_url=args.base_url,
-            resolve_host=args.resolve_host,
             hosted_token_env=args.reporter_auth_token_env,
         )
         reporter = ProbeClient(
             args.base_url,
-            args.resolve_host,
             reporter_session,
         )
         reporter.request("GET", "/healthz", operation_id="Health")
@@ -312,12 +307,10 @@ def main() -> int:
             operator_session = build_operator_session(
                 environment=args.env,
                 base_url=args.base_url,
-                resolve_host=args.resolve_host,
                 hosted_token_env=args.operator_auth_token_env,
             )
             operator = ProbeClient(
                 args.base_url,
-                args.resolve_host,
                 operator_session,
             )
             _, queue_payload = operator.request(

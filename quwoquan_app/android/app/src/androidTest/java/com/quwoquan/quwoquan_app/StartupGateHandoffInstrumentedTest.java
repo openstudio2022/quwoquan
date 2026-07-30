@@ -24,6 +24,7 @@ import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry;
 import androidx.test.runner.lifecycle.Stage;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.embedding.android.FlutterFragmentActivity;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicReference;
@@ -129,7 +130,7 @@ public class StartupGateHandoffInstrumentedTest {
   public void mainEarlyFailureIsVisibleToNextGate() {
     StartupHealthStore.clearAllMarkersForInstrumentedTest(appContext);
     StartupHealthStore.markCurrentArtifactStarting(appContext);
-    StartupHealthStore.markCurrentArtifactFatal(appContext);
+    assertTrue(StartupHealthStore.markCurrentArtifactFatal(appContext));
     assertTrue(StartupHealthStore.shouldRecoverConfirmedStartupFatal(appContext));
 
     Intent launch = new Intent(appContext, StartupGateActivity.class);
@@ -138,6 +139,83 @@ public class StartupGateHandoffInstrumentedTest {
         ActivityScenario.launch(launch)) {
       onView(withText("应用暂时无法启动")).check(matches(isDisplayed()));
       scenario.onActivity(gate -> assertFalse(gate.isFinishing()));
+    }
+  }
+
+  @Test
+  public void contradictorySafeShellFatalMarkerSelfHeals() {
+    StartupHealthStore.seedSafeShellConflictForInstrumentedTest(appContext);
+    assertFalse(StartupHealthStore.shouldRecoverConfirmedStartupFatal(appContext));
+    assertFalse(StartupHealthStore.shouldRecoverConfirmedStartupFatal(appContext));
+  }
+
+  @Test
+  public void staleArtifactFatalMarkerSelfHeals() {
+    StartupHealthStore.seedArtifactMismatchForInstrumentedTest(appContext);
+    assertFalse(StartupHealthStore.shouldRecoverConfirmedStartupFatal(appContext));
+    assertFalse(StartupHealthStore.shouldRecoverConfirmedStartupFatal(appContext));
+  }
+
+  @Test
+  public void dartFatalRequestRequiresColdMatchingAttemptBeforeSafeShell() throws Exception {
+    try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+      scenario.onActivity(
+          main -> {
+            try {
+              Field attemptField = MainActivity.class.getDeclaredField("currentDartAttemptId");
+              Field hotRestartField =
+                  MainActivity.class.getDeclaredField("currentDartAttemptIsHotRestart");
+              Field safeShellField =
+                  MainActivity.class.getDeclaredField("startupSafeTerminalConfirmed");
+              Method record =
+                  MainActivity.class.getDeclaredMethod(
+                      "recordCurrentDartAttemptFatal", String.class, String.class);
+              attemptField.setAccessible(true);
+              hotRestartField.setAccessible(true);
+              safeShellField.setAccessible(true);
+              record.setAccessible(true);
+
+              StartupHealthStore.clearAllMarkersForInstrumentedTest(appContext);
+              StartupHealthStore.markCurrentArtifactStarting(appContext);
+              attemptField.set(main, "attempt-cold");
+              hotRestartField.setBoolean(main, false);
+              safeShellField.setBoolean(main, false);
+              assertTrue(
+                  (Boolean)
+                      record.invoke(
+                          main,
+                          "attempt-cold",
+                          "OPS.SYSTEM.startup_initialization_failed"));
+
+              StartupHealthStore.clearAllMarkersForInstrumentedTest(appContext);
+              StartupHealthStore.markCurrentArtifactStarting(appContext);
+              hotRestartField.setBoolean(main, true);
+              assertFalse(
+                  (Boolean)
+                      record.invoke(
+                          main,
+                          "attempt-cold",
+                          "OPS.SYSTEM.startup_initialization_failed"));
+
+              hotRestartField.setBoolean(main, false);
+              assertFalse(
+                  (Boolean)
+                      record.invoke(
+                          main,
+                          "different-attempt",
+                          "OPS.SYSTEM.startup_initialization_failed"));
+
+              safeShellField.setBoolean(main, true);
+              assertFalse(
+                  (Boolean)
+                      record.invoke(
+                          main,
+                          "attempt-cold",
+                          "OPS.SYSTEM.startup_initialization_failed"));
+            } catch (ReflectiveOperationException error) {
+              throw new AssertionError(error);
+            }
+          });
     }
   }
 

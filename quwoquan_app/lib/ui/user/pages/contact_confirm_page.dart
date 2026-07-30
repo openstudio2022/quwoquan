@@ -54,7 +54,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
   Future<_ConfirmData> _load() async {
     final profile = await ref
         .read(personaQueryProvider(AppUiSurfaces.addContactConfirm))
-        .getSubAccountProfile(widget.targetUserId);
+        .getPersonaProfile(widget.targetUserId);
     final capability = await ref
         .read(relationshipCapabilityRepositoryProvider)
         .getCapability(widget.targetUserId);
@@ -260,7 +260,7 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
 class _ConfirmData {
   const _ConfirmData({required this.profile, required this.capability});
 
-  final SubAccountProfileViewData profile;
+  final PersonaProfileViewData profile;
   final RelationshipCapabilityDto capability;
 }
 

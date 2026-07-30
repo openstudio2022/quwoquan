@@ -1,6 +1,8 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/application/content/post/capture_photography_tag_deriver.dart';
+import 'package:quwoquan_app/core/media/media_capture_metadata.dart';
 
 /// 通用发布设置状态模型（design B1），承载位置/公开/圈子选择，供创作、编辑等多页面复用。
 class PublishSettings {
@@ -8,6 +10,8 @@ class PublishSettings {
     this.isPublic = true,
     this.locationName = '',
     this.locationPoi,
+    this.geoTagRef = '',
+    this.visitedAt,
     this.circleIds = const <String>[],
     this.circleNames = const <String>[],
     this.homepage,
@@ -17,6 +21,8 @@ class PublishSettings {
     this.entityRefs = const <String>[],
     this.entityNames = const <String>[],
     this.assistantUsePolicy = 'inherit',
+    this.captureDisclosure = kDefaultCaptureDisclosure,
+    this.captureMetadata = MediaCaptureMetadata.empty,
   });
 
   final bool isPublic;
@@ -24,6 +30,18 @@ class PublishSettings {
 
   /// 选中 POI（codegen [LocationPoiDto]）；未选位置时为 null。
   final LocationPoiDto? locationPoi;
+
+  /// 由 [locationPoi] 解析出的行政区标签路径（`Topic/地理/行政区/...`）。
+  ///
+  /// 解析由 `GeoTagRefResolver` 经 tag-service 完成；解析不出时保持为空，
+  /// 不用展示文本冒充标签。
+  final String geoTagRef;
+
+  /// 作者声明的实际到访时间（本地时区的日期选择结果）。
+  ///
+  /// 只在选了位置或关联主页时可声明：脱离地点的时间不构成「同地同期」事实。
+  /// 未声明时保持 null，不用发布时间冒充到访时间。
+  final DateTime? visitedAt;
   final List<String> circleIds;
   final List<String> circleNames;
   final HomepageCanonicalReference? homepage;
@@ -33,6 +51,29 @@ class PublishSettings {
   final List<String> entityRefs;
   final List<String> entityNames;
   final String assistantUsePolicy;
+
+  /// 创作者允许上报的拍摄元数据分组。默认四组全开。
+  ///
+  /// 关闭某组后，[MediaCaptureMetadata.discloseOnly] 会在离开端侧前裁剪该组，
+  /// 服务端据此撤回该组已派生的 tagRef 与交集事实。
+  final Set<MediaCaptureDisclosureGroup> captureDisclosure;
+
+  /// 从首张素材解析出的拍摄事实，未解析到时为 [MediaCaptureMetadata.empty]。
+  ///
+  /// 刻意不进 [toMap]：草稿不落 GPS 与拍摄时间这两项 PII，重新打开草稿时从素材
+  /// 重新解析。落盘一份等于在本地多存一处 PII 副本，且撤回披露时要多清一处。
+  final MediaCaptureMetadata captureMetadata;
+
+  /// 按当前披露设置裁剪后的拍摄事实。这是唯一允许离开端侧的形态。
+  MediaCaptureMetadata get disclosedCaptureMetadata =>
+      captureMetadata.discloseOnly(captureDisclosure);
+
+  /// 由拍摄事实派生的 `Topic/摄影/**` tagRef。
+  ///
+  /// 派生在 getter 而不是构造时完成：创作者拨动披露开关后必须立刻反映到候选标签上，
+  /// 缓存一份就会出现「关掉了开关但标签还在」。
+  List<String> get captureDerivedTagRefs =>
+      const CapturePhotographyTagDeriver().derive(disclosedCaptureMetadata);
 
   /// 从 Map（如 _tabData）解析
   factory PublishSettings.fromMap(Map<String, dynamic> map) {
@@ -57,6 +98,8 @@ class PublishSettings {
       isPublic: vis == 'public',
       locationName: (map['locationName'] as String? ?? '').trim(),
       locationPoi: poi,
+      geoTagRef: (map['geoTagRef'] as String? ?? '').trim(),
+      visitedAt: _visitedAtFromMap(map['visitedAt']),
       circleIds: vis == 'public'
           ? List<String>.from(map['circleIds'] as List? ?? const <String>[])
           : const <String>[],
@@ -81,13 +124,40 @@ class PublishSettings {
           : const <String>[],
       assistantUsePolicy: (map['assistantUsePolicy'] as String? ?? 'inherit')
           .trim(),
+      captureDisclosure: _captureDisclosureFromMap(map['captureDisclosure']),
     );
+  }
+
+  /// 草稿恢复时解析到访时间。
+  ///
+  /// 草稿里存的是 RFC3339；解析不出时按未声明处理，不做任何猜测。
+  static DateTime? _visitedAtFromMap(Object? raw) {
+    if (raw is DateTime) return raw;
+    final text = raw?.toString().trim() ?? '';
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
+  }
+
+  /// 草稿恢复时解析披露分组。
+  ///
+  /// 键缺失表示草稿早于本能力，按默认全开处理；显式空数组表示创作者关掉了全部分组，
+  /// 必须原样尊重，不能回退成默认值。
+  static Set<MediaCaptureDisclosureGroup> _captureDisclosureFromMap(
+    Object? raw,
+  ) {
+    if (raw is! List) return kDefaultCaptureDisclosure;
+    return raw
+        .map((item) => MediaCaptureDisclosureGroup.fromWire(item.toString()))
+        .nonNulls
+        .toSet();
   }
 
   Map<String, dynamic> toMap() => <String, dynamic>{
     'visibility': isPublic ? 'public' : 'private',
     'locationName': locationName,
     'location': locationPoi?.toMap() ?? <String, dynamic>{},
+    'geoTagRef': geoTagRef,
+    'visitedAt': visitedAt?.toIso8601String(),
     'circleIds': circleIds,
     'circleNames': circleNames,
     'homepage': homepage?.toMap(),
@@ -97,7 +167,17 @@ class PublishSettings {
     'entityRefs': entityRefs,
     'entityNames': entityNames,
     'assistantUsePolicy': assistantUsePolicy,
+    'captureDisclosure': captureDisclosure
+        .map((group) => group.wire)
+        .toList(growable: false),
   };
+
+  /// 内容是否已绑定地点事实（选中 POI、解析出行政区标签或关联对象主页）。
+  ///
+  /// 到访时间只有挂在地点上才能参与「同地同期」交集，所以入口展示与 payload
+  /// 落字段都以此为唯一判断。
+  bool get hasPlaceAnchor =>
+      locationPoi != null || geoTagRef.trim().isNotEmpty || homepage != null;
 
   /// 生成 Post 聚合的发布字段。
   ///
@@ -108,6 +188,10 @@ class PublishSettings {
       'visibility': isPublic ? 'public' : 'private',
     };
     if (locationName.isNotEmpty) payload['locationName'] = locationName;
+    if (geoTagRef.isNotEmpty) payload['geoTagRef'] = geoTagRef;
+    if (hasPlaceAnchor && visitedAt != null) {
+      payload['visitedAt'] = visitedAt!.toUtc().toIso8601String();
+    }
     if (locationPoi != null) {
       payload['location'] = <String, dynamic>{
         'latitude': locationPoi!.latitude,
@@ -130,6 +214,8 @@ class PublishSettings {
     bool? isPublic,
     String? locationName,
     LocationPoiDto? locationPoi,
+    String? geoTagRef,
+    DateTime? visitedAt,
     List<String>? circleIds,
     List<String>? circleNames,
     HomepageCanonicalReference? homepage,
@@ -139,12 +225,17 @@ class PublishSettings {
     List<String>? entityRefs,
     List<String>? entityNames,
     String? assistantUsePolicy,
+    Set<MediaCaptureDisclosureGroup>? captureDisclosure,
+    MediaCaptureMetadata? captureMetadata,
     bool clearHomepage = false,
     bool clearLocationPoi = false,
+    bool clearVisitedAt = false,
   }) => PublishSettings(
     isPublic: isPublic ?? this.isPublic,
     locationName: locationName ?? this.locationName,
     locationPoi: clearLocationPoi ? null : (locationPoi ?? this.locationPoi),
+    geoTagRef: clearLocationPoi ? '' : (geoTagRef ?? this.geoTagRef),
+    visitedAt: clearVisitedAt ? null : (visitedAt ?? this.visitedAt),
     circleIds: circleIds ?? this.circleIds,
     circleNames: circleNames ?? this.circleNames,
     homepage: clearHomepage ? null : (homepage ?? this.homepage),
@@ -154,6 +245,8 @@ class PublishSettings {
     entityRefs: entityRefs ?? this.entityRefs,
     entityNames: entityNames ?? this.entityNames,
     assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
+    captureDisclosure: captureDisclosure ?? this.captureDisclosure,
+    captureMetadata: captureMetadata ?? this.captureMetadata,
   );
 }
 

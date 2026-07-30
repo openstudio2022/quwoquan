@@ -2,6 +2,7 @@
   "label": "双鱼座",
   "labelEn": "Pisces",
   "description": "双鱼座",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

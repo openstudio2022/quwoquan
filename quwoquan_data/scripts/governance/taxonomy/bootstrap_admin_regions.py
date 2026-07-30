@@ -2,8 +2,8 @@
 
 数据源：
   - 中国大陆 31 省级：quwoquan_data/reference/admin_regions/pca.json（民政部数据）
-  - 港澳台 3 个省级：脚本内手工定义（暂无下级数据）
-  - 泰国/欧洲：脚本内手工定义（量小、变化少）
+  - 港澳台 3 个省级及其下级：overseas_regions_asia.CHINA_SAR_TW_CITIES
+  - 境外：overseas_regions_{asia,americas,europe}（量小、变化少，手工维护）
 
 层级：行政区/国家/省级/市级/区县级（最多4层路径）
 路径示例：Topic/地理/行政区/中国/四川省/成都市/武侯区
@@ -35,6 +35,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT, NOW_ISO
+from governance.taxonomy.overseas_regions_asia import (
+    ASIA_REGIONS,
+    CHINA_SAR_TW_CITIES,
+    CITY_STATE_CITIES,
+)
+from governance.taxonomy.overseas_regions_americas import AMERICAS_OCEANIA_REGIONS
+from governance.taxonomy.overseas_regions_europe import EUROPE_MIDEAST_REGIONS
+
+ALL_OVERSEAS_REGIONS = {
+    **ASIA_REGIONS,
+    **AMERICAS_OCEANIA_REGIONS,
+    **EUROPE_MIDEAST_REGIONS,
+}
 
 TAGS_ROOT = CONTROL_PLANE_TAXONOMY_ROOT / "Topic" / "地理" / "行政区"
 DATA_DIR = DATA_ROOT / "reference" / "admin_regions"
@@ -42,22 +55,49 @@ DATA_DIR = DATA_ROOT / "reference" / "admin_regions"
 DRY_RUN = False
 created = 0
 skipped = 0
+pruned = 0
+
+
+# 行政区标签的采集通道是 POI picker 与 EXIF GPS（见 Post.geoTagRef），消费方是地理召回
+# 与就近交集。两个字段对整棵子树是常量，所以在这里统一写入而不是逐条声明。
+GEO_COLLECTION_CHANNEL = "poi"
+GEO_CONSUMED_BY = ["recall", "intersection"]
 
 
 def ensure_tag(rel_path: str, label: str, label_en: str, desc: str):
+    """写入或补全一个行政区标签。
+
+    已存在的节点只补 collectionChannel / consumedBy 两个治理字段，不覆盖人工维护过的
+    label / description，也不刷新 createdAt——否则每次 bootstrap 都会产生全树 diff。
+    """
     global created, skipped
     p = TAGS_ROOT / rel_path / "_definition.json"
     if p.exists():
         skipped += 1
+        _backfill_governance_fields(p)
         return
     if not DRY_RUN:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps({
             "label": label, "labelEn": label_en,
             "description": desc,
+            "collectionChannel": GEO_COLLECTION_CHANNEL,
+            "consumedBy": GEO_CONSUMED_BY,
             "createdAt": NOW_ISO, "updatedAt": NOW_ISO,
         }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     created += 1
+
+
+def _backfill_governance_fields(path: Path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("collectionChannel") == GEO_COLLECTION_CHANNEL \
+            and data.get("consumedBy") == GEO_CONSUMED_BY:
+        return
+    data["collectionChannel"] = GEO_COLLECTION_CHANNEL
+    data["consumedBy"] = GEO_CONSUMED_BY
+    data["updatedAt"] = NOW_ISO
+    if not DRY_RUN:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 # ─────────────────────────────────────────────
@@ -219,117 +259,73 @@ def gen_china(filter_province: str | None = None):
                                 district, district, f"{city}{district}"
                             )
 
-    # 港澳台（pca.json 不含，手动补充）
-    if not filter_province or filter_province == "香港特别行政区":
-        ensure_tag("中国/香港特别行政区", "香港特别行政区",
-                   PROVINCE_EN["香港特别行政区"], PROVINCE_DESC["香港特别行政区"])
-    if not filter_province or filter_province == "澳门特别行政区":
-        ensure_tag("中国/澳门特别行政区", "澳门特别行政区",
-                   PROVINCE_EN["澳门特别行政区"], PROVINCE_DESC["澳门特别行政区"])
-    if not filter_province or filter_province == "台湾省":
-        ensure_tag("中国/台湾省", "台湾省",
-                   PROVINCE_EN["台湾省"], PROVINCE_DESC["台湾省"])
+    # 港澳台（pca.json 不含，手动补充；下级城市见 CHINA_SAR_TW_CITIES）
+    for province in ("香港特别行政区", "澳门特别行政区", "台湾省"):
+        if filter_province and filter_province != province:
+            continue
+        ensure_tag(f"中国/{province}", province,
+                   PROVINCE_EN[province], PROVINCE_DESC[province])
+        for city, (city_en, city_desc) in CHINA_SAR_TW_CITIES[province].items():
+            ensure_tag(f"中国/{province}/{city}", city, city_en, city_desc)
 
 
 # ─────────────────────────────────────────────
-# 泰国（手工定义，量小）
+# 境外行政区（手工定义，量小、变化少）
 # ─────────────────────────────────────────────
 
-THAILAND_PROVINCES: dict[str, tuple[str, str, dict]] = {
-    "曼谷府": ("Bangkok", "泰国首都府，政治与经济核心", {
-        "曼谷": ("Bangkok", "首都与最大都市"),
-    }),
-    "清迈府": ("Chiang Mai Province", "泰北文化与旅游重镇所在府", {
-        "清迈市": ("Chiang Mai", "泰北中心城市与门户"),
-    }),
-    "普吉府": ("Phuket Province", "泰国最大海岛旅游目的地所在府", {
-        "普吉镇": ("Phuket Town", "府城与老城文化中心"),
-        "芭东海滩": ("Patong Beach", "著名海滩度假区"),
-    }),
-    "素叻他尼府": ("Surat Thani Province", "泰国湾南岸枢纽，著名离岛门户", {
-        "苏梅岛": ("Koh Samui", "南部热门海岛度假地"),
-        "帕岸岛": ("Koh Phangan", "生态旅游与满月派对知名岛"),
-    }),
-    "清莱府": ("Chiang Rai Province", "泰北边境与文化三角所在府", {
-        "清莱市": ("Chiang Rai", "府治与区域中心"),
-    }),
-    "春武里府": ("Chonburi Province", "东部经济走廊与海滨旅游区", {
-        "芭提雅": ("Pattaya", "著名滨海旅游城市"),
-    }),
-    "巴蜀府": ("Prachuap Khiri Khan Province", "泰国湾西岸，皇家海滨传统胜地", {
-        "华欣": ("Hua Hin", "皇家海滨度假城"),
-    }),
-}
+# 旧版把欧洲城市直接挂在国家下（法国/巴黎），与亚洲的三层结构不一致，也和端侧
+# GeoTagRefResolver 按「国家 / 一级行政区 / 城市」逐段解析地址的方式对不上。城市迁到
+# 一级行政区之下后，这些扁平路径必须删除，否则同一个城市在同一轴上出现两次（R14）。
+#
+# 不含 挪威/奥斯陆、捷克/布拉格、奥地利/维也纳：这三个名字在新结构里就是一级行政区
+# 名，同名节点被原地提升为一级行政区而不是被删除，列进来只会每次运行都报「仍有下级」。
+LEGACY_FLAT_CITY_PATHS: tuple[str, ...] = (
+    "法国/巴黎", "法国/尼斯", "法国/马赛",
+    "意大利/罗马", "意大利/佛罗伦萨", "意大利/威尼斯",
+    "西班牙/巴塞罗那", "西班牙/马德里", "西班牙/塞维利亚",
+    "瑞士/苏黎世", "瑞士/日内瓦", "瑞士/因特拉肯",
+    "奥地利/萨尔茨堡",
+    "捷克/CK小镇",
+    "荷兰/阿姆斯特丹",
+    "英国/伦敦", "英国/爱丁堡",
+    "希腊/雅典", "希腊/圣托里尼",
+    "葡萄牙/里斯本", "葡萄牙/波尔图",
+    "挪威/卑尔根", "挪威/特罗姆瑟",
+)
 
 
-def gen_thailand():
-    ensure_tag("泰国", "泰国", "Thailand", "泰国（TH）行政区域")
-    for province, (prov_en, prov_desc, cities) in THAILAND_PROVINCES.items():
-        ensure_tag(f"泰国/{province}", province, prov_en, prov_desc)
-        for city, (city_en, city_desc) in cities.items():
-            ensure_tag(f"泰国/{province}/{city}", city, city_en, city_desc)
+def prune_legacy_flat_cities():
+    global pruned
+    for rel in LEGACY_FLAT_CITY_PATHS:
+        d = TAGS_ROOT / rel
+        definition = d / "_definition.json"
+        if not definition.exists():
+            continue
+        children = [c for c in d.iterdir() if c.name != "_definition.json"]
+        if children:
+            print(f"WARN: 跳过 {rel}，仍有下级节点 {[c.name for c in children]}", file=sys.stderr)
+            continue
+        if not DRY_RUN:
+            definition.unlink()
+            d.rmdir()
+        pruned += 1
 
 
-# ─────────────────────────────────────────────
-# 欧洲（手工定义，量小）
-# ─────────────────────────────────────────────
+def gen_overseas(filter_country: str | None = None):
+    """生成境外三层行政区标签：国家 / 一级行政区 / 城市。
 
-EUROPE_CITIES: dict[str, tuple[str, str, dict[str, tuple[str, str]]]] = {
-    "法国": ("France", "法国（FR）行政区域", {
-        "巴黎": ("Paris", "首都，政治文化中心"),
-        "尼斯": ("Nice", "地中海滨海与度假名城"),
-        "马赛": ("Marseille", "第一大港，区域经济中心"),
-    }),
-    "意大利": ("Italy", "意大利（IT）行政区域", {
-        "罗马": ("Rome", "首都，历史与政治中心"),
-        "佛罗伦萨": ("Florence", "文艺复兴艺术与旅游重镇"),
-        "威尼斯": ("Venice", "水城与文化遗产名城"),
-    }),
-    "西班牙": ("Spain", "西班牙（ES）行政区域", {
-        "巴塞罗那": ("Barcelona", "加泰罗尼亚经济与国际旅游中心"),
-        "马德里": ("Madrid", "首都，政治与经济中心"),
-        "塞维利亚": ("Seville", "安达卢西亚文化与历史中心"),
-    }),
-    "瑞士": ("Switzerland", "瑞士（CH）行政区域", {
-        "苏黎世": ("Zurich", "最大城市与国际金融中心"),
-        "日内瓦": ("Geneva", "国际组织与高端服务中心"),
-        "因特拉肯": ("Interlaken", "阿尔卑斯山门户旅游城市"),
-    }),
-    "奥地利": ("Austria", "奥地利（AT）行政区域", {
-        "维也纳": ("Vienna", "首都，音乐与文化中心"),
-        "萨尔茨堡": ("Salzburg", "巴洛克古城与莫扎特故乡"),
-    }),
-    "捷克": ("Czech Republic", "捷克（CZ）行政区域", {
-        "布拉格": ("Prague", "首都，历史文化名城"),
-        "CK小镇": ("Český Krumlov", "世界遗产小镇"),
-    }),
-    "荷兰": ("Netherlands", "荷兰（NL）行政区域", {
-        "阿姆斯特丹": ("Amsterdam", "法定首都与最大城市"),
-    }),
-    "英国": ("United Kingdom", "英国（GB）行政区域", {
-        "伦敦": ("London", "首都与全球金融中心"),
-        "爱丁堡": ("Edinburgh", "苏格兰首府与文化古都"),
-    }),
-    "希腊": ("Greece", "希腊（GR）行政区域", {
-        "雅典": ("Athens", "首都，古希腊文明中心"),
-        "圣托里尼": ("Santorini", "爱琴海度假与火山岛名片"),
-    }),
-    "葡萄牙": ("Portugal", "葡萄牙（PT）行政区域", {
-        "里斯本": ("Lisbon", "首都与大西洋门户"),
-        "波尔图": ("Porto", "北部港口与文化酒乡名城"),
-    }),
-    "挪威": ("Norway", "挪威（NO）行政区域", {
-        "奥斯陆": ("Oslo", "首都与政治中心"),
-        "卑尔根": ("Bergen", "西海岸港口与峡湾门户"),
-        "特罗姆瑟": ("Tromsø", "北极圈门户与极光旅游重镇"),
-    }),
-}
-
-
-def gen_europe():
-    for country, (country_en, country_desc, cities) in EUROPE_CITIES.items():
+    城邦与岛国（新加坡、马尔代夫）没有有意义的一级行政区，城市直接挂在国家下，
+    表里以空的一级行政区表表达。
+    """
+    for country, (country_en, country_desc, regions) in ALL_OVERSEAS_REGIONS.items():
+        if filter_country and filter_country != country:
+            continue
         ensure_tag(country, country, country_en, country_desc)
-        for city, (city_en, city_desc) in cities.items():
+        for region, (region_en, region_desc, cities) in regions.items():
+            ensure_tag(f"{country}/{region}", region, region_en, region_desc)
+            for city, (city_en, city_desc) in cities.items():
+                ensure_tag(f"{country}/{region}/{city}", city, city_en, city_desc)
+        for city, (city_en, city_desc) in CITY_STATE_CITIES.get(country, {}).items():
             ensure_tag(f"{country}/{city}", city, city_en, city_desc)
 
 
@@ -361,25 +357,26 @@ def print_stats():
                     if isinstance(districts, (list, dict)):
                         district_count += len(districts)
 
-    # 泰国/欧洲
-    thai_nodes = 1  # 泰国
-    for _p, (_pe, _pd, cities) in THAILAND_PROVINCES.items():
-        thai_nodes += 1 + len(cities)
-    euro_nodes = 0
-    for _c, (_ce, _cd, cities) in EUROPE_CITIES.items():
-        euro_nodes += 1 + len(cities)
+    sar_tw_cities = sum(len(cities) for cities in CHINA_SAR_TW_CITIES.values())
+    overseas_nodes = 0
+    for country, (_en, _desc, regions) in ALL_OVERSEAS_REGIONS.items():
+        overseas_nodes += 1 + len(regions)
+        overseas_nodes += sum(len(cities) for _r, (_re, _rd, cities) in regions.items())
+        overseas_nodes += len(CITY_STATE_CITIES.get(country, {}))
 
-    total_china = 1 + province_count + city_count + district_count
-    total = total_china + thai_nodes + euro_nodes
+    total_china = 1 + province_count + city_count + district_count + sar_tw_cities
+    total = total_china + overseas_nodes
 
-    print(f"=== 行政区数据源统计 ===")
+    print("=== 行政区数据源统计 ===")
     print(f"中国省级: {province_count}（含港澳台）")
     print(f"中国地级: {city_count}")
     print(f"中国县级: {district_count}")
+    print(f"港澳台下级: {sar_tw_cities}")
     print(f"中国总计: {total_china}（含根节点）")
-    print(f"泰国: {thai_nodes}")
-    print(f"欧洲: {euro_nodes}")
+    print(f"境外国家: {len(ALL_OVERSEAS_REGIONS)}")
+    print(f"境外节点: {overseas_nodes}")
     print(f"全部总计: {total}")
+    print(f"境外占比: {overseas_nodes / total:.1%}")
 
 
 # ─────────────────────────────────────────────
@@ -388,7 +385,7 @@ def print_stats():
 
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(description="生成行政区标签到 Topic/地理/行政区/")
-    parser.add_argument("--country", default=None, help="国家名（如 中国、泰国）")
+    parser.add_argument("--country", default=None, help="国家名（如 中国、日本、泰国）")
     parser.add_argument("--province", default=None, help="省份名（如 四川省），仅生成该省")
     parser.add_argument("--dry-run", action="store_true", help="仅统计不写盘")
     parser.add_argument("--stats", action="store_true", help="打印数据源统计后退出")
@@ -401,19 +398,15 @@ def main(argv: list[str] | None = None):
     global DRY_RUN
     DRY_RUN = args.dry_run
 
-    # 中国
     if args.country in (None, "中国"):
         gen_china(filter_province=args.province)
 
-    # 泰国
-    if args.country in (None, "泰国") and args.province is None:
-        gen_thailand()
+    # --province 只对中国有意义；指定它时不触碰境外子树。
+    if args.province is None and args.country != "中国":
+        prune_legacy_flat_cities()
+        gen_overseas(filter_country=args.country)
 
-    # 欧洲
-    if args.country is None and args.province is None:
-        gen_europe()
-
-    print(f"\n行政区生成完成：新增 {created}，跳过（已存在）{skipped}")
+    print(f"\n行政区生成完成：新增 {created}，跳过（已存在）{skipped}，删除遗留 {pruned}")
     total = created + skipped
     print(f"总节点数：{total}")
     if DRY_RUN:

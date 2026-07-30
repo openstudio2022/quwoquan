@@ -77,7 +77,7 @@ data_lifecycle:
   - field: locationName
     strategy: drop
 field_visibility:
-- field: postId
+- field: _id
   description: API/wire 唯一键为 postId；存储层 Mongo _id 不进入客户端 wire；拒绝 _id 与 id 旧键别名
 - field: embedding
   visibility: never_expose

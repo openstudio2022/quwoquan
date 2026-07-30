@@ -2,6 +2,7 @@
   "label": "多重曝光",
   "labelEn": "Multiple Exposure",
   "description": "多次曝光叠加在同一画面",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

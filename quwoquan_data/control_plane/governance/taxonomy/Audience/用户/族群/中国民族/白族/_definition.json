@@ -2,6 +2,7 @@
   "label": "白族",
   "labelEn": "白族",
   "description": "中国白族",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

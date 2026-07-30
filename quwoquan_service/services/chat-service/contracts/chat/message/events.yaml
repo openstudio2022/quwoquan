@@ -38,6 +38,7 @@ events:
   consumers:
   - assistant-service
   channel: transactional_outbox
+  payload_entity: Message
   payload_fields:
   - conversationId
   - messageId

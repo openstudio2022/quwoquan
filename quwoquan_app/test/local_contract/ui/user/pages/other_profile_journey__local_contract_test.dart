@@ -67,14 +67,18 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: 'viewer-profile',
-      targetSubAccountId: targetUserId,
+      viewerPersonaId: 'viewer-profile',
+      targetPersonaId: targetUserId,
       relationState: 'not_following',
       canFollow: true,
       canUnfollow: false,
       canFollowBack: false,
       canGreet: true,
       canOpenConversation: false,
+      canCreateDirectConversation: false,
+      canSendMessage: false,
+      hasPendingGreeting: false,
+      hasFormalConversation: false,
       canStartVoiceCall: false,
       canStartVideoCall: false,
       isBlocked: false,
@@ -98,7 +102,7 @@ Widget _scopedApp() {
       ),
       authorImpactProvider.overrideWith((ref, request) async {
         return AuthorImpactSummary(
-          authorId: request.subAccountId,
+          authorId: request.personaId,
           total: 1,
           items: <AuthorImpactItem>[
             authorImpactItemFixture(

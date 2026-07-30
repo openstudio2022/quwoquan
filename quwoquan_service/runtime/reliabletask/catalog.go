@@ -10,12 +10,9 @@ import (
 )
 
 type Catalog struct {
-	Version                  int                   `yaml:"version"`
-	CompatibleRuntimeVersion string                `yaml:"compatibleRuntimeVersion"`
-	Schema            int                   `yaml:"schema"`
-	Modules                  map[string]ModuleSpec `yaml:"modules"`
-	Tasks                    map[string]TaskSpec   `yaml:"tasks"`
-	Policies                 PolicyCatalog         `yaml:"-"`
+	Modules  map[string]ModuleSpec `yaml:"modules"`
+	Tasks    map[string]TaskSpec   `yaml:"tasks"`
+	Policies PolicyCatalog         `yaml:"-"`
 }
 
 type ModuleSpec struct {
@@ -112,9 +109,6 @@ func LoadCatalogWithPolicies(catalogPath string, policyPath string) (Catalog, er
 }
 
 func (c Catalog) Validate() error {
-	if c.Version <= 0 {
-		return fmt.Errorf("catalog version is required")
-	}
 	if len(c.Modules) == 0 {
 		return fmt.Errorf("catalog modules are required")
 	}

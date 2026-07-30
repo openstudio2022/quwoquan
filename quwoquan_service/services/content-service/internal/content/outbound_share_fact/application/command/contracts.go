@@ -11,8 +11,8 @@ type AppendOutboundShareCommand struct {
 	PostID            string
 	ActorDimension    sharemodel.ActorDimension
 	ActorID           string
-	Channel           string
-	DestinationKind   string
+	Channel           sharemodel.Channel
+	DestinationKind   sharemodel.DestinationKind
 	Destination       string
 	ReferralID        string
 	DeliverySucceeded bool
@@ -21,12 +21,12 @@ type AppendOutboundShareCommand struct {
 }
 
 type AppendOutboundShareResult struct {
-	EventID    string    `json:"eventId"`
-	PostID     string    `json:"postId"`
-	Channel    string    `json:"channel"`
-	ReferralID string    `json:"referralId"`
-	OccurredAt time.Time `json:"occurredAt"`
-	Replayed   bool      `json:"replayed"`
+	EventID    string             `json:"eventId"`
+	PostID     string             `json:"postId"`
+	Channel    sharemodel.Channel `json:"channel"`
+	ReferralID string             `json:"referralId"`
+	OccurredAt time.Time          `json:"occurredAt"`
+	Replayed   bool               `json:"replayed"`
 }
 
 type ShareablePostSlice struct {

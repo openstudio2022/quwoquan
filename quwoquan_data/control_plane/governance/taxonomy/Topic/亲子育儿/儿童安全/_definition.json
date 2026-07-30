@@ -2,6 +2,7 @@
   "label": "儿童安全",
   "labelEn": "Child Safety",
   "description": "儿童安全防护知识",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

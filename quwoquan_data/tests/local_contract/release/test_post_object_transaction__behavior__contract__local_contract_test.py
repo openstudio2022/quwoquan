@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
 import pytest
+import yaml
 
+from content.release.canonical import creator_projection
 from content.release.canonical.application import apply_object_transaction
 from content.release.canonical.object_transaction_audit import (
     audit_object_transaction,
@@ -26,6 +29,42 @@ from core.tree_integrity import tree_integrity_stats
 EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
 POST_REF = "image/西湖/光影"
 CREATOR_REF = "qwq_creator_landscape_photographer_001"
+REPO_ROOT = Path(__file__).resolve().parents[4]
+REAL_PUBLISH_ROOT = REPO_ROOT / "quwoquan_data" / "publish"
+CREATOR_PROFILE_PATH = (
+    REPO_ROOT
+    / "quwoquan_data"
+    / "control_plane"
+    / "governance"
+    / "creator_pool"
+    / "profiles"
+    / "system_builtin"
+    / "landscape_photographer.creator.yaml"
+)
+
+
+def _copy_creator_avatar_cas(publish_root: Path) -> None:
+    profile = yaml.safe_load(CREATOR_PROFILE_PATH.read_text(encoding="utf-8"))
+    avatar = profile.get("avatarAsset") if isinstance(profile, dict) else None
+    assert isinstance(avatar, dict)
+    object_key = str(avatar.get("objectKey") or "")
+    assert object_key
+    source = REAL_PUBLISH_ROOT / object_key
+    assert source.is_file()
+    target = publish_root / object_key
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_creator_avatar_cas(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mirror the referenced creator avatar into this test's isolated CAS root."""
+    isolated_publish = tmp_path / "creator-avatar-publish"
+    _copy_creator_avatar_cas(isolated_publish)
+    monkeypatch.setattr(creator_projection, "PUBLISH_ROOT", isolated_publish)
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -85,6 +124,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
             "schema": "quwoquan_data.post_manifest",
             "vertical": "travel",
             "topicId": "西湖__image_1",
+            "contentIdentity": "work",
             "contentType": "image",
             "carrier": "image",
             "title": "西湖光影",
@@ -135,6 +175,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     publish = tmp_path / "publish"
     for relative in ("creators", "entities", "posts", "tags", "media/objects"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
+    _copy_creator_avatar_cas(publish)
     package = execution / "evidence/object-transactions" / transaction_id
     output = tmp_path / "output"
     return execution, package, publish, transaction_id
@@ -350,6 +391,31 @@ def test_canonical_transaction_rejects_source_use_mode_upgrade(
         )
 
 
+def test_canonical_transaction_rejects_rights_policy_as_source_use_mode(
+    tmp_path: Path,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    _write_json(
+        execution / "sources/commons/meta.json",
+        {
+            "sourceUseMode": "attribution_no_watermark",
+            "rightsMode": "attribution_no_watermark",
+            "researchLane": "video",
+        },
+    )
+
+    with pytest.raises(
+        ObjectTransactionError,
+        match="sourceUseMode 非法或缺失",
+    ):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
+
+
 def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     tmp_path: Path,
 ) -> None:
@@ -410,8 +476,9 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
         {
                 "schema": "quwoquan_data.post_manifest",
                 "vertical": "travel",
-            "topicId": "西湖__video_1",
-            "contentType": "video",
+                "topicId": "西湖__video_1",
+                "contentIdentity": "work",
+                "contentType": "video",
             "carrier": "video",
             "title": "西湖光影短片",
             "caption": "湖岸与长桥的光影",
@@ -496,6 +563,7 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     publish = tmp_path / "publish-video"
     for relative in ("creators", "entities", "posts", "tags", "media/objects"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
+    _copy_creator_avatar_cas(publish)
     output = tmp_path / "output-video"
     audit = audit_object_transaction(
         publish_root=publish,

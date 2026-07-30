@@ -242,7 +242,7 @@ void main() {
         builder: (context, child) => MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: const OtherProfilePage(username: 'nature_photographer'),
+          home: const OtherProfilePage(userHandle: 'nature_photographer'),
         ),
       ),
     );
@@ -263,7 +263,7 @@ void main() {
     expect(find.byType(ProfileShell), findsOneWidget);
   });
 
-  testWidgets('OtherProfilePage 优先使用 subAccountId 作为 canonical key', (
+  testWidgets('OtherProfilePage 优先使用 personaId 作为 canonical key', (
     tester,
   ) async {
     setPhoneSize(tester);
@@ -286,8 +286,8 @@ void main() {
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             home: const OtherProfilePage(
-              username: 'nature_photographer',
-              subAccountId: 'sub-account-1',
+              userHandle: 'nature_photographer',
+              personaId: 'persona-1',
             ),
           ),
         ),
@@ -295,6 +295,6 @@ void main() {
     );
 
     final shell = tester.widget<ProfileShell>(find.byType(ProfileShell));
-    expect(shell.userId, 'sub-account-1');
+    expect(shell.userId, 'persona-1');
   });
 }

@@ -25,12 +25,12 @@ void main() {
       ),
     );
     await tester.tap(find.text('打开添加主页'));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text(CreationText.addHomepageCityLabel), findsOneWidget);
 
     await tester.tap(find.text(CreationText.homepageTypeVehicle));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(
       find.text(CreationText.addHomepageVehicleManufacturerLabel),
@@ -50,19 +50,19 @@ void main() {
       _buildApp(repository: repository, child: const _SuggestHomepageHarness()),
     );
     await tester.tap(find.text('打开添加主页'));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).first, '西湖景区');
     await tester.pump();
 
     await tester.tap(find.byIcon(CupertinoIcons.xmark));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text(CreationText.unsavedChangesTitle), findsOneWidget);
     expect(find.text(CreationText.continueEditing), findsOneWidget);
 
     await tester.tap(find.text(CreationText.discard));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text('result:closed'), findsOneWidget);
   });
@@ -79,10 +79,10 @@ void main() {
       ),
     );
     await tester.tap(find.text('打开添加主页'));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.tap(find.text(CreationText.homepageTypeVehicle));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.enterText(find.byType(CupertinoTextField).at(0), '丰田');
     await tester.enterText(find.byType(CupertinoTextField).at(1), 'RAV4');
@@ -91,7 +91,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(TestKeys.suggestHomepageSubmitButton));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.pump(const Duration(seconds: 3));
     await tester.pump();
 
@@ -141,7 +141,7 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     final loginContext = tester.element(
       find.byKey(const ValueKey<String>('suggest-login-close')),
@@ -153,7 +153,7 @@ void main() {
       LoginDismissPolicy.safeFallback.name,
     );
     await tester.tap(find.byKey(const ValueKey<String>('suggest-login-close')));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
     await tester.pump();
 
     expect(find.text('SUGGEST_SAFE_HOME'), findsOneWidget);
@@ -168,12 +168,30 @@ Widget _buildApp({
   required _TrackingHomepageRepository repository,
   required Widget child,
 }) {
+  final router = GoRouter(
+    initialLocation: AppRoutePaths.home,
+    routes: <RouteBase>[
+      GoRoute(path: AppRoutePaths.home, builder: (_, _) => child),
+      GoRoute(
+        path: AppRoutePaths.suggestHomepagePathTemplate,
+        builder: (_, state) => SuggestHomepagePage(
+          initialQuery: state.uri.queryParameters['query'] ?? '',
+          sourcePlaceId: state.uri.queryParameters['sourcePlaceId'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.loginPathTemplate,
+        builder: (_, _) => const Text('UNEXPECTED_LOGIN'),
+      ),
+    ],
+  );
+  addTearDown(router.dispose);
   return ProviderScope(
     overrides: [
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       homepageFacetSetProvider.overrideWithValue(repository),
     ],
-    child: MaterialApp(home: child),
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -199,11 +217,9 @@ class _SuggestHomepageHarnessState extends State<_SuggestHomepageHarness> {
           children: <Widget>[
             ElevatedButton(
               onPressed: () async {
-                final result = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute<bool>(
-                    builder: (_) => SuggestHomepagePage(
-                      sourcePlaceId: widget.sourcePlaceId,
-                    ),
+                final result = await context.push<bool>(
+                  AppRoutePaths.suggestHomepage(
+                    sourcePlaceId: widget.sourcePlaceId,
                   ),
                 );
                 if (!mounted) {
@@ -243,8 +259,9 @@ class _AuthenticatedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'entity-test-token',
+    refreshToken: 'entity-test-refresh-token',
     ownerId: 'fixture_user_current',
-    activeSubAccountId: 'fixture_user_current',
+    activePersonaId: 'fixture_user_current',
   );
 }
 
@@ -252,4 +269,11 @@ class _GuestSession extends AuthSessionController {
   @override
   AuthSessionState build() =>
       const AuthSessionState(status: AuthSessionStatus.guest);
+}
+
+Future<void> _pumpUi(WidgetTester tester) async {
+  await tester.pump();
+  for (var frame = 0; frame < 6; frame += 1) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }

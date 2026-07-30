@@ -2,6 +2,7 @@
   "label": "中式正餐",
   "labelEn": "Chinese Restaurant",
   "description": "中式正规堂食餐厅",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -52,7 +52,7 @@ func (s *FeedService) resolveObjectCards(
 	}
 	// 对象卡是 viewer 个性化增强位：匿名（含规范化后的匿名 fallback 身份）不注入。
 	trimmedUser := strings.TrimSpace(userID)
-	if trimmedUser == "" || trimmedUser == identity.AnonymousFallbackSubAccountID {
+	if trimmedUser == "" || trimmedUser == identity.AnonymousFallbackPersonaID {
 		return nil
 	}
 	cfg := s.objectCardPolicy()

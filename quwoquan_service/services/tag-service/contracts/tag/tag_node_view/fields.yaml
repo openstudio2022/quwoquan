@@ -1,730 +1,832 @@
 description: 路径制标签节点只读投影（源自 control_plane/governance/taxonomy 的发布导入）
 fields:
-- name: tagRef
-  source: tagRef
-  type: string
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  tag_ref: true
-  description: 路径制 id，以 Topic/Audience/Format/Entity 开头
-  role: projection
-- name: group
-  source: group
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 分组 Topic/Audience/Format/Entity
-  role: projection
-- name: nodeKind
-  source: nodeKind
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: control-plane 节点种类 group | dimension | definition
-  role: projection
-- name: label
-  source: label
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: displayLabel
-  source: displayLabel
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 面向端侧展示的短名，例如 广东省 -> 广东、深圳市 -> 深圳
-  role: projection
-- name: labelEn
-  source: labelEn
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: description
-  source: description
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: control-plane definition description 或 group semantics
-  role: projection
-- name: aliases
-  source: aliases
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: ancestors
-  source: ancestors
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 祖先 tagRef 路径（自顶向下）
-  role: projection
-- name: parentTagRef
-  source: parentTagRef
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  tag_ref: true
-  description: 直接父节点 tagRef，用于 children 查询
-  role: projection
-- name: depth
-  source: depth
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: maxDepth
-  source: maxDepth
-  type: int
-  constraints:
-  - DEFAULT_0
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: dimension 节点声明的最大相对深度；非 dimension 为 0
-  role: projection
-- name: pathPolicy
-  source: pathPolicy
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: dimension 节点声明的选取策略
-  role: projection
-- name: releaseId
-  source: releaseId
-  type: string
-  constraints:
-  - PK
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 导入该标签节点的数据发布批次
-  role: projection
-  reference: true
-- name: lifecycleStatus
-  source: lifecycleStatus
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: active | deprecated；children 只返回 active 节点
-  role: projection
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
+  - name: tagRef
+    source: tagRef
+    type: string
+    max_utf8_bytes: 256
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    tag_ref: true
+    description: 路径制 id，以 Topic/Audience/Format/Entity 开头
+    role: projection
+  - name: group
+    source: group
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 分组 Topic/Audience/Format/Entity
+    role: projection
+  - name: nodeKind
+    source: nodeKind
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: control-plane 节点种类 group | dimension | definition
+    role: projection
+  - name: label
+    source: label
+    type: string
+    max_utf8_bytes: 256
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: displayLabel
+    source: displayLabel
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 面向端侧展示的短名，例如 广东省 -> 广东、深圳市 -> 深圳
+    role: projection
+  - name: labelEn
+    source: labelEn
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: description
+    source: description
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: control-plane definition description 或 group semantics
+    role: projection
+  - name: aliases
+    source: aliases
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: ancestors
+    source: ancestors
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 祖先 tagRef 路径（自顶向下）
+    role: projection
+  - name: axisRole
+    source: axisRole
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 该标签所在的语义轴 topic | userInterest | userAttribute | creatorIdentity | audienceGroup | entityType | contentAngle | contentFormat；四大分组是正交轴，同名标签跨轴出现是正交、同轴出现即重复
+    role: projection
+  - name: sameAsRefs
+    source: sameAsRefs
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    tag_ref: true
+    description: 指向其他轴上同一现实概念的 tagRef（双向）；推荐侧据此在路径前缀传播之外做跨维度 affinity 传播，修复冷启动断链
+    role: projection
+  - name: parentTagRef
+    source: parentTagRef
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    tag_ref: true
+    description: 直接父节点 tagRef，用于 children 查询
+    role: projection
+  - name: depth
+    source: depth
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: maxDepth
+    source: maxDepth
+    type: int
+    constraints:
+      - DEFAULT_0
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: dimension 节点声明的最大相对深度；非 dimension 为 0
+    role: projection
+  - name: pathPolicy
+    source: pathPolicy
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: dimension 节点声明的选取策略
+    role: projection
+  - name: releaseId
+    source: releaseId
+    type: string
+    constraints:
+      - PK
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 导入该标签节点的数据发布批次
+    role: projection
+    reference: true
+  - name: lifecycleStatus
+    source: lifecycleStatus
+    type: enum
+    enum_ref: TagLifecycleStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: active | trending | seasonal | campaign | deprecated；前四者都可用，children/resolve/validate 只拒绝 deprecated
+    role: projection
+  - name: heatWindow
+    source: heatWindow
+    type: TagHeatWindow
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: seasonal | campaign 的热度生效窗口；只影响推荐加权，不影响可用性，窗口外标签仍可解析
+    role: projection
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
 types:
   TagResolveView:
     description: resolve(tagRef) 返回视图
     fields:
-    - name: tagRef
-      source: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: group
-      source: group
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: label
-      source: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: labelEn
-      source: labelEn
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: aliases
-      source: aliases
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: ancestors
-      source: ancestors
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagRef
+        source: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: group
+        source: group
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        source: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: labelEn
+        source: labelEn
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: aliases
+        source: aliases
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: ancestors
+        source: ancestors
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: axisRole
+        source: axisRole
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 该标签所在的语义轴
+      - name: sameAsRefs
+        source: sameAsRefs
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        tag_ref: true
+        description: 其他轴上指同一现实概念的 tagRef（双向）
   TagChildView:
     description: children(parentTagRef) 返回直接子节点视图，用于行政区选择等标签层级浏览
     fields:
-    - name: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      tag_ref: true
-    - name: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: displayLabel
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: labelEn
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: parentTagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      tag_ref: true
-    - name: depth
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: hasChildren
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: releaseId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: lifecycleStatus
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        tag_ref: true
+      - name: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: displayLabel
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: labelEn
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: parentTagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        tag_ref: true
+      - name: depth
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: hasChildren
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: releaseId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: lifecycleStatus
+        type: enum
+        enum_ref: TagLifecycleStatus
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: heatWindow
+        type: TagHeatWindow
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   TagChildrenSlice:
     description: children(parentTagRef) 的单一响应信封
     fields:
-    - name: items
-      source: items
-      type: '[]TagChildView'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: items
+        source: items
+        type: '[]TagChildView'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   SharedTagView:
     description: shared-tags 结果项（交集锚点）
     fields:
-    - name: tagRef
-      source: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: label
-      source: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: strength
-      source: strength
-      type: float64
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 共享强度/置信（仅排序用，端不展示）
-    - name: source
-      source: source
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: tagRef / geoTagRef / entityRef
+      - name: tagRef
+        source: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        source: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: strength
+        source: strength
+        type: float64
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 共享强度/置信（仅排序用，端不展示）
+      - name: source
+        source: source
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: tagRef / geoTagRef / entityRef
   InvertedObjectsView:
     description: inverted(tagRef) 结果视图
     fields:
-    - name: tagRef
-      source: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: objectCount
-      source: objectCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: objectIds
-      source: objectIds
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagRef
+        source: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: objectCount
+        source: objectCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: objectIds
+        source: objectIds
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   TagDimensionView:
     description: 维度面板项（创作）
     fields:
-    - name: group
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: dimensionId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: labelEn
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: maxDepth
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: pathPolicy
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: group
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: dimensionId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: labelEn
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: maxDepth
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: pathPolicy
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   TagSuggestionView:
     description: 标签建议项
     fields:
-    - name: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: labelEn
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: matchField
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: labelEn
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: matchField
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   TagValidateRequest:
     description: 批量校验 tagRefs 请求
     fields:
-    - name: expectedTaxonomyReleaseId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      description: 调用方预期使用的 taxonomy release；仅与当前 active release 一致时允许校验通过
-    - name: tagRefs
-      type: '[]string'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      tag_ref: true
+      - name: expectedTaxonomyReleaseId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 调用方预期使用的 taxonomy release；仅与当前 active release 一致时允许校验通过
+      - name: tagRefs
+        type: '[]string'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        tag_ref: true
   TagValidationResultView:
     description: 校验结果
     fields:
-    - name: taxonomyReleaseId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-      description: 执行该次校验的当前 active taxonomy release；调用方必须与请求 release 一致
-    - name: valid
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: invalid
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: taxonomyReleaseId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 执行该次校验的当前 active taxonomy release；调用方必须与请求 release 一致
+      - name: valid
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: invalid
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   TagSearchResultView:
     description: 标签搜索结果项
     fields:
-    - name: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: score
-      type: float64
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: score
+        type: float64
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   RelatedTagView:
     description: 相关标签项
     fields:
-    - name: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: label
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: cooccurCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: label
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: cooccurCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   SearchByTagsRequest:
     description: 多标签联合搜索请求
     fields:
-    - name: tagRefs
-      type: '[]string'
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      tag_ref: true
-    - name: objectType
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: limit
-      type: int
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
+      - name: tagRefs
+        type: '[]string'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        tag_ref: true
+      - name: objectType
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: limit
+        type: int
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
   TagObjectMatchView:
     description: 多标签匹配对象项
     fields:
-    - name: objectId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: objectType
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: matchedTags
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: score
-      type: float64
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: objectId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: objectType
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: matchedTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: score
+        type: float64
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   TagCooccurrenceView:
     description: 标签对共现项
     fields:
-    - name: tagA
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: tagB
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: cooccurCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: tagA
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: tagB
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: cooccurCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   RelatedObjectView:
     description: 共享标签相关对象项
     fields:
-    - name: objectId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: objectType
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: sharedTags
-      type: '[]string'
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: sharedCount
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_0
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: objectId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: objectType
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: sharedTags
+        type: '[]string'
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: sharedCount
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_0
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  ListTagChildrenQuery:
+    fields:
+      - name: parentTagRef
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: TagApiDefaults.childrenLimit
+  ValidateTagRefsQuery:
+    fields:
+      - name: expectedTaxonomyReleaseId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: tagRefs
+        type: '[]string'
+        constraints:
+          - NOT_BLANK
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_normalization: trim
+  ResolveTagQuery:
+    fields:
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim

@@ -2,6 +2,7 @@
   "label": "已婚有孩",
   "labelEn": "Married with Kids",
   "description": "已婚并有子女",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

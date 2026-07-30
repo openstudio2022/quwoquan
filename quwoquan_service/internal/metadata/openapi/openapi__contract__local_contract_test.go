@@ -66,6 +66,13 @@ func TestGenerateCoversEveryTransportOperation(t *testing.T) {
 	if got, want := content["openapi"], "3.0.3"; got != want {
 		t.Fatalf("OpenAPI version = %v, want %s", got, want)
 	}
+	info, ok := content["info"].(map[string]any)
+	if !ok {
+		t.Fatalf("OpenAPI info = %T, want object", content["info"])
+	}
+	if got, want := info["version"], "canonical"; got != want {
+		t.Fatalf("API contract identity = %v, want %s", got, want)
+	}
 	if got, want := snapshots[0].RelativePath, "content/openapi.yaml"; got != want {
 		t.Fatalf("first snapshot path = %q, want %q", got, want)
 	}
@@ -197,6 +204,13 @@ func TestGenerateExposesTypedIdempotencyAndConcurrencyHeaders(t *testing.T) {
 	)
 	operation.Reliability.Idempotency = "required"
 	operation.Concurrency.VersionPrecondition = ast.VersionPreconditionIfMatch
+	required := true
+	operation.RequestBindings = &ast.RequestBindings{
+		Path: []ast.RequestBinding{{Name: "groupId", Field: "groupId"}},
+		Header: []ast.RequestBinding{{
+			Name: "X-Content-Digest", Field: "contentDigest", Required: &required,
+		}},
+	}
 
 	snapshots, err := Generate(&graph.ContractGraph{
 		Operations: []ast.Operation{operation},
@@ -220,6 +234,14 @@ func TestGenerateExposesTypedIdempotencyAndConcurrencyHeaders(t *testing.T) {
 		operation.PathTemplate,
 		"patch",
 		"If-Match",
+		true,
+	)
+	assertHeaderParameter(
+		t,
+		document,
+		operation.PathTemplate,
+		"patch",
+		"X-Content-Digest",
 		true,
 	)
 }

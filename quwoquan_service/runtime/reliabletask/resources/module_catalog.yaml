@@ -1,9 +1,5 @@
 # reliabletask 跨服务技术协议：只约束任务类型、权限、存储/队列依赖与运行 plane。
 # 它不是环境拓扑、服务注册或 readiness 清单；环境 package 只从本文件投影。
-version: 1
-compatibleRuntimeVersion: ">=1.0.0"
-schema: 1
-
 modules:
   chat.api:
     domain: chat
@@ -411,8 +407,8 @@ tasks:
     retryPolicy:
       maxAttempts: 8
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.standard.v1
-    rateLimitPolicyRef: reliabletask.rate.chat_avatar.v1
+    retentionPolicyRef: reliabletask.retention.standard
+    rateLimitPolicyRef: reliabletask.rate.chat_avatar
     runtimeFailureModule: CHAT.GROUP_AVATAR
   chat.roster_projection.rebuild:
     ownerDomain: chat
@@ -429,8 +425,8 @@ tasks:
     retryPolicy:
       maxAttempts: 8
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.standard.v1
-    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    retentionPolicyRef: reliabletask.retention.standard
+    rateLimitPolicyRef: reliabletask.rate.projection
     runtimeFailureModule: CHAT.ROSTER_PROJECTION
   chat.inbox_projection.update:
     ownerDomain: chat
@@ -447,8 +443,8 @@ tasks:
     retryPolicy:
       maxAttempts: 8
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.standard.v1
-    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    retentionPolicyRef: reliabletask.retention.standard
+    rateLimitPolicyRef: reliabletask.rate.projection
     runtimeFailureModule: CHAT.INBOX_PROJECTION
   user.avatar.propagate:
     ownerDomain: user
@@ -465,8 +461,8 @@ tasks:
     retryPolicy:
       maxAttempts: 8
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.standard.v1
-    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    retentionPolicyRef: reliabletask.retention.standard
+    rateLimitPolicyRef: reliabletask.rate.projection
     runtimeFailureModule: USER.AVATAR_PROPAGATION
   content.search_index.refresh:
     ownerDomain: content
@@ -484,8 +480,8 @@ tasks:
     retryPolicy:
       maxAttempts: 8
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.standard.v1
-    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    retentionPolicyRef: reliabletask.retention.standard
+    rateLimitPolicyRef: reliabletask.rate.projection
     runtimeFailureModule: CONTENT.SEARCH_INDEX
   data.content_object.execute:
     ownerDomain: data
@@ -519,8 +515,8 @@ tasks:
     retryPolicy:
       maxAttempts: 3
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.standard.v1
-    rateLimitPolicyRef: reliabletask.rate.data_content_supply.v1
+    retentionPolicyRef: reliabletask.retention.standard
+    rateLimitPolicyRef: reliabletask.rate.data_content_supply
     runtimeFailureModule: DATA.CONTENT_OBJECT
   notification.patch.fanout:
     ownerDomain: notification
@@ -537,6 +533,6 @@ tasks:
     retryPolicy:
       maxAttempts: 10
       backoff: exponential
-    retentionPolicyRef: reliabletask.retention.notification.v1
-    rateLimitPolicyRef: reliabletask.rate.notification_fanout.v1
+    retentionPolicyRef: reliabletask.retention.notification
+    rateLimitPolicyRef: reliabletask.rate.notification_fanout
     runtimeFailureModule: NOTIFICATION.FANOUT

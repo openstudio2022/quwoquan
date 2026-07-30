@@ -127,6 +127,28 @@
 - 发现流与内容列表响应统一 `items` + `nextCursor`。
 - 行为事件必须可被 `product-ops` 消费，且可关联 `traceId/requestId/pageId`。
 
+<a id="req-003"></a>
+### REQ-003 标签体系以闭环效力而非定义规模计量
+
+- 标签的商用价值由五级基线度量，唯一口径是 `python3 quwoquan_data/scripts/cli.py governance taxonomy closure-scorecard`：
+ `defined`（节点存在）、`collectible`（声明 `collectionChannel`）、`published`（canonical `publish/posts/**` 的 `tagRefs` 真实使用）、
+ `consumed`（声明 `consumedBy`）、`verified`（前述采集、供给、消费三者同时成立）。
+- 五级的语义边界由 `quwoquan_data/schema/governance/_definition.schema.json` 拥有：该 schema 已声明
+ 「没有采集通道的标签是孤儿」「采集到但无人消费的标签同样是孤儿」。计量脚本读取该 schema 的枚举，
+ 不得在脚本或规格内复制第二份采集通道与消费方取值。
+- `verified` 取三者交集而非加权分：有采集无消费是白采，有消费无供给是空转，任一级断开该标签对用户即为零价值，不可互相补偿。
+- 规模指标（`quwoquan_data/scripts/cli.py governance taxonomy stats`）只描述定义广度，不得用于论证标签体系可用。
+- canonical 发布物引用的 `tagRef` 必须在 taxonomy 中存在；悬空引用既不进召回也不进搜索筛选，按缺陷处理。
+
+<a id="req-004"></a>
+### REQ-004 声明采集通道即必须存在生产写入点
+
+- 标签声明 `collectionChannel` 只表达意图；该通道必须有 App 生产代码真的去调用其解析器，标签才会被写到内容或用户上。
+- 每个被标签使用的通道必须在 `quwoquan_ops/gate/verify_tag_collection_wiring.py` 的 `PRODUCERS` 登记生产写入点与责任说明；
+ 新增通道而不登记即阻断。
+- 「已接通」的唯一判定是生产符号在 `quwoquan_app/lib/**` 中于定义文件之外被非注释引用；仅被测试树引用不算接通。
+- 存量未接通通道进 `UNWIRED_BASELINE` 且只减不增：接通后必须同步删除基线条目，禁止基线退化为永久豁免。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -135,6 +157,22 @@
 - 条件：本领域收到有效输入且前置领域事实成立。
 - 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
+
+<a id="dom-002"></a>
+### DOM-002 标签闭环五级基线可复跑且自洽
+
+- 条件：taxonomy 与 canonical 发布物均可读。
+- 可观察结果：`closure-scorecard` 输出五级计数、孤儿三分类、按语义轴下钻与商用判定；
+ `verified` 不超过 `collectible`、`published`、`consumed` 中的任一项；各语义轴 `defined` 之和等于总数。
+- 禁止结果：不得出现 schema 枚举之外的 `collectionChannel` / `consumedBy` 取值；不得存在悬空 `tagRef`。
+
+<a id="dom-003"></a>
+### DOM-003 采集通道接线断点可枚举且只减不增
+
+- 条件：taxonomy 与 App 生产代码均可读。
+- 可观察结果：`verify_tag_collection_wiring.py` 列出每条在用通道的覆盖标签数与接线状态，
+ 并对未登记通道、基线外未接通、基线内已接通三类偏离全部阻断。
+- 禁止结果：不得以文档注释提及生产符号冒充接通；不得在未接通的前提下扩大基线。
 
 ## 7. 工程归属
 
@@ -158,3 +196,32 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 标签闭环 verified 为 0，标签体系尚不支撑商用
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 `closure-scorecard` 实测 `defined=5891 / collectible=4159 / published=5 / consumed=4159 / verified=0`，
+ 判定 `BLOCK`。尚无任何标签同时具备采集通道、真实内容供给与消费方。
+ 其中 `consumed` 的 4159 项全部落在「有消费声明但零内容供给」——`Topic/地理` 4122 个节点声明了 `poi` 采集与
+ `recall`/`intersection` 消费，但 `Post.geoTagRef` 在端侧没有生产写入点，供给恒为空（断点证据见 `OPEN-003`）。
+ canonical 发布物只有 3 篇、合计使用 5 个 `tagRef`，因此扩充标签定义不会转化为可用信号，只会放大空转。
+- 完成判定：`DOM-002` 可复跑，且 `verified > 0`（至少一条语义轴打通采集、供给、消费三级）
+
+<a id="open-003"></a>
+### OPEN-003 三条在用采集通道全部没有生产写入点
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 taxonomy 只使用三条采集通道，三条都未接通，合计 4159 个标签永远不会被打上：
+ `poi` 覆盖 4059 个 `Topic/地理` 节点，`GeoTagRefResolver` 已实现却只在测试树被调用，
+ 发布确认页选中 POI 时仅写 `locationPoi`，`Post.geoTagRef` 恒空，
+ 导致 `decodeDeclaredVisit` 的区域级同地交集分支从未被触发；
+ `exif` 覆盖 40 个摄影节点，`extractMediaCaptureMetadata` 无任何生产调用点，
+ `PublishSettings.captureMetadata` 恒为 `empty`，`captureDerivedTagRefs` 恒为空列表；
+ `creator_chip` 覆盖 60 个节点，创作页尚无打标 chip，`tagRefs` 只能由正文内联 mention 填充。
+ 断点已由 `UNWIRED_BASELINE` 固化，接通一条即须删除一条。
+- 完成判定：`DOM-003` 通过且 `UNWIRED_BASELINE` 为空

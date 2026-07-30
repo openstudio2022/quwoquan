@@ -17,6 +17,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
@@ -34,6 +35,8 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentDiscoveryFeedEmptyReason;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../support/cloud_services/behavior_repository_double.dart';
@@ -218,6 +221,7 @@ IntersectionReason _photoSpotReason() {
 }
 
 MicroPostDto _microPost({
+  String? id,
   List<String> imageUrls = const <String>[
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
   ],
@@ -226,7 +230,8 @@ MicroPostDto _microPost({
   String avatarUrl = '',
 }) {
   final reasonClass = reason?.intersectionClass ?? 'fact';
-  final postId = 'post_intersection_demo_${reasonClass}_${imageUrls.length}';
+  final postId =
+      id ?? 'post_intersection_demo_${reasonClass}_${imageUrls.length}';
   final effectiveReason =
       reason ?? _reason(intersectionClass: reasonClass, postId: postId);
   return MicroPostDto(
@@ -308,7 +313,7 @@ VideoPostDto _videoPost({required int width, required int height}) {
     authorVerified: false,
     body: '视频画面下方的配文',
     videoUrl:
-        'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+        'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
     thumbnailUrl:
         'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
     coverUrl:
@@ -391,6 +396,13 @@ class _NoopMediaDownloadCache extends MediaDownloadCache {
   Future<String?> getCachedFilePath(String url) async => null;
 }
 
+final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
+  avatarBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/avatar',
+  imageBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/image',
+  videoBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/video',
+  attachmentBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/image',
+);
+
 Widget _buildFeed(
   PostBaseDto post, {
   ContentBehaviorTracker? tracker,
@@ -402,6 +414,7 @@ Widget _buildFeed(
     key: ValueKey<String>('feed-scope-${post.id}'),
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       discoveryFeedMapProvider.overrideWith(
         () => _SinglePostFeedMapNotifier(post),
       ),
@@ -431,7 +444,10 @@ Widget _buildFeed(
 
 Widget _buildRealProviderFeed() {
   return ProviderScope(
-    overrides: [...mockContentFacetOverrides(MockContentRepository())],
+    overrides: [
+      ...mockContentFacetOverrides(MockContentRepository()),
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
+    ],
     child: CupertinoApp(
       home: ScreenUtilInit(
         designSize: const Size(390, 844),
@@ -591,7 +607,7 @@ void main() {
     );
     expect(
       player.deliveryReference.url,
-      'https://cdn.alpha.quwoquan.com:17100/media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+      'https://cdn.alpha.quwoquan.com:17100/media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
     );
     expect(player.deliveryReference.url, isNot(contains('https://10.0.2.2')));
   });
@@ -738,6 +754,40 @@ void main() {
     expect(find.byType(CupertinoActivityIndicator), findsNothing);
   });
 
+  testWidgets('用户深滚后回到顶部只触发一次前页恢复', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final notifier = _PreviousPageRecoveryFeedMapNotifier(
+      List<PostBaseDto>.generate(
+        48,
+        (index) => _microPost(
+          id: 'post_previous_page_${index.toString().padLeft(2, '0')}',
+          imageUrls: const <String>[],
+        ),
+        growable: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _buildFeedScope(
+        notifier: () => notifier,
+        scopeId: 'previous-page-user-behavior',
+      ),
+    );
+    await tester.pump();
+
+    final scrollView = find.byType(CustomScrollView);
+    expect(scrollView, findsOneWidget);
+    await tester.fling(scrollView, const Offset(0, -5000), 5000);
+    await tester.pumpAndSettle();
+    expect(notifier.prependCalls, 0);
+
+    await tester.fling(scrollView, const Offset(0, 6000), 5000);
+    await tester.pumpAndSettle();
+
+    expect(notifier.prependCalls, 1);
+  });
+
   testWidgets('关注空态准确说明尚无动态且没有插画或错误重试', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -769,7 +819,7 @@ void main() {
     expect(find.byKey(const ValueKey('home-feed-skeleton')), findsNothing);
   });
 
-  testWidgets('推荐空状态不能进入关注正常空态而是提供阻塞重载', (tester) async {
+  testWidgets('缺少 canonical empty reason 的推荐空响应按协议错误阻断', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -788,6 +838,28 @@ void main() {
     expect(find.byType(Icon), findsNothing);
     expect(find.text('暂时没有推荐内容'), findsNothing);
     expect(find.textContaining('关注更多内容后'), findsNothing);
+  });
+
+  testWidgets('推荐健康空态仅显示内容加载完毕且没有错误恢复控件', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildFeedScope(notifier: _RecommendCanonicalEmptyFeedMapNotifier.new),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('home-feed-completed-empty')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(DiscoveryFeedText.contentLoadingCompleted),
+      findsOneWidget,
+    );
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
+    expect(find.text(SearchText.reload), findsNothing);
+    expect(find.byType(Icon), findsNothing);
   });
 
   testWidgets('feed 离线、超时和依赖不可用使用准确恢复组且不展示技术字段', (tester) async {
@@ -940,7 +1012,7 @@ void main() {
     );
   });
 
-  testWidgets('约伴徽标只由云侧重社交 actionHint 驱动（有 start_companion 展示有人同行）', (
+  testWidgets('约伴徽标只由云侧重社交 actionHint 驱动（有 start_gathering 展示有人同行）', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -953,7 +1025,7 @@ void main() {
       source: 'coWishlistedEntity',
       actionHints: <IntersectionActionHint>[
         IntersectionActionHint(
-          actionKey: 'start_companion',
+          actionKey: 'start_gathering',
           label: '发起结伴',
           actionTier: 'heavy',
         ),
@@ -1588,7 +1660,7 @@ void main() {
 }
 
 /// N6：带 GoRouter 的 feed 宿主，使交集 span 点击的 `context.push` 可达，
-/// 从而验证 onTrack → trackTagClick 的归因字段透传（`/user/:username` 复用
+/// 从而验证 onTrack → trackTagClick 的归因字段透传（`/user/:userHandle` 复用
 /// resolvePath(userProfile) 的 codegen 路由）。
 Widget _routedFeed(
   PostBaseDto post, {
@@ -1614,8 +1686,9 @@ Widget _routedFeed(
         ),
       ),
       GoRoute(
-        path: '/user/:username',
-        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+        path: '/user/:userHandle',
+        builder: (_, state) =>
+            Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -1623,6 +1696,7 @@ Widget _routedFeed(
     key: ValueKey<String>('routed-feed-scope-${post.id}'),
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       discoveryFeedMapProvider.overrideWith(
         () => _SinglePostFeedMapNotifier(post),
       ),
@@ -1641,7 +1715,7 @@ class _AuthenticatedSession extends AuthSessionController {
       accessToken: 'test-token',
       refreshToken: 'test-refresh-token',
       ownerId: 'test-user',
-      activeSubAccountId: 'test-sub-account',
+      activePersonaId: 'test-persona',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',
@@ -1657,7 +1731,14 @@ class _SinglePostFeedMapNotifier extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
-      'recommend': AsyncData(DiscoveryFeedState(items: <PostBaseDto>[post])),
+      'recommend': AsyncData(
+        DiscoveryFeedState(
+          items: <PostBaseDto>[post],
+          feedRequestId: 'frq_local_contract_single_post',
+          policyDigest:
+              'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ),
+      ),
     };
   }
 
@@ -1669,7 +1750,12 @@ class _FollowingEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
-      'following': AsyncData(const DiscoveryFeedState(items: <PostBaseDto>[])),
+      'following': AsyncData(
+        const DiscoveryFeedState(
+          items: <PostBaseDto>[],
+          emptyReason: ContentDiscoveryFeedEmptyReason.followingEmpty,
+        ),
+      ),
     };
   }
 
@@ -1682,6 +1768,23 @@ class _RecommendEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
     return <String, AsyncValue<DiscoveryFeedState>>{
       'recommend': AsyncData(const DiscoveryFeedState(items: <PostBaseDto>[])),
+    };
+  }
+
+  @override
+  Future<void> load(String channelId, {bool force = false}) async {}
+}
+
+class _RecommendCanonicalEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'recommend': AsyncData(
+        const DiscoveryFeedState(
+          items: <PostBaseDto>[],
+          emptyReason: ContentDiscoveryFeedEmptyReason.noEligibleContent,
+        ),
+      ),
     };
   }
 
@@ -1750,6 +1853,36 @@ class _SlowLoadingFeedMapNotifier extends DiscoveryFeedMapNotifier {
   Future<void> load(String channelId, {bool force = false}) async {}
 }
 
+class _PreviousPageRecoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  _PreviousPageRecoveryFeedMapNotifier(this.posts);
+
+  final List<PostBaseDto> posts;
+  int prependCalls = 0;
+
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'recommend': AsyncData(
+        DiscoveryFeedState(
+          items: posts,
+          canRestorePreviousPage: true,
+          residentPageCount: 4,
+          retainedPageCount: 6,
+        ),
+      ),
+    };
+  }
+
+  @override
+  Future<void> load(String channelId, {bool force = false}) async {}
+
+  @override
+  Future<bool> prependPreviousPage(String channelId) async {
+    prependCalls += 1;
+    return true;
+  }
+}
+
 Widget _buildFeedScope({
   required DiscoveryFeedMapNotifier Function() notifier,
   bool disableAnimations = false,
@@ -1760,6 +1893,7 @@ Widget _buildFeedScope({
     key: ValueKey<String>('feed-scope-${scopeId ?? channelId}'),
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       discoveryFeedMapProvider.overrideWith(notifier),
     ],
     child: CupertinoApp(

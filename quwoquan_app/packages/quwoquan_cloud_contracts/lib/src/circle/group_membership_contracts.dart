@@ -1,105 +1,9 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/circle/group_membership_contracts.requests.g.dart';
 
 enum CircleGroupMembershipRole { owner, manager, member }
 
 enum CircleGroupMembershipState { pending, active, rejected, left, removed }
-
-final class ApplyCircleGroupMembershipCommand {
-  ApplyCircleGroupMembershipCommand({
-    required String circleId,
-    required String groupId,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId');
-  final String circleId;
-  final String groupId;
-}
-
-final class MyCircleGroupMembershipQuery {
-  MyCircleGroupMembershipQuery({
-    required String circleId,
-    required String groupId,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId');
-  final String circleId;
-  final String groupId;
-}
-
-final class CircleGroupMembershipListQuery {
-  CircleGroupMembershipListQuery({
-    required String circleId,
-    required String groupId,
-    this.state,
-    this.cursor,
-    this.limit = 20,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId') {
-    _limit(limit);
-  }
-  final String circleId;
-  final String groupId;
-  final CircleGroupMembershipState? state;
-  final String? cursor;
-  final int limit;
-}
-
-final class LeaveCircleGroupMembershipCommand {
-  LeaveCircleGroupMembershipCommand({
-    required String circleId,
-    required String groupId,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId');
-  final String circleId;
-  final String groupId;
-}
-
-final class DecideCircleGroupMembershipCommand {
-  DecideCircleGroupMembershipCommand({
-    required String circleId,
-    required String groupId,
-    required String personaId,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId'),
-       personaId = _required(personaId, 'personaId');
-  final String circleId;
-  final String groupId;
-  final String personaId;
-}
-
-final class RemoveCircleGroupMembershipCommand {
-  RemoveCircleGroupMembershipCommand({
-    required String circleId,
-    required String groupId,
-    required String personaId,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId'),
-       personaId = _required(personaId, 'personaId');
-  final String circleId;
-  final String groupId;
-  final String personaId;
-}
-
-final class UpdateCircleGroupMembershipRoleCommand {
-  UpdateCircleGroupMembershipRoleCommand({
-    required String circleId,
-    required String groupId,
-    required String personaId,
-    required this.role,
-  }) : circleId = _required(circleId, 'circleId'),
-       groupId = _required(groupId, 'groupId'),
-       personaId = _required(personaId, 'personaId') {
-    if (role == CircleGroupMembershipRole.owner) {
-      throw ArgumentError.value(
-        role,
-        'role',
-        'owner transfer is not a role update',
-      );
-    }
-  }
-  final String circleId;
-  final String groupId;
-  final String personaId;
-  final CircleGroupMembershipRole role;
-}
 
 final class CircleGroupMembershipCommandResult {
   const CircleGroupMembershipCommandResult({
@@ -179,55 +83,6 @@ abstract interface class CircleGroupMembershipQueryReader {
   );
 }
 
-CloudOperationRequestPayload encodeApplyCircleGroupMembershipCommand(
-  ApplyCircleGroupMembershipCommand command,
-) => _path(command.circleId, command.groupId);
-
-CloudOperationRequestPayload encodeMyCircleGroupMembershipQuery(
-  MyCircleGroupMembershipQuery query,
-) => _path(query.circleId, query.groupId);
-
-CloudOperationRequestPayload encodeCircleGroupMembershipListQuery(
-  CircleGroupMembershipListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': query.circleId,
-    'groupId': query.groupId,
-  },
-  queryParameters: <String, String>{
-    if (query.state != null) 'state': query.state!.name,
-    if (query.cursor != null) 'cursor': query.cursor!,
-    'limit': query.limit.toString(),
-  },
-);
-
-CloudOperationRequestPayload encodeLeaveCircleGroupMembershipCommand(
-  LeaveCircleGroupMembershipCommand command,
-) => _path(command.circleId, command.groupId);
-
-CloudOperationRequestPayload encodeApproveCircleGroupMembershipCommand(
-  DecideCircleGroupMembershipCommand command,
-) => _targetPath(command.circleId, command.groupId, command.personaId);
-
-CloudOperationRequestPayload encodeRejectCircleGroupMembershipCommand(
-  DecideCircleGroupMembershipCommand command,
-) => _targetPath(command.circleId, command.groupId, command.personaId);
-
-CloudOperationRequestPayload encodeRemoveCircleGroupMembershipCommand(
-  RemoveCircleGroupMembershipCommand command,
-) => _targetPath(command.circleId, command.groupId, command.personaId);
-
-CloudOperationRequestPayload encodeUpdateCircleGroupMembershipRoleCommand(
-  UpdateCircleGroupMembershipRoleCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'groupId': command.groupId,
-    'personaId': command.personaId,
-  },
-  body: <String, Object?>{'role': command.role.name},
-);
-
 CircleGroupMembershipCommandResult decodeCircleGroupMembershipCommandResult(
   Object? value,
 ) {
@@ -297,26 +152,6 @@ CircleGroupMembershipSlice _slice(Object? value) {
   );
 }
 
-CloudOperationRequestPayload _path(String circleId, String groupId) =>
-    CloudOperationRequestPayload(
-      pathParameters: <String, String>{
-        'circleId': circleId,
-        'groupId': groupId,
-      },
-    );
-
-CloudOperationRequestPayload _targetPath(
-  String circleId,
-  String groupId,
-  String personaId,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': circleId,
-    'groupId': groupId,
-    'personaId': personaId,
-  },
-);
-
 CircleGroupMembershipRole _role(Object? value) => switch (value) {
   'owner' => CircleGroupMembershipRole.owner,
   'manager' => CircleGroupMembershipRole.manager,
@@ -344,12 +179,6 @@ Map<String, Object?> _object(Object? value, String label) {
 void _only(Map<String, Object?> map, Set<String> allowed) {
   final unknown = map.keys.where((key) => !allowed.contains(key)).toList();
   if (unknown.isNotEmpty) throw FormatException('unknown fields: $unknown');
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }
 
 String _string(Map<String, Object?> map, String key) {
@@ -392,9 +221,4 @@ DateTime? _optionalDate(Object? value) {
   if (parsed == null)
     throw const FormatException('optional timestamp must be RFC3339');
   return parsed.toUtc();
-}
-
-void _limit(int value) {
-  if (value < 1 || value > 100)
-    throw ArgumentError.value(value, 'limit', 'must be in 1..100');
 }

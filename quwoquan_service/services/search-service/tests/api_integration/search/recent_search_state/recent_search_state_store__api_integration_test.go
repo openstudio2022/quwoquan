@@ -50,7 +50,7 @@ func recentRequest(t *testing.T, handler http.Handler, method, target, persona, 
 		request.Header.Set("Content-Type", "application/json")
 	}
 	if persona != "" {
-		request.Header.Set("X-Client-Sub-Account-Id", persona)
+		request.Header.Set("X-Client-Persona-Id", persona)
 	}
 	if idemKey != "" {
 		request.Header.Set("Idempotency-Key", idemKey)

@@ -155,7 +155,11 @@ void main() {
           _album('travel', '旅行'),
         ],
         assetsByAlbumId: <String, List<AssetEntity>>{
-          'recent': <AssetEntity>[_image('a1'), _image('a2'), _video('v1')],
+          'recent': <AssetEntity>[
+            _image('photo-one'),
+            _image('photo-two'),
+            _video('video-one'),
+          ],
           'travel': <AssetEntity>[_image('b1')],
         },
       );
@@ -166,21 +170,15 @@ void main() {
       expect(find.text(MediaText.mediaPickerCategoryAll), findsNothing);
       expect(find.text(MediaText.mediaPickerCategoryPhoto), findsNothing);
       expect(find.text(MediaText.mediaPickerCategoryLive), findsNothing);
-      expect(
-        find.text(MediaText.mediaPickerCategoryFullscreen),
-        findsNothing,
-      );
+      expect(find.text(MediaText.mediaPickerCategoryFullscreen), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('media-picker-camera-tile')),
         findsOneWidget,
       );
       expect(find.text(MediaText.mediaPickerOneTapMovie), findsOneWidget);
+      expect(find.text(MediaText.mediaPickerVideoCameraEntry), findsNothing);
       expect(
-        find.text(MediaText.mediaPickerVideoCameraEntry),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-v1')),
+        find.byKey(const ValueKey<String>('media-picker-asset-video-one')),
         findsNothing,
       );
 
@@ -192,10 +190,7 @@ void main() {
         find.byKey(TestKeys.mediaPickerAlbumDropdownPanel),
         findsOneWidget,
       );
-      expect(
-        find.text(MediaText.mediaPickerAlbumSelectionTitle),
-        findsNothing,
-      );
+      expect(find.text(MediaText.mediaPickerAlbumSelectionTitle), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('media-picker-album-travel')),
         findsOneWidget,
@@ -208,7 +203,7 @@ void main() {
       await _pumpMediaPickerFrame(tester);
 
       expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-a1')),
+        find.byKey(const ValueKey<String>('media-picker-asset-photo-one')),
         findsNothing,
       );
       expect(
@@ -228,7 +223,11 @@ void main() {
         ],
         assetsByAlbumId: <String, List<AssetEntity>>{
           'recent': <AssetEntity>[_image('r1'), _image('r2')],
-          'videos': <AssetEntity>[_video('v1'), _video('v2'), _video('v3')],
+          'videos': <AssetEntity>[
+            _video('video-one'),
+            _video('video-two'),
+            _video('video-three'),
+          ],
           'travel': <AssetEntity>[_image('t1'), _image('t2'), _image('t3')],
           'camera': <AssetEntity>[_image('c1')],
           'empty': const <AssetEntity>[],
@@ -745,10 +744,7 @@ void main() {
       );
       await _pumpMediaPickerFrame(tester);
       final oneTapButtonWhenSingle = tester.widget<CupertinoButton>(
-        find.widgetWithText(
-          CupertinoButton,
-          MediaText.mediaPickerOneTapMovie,
-        ),
+        find.widgetWithText(CupertinoButton, MediaText.mediaPickerOneTapMovie),
       );
       expect(oneTapButtonWhenSingle.onPressed, isNull);
 
@@ -828,9 +824,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(
-        find.text(MediaText.mediaPickerOneTapMovieGentleMotion),
-      );
+      await tester.tap(find.text(MediaText.mediaPickerOneTapMovieGentleMotion));
       await tester.tap(find.text(MediaText.mediaPickerNextStep));
       await tester.pumpAndSettle();
 

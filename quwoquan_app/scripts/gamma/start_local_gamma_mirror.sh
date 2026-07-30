@@ -20,6 +20,19 @@ trap cleanup_active_child EXIT INT TERM HUP
 
 QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+QWQ_LOCAL_RELEASE_ENV="${QWQ_LOCAL_RELEASE_ENV:-gamma}"
+QWQ_LOCAL_RELEASE_TARGET="${QWQ_LOCAL_RELEASE_TARGET:-${QWQ_LOCAL_RELEASE_ENV}-local}"
+if [[ "$QWQ_LOCAL_RELEASE_ENV" != "alpha" \
+   && "$QWQ_LOCAL_RELEASE_ENV" != "beta" \
+   && "$QWQ_LOCAL_RELEASE_ENV" != "gamma" ]]; then
+  echo "[local-release] GATE_BLOCK: unsupported environment $QWQ_LOCAL_RELEASE_ENV" >&2
+  exit 2
+fi
+if [[ "$QWQ_LOCAL_RELEASE_TARGET" != "${QWQ_LOCAL_RELEASE_ENV}-local" ]]; then
+  echo "[local-release] GATE_BLOCK: target does not belong to environment" >&2
+  exit 2
+fi
+export QWQ_LOCAL_RELEASE_ENV QWQ_LOCAL_RELEASE_TARGET
 PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
 WORKLOAD="${QWQ_WORKLOAD:-full}"
 case "$WORKLOAD" in
@@ -57,7 +70,8 @@ for arg in "$@"; do
   if [[ "$arg" == "--down" ]]; then LOCAL_RUN_ACTION="down"; fi
 done
 eval "$(python3 "$ROOT/quwoquan_ops/cli/lib/local_run.py" \
-  --env gamma --target gamma-local --action "$LOCAL_RUN_ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
+  --env "$QWQ_LOCAL_RELEASE_ENV" --target "$QWQ_LOCAL_RELEASE_TARGET" \
+  --action "$LOCAL_RUN_ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
 export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
 COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
 COMPOSE_FILES=("$COMPOSE_FILE")
@@ -66,14 +80,19 @@ while IFS= read -r service_compose_file; do
 done < <(find "$ROOT/quwoquan_service/services" -mindepth 3 -maxdepth 3 -path '*/deploy/compose.yaml' -type f | sort)
 while IFS= read -r service_environment_compose_file; do
   COMPOSE_FILES+=("$service_environment_compose_file")
-done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path '*/environments/gamma/deploy/compose.yaml' -type f | sort)
+done < <(find "$ROOT/quwoquan_service/services" -mindepth 5 -maxdepth 5 -path "*/environments/${QWQ_LOCAL_RELEASE_ENV}/deploy/compose.yaml" -type f | sort)
 COMPOSE_FILES+=("$ROOT/quwoquan_service/control-plane/platform-ops/deploy/compose.yaml")
 COMPOSE_FILE_ARGS=()
 for service_compose_file in "${COMPOSE_FILES[@]}"; do
   COMPOSE_FILE_ARGS+=(-f "$service_compose_file")
 done
-LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-quwoquan_service}"
-LOCAL_GAMMA_REC_POLICY_SOURCE="${LOCAL_GAMMA_REC_POLICY_SOURCE:-$ROOT/quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy_object_cards_v1.yaml}"
+if [[ "$QWQ_LOCAL_RELEASE_ENV" == "gamma" ]]; then
+  default_compose_project="quwoquan_service"
+else
+  default_compose_project="quwoquan_${QWQ_LOCAL_RELEASE_ENV}_release"
+fi
+LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-$default_compose_project}"
+LOCAL_GAMMA_REC_POLICY_SOURCE="$ROOT/quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
 export LOCAL_GAMMA_REC_POLICY_SOURCE
 if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-}" \
@@ -96,7 +115,7 @@ if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_MONGO_PORT:-}" \
    || -z "${LOCAL_GAMMA_REDIS_PORT:-}" \
    || -z "${LOCAL_GAMMA_ES_PORT:-}" ]]; then
-  eval "$(python3 "$ROOT/quwoquan_ops/cli/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
+  eval "$(python3 "$ROOT/quwoquan_ops/cli/print_local_port_profile.py" --profile "$QWQ_LOCAL_RELEASE_TARGET" --format shell-defaults)"
 fi
 # docker compose 只读取导出的环境变量；这里把 canonical local-gamma 端口全部导出，
 # 避免直接运行脚本/Makefile 时回退到 compose 文件里的旧默认端口。
@@ -126,7 +145,7 @@ export \
 
 export_service_compose_environment() {
   local source_name target_name
-  export QWQ_COMPOSE_ENV=gamma
+  export QWQ_COMPOSE_ENV="$QWQ_LOCAL_RELEASE_ENV"
   while IFS= read -r source_name; do
     # gamma-local infrastructure Compose still owns LOCAL_GAMMA_* mount/port
     # variables (for example the immutable Caddyfile source). Export both the
@@ -137,8 +156,19 @@ export_service_compose_environment() {
     export "$target_name"
   done < <(compgen -A variable LOCAL_GAMMA_ | sort)
 }
-CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
-IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+first_party_image_owners() {
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+
+print("\n".join(first_party_service_names()))
+PY
+}
+CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-}"
+if [[ ! "$CONFIG_VERSION" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "[local-release] GATE_BLOCK: LOCAL_GAMMA_CONFIG_VERSION must be the canonical sha256 runtime configuration digest" >&2
+  exit 2
+fi
+IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-}"
 eval "$(
   PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 import shlex
@@ -149,7 +179,11 @@ from quwoquan_ops.cli.lib.environment_topology import (
     load_environment_topology,
 )
 
-bases = get_target(load_environment_topology(), "gamma-local")["publicBases"]
+import os
+
+bases = get_target(
+    load_environment_topology(), os.environ["QWQ_LOCAL_RELEASE_TARGET"]
+)["publicBases"]
 for name, role in (
     ("GATEWAY_BASE_URL", "api"),
     ("PRODUCT_OPS_BASE_URL", "productOps"),
@@ -165,6 +199,7 @@ for name, role in (
     ("QWQ_PUBLIC_RTC_HOST", "rtc"),
     ("QWQ_PUBLIC_OPS_HOST", "productOps"),
     ("QWQ_PUBLIC_CDN_HOST", "mediaImage"),
+    ("QWQ_PUBLIC_UPLOAD_HOST", "mediaUpload"),
 ):
     print(f"{name}={shlex.quote(str(urlsplit(str(bases[role])).hostname))}")
 PY
@@ -174,6 +209,7 @@ PUBLIC_HOSTS=(
   "$QWQ_PUBLIC_WEB_HOST"
   "$QWQ_PUBLIC_OPS_HOST"
   "$QWQ_PUBLIC_CDN_HOST"
+  "$QWQ_PUBLIC_UPLOAD_HOST"
 )
 LOCAL_GAMMA_TAGS_DIR="${LOCAL_GAMMA_TAGS_DIR:-$ROOT/quwoquan_data/control_plane/governance/taxonomy}"
 LOCAL_GAMMA_TAG_DB="${LOCAL_GAMMA_TAG_DB:-quwoquan_tag}"
@@ -184,9 +220,9 @@ DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
 FORCE_CLEAN_RECREATE="${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-0}"
 PRESERVE_POSTGRES_VOLUME="${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}"
-LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"
-LOCAL_GAMMA_CACHE_ROOT="${QWQ_OUTPUT_ROOT}/env/gamma/local/gamma-local/cache"
-LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/gamma/local/gamma-local/process"
+LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/rendered"
+LOCAL_GAMMA_CACHE_ROOT="${QWQ_OUTPUT_ROOT}/env/${QWQ_LOCAL_RELEASE_ENV}/local/${QWQ_LOCAL_RELEASE_TARGET}/cache"
+LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/${QWQ_LOCAL_RELEASE_ENV}/local/${QWQ_LOCAL_RELEASE_TARGET}/process"
 LOCAL_GAMMA_RUNTIME_LOG_ROOT="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
 GAMMA_RUN_ROOT="${QWQ_RUN_ROOT}"
 # 渲染配置是部署过程临时输入，真相源始终在 Ops/服务的 deploy 与 configs 目录。
@@ -196,26 +232,30 @@ LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/media"
 LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/gamma/local/Caddyfile"
 LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"
 LOCAL_GAMMA_CADDY_CONFIG_VOLUME="${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}"
-eval "$(
+tls_exports="$(
   PYTHONDONTWRITEBYTECODE=1 python3 \
     "$ROOT/quwoquan_ops/cli/lib/public_domain_tls.py" paths \
-    --target gamma-local \
-    --format shell
-)"
+    --target "$QWQ_LOCAL_RELEASE_TARGET" \
+    --format shell \
+    --allow-missing
+)" || exit $?
+eval "$tls_exports"
 LOCAL_GAMMA_MODEL_CACHE_ROOT="${LOCAL_GAMMA_CACHE_ROOT}/model"
-LOCAL_GAMMA_PORTAL_ROOT="${LOCAL_GAMMA_PORTAL_ROOT:-${QWQ_DEPLOY_WORK_ROOT}/gamma-local/build/ops-portal}"
+LOCAL_GAMMA_PORTAL_ROOT="${LOCAL_GAMMA_PORTAL_ROOT:-${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/build/ops-portal}"
 LOCAL_GAMMA_STACK_STATUS_REPORT="${LOCAL_GAMMA_PROCESS_ROOT}/stack_status.json"
-LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT="${LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT:-30s}"
-STAGE="${STAGE:-gamma}"
+STAGE="${STAGE:-$QWQ_LOCAL_RELEASE_ENV}"
 LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-}"
 CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-}"
 LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-}"
 case "$STAGE" in
-  ""|gamma|pre)
-    LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-gamma}"
-    CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-gamma}"
-    LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-gamma}"
-    ENABLE_FIXTURE_SEEDS=0
+  alpha|beta|gamma)
+    if [[ "$STAGE" != "$QWQ_LOCAL_RELEASE_ENV" ]]; then
+      echo "[local-release] GATE_BLOCK: stage does not match environment" >&2
+      exit 2
+    fi
+    LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-$QWQ_LOCAL_RELEASE_ENV}"
+    CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-$QWQ_LOCAL_RELEASE_ENV}"
+    LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-local-${QWQ_LOCAL_RELEASE_ENV}}"
     # gamma-local 保持生产 Remote composition 与完整第一方拓扑；
     # 所有外部 Provider 由服务 Binding 选择 Port 对等本地替身，并由 stackctl 统一材料化。
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
@@ -224,92 +264,14 @@ case "$STAGE" in
     LOCAL_GAMMA_APP_ENV="${LOCAL_GAMMA_APP_ENV:-prod}"
     CONFIG_SOURCE_ENV="${CONFIG_SOURCE_ENV:-prod}"
     LOCAL_GAMMA_READY_INDEX_SUFFIX="${LOCAL_GAMMA_READY_INDEX_SUFFIX:-prod-onebox}"
-    ENABLE_FIXTURE_SEEDS="${ENABLE_FIXTURE_SEEDS:-0}"
     # prod 只消费 environments/prod 的真实 Provider Binding，缺凭据必须 fail-fast。
     ASSISTANT_SCENARIO_SEED_REFS="${ASSISTANT_SCENARIO_SEED_REFS:-}"
     ;;
   *)
-    echo "[local-gamma] FAIL: unsupported STAGE=$STAGE (expected pre|gamma|prod)" >&2
+    echo "[local-release] FAIL: unsupported STAGE=$STAGE" >&2
     exit 2
     ;;
 esac
-if [[ "${ENABLE_FIXTURE_SEEDS:-0}" != "0" ]]; then
-  echo "[local-gamma] GATE_BLOCK: environment-visible fixture seeding is retired; activate an immutable data release instead" >&2
-  exit 2
-fi
-# Warm path: reuse persisted mongo/ES when watermark digest still matches seed inputs.
-LOCAL_GAMMA_DATA_PLANE_WATERMARK="${LOCAL_GAMMA_DATA_PLANE_WATERMARK:-${LOCAL_GAMMA_CACHE_ROOT}/data-plane-watermark.json}"
-compute_local_gamma_data_plane_digest() {
-  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$LOCAL_GAMMA_TAGS_DIR" <<'PY'
-import hashlib
-import sys
-from pathlib import Path
-
-tags_dir = Path(sys.argv[1])
-digest = hashlib.sha256()
-for path in sorted(tags_dir.rglob("*")):
-    if path.is_file():
-        digest.update(path.as_posix().encode())
-        digest.update(path.read_bytes())
-print(digest.hexdigest())
-PY
-}
-maybe_reuse_local_gamma_data_plane() {
-  if [[ "${LOCAL_GAMMA_REUSE_DATA_PLANE:-0}" != "1" ]]; then
-    return 0
-  fi
-  if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
-    return 0
-  fi
-  if [[ ! -f "$LOCAL_GAMMA_DATA_PLANE_WATERMARK" ]]; then
-    echo "[local-gamma] data-plane reuse requested but watermark missing; full seed will run"
-    return 0
-  fi
-  local current_digest
-  current_digest="$(compute_local_gamma_data_plane_digest)"
-  if PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$LOCAL_GAMMA_DATA_PLANE_WATERMARK" "$current_digest" <<'PY'
-import json
-import sys
-from pathlib import Path
-
-payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-raise SystemExit(0 if payload.get("status") == "ready" and payload.get("digest") == sys.argv[2] else 1)
-PY
-  then
-    ENABLE_FIXTURE_SEEDS=0
-    echo "[local-gamma] LOCAL_GAMMA_REUSE_DATA_PLANE hit watermark digest=${current_digest:0:12}…; skip fixture seed/ES backfill"
-  else
-    echo "[local-gamma] data-plane watermark stale or invalid; full seed will run"
-  fi
-}
-write_local_gamma_data_plane_watermark() {
-  local digest="$1"
-  mkdir -p "$(dirname "$LOCAL_GAMMA_DATA_PLANE_WATERMARK")"
-  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$LOCAL_GAMMA_DATA_PLANE_WATERMARK" "$digest" <<'PY'
-import json
-import sys
-from datetime import datetime, timezone
-from pathlib import Path
-
-path = Path(sys.argv[1])
-path.write_text(
-    json.dumps(
-        {
-            "schema": "local-gamma-data-plane-watermark",
-            "status": "ready",
-            "digest": sys.argv[2],
-            "writtenAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        },
-        ensure_ascii=False,
-        indent=2,
-    )
-    + "\n",
-    encoding="utf-8",
-)
-print(path)
-PY
-}
-maybe_reuse_local_gamma_data_plane
 LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$(PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" <<'PY'
 import sys
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
@@ -320,18 +282,17 @@ PY
 LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
-PREVIOUS_IMAGE_VERSION="${PREVIOUS_IMAGE_VERSION:-${PREV_IMAGE_VERSION:-}}"
 export \
   STAGE \
   LOCAL_GAMMA_APP_ENV \
   CONFIG_SOURCE_ENV \
-  ENABLE_FIXTURE_SEEDS \
   ASSISTANT_SCENARIO_SEED_REFS \
   LOCAL_GAMMA_READY_INDEX_STREAM \
   LOCAL_GAMMA_READY_INDEX_GROUP \
   LOCAL_GAMMA_READY_INDEX_QUEUE \
   LOCAL_GAMMA_CADDY_DATA_VOLUME \
   LOCAL_GAMMA_CADDY_CONFIG_VOLUME \
+  LOCAL_GAMMA_COMPOSE_PROJECT_NAME \
   QWQ_PUBLIC_TLS_CERT_FILE \
   QWQ_PUBLIC_TLS_KEY_FILE \
   QWQ_PUBLIC_API_HOST \
@@ -339,6 +300,7 @@ export \
   QWQ_PUBLIC_RTC_HOST \
   QWQ_PUBLIC_OPS_HOST \
   QWQ_PUBLIC_CDN_HOST \
+  QWQ_PUBLIC_UPLOAD_HOST \
   MEDIA_AVATAR_BASE_URL \
   MEDIA_IMAGE_BASE_URL \
   MEDIA_VIDEO_BASE_URL \
@@ -348,8 +310,8 @@ export \
   LOCAL_GAMMA_MODEL_CACHE_ROOT \
   LOCAL_GAMMA_PORTAL_ROOT \
   GAMMA_RUN_ROOT \
-  LOCAL_GAMMA_LEGAL_STATIC_ROOT \
-  PREVIOUS_IMAGE_VERSION
+  LOCAL_GAMMA_LEGAL_STATIC_ROOT
+export QWQ_LOCAL_RELEASE_ENV QWQ_LOCAL_RELEASE_TARGET
 
 library_image() {
   local image="$1"
@@ -380,71 +342,48 @@ esac
 export LOCAL_GAMMA_GO_BASE_IMAGE="${LOCAL_GAMMA_GO_BASE_IMAGE:?LOCAL_GAMMA_GO_BASE_IMAGE is required}"
 export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:?LOCAL_GAMMA_ALPINE_BASE_IMAGE is required}"
 export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
-LOCAL_GAMMA_RTC_SOURCE_IMAGE_PLACEHOLDER="localhost/quwoquan_service_rtc-service:source-provenance-required"
 
-local_gamma_service_default_image_ref() {
-  case "$1" in
-    recommendation-service) echo "localhost/quwoquan_service_recommendation-service:source-provenance-required" ;;
-    content-service) echo "localhost/quwoquan_service_content-service:source-provenance-required" ;;
-    chat-service) echo "localhost/quwoquan_service_chat-service:source-provenance-required" ;;
-    user-service) echo "localhost/quwoquan_service_user-service:source-provenance-required" ;;
-    assistant-service) echo "localhost/quwoquan_service_assistant-service:source-provenance-required" ;;
-    product-ops-service) echo "localhost/quwoquan_service_product-ops-service:source-provenance-required" ;;
-    platform-ops-service) echo "localhost/quwoquan_service_platform-ops-service:source-provenance-required" ;;
-    tag-service) echo "localhost/quwoquan_service_tag-service:source-provenance-required" ;;
-    search-service) echo "localhost/quwoquan_service_search-service:source-provenance-required" ;;
-    entity-service) echo "localhost/quwoquan_service_entity-service:source-provenance-required" ;;
-    circle-service) echo "localhost/quwoquan_service_circle-service:source-provenance-required" ;;
-    integration-service) echo "localhost/quwoquan_service_integration-service:source-provenance-required" ;;
-    notification-service) echo "localhost/quwoquan_service_notification-service:source-provenance-required" ;;
-    rtc-service) echo "$LOCAL_GAMMA_RTC_SOURCE_IMAGE_PLACEHOLDER" ;;
-    *) return 1 ;;
-  esac
+validate_local_gamma_image_composition() {
+  local expected_version="${LOCAL_GAMMA_IMAGE_VERSION:-}"
+  local service=""
+  local service_key=""
+  local image_key=""
+  local image_ref=""
+  local -a composition_args=("$expected_version")
+  while IFS= read -r service; do
+    service_key="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
+    image_key="LOCAL_GAMMA_${service_key}_IMAGE"
+    image_ref="${!image_key:-}"
+    if [[ -z "$image_ref" ]]; then
+      echo "[local-release] GATE_BLOCK: ${image_key} is required from canonical image composition" >&2
+      return 2
+    fi
+    export "$image_key"
+    composition_args+=("$service" "$image_ref")
+  done < <(first_party_image_owners)
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "${composition_args[@]}" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.immutable_image_composition import immutable_image_digest
+
+expected = sys.argv[1]
+bindings = dict(zip(sys.argv[2::2], sys.argv[3::2], strict=True))
+actual = immutable_image_digest(bindings)
+if expected != actual:
+    raise SystemExit(
+        "[local-release] GATE_BLOCK: image composition version does not match exact refs"
+    )
+PY
+  IMAGE_VERSION="$expected_version"
+  export LOCAL_GAMMA_IMAGE_VERSION IMAGE_VERSION
 }
-
-local_gamma_service_repository_name() {
-  case "$1" in
-    recommendation-service) echo "recommendation-service" ;;
-    content-service|chat-service|user-service|assistant-service|product-ops-service|platform-ops-service|tag-service|search-service|entity-service|circle-service|integration-service|notification-service|rtc-service) echo "$1" ;;
-    *) return 1 ;;
-  esac
-}
-
-resolve_local_gamma_service_image_ref() {
-  local service="$1"
-  local default_ref=""
-  default_ref="$(local_gamma_service_default_image_ref "$service")" || return 1
-  local root="${LOCAL_GAMMA_IMAGE_REPOSITORY_ROOT:-}"
-  local tag="${IMAGE_VERSION:-${LOCAL_GAMMA_IMAGE_VERSION:-}}"
-  if [[ -n "$root" && -n "$tag" ]]; then
-    printf '%s/%s:%s\n' \
-      "${root%/}" \
-      "$(local_gamma_service_repository_name "$service")" \
-      "$tag"
-    return 0
-  fi
-  printf '%s\n' "$default_ref"
-}
-
-export LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE="${LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref recommendation-service)}"
-export LOCAL_GAMMA_CONTENT_SERVICE_IMAGE="${LOCAL_GAMMA_CONTENT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref content-service)}"
-export LOCAL_GAMMA_CHAT_SERVICE_IMAGE="${LOCAL_GAMMA_CHAT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref chat-service)}"
-export LOCAL_GAMMA_USER_SERVICE_IMAGE="${LOCAL_GAMMA_USER_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref user-service)}"
-export LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE="${LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref assistant-service)}"
-export LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE="${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref product-ops-service)}"
-export LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE="${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref platform-ops-service)}"
-export LOCAL_GAMMA_TAG_SERVICE_IMAGE="${LOCAL_GAMMA_TAG_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref tag-service)}"
-export LOCAL_GAMMA_SEARCH_SERVICE_IMAGE="${LOCAL_GAMMA_SEARCH_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref search-service)}"
-export LOCAL_GAMMA_ENTITY_SERVICE_IMAGE="${LOCAL_GAMMA_ENTITY_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref entity-service)}"
-export LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE="${LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref circle-service)}"
-export LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE="${LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref integration-service)}"
-export LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE="${LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref notification-service)}"
-export LOCAL_GAMMA_RTC_SERVICE_IMAGE="${LOCAL_GAMMA_RTC_SERVICE_IMAGE:-$(resolve_local_gamma_service_image_ref rtc-service)}"
 
 skip_build=0
 skip_up=0
 build_only=0
 build_services_csv=""
+formal_release=0
+formal_release_teardown=0
 print_env=0
 down=0
 tunnel_pid_file="${LOCAL_GAMMA_PROCESS_ROOT}/colima-tunnels.pids"
@@ -592,7 +531,7 @@ start_colima_tunnels_if_needed() {
   # user-service 直连健康探针（wait_local_gamma_host_ready）使用 user_port，必须同步开隧道，
   # 否则 colima 下 host 无法直达 user-service 发布端口，host 就绪探测会卡死。
   local user_port="${LOCAL_GAMMA_USER_PORT:-19210}"
-  local ssh_config="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/runtime/colima-ssh-config"
+  local ssh_config="${QWQ_DEPLOY_WORK_ROOT}/${QWQ_LOCAL_RELEASE_TARGET}/runtime/colima-ssh-config"
   mkdir -p \
     "${LOCAL_GAMMA_PROCESS_ROOT}" \
     "${LOCAL_GAMMA_RUNTIME_LOG_ROOT}" \
@@ -644,6 +583,10 @@ Options:
   --build-only   Build the requested service images without starting Compose.
   --build-services <csv>
                  Comma-separated service names; valid only with --build-only.
+  --formal-release
+                 Reuse exact prebuilt candidate images and preserve the running data plane.
+  --formal-release-teardown
+                 Stop only the candidate-scoped Compose project; never repair or wipe.
   --print-env    Print Flutter dart-defines for the local gamma mirror.
   --down         Stop the local gamma mirror.
   --help         Show this help.
@@ -663,12 +606,19 @@ while [[ $# -gt 0 ]]; do
       build_services_csv="$2"
       shift 2
       ;;
+    --formal-release) formal_release=1; shift ;;
+    --formal-release-teardown) formal_release_teardown=1; shift ;;
     --print-env) print_env=1; shift ;;
     --down) down=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ "$formal_release_teardown" == "1" && "$down" != "1" ]]; then
+  echo "[local-release] GATE_BLOCK: --formal-release-teardown requires --down" >&2
+  exit 2
+fi
 
 if [[ "$build_only" == "1" && "$skip_build" == "1" ]]; then
   echo "--build-only cannot be combined with --skip-build" >&2
@@ -682,9 +632,16 @@ if [[ -n "$build_services_csv" && "$build_only" != "1" ]]; then
   echo "--build-services is valid only with --build-only" >&2
   exit 2
 fi
-if [[ "$print_env" != "1" && "$skip_up" != "1" && "$build_only" != "1" && "$down" != "1" && "$LOCAL_GAMMA_RTC_SERVICE_IMAGE" == "$LOCAL_GAMMA_RTC_SOURCE_IMAGE_PLACEHOLDER" ]]; then
-  echo "[local-gamma] FAIL: LOCAL_GAMMA_RTC_SERVICE_IMAGE must come from stackctl source provenance" >&2
-  exit 2
+if [[ "$formal_release" == "1" ]]; then
+  if [[ "$skip_build" != "1" || "$build_only" == "1" || "$down" == "1" ]]; then
+    echo "[local-gamma] GATE_BLOCK: --formal-release requires --skip-build and cannot build/down" >&2
+    exit 2
+  fi
+  FORCE_CLEAN_RECREATE=0
+  PRESERVE_POSTGRES_VOLUME=1
+fi
+if [[ "$print_env" != "1" ]]; then
+  validate_local_gamma_image_composition || exit $?
 fi
 restarted_from_previous=0
 if [[ "$print_env" != "1" ]] && local_gamma_has_existing_stack; then
@@ -701,6 +658,22 @@ from quwoquan_ops.cli.lib.output_paths import deployment_package_root
 print(deployment_package_root(sys.argv[1]))
 PY
 )"
+  local packaged_configuration_digest
+  packaged_configuration_digest="$(
+    PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$CONFIG_SOURCE_ENV" "$QWQ_LOCAL_RELEASE_TARGET" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.immutable_configuration_composition import (
+    packaged_configuration_digest,
+)
+
+print(packaged_configuration_digest(sys.argv[1], target=sys.argv[2]))
+PY
+  )" || return 1
+  if [[ "$packaged_configuration_digest" != "$CONFIG_VERSION" ]]; then
+    echo "[local-release] GATE_BLOCK: LOCAL_GAMMA_CONFIG_VERSION does not match the packaged runtime configuration" >&2
+    return 1
+  fi
 
   copy_service_package_config() {
     local service="$1"
@@ -744,34 +717,17 @@ PY
   rm -rf "$out"
   mkdir -p "$out/quwoquan_service/runtime/reliabletask/resources"
   local service
-  for service in \
-    assistant-service \
-    chat-service \
-    circle-service \
-    content-service \
-    entity-service \
-    integration-service \
-    notification-service \
-    product-ops-service \
-    realtime-gateway \
-    recommendation-service \
-    rtc-service \
-    search-service \
-    tag-service \
-    user-service \
-    platform-ops-service; do
+  while IFS= read -r service; do
     copy_service_package_config "$service"
-  done
+  done < <(first_party_image_owners)
 
   local -a report_account_backfill_args=(
     --write-report-account-backfill
-    gamma
-    gamma-local
+    "$QWQ_LOCAL_RELEASE_ENV"
+    "$QWQ_LOCAL_RELEASE_TARGET"
     "$out/report-account-backfill.json"
+    --empty
   )
-  if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
-    report_account_backfill_args+=(--empty)
-  fi
   PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 \
     python3 -m quwoquan_ops.cli.lib.local_environment_auth \
       "${report_account_backfill_args[@]}" >/dev/null
@@ -784,39 +740,24 @@ PY
   cp "$package_root/runtime-shared/retention_policy.yaml" "$out/quwoquan_service/runtime/reliabletask/resources/retention_policy.yaml"
 }
 
-verify_canonical_video_materialization() {
-  python3 "$ROOT/quwoquan_ops/cli/lib/local_gamma_media.py" \
-    verify --target-root "$LOCAL_GAMMA_MEDIA_ROOT"
-}
-
 prepare_media_root() {
   local media="${LOCAL_GAMMA_MEDIA_ROOT}"
-  local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
-  local required_sample="$media/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
-  local required_avatar="$media/media/avatar/s/archived-avatar/circle/fixture_circle_coffee_04/v1/avatar.png"
-  local required_video="$media/media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
-  local media_file_count=0
-  if [[ -d "$media/media" ]]; then
-    media_file_count="$(find "$media/media" -type f | wc -l | tr -d '[:space:]')"
-    if [[ -f "$required_sample" && -f "$required_avatar" && -f "$required_video" && "$media_file_count" -ge 1000 ]]; then
-      verify_canonical_video_materialization
-      echo "[local-gamma] reuse pre-synced full shared media bundle: $media"
-      return 0
-    fi
-    echo "[local-gamma] gamma media root is incomplete; rebuilding full shared media bundle: $media (files=$media_file_count)" >&2
-    rm -rf "$media"
+  mkdir -p \
+    "$media/media/avatar/s" \
+    "$media/media/image/s" \
+    "$media/media/video/s"
+  local forbidden_media=""
+  forbidden_media="$(
+    find "$media/media" -type f \
+      \( -path '*fixture*' -o -path '*test_fixtures*' -o -path '*mock*' -o -path '*seed*' \) \
+      -print -quit
+  )"
+  if [[ -n "$forbidden_media" ]]; then
+    echo "[local-gamma] GATE_BLOCK: environment media root contains fixture/mock/seed business media: $forbidden_media" >&2
+    echo "[local-release] run immutable release full-sync before exposing $QWQ_LOCAL_RELEASE_TARGET media" >&2
+    return 2
   fi
-  if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
-    echo "[local-gamma] FAIL: STAGE=${STAGE} requires an existing media root at ${media}/media" >&2
-    return 1
-  fi
-  if [[ -d "$canonical_media_root" ]]; then
-    python3 "$ROOT/quwoquan_ops/cli/lib/local_gamma_media.py" \
-      materialize --target-root "$media"
-    return 0
-  fi
-  echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync ${LOCAL_GAMMA_MEDIA_ROOT} first" >&2
-  return 1
+  echo "[local-gamma] release media root ready; Data CLI ship apply --full-sync owns public slices: $media"
 }
 
 validate_caddyfile_source() {
@@ -837,18 +778,7 @@ PY
 
   python3 "$ROOT/quwoquan_app/scripts/env/print_app_env_dart_defines.py" \
     --env "$LOCAL_GAMMA_APP_ENV" \
-    --target gamma-local
-}
-
-preflight_local_gamma_inputs() {
-  if [[ ! -d "$LOCAL_GAMMA_TAGS_DIR" ]]; then
-    echo "[local-gamma] FAIL: missing canonical control-plane taxonomy: $LOCAL_GAMMA_TAGS_DIR" >&2
-    return 1
-  fi
-  if [[ ! -f "$LOCAL_GAMMA_TAG_OBJECTS_FILE" ]]; then
-    echo "[local-gamma] FAIL: missing object_tag_index fixture: $LOCAL_GAMMA_TAG_OBJECTS_FILE" >&2
-    return 1
-  fi
+    --target "$QWQ_LOCAL_RELEASE_TARGET"
 }
 
 run_docker_probe_with_timeout() {
@@ -886,7 +816,7 @@ run_docker_probe_with_timeout() {
 
 preflight_docker_daemon() {
   if ! command -v docker >/dev/null 2>&1; then
-    echo "[local-gamma] GATE_BLOCK: docker is required for gamma-local" >&2
+    echo "[local-release] GATE_BLOCK: docker is required for $QWQ_LOCAL_RELEASE_TARGET" >&2
     return 1
   fi
   echo "[local-gamma] checking Docker daemon readiness before compose build"
@@ -921,6 +851,7 @@ ensure_local_gamma_base_images() {
 
 expected_local_gamma_built_image_ref() {
   case "$1" in
+    api-edge) printf '%s\n' "$LOCAL_GAMMA_API_EDGE_IMAGE" ;;
     recommendation-service) printf '%s\n' "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" ;;
     content-service) printf '%s\n' "$LOCAL_GAMMA_CONTENT_SERVICE_IMAGE" ;;
     chat-service) printf '%s\n' "$LOCAL_GAMMA_CHAT_SERVICE_IMAGE" ;;
@@ -934,6 +865,7 @@ expected_local_gamma_built_image_ref() {
     circle-service) printf '%s\n' "$LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE" ;;
     integration-service) printf '%s\n' "$LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE" ;;
     notification-service) printf '%s\n' "$LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE" ;;
+    realtime-gateway) printf '%s\n' "$LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE" ;;
     rtc-service) printf '%s\n' "$LOCAL_GAMMA_RTC_SERVICE_IMAGE" ;;
     *) return 1 ;;
   esac
@@ -1082,43 +1014,24 @@ run_compose_build_with_timeout() {
 
 prepare_down_compose_environment() {
   # `docker compose down` still interpolates every declared service.  Teardown
-  # must therefore be independent from a prior successful config render: these
-  # values are parse-only placeholders and are never used to start a process.
-  local down_config_version="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-down}"
+  # uses the already-validated exact image composition and only fills non-image
+  # parse inputs that Compose requires without starting a process.
+  local down_config_version="$CONFIG_VERSION"
   local service=""
   local service_key=""
   local version_key=""
-  for service in \
-    assistant-service \
-    chat-service \
-    circle-service \
-    content-service \
-    entity-service \
-    integration-service \
-    notification-service \
-    product-ops-service \
-    realtime-gateway \
-    recommendation-service \
-    rtc-service \
-    search-service \
-    tag-service \
-    user-service \
-    platform-ops-service; do
+  while IFS= read -r service; do
     service_key="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
     version_key="LOCAL_GAMMA_${service_key}_CONFIG_VERSION"
     if [[ -z "${!version_key:-}" ]]; then
       printf -v "$version_key" '%s' "$down_config_version"
     fi
     export "$version_key"
-  done
+  done < <(first_party_image_owners)
   : "${LOCAL_GAMMA_REC_POLICY_SOURCE:=down-not-used}"
-  : "${LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:=localhost/quwoquan_service_realtime_gateway:down}"
-  : "${LOCAL_GAMMA_RTC_SERVICE_IMAGE:=localhost/quwoquan_service_rtc_service:down}"
   export \
     LOCAL_GAMMA_CONFIG_ROOT \
-    LOCAL_GAMMA_REC_POLICY_SOURCE \
-    LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE \
-    LOCAL_GAMMA_RTC_SERVICE_IMAGE
+    LOCAL_GAMMA_REC_POLICY_SOURCE
   export_service_compose_environment
 }
 
@@ -1133,7 +1046,9 @@ if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
   prepare_down_compose_environment
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" down
-  cleanup_stale_named_gamma_containers
+  if [[ "$formal_release_teardown" != "1" ]]; then
+    cleanup_stale_named_gamma_containers
+  fi
   rm -f "$stack_report"
   exit 0
 fi
@@ -1154,12 +1069,8 @@ validate_caddyfile_source
 
 if [[ "$skip_up" == "1" ]]; then
   echo "[local-gamma] prepared artifacts only"
-  echo "[local-gamma] configVersion=$CONFIG_VERSION imageVersion=$IMAGE_VERSION"
+  echo "[local-release] configurationDigest=$CONFIG_VERSION imageTransportTag=$IMAGE_VERSION"
   exit 0
-fi
-
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  preflight_local_gamma_inputs
 fi
 
 podman_compose=0
@@ -1175,6 +1086,13 @@ else
     compose_up_args+=(--no-build)
   fi
 fi
+if [[ "$formal_release" == "1" && "$podman_compose" == "1" ]]; then
+  echo "[local-gamma] GATE_BLOCK: formal release forbids the destructive podman compatibility path" >&2
+  exit 2
+fi
+if [[ "$formal_release" == "1" ]]; then
+  compose_up_args=(up -d --no-build)
+fi
 
 prepare_local_gamma_mongosh() {
   local container_cli="$1"
@@ -1188,8 +1106,9 @@ prepare_local_gamma_mongosh() {
 set -euo pipefail
 
 container_cli="${LOCAL_GAMMA_CONTAINER_CLI:?LOCAL_GAMMA_CONTAINER_CLI is required}"
+compose_project="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:?LOCAL_GAMMA_COMPOSE_PROJECT_NAME is required}"
 container_name=""
-for candidate in quwoquan_service-mongodb-1 quwoquan_service_mongodb_1; do
+for candidate in "${compose_project}-mongodb-1" "${compose_project}_mongodb_1"; do
   if "$container_cli" inspect "$candidate" >/dev/null 2>&1; then
     container_name="$candidate"
     break
@@ -1225,6 +1144,7 @@ else
 fi
 
 compose_build_services=(
+  api-edge
   recommendation-service
   content-service
   chat-service
@@ -1774,27 +1694,36 @@ if [[ "$podman_compose" == "1" ]]; then
   wait_healthy quwoquan_service_gamma-proxy_1
 else
   echo "[local-gamma] startup mode: compose-up"
-  # Recreate the local mirror on every gate run so changed host port envs take effect.
-  "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
-  cleanup_stale_named_gamma_containers
-  # 本地进程中断时 Caddy 可能留下半写入的证书锁。此处代理已停止，
-  # 可安全清理过期签发锁，同时保留本地 CA 与已签发证书。
-  if docker volume inspect quwoquan_service_local-gamma-caddy-data >/dev/null 2>&1; then
-    docker run --rm \
-      -v quwoquan_service_local-gamma-caddy-data:/data \
-      --entrypoint sh \
-      "$LOCAL_GAMMA_CADDY_IMAGE" \
-      -c 'rm -f /data/caddy/locks/*.lock' >/dev/null
-  fi
-  if [[ "$PRESERVE_POSTGRES_VOLUME" != "1" ]]; then
-    docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+  if [[ "$formal_release" != "1" ]]; then
+    # Explicit local-development startup may recreate and repair its disposable mirror.
+    "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
+    cleanup_stale_named_gamma_containers
+    if docker volume inspect quwoquan_service_local-gamma-caddy-data >/dev/null 2>&1; then
+      docker run --rm \
+        -v quwoquan_service_local-gamma-caddy-data:/data \
+        --entrypoint sh \
+        "$LOCAL_GAMMA_CADDY_IMAGE" \
+        -c 'rm -f /data/caddy/locks/*.lock' >/dev/null
+    fi
+    if [[ "$PRESERVE_POSTGRES_VOLUME" != "1" ]]; then
+      docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
+    fi
+  else
+    echo "[local-gamma] formal release preserves images and data"
   fi
   ensure_docker_gamma_proxy_started() {
-    local name="quwoquan_service-gamma-proxy-1"
+    local name=""
     local status=""
     local health=""
     local deadline=$((SECONDS + 15))
     while (( SECONDS < deadline )); do
+      name="$(docker ps -aq \
+        --filter "label=com.docker.compose.project=${LOCAL_GAMMA_COMPOSE_PROJECT_NAME}" \
+        --filter "label=com.docker.compose.service=gamma-proxy" | head -n 1)"
+      if [[ -z "$name" ]]; then
+        sleep 1
+        continue
+      fi
       status="$(docker inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
       if [[ -n "$status" ]]; then
         break
@@ -1874,7 +1803,7 @@ else
     # ElasticSearch cold boots on the constrained local Gamma VM can exceed
     # eight minutes while rebuilding Painless lookup data.  The previous
     # timeout tore down a healthy-in-progress stack and retried with images
-    # that may not exist locally, so no service ever reached its seed phase.
+    # that may not exist locally, so no service ever reached its readiness phase.
     local timeout_seconds="${LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:?LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS is required}"
     if ! [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]]; then
       echo "[local-gamma] FAIL: LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS must be a positive integer" >&2
@@ -1934,7 +1863,7 @@ gamma_canonical_video_range_mime_ready() {
       -H "Range: bytes=0-1" \
       -o /dev/null \
       -w '%{http_code}|%{content_type}' \
-      "https://${host}:${port}/media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+      "https://${host}:${port}/media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4"
   )" || return 1
   status="${probe%%|*}"
   content_type="${probe#*|}"
@@ -1989,7 +1918,7 @@ wait_local_gamma_host_ready() {
       && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${integration_port}/healthz" >/dev/null 2>&1 \
       && curl -fsS "http://127.0.0.1:${notification_port}/healthz" >/dev/null 2>&1 \
-      && { [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]] || curl -fsS "http://127.0.0.1:${tag_port}/healthz" >/dev/null 2>&1; }
+      && curl -fsS "http://127.0.0.1:${tag_port}/healthz" >/dev/null 2>&1
     then
       return 0
     fi
@@ -2010,703 +1939,35 @@ ensure_gamma_filter_catalog_release() {
   echo "[local-gamma] activating canonical FilterCatalogRelease"
   PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/quwoquan_ops/cli/stackctl.py" \
     --output-format json \
-    filter-catalog --target gamma-local --action stage-and-activate
+    filter-catalog --target "$QWQ_LOCAL_RELEASE_TARGET" --action stage-and-activate
 }
 wait_local_gamma_host_ready
 ensure_gamma_filter_catalog_release
 
-seed_integration_location_data() {
-  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  local fixture="$ROOT/quwoquan_service/services/integration-service/tests/support/contract_fixtures/scenarios/integration_scenarios.json"
-  if [[ -z "$mongo_port" || ! -f "$fixture" ]]; then
-    echo "[local-gamma] FAIL: Integration Location seed input is unavailable" >&2
-    return 1
-  fi
-  python3 - "$fixture" "$mongo_port" <<'PY'
+
+
+
+
+echo "[local-gamma] immutable release activation owns business data and search projections; no environment seed path is available"
+
+PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - "$stack_report" "${QWQ_RELEASE_CANDIDATE_DIGEST:-}" "$CONFIG_VERSION" "$IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_IMAGE_BASE_URL" "$restarted_from_previous" "$WORKLOAD" <<'PY'
 import json
 import os
-import subprocess
-import sys
-from pathlib import Path
-
-fixture_path, mongo_port = sys.argv[1:3]
-payload = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
-raw_items = payload.get("seedSets", {}).get("location_poi_core", {}).get("pois", [])
-documents = []
-for raw in raw_items:
-    poi_id = str(raw.get("poiId", "")).strip()
-    name = str(raw.get("name", "")).strip()
-    latitude = raw.get("lat")
-    longitude = raw.get("lng")
-    if not poi_id or not name or not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
-        raise SystemExit("Integration Location fixture contains an incomplete POI")
-    documents.append(
-        {
-            "poiId": poi_id,
-            "name": name,
-            "address": str(raw.get("address", "")),
-            "cityCode": str(raw.get("cityCode", "")),
-            "adCode": str(raw.get("adCode", "")),
-            "distanceMeters": int(raw.get("distanceMeters", 0) or 0),
-            "location": {
-                "type": "Point",
-                "coordinates": [float(longitude), float(latitude)],
-            },
-        }
-    )
-if not documents:
-    raise SystemExit("Integration Location fixture is empty")
-encoded = json.dumps(documents, ensure_ascii=False)
-script = f"""
-const collection = db.getSiblingDB('quwoquan_integration').location_pois;
-collection.deleteMany({{}});
-collection.insertMany({encoded});
-printjson({{inserted: collection.countDocuments({{}})}});
-"""
-result = subprocess.run(
-    [
-        "mongosh",
-        f"mongodb://127.0.0.1:{mongo_port}/?directConnection=true",
-        "--quiet",
-    ],
-    input=script,
-    text=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    check=False,
-)
-if result.returncode != 0:
-    print(result.stdout)
-    print(result.stderr, file=sys.stderr)
-    raise SystemExit(result.returncode)
-print(result.stdout.strip())
-PY
-}
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  seed_integration_location_data
-else
-  echo "[local-gamma] skip Integration Location seed because STAGE=${STAGE} uses persisted/host data"
-fi
-
-# tag-service 数据在 local-gamma 启动时按当前真相源重建：
-#  - tag_nodes ← control_plane/governance/taxonomy（路径制 taxonomy 唯一真相源）
-#  - object_tag_index ← app_gamma_seed_manifest 声明的 ref 子集
-# local-gamma 尚未上线；这里直接清库重建，拒绝保留任何旧索引名、旧数据或兼容路径。
-seed_tag_service_data() {
-  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  if [[ -z "$mongo_port" ]]; then
-    echo "[local-gamma] FAIL: LOCAL_GAMMA_MONGO_PORT is required for tag data seed" >&2
-    return 1
-  fi
-  local mongo_uri="mongodb://127.0.0.1:${mongo_port}/?directConnection=true"
-  local data_release_id="${LOCAL_GAMMA_DATA_RELEASE_ID:-tag-taxonomy-20260723-001}"
-  echo "[local-gamma] rebuilding ${LOCAL_GAMMA_TAG_DB} from current tag sources ..."
-  mongosh "$mongo_uri" --quiet --eval "db.getSiblingDB(\"${LOCAL_GAMMA_TAG_DB}\").dropDatabase()"
-  echo "[local-gamma] seeding tag_nodes (${LOCAL_GAMMA_TAGS_DIR} -> ${LOCAL_GAMMA_TAG_DB}.tag_nodes) ..."
-  ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import \
-      --tags-dir "$LOCAL_GAMMA_TAGS_DIR" \
-      --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
-      --release-id "$data_release_id" --source-owner qwq_data )
-  echo "[local-gamma] seeding object_tag_index (${LOCAL_GAMMA_TAG_OBJECTS_FILE} -> ${LOCAL_GAMMA_TAG_DB}.object_tag_index) ..."
-  ( cd "$ROOT/quwoquan_service" && go run ./services/tag-service/cmd/import-objects \
-      --objects-file "$LOCAL_GAMMA_TAG_OBJECTS_FILE" \
-      --seed-refs "$LOCAL_GAMMA_TAG_SEED_REFS" \
-      --mongo-uri "$mongo_uri" --db "$LOCAL_GAMMA_TAG_DB" \
-      --release-id "$data_release_id" --source-owner gamma_seed_manifest )
-}
-
-wait_tag_service_taxonomy_ready() {
-  local tag_port="${LOCAL_GAMMA_TAG_PORT:-19270}"
-  local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
-  while (( $(date +%s) < deadline )); do
-    if curl -fsS "http://127.0.0.1:${tag_port}/healthz" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 2
-  done
-  echo "[local-gamma] FAIL: tag-service taxonomy projection did not become healthy after canonical import" >&2
-  curl -fsS "http://127.0.0.1:${tag_port}/healthz" >&2 || true
-  return 1
-}
-
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  seed_tag_service_data
-  wait_tag_service_taxonomy_ready
-else
-  echo "[local-gamma] skip tag seed because STAGE=${STAGE} uses persisted/host data"
-fi
-
-seed_gamma_intersection_data() {
-  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  local gateway="${GATEWAY_BASE_URL%/}"
-  local report="${GAMMA_RUN_ROOT}/intersection-seed-report.json"
-  if [[ -z "$mongo_port" ]]; then
-    echo "[local-gamma] GATE_BLOCK: intersection seed requires LOCAL_GAMMA_MONGO_PORT" >&2
-    return 1
-  fi
-  echo "[local-gamma] seeding intersection viewer relationships and read model ..."
-  if ! python3 - "$ROOT" "$mongo_port" "$gateway" "$report" <<'PY'
-import json
-import subprocess
-import sys
-from pathlib import Path
-
-root, mongo_port, gateway, report_path = sys.argv[1:5]
-sys.path.insert(0, root)
-
-from quwoquan_ops.cli.lib.local_environment_auth import (
-    open_local_acceptance_session,
-    request_local_environment_json,
-)
-
-session = open_local_acceptance_session(
-    gateway,
-    environment="gamma",
-    target_name="gamma-local",
-)
-viewer = session.persona_id
-person = "sys_travel_9003_sub_01"
-third_a = "sys_travel_9004_sub_01"
-third_b = "sys_travel_9005_sub_01"
-circle = "fixture_circle_photo"
-entity = "fixture_homepage_travel_photo_west_lake"
-shared_post = "gamma_intersection_shared_post"
-profile_post = "gamma_intersection_profile_post"
-avatar = (
-    os.environ["MEDIA_AVATAR_BASE_URL"] + "/s/"
-    "archived-avatar/user/fixture_user_photo/v1/avatar.png"
-)
-
-seed_js = f"""
-const db = db.getSiblingDB('quwoquan_content');
-const viewer = '{viewer}';
-const person = '{person}';
-const thirdA = '{third_a}';
-const thirdB = '{third_b}';
-const circle = '{circle}';
-const entity = '{entity}';
-const sharedPost = '{shared_post}';
-const profilePost = '{profile_post}';
-const avatar = '{avatar}';
-const now = new Date();
-db.follow_edges.deleteMany({{$or:[{{followerId: {{$in:[viewer, person]}}}}, {{followeeId: {{$in:[viewer, person]}}}}]}});
-db.circle_members.deleteMany({{userId: {{$in:[viewer, person]}}}});
-db.rm_behavior_events.deleteMany({{userId: {{$in:[viewer, person, thirdA]}}}});
-db.entity_wishlist_events.deleteMany({{userId: {{$in:[viewer, person]}}}});
-db.rec_learning_events.deleteMany({{userId: {{$in:[thirdA, thirdB]}}, contentId: sharedPost}});
-db.rm_recommend_feature.deleteMany({{userId: {{$in:[thirdA, thirdB]}}}});
-db.circle_tag_aggregates.deleteMany({{circleId: circle}});
-db.posts.deleteMany({{postId: {{$in:[sharedPost, profilePost]}}}});
-db.rm_viewer_object_intersection.deleteMany({{_id: viewer}});
-db.follow_edges.insertMany([
-  {{followerId: viewer, followeeId: thirdA, createdAt: now}},
-  {{followerId: viewer, followeeId: thirdB, createdAt: now}},
-  {{followerId: viewer, followeeId: person, createdAt: now}},
-  {{followerId: person, followeeId: thirdA, createdAt: now}},
-  {{followerId: person, followeeId: thirdB, createdAt: now}},
-  {{followerId: thirdA, followeeId: person, createdAt: now}}
-]);
-db.circle_members.insertMany([
-  {{circleId: circle, userId: viewer, role: 'member', joinedAt: now, lastActiveAt: now}},
-  {{circleId: circle, userId: person, role: 'member', joinedAt: now, lastActiveAt: now}}
-]);
-db.rm_behavior_events.insertMany([
-  {{userId: viewer, action: 'comment', contentId: sharedPost, entityRefs: [], createdAt: now}},
-  {{userId: person, action: 'comment', contentId: sharedPost, entityRefs: [], createdAt: now}},
-  {{userId: viewer, action: 'entity_page_view', contentId: '', entityRefs: [entity], createdAt: now}},
-  {{userId: person, action: 'entity_page_view', contentId: '', entityRefs: [entity], createdAt: now}},
-  {{userId: thirdA, action: 'entity_page_view', contentId: '', entityRefs: [entity], createdAt: now}}
-]);
-db.entity_wishlist_events.insertMany([
-  {{userId: viewer, entityId: entity, objectType: 'sight', displayName: '西湖旅行摄影线', status: 'active', createdAt: now}},
-  {{userId: person, entityId: entity, objectType: 'sight', displayName: '西湖旅行摄影线', status: 'active', createdAt: now}}
-]);
-db.rec_learning_events.insertMany([
-  {{userId: thirdA, eventType: 'rec_engagement', contentId: sharedPost, labels: {{action: 'like'}}, createdAt: now}},
-  {{userId: thirdB, eventType: 'rec_engagement', contentId: sharedPost, labels: {{action: 'share'}}, createdAt: now}}
-]);
-db.rm_recommend_feature.insertMany([
-  {{userId: thirdA, userFeatures: {{tagInteraction: {{'Topic/摄影': 2, 'Topic/旅行/玩法/摄影旅拍': 1}}}}, updatedAt: now}},
-  {{userId: thirdB, userFeatures: {{tagInteraction: {{'Topic/摄影': 3, 'Topic/旅行/玩法/摄影旅拍': 1}}}}, updatedAt: now}}
-]);
-db.circle_tag_aggregates.insertOne({{
-  circleId: circle,
-  tags: {{'Topic/摄影': 4.5, 'Topic/旅行/玩法/摄影旅拍': 3.5, 'Topic/城市漫步': 2.5}},
-  updatedAt: now
-}});
-db.posts.insertMany([
-  {{_id: profilePost, postId: profilePost, id: profilePost, authorId: person, status: 'published', authorDisplayNameSnapshot: '交集约伴体验号', authorAvatarUrlSnapshot: avatar, updatedAt: now, publishedAt: now}},
-  {{_id: sharedPost, postId: sharedPost, id: sharedPost, authorId: person, status: 'published', title: '交集真实证据共享内容', contentType: 'article', authorDisplayNameSnapshot: '交集约伴体验号', authorAvatarUrlSnapshot: avatar, updatedAt: now, publishedAt: now}}
-]);
-printjson({{viewer, person, circle, entity}});
-"""
-seed = subprocess.run(
-    [
-        "mongosh",
-        f"mongodb://127.0.0.1:{mongo_port}/?directConnection=true",
-        "--quiet",
-    ],
-    input=seed_js,
-    text=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    check=False,
-)
-if seed.returncode != 0:
-    print(seed.stdout)
-    print(seed.stderr, file=sys.stderr)
-    raise SystemExit(seed.returncode)
-
-def request_json(path: str) -> dict:
-    return request_local_environment_json(
-        gateway,
-        path=path,
-        session=session,
-    )
-
-object_body = request_json(
-    f"/content/intersections/object?objectId={person}&objectType=user&limit=8"
-)
-reasons = object_body.get("items") or []
-if not reasons:
-    raise SystemExit("object intersection seed probe returned no items")
-
-# SVO displayBinding 适配：对象页响应是 host_plain 投影（宿主 span 已去链接），
-# 直接塞进收件箱快照会被 explicit_link 严格校验淘汰（summary/list 恒空）。
-# 物化前重置为 canonical explicit 形态，由服务端 hydrate 按收件箱语境重建 spans。
-for reason in reasons:
-    reason.pop("displayBinding", None)
-    reason.pop("primarySpans", None)
-
-materialize_js = f"""
-const viewer = '{viewer}';
-const reasons = {json.dumps(reasons, ensure_ascii=False)};
-db.getSiblingDB('quwoquan_content').rm_viewer_object_intersection.updateOne(
-  {{_id: viewer}},
-  {{$set: {{computedAt: new Date(), reasonsJson: JSON.stringify(reasons)}}}},
-  {{upsert: true}}
-);
-printjson({{viewer, reasonCount: reasons.length}});
-"""
-materialize = subprocess.run(
-    [
-        "mongosh",
-        f"mongodb://127.0.0.1:{mongo_port}/?directConnection=true",
-        "--quiet",
-    ],
-    input=materialize_js,
-    text=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    check=False,
-)
-if materialize.returncode != 0:
-    print(materialize.stdout)
-    print(materialize.stderr, file=sys.stderr)
-    raise SystemExit(materialize.returncode)
-
-summary = request_json("/content/intersections/summary")
-listing = request_json("/content/intersections?limit=8")
-if int(summary.get("totalCount") or 0) <= 0:
-    raise SystemExit(f"intersection summary remains empty: {summary}")
-if len(listing.get("items") or []) <= 0:
-    raise SystemExit(f"intersection list remains empty: {listing}")
-
-report = {
-    "authenticatedProbe": True,
-    "personObjectId": person,
-    "entityObjectId": entity,
-    "summaryTotalCount": summary.get("totalCount"),
-    "summaryDimensions": [
-        item.get("dimension")
-        for item in summary.get("dimensions", [])
-        if isinstance(item, dict)
-    ],
-    "listItemCount": len(listing.get("items") or []),
-    "objectPointSources": [
-        point.get("sourceRef")
-        for item in reasons
-        for point in item.get("intersectionPoints", [])
-        if isinstance(point, dict)
-    ],
-}
-Path(report_path).parent.mkdir(parents=True, exist_ok=True)
-Path(report_path).write_text(
-    json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-    encoding="utf-8",
-)
-print(json.dumps(report, ensure_ascii=False))
-PY
-  then
-    echo "[local-gamma] GATE_BLOCK: intersection seed failed; /content/intersections is unproven" >&2
-    return 1
-  fi
-  echo "[local-gamma] intersection seed completed (${report})"
-}
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  seed_gamma_intersection_data
-else
-  echo "[local-gamma] skip intersection seed because STAGE=${STAGE} uses persisted/host data"
-fi
-
-seed_gamma_premium_pool_data() {
-  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  local redis_port="${LOCAL_GAMMA_REDIS_PORT:-}"
-  local gateway="${GATEWAY_BASE_URL%/}"
-  local report="${GAMMA_RUN_ROOT}/premium-pool-seed-report.json"
-  if [[ -z "$mongo_port" ]]; then
-    echo "[local-gamma] GATE_BLOCK: premium pool seed requires LOCAL_GAMMA_MONGO_PORT" >&2
-    return 1
-  fi
-  if [[ -z "$redis_port" ]]; then
-    echo "[local-gamma] GATE_BLOCK: premium pool seed requires LOCAL_GAMMA_REDIS_PORT" >&2
-    return 1
-  fi
-  echo "[local-gamma] seeding premium pool projection and recall proof ..."
-  if ! python3 - "$ROOT" "$mongo_port" "$redis_port" "$gateway" "$report" <<'PY'
-import json
-import os
-import subprocess
-import sys
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-
-root, mongo_port, redis_port, gateway, report_path = sys.argv[1:6]
-sys.path.insert(0, root)
-
-from quwoquan_ops.cli.lib.local_environment_auth import (
-    open_local_acceptance_session,
-    request_local_environment_json,
-)
-
-session = open_local_acceptance_session(
-    gateway,
-    environment="gamma",
-    target_name="gamma-local",
-)
-eligible = "gamma_premium_pool_eligible_post"
-expired = "gamma_premium_pool_expired_post"
-rolled_back = "gamma_premium_pool_rolled_back_post"
-takedown = "gamma_premium_pool_takedown_post"
-all_ids = [eligible, expired, rolled_back, takedown]
-cover = (
-    os.environ["MEDIA_IMAGE_BASE_URL"] + "/s/"
-    "archived-image/post/fixture_photo_001/v1/cover.png"
-)
-
-seed_js = f"""
-const db = db.getSiblingDB('quwoquan_content');
-const now = new Date();
-const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-const past = new Date(now.getTime() - 60 * 60 * 1000);
-const ids = {json.dumps(all_ids)};
-db.posts.deleteMany({{_id: {{$in: ids}}}});
-db.rm_discovery_feed.deleteMany({{postId: {{$in: ids}}}});
-db.rm_premium_pool.deleteMany({{contentId: {{$in: ids}}}});
-for (const id of ids) {{
-  db.posts.insertOne({{
-    _id: id,
-    postId: id,
-    id: id,
-    contentType: 'image',
-    contentIdentity: 'work',
-    title: id === '{eligible}' ? 'Gamma 精品池真实召回样例' : `Gamma 精品池不可召回样例 ${{id}}`,
-    body: 'premium pool gamma seed',
-    mediaUrls: ['{cover}'],
-    coverUrl: '{cover}',
-    thumbnailUrl: '{cover}',
-    authorId: 'sys_travel_9003_sub_01',
-    authorDisplayNameSnapshot: '交集约伴体验号',
-    status: 'published',
-    visibility: 'public',
-    moderationStatus: 'approved',
-    likeCount: 12,
-    commentCount: 3,
-    shareCount: 1,
-    createdAt: now,
-    updatedAt: now,
-    publishedAt: now
-  }});
-  db.rm_discovery_feed.insertOne({{
-    postId: id,
-    contentType: 'image',
-    authorId: 'sys_travel_9003_sub_01',
-    title: id,
-    tagRefs: ['Topic/旅行', 'Topic/摄影'],
-    entityRefs: ['fixture_homepage_travel_photo_west_lake'],
-    coverUrl: '{cover}',
-    likeCount: 12,
-    commentCount: 3,
-    shareCount: 1,
-    viewCount: 180,
-    publishedAt: now,
-    recScore: id === '{eligible}' ? 0.96 : 0.2,
-    qualityScore: id === '{eligible}' ? 0.96 : 0.2,
-    contentVertical: 'travel_photography',
-    supplySource: 'product_ops'
-  }});
-}}
-db.rm_premium_pool.insertMany([
-  {{
-    contentId: '{eligible}',
-    scope: 'global',
-    status: 'active',
-    eligibilityState: 'eligible',
-    ineligibleReasons: [],
-    qualityAdmission: 'approved',
-    qualityScore: 0.96,
-    supplySource: 'product_ops',
-    sourceTaskId: 'gamma_premium_pool_seed',
-    auditId: 'audit_gamma_premium_eligible',
-    rollbackToken: 'rbk_gamma_premium_eligible',
-    featuredAt: now,
-    expiresAt: future,
-    takedownEjected: false,
-    projectionVersion: 'premium_pool_projection_v1',
-    updatedAt: now
-  }},
-  {{
-    contentId: '{expired}',
-    scope: 'global',
-    status: 'active',
-    eligibilityState: 'ineligible',
-    ineligibleReasons: ['expired'],
-    qualityAdmission: 'approved',
-    qualityScore: 0.95,
-    supplySource: 'product_ops',
-    featuredAt: now,
-    expiresAt: past,
-    takedownEjected: false,
-    projectionVersion: 'premium_pool_projection_v1',
-    updatedAt: now
-  }},
-  {{
-    contentId: '{rolled_back}',
-    scope: 'global',
-    status: 'rolled_back',
-    eligibilityState: 'ineligible',
-    ineligibleReasons: ['inactive_status'],
-    qualityAdmission: 'approved',
-    qualityScore: 0.94,
-    supplySource: 'product_ops',
-    featuredAt: now,
-    expiresAt: future,
-    takedownEjected: false,
-    projectionVersion: 'premium_pool_projection_v1',
-    updatedAt: now
-  }},
-  {{
-    contentId: '{takedown}',
-    scope: 'global',
-    status: 'takedown_ejected',
-    eligibilityState: 'ineligible',
-    ineligibleReasons: ['takedown_ejected'],
-    qualityAdmission: 'approved',
-    qualityScore: 0.93,
-    supplySource: 'product_ops',
-    featuredAt: now,
-    expiresAt: future,
-    takedownEjected: true,
-    projectionVersion: 'premium_pool_projection_v1',
-    updatedAt: now
-  }}
-]);
-printjson({{eligible: '{eligible}', ineligible: ['{expired}', '{rolled_back}', '{takedown}']}});
-"""
-seed = subprocess.run(
-    [
-        "mongosh",
-        f"mongodb://127.0.0.1:{mongo_port}/?directConnection=true",
-        "--quiet",
-    ],
-    input=seed_js,
-    text=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    check=False,
-)
-if seed.returncode != 0:
-    print(seed.stdout)
-    print(seed.stderr, file=sys.stderr)
-    raise SystemExit(seed.returncode)
-
-# 精品池证明使用固定验收 actor 和内容 ID，以便 Gamma 多次运行的报告可比。每次
-# 发起新请求前，只删除本证明历史的 served/impressed/negative membership；
-# 否则上一次有效运行会由重复曝光门禁隐藏本次自身的证据。
-acceptance_actor = "fixture_user_current"
-today = datetime.now(timezone.utc).date()
-reset_keys = [f"rec:negative:{{{acceptance_actor}}}"]
-reset_keys.extend(
-    f"rec:served:{{{acceptance_actor}}}:{(today - timedelta(days=offset)).strftime('%Y%m%d')}"
-    for offset in range(2)
-)
-reset_keys.extend(
-    f"rec:impressed:{{{acceptance_actor}}}:{(today - timedelta(days=offset)).strftime('%Y%m%d')}"
-    for offset in range(7)
-)
-for key in reset_keys:
-    reset = subprocess.run(
-        [
-            "redis-cli",
-            "-h",
-            "127.0.0.1",
-            "-p",
-            redis_port,
-            "SREM",
-            key,
-            *all_ids,
-        ],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if reset.returncode != 0:
-        print(reset.stderr, file=sys.stderr)
-        raise SystemExit("reset premium proof recommendation state failed")
-
-body = request_local_environment_json(
-    gateway,
-    path="/content/feed?type=premium&limit=5",
-    session=session,
-)
-items = body.get("items") or []
-ids = [item.get("id") or item.get("postId") for item in items if isinstance(item, dict)]
-if eligible not in ids:
-    raise SystemExit(f"premium pool eligible item missing from feed: ids={ids}")
-blocked = [item for item in (expired, rolled_back, takedown) if item in ids]
-if blocked:
-    raise SystemExit(f"ineligible premium pool items leaked into feed: {blocked}")
-recall_paths = {
-    (item.get("id") or item.get("postId")): item.get("recallPath")
-    for item in items
-    if isinstance(item, dict)
-}
-if recall_paths.get(eligible) != "premium_pool":
-    raise SystemExit(f"eligible recallPath must be premium_pool, got {recall_paths.get(eligible)!r}")
-
-report = {
-    "authenticatedProbe": True,
-    "eligibleContentId": eligible,
-    "ineligibleContentIds": [expired, rolled_back, takedown],
-    "feedItemIds": ids,
-    "eligibleRecallPath": recall_paths.get(eligible),
-}
-Path(report_path).parent.mkdir(parents=True, exist_ok=True)
-Path(report_path).write_text(
-    json.dumps(report, ensure_ascii=False, indent=2) + "\n",
-    encoding="utf-8",
-)
-print(json.dumps(report, ensure_ascii=False))
-PY
-  then
-    echo "[local-gamma] GATE_BLOCK: premium pool seed failed; premium stream recall is unproven" >&2
-    return 1
-  fi
-  echo "[local-gamma] premium pool seed completed (${report})"
-}
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  seed_gamma_premium_pool_data
-else
-  echo "[local-gamma] skip premium pool seed because STAGE=${STAGE} uses persisted/host data"
-fi
-
-# search-service 的 ES 召回读模型 cold-start：把已 seed 的内容（quwoquan_content.posts）
-# 经统一投影回填进共享 ES 索引 quwoquan_objects（与 search-service 查询同一索引）。
-# 这是检索读模型的环境 seed，与 tag/content seed 同级，保证 /search 返回真实 hit。
-seed_search_index() {
-  local es_port="${LOCAL_GAMMA_ES_PORT:-}"
-  local mongo_port="${LOCAL_GAMMA_MONGO_PORT:-}"
-  local postgres_port="${LOCAL_GAMMA_POSTGRES_PORT:-}"
-  if [[ -z "$es_port" || -z "$mongo_port" || -z "$postgres_port" ]]; then
-    echo "[local-gamma] FAIL: search backfill requires LOCAL_GAMMA_ES_PORT, LOCAL_GAMMA_MONGO_PORT and LOCAL_GAMMA_POSTGRES_PORT" >&2
-    return 1
-  fi
-  echo "[local-gamma] waiting for ES host port ${es_port} (yellow) before search backfill ..."
-  if ! python3 - "$es_port" <<'PY'
-import sys
-import time
-import urllib.request
-
-port = sys.argv[1]
-deadline = time.time() + 120
-last = None
-ok = False
-while time.time() < deadline:
-    try:
-        with urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/_cluster/health?wait_for_status=yellow&timeout=2s",
-            timeout=4,
-        ) as resp:
-            if 200 <= int(resp.status) < 300:
-                ok = True
-                break
-            last = f"http {resp.status}"
-    except Exception as exc:  # noqa: BLE001
-        last = str(exc)
-    time.sleep(2)
-raise SystemExit(0 if ok else (last or "es not ready"))
-PY
-  then
-    echo "[local-gamma] FAIL: ES host port ${es_port} is not ready for search backfill" >&2
-    return 1
-  fi
-  echo "[local-gamma] backfilling all search projections into ES quwoquan_objects ..."
-  # batch-size 100：本地 ES 跑在 linux/amd64 模拟（Apple Silicon 无原生 8.x JDK），
-  # 单节点写入吞吐受限；ES client RequestTimeout 默认 5s，500-doc 默认批的单次 _bulk
-  # 会超时（服务端仍写入但 client 报 context deadline exceeded）。按 100/批切分后每个
-  # _bulk 都在 5s 内返回，回填稳定干净成功（这是 backfill 暴露 --batch-size 的用途，
-  # 非 shim：换原生 ES 集群时该值不影响正确性，只影响往返次数）。
-  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
-      go run ./services/content-service/cmd/search-backfill \
-      --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
-      --posts-db quwoquan_content --env gamma --batch-size 100 \
-      --request-timeout "$LOCAL_GAMMA_SEARCH_BACKFILL_REQUEST_TIMEOUT" ); then
-    echo "[local-gamma] FAIL: content/place search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
-    return 1
-  fi
-  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
-      go run ./services/entity-service/cmd/search-backfill \
-      --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
-      --entity-db quwoquan_entity --env gamma --batch-size 100 ); then
-    echo "[local-gamma] FAIL: entity homepage search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
-    return 1
-  fi
-  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
-      go run ./services/circle-service/cmd/search-backfill \
-      --mongo-uri "mongodb://127.0.0.1:${mongo_port}/?directConnection=true" \
-      --circle-db quwoquan_circle --env gamma --batch-size 100 ); then
-    echo "[local-gamma] FAIL: circle/group search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
-    return 1
-  fi
-  if ! ( cd "$ROOT/quwoquan_service" && SEARCH_ES_ENDPOINTS="http://127.0.0.1:${es_port}" \
-      go run ./services/user-service/cmd/search-backfill \
-      --postgres-dsn "postgres://quwoquan:quwoquan@127.0.0.1:${postgres_port}/quwoquan?sslmode=disable" \
-      --env gamma --batch-size 100 ); then
-    echo "[local-gamma] FAIL: user profile search backfill failed; gamma startup is blocked because /search would be incomplete" >&2
-    return 1
-  fi
-  echo "[local-gamma] all search index backfills completed (content/place, entity, circle/group, user)"
-}
-if [[ "$ENABLE_FIXTURE_SEEDS" == "1" ]]; then
-  seed_search_index
-  write_local_gamma_data_plane_watermark "$(compute_local_gamma_data_plane_digest)"
-  echo "[local-gamma] wrote data-plane watermark: ${LOCAL_GAMMA_DATA_PLANE_WATERMARK}"
-else
-  echo "[local-gamma] skip search backfill because STAGE=${STAGE} uses persisted/host data"
-fi
-
-python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$PREVIOUS_IMAGE_VERSION" "$STAGE" "$LOCAL_GAMMA_APP_ENV" "$CONFIG_SOURCE_ENV" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_IMAGE_BASE_URL" "$restarted_from_previous" "$WORKLOAD" <<'PY'
-import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from quwoquan_ops.cli.lib.immutable_image_composition import (
+    first_party_service_names,
+    immutable_image_digest,
+    local_release_image_environment_key,
+)
+
 (
     report_path,
-    config_version,
-    image_version,
-    previous_image_version,
+    candidate_digest,
+    configuration_digest,
+    image_transport_tag,
     stage,
     runtime_env,
     config_env,
@@ -2716,15 +1977,32 @@ from pathlib import Path
     restarted,
     workload,
 ) = sys.argv[1:13]
+image_refs = {
+    service: os.environ[local_release_image_environment_key(service)]
+    for service in first_party_service_names()
+}
+derived_image_version = immutable_image_digest(image_refs)
+if derived_image_version != image_transport_tag:
+    raise SystemExit(
+        "[local-release] GATE_BLOCK: runtime receipt image composition drifted"
+    )
 payload = {
     "status": "passed",
     "workload": workload,
     "serviceMode": "single-stack",
     "restartedFromPrevious": restarted == "1",
     "stage": stage,
-    "configVersion": config_version,
-    "imageVersion": image_version,
-    "previousImageVersion": previous_image_version or None,
+    "candidateDigest": candidate_digest or None,
+    "configurationDigest": configuration_digest,
+    "imageTransportTag": image_transport_tag,
+    "imageComposition": {
+        "imageVersion": derived_image_version,
+        "images": {
+            service: {"ref": ref}
+            for service, ref in sorted(image_refs.items())
+        },
+    },
+    "composeProject": os.environ["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"],
     "runtimeEnv": runtime_env,
     "configEnv": config_env,
     "gatewayBaseUrl": gateway,

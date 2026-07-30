@@ -1,0 +1,12 @@
+{
+  "label": "圣水洞",
+  "labelEn": "Seongsu-dong",
+  "description": "旧厂改造的咖啡与设计街区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

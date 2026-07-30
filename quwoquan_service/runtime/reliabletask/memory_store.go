@@ -10,31 +10,33 @@ import (
 )
 
 type MemoryStore struct {
-	mu                  sync.Mutex
-	outboxes            map[string]TaskOutboxRecord
-	outboxByDedupe      map[string]string
-	outboxByIdempotency map[string]string
-	tasks               map[string]ReliableAsyncTask
-	taskByDedupe        map[string]string
-	notifications       map[string]NotificationOutboxRecord
-	ledgers             map[string]NotificationDeliveryLedgerRecord
-	attempts            map[string]ProviderAttemptRecord
-	resultOutboxes      map[string]ExternalInteractionResultOutboxRecord
-	leases              map[string]TaskLease
+	mu                   sync.Mutex
+	outboxes             map[string]TaskOutboxRecord
+	outboxByDedupe       map[string]string
+	outboxByIdempotency  map[string]string
+	tasks                map[string]ReliableAsyncTask
+	taskByDedupe         map[string]string
+	notifications        map[string]NotificationOutboxRecord
+	ledgers              map[string]NotificationDeliveryLedgerRecord
+	attempts             map[string]ProviderAttemptRecord
+	resultOutboxes       map[string]ExternalInteractionResultOutboxRecord
+	taskRecoveryReceipts map[string]TaskRecoveryReceipt
+	leases               map[string]TaskLease
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		outboxes:            map[string]TaskOutboxRecord{},
-		outboxByDedupe:      map[string]string{},
-		outboxByIdempotency: map[string]string{},
-		tasks:               map[string]ReliableAsyncTask{},
-		taskByDedupe:        map[string]string{},
-		notifications:       map[string]NotificationOutboxRecord{},
-		ledgers:             map[string]NotificationDeliveryLedgerRecord{},
-		attempts:            map[string]ProviderAttemptRecord{},
-		resultOutboxes:      map[string]ExternalInteractionResultOutboxRecord{},
-		leases:              map[string]TaskLease{},
+		outboxes:             map[string]TaskOutboxRecord{},
+		outboxByDedupe:       map[string]string{},
+		outboxByIdempotency:  map[string]string{},
+		tasks:                map[string]ReliableAsyncTask{},
+		taskByDedupe:         map[string]string{},
+		notifications:        map[string]NotificationOutboxRecord{},
+		ledgers:              map[string]NotificationDeliveryLedgerRecord{},
+		attempts:             map[string]ProviderAttemptRecord{},
+		resultOutboxes:       map[string]ExternalInteractionResultOutboxRecord{},
+		taskRecoveryReceipts: map[string]TaskRecoveryReceipt{},
+		leases:               map[string]TaskLease{},
 	}
 }
 
@@ -810,6 +812,51 @@ func (s *MemoryStore) RecoverDeadTask(ctx context.Context, taskID string, now ti
 	task.UpdatedAt = now.UTC()
 	s.tasks[task.TaskID] = task
 	return nil
+}
+
+func (s *MemoryStore) RecoverDeadTaskIdempotently(
+	ctx context.Context,
+	taskID string,
+	idempotencyKey string,
+	now time.Time,
+) (TaskRecoveryReceipt, bool, error) {
+	_ = ctx
+	taskID = strings.TrimSpace(taskID)
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if idempotencyKey == "" {
+		return TaskRecoveryReceipt{}, false, ErrRecoveryIdempotencyKey
+	}
+	if taskID == "" {
+		return TaskRecoveryReceipt{}, false, ErrTaskNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, found := s.taskRecoveryReceipts[idempotencyKey]; found {
+		if existing.TaskID != taskID {
+			return TaskRecoveryReceipt{}, false, ErrRecoveryIdempotencyConflict
+		}
+		return existing, true, nil
+	}
+	task, found := s.tasks[taskID]
+	if !found || task.Status != TaskStatusDead {
+		return TaskRecoveryReceipt{}, false, ErrTaskNotFound
+	}
+	now = now.UTC()
+	task.Status = TaskStatusReady
+	task.NextAttemptAt = now
+	task.LeaseOwner = ""
+	task.LeaseToken = ""
+	task.LeaseUntil = time.Time{}
+	task.UpdatedAt = now
+	s.tasks[task.TaskID] = task
+	receipt := TaskRecoveryReceipt{
+		IdempotencyKey: idempotencyKey,
+		TaskID:         taskID,
+		RecoveredAt:    now,
+		ExpiresAt:      now.Add(30 * 24 * time.Hour),
+	}
+	s.taskRecoveryReceipts[idempotencyKey] = receipt
+	return receipt, false, nil
 }
 
 func (s *MemoryStore) ListDeadNotifications(ctx context.Context, eventTypes []string, limit int) ([]DeadNotificationRecord, error) {

@@ -129,8 +129,6 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
       'creatorId': currentUserId,
       'circleId': '',
       'originType': type == 'group' ? 'ad_hoc_group' : 'direct_init',
-      'bindingType': 'none',
-      'lifecyclePolicy': 'persistent',
       'maxSeq': 0,
       'lastSeq': 0,
       'memberCount': memberIds.length + 1,
@@ -147,6 +145,7 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
     final members = <ChatFixtureObject>[
       <String, Object?>{
         'userId': currentUserId,
+        'userHandle': userHandleFor(currentUserId),
         'displayName': displayNameFor(currentUserId),
         'avatarUrl': avatarFor(currentUserId),
         'role': 'owner',
@@ -157,6 +156,7 @@ extension AlphaChatConversationState on AlphaChatStateEngine {
       for (var index = 0; index < memberIds.length; index += 1)
         <String, Object?>{
           'userId': memberIds[index],
+          'userHandle': userHandleFor(memberIds[index]),
           'displayName': displayNameFor(memberIds[index]),
           'avatarUrl': avatarFor(memberIds[index]),
           'role': 'member',
@@ -377,11 +377,6 @@ ChatFixtureObject _conversationWire(ChatFixtureObject conversation) {
     'originType': _firstText(<Object?>[
       conversation['originType'],
       'direct_init',
-    ]),
-    'bindingType': _firstText(<Object?>[conversation['bindingType'], 'none']),
-    'lifecyclePolicy': _firstText(<Object?>[
-      conversation['lifecyclePolicy'],
-      'persistent',
     ]),
     'maxSeq': _int(conversation['maxSeq']),
     'memberCount': _int(conversation['memberCount']),

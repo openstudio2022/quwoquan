@@ -4,6 +4,10 @@ errors:
 - code: USER.CONTACT.rate_limited
   kind: CONTACT
   reason: rate_limited
+  emitted_by:
+  - surface: http
+    operations:
+    - InitiateContactDiscovery
   http_status: 429
   recovery_action: retry
   recovery_after_seconds: 86400
@@ -15,6 +19,10 @@ errors:
 - code: USER.CONTACT.too_many_contacts
   kind: CONTACT
   reason: payload_too_large
+  emitted_by:
+  - surface: http
+    operations:
+    - InitiateContactDiscovery
   http_status: 400
   recovery_action: retry
   dart_const: tooManyContacts
@@ -25,6 +33,11 @@ errors:
 - code: USER.CONTACT.not_found
   kind: CONTACT
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - DismissContactDiscovery
+    - GetLatestContactDiscovery
   http_status: 404
   recovery_action: surface
   dart_const: contactDiscoveryNotFound

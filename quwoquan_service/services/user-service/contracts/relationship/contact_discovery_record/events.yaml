@@ -2,9 +2,10 @@ events:
 - name: ContactDiscoveryInitiated
   description: 用户触发通讯录发现
   producer: user-service
-  consumers:
-  - user-service
-  channel: event_store
+  consumers: []
+  channel: ephemeral_user_event
+  no_consumer_reason: The best-effort user event has no durable service consumer; ContactDiscoveryRecord remains queryable from its authoritative store.
+  payload_entity: ContactDiscoveryRecord
   payload_fields:
   - id
   - ownerAccountId
@@ -13,12 +14,13 @@ events:
 - name: ContactDiscoveryCompleted
   description: 通讯录匹配完成
   producer: user-service
-  consumers:
-  - notification-service
-  channel: event_store
+  consumers: []
+  channel: ephemeral_user_event
+  no_consumer_reason: The best-effort user event has no durable service consumer; clients fetch the privacy-filtered result through the named reader.
+  payload_entity: ContactDiscoveryRecord
   payload_fields:
   - id
   - ownerAccountId
   - matchCount
   - completedAt
-  security_note: payload 不含 matchedSubAccountIds（端侧通过 API 拉取）
+  security_note: payload 不含 matchedPersonaIds（端侧通过 API 拉取）

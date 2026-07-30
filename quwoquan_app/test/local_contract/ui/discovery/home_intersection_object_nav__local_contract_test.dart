@@ -145,9 +145,9 @@ void main() {
               ),
             ),
             GoRoute(
-              path: '/user/:username',
+              path: '/user/:userHandle',
               builder: (context, state) => Center(
-                child: Text('USER:${state.pathParameters['username']}'),
+                child: Text('USER:${state.pathParameters['userHandle']}'),
               ),
             ),
           ],

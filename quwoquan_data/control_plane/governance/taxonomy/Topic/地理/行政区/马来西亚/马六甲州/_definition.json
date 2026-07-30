@@ -1,0 +1,12 @@
+{
+  "label": "马六甲州",
+  "labelEn": "Malacca",
+  "description": "海峡贸易史与殖民建筑遗产地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

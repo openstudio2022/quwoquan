@@ -2,6 +2,7 @@
   "label": "收藏型",
   "labelEn": "Collector",
   "description": "大量收藏内容",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

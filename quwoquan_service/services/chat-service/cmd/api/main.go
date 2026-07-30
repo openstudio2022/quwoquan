@@ -51,9 +51,7 @@ type redisSceneCfg struct {
 
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 
 	Service struct {
@@ -116,8 +114,8 @@ func main() {
 		log.Fatalf("chat-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("chat-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
+		log.Fatalf("chat-service config identity failed: %v", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
@@ -264,6 +262,14 @@ func main() {
 	if err := userAccountClosedProjection.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("chat-service UserAccountClosed indexes unavailable: %v", err)
 	}
+	userAccountRestrictionProjection, err :=
+		persistence.NewMongoUserAccountRestrictionProjection(mongoDB)
+	if err != nil {
+		log.Fatalf("chat-service account restriction projection invalid: %v", err)
+	}
+	if err := userAccountRestrictionProjection.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service account restriction indexes unavailable: %v", err)
+	}
 	userAccountClosedConsumer, err := mq.NewUserAccountClosedConsumer(
 		router.Scene("general"),
 		userAccountClosedProjection,
@@ -275,6 +281,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("chat-service UserAccountClosed consumer invalid: %v", err)
 	}
+	userAccountClosedConsumer.WithUserAccountRestrictionProjection(
+		userAccountRestrictionProjection,
+	)
 	if err := userAccountClosedConsumer.EnsureGroup(ctx); err != nil {
 		log.Fatalf("chat-service UserAccountClosed consumer group unavailable: %v", err)
 	}
@@ -287,7 +296,7 @@ func main() {
 		MessageProjection:                 chatStore,
 		Members:                           chatStore,
 		UserStates:                        chatStore,
-		Receipts:                          chatStore,
+		ReceiptFacts:                      chatStore,
 		ConversationCommands:              conversationCommands,
 		MembershipCommands:                membershipCommands,
 		UserStateCommands:                 userStateCommands,
@@ -730,15 +739,12 @@ func main() {
 	}, ioLogger, processLogger, exceptionLogger)
 	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
 
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
-
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:      accessVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
-		})(rateLimited),
+		})(corsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,

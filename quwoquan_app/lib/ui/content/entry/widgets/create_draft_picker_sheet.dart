@@ -3,7 +3,6 @@ import 'package:quwoquan_app/core/constants/chat_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 
 /// 草稿列表底栏；视觉与 [CreateActionSheet] 对齐（同面板底、外边距、分组圆角、分割线、主色标签、取消组）。
 class CreateDraftPickerSheet extends StatefulWidget {
@@ -11,11 +10,13 @@ class CreateDraftPickerSheet extends StatefulWidget {
     super.key,
     required this.initialDrafts,
     required this.onSelect,
+    required this.onDelete,
     required this.onDismiss,
   });
 
   final List<CreateDraft> initialDrafts;
   final ValueChanged<CreateDraft> onSelect;
+  final Future<void> Function(CreateDraft draft) onDelete;
   final VoidCallback onDismiss;
 
   @override
@@ -32,7 +33,7 @@ class _CreateDraftPickerSheetState extends State<CreateDraftPickerSheet> {
   }
 
   Future<void> _deleteDraft(CreateDraft draft) async {
-    await CreateDraftLocalStorage.removeDraftById(draft.id);
+    await widget.onDelete(draft);
     if (!mounted) {
       return;
     }

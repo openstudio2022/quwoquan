@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	application "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	orchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	assistant "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	ports "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
 )
 
@@ -62,10 +63,10 @@ func (reader learningProjectionReaderStub) GetLearningProjectionForPersona(
 
 func TestResolveFeedbackContextSnapshotFailsClosedWithoutConsent(t *testing.T) {
 	t.Parallel()
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		consentStoreStub{},
 		nil,
-		application.WithLearningProjectionReader(learningProjectionReaderStub{
+		orchestration.WithLearningProjectionReader(learningProjectionReaderStub{
 			projection: eligibleLearningProjection(),
 		}),
 	)
@@ -87,7 +88,7 @@ func TestResolveFeedbackContextSnapshotFailsClosedWithoutConsent(t *testing.T) {
 func TestResolveFeedbackContextSnapshotFiltersPolicyAllowlists(t *testing.T) {
 	t.Parallel()
 	projection := eligibleLearningProjection()
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		consentStoreStub{consents: []assistant.SkillConsent{{
 			ID:           "consent-1",
 			UserID:       "account-1",
@@ -96,7 +97,7 @@ func TestResolveFeedbackContextSnapshotFiltersPolicyAllowlists(t *testing.T) {
 			GrantedAt:    time.Now().UTC(),
 		}}},
 		nil,
-		application.WithLearningProjectionReader(learningProjectionReaderStub{
+		orchestration.WithLearningProjectionReader(learningProjectionReaderStub{
 			projection: projection,
 		}),
 	)
@@ -141,7 +142,7 @@ func TestResolveFeedbackContextSnapshotFailsClosedForUntrustedOrUnavailableProje
 	cases := []struct {
 		name     string
 		consents consentStoreStub
-		reader   application.LearningProjectionReader
+		reader   ports.LearningProjectionReader
 		want     string
 	}{
 		{
@@ -173,10 +174,10 @@ func TestResolveFeedbackContextSnapshotFailsClosedForUntrustedOrUnavailableProje
 	}
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
-			service := application.NewAssistantService(
+			service := orchestration.NewAssistantService(
 				testCase.consents,
 				nil,
-				application.WithLearningProjectionReader(testCase.reader),
+				orchestration.WithLearningProjectionReader(testCase.reader),
 			)
 			snapshot := service.ResolveFeedbackContextSnapshot(
 				t.Context(),
@@ -233,7 +234,7 @@ func eligibleLearningProjection() *learningmodel.LearningProjection {
 	return &learningmodel.LearningProjection{
 		UserID:            "account-1",
 		PersonaID:         "persona-1",
-		DefinitionVersion: learningmodel.LearningProjectionDefinitionVersion,
+		DefinitionDigest:  learningmodel.LearningProjectionDefinitionDigest,
 		WatermarkSequence: 12,
 		DailyBuckets: map[string]learningmodel.LearningProjectionBucket{
 			now.Format("2006-01-02"): {

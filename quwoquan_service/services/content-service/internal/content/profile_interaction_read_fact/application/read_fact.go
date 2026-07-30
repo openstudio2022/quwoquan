@@ -7,6 +7,7 @@ import (
 	"time"
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	profileinteractiongenerated "quwoquan_service/services/content-service/generated/content/profile_interaction_read_fact"
 	"quwoquan_service/services/content-service/internal/content/post/application/commandmeta"
 	activityports "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/domain/ports"
 	readfactmodel "quwoquan_service/services/content-service/internal/content/profile_interaction_read_fact/domain/model"
@@ -71,12 +72,12 @@ func (s *ReadFactService) AppendReadFact(
 		fact.ActivityID,
 	)
 	if err != nil {
-		return ReadFactAck{}, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+		return ReadFactAck{}, profileinteractiongenerated.AppErrorFromProfileInteractionReadFactTargetUnavailable(
 			"validate profile interaction read target: " + err.Error(),
 		)
 	}
 	if !allowed {
-		return ReadFactAck{}, contentgenerated.AppErrorFromInteractionOwnerForbidden(
+		return ReadFactAck{}, profileinteractiongenerated.AppErrorFromProfileInteractionReadFactOwnerForbidden(
 			"profile interaction activity is absent, inactive, or not received by owner",
 		)
 	}

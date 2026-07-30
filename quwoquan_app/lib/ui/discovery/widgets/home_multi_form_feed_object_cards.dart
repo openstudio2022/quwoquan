@@ -7,12 +7,17 @@ part of 'home_multi_form_feed.dart';
 /// 首页 feed 展示条目：内容 post 或混合对象卡。
 sealed class _HomeFeedEntry {
   const _HomeFeedEntry();
+
+  String get stableIdentity;
 }
 
 final class _HomeFeedPostEntry extends _HomeFeedEntry {
   const _HomeFeedPostEntry(this.post, this.postIndex);
 
   final PostBaseDto post;
+
+  @override
+  String get stableIdentity => homeFeedPostEntryIdentity(post.id);
 
   /// 数据索引（items 序位）：埋点 position 与 `home-feed-card-{index}` key
   /// 保持基于内容序位，不受对象卡插入影响。
@@ -23,6 +28,13 @@ final class _HomeFeedObjectCardEntry extends _HomeFeedEntry {
   const _HomeFeedObjectCardEntry(this.card);
 
   final FeedObjectCardDto card;
+
+  @override
+  String get stableIdentity => homeFeedObjectCardEntryIdentity(
+    objectKind: card.objectKind,
+    objectId: card.objectId,
+    anchorIndex: card.anchorIndex,
+  );
 }
 
 /// 把对象卡按 anchorIndex 编织进内容序列（anchor 越界/非法的卡丢弃）。
@@ -43,7 +55,9 @@ List<_HomeFeedEntry> _weaveObjectCards(
     if (card.anchorIndex <= 0 || card.anchorIndex > posts.length) {
       continue;
     }
-    byAnchor.putIfAbsent(card.anchorIndex, () => <FeedObjectCardDto>[]).add(card);
+    byAnchor
+        .putIfAbsent(card.anchorIndex, () => <FeedObjectCardDto>[])
+        .add(card);
   }
   final entries = <_HomeFeedEntry>[];
   for (var i = 0; i < posts.length; i++) {
@@ -67,27 +81,29 @@ class _HomeEntityObjectCard extends ConsumerWidget {
     required this.card,
     required this.isDark,
     required this.channelId,
+    required this.feedRequestId,
+    required this.policyDigest,
   });
 
   final FeedObjectCardDto card;
   final bool isDark;
   final String channelId;
+  final String? feedRequestId;
+  final String? policyDigest;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // 曝光归因：对象卡按 objectId/objectKind 走七态漏斗（visible 弱可见级）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final feedSession = ref.read(feedSessionProvider.notifier);
       ref
           .read(contentBehaviorTrackerProvider)
           .trackVisible(
             card.objectId,
             contentType: card.objectKind,
             referralSource: ReferralSource.organicFeed,
-            feedRequestId: feedSession.currentFeedRequestId,
+            feedRequestId: feedRequestId,
             channelId: channelId,
-            rankingVersion: feedSession.currentRankingVersion,
-            reasonVersion: feedSession.currentReasonVersion,
+            policyDigest: policyDigest,
             recallPath: card.recallPath,
           );
     });
@@ -173,17 +189,15 @@ class _HomeEntityObjectCard extends ConsumerWidget {
   }
 
   void _openObject(BuildContext context, WidgetRef ref) {
-    final feedSession = ref.read(feedSessionProvider.notifier);
     ref
         .read(contentBehaviorTrackerProvider)
         .trackClick(
           card.objectId,
           contentType: card.objectKind,
           referralSource: ReferralSource.organicFeed,
-          feedRequestId: feedSession.currentFeedRequestId,
+          feedRequestId: feedRequestId,
           channelId: channelId,
-          rankingVersion: feedSession.currentRankingVersion,
-          reasonVersion: feedSession.currentReasonVersion,
+          policyDigest: policyDigest,
           recallPath: card.recallPath,
         );
     // objectId 即可路由的 homepageId（服务端装配保证卡必可点）。

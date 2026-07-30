@@ -17,7 +17,7 @@ func TestFileStorePersistsDocumentsWorkflowAndAudit(t *testing.T) {
 	if err := store.UpsertWorkflow(WorkflowState{
 		ObjectType: "experiment",
 		ObjectID:   "exp-1",
-		WorkflowID: "experiment_rollout_v1",
+		WorkflowID: "experiment_rollout",
 		State:      "running",
 		History: []WorkflowTransition{{
 			From:   "review_pending",
@@ -119,7 +119,7 @@ func TestPutDocumentIfAbsentPreservesFirstImmutableFact(t *testing.T) {
 
 func TestEffectiveConfigHashIsStableAndOrderSensitive(t *testing.T) {
 	values := []ResolvedConfigValue{
-		{Key: "sys.gateway.rate_limit.per_user_rps", Value: 50, ScopeLevel: "service", ScopeID: "product-ops-service", SourceLayer: "release-package"},
+		{Key: "sys.api-edge.rate_limit.query.limit", Value: 50, ScopeLevel: "workload", ScopeID: "api-edge", SourceLayer: "release-package"},
 		{Key: "sys.orchestrator.downstream.timeout_ms", Value: 780, ScopeLevel: "service", ScopeID: "product-ops-service", SourceLayer: "release-package"},
 	}
 	first := EffectiveConfigHash(values)
@@ -167,7 +167,7 @@ func TestHotConfigStoreApplyAndGet(t *testing.T) {
 	store := NewHotConfigStore()
 
 	resolved := []ResolvedConfigValue{
-		{Key: "sys.gateway.rate_limit.per_user_rps", Value: 50.0, ScopeLevel: "service", ScopeID: "product-ops-service"},
+		{Key: "sys.api-edge.rate_limit.query.limit", Value: 50.0, ScopeLevel: "workload", ScopeID: "api-edge"},
 		{Key: "sys.config_center.disk_fallback_enabled", Value: true, ScopeLevel: "environment", ScopeID: "beta"},
 	}
 	hash := store.Apply(resolved)
@@ -178,7 +178,7 @@ func TestHotConfigStoreApplyAndGet(t *testing.T) {
 		t.Fatalf("hash mismatch: %s vs %s", store.EffectiveHash(), hash)
 	}
 
-	if got := store.GetInt("sys.gateway.rate_limit.per_user_rps", 0); got != 50 {
+	if got := store.GetInt("sys.api-edge.rate_limit.query.limit", 0); got != 50 {
 		t.Fatalf("expected 50, got %d", got)
 	}
 	if got := store.GetBool("sys.config_center.disk_fallback_enabled", false); !got {

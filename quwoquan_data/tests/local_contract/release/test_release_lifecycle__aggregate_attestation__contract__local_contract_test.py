@@ -36,6 +36,7 @@ def _fixture(tmp_path: Path) -> Path:
         {
             "schema": "quwoquan_data.release",
             "releaseId": RELEASE_ID,
+            "sourceOwner": "qwq_data",
             "releaseKind": "content",
             "canonicalMerkle": "sha256:" + "a" * 64,
             "executionIds": EXECUTION_IDS,
@@ -60,6 +61,7 @@ def _fixture(tmp_path: Path) -> Path:
         {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": RELEASE_ID,
+            "sourceOwner": "qwq_data",
             "releaseKind": "content",
             "executionIds": EXECUTION_IDS,
             "entityCount": 1,
@@ -78,6 +80,7 @@ def _fixture(tmp_path: Path) -> Path:
 def _environment_fixture(
     root: Path,
     *,
+    manifest_digest: str,
     environment: str,
     import_run_id: str,
     verify_run_id: str | None,
@@ -173,6 +176,10 @@ def _environment_fixture(
             "status": receipt_status,
             "environment": environment,
             "releaseId": RELEASE_ID,
+            "sourceOwner": "qwq_data",
+            "manifestDigest": manifest_digest,
+            "mode": "sync",
+            "deletePolicy": "tombstone",
             "counts": {"postsLoaded": 0, "entitiesLoaded": 1},
             "postBindings": [],
             "auditEvents": [],
@@ -313,6 +320,11 @@ def test_release_lifecycle__accepts_create_once_empty_baseline__local_contract(
     assert created["releaseKind"] == "empty_baseline"
     assert created["idempotent"] is False
     assert repeated["idempotent"] is True
+    assert json.loads(
+        (release_root / baseline_id / "payload/release.json").read_text(
+            encoding="utf-8"
+        )
+    )["sourceOwner"] == "qwq_data"
     assert (
         lifecycle.release_lifecycle_issues(baseline_id, release_root=release_root) == []
     )
@@ -338,6 +350,7 @@ def test_environment_lifecycle__consumes_real_import_and_api_evidence__local_con
     output = tmp_path / "output"
     _environment_fixture(
         output,
+        manifest_digest=payload_digest(releases / RELEASE_ID),
         environment="alpha",
         import_run_id="apply-001",
         verify_run_id="verify-001",
@@ -356,6 +369,44 @@ def test_environment_lifecycle__consumes_real_import_and_api_evidence__local_con
     )
 
 
+def test_environment_lifecycle__rejects_import_manifest_digest_drift__local_contract(
+    tmp_path: Path,
+) -> None:
+    releases = tmp_path / "releases"
+    _fixture(releases)
+    output = tmp_path / "output"
+    _environment_fixture(
+        output,
+        manifest_digest=payload_digest(releases / RELEASE_ID),
+        environment="alpha",
+        import_run_id="apply-001",
+        verify_run_id="verify-001",
+        status="completed",
+    )
+    report_path = (
+        output
+        / "env/alpha/runs/data-release"
+        / RELEASE_ID
+        / "apply-001/import.json"
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    report["manifestDigest"] = "sha256:" + "0" * 64
+    _write_json(report_path, report)
+
+    issues = lifecycle.environment_lifecycle_issues(
+        RELEASE_ID,
+        environment="alpha",
+        import_run_id="apply-001",
+        verify_run_id="verify-001",
+        release_root=releases,
+        output_root=output,
+    )
+
+    assert issues == [
+        f"{report_path}: manifestDigest drift from immutable payload"
+    ]
+
+
 def test_environment_lifecycle__supports_prod_prepared_and_dry_run_without_activation(
     tmp_path: Path,
 ) -> None:
@@ -364,6 +415,7 @@ def test_environment_lifecycle__supports_prod_prepared_and_dry_run_without_activ
     output = tmp_path / "output"
     _environment_fixture(
         output,
+        manifest_digest=payload_digest(releases / RELEASE_ID),
         environment="prod",
         import_run_id="dry-run-001",
         verify_run_id=None,
@@ -402,6 +454,7 @@ def test_environment_lifecycle__binds_rollback_source_and_replay__local_contract
     output = tmp_path / "output"
     _environment_fixture(
         output,
+        manifest_digest=payload_digest(releases / RELEASE_ID),
         environment="gamma",
         import_run_id="rollback-001",
         verify_run_id="verify-replay-001",

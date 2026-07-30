@@ -8,7 +8,7 @@
     - 类型按底稿形态路由：实体主页主底稿来自 Wiki/百科/知识图谱/官网等实体介绍源，政府/文旅/媒体只作 supporting evidence；文章底稿来自 article_research，UGC、社区、媒体、官方和垂类专业文章同等按质量、事实密度、文字完整度和权利风险筛选。
     - 源图是加分与可选证据，article 必须写 baseSourceRef 且一稿一用，若使用 assetRefs 则资产必须权利合规（图文同源底稿，图片可跨内容复用，无需全批独占），无合格源图的优质文字底稿可写 publishMediaMode=text_only。
     - 图片作品底稿是 image_research 的图片集合，carrier=image，只写 sourceCollectionId/assetRefs，同一作品只能使用同一作者/页面/专辑/授权凭证下 1..20 张图，标题<=80字且可空，配文<=300字且可空。
-    - 每个 article/image/video 内容对象必须绑定平台 creator assignment，字段至少包含 authorId、creatorProfileId、creatorArchetype、creatorProfileVersion、creatorDisclosure、experienceClaimMode、authorQualitySignals；creator 必须来自系统 creator registry。
+    - 每个 article/image/video 内容对象必须绑定平台 creator assignment，字段至少包含 authorId、creatorProfileId、creatorArchetype、creatorProfileDigest、creatorDisclosure、experienceClaimMode、authorQualitySignals；creator 必须来自系统 creator registry，digest 必须由完整 profile 内容确定性计算。
     - 写 _shared/content_plan_packet.json（schema=quwoquan_data.content_plan_packet），注册 content_object，并写每项 3.compose/brief.json。
     - ref/title 必须由证据归纳；evidenceRefs 必须存在，blocked/reject 来源不可引用。
     - 完成后运行 content_plan validator 并修复到无问题。

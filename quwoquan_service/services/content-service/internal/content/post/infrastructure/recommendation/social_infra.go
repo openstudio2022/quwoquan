@@ -238,7 +238,10 @@ func (m *MongoSocialCandidateDB) GetCandidatesByIDs(ctx context.Context, ids []s
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	cursor, err := m.coll.Find(ctx, bson.M{"postId": bson.M{"$in": ids}})
+	cursor, err := m.coll.Find(ctx, bson.M{
+		"postId":            bson.M{"$in": ids},
+		"accountRestricted": bson.M{"$ne": true},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -252,8 +255,9 @@ func (m *MongoSocialCandidateDB) GetCircleHotContent(ctx context.Context, circle
 	}
 	cutoff := time.Now().Add(-maxAge)
 	cursor, err := m.coll.Find(ctx, bson.M{
-		"circleIds":   bson.M{"$in": circleIDs},
-		"publishedAt": bson.M{"$gte": cutoff},
+		"circleIds":         bson.M{"$in": circleIDs},
+		"publishedAt":       bson.M{"$gte": cutoff},
+		"accountRestricted": bson.M{"$ne": true},
 	}, options.Find().SetLimit(int64(limit)).SetSort(bson.M{"viewCount": -1}))
 	if err != nil {
 		return nil, err

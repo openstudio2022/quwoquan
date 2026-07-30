@@ -33,5 +33,4 @@ business_rules:
 - 仅 received activity 的 owner persona 可追加
 - read 投影同时保证 seenAt 非空，seen 不得回退已存在 readAt
 lifecycle:
-  initial: appended
-  terminal: appended
+  immutable: true

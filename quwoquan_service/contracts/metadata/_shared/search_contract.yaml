@@ -71,7 +71,6 @@ retrieve_contract:
     - provenance
     # Commercial search-service envelope additions (App + AI consume; never UI-hardcoded).
     - relatedTerms
-    - rankingVersion
     - experimentBucket
     - requestId
   hit_fields:

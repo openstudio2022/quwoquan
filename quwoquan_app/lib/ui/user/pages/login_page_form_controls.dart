@@ -1,45 +1,166 @@
 part of 'login_page.dart';
 
-/// 重发验证码动作：倒计时进行中显示禁用倒计时文案；倒计时结束且可发码时
-/// 显示可点击的"重新获取"，让用户在任何"想换一份验证码"的态下都有明确出口。
-class _OtpResendAction extends StatelessWidget {
-  const _OtpResendAction({
-    required this.resendSeconds,
-    required this.enabled,
-    required this.onResend,
+Future<bool?> showLoginConsentSheet(
+  BuildContext context, {
+  required VoidCallback onAgreementTap,
+  required VoidCallback onPrivacyTap,
+}) {
+  return showCupertinoModalPopup<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (sheetContext) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.iosSystemBackground(sheetContext),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppSpacing.radiusTen),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: AppSpacing.forty,
+                  height: AppSpacing.three,
+                  decoration: BoxDecoration(
+                    color: AppColors.iosTertiaryLabel(sheetContext),
+                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  FoundationText.loginConsentSheetTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.iosLabel(sheetContext),
+                    fontSize: AppTypography.iosTitle3,
+                    fontWeight: AppTypography.semiBold,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  FoundationText.loginConsentSheetSubtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.iosSecondaryLabel(sheetContext),
+                    fontSize: AppTypography.base,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _AgreementLinks(
+                  onAgreementTap: onAgreementTap,
+                  onPrivacyTap: onPrivacyTap,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                LoginActionButton(
+                  key: const ValueKey<String>('loginConsentConfirm'),
+                  label: FoundationText.loginConsentSheetConfirm,
+                  onPressed: () => Navigator.of(sheetContext).pop(true),
+                ),
+                CupertinoButton(
+                  key: const ValueKey<String>('loginConsentCancel'),
+                  onPressed: () => Navigator.of(sheetContext).pop(false),
+                  child: Text(
+                    FoundationText.loginConsentSheetCancel,
+                    style: TextStyle(color: AppColors.iosAccent(sheetContext)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class LoginActionButton extends StatelessWidget {
+  const LoginActionButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.enabled = true,
+    this.busy = false,
+    this.outlined = false,
   });
 
-  final int resendSeconds;
+  final String label;
+  final VoidCallback onPressed;
   final bool enabled;
-  final VoidCallback onResend;
+  final bool busy;
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) {
-    final counting = resendSeconds > 0;
-    final label = counting
-        ? FoundationText.loginOtpResendCountdown.replaceFirst(
-            '%d',
-            '$resendSeconds',
-          )
-        : FoundationText.loginOtpResend;
-    final canTap = enabled && !counting;
+    final canPress = enabled && !busy;
+    final accent = AppColors.iosAccent(context);
+    final foreground = outlined
+        ? canPress
+              ? accent
+              : AppColors.iosSecondaryLabel(context)
+        : AppColors.white;
+    final background = outlined
+        ? AppColors.transparent
+        : canPress
+        ? accent
+        : AppColors.loginPrimaryDisabled(context);
     return Semantics(
       button: true,
-      enabled: canTap,
-      label: FoundationText.loginOtpResend,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: canTap ? onResend : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-          child: Text(
-            label,
-            key: const ValueKey<String>('loginOtpResendAction'),
-            style: TextStyle(
-              fontSize: AppTypography.iosCaption1,
-              color: canTap
-                  ? AppColors.iosAccent(context)
-                  : AppColors.iosSecondaryLabel(context),
+      enabled: canPress,
+      label: label,
+      child: SizedBox(
+        width: double.infinity,
+        height: AppSpacing.loginPrimaryButtonHeight,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: outlined
+                ? Border.all(
+                    color: canPress
+                        ? accent
+                        : AppColors.loginInputBorder(context),
+                  )
+                : null,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+          ),
+          child: CupertinoButton(
+            padding: EdgeInsets.zero,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+            color: background,
+            disabledColor: background,
+            onPressed: canPress ? onPressed : null,
+            child: Stack(
+              alignment: Alignment.center,
+              children: <Widget>[
+                AnimatedOpacity(
+                  opacity: busy ? 0 : 1,
+                  duration: const Duration(milliseconds: 120),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: canPress || outlined
+                          ? foreground
+                          : AppColors.white.withValues(alpha: 0.72),
+                      fontSize: AppTypography.lg,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+                ),
+                if (busy)
+                  AppRequestFeedback.inline(
+                    indicatorColor: outlined ? accent : AppColors.white,
+                  ),
+              ],
             ),
           ),
         ),
@@ -48,161 +169,80 @@ class _OtpResendAction extends StatelessWidget {
   }
 }
 
-class PhoneNumberField extends StatefulWidget {
-  const PhoneNumberField({
+class LoginPhoneField extends StatelessWidget {
+  const LoginPhoneField({
     super.key,
     required this.controller,
     required this.enabled,
-    required this.hasError,
     required this.onChanged,
-    this.onEditingComplete,
+    required this.onEditingComplete,
   });
 
   final TextEditingController controller;
   final bool enabled;
-  final bool hasError;
   final ValueChanged<String> onChanged;
-  final VoidCallback? onEditingComplete;
-
-  @override
-  State<PhoneNumberField> createState() => _PhoneNumberFieldState();
-}
-
-class _LoginInputDecorationSpec {
-  const _LoginInputDecorationSpec({
-    required this.surface,
-    required this.border,
-    required this.borderWidth,
-    required this.shadow,
-  });
-
-  final Color surface;
-  final Color border;
-  final double borderWidth;
-  final List<BoxShadow> shadow;
-}
-
-_LoginInputDecorationSpec _loginInputDecorationForState(
-  BuildContext context, {
-  required bool focused,
-  required bool hasError,
-  bool enabled = true,
-}) {
-  final border = hasError
-      ? AppColors.errorBorder(context)
-      : focused
-      ? AppColors.loginInputFocusedBorder(context)
-      : AppColors.loginInputBorder(context);
-  return _LoginInputDecorationSpec(
-    surface: AppColors.loginInputSurface(context),
-    border: border,
-    borderWidth: focused || hasError ? AppSpacing.oneHalf : AppSpacing.one,
-    shadow: <BoxShadow>[
-      if (focused && enabled)
-        BoxShadow(
-          color: AppColors.loginInputFocusedBorder(
-            context,
-          ).withValues(alpha: 0.10),
-          blurRadius: AppSpacing.ten,
-          offset: const Offset(AppSpacing.zero, AppSpacing.three),
-        ),
-    ],
-  );
-}
-
-class _PhoneNumberFieldState extends State<PhoneNumberField> {
-  late final FocusNode _focusNode;
-  bool _focused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode = FocusNode();
-    _focusNode.addListener(_handleFocusChanged);
-  }
-
-  @override
-  void dispose() {
-    _focusNode.removeListener(_handleFocusChanged);
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _handleFocusChanged() {
-    final lostFocus = _focused && !_focusNode.hasFocus;
-    if (mounted) {
-      setState(() => _focused = _focusNode.hasFocus);
-    }
-    if (lostFocus) {
-      widget.onEditingComplete?.call();
-    }
-  }
+  final VoidCallback onEditingComplete;
 
   @override
   Widget build(BuildContext context) {
-    final decoration = _loginInputDecorationForState(
-      context,
-      focused: _focused,
-      hasError: widget.hasError,
-      enabled: widget.enabled,
-    );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.enabled ? () => _focusNode.requestFocus() : null,
+    return Semantics(
+      textField: true,
+      label: FoundationText.loginPhoneNumberPlaceholder,
       child: Container(
         height: AppSpacing.loginPhoneFieldHeight,
-        decoration: BoxDecoration(
-          color: decoration.surface,
-          borderRadius: BorderRadius.circular(AppSpacing.loginInputRadius),
-          border: Border.all(
-            color: decoration.border,
-            width: decoration.borderWidth,
-          ),
-          boxShadow: decoration.shadow,
-        ),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.loginInputSurface(context),
+          border: Border.all(color: AppColors.loginInputBorder(context)),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        ),
         child: Row(
           children: <Widget>[
             Text(
               '+86',
               style: TextStyle(
-                fontSize: AppTypography.iosBody,
                 color: AppColors.iosLabel(context),
-                fontWeight: AppTypography.semiBold,
+                fontSize: AppTypography.lg,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
+            Icon(
+              CupertinoIcons.chevron_down,
+              size: AppTypography.xs,
+              color: AppColors.iosSecondaryLabel(context),
+            ),
+            const SizedBox(width: AppSpacing.md),
             Container(
               width: AppSpacing.one,
               height: AppSpacing.twenty,
               color: AppColors.iosSeparator(context),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: CupertinoTextField.borderless(
-                controller: widget.controller,
-                enabled: widget.enabled,
-                focusNode: _focusNode,
+              child: CupertinoTextField(
+                key: const ValueKey<String>('loginPhoneField'),
+                controller: controller,
+                enabled: enabled,
+                decoration: null,
+                padding: EdgeInsets.zero,
+                placeholder: FoundationText.loginPhoneNumberPlaceholder,
+                placeholderStyle: TextStyle(
+                  color: AppColors.iosTertiaryLabel(context),
+                  fontSize: AppTypography.lg,
+                ),
+                style: TextStyle(
+                  color: AppColors.iosLabel(context),
+                  fontSize: AppTypography.lg,
+                ),
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
                 autofillHints: const <String>[AutofillHints.telephoneNumber],
-                placeholder: FoundationText.loginPhoneNumberPlaceholder,
                 inputFormatters: <TextInputFormatter>[
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(11),
                 ],
-                style: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  color: widget.enabled
-                      ? AppColors.iosLabel(context)
-                      : AppColors.iosSecondaryLabel(context),
-                ),
-                placeholderStyle: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  color: AppColors.iosTertiaryLabel(context),
-                ),
-                onChanged: widget.onChanged,
-                onEditingComplete: widget.onEditingComplete,
+                onChanged: onChanged,
+                onEditingComplete: onEditingComplete,
               ),
             ),
           ],
@@ -212,331 +252,156 @@ class _PhoneNumberFieldState extends State<PhoneNumberField> {
   }
 }
 
-class OtpCodeBoxes extends StatelessWidget {
+class OtpCodeBoxes extends StatefulWidget {
   const OtpCodeBoxes({
     super.key,
     required this.controller,
     required this.enabled,
-    required this.hasError,
     required this.onChanged,
+    required this.focusRequestSerial,
+    required this.shakeSerial,
   });
 
   final TextEditingController controller;
   final bool enabled;
-  final bool hasError;
   final ValueChanged<String> onChanged;
+  final int focusRequestSerial;
+  final int shakeSerial;
 
   @override
-  Widget build(BuildContext context) {
-    return _OtpCodeBoxesBody(
-      controller: controller,
-      enabled: enabled,
-      hasError: hasError,
-      onChanged: onChanged,
-    );
-  }
+  State<OtpCodeBoxes> createState() => _OtpCodeBoxesState();
 }
 
-class _OtpCodeBoxesBody extends StatefulWidget {
-  const _OtpCodeBoxesBody({
-    required this.controller,
-    required this.enabled,
-    required this.hasError,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final bool enabled;
-  final bool hasError;
-  final ValueChanged<String> onChanged;
-
-  @override
-  State<_OtpCodeBoxesBody> createState() => _OtpCodeBoxesBodyState();
-}
-
-class _OtpCodeBoxesBodyState extends State<_OtpCodeBoxesBody> {
+class _OtpCodeBoxesState extends State<OtpCodeBoxes>
+    with SingleTickerProviderStateMixin {
   late final FocusNode _focusNode;
-  bool _focused = false;
+  late final AnimationController _shakeController;
+  late final Animation<double> _shakeOffset;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
-    _focusNode.addListener(_handleFocusChanged);
-    _scheduleOtpFocusRequest();
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _shakeOffset = TweenSequence<double>(<TweenSequenceItem<double>>[
+      TweenSequenceItem(tween: Tween(begin: 0, end: -6), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -6, end: 6), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 6, end: -4), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -4, end: 4), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 4, end: 0), weight: 1),
+    ]).animate(_shakeController);
+    _scheduleFocus();
   }
 
   @override
-  void didUpdateWidget(covariant _OtpCodeBoxesBody oldWidget) {
+  void didUpdateWidget(covariant OtpCodeBoxes oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.enabled && !oldWidget.enabled) {
-      _scheduleOtpFocusRequest();
+    if (oldWidget.focusRequestSerial != widget.focusRequestSerial &&
+        widget.enabled) {
+      _scheduleFocus();
+    }
+    if (oldWidget.shakeSerial != widget.shakeSerial &&
+        !(MediaQuery.maybeOf(context)?.disableAnimations ?? false)) {
+      _shakeController.forward(from: 0);
     }
   }
 
-  void _scheduleOtpFocusRequest() {
-    if (!widget.enabled) {
-      return;
-    }
+  void _scheduleFocus() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.enabled) {
-        return;
-      }
-      _focusNode.requestFocus();
+      if (mounted && widget.enabled) _focusNode.requestFocus();
     });
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_handleFocusChanged);
     _focusNode.dispose();
+    _shakeController.dispose();
     super.dispose();
   }
 
-  void _handleFocusChanged() {
-    if (mounted) {
-      setState(() => _focused = _focusNode.hasFocus);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final decoration = _loginInputDecorationForState(
-      context,
-      focused: _focused,
-      hasError: widget.hasError,
-      enabled: widget.enabled,
-    );
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.enabled ? () => _focusNode.requestFocus() : null,
-      child: SizedBox(
-        height: AppSpacing.loginOtpBoxSize,
-        child: Stack(
-          alignment: Alignment.center,
-          children: <Widget>[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final defaultGap = AppSpacing.loginOtpBoxGap;
-                final availableWidth = constraints.maxWidth.isFinite
-                    ? constraints.maxWidth
-                    : AppSpacing.loginOtpBoxSize * 6 + defaultGap * 5;
-                final minimumBoxWidth = AppSpacing.loginOtpBoxMinSize * 6;
-                // 窄宽度下优先压缩格间距，保证 6 格仍在同一行内且尽量维持 44x44 热区。
-                final gap = availableWidth <= minimumBoxWidth
-                    ? AppSpacing.zero
-                    : ((availableWidth - minimumBoxWidth) / 5).clamp(
-                        AppSpacing.zero,
-                        defaultGap,
-                      );
-                final boxSize = ((availableWidth - gap * 5) / 6).clamp(
-                  availableWidth >= minimumBoxWidth
-                      ? AppSpacing.loginOtpBoxMinSize
-                      : AppSpacing.zero,
-                  AppSpacing.loginOtpBoxSize,
-                );
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List<Widget>.generate(6, (index) {
-                    final value = index < widget.controller.text.length
-                        ? widget.controller.text[index]
-                        : '';
-                    return Padding(
+    final code = widget.controller.text;
+    final activeIndex = widget.enabled ? code.length.clamp(0, 5) : -1;
+    return Semantics(
+      textField: true,
+      label: FoundationText.loginOtpPlaceholder,
+      value: '${code.length}/6',
+      child: AnimatedBuilder(
+        animation: _shakeOffset,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(_shakeOffset.value, 0),
+          child: child,
+        ),
+        child: SizedBox(
+          height: AppSpacing.loginOtpBoxSize,
+          child: Stack(
+            children: <Widget>[
+              Row(
+                children: List<Widget>.generate(6, (index) {
+                  final digit = index < code.length ? code[index] : '';
+                  return Expanded(
+                    child: Padding(
                       padding: EdgeInsets.only(
-                        right: index == 5 ? AppSpacing.zero : gap,
+                        right: index == 5 ? 0 : AppSpacing.loginOtpBoxGap,
                       ),
                       child: Container(
-                        width: boxSize,
-                        height: boxSize,
+                        key: ValueKey<String>('loginOtpBox$index'),
+                        height: AppSpacing.loginOtpBoxSize,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: decoration.surface,
-                          borderRadius: BorderRadius.circular(
-                            AppSpacing.loginOtpBoxRadius,
-                          ),
+                          color: AppColors.loginInputSurface(context),
                           border: Border.all(
-                            color: decoration.border,
-                            width: decoration.borderWidth,
+                            color: index == activeIndex
+                                ? AppColors.loginInputFocusedBorder(context)
+                                : AppColors.loginInputBorder(context),
+                            width: index == activeIndex
+                                ? AppSpacing.two
+                                : AppSpacing.one,
                           ),
-                          boxShadow: decoration.shadow,
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.radiusTen,
+                          ),
                         ),
                         child: Text(
-                          value,
+                          digit,
                           style: TextStyle(
-                            fontSize: AppTypography.iosTitle3,
-                            fontWeight: AppTypography.semiBold,
                             color: AppColors.iosLabel(context),
+                            fontSize: AppTypography.xl,
+                            fontWeight: AppTypography.medium,
                           ),
                         ),
                       ),
-                    );
-                  }),
-                );
-              },
-            ),
-            Opacity(
-              opacity: 0.01,
-              child: SizedBox(
-                height: AppSpacing.loginOtpBoxSize,
-                child: CupertinoTextField.borderless(
-                  controller: widget.controller,
-                  enabled: widget.enabled,
-                  focusNode: _focusNode,
-                  autofocus: false,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const <String>[AutofillHints.oneTimeCode],
-                  enableInteractiveSelection: true,
-                  inputFormatters: <TextInputFormatter>[
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(6),
-                  ],
-                  onChanged: widget.onChanged,
-                  onSubmitted: widget.onChanged,
+                    ),
+                  );
+                }),
+              ),
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.01,
+                  child: CupertinoTextField(
+                    key: const ValueKey<String>('loginOtpHiddenField'),
+                    controller: widget.controller,
+                    focusNode: _focusNode,
+                    enabled: widget.enabled,
+                    decoration: null,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const <String>[AutofillHints.oneTimeCode],
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(6),
+                    ],
+                    onChanged: widget.onChanged,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ResolvingPanel extends StatelessWidget {
-  const _ResolvingPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      key: const ValueKey<String>('resolving'),
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        AppRequestFeedback.inline(indicatorColor: AppColors.iosAccent(context)),
-        const SizedBox(height: AppSpacing.loginOtherTitleToIconsGap),
-        Text(
-          FoundationText.loginResolvingHint,
-          style: TextStyle(
-            fontSize: AppTypography.iosCallout,
-            color: AppColors.iosSecondaryLabel(context),
+            ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _Avatar extends StatefulWidget {
-  const _Avatar({required this.avatarUrl});
-
-  final String avatarUrl;
-
-  @override
-  State<_Avatar> createState() => _AvatarState();
-}
-
-class _AvatarState extends State<_Avatar> {
-  bool _loaded = false;
-
-  @override
-  void didUpdateWidget(covariant _Avatar oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.avatarUrl.trim() != widget.avatarUrl.trim()) {
-      _loaded = false;
-    }
-  }
-
-  void _reveal(String loadedUrl) {
-    if (!mounted || widget.avatarUrl.trim() != loadedUrl || _loaded) {
-      return;
-    }
-    setState(() => _loaded = true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final avatarUrl = widget.avatarUrl.trim();
-    if (avatarUrl.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return AnimatedSize(
-      duration: AppSpacing.loginAvatarRevealDuration,
-      alignment: Alignment.topCenter,
-      curve: Curves.easeOut,
-      child: Offstage(
-        offstage: !_loaded,
-        child: AnimatedOpacity(
-          opacity: _loaded ? 1 : 0,
-          duration: AppSpacing.loginAvatarRevealDuration,
-          curve: Curves.easeOut,
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Semantics(
-              image: true,
-              label: FoundationText.loginAccountAvatarSemanticLabel,
-              child: ClipOval(
-                child: AppAvatarImage(
-                  key: ValueKey<String>(avatarUrl),
-                  imageUrl: avatarUrl,
-                  size: AppSpacing.loginAvatarSize,
-                  fit: BoxFit.cover,
-                  placeholder: const SizedBox.shrink(),
-                  errorWidget: const SizedBox.shrink(),
-                  onLoadSucceeded: () => _reveal(avatarUrl),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class PrimaryLoginButton extends StatelessWidget {
-  const PrimaryLoginButton({
-    super.key,
-    required this.label,
-    required this.isSubmitting,
-    required this.enabled,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool isSubmitting;
-  final bool enabled;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      enabled: enabled && !isSubmitting,
-      label: label,
-      child: CupertinoButton(
-        minimumSize: const Size(
-          AppSpacing.loginPrimaryButtonHeight,
-          AppSpacing.loginPrimaryButtonHeight,
-        ),
-        padding: EdgeInsets.zero,
-        color: enabled
-            ? AppColors.iosAccent(context)
-            : AppColors.loginPrimaryDisabled(context),
-        disabledColor: AppColors.loginPrimaryDisabled(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
-        onPressed: enabled && !isSubmitting ? onPressed : null,
-        child: isSubmitting
-            ? AppRequestFeedback.inline(indicatorColor: CupertinoColors.white)
-            : Text(
-                label,
-                style: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  fontWeight: FontWeight.w600,
-                  color: enabled
-                      ? CupertinoColors.white
-                      : CupertinoColors.white.withValues(alpha: 0.76),
-                ),
-              ),
       ),
     );
   }
@@ -546,282 +411,312 @@ class LoginAgreementRow extends StatelessWidget {
   const LoginAgreementRow({
     super.key,
     required this.accepted,
-    required this.showError,
     required this.onToggle,
     required this.onAgreementTap,
     required this.onPrivacyTap,
   });
 
   final bool accepted;
-  final bool showError;
   final VoidCallback onToggle;
   final VoidCallback onAgreementTap;
   final VoidCallback onPrivacyTap;
 
   @override
   Widget build(BuildContext context) {
-    final row = Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: const Size.square(AppSpacing.minInteractiveSize),
-          onPressed: onToggle,
-          child: Icon(
-            accepted
-                ? CupertinoIcons.check_mark_circled_solid
-                : CupertinoIcons.circle,
-            size: AppSpacing.twenty,
-            color: accepted
-                ? AppColors.iosAccent(context)
-                : AppColors.iosSecondaryLabel(context),
-          ),
-        ),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.containerSm),
-            child: Wrap(
-              children: <Widget>[
-                Text(
-                  FoundationText.loginAgreementPrefix,
-                  style: TextStyle(
-                    fontSize: AppTypography.base,
-                    color: AppColors.iosSecondaryLabel(context),
-                  ),
-                ),
-                _AgreementLink(
-                  label: FoundationText.userAgreement,
-                  onTap: onAgreementTap,
-                ),
-                Text(
-                  FoundationText.loginAgreementAnd,
-                  style: TextStyle(
-                    fontSize: AppTypography.base,
-                    color: AppColors.iosSecondaryLabel(context),
-                  ),
-                ),
-                _AgreementLink(
-                  label: FoundationText.privacyPolicy,
-                  onTap: onPrivacyTap,
-                ),
-              ],
+    return Semantics(
+      checked: accepted,
+      button: true,
+      label: FoundationText.loginAgreementRequired,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xs,
+        children: <Widget>[
+          GestureDetector(
+            onTap: onToggle,
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: AppSpacing.minInteractiveSize,
+              height: AppSpacing.minInteractiveSize,
+              child: Icon(
+                accepted
+                    ? CupertinoIcons.check_mark_circled_solid
+                    : CupertinoIcons.circle,
+                size: AppSpacing.twenty,
+                color: accepted
+                    ? AppColors.iosAccent(context)
+                    : AppColors.iosSecondaryLabel(context),
+              ),
             ),
           ),
-        ),
-      ],
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        row,
-        if (showError)
-          Padding(
-            padding: const EdgeInsets.only(left: AppSpacing.minInteractiveSize),
-            child: AppInlineFieldError(
-              key: const ValueKey<String>('loginAgreementError'),
-              message: FoundationText.loginAgreementRequired,
-            ),
+          _AgreementLinks(
+            onAgreementTap: onAgreementTap,
+            onPrivacyTap: onPrivacyTap,
           ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-class _AgreementLink extends StatelessWidget {
-  const _AgreementLink({required this.label, required this.onTap});
+class _AgreementLinks extends StatelessWidget {
+  const _AgreementLinks({
+    required this.onAgreementTap,
+    required this.onPrivacyTap,
+  });
 
-  final String label;
-  final VoidCallback onTap;
+  final VoidCallback onAgreementTap;
+  final VoidCallback onPrivacyTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: AppTypography.base,
-          color: AppColors.iosAccent(context),
-          fontWeight: AppTypography.semiBold,
+    final base = TextStyle(
+      color: AppColors.iosSecondaryLabel(context),
+      fontSize: AppTypography.iosCaption1,
+    );
+    final link = base.copyWith(color: AppColors.iosAccent(context));
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: <InlineSpan>[
+          const TextSpan(text: FoundationText.loginAgreementPrefix),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+              onPressed: onAgreementTap,
+              child: Text(FoundationText.userAgreement, style: link),
+            ),
+          ),
+          const TextSpan(text: FoundationText.loginAgreementAnd),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+              onPressed: onPrivacyTap,
+              child: Text(FoundationText.privacyPolicy, style: link),
+            ),
+          ),
+        ],
+      ),
+      textAlign: TextAlign.center,
+    );
+  }
+}
+
+class LoginMethodFooter extends StatelessWidget {
+  const LoginMethodFooter({
+    super.key,
+    required this.onTap,
+    required this.availableMethods,
+    this.disabledProvider = '',
+  });
+
+  final ValueChanged<String> onTap;
+  final Map<String, NativeAuthCapability> availableMethods;
+  final String disabledProvider;
+
+  @override
+  Widget build(BuildContext context) {
+    const methods = <String>['wechat', 'qq', 'alipay'];
+    return Container(
+      key: const ValueKey<String>('loginMethodFooter'),
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 132),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      color: AppColors.loginPageBackground(context),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: AppSpacing.loginFrameMaxWidth,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Container(
+                      height: AppSpacing.one,
+                      color: AppColors.loginOtherDivider(context),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
+                    child: Text(
+                      FoundationText.loginOtherMethods,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.iosSecondaryLabel(context),
+                        fontSize: AppTypography.iosFootnote,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Container(
+                      height: AppSpacing.one,
+                      color: AppColors.loginOtherDivider(context),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: methods
+                    .map((method) {
+                      final capability = availableMethods[method];
+                      final current = disabledProvider == method;
+                      final enabled =
+                          capability?.isAvailable == true && !current;
+                      return Expanded(
+                        child: _LoginMethodButton(
+                          method: method,
+                          enabled: enabled,
+                          current: current,
+                          onPressed: () => onTap(method),
+                        ),
+                      );
+                    })
+                    .toList(growable: false),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-enum OtherLoginMethodMode { returning, phoneOtp }
-
-class OtherLoginMethodGrid extends StatelessWidget {
-  const OtherLoginMethodGrid({
-    super.key,
-    required this.onTap,
-    required this.availableMethods,
+class _LoginMethodButton extends StatelessWidget {
+  const _LoginMethodButton({
+    required this.method,
     required this.enabled,
-    this.mode = OtherLoginMethodMode.phoneOtp,
-    this.excludedMethod = '',
+    required this.current,
+    required this.onPressed,
   });
 
-  final ValueChanged<String> onTap;
-  final Map<String, NativeAuthCapability> availableMethods;
+  final String method;
   final bool enabled;
-  final OtherLoginMethodMode mode;
-  final String excludedMethod;
+  final bool current;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final socialEntries =
-        const <
-          ({
-            String id,
-            IconData icon,
-            Color background,
-            Color iconColor,
-            double iconSize,
-            String label,
-            String semanticLabel,
-          })
-        >[
-          (
-            id: 'wechat',
-            icon: SimpleIcons.wechat,
-            background: AppColors.loginMethodWechatBrand,
-            iconColor: AppColors.white,
-            iconSize: AppSpacing.loginOtherMethodIconSize,
-            label: FoundationText.loginMethodWechat,
-            semanticLabel: FoundationText.loginMethodWechatSemanticLabel,
-          ),
-          (
-            id: 'qq',
-            icon: SimpleIcons.qq,
-            background: AppColors.loginMethodQqBrand,
-            iconColor: AppColors.white,
-            iconSize: AppSpacing.loginOtherMethodIconSize,
-            label: FoundationText.loginMethodQq,
-            semanticLabel: FoundationText.loginMethodQqSemanticLabel,
-          ),
-          (
-            id: 'alipay',
-            icon: SimpleIcons.alipay,
-            background: AppColors.loginMethodAlipayBrand,
-            iconColor: AppColors.white,
-            iconSize: AppSpacing.loginOtherMethodIconSize,
-            label: FoundationText.loginMethodAlipay,
-            semanticLabel: FoundationText.loginMethodAlipaySemanticLabel,
-          ),
-        ];
-    final allEntries =
-        <
-          ({
-            String id,
-            IconData icon,
-            Color background,
-            Color iconColor,
-            double iconSize,
-            String label,
-            String semanticLabel,
-          })
-        >[
-          if (mode == OtherLoginMethodMode.returning)
-            (
-              id: 'phone',
-              icon: Icons.phone_iphone,
-              background: AppColors.loginMethodPhoneCircle,
-              iconColor: AppColors.white,
-              iconSize: AppSpacing.loginOtherMethodIconSize,
-              label: FoundationText.loginMethodPhone,
-              semanticLabel: FoundationText.loginMethodPhoneSemanticLabel,
-            ),
-          ...socialEntries,
-        ];
-    final entries = allEntries
-        .where(
-          (entry) =>
-              entry.id != excludedMethod &&
-              (entry.id == 'phone' ||
-                  availableMethods[entry.id]?.isDiscoverable == true),
-        )
-        .toList(growable: false);
-    if (entries.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Column(
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Container(
-                height: AppSpacing.one,
-                color: AppColors.loginOtherDivider(context),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Text(
-                FoundationText.loginOtherMethods,
-                style: TextStyle(
-                  fontSize: AppTypography.base,
-                  color: AppColors.iosSecondaryLabel(context),
+    final label = switch (method) {
+      'wechat' => FoundationText.loginMethodWechat,
+      'qq' => FoundationText.loginMethodQq,
+      _ => FoundationText.loginMethodAlipay,
+    };
+    final semantic = current
+        ? switch (method) {
+            'wechat' => FoundationText.loginWechatCurrent,
+            'qq' => FoundationText.loginQqCurrent,
+            _ => FoundationText.loginAlipayCurrent,
+          }
+        : enabled
+        ? switch (method) {
+            'wechat' => FoundationText.loginMethodWechatSemanticLabel,
+            'qq' => FoundationText.loginMethodQqSemanticLabel,
+            _ => FoundationText.loginMethodAlipaySemanticLabel,
+          }
+        : switch (method) {
+            'wechat' => FoundationText.loginWechatUnavailable,
+            'qq' => FoundationText.loginQqUnavailable,
+            _ => FoundationText.loginAlipayUnavailable,
+          };
+    final icon = switch (method) {
+      'wechat' => SimpleIcons.wechat,
+      'qq' => SimpleIcons.qq,
+      _ => SimpleIcons.alipay,
+    };
+    final color = switch (method) {
+      'wechat' => AppColors.loginMethodWechatBrand,
+      'qq' => AppColors.loginMethodQqBrand,
+      _ => AppColors.loginMethodAlipayBrand,
+    };
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: semantic,
+      child: ExcludeSemantics(
+        child: Opacity(
+          opacity: enabled ? 1 : 0.35,
+          child: CupertinoButton(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            onPressed: enabled ? onPressed : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Container(
+                  width: AppSpacing.loginOtherMethodSize,
+                  height: AppSpacing.loginOtherMethodSize,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    size: AppSpacing.loginOtherMethodIconSize,
+                    color: AppColors.white,
+                  ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: Container(
-                height: AppSpacing.one,
-                color: AppColors.loginOtherDivider(context),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: double.infinity,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: entries
-                  .map((entry) {
-                    return Semantics(
-                      button: true,
-                      enabled: enabled,
-                      label: entry.semanticLabel,
-                      child: CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: enabled ? () => onTap(entry.id) : null,
-                        child: Column(
-                          children: <Widget>[
-                            Container(
-                              width: AppSpacing.loginOtherMethodSize,
-                              height: AppSpacing.loginOtherMethodSize,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: entry.background,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                entry.icon,
-                                size: entry.iconSize,
-                                color: entry.iconColor,
-                              ),
-                            ),
-                            const SizedBox(height: AppSpacing.xs),
-                            Text(
-                              entry.label,
-                              style: TextStyle(
-                                fontSize: AppTypography.iosCaption1,
-                                color: AppColors.iosSecondaryLabel(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  })
-                  .toList(growable: false),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.iosSecondaryLabel(context),
+                    fontSize: AppTypography.iosCaption1,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class LoginProviderMark extends StatelessWidget {
+  const LoginProviderMark({super.key, required this.provider});
+
+  final String provider;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = switch (provider) {
+      'wechat' => SimpleIcons.wechat,
+      'qq' => SimpleIcons.qq,
+      _ => SimpleIcons.alipay,
+    };
+    final color = switch (provider) {
+      'wechat' => AppColors.loginMethodWechatBrand,
+      'qq' => AppColors.loginMethodQqBrand,
+      _ => AppColors.loginMethodAlipayBrand,
+    };
+    return Container(
+      width: AppSpacing.loginOtherMethodSize,
+      height: AppSpacing.loginOtherMethodSize,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      child: Icon(
+        icon,
+        size: AppSpacing.loginOtherMethodIconSize,
+        color: AppColors.white,
+      ),
     );
   }
 }

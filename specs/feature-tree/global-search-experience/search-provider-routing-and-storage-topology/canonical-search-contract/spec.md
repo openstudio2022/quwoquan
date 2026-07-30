@@ -15,7 +15,8 @@
 ### In Scope
 
 - 单一 search(request) contract，suggest/result 仅以 mode 区分。
-- 商用 response 字段 requestId/rankingVersion/experimentBucket/relatedTerms/rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
+- 商用 response 字段 requestId/experimentBucket/relatedTerms/rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
+- 搜索实验 assignment unit 只使用可信登录主体或匿名稳定 `X-Session-Id`；禁止空主体默认为 control，也禁止用逐请求 requestId 重分桶。
 - App RemoteSearchRepository + RetrieveRequest 映射；assistant search tool 桥接 canonical。
 - 错误响应经 CloudException/runtimeFailure 结构化。
 
@@ -59,7 +60,8 @@
 - GIVEN _shared/search_contract.yaml 已登记商用字段且 make verify-metadata 绿。
 - GIVEN codegen 产物 search_registry.g.dart 与 metadata 一致且幂等。
 - WHEN 调用 search(request) 以 mode=suggest|result 区分，返回统一 envelope。
-- THEN response 含 requestId/rankingVersion/experimentBucket/relatedTerms；hit 含 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
+- THEN response 含 requestId/experimentBucket/relatedTerms；hit 含 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
+- THEN 登录态从可信 principal 派生 experiment subject；匿名态必须按 SearchQuery contract 携带稳定 `X-Session-Id`，缺失时返回 `SEARCH.USER.invalid_argument`。
 - THEN suggest 与 result 共用同一接口，无第二套建议专用接口。
 
 <a id="gwt-002"></a>

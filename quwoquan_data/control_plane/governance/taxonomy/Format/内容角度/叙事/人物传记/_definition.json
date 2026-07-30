@@ -2,6 +2,7 @@
   "label": "人物传记",
   "labelEn": "Biography",
   "description": "人物生平故事叙述",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

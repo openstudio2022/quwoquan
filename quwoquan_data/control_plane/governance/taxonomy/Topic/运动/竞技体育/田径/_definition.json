@@ -2,6 +2,7 @@
   "label": "田径",
   "labelEn": "Athletics",
   "description": "田赛径赛等田径项目",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

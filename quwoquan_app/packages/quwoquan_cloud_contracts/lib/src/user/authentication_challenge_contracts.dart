@@ -1,56 +1,5 @@
 import '../operation_request_payload.dart';
-
-/// AuthenticationChallenge 聚合命令的 pure contracts。
-/// 真相源：quwoquan_service/services/user-service/contracts/account/authentication_challenge/{service,fields}.yaml。
-/// OTP challenge 一次性消费；重复消费返回 USER.AUTH.challenge_consumed。
-
-final class SendOtpCommand {
-  SendOtpCommand({
-    required String phone,
-    this.deviceId,
-    this.platform,
-    this.appVersion,
-    this.sourceOperation,
-    this.bindingTicket,
-  }) : phone = _required(phone, 'phone');
-
-  final String phone;
-  final String? deviceId;
-  final String? platform;
-  final String? appVersion;
-
-  /// 发码用途（login/bind_phone），服务端按用途隔离配额与消费。
-  final String? sourceOperation;
-
-  /// 仅 `bind_phone` 使用；服务端据此约束 OTP 只能完成对应社交首登绑定。
-  final String? bindingTicket;
-}
-
-final class CreateAlipayAuthorizationRequestCommand {
-  CreateAlipayAuthorizationRequestCommand({this.platform, this.appVersion});
-
-  final String? platform;
-  final String? appVersion;
-}
-
-final class ResolveOneTapLoginHintCommand {
-  ResolveOneTapLoginHintCommand({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    this.appVersion,
-  }) : vendor = _required(vendor, 'vendor'),
-       carrierToken = _required(carrierToken, 'carrierToken'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform');
-
-  final String vendor;
-  final String carrierToken;
-  final String deviceId;
-  final String platform;
-  final String? appVersion;
-}
+part '../generated/requests/user/authentication_challenge_contracts.requests.g.dart';
 
 /// 一次发码的结果（脱敏号码 + 有效期）；验证码明文不进入端云 response。
 final class OtpChallengeIssueResult {
@@ -124,41 +73,6 @@ abstract interface class AuthenticationChallengeCommandWriter {
     ResolveOneTapLoginHintCommand command,
   );
 }
-
-CloudOperationRequestPayload encodeSendOtpCommand(SendOtpCommand command) =>
-    CloudOperationRequestPayload(
-      body: <String, Object?>{
-        'phone': command.phone,
-        if (command.deviceId != null) 'deviceId': command.deviceId,
-        if (command.platform != null) 'platform': command.platform,
-        if (command.appVersion != null) 'appVersion': command.appVersion,
-        if (command.sourceOperation != null)
-          'sourceOperation': command.sourceOperation,
-        if (command.bindingTicket != null)
-          'bindingTicket': command.bindingTicket,
-      },
-    );
-
-CloudOperationRequestPayload encodeCreateAlipayAuthorizationRequestCommand(
-  CreateAlipayAuthorizationRequestCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    if (command.platform != null) 'platform': command.platform,
-    if (command.appVersion != null) 'appVersion': command.appVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeResolveOneTapLoginHintCommand(
-  ResolveOneTapLoginHintCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'vendor': command.vendor,
-    'carrierToken': command.carrierToken,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    if (command.appVersion != null) 'appVersion': command.appVersion,
-  },
-);
 
 OtpChallengeIssueResult decodeOtpChallengeIssueResult(Object? value) {
   final map = _object(value, 'OtpChallengeIssueResult');
@@ -235,10 +149,4 @@ int _intOr(Map<String, Object?> map, String key, int fallback) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return fallback;
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }

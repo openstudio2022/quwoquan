@@ -47,7 +47,7 @@ func TestErrorCode_InvalidArgument(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/user/sub-accounts/error-persona/block",
+		"/user/personas/error-persona/block",
 		"",
 		headers,
 	)
@@ -72,14 +72,14 @@ func TestErrorCode_PrimaryGuard_RetirePrimary(t *testing.T) {
 	createTestProfile(t, "err_user_1", "err_user1")
 	createTestPersona(t, "err_pa_primary", "err_user_1", "Primary", true, true)
 
-	createTestPersonaFull(t, "err_pa_other", "err_user_1", "err_pa_other_sa", "Other", "open", false, false)
-	rec := doRequest(t, http.MethodPost, "/user/personas/err_pa_primary_sa/retire", "", authHeaders("err_user_1"))
+	createTestPersonaFull(t, "err_pa_other", "err_user_1", "err_pa_other", "Other", "open", false, false)
+	rec := doRequest(t, http.MethodPost, "/user/personas/err_pa_primary/retire", "", authHeaders("err_user_1"))
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 	result := parseJSON(t, rec)
-	if result["code"] != "USER.SUB_ACCOUNT.primary_guard" {
-		t.Errorf("expected code=USER.SUB_ACCOUNT.primary_guard, got %v", result["code"])
+	if result["code"] != "USER.PERSONA.primary_guard" {
+		t.Errorf("expected code=USER.PERSONA.primary_guard, got %v", result["code"])
 	}
 }
 

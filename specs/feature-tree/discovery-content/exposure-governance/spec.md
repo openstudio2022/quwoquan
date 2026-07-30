@@ -17,7 +17,7 @@
 - 动态曝光预算、分级流量池和 bandit 先验规格。
 - 内容生命周期复活与活跃度自适应规格。
 - 曝光健康 SLI、容量与回滚策略。
-- 行为事件分桶字段：feedRequestId/channelId/vertical/recallPath/rankingVersion/reasonVersion/intersectionSourceRef/intersectionClass。
+- 行为事件分桶字段：feedRequestId/channelId/vertical/recallPath/policyDigest/intersectionSourceRef/intersectionClass。
 
 ### Out of Scope
 

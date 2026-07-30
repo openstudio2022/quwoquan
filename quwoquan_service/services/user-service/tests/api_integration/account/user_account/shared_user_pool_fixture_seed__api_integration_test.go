@@ -14,12 +14,12 @@ type sharedPoolUser struct {
 	DisplayName     string   `json:"displayName"`
 	AvatarObjectKey string   `json:"avatarObjectKey"`
 	Bio             string   `json:"bio"`
-	SubAccountRefs  []string `json:"subAccountRefs"`
+	PersonaRefs     []string `json:"personaRefs"`
 }
 
 type sharedPoolPersona struct {
 	UserID          string
-	SubAccountID    string
+	PersonaID       string
 	DisplayName     string
 	AvatarObjectKey string
 	Bio             string
@@ -49,10 +49,10 @@ func loadSharedPoolPersonas(t *testing.T) []sharedPoolPersona {
 	}
 	personas := make([]sharedPoolPersona, 0, len(payload.Users))
 	for _, user := range payload.Users {
-		for _, subAccountID := range user.SubAccountRefs {
+		for _, personaID := range user.PersonaRefs {
 			personas = append(personas, sharedPoolPersona{
 				UserID:          user.UserID,
-				SubAccountID:    subAccountID,
+				PersonaID:       personaID,
 				DisplayName:     user.DisplayName,
 				AvatarObjectKey: user.AvatarObjectKey,
 				Bio:             user.Bio,
@@ -94,9 +94,9 @@ func seedSharedPoolPersonas(t *testing.T, personas []sharedPoolPersona) {
 		}
 		createTestPersonaFull(
 			t,
-			"persona_"+persona.SubAccountID,
+			"persona_"+persona.PersonaID,
 			persona.UserID,
-			persona.SubAccountID,
+			persona.PersonaID,
 			persona.DisplayName,
 			"open",
 			!profileExists,
@@ -104,10 +104,10 @@ func seedSharedPoolPersonas(t *testing.T, personas []sharedPoolPersona) {
 		)
 		if _, err := pgPool.Exec(
 			context.Background(),
-			`UPDATE personas SET user_handle = $1, avatar_url = $2 WHERE sub_account_id = $3`,
-			persona.SubAccountID,
+			`UPDATE personas SET user_handle = $1, avatar_url = $2 WHERE persona_id = $3`,
+			persona.PersonaID,
 			persona.AvatarObjectKey,
-			persona.SubAccountID,
+			persona.PersonaID,
 		); err != nil {
 			t.Fatalf("seed shared persona handle/avatar: %v", err)
 		}
@@ -146,12 +146,12 @@ func TestContractFixtureSeedSharedUserPoolReadsViaHandler(t *testing.T) {
 		bundleRec := doRequest(
 			t,
 			http.MethodGet,
-			"/user/sub-accounts/"+target.SubAccountID+"/homepage-bundle",
+			"/user/personas/"+target.PersonaID+"/homepage-bundle",
 			"",
-			authHeadersForPersona(viewer.UserID, viewer.SubAccountID),
+			authHeadersForPersona(viewer.UserID, viewer.PersonaID),
 		)
 		if bundleRec.Code != http.StatusOK {
-			t.Fatalf("homepage-bundle %s expected 200, got %d: %s", target.SubAccountID, bundleRec.Code, bundleRec.Body.String())
+			t.Fatalf("homepage-bundle %s expected 200, got %d: %s", target.PersonaID, bundleRec.Code, bundleRec.Body.String())
 		}
 	}
 }

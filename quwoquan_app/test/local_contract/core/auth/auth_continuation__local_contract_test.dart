@@ -186,9 +186,18 @@ void main() {
       (container.read(authSessionControllerProvider.notifier)
               as _FlippableSession)
           .loginNow();
+      expect(
+        container.read(authSessionControllerProvider).isAuthenticated,
+        isTrue,
+      );
       router.pop();
       await tester.pumpAndSettle();
 
+      expect(
+        container.read(authSessionControllerProvider).isAuthenticated,
+        isTrue,
+      );
+      expect(find.text('LOGIN_PLACEHOLDER'), findsNothing);
       expect(submitted.length, 1);
       expect(submitted.single.content, '第一条评论');
       // 续接后槽位清空，不会重复发出。
@@ -209,8 +218,9 @@ class _FlippableSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'test-token',
+      refreshToken: 'test-refresh-token',
       ownerId: 'test-user',
-      activeSubAccountId: 'test-user',
+      activePersonaId: 'test-user',
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'test-install',

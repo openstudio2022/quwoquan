@@ -11,7 +11,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/messaging"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
@@ -91,16 +91,16 @@ func TestAssistantMentionedConsumerGroundsAndRepliesThroughChatHTTP(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		redis,
-		application.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
-		application.WithAgentLoop(application.NewAgentLoop(
+		orchestration.WithConversationRunStore(persistence.NewMemoryConversationRunStore()),
+		orchestration.WithAgentLoop(orchestration.NewAgentLoop(
 			proactiveSkillRuntime{},
-			application.ReactRuntime{Model: proactiveFinalModel{}},
+			orchestration.ReactRuntime{Model: proactiveFinalModel{}},
 			nil,
 		)),
-		application.WithChatGroundingClient(chatGrounding),
+		orchestration.WithChatGroundingClient(chatGrounding),
 		testFrozenPolicyOption(),
 	)
 	transport, err := runtimemessaging.NewRedisMessageTransportForRoot(

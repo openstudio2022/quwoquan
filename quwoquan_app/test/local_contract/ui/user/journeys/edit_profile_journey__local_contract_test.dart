@@ -50,13 +50,12 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
   }
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
-    const base = SubAccountProfileViewData(
-      subAccountId: 'user_001',
+  Future<PersonaProfileViewData> getUserProfile(String userId) async {
+    const base = PersonaProfileViewData(
+      personaId: 'user_001',
       ownerUserId: 'user_001',
       subjectType: 'user',
       userHandle: 'test_user',
-      username: 'test_user',
       displayName: '测试用户',
       avatarUrl: '',
       backgroundUrl: '',
@@ -76,12 +75,11 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
     if (nick == null && _updatedBio == null) {
       return base;
     }
-    return SubAccountProfileViewData(
-      subAccountId: base.subAccountId,
+    return PersonaProfileViewData(
+      personaId: base.personaId,
       ownerUserId: base.ownerUserId,
       subjectType: base.subjectType,
       userHandle: base.userHandle,
-      username: base.username,
       displayName: (nick != null && nick.isNotEmpty) ? nick : base.displayName,
       nicknameCustomized: nick != null || base.nicknameCustomized,
       avatarUrl: base.avatarUrl,
@@ -107,9 +105,9 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
-    final profile = await getUserProfile(subAccountId);
+    final profile = await getUserProfile(personaId);
     final stats = UserProfileStatsViewData.fromProfile(profile);
     return UserHomepageBundleViewData(
       profile: profile,
@@ -117,13 +115,13 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
       relationshipCapability: null,
       tabCounts: UserHomepageTabCountsViewData.fromStats(stats),
       viewerContext: const UserHomepageViewerContextViewData(
-        viewerSubAccountId: 'user_001',
+        viewerPersonaId: 'user_001',
         isOwner: true,
         isGuest: false,
         relationToTarget: 'self',
         canViewFullProfile: true,
       ),
-      cacheVersion: 'uat-profile-v1',
+      cacheVersion: 'uat-profile-revision-a',
     );
   }
 
@@ -143,7 +141,7 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
     final profile = await getUserProfile('user_001');
     return ProfileEditSnapshotData(
       ownerUserId: profile.ownerUserId,
-      subAccountId: profile.subAccountId,
+      personaId: profile.personaId,
       avatarUrl: profile.avatarUrl,
       avatarAssetId: '',
       avatarVersion: profile.avatarVersion,
@@ -167,7 +165,6 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
       publicProfileUrl: 'https://app.quwoquan.test/u/test_user',
       qrPayload: 'https://app.quwoquan.test/u/test_user?qr=uat',
       qrTokenId: 'uat-token',
-      styleVersion: 'v1',
       avatarUrl: '',
       displayName: '测试用户',
       region: '',
@@ -181,7 +178,7 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
     String handle = '',
   }) async {
     return ProfileQrResolveWireDto(
-      subAccountId: 'user_001',
+      personaId: 'user_001',
       userHandle: handle.isEmpty ? 'test_user' : handle,
       publicProfileUrl: 'https://app.quwoquan.test/u/test_user',
       scanStatus: 'accepted',
@@ -254,7 +251,7 @@ class _ProfileEditJourneyEntry extends ConsumerStatefulWidget {
 
 class _ProfileEditJourneyEntryState
     extends ConsumerState<_ProfileEditJourneyEntry> {
-  late Future<SubAccountProfileViewData> _profile;
+  late Future<PersonaProfileViewData> _profile;
 
   @override
   void initState() {
@@ -262,7 +259,7 @@ class _ProfileEditJourneyEntryState
     _profile = _load();
   }
 
-  Future<SubAccountProfileViewData> _load() {
+  Future<PersonaProfileViewData> _load() {
     return ref
         .read(profileQueryProvider(AppUiSurfaces.profileEdit))
         .getUserProfile('me');
@@ -272,7 +269,7 @@ class _ProfileEditJourneyEntryState
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       child: SafeArea(
-        child: FutureBuilder<SubAccountProfileViewData>(
+        child: FutureBuilder<PersonaProfileViewData>(
           future: _profile,
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
@@ -312,7 +309,7 @@ class _AuthenticatedAuthSessionStore extends AuthSessionStore {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       ownerId: 'user_001',
-      activeSubAccountId: 'user_001',
+      activePersonaId: 'user_001',
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'install-id',
@@ -331,7 +328,7 @@ class _AuthenticatedSessionController extends AuthSessionController {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -392,7 +389,7 @@ void main() {
           currentUserIdProvider.overrideWithValue(currentUserId),
           activePersonaContextProvider.overrideWith(
             (ref) async => const ActivePersonaContextViewData(
-              subAccountId: currentUserId,
+              personaId: currentUserId,
               ownerUserId: currentUserId,
               subjectType: 'persona',
               displayName: '测试用户',

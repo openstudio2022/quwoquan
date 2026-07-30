@@ -5,6 +5,7 @@
 library;
 
 import '../operation_request_payload.dart';
+part '../generated/requests/tag/tag_catalog_contracts.requests.g.dart';
 
 /// 标签 API 默认分页常量。
 class TagApiDefaults {
@@ -18,50 +19,6 @@ class TagTaxonomyRefs {
   static const String chinaAdminRegionRoot = 'Topic/地理/行政区/中国';
   static const String careerOccupationRoot = 'Audience/用户/职业';
   static const String careerInterestRoot = 'Audience/用户/兴趣偏好';
-}
-
-/// App 商用页面暴露的标签解析查询。
-final class ResolveTagQuery {
-  ResolveTagQuery({required String tagRef})
-    : tagRef = _requiredTagValue(tagRef, 'tagRef');
-
-  final String tagRef;
-}
-
-/// App 商用页面暴露的标签子节点查询。
-final class ListTagChildrenQuery {
-  ListTagChildrenQuery({
-    required String parentTagRef,
-    this.limit = TagApiDefaults.childrenLimit,
-  }) : parentTagRef = _requiredTagValue(parentTagRef, 'parentTagRef') {
-    if (limit <= 0) {
-      throw ArgumentError.value(limit, 'limit', 'must be positive');
-    }
-  }
-
-  final String parentTagRef;
-  final int limit;
-}
-
-/// App 商用页面暴露的批量标签校验查询。
-final class ValidateTagRefsQuery {
-  ValidateTagRefsQuery({
-    required String expectedTaxonomyReleaseId,
-    required Iterable<String> tagRefs,
-  }) : expectedTaxonomyReleaseId = _requiredTagValue(
-         expectedTaxonomyReleaseId,
-         'expectedTaxonomyReleaseId',
-       ),
-       tagRefs = List<String>.unmodifiable(
-         tagRefs.map((value) => _requiredTagValue(value, 'tagRefs')),
-       ) {
-    if (this.tagRefs.isEmpty) {
-      throw ArgumentError.value(this.tagRefs, 'tagRefs', 'must not be empty');
-    }
-  }
-
-  final String expectedTaxonomyReleaseId;
-  final List<String> tagRefs;
 }
 
 /// 标签直接子节点的强类型切片。
@@ -171,34 +128,6 @@ class TagValidationResult {
       );
 }
 
-CloudOperationRequestPayload encodeResolveTagQuery(ResolveTagQuery query) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{'tagRef': query.tagRef},
-  );
-}
-
-CloudOperationRequestPayload encodeListTagChildrenQuery(
-  ListTagChildrenQuery query,
-) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'parentTagRef': query.parentTagRef,
-      'limit': '${query.limit}',
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeValidateTagRefsQuery(
-  ValidateTagRefsQuery query,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      'expectedTaxonomyReleaseId': query.expectedTaxonomyReleaseId,
-      'tagRefs': query.tagRefs,
-    },
-  );
-}
-
 TagResolve decodeTagResolve(Object? response) {
   return TagResolve.fromJson(
     _tagObject(_unwrapTagPayload(response), 'TagResolve'),
@@ -287,12 +216,4 @@ List<String> _requiredResponseStringList(
       return item.trim();
     }),
   );
-}
-
-String _requiredTagValue(String value, String field) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, field, 'must not be empty');
-  }
-  return normalized;
 }

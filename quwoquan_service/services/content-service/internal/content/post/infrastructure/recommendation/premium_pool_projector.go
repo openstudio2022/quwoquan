@@ -172,7 +172,7 @@ func (w mongoPremiumPoolProjectionWriter) MarkPremiumProjectionTakedown(ctx cont
 			"eligibilityState":  "ineligible",
 			"ineligibleReasons": []string{"takedown_ejected"},
 			"takedownEjected":   true,
-			"projectionVersion": PremiumPoolProjectionVersion,
+			"projectionId":      PremiumPoolProjectionID,
 			"updatedAt":         now.UTC(),
 		}},
 	)

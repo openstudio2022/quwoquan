@@ -24,8 +24,8 @@ class _GreetingRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final peerId = box == _GreetingBox.received
-        ? request.requesterSubAccountId
-        : request.targetSubAccountId;
+        ? request.requesterPersonaId
+        : request.targetPersonaId;
     final message = request.requestMessage?.trim();
     return DecoratedBox(
       decoration: BoxDecoration(

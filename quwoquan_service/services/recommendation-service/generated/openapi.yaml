@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan recommendation API
-    version: v1
+    version: canonical
 paths:
     /internal/recommendation/model-releases:batch-score:
         post:

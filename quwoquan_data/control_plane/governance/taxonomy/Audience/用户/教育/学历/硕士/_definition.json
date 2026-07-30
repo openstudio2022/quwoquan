@@ -2,6 +2,7 @@
   "label": "硕士",
   "labelEn": "Master's Degree",
   "description": "硕士研究生学历",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

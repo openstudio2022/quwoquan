@@ -2,6 +2,7 @@ events:
 - name: MediaImageReprocessRunStarted
   producer: content-service
   consumers: []
+  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
   channel: fact_collection
   payload_entity: MediaImageReprocessRun
   payload_fields:
@@ -13,6 +14,7 @@ events:
 - name: MediaImageReprocessRunPaused
   producer: content-service
   consumers: []
+  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
   channel: fact_collection
   payload_entity: MediaImageReprocessRun
   payload_fields:
@@ -25,6 +27,7 @@ events:
 - name: MediaImageReprocessRunResumed
   producer: content-service
   consumers: []
+  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
   channel: fact_collection
   payload_entity: MediaImageReprocessRun
   payload_fields:
@@ -37,6 +40,7 @@ events:
 - name: MediaImageReprocessRunCompleted
   producer: content-service
   consumers: []
+  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
   channel: fact_collection
   payload_entity: MediaImageReprocessRun
   payload_fields:
@@ -48,6 +52,7 @@ events:
 - name: MediaImageReprocessRunRolledBack
   producer: content-service
   consumers: []
+  no_consumer_reason: run 事实即受控运维审计记录；worker 直接读取 aggregate，不经事件投递。
   channel: fact_collection
   payload_entity: MediaImageReprocessRun
   payload_fields:

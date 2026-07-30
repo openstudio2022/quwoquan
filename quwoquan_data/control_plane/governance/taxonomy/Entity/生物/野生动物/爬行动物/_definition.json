@@ -2,6 +2,7 @@
   "label": "爬行动物",
   "labelEn": "Reptile",
   "description": "爬行纲动物",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

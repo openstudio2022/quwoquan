@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan tag API
-    version: v1
+    version: canonical
 paths:
     /internal/tag/graph/cooccurrence:
         get:
@@ -16,6 +16,22 @@ paths:
                 method: getCooccurrence
                 reader: TagCooccurrenceReader
                 slice: TagCooccurrenceSlice
+            parameters:
+                - name: tagRef
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: minCount
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -43,6 +59,27 @@ paths:
                 method: findInvertedObjects
                 reader: TagInvertedObjectReader
                 slice: InvertedObjectsSlice
+            parameters:
+                - name: tagRef
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: objectType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: includeDescendants
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -70,6 +107,17 @@ paths:
                 method: listRelatedTags
                 reader: RelatedTagReader
                 slice: RelatedTagsSlice
+            parameters:
+                - name: tagRef
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -97,6 +145,22 @@ paths:
                 method: listRelatedObjects
                 reader: RelatedObjectReader
                 slice: RelatedObjectsSlice
+            parameters:
+                - name: objectId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: objectType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -164,6 +228,32 @@ paths:
                 method: findSharedTags
                 reader: ObjectTagIntersectionReader
                 slice: SharedTagsSlice
+            parameters:
+                - name: objectAId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: objectAType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: objectBId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: objectBType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -198,7 +288,7 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -274,6 +364,17 @@ paths:
                 method: listChildren
                 reader: TagHierarchyReader
                 slice: TagChildrenSlice
+            parameters:
+                - name: parentTagRef
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -341,7 +442,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/TagFeedbackRequest'
+                            $ref: '#/components/schemas/ReportTagFeedbackCommand'
             responses:
                 "200":
                     description: OK
@@ -369,6 +470,12 @@ paths:
                 method: resolve
                 reader: TagDefinitionReader
                 slice: TagDefinitionSlice
+            parameters:
+                - name: tagRef
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -397,6 +504,22 @@ paths:
                 method: search
                 reader: TagSearchReader
                 slice: TagSearchResultsSlice
+            parameters:
+                - name: q
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: group
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -425,6 +548,22 @@ paths:
                 method: suggest
                 reader: TagSuggestionReader
                 slice: TagSuggestionsSlice
+            parameters:
+                - name: q
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: group
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -465,7 +604,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/TagValidateRequest'
+                            $ref: '#/components/schemas/ValidateTagRefsQuery'
             responses:
                 "200":
                     description: OK
@@ -507,6 +646,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RelatedTagView
             x-contract-placeholder: true
+        ReportTagFeedbackCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ReportTagFeedbackCommand
+            x-contract-placeholder: true
         SearchByTagsRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -536,11 +680,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: TagDimensionView
-            x-contract-placeholder: true
-        TagFeedbackRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: TagFeedbackRequest
             x-contract-placeholder: true
         TagFeedbackResultView:
             type: object
@@ -572,13 +711,13 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: TagTaxonomyRelease
             x-contract-placeholder: true
-        TagValidateRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: TagValidateRequest
-            x-contract-placeholder: true
         TagValidationResultView:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: TagValidationResultView
+            x-contract-placeholder: true
+        ValidateTagRefsQuery:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ValidateTagRefsQuery
             x-contract-placeholder: true

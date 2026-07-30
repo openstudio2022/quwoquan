@@ -61,38 +61,6 @@ type AssistantUserTaskListView struct {
 	Items []AssistantUserTaskView `json:"items"`
 }
 
-type AssistantLearningOpsSummaryView struct {
-	UserID                string             `json:"userId"`
-	TotalFeedbackCount    int64              `json:"totalFeedbackCount"`
-	PositiveFeedbackCount int64              `json:"positiveFeedbackCount"`
-	NegativeFeedbackCount int64              `json:"negativeFeedbackCount"`
-	TextFeedbackCount     int64              `json:"textFeedbackCount"`
-	HighPriorityCount     int64              `json:"highPriorityCount"`
-	MediumPriorityCount   int64              `json:"mediumPriorityCount"`
-	LastFeedbackType      string             `json:"lastFeedbackType,omitempty"`
-	LastFeedbackScore     float64            `json:"lastFeedbackScore,omitempty"`
-	LastFeedbackAt        string             `json:"lastFeedbackAt,omitempty"`
-	LastMetricID          string             `json:"lastMetricId,omitempty"`
-	LastMetricScore       float64            `json:"lastMetricScore,omitempty"`
-	TopReasonCodes        []string           `json:"topReasonCodes,omitempty"`
-	MetricAverages        map[string]float64 `json:"metricAverages,omitempty"`
-	LatestMetricScores    map[string]float64 `json:"latestMetricScores,omitempty"`
-	UpdatedAt             string             `json:"updatedAt,omitempty"`
-}
-
-type AssistantSkillCatalogItemView struct {
-	SkillID         string `json:"skillId"`
-	DisplayName     string `json:"displayName"`
-	Description     string `json:"description,omitempty"`
-	Category        string `json:"category,omitempty"`
-	RequiresConsent bool   `json:"requiresConsent"`
-	IconHint        string `json:"iconHint,omitempty"`
-}
-
-type AssistantSkillCatalogListView struct {
-	Items []AssistantSkillCatalogItemView `json:"items"`
-}
-
 type AssistantSuggestedHomepageView struct {
 	ID                string `json:"id"`
 	Type              string `json:"type"`
@@ -157,7 +125,7 @@ type PageContextInput struct {
 type SearchRequest struct {
 	UserQuery             string                    `json:"userQuery"`
 	SearchIntensity       string                    `json:"searchIntensity,omitempty"`
-	SubAccountID          string                    `json:"subAccountId,omitempty"`
+	PersonaID             string                    `json:"personaId,omitempty"`
 	PersonaContextVersion string                    `json:"personaContextVersion,omitempty"`
 	SourceSurfaceID       string                    `json:"sourceSurfaceId,omitempty"`
 	FromGlobalSearch      bool                      `json:"fromGlobalSearch,omitempty"`

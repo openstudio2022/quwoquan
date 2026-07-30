@@ -1,7 +1,8 @@
 {
   "label": "食品饮料",
   "labelEn": "Food & Beverage",
-  "description": "食品饮料类商品",
+  "description": "食品饮料商品",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

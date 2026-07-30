@@ -1,0 +1,46 @@
+domain: gateway
+aggregate: RateLimitBucket
+description: 统一入口共享限流的 canonical HTTP 错误；gateway surface 对全部 generated operation 生效。
+errors:
+- code: GATEWAY.USER.rate_limited
+  kind: USER
+  reason: rate_limited
+  http_status: 429
+  emitted_by:
+  - {surface: gateway}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  recovery: {action: retry, disruptionLevel: snackbar, afterSeconds: 1}
+  dart_const: rateLimited
+  go_const: ErrRateLimited
+  user_message:
+    zh: 操作太频繁，请稍后重试
+    en: Too many requests, please wait
+- code: GATEWAY.MIDDLEWARE.rate_limit_state_unavailable
+  kind: MIDDLEWARE
+  reason: rate_limit_state_unavailable
+  http_status: 503
+  emitted_by:
+  - {surface: gateway}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  recovery: {action: retry, disruptionLevel: snackbar, afterSeconds: 1}
+  dart_const: rateLimitStateUnavailable
+  go_const: ErrRateLimitStateUnavailable
+  user_message:
+    zh: 请求保护暂不可用，请稍后重试
+    en: Request admission is temporarily unavailable
+- code: GATEWAY.MIDDLEWARE.upstream_unavailable
+  kind: MIDDLEWARE
+  reason: upstream_unavailable
+  http_status: 503
+  emitted_by:
+  - {surface: gateway}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  recovery: {action: retry, disruptionLevel: snackbar, afterSeconds: 1}
+  dart_const: upstreamUnavailable
+  go_const: ErrUpstreamUnavailable
+  user_message:
+    zh: 服务暂不可用，请稍后重试
+    en: Service is temporarily unavailable

@@ -18,7 +18,6 @@ from typing import Any, Mapping
 
 
 READBACK_SCHEMA = "b10-remote-uat-readback"
-READBACK_VERSION = 1
 SENSITIVE_VALUE_RE = re.compile(
     r"(?:endpoint|secret|credential|token|password|https?://)",
     re.IGNORECASE,
@@ -113,11 +112,17 @@ def _validate_device_evidence(value: object) -> None:
     observed_hashes: set[str] = set()
     platforms: set[str] = set()
     directions: set[str] = set()
+    expected_application_digests = {
+        "ios": _required_env("QWQ_B10_IOS_APPLICATION_DIGEST"),
+        "android": _required_env("QWQ_B10_ANDROID_APPLICATION_DIGEST"),
+    }
+    if not all(SHA256_RE.fullmatch(value) for value in expected_application_digests.values()):
+        raise ValueError("B10 application identities must be immutable sha256 digests")
     for item in value:
         if not isinstance(item, Mapping) or set(item) != {
             "platform",
             "deviceHash",
-            "appVersion",
+            "applicationDigest",
             "caseDirection",
         }:
             raise ValueError("deviceEvidence items have an invalid shape")
@@ -127,8 +132,10 @@ def _validate_device_evidence(value: object) -> None:
             raise ValueError("deviceEvidence must identify iOS and Android with hashes only")
         if not SHA256_RE.fullmatch(device_hash):
             raise ValueError("deviceEvidence.deviceHash must be a sha256 digest")
-        if not isinstance(item.get("appVersion"), str) or not item["appVersion"]:
-            raise ValueError("deviceEvidence.appVersion is required")
+        if item.get("applicationDigest") != expected_application_digests[platform]:
+            raise ValueError(
+                "deviceEvidence.applicationDigest must bind the exact platform package"
+            )
         if item.get("caseDirection") not in {
             "ios_to_android",
             "android_to_ios",
@@ -174,7 +181,6 @@ def _validate_readback(
 ) -> tuple[list[dict[str, Any]], str, str, dict[str, list[str]], dict[str, str]]:
     required = {
         "schema",
-        "version",
         "status",
         "capabilityId",
         "adapterId",
@@ -200,7 +206,6 @@ def _validate_readback(
         raise ValueError("native-device patrol readback has missing or unsupported fields")
     if (
         payload.get("schema") != READBACK_SCHEMA
-        or payload.get("version") != READBACK_VERSION
         or payload.get("status") != "passed"
         or payload.get("capabilityId") != capability_id
         or payload.get("adapterId") != adapter_id
@@ -504,7 +509,6 @@ def run(capability_id: str, adapter_id: str) -> int:
     )
     case_result = {
         "schema": "provider-conformance-case-results",
-        "version": 1,
         "status": "passed",
         "adapterId": adapter_id,
         "capabilityId": capability_id,

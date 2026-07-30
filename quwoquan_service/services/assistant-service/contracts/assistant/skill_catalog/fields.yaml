@@ -1,0 +1,167 @@
+description: SkillCatalog 私有目录项与 ListSkills 响应类型。
+fields:
+- name: skillId
+  source: skillId
+  type: string
+  constraints:
+  - PK
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: displayName
+  source: displayName
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: description
+  source: description
+  type: string
+  constraints:
+  - NULLABLE
+  classification: SENSITIVE
+  log_policy: deny
+  api_exposure: read
+  ops_exposure: none
+  role: projection
+- name: category
+  source: category
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: requiresConsent
+  source: requiresConsent
+  type: bool
+  constraints:
+  - NOT_NULL
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: iconHint
+  source: iconHint
+  type: string
+  constraints:
+  - NULLABLE
+  classification: PUBLIC
+  log_policy: allow
+  api_exposure: read
+  ops_exposure: read
+  role: projection
+- name: accountId
+  source: accountId
+  type: string
+  constraints:
+  - NOT_NULL
+  classification: SENSITIVE
+  log_policy: deny
+  api_exposure: drop
+  ops_exposure: none
+  role: projection
+  reference: true
+types:
+  ListSkillsQuery:
+    description: ListSkills 的 query 与可信 transport 注入参数。
+    fields:
+    - name: limit
+      source: limit
+      type: int
+      constraints:
+      - NULLABLE
+      - POSITIVE
+      - MAX_100
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: accountId
+      source: accountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: drop
+      ops_exposure: none
+  AssistantSkillCatalogItemView:
+    description: 技能目录项；description 可包含当前账号已授权 scope，故响应整体为 SENSITIVE。
+    fields:
+    - name: skillId
+      source: skillId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: displayName
+      source: displayName
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: description
+      source: description
+      type: string
+      constraints:
+      - NULLABLE
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none
+    - name: category
+      source: category
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: requiresConsent
+      source: requiresConsent
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: iconHint
+      source: iconHint
+      type: string
+      constraints:
+      - NULLABLE
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  AssistantSkillCatalogListView:
+    description: ListSkills 私有响应体。
+    fields:
+    - name: items
+      source: items
+      type: '[]AssistantSkillCatalogItemView'
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: deny
+      api_exposure: read
+      ops_exposure: none

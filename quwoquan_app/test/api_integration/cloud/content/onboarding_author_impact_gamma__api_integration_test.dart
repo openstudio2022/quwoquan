@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/remote/content/post/author_impact_remote.dart';
+import 'package:quwoquan_app/cloud/remote/tag/tag_catalog_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
@@ -47,27 +48,31 @@ void main() {
           'gamma-onboarding-${DateTime.now().microsecondsSinceEpoch}';
       const tagRefs = <String>['Topic/旅行/创作者类型/旅行博主'];
 
+      // 发布身份取自云侧目录本身，和页面同源。写死 release 号会让这条用例
+      // 在下一次 tag 发布后失败，也会掩盖端侧固化常量的回归。
+      final taxonomyReleaseID = await _activeTaxonomyReleaseId(
+        httpClient,
+        parentTagRef: 'Topic/旅行/创作者类型',
+      );
+
       // Same clientEventId must be safe to replay. Server-side local Gamma
       // owns the durable de-duplication; this adapter must not queue or claim
       // success before it receives the confirmed response.
       await repository.submitOnboardingInterest(
         clientEventId: eventID,
-        catalogVersion: 'v1',
-        taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+        taxonomyReleaseId: taxonomyReleaseID,
         tagRefs: tagRefs,
       );
       await repository.submitOnboardingInterest(
         clientEventId: eventID,
-        catalogVersion: 'v1',
-        taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+        taxonomyReleaseId: taxonomyReleaseID,
         tagRefs: tagRefs,
       );
 
       await expectLater(
         repository.submitOnboardingInterest(
           clientEventId: '$eventID-invalid',
-          catalogVersion: 'v1',
-          taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+          taxonomyReleaseId: taxonomyReleaseID,
           tagRefs: const <String>['Topic/旅行'],
         ),
         throwsA(
@@ -124,7 +129,7 @@ void main() {
       expect(item.evidenceSnapshotId, item.impactId);
 
       final evidence = await query.listAuthorImpactEvidence(
-        subAccountId: _personaID,
+        personaId: _personaID,
         impactId: item.impactId,
         evidenceSnapshotId: item.evidenceSnapshotId,
       );
@@ -148,6 +153,43 @@ void _requireGammaRuntimeInputs() {
       'is issued from the local environment signer.',
     );
   }
+}
+
+Future<String> _activeTaxonomyReleaseId(
+  CloudHttpClient httpClient, {
+  required String parentTagRef,
+}) async {
+  final catalog = RemoteGeneratedTagCatalogQuery(
+    client: buildGeneratedCloudOperationClient(
+      httpClient: httpClient,
+      clientContextProvider: const _GammaClientContext(),
+      telemetrySink: _RecordingTelemetry(),
+      environment: CloudRuntimeEnvironment(
+        environment: CloudEnvironment.gamma,
+        gatewayBaseUri: Uri.parse(_gatewayURL),
+      ),
+    ),
+    invocationContext: (pageID) => CloudOperationInvocationContext(
+      surfaceId: AppUiSurfaces.interestOnboarding.id,
+      routeId: AppUiSurfaces.interestOnboarding.routeId,
+      clientPageId: pageID,
+      actor: CloudOperationActorContext(
+        personaId: _personaID,
+        deviceActorId: 'gamma-uat-device',
+      ),
+    ),
+  );
+  final children = await catalog.listChildren(parentTagRef);
+  final releaseIds = children
+      .map((child) => child.releaseId.trim())
+      .where((releaseId) => releaseId.isNotEmpty)
+      .toSet();
+  expect(
+    releaseIds,
+    hasLength(1),
+    reason: 'catalog children must expose exactly one active taxonomy release',
+  );
+  return releaseIds.single;
 }
 
 CloudHttpClient _newCloudHttpClient() {

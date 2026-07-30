@@ -8,7 +8,7 @@ description: '当前身份关注对象的统一读模型。它聚合用户关注
   '
 identity:
   fields:
-  - viewerSubAccountId
+  - viewerPersonaId
   - subjectType
   - subjectId
   version_source: checkpoint

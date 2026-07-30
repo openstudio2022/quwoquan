@@ -2,6 +2,7 @@
   "label": "面食",
   "labelEn": "Noodles",
   "description": "面条饺子馄饨等面食类",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

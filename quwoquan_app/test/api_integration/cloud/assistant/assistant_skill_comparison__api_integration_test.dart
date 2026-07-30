@@ -315,7 +315,7 @@ String _toolNameForEvent(Map<String, dynamic> payload) {
 bool _looksLikeSkillSelection(Map<String, dynamic> payload) {
   final raw = payload['process'];
   return raw is Map &&
-      raw['stage'] == 'skill_selection' &&
+      raw['stage'] == 'classifying' &&
       raw.containsKey('skillId') &&
       raw.containsKey('domainId');
 }

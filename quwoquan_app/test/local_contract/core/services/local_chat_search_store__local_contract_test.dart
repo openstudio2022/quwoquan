@@ -27,7 +27,7 @@ void main() {
       );
       namespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          subAccountId: 'user_001',
+          personaId: 'user_001',
           ownerUserId: 'user_001',
           subjectType: 'owner',
           displayName: '测试用户',
@@ -37,10 +37,10 @@ void main() {
       );
       subNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          subAccountId: 'sub_001',
+          personaId: 'sub_001',
           ownerUserId: 'user_001',
-          subjectType: 'sub_account',
-          displayName: '子账号',
+          subjectType: 'persona',
+          displayName: 'Persona',
           avatarUrl: '',
           contextVersion: 2,
         ),
@@ -106,6 +106,7 @@ void main() {
         contacts: const <LocalChatSearchContactRecord>[
           LocalChatSearchContactRecord(
             contactId: 'u_owner_1',
+            userHandle: 'owner_friend',
             displayName: '王芳',
             subtitle: '主账号联系人',
           ),
@@ -116,16 +117,19 @@ void main() {
         contacts: const <LocalChatSearchContactRecord>[
           LocalChatSearchContactRecord(
             contactId: 'u_sub_1',
+            userHandle: 'persona_friend',
             displayName: '李雷',
-            subtitle: '子账号联系人',
+            subtitle: 'Persona联系人',
           ),
         ],
       );
 
-      expect(
-        await store.searchContacts(namespace: namespace, query: '王'),
-        hasLength(1),
+      final ownerContacts = await store.searchContacts(
+        namespace: namespace,
+        query: '王',
       );
+      expect(ownerContacts, hasLength(1));
+      expect(ownerContacts.single.userHandle, 'owner_friend');
       expect(
         await store.searchContacts(namespace: subNamespace, query: '王'),
         isEmpty,

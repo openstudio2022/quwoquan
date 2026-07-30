@@ -10,18 +10,32 @@ import (
 
 	rtfailures "quwoquan_service/runtime/failures"
 	"quwoquan_service/runtime/streaming"
-	app "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	app "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
+	assistantstreaming "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/streaming"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 type Runner struct {
-	Now func() time.Time
+	Now          func() time.Time
+	PromptAssets ports.PromptAssetResolver
 }
 
 type Transcript struct {
-	CaseID  string               `json:"caseId"`
-	Events  []streaming.Envelope `json:"events"`
-	Failure *rtfailures.Failure  `json:"runtimeFailure,omitempty"`
+	CaseID               string               `json:"caseId"`
+	SelectedSkillID      string               `json:"selectedSkillId,omitempty"`
+	SelectedDomainID     string               `json:"selectedDomainId,omitempty"`
+	ToolCalls            []ReplayToolCall     `json:"toolCalls"`
+	ClarificationSlotIDs []string             `json:"clarificationSlotIds"`
+	ReferenceURLs        []string             `json:"referenceUrls"`
+	FinalAnswerMode      string               `json:"finalAnswerMode,omitempty"`
+	Events               []streaming.Envelope `json:"events"`
+	Failure              *rtfailures.Failure  `json:"runtimeFailure,omitempty"`
+}
+
+type ReplayToolCall struct {
+	ToolName string         `json:"toolName"`
+	Input    map[string]any `json:"input,omitempty"`
 }
 
 func LoadCase(path string) (assistant.ReplayCase, error) {
@@ -38,50 +52,123 @@ func LoadCase(path string) (assistant.ReplayCase, error) {
 
 func (r Runner) Run(ctx context.Context, replay assistant.ReplayCase) (Transcript, error) {
 	now := r.now()
+	skillID, domainID := replaySkillIdentity(replay)
 	turn := assistant.AssistantTurn{
 		TurnID:         replay.Request.TurnID,
 		ConversationID: replay.Request.ConversationID,
 		UserID:         replay.Request.UserID,
 		TurnType:       "replay",
 		Status:         "running",
-		SkillID:        "general_qa",
-		DomainID:       "assistant",
+		SkillID:        skillID,
+		DomainID:       domainID,
 		Input:          assistant.AssistantTurnInput{Text: replay.Request.InputText},
 		Trigger:        assistant.AssistantTurnTrigger{Type: "replay"},
 		TraceID:        "trace_" + replay.ReplayCaseID,
-		CreatedAt:      now,
+		RequestContext: assistant.AssistantRunRequestContext{
+			SurfaceID: stringValue(replay.Request.ClientContext, "surfaceId", "assistant.personal"),
+			PersonaID: replay.Request.UserID,
+		},
+		CreatedAt: now,
 		FrozenPolicySelection: assistant.AssistantFrozenPolicySelection{
 			PolicyID:        "assistant-replay",
-			ReleaseVersion:  "replay-v1",
+			ReleaseDigest:   "ac203c9843b5bd8c883e07039ff82820c94422010be6108bb82403ca25376a22",
 			Cohort:          "replay",
 			RolloutRevision: 1,
 			RuleID:          "replay",
 			Template: assistant.AssistantFrozenPolicyTemplate{
 				TemplateID:      "replay",
-				SkillID:         "general_qa",
-				DomainID:        "assistant",
-				PromptPolicy:    "m6.replay",
+				SkillID:         skillID,
+				DomainID:        domainID,
+				PromptPolicy:    "replay",
 				AllowedTools:    replayToolPolicy(replay.FakeToolScript),
-				SearchIntensity: "balanced",
+				SearchIntensity: "medium",
 			},
 		},
+	}
+	toolExecutor := &scriptedToolExecutor{
+		now:   r.now,
+		steps: replay.FakeToolScript,
 	}
 	loop := app.NewAgentLoop(
 		nil,
 		app.ReactRuntime{
 			Model: scriptedModelProvider{steps: replay.FakeModelScript},
-			Tools: scriptedToolExecutor{
-				now:   r.now,
-				steps: replay.FakeToolScript,
-			},
+			Tools: toolExecutor,
 		},
 		r.now,
 	)
+	loop.PromptAssets = r.PromptAssets
 	events, failure, err := loop.RunTurn(ctx, turn)
 	if err != nil {
 		return Transcript{}, err
 	}
-	return Transcript{CaseID: replay.ReplayCaseID, Events: events, Failure: failure}, nil
+	transcript := projectTranscript(replay.ReplayCaseID, events, toolExecutor.calls)
+	transcript.Failure = failure
+	return transcript, nil
+}
+
+func replaySkillIdentity(replay assistant.ReplayCase) (string, string) {
+	skillID := strings.TrimSpace(replay.Expectations.SelectedSkillID)
+	if skillID == "" {
+		skillID = strings.TrimSpace(replay.ExpectedRunResponse.Observability.SkillID)
+	}
+	if skillID == "" {
+		skillID = "general_qa"
+	}
+	domainID := strings.TrimSpace(replay.Expectations.SelectedDomainID)
+	if domainID == "" {
+		domainID = strings.TrimSpace(replay.ExpectedRunResponse.Observability.DomainID)
+	}
+	if domainID == "" {
+		domainID = "assistant"
+	}
+	return skillID, domainID
+}
+
+func projectTranscript(
+	caseID string,
+	events []streaming.Envelope,
+	toolCalls []ReplayToolCall,
+) Transcript {
+	transcript := Transcript{
+		CaseID:               caseID,
+		ToolCalls:            append([]ReplayToolCall(nil), toolCalls...),
+		ClarificationSlotIDs: []string{},
+		ReferenceURLs:        []string{},
+		Events:               events,
+	}
+	referenceURLs := map[string]bool{}
+	for _, event := range events {
+		if process, ok := event.Payload["process"].(assistant.AssistantRunVisibleProcess); ok {
+			if process.Stage == "classifying" && process.Status == "completed" {
+				transcript.SelectedSkillID = strings.TrimSpace(process.SkillID)
+				transcript.SelectedDomainID = strings.TrimSpace(process.DomainID)
+			}
+			for _, reference := range process.AcceptedReferences {
+				url := strings.TrimSpace(reference.Destination.URL)
+				if url != "" && !referenceURLs[url] {
+					referenceURLs[url] = true
+					transcript.ReferenceURLs = append(transcript.ReferenceURLs, url)
+				}
+			}
+		}
+		if event.EventType != string(assistantstreaming.AssistantStreamEventCompleted) {
+			continue
+		}
+		transcript.FinalAnswerMode = strings.TrimSpace(
+			stringValue(event.Payload, "finalAnswerMode", ""),
+		)
+		if askUser, ok := event.Payload["askUser"].(map[string]any); ok {
+			slotID := strings.TrimSpace(stringValue(askUser, "slotId", ""))
+			if slotID != "" {
+				transcript.ClarificationSlotIDs = append(
+					transcript.ClarificationSlotIDs,
+					slotID,
+				)
+			}
+		}
+	}
+	return transcript
 }
 
 func (r Runner) now() time.Time {
@@ -133,9 +220,10 @@ func replayToolPolicy(steps []assistant.ReplayToolStep) []string {
 type scriptedToolExecutor struct {
 	now   func() time.Time
 	steps []assistant.ReplayToolStep
+	calls []ReplayToolCall
 }
 
-func (e scriptedToolExecutor) Execute(_ context.Context, req app.ToolRequest) (app.ToolExecution, error) {
+func (e *scriptedToolExecutor) Execute(_ context.Context, req app.ToolRequest) (app.ToolExecution, error) {
 	now := time.Now().UTC()
 	if e.now != nil {
 		now = e.now().UTC()
@@ -146,6 +234,10 @@ func (e scriptedToolExecutor) Execute(_ context.Context, req app.ToolRequest) (a
 			"query": req.Turn.Input.Text,
 		}
 	}
+	e.calls = append(e.calls, ReplayToolCall{
+		ToolName: strings.TrimSpace(req.ToolName),
+		Input:    copyMap(input),
+	})
 	requested := assistant.ToolUse{
 		ToolUseID: "tu_" + strings.ReplaceAll(req.Turn.TurnID, "atn_", ""),
 		TurnID:    req.Turn.TurnID,
@@ -189,4 +281,15 @@ func stringValue(values map[string]any, key string, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func copyMap(source map[string]any) map[string]any {
+	if source == nil {
+		return nil
+	}
+	copied := make(map[string]any, len(source))
+	for key, value := range source {
+		copied[key] = value
+	}
+	return copied
 }

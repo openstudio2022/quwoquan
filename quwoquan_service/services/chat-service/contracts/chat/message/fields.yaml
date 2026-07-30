@@ -1,308 +1,469 @@
 description: 消息（使用 seq + clientMsgId 保证顺序与幂等）
 fields:
-- name: _id
-  source: _id
-  type: ObjectId
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: conversationId
-  source: conversationId
-  type: ObjectId
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: seq
-  source: seq
-  type: int64
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: per-conversation 单调递增序号（Message Mongo transaction 内分配）
-  role: authoritative_state
-- name: clientMsgId
-  source: clientMsgId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: 客户端生成的 UUID，用于幂等去重
-  role: authoritative_state
-- name: senderId
-  source: senderId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 发送者稳定公开主体 ID（subAccountId）
-  role: authoritative_state
-  reference: true
-- name: senderDisplayNameSnapshot
-  source: senderDisplayNameSnapshot
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 发送者显示名快照
-  role: authoritative_state
-- name: senderAvatarUrlSnapshot
-  source: senderAvatarUrlSnapshot
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 发送者头像快照
-  role: authoritative_state
-- name: personaContextVersion
-  source: personaContextVersion
-  type: int
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  description: 发送消息时绑定的 subAccount 上下文版本
-  role: authoritative_state
-- name: type
-  source: type
-  type: enum
-  enum_ref: MessageType
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: content
-  source: content
-  type: string
-  constraints:
-  - NULLABLE
-  classification: SENSITIVE
-  log_policy: mask
-  api_exposure: read
-  ops_exposure: mask
-  search_field: true
-  role: authoritative_state
-- name: mediaAssetId
-  source: mediaAssetId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read_write
-  ops_exposure: read
-  description: 'audio/image/video/file 消息必须引用发送者自己已 ready 的 MediaAsset。
+  - name: _id
+    source: _id
+    type: ObjectId
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: conversationId
+    source: conversationId
+    type: ObjectId
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: seq
+    source: seq
+    type: int64
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: per-conversation 单调递增序号（Message Mongo transaction 内分配）
+    role: authoritative_state
+  - name: clientMsgId
+    source: clientMsgId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 客户端生成的 UUID，用于幂等去重
+    role: authoritative_state
+  - name: senderId
+    source: senderId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发送者稳定公开主体 ID（personaId）
+    role: authoritative_state
+    reference: true
+  - name: senderDisplayNameSnapshot
+    source: senderDisplayNameSnapshot
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发送者显示名快照
+    role: authoritative_state
+  - name: senderAvatarUrlSnapshot
+    source: senderAvatarUrlSnapshot
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发送者头像快照
+    role: authoritative_state
+  - name: personaContextVersion
+    source: personaContextVersion
+    type: int
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 发送消息时绑定的 persona 上下文版本
+    role: authoritative_state
+  - name: type
+    source: type
+    type: enum
+    enum_ref: MessageType
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: content
+    source: content
+    type: string
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: mask
+    search_field: true
+    role: authoritative_state
+  - name: mediaAssetId
+    source: mediaAssetId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read_write
+    ops_exposure: read
+    description: 'audio/image/video/file 消息必须引用发送者自己已 ready 的 MediaAsset。
 
-    Message 聚合只保存该稳定引用；URL、mime、size 等交付字段由 MediaAsset
+      Message 聚合只保存该稳定引用；URL、mime、size 等交付字段由 MediaAsset
 
-    named Reader 产生的 ChatMessageClient projection 提供。
+      named Reader 产生的 ChatMessageClient projection 提供。
 
-    '
-  role: authoritative_state
-  reference: true
-- name: card
-  source: card
-  type: object
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: Message 聚合拥有的强类型卡片值对象；只允许 card 类型消息携带。
-  role: owned_value
-- name: replyToMessageId
-  source: replyToMessageId
-  type: ObjectId
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: mentions
-  source: mentions
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  - MAX_ITEMS_50
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: '群消息提及的稳定成员 userId；`assistant` 仅在助手已入群时合法，
+'
+    role: authoritative_state
+    reference: true
+  - name: card
+    source: card
+    type: MessageCard
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: Message 聚合拥有的强类型卡片值对象；只允许 card 类型消息携带。
+    role: owned_value
+  - name: replyToMessageId
+    source: replyToMessageId
+    type: ObjectId
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: mentions
+    source: mentions
+    type: '[]string'
+    constraints:
+      - NULLABLE
+      - MAX_ITEMS_50
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: '群消息提及的稳定成员 userId；`assistant` 仅在助手已入群时合法，
 
-    `__all__` 仅 owner/admin 可用。服务端去空去重并验证目标为当前活跃成员，
+      `__all__` 仅 owner/admin 可用。服务端去空去重并验证目标为当前活跃成员，
 
-    禁止客户端仅凭正文中的 `@显示名` 产生提醒。
+      禁止客户端仅凭正文中的 `@显示名` 产生提醒。
 
-    '
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: MessageStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: recalledAt
-  source: recalledAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: timestamp
-  source: timestamp
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-types:
+'
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: MessageStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: recalledAt
+    source: recalledAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: timestamp
+    source: timestamp
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+value_objects:
   MessageCard:
     description: Message 聚合内的卡片值对象；不提供独立 Store、Facade 或跨上下文访问。
     fields:
-    - name: kind
-      source: kind
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: title
-      source: title
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: subtitle
-      source: subtitle
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: thumbnailUrl
-      source: thumbnailUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: deeplink
-      source: deeplink
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: landingUrl
-      source: landingUrl
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: shareText
-      source: shareText
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: message
-      source: message
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
-    - name: attributes
-      source: attributes
-      type: embedded_list
-      item_entity: MessageCardAttribute
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
+      - name: kind
+        source: kind
+        type: enum
+        enum_ref: MessageCardKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: title
+        source: title
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: subtitle
+        source: subtitle
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: thumbnailUrl
+        source: thumbnailUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: deeplink
+        source: deeplink
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: landingUrl
+        source: landingUrl
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: shareText
+        source: shareText
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: message
+        source: message
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: attributes
+        source: attributes
+        type: '[]MessageCardAttribute'
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
   MessageCardAttribute:
     description: 卡片的有界强类型属性；同名属性在一个卡片内唯一。
     fields:
-    - name: name
-      source: name
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: value
-      source: value
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
+      - name: name
+        source: name
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: value
+        source: value
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+types:
+  ChatSendAssistantDeliveryMessageCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: creatorPersonaId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: assistantSkillId
+        type: string
+        constraints:
+          - NULLABLE
+      - name: type
+        type: enum
+        enum_ref: MessageType
+        constraints:
+          - NOT_NULL
+      - name: content
+        type: string
+        constraints:
+          - NOT_NULL
+      - name: clientMsgId
+        type: string
+        constraints:
+          - NOT_BLANK
+  ChatSendMessageCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: type
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: content
+        type: string
+        client_dart_type: String
+      - name: clientMsgId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: mediaAssetId
+        type: string
+        constraints:
+          - NULLABLE
+          - REQUIRED_WHEN_type_image
+          - REQUIRED_WHEN_type_video
+          - REQUIRED_WHEN_type_audio
+          - REQUIRED_WHEN_type_file
+          - FORBIDDEN_WHEN_type_text
+          - FORBIDDEN_WHEN_type_card
+          - FORBIDDEN_WHEN_type_system_call_log
+          - FORBIDDEN_WHEN_type_system_announcement
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: card
+        type: object
+        constraints:
+          - NULLABLE
+          - REQUIRED_WHEN_type_card
+          - FORBIDDEN_UNLESS_type_card
+        client_dart_type: ChatMessageCardCommand?
+        client_wire: toMap
+      - name: replyToMessageId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: mentions
+        type: '[]string'
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim
+        client_omit_empty: true
+      - name: senderDisplayNameSnapshot
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: senderAvatarUrlSnapshot
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: personaContextVersion
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+  ChatListMessagesQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: afterSeq
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+      - name: beforeSeq
+        type: int
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  ChatRecallMessageCommand:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: idempotencyKey
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        client_wire_name: Idempotency-Key
+      - name: messageId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  ChatSyncMessagesQuery:
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: lastSeq
+        type: int
+        client_dart_type: int
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "500"

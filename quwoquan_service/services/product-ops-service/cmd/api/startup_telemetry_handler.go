@@ -3,24 +3,20 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 	productopsgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
+	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
 const (
-	startupTelemetryProofHeader  = "X-Qwq-Startup-Proof"
-	startupTelemetryMaxBatch     = 32
-	startupTelemetryMaxPerMinute = 120
-	startupTelemetryMaxRateKeys  = 2048
+	startupTelemetryProofHeader = "X-Qwq-Startup-Proof"
+	startupTelemetryMaxBatch    = 32
 )
 
 var (
@@ -29,7 +25,6 @@ var (
 	startupTelemetryAppVersionPattern = regexp.MustCompile(
 		`^v?[0-9]+(?:\.[0-9]+){1,3}(?:[-.][A-Za-z0-9]+)*$`,
 	)
-	startupTelemetryLimiter = newStartupTelemetryLimiter()
 )
 
 var allowedStartupTelemetryPhases = map[string]struct{}{
@@ -158,49 +153,6 @@ type startupTelemetryEventInput struct {
 	DeadlineOrigin  string `json:"deadlineOrigin,omitempty"`
 }
 
-type startupTelemetryRateWindow struct {
-	StartedAt time.Time
-	Count     int
-}
-
-type startupTelemetryRateLimiter struct {
-	mu      sync.Mutex
-	windows map[string]startupTelemetryRateWindow
-}
-
-func newStartupTelemetryLimiter() *startupTelemetryRateLimiter {
-	return &startupTelemetryRateLimiter{windows: map[string]startupTelemetryRateWindow{}}
-}
-
-func (l *startupTelemetryRateLimiter) allow(key string, count int, now time.Time) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	window, exists := l.windows[key]
-	if !exists && len(l.windows) >= startupTelemetryMaxRateKeys {
-		for existingKey, existingWindow := range l.windows {
-			if now.Sub(existingWindow.StartedAt) >= time.Minute {
-				delete(l.windows, existingKey)
-			}
-		}
-		if len(l.windows) >= startupTelemetryMaxRateKeys {
-			for existingKey := range l.windows {
-				delete(l.windows, existingKey)
-				break
-			}
-		}
-	}
-	if window.StartedAt.IsZero() || now.Sub(window.StartedAt) >= time.Minute {
-		window = startupTelemetryRateWindow{StartedAt: now}
-	}
-	if window.Count+count > startupTelemetryMaxPerMinute {
-		l.windows[key] = window
-		return false
-	}
-	window.Count += count
-	l.windows[key] = window
-	return true
-}
-
 func (s *productService) handleReportStartupEventBatch(w http.ResponseWriter, r *http.Request) {
 	var body startupTelemetryBatchRequest
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 128<<10))
@@ -223,11 +175,6 @@ func (s *productService) handleReportStartupEventBatch(w http.ResponseWriter, r 
 		writeStartupTelemetryInvalid(w, r, "event batch size is invalid")
 		return
 	}
-	if !startupTelemetryLimiter.allow(startupTelemetryRateLimitKey(r, proof), len(body.Events), time.Now()) {
-		writeStartupTelemetryUnavailable(w, r, "startup telemetry rate limit exceeded")
-		return
-	}
-
 	records := make([]application.StartupDiagnosticRecord, 0, len(body.Events))
 	byID := make(map[string]startupTelemetryEventInput, len(body.Events))
 	for _, event := range body.Events {
@@ -274,16 +221,6 @@ func writeStartupTelemetryUnavailable(w http.ResponseWriter, r *http.Request, de
 
 func writeStartupTelemetryError(w http.ResponseWriter, r *http.Request, appError *rterr.AppError) {
 	rterr.WriteHTTPError(w, appError, rterr.HTTPWriteOptionsFromRequest(r))
-}
-
-func startupTelemetryRateLimitKey(r *http.Request, _ string) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err != nil || host == "" {
-		host = strings.TrimSpace(r.RemoteAddr)
-	}
-	// proof 可关联匿名启动尝试，但不是服务端签发的认证凭据；若将它拼进限流键，
-	// 同一来源可以不断更换 proof 绕过保护。因此匿名入口至少按来源 IP 收敛。
-	return host
 }
 
 func (event startupTelemetryEventInput) validate() error {

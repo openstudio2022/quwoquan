@@ -20,6 +20,7 @@ from content.post.video import (
     validate_video_work_package,
 )
 from governance.coverage.license import RightsAuditStatus
+from governance.creators.assignment import creator_profile_digest
 from content.execution.runtime_state import write_execution_runtime_state
 from content.post.gate import gate_post
 from content.post.materialize_apply import materialize_posts
@@ -31,12 +32,17 @@ from content.post.video.authoring import (
     video_script_path,
 )
 from content.post.video.codec import VideoSourceFrameEvidence
+from content.templates.registry import TemplateRegistry
 from content.source.media.check import check_images
 from core.io import read_json, write_json
 from core.paths import execution_root
 from support.execution_manifest_fixture import (
     ExecutionFixtureBuilder,
     build_execution_fixture,
+)
+
+LANDSCAPE_CREATOR_PROFILE_DIGEST = creator_profile_digest(
+    TemplateRegistry.load().creators["qwq_creator_landscape_photographer_001"]
 )
 
 
@@ -371,7 +377,7 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
         "authorId": "builtin_travel_landscape_photographer",
         "creatorProfileId": "qwq_creator_landscape_photographer_001",
         "creatorArchetype": "landscape_photographer",
-        "creatorProfileVersion": "1.0.0",
+        "creatorProfileDigest": LANDSCAPE_CREATOR_PROFILE_DIGEST,
         "creatorDisclosure": {
             "type": "platform_virtual_creator",
             "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
@@ -421,6 +427,7 @@ def test_video_execution_reaches_review_materialization_and_post_gate() -> None:
     assert not (post_dir / "article.md").exists()
     manifest = read_json(post_dir / "manifest.json")
     assert manifest["contentType"] == "video"
+    assert manifest["contentIdentity"] == "work"
     assert manifest["publishAngle"] == "体验"
     assert manifest["reviewDecision"] == "approved"
     gate_issues = gate_post(execution_id, "video", refs=[ref])

@@ -500,6 +500,7 @@ func (s *MemberService) applyCircleGroupMembershipFact(
 				ID:             generateID(),
 				ConversationId: conv.ID,
 				UserId:         event.UserID,
+				UserHandle:     profile.UserHandle,
 				DisplayName:    profile.DisplayName,
 				AvatarUrl:      profile.AvatarURL,
 				AvatarAssetId:  profile.AvatarAssetID,

@@ -17,7 +17,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -72,14 +72,18 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: 'viewer-profile',
-      targetSubAccountId: targetUserId,
+      viewerPersonaId: 'viewer-profile',
+      targetPersonaId: targetUserId,
       relationState: 'not_following',
       canFollow: true,
       canUnfollow: false,
       canFollowBack: false,
       canGreet: true,
       canOpenConversation: false,
+      canCreateDirectConversation: false,
+      canSendMessage: false,
+      hasPendingGreeting: false,
+      hasFormalConversation: false,
       canStartVoiceCall: false,
       canStartVideoCall: false,
       isBlocked: false,
@@ -95,9 +99,18 @@ class _MutualCallCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: 'viewer-profile',
-      targetSubAccountId: targetUserId,
+      viewerPersonaId: 'viewer-profile',
+      targetPersonaId: targetUserId,
       relationState: 'mutual',
+      canFollow: false,
+      canUnfollow: true,
+      canFollowBack: false,
+      canGreet: false,
+      canOpenConversation: true,
+      canCreateDirectConversation: true,
+      canSendMessage: true,
+      hasPendingGreeting: false,
+      hasFormalConversation: false,
       canStartVoiceCall: true,
       canStartVideoCall: true,
       isBlocked: false,
@@ -115,8 +128,9 @@ class _FlippableProfileAuthSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'access-token',
+      refreshToken: 'refresh-token',
       ownerId: 'viewer-profile',
-      activeSubAccountId: 'viewer-profile',
+      activePersonaId: 'viewer-profile',
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'install-id',
@@ -129,8 +143,9 @@ class _AuthenticatedProfileAuthSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'access-token',
+    refreshToken: 'refresh-token',
     ownerId: 'viewer-profile',
-    activeSubAccountId: 'viewer-profile',
+    activePersonaId: 'viewer-profile',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -142,9 +157,9 @@ class _RecordingBlockWriter implements BlockCommandWriter {
 
   @override
   Future<BlockCommandResult> blockUser(BlockUserCommand command) async {
-    blockedTarget = command.targetSubAccountId;
+    blockedTarget = command.targetPersonaId;
     return BlockCommandResult(
-      targetSubAccountId: command.targetSubAccountId,
+      targetPersonaId: command.targetPersonaId,
       blocked: true,
       idempotentReplay: false,
       updatedAt: DateTime.utc(2026, 7, 20),
@@ -154,7 +169,7 @@ class _RecordingBlockWriter implements BlockCommandWriter {
   @override
   Future<BlockCommandResult> unblockUser(UnblockUserCommand command) async {
     return BlockCommandResult(
-      targetSubAccountId: command.targetSubAccountId,
+      targetPersonaId: command.targetPersonaId,
       blocked: false,
       idempotentReplay: false,
       updatedAt: DateTime.utc(2026, 7, 20),
@@ -198,7 +213,7 @@ class _FailingHomepageBundleRepository extends MockUserProfileRepository {
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
     throw Exception('homepage-bundle 加载失败（测试）');
   }
@@ -208,19 +223,19 @@ abstract class _ProfileBundleOverrideRepository
     extends MockUserProfileRepository {
   const _ProfileBundleOverrideRepository();
 
-  Future<SubAccountProfileViewData> profileFor(String userId);
+  Future<PersonaProfileViewData> profileFor(String userId);
 
   @override
-  Future<SubAccountProfileViewData> getUserProfile(String userId) =>
+  Future<PersonaProfileViewData> getUserProfile(String userId) =>
       profileFor(userId);
 
   @override
   Future<UserHomepageBundleViewData> getUserHomepageBundle(
-    String subAccountId,
+    String personaId,
   ) async {
-    final base = await super.getUserHomepageBundle(subAccountId);
+    final base = await super.getUserHomepageBundle(personaId);
     return UserHomepageBundleViewData(
-      profile: await profileFor(subAccountId),
+      profile: await profileFor(personaId),
       stats: base.stats,
       relationshipCapability: base.relationshipCapability,
       tabCounts: base.tabCounts,
@@ -239,13 +254,12 @@ class _DefaultNicknameProfileRepository
   static const String defaultNickname = '新同学_260622_6698692';
 
   @override
-  Future<SubAccountProfileViewData> profileFor(String userId) async {
-    return SubAccountProfileViewData.fromSubAccountProfileWire(
-      SubAccountProfileWireDto(
-        subAccountId: userId,
+  Future<PersonaProfileViewData> profileFor(String userId) async {
+    return PersonaProfileViewData.fromPersonaProfileWire(
+      PersonaProfileWireDto(
+        personaId: userId,
         ownerUserId: userId,
         userHandle: userId,
-        username: userId,
         displayName: defaultNickname,
         nickname: defaultNickname,
         nicknameCustomized: false,
@@ -264,13 +278,12 @@ class _CustomizedNicknameProfileRepository
   const _CustomizedNicknameProfileRepository();
 
   @override
-  Future<SubAccountProfileViewData> profileFor(String userId) async {
-    return SubAccountProfileViewData.fromSubAccountProfileWire(
-      SubAccountProfileWireDto(
-        subAccountId: userId,
+  Future<PersonaProfileViewData> profileFor(String userId) async {
+    return PersonaProfileViewData.fromPersonaProfileWire(
+      PersonaProfileWireDto(
+        personaId: userId,
         ownerUserId: userId,
         userHandle: userId,
-        username: userId,
         displayName: '我的专属昵称',
         nickname: '我的专属昵称',
         nicknameCustomized: true,
@@ -293,13 +306,12 @@ class _ResolvedAvatarProfileRepository
       'AAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
   @override
-  Future<SubAccountProfileViewData> profileFor(String userId) async {
-    return SubAccountProfileViewData.fromSubAccountProfileWire(
-      SubAccountProfileWireDto(
-        subAccountId: userId,
+  Future<PersonaProfileViewData> profileFor(String userId) async {
+    return PersonaProfileViewData.fromPersonaProfileWire(
+      PersonaProfileWireDto(
+        personaId: userId,
         ownerUserId: userId,
         userHandle: userId,
-        username: userId,
         displayName: '头像同源用户',
         nickname: '头像同源用户',
         nicknameCustomized: true,
@@ -829,7 +841,7 @@ void main() {
                 throw StateError('author impact temporarily unavailable');
               }
               return AuthorImpactSummary(
-                authorId: request.subAccountId,
+                authorId: request.personaId,
                 total: 0,
                 items: const <AuthorImpactItem>[],
               );
@@ -907,7 +919,7 @@ void main() {
             }),
             authorImpactProvider.overrideWith((ref, request) async {
               return AuthorImpactSummary(
-                authorId: request.subAccountId,
+                authorId: request.personaId,
                 total: 2,
                 items: <AuthorImpactItem>[
                   authorImpactItemFixture(

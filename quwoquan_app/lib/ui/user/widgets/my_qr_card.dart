@@ -357,7 +357,6 @@ AppForwardPayload _buildProfileQrForwardPayload(ProfileQrCardData card) {
     extra: <String, Object?>{
       'qrPayload': card.qrPayload,
       'qrTokenId': card.qrTokenId,
-      'styleVersion': card.styleVersion,
       'displayName': card.displayName,
       'region': card.region,
     },

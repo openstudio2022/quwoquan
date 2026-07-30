@@ -25,7 +25,7 @@ class ShareInteractionObservability {
 
   void track({
     required String eventName,
-    required String subAccountId,
+    required String personaId,
     required ShareInteractionDirection direction,
     ShareInteractionItem? item,
     String? result,
@@ -38,7 +38,7 @@ class ShareInteractionObservability {
           eventType: 'share_interaction',
           eventName: eventName,
           properties: <String, dynamic>{
-            'subAccountId': subAccountId,
+            'personaId': personaId,
             'direction': direction.name,
             'interactionId': ?item?.interactionId,
             'targetKind': ?item?.targetKind.name,

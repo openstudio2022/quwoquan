@@ -38,16 +38,19 @@ void main() {
     final homepage = await query.getUserHomepageBundle('persona-2');
     final search = await query.searchSocialRelations(query: '小趣');
 
-    expect(me.subAccountId, 'persona-1');
-    expect(target.subAccountId, 'persona-2');
-    expect(homepage.profile.subAccountId, 'persona-2');
+    expect(me.personaId, 'persona-1');
+    expect(target.personaId, 'persona-2');
+    expect(homepage.profile.personaId, 'persona-2');
     expect(homepage.relationshipCapability?.canOpenConversation, isTrue);
     expect(search.single.relationshipCapability.relationState, 'mutual');
+    expect(search.single.relationshipCapability.targetPersonaId, 'persona-2');
+    expect(search.single.relationshipCapability.canGreet, isFalse);
+    expect(search.single.relationshipCapability.hasFormalConversation, isTrue);
     expect(
       executor.operationIds,
       containsAll(<String>[
         AppCloudOperationIds.userUserAccountGetMeProfile,
-        AppCloudOperationIds.userUserAccountGetSubAccountProfile,
+        AppCloudOperationIds.userUserAccountGetPersonaProfile,
         AppCloudOperationIds.userUserAccountGetUserHomepageBundle,
         AppCloudOperationIds.userUserAccountSearchSocialRelations,
       ]),
@@ -66,7 +69,7 @@ void main() {
     final guard = await query.getPersonaLifecycleGuard('persona-2');
 
     expect(personas.single.avatarVersion, 3);
-    expect(summary.quota.usedSubAccounts, 1);
+    expect(summary.quota.usedPersonas, 1);
     expect(summary.activeContext?.displayName, '主分身');
     expect(active.contextVersion, 7);
     expect(guard.allowed, isTrue);
@@ -97,7 +100,7 @@ void main() {
     expect(snapshot.nickname, '主分身');
     expect(snapshot.phoneCredential?.isBound, isTrue);
     expect(card.qrPayload, 'quwoquan://profile/persona-1');
-    expect(resolved.subAccountId, 'persona-2');
+    expect(resolved.personaId, 'persona-2');
     expect(
       executor.operationIds,
       containsAll(<String>[
@@ -119,7 +122,7 @@ final Map<String, Object?> _responses = <String, Object?>{
     'persona-1',
     '主分身',
   ),
-  AppCloudOperationIds.userUserAccountGetSubAccountProfile: _profile(
+  AppCloudOperationIds.userUserAccountGetPersonaProfile: _profile(
     'persona-2',
     '小趣',
   ),
@@ -140,7 +143,7 @@ final Map<String, Object?> _responses = <String, Object?>{
   AppCloudOperationIds.userUserAccountGetActivePersonaContext: _activeContext,
   AppCloudOperationIds.userUserAccountGetPersonaLifecycleGuard:
       <String, Object?>{
-        'subAccountId': 'persona-2',
+        'personaId': 'persona-2',
         'requestedAction': 'retire',
         'allowed': true,
         'reason': '',
@@ -148,7 +151,7 @@ final Map<String, Object?> _responses = <String, Object?>{
       },
   AppCloudOperationIds.userUserAccountGetProfileEditSnapshot: <String, Object?>{
     'ownerUserId': 'owner-1',
-    'subAccountId': 'persona-1',
+    'personaId': 'persona-1',
     'nickname': '主分身',
     'displayName': '主分身',
     'userHandle': 'owner',
@@ -161,7 +164,7 @@ final Map<String, Object?> _responses = <String, Object?>{
   },
   AppCloudOperationIds.userUserAccountGetProfileQrCard: _qrCard,
   AppCloudOperationIds.userUserAccountResolveProfileQrToken: <String, Object?>{
-    'subAccountId': 'persona-2',
+    'personaId': 'persona-2',
     'userHandle': 'xiaoq',
     'publicProfileUrl': 'https://quwoquan.example/u/xiaoq',
     'scanStatus': 'accepted',
@@ -169,18 +172,27 @@ final Map<String, Object?> _responses = <String, Object?>{
   AppCloudOperationIds.userUserAccountSearchSocialRelations: <String, Object?>{
     'items': <Object?>[
       <String, Object?>{
-        'subAccountId': 'persona-2',
-        'username': 'xiaoq',
+        'personaId': 'persona-2',
         'userHandle': 'xiaoq',
         'displayName': '小趣',
         'chatAvailable': true,
         'relationshipCapability': <String, Object?>{
+          'viewerPersonaId': 'persona-1',
+          'targetPersonaId': 'persona-2',
           'relationState': 'mutual',
           'canFollow': false,
           'canUnfollow': true,
+          'canFollowBack': false,
+          'canGreet': false,
           'canOpenConversation': true,
+          'canCreateDirectConversation': true,
+          'canSendMessage': true,
+          'hasPendingGreeting': false,
+          'hasFormalConversation': true,
           'canStartVoiceCall': true,
           'canStartVideoCall': true,
+          'isBlocked': false,
+          'isBlockedBy': false,
         },
       },
     ],
@@ -196,23 +208,29 @@ final Map<String, Object?> _responses = <String, Object?>{
       'postCount': 4,
     },
     'relationshipCapability': <String, Object?>{
-      'viewerSubAccountId': 'persona-1',
-      'targetSubAccountId': 'persona-2',
+      'viewerPersonaId': 'persona-1',
+      'targetPersonaId': 'persona-2',
       'relationState': 'mutual',
+      'canFollow': false,
+      'canUnfollow': true,
+      'canFollowBack': false,
+      'canGreet': false,
       'canOpenConversation': true,
       'canCreateDirectConversation': true,
       'canSendMessage': true,
+      'hasPendingGreeting': false,
+      'hasFormalConversation': true,
       'canStartVoiceCall': true,
       'canStartVideoCall': true,
       'isBlocked': false,
       'isBlockedBy': false,
     },
-    'cacheVersion': 'profile-v1',
+    'cacheVersion': 'profile-revision-a',
   },
 };
 
 const Map<String, Object?> _persona = <String, Object?>{
-  'subAccountId': 'persona-1',
+  'personaId': 'persona-1',
   'displayName': '主分身',
   'userHandle': 'owner',
   'avatarVersion': 3,
@@ -227,7 +245,7 @@ const Map<String, Object?> _persona = <String, Object?>{
 
 const Map<String, Object?> _activeContext = <String, Object?>{
   'ownerUserId': 'owner-1',
-  'subAccountId': 'persona-1',
+  'personaId': 'persona-1',
   'subjectType': 'persona',
   'displayName': '主分身',
   'avatarUrl': '',
@@ -243,7 +261,6 @@ const Map<String, Object?> _qrCard = <String, Object?>{
   'publicProfileUrl': 'https://quwoquan.example/u/owner',
   'qrPayload': 'quwoquan://profile/persona-1',
   'qrTokenId': 'qr-token-1',
-  'styleVersion': 'v1',
   'avatarUrl': '',
   'avatarVersion': '3',
   'displayName': '主分身',
@@ -251,14 +268,13 @@ const Map<String, Object?> _qrCard = <String, Object?>{
   'shareText': '扫一扫认识我',
 };
 
-Map<String, Object?> _profile(String subAccountId, String displayName) {
+Map<String, Object?> _profile(String personaId, String displayName) {
   return <String, Object?>{
-    'subAccountId': subAccountId,
+    'personaId': personaId,
     'ownerUserId': 'owner-1',
-    'userHandle': subAccountId == 'persona-1' ? 'owner' : 'xiaoq',
+    'userHandle': personaId == 'persona-1' ? 'owner' : 'xiaoq',
     'nickname': displayName,
     'displayName': displayName,
-    'username': subAccountId == 'persona-1' ? 'owner' : 'xiaoq',
     'subjectType': 'persona',
     'avatarVersion': 3,
     'profileVisibility': 'public',

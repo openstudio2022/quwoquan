@@ -149,11 +149,49 @@ type operationsYAML struct {
 }
 
 type serviceRouteYAML struct {
-	Method         string   `yaml:"method"`
-	Path           string   `yaml:"path"`
-	Operation      string   `yaml:"operation"`
-	QueryParams    []string `yaml:"query_params"`
-	WritableFields []string `yaml:"writable_fields"`
+	Method            string              `yaml:"method"`
+	Path              string              `yaml:"path"`
+	Operation         string              `yaml:"operation"`
+	RequestEntity     string              `yaml:"request_entity"`
+	RequestBodyKind   string              `yaml:"request_body_kind"`
+	RequestBindings   requestBindingsYAML `yaml:"request_bindings"`
+	Pagination        paginationYAML      `yaml:"pagination"`
+	RequestBodyFields []string            `yaml:"-"`
+}
+
+type paginationYAML struct {
+	DefaultItems int `yaml:"default_items"`
+	MaximumItems int `yaml:"maximum_items"`
+}
+
+type requestBindingsYAML struct {
+	Path     []requestBindingYAML `yaml:"path"`
+	Query    []requestBindingYAML `yaml:"query"`
+	Header   []requestBindingYAML `yaml:"header"`
+	Injected []requestBindingYAML `yaml:"injected"`
+}
+
+type requestBindingYAML struct {
+	Name  string `yaml:"name"`
+	Field string `yaml:"field"`
+}
+
+type serviceRequestFieldYAML struct {
+	Name           string `yaml:"name"`
+	ClientWireName string `yaml:"client_wire_name"`
+}
+
+type serviceRequestEntityYAML struct {
+	Fields []serviceRequestFieldYAML `yaml:"fields"`
+}
+
+type serviceFieldsYAML struct {
+	Entity       string                              `yaml:"entity"`
+	Fields       []serviceRequestFieldYAML           `yaml:"fields"`
+	Entities     map[string]serviceRequestEntityYAML `yaml:"entities"`
+	Types        map[string]serviceRequestEntityYAML `yaml:"types"`
+	ValueObjects map[string]serviceRequestEntityYAML `yaml:"value_objects"`
+	Members      map[string]serviceRequestEntityYAML `yaml:"members"`
 }
 
 type objectRouteGroup struct {
@@ -265,21 +303,23 @@ func toPascal(s string) string {
 }
 
 type routeBindingData struct {
-	Method         string
-	Path           string
-	Operation      string
-	QueryParams    []string
-	WritableFields []string
+	Method            string
+	Path              string
+	Operation         string
+	QueryBindingNames []string
+	RequestBodyFields []string
 }
 
 type httpScaffoldData struct {
-	Routes              []routeBindingData
-	DispatchOperations  []string
-	WritableOperations  []string
-	WritableByOperation map[string][]string
-	GetFeedRouteFound   bool
-	GetFeedQueryParams  []string
-	GetFeedLimitInQuery bool
+	Routes                   []routeBindingData
+	DispatchOperations       []string
+	BodyOperations           []string
+	BodyFieldsByOperation    map[string][]string
+	GetFeedRouteFound        bool
+	GetFeedQueryBindingNames []string
+	GetFeedLimitInQuery      bool
+	GetFeedDefaultItems      int
+	GetFeedMaximumItems      int
 }
 
 func generateHTTPScaffold(
@@ -307,17 +347,17 @@ func generateObjectHTTPScaffold(
 	sourcePath string,
 ) error {
 	data := httpScaffoldData{
-		Routes:              make([]routeBindingData, 0, len(serviceRoutes)),
-		WritableByOperation: map[string][]string{},
+		Routes:                make([]routeBindingData, 0, len(serviceRoutes)),
+		BodyFieldsByOperation: map[string][]string{},
 	}
 	for _, r := range serviceRoutes {
 		if strings.TrimSpace(r.Method) == "" || strings.TrimSpace(r.Path) == "" || strings.TrimSpace(r.Operation) == "" {
 			continue
 		}
-		qp := make([]string, 0, len(r.QueryParams))
+		qp := make([]string, 0, len(r.RequestBindings.Query))
 		seenQP := map[string]struct{}{}
-		for _, key := range r.QueryParams {
-			k := strings.TrimSpace(key)
+		for _, binding := range r.RequestBindings.Query {
+			k := strings.TrimSpace(binding.Name)
 			if k == "" {
 				continue
 			}
@@ -327,37 +367,46 @@ func generateObjectHTTPScaffold(
 			seenQP[k] = struct{}{}
 			qp = append(qp, k)
 		}
-		wf := make([]string, 0, len(r.WritableFields))
-		seenWF := map[string]struct{}{}
-		for _, field := range r.WritableFields {
+		bodyFields := make([]string, 0, len(r.RequestBodyFields))
+		seenBodyFields := map[string]struct{}{}
+		for _, field := range r.RequestBodyFields {
 			f := strings.TrimSpace(field)
 			if f == "" {
 				continue
 			}
-			if _, ok := seenWF[f]; ok {
+			if _, ok := seenBodyFields[f]; ok {
 				continue
 			}
-			seenWF[f] = struct{}{}
-			wf = append(wf, f)
+			seenBodyFields[f] = struct{}{}
+			bodyFields = append(bodyFields, f)
 		}
 		data.Routes = append(data.Routes, routeBindingData{
-			Method:         strings.ToUpper(r.Method),
-			Path:           r.Path,
-			Operation:      r.Operation,
-			QueryParams:    qp,
-			WritableFields: wf,
+			Method:            strings.ToUpper(r.Method),
+			Path:              r.Path,
+			Operation:         r.Operation,
+			QueryBindingNames: qp,
+			RequestBodyFields: bodyFields,
 		})
-		if len(wf) > 0 {
-			data.WritableByOperation[r.Operation] = wf
+		if strings.TrimSpace(r.RequestBodyKind) == "object" {
+			data.BodyFieldsByOperation[r.Operation] = bodyFields
 		}
 		if r.Operation == "GetFeed" {
 			data.GetFeedRouteFound = true
-			data.GetFeedQueryParams = qp
+			data.GetFeedQueryBindingNames = qp
+			data.GetFeedDefaultItems = r.Pagination.DefaultItems
+			data.GetFeedMaximumItems = r.Pagination.MaximumItems
 			for _, key := range qp {
 				if key == "limit" {
 					data.GetFeedLimitInQuery = true
 					break
 				}
+			}
+			if !data.GetFeedLimitInQuery {
+				return fmt.Errorf("GetFeed must bind the limit query parameter")
+			}
+			if data.GetFeedDefaultItems <= 0 || data.GetFeedMaximumItems <= 0 ||
+				data.GetFeedDefaultItems > data.GetFeedMaximumItems {
+				return fmt.Errorf("GetFeed must declare a valid pagination budget")
 			}
 		}
 	}
@@ -369,10 +418,10 @@ func generateObjectHTTPScaffold(
 		data.DispatchOperations = append(data.DispatchOperations, op)
 	}
 	sort.Strings(data.DispatchOperations)
-	for op := range data.WritableByOperation {
-		data.WritableOperations = append(data.WritableOperations, op)
+	for op := range data.BodyFieldsByOperation {
+		data.BodyOperations = append(data.BodyOperations, op)
 	}
-	sort.Strings(data.WritableOperations)
+	sort.Strings(data.BodyOperations)
 	sort.Slice(data.Routes, func(i, j int) bool {
 		if data.Routes[i].Path == data.Routes[j].Path {
 			return data.Routes[i].Method < data.Routes[j].Method
@@ -721,55 +770,59 @@ func generatedSplitPath(raw string) []string {
 	return strings.Split(trimmed, "/")
 }
 
-type GeneratedGetFeedParams struct {
 {{- if .GetFeedRouteFound }}
-{{- range .GetFeedQueryParams }}
+type GeneratedGetFeedParams struct {
+{{- range .GetFeedQueryBindingNames }}
 {{- if ne . "limit" }}
 	{{ generatedGoField . }} string
 {{- end }}
 {{- end }}
 	Limit int
-{{- else }}
-	Limit int
-{{- end }}
 }
 
-func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetFeedParams {
-	out := GeneratedGetFeedParams{Limit: defaultLimit}
+const (
+	GeneratedGetFeedDefaultItems = {{ .GetFeedDefaultItems }}
+	GeneratedGetFeedMaximumItems = {{ .GetFeedMaximumItems }}
+)
+
+func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error) {
+	out := GeneratedGetFeedParams{Limit: GeneratedGetFeedDefaultItems}
 	q := r.URL.Query()
-	_ = q
-	_ = strconv.IntSize
-{{- if .GetFeedRouteFound }}
-{{- range .GetFeedQueryParams }}
+{{- range .GetFeedQueryBindingNames }}
 {{- if ne . "limit" }}
 	out.{{ generatedGoField . }} = strings.TrimSpace(q.Get("{{ . }}"))
 {{- end }}
 {{- end }}
 	rawLimit := strings.TrimSpace(q.Get("limit"))
 	if rawLimit != "" {
-		if parsed, err := strconv.Atoi(rawLimit); err == nil {
-			out.Limit = parsed
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			return GeneratedGetFeedParams{}, fmt.Errorf("limit must be an integer")
 		}
+		out.Limit = parsed
 	}
-{{- end }}
-	if out.Limit <= 0 {
-		out.Limit = defaultLimit
+	if out.Limit <= 0 || out.Limit > GeneratedGetFeedMaximumItems {
+		return GeneratedGetFeedParams{}, fmt.Errorf(
+			"limit must be between 1 and %d",
+			GeneratedGetFeedMaximumItems,
+		)
 	}
-	return out
+	return out, nil
 }
+{{- end }}
 
-var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
-{{- range .WritableOperations }}
+var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
+{{- range .BodyOperations }}
 	"{{ . }}": {
-		{{- range index $.WritableByOperation . }}
+		{{- range index $.BodyFieldsByOperation . }}
 		"{{ . }}": {},
 		{{- end }}
 	},
 {{- end }}
 }
 
-func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
-	allowed, ok := generatedWritableFieldSetByOperation[operation]
+func BindGeneratedRequestBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
+	allowed, ok := generatedRequestBodyFieldSetByOperation[operation]
 	if !ok {
 		return nil, nil
 	}
@@ -787,7 +840,7 @@ func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (ma
 	sanitized := make(map[string]any, len(input))
 	for key, value := range input {
 		if _, allowedKey := allowed[key]; !allowedKey {
-			return nil, fmt.Errorf("field %q is not writable for operation %s", key, operation)
+			return nil, fmt.Errorf("field %q is not part of request body for operation %s", key, operation)
 		}
 		sanitized[key] = value
 	}
@@ -813,6 +866,10 @@ func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (ma
 	if markerIndex < 0 {
 		return fmt.Errorf("generated route table marker not found")
 	}
+	strconvImport := ""
+	if data.GetFeedRouteFound {
+		strconvImport = "\t\"strconv\"\n"
+	}
 	generatedHeader := fmt.Sprintf(`// Code generated by tools/codegen_content_service from %s. DO NOT EDIT.
 package transport
 
@@ -821,11 +878,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
+%s
 	"strings"
 )
 
-`, sourcePath)
+`, sourcePath, strconvImport)
 	generated := append([]byte(generatedHeader), out[markerIndex:]...)
 	generated = bytes.Replace(generated, []byte("func resolveGeneratedOperation("), []byte("func ResolveOperation("), 1)
 	if formatted, err := format.Source(generated); err == nil {
@@ -850,6 +907,138 @@ func findObjectDir(
 	return "", fmt.Errorf("business object %q not found", aggregateName)
 }
 
+func deriveRequestBodyFields(
+	route serviceRouteYAML,
+	objectName string,
+	fields serviceFieldsYAML,
+) ([]string, error) {
+	if strings.TrimSpace(route.RequestBodyKind) != "object" {
+		return nil, nil
+	}
+	requestEntity := strings.TrimSpace(route.RequestEntity)
+	if requestEntity == "" {
+		return nil, fmt.Errorf(
+			"operation %s request_body_kind=object requires request_entity",
+			route.Operation,
+		)
+	}
+	entity, err := findServiceRequestEntity(fields, objectName, requestEntity)
+	if err != nil {
+		return nil, fmt.Errorf("operation %s: %w", route.Operation, err)
+	}
+
+	boundFields := make(map[string]string)
+	for _, group := range []struct {
+		name   string
+		values []requestBindingYAML
+	}{
+		{name: "path", values: route.RequestBindings.Path},
+		{name: "query", values: route.RequestBindings.Query},
+		{name: "header", values: route.RequestBindings.Header},
+		{name: "injected", values: route.RequestBindings.Injected},
+	} {
+		for _, binding := range group.values {
+			field := strings.TrimSpace(binding.Field)
+			if field == "" {
+				return nil, fmt.Errorf(
+					"operation %s request_bindings.%s has an empty field",
+					route.Operation,
+					group.name,
+				)
+			}
+			if previous, exists := boundFields[field]; exists {
+				return nil, fmt.Errorf(
+					"operation %s request field %s is bound to both %s and %s",
+					route.Operation,
+					field,
+					previous,
+					group.name,
+				)
+			}
+			boundFields[field] = group.name
+		}
+	}
+
+	bodyFields := make([]string, 0, len(entity.Fields))
+	seenNames := make(map[string]struct{}, len(entity.Fields))
+	seenWireNames := make(map[string]struct{}, len(entity.Fields))
+	for _, field := range entity.Fields {
+		name := strings.TrimSpace(field.Name)
+		if name == "" {
+			return nil, fmt.Errorf(
+				"request_entity %s has an empty field",
+				requestEntity,
+			)
+		}
+		if _, exists := seenNames[name]; exists {
+			return nil, fmt.Errorf(
+				"request_entity %s repeats field %s",
+				requestEntity,
+				name,
+			)
+		}
+		seenNames[name] = struct{}{}
+		if _, bound := boundFields[name]; bound {
+			continue
+		}
+		wireName := strings.TrimSpace(field.ClientWireName)
+		if wireName == "" {
+			wireName = name
+		}
+		if _, exists := seenWireNames[wireName]; exists {
+			return nil, fmt.Errorf(
+				"request_entity %s maps multiple body fields to wire name %s",
+				requestEntity,
+				wireName,
+			)
+		}
+		seenWireNames[wireName] = struct{}{}
+		bodyFields = append(bodyFields, wireName)
+	}
+	if len(bodyFields) == 0 {
+		return nil, fmt.Errorf(
+			"operation %s request_body_kind=object has no body fields after canonical bindings",
+			route.Operation,
+		)
+	}
+	return bodyFields, nil
+}
+
+func findServiceRequestEntity(
+	fields serviceFieldsYAML,
+	objectName string,
+	requestEntity string,
+) (serviceRequestEntityYAML, error) {
+	var matches []serviceRequestEntityYAML
+	for _, catalog := range []map[string]serviceRequestEntityYAML{
+		fields.Entities,
+		fields.Types,
+		fields.ValueObjects,
+		fields.Members,
+	} {
+		if entity, exists := catalog[requestEntity]; exists {
+			matches = append(matches, entity)
+		}
+	}
+	if strings.TrimSpace(fields.Entity) == requestEntity ||
+		(strings.TrimSpace(fields.Entity) == "" && toPascal(objectName) == requestEntity) {
+		matches = append(matches, serviceRequestEntityYAML{Fields: fields.Fields})
+	}
+	if len(matches) == 0 {
+		return serviceRequestEntityYAML{}, fmt.Errorf(
+			"request_entity %s is absent from fields.yaml",
+			requestEntity,
+		)
+	}
+	if len(matches) > 1 {
+		return serviceRequestEntityYAML{}, fmt.Errorf(
+			"request_entity %s is declared more than once in fields.yaml",
+			requestEntity,
+		)
+	}
+	return matches[0], nil
+}
+
 func loadServiceRoutes(
 	source *contractcodegen.Source,
 	serviceName string,
@@ -870,6 +1059,13 @@ func loadServiceRoutes(
 		var operations operationsYAML
 		if err := source.Decode(operationsPath, &operations); err != nil {
 			return nil, err
+		}
+		fieldsPath := path.Join(path.Dir(operationsPath), "fields.yaml")
+		var fields serviceFieldsYAML
+		if source.Has(fieldsPath) {
+			if err := source.Decode(fieldsPath, &fields); err != nil {
+				return nil, err
+			}
 		}
 		group := objectRouteGroup{
 			Context:    parts[1],
@@ -909,6 +1105,15 @@ func loadServiceRoutes(
 			route.Method = method
 			route.Path = routePath
 			route.Operation = operation
+			requestBodyFields, err := deriveRequestBodyFields(
+				route,
+				group.Object,
+				fields,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", operationsPath, err)
+			}
+			route.RequestBodyFields = requestBodyFields
 			group.Routes = append(group.Routes, route)
 		}
 		groups = append(groups, group)

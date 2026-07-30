@@ -97,7 +97,6 @@ def run_native_harness(*, command: Sequence[str], target: str) -> int:
     )
     execution = {
         "schema": "provider-conformance-native-execution",
-        "version": 1,
         "target": target,
         "executable": Path(resolved_command[0]).name,
         "commandDigest": command_digest,
@@ -140,7 +139,6 @@ def run_native_harness(*, command: Sequence[str], target: str) -> int:
     }
     case_result = {
         "schema": "provider-conformance-case-results",
-        "version": 1,
         "status": "passed",
         "adapterId": adapter_id,
         "capabilityId": capability_id,

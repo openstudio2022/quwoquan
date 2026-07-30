@@ -122,6 +122,16 @@ const (
 	HomepageTypeHotSpring HomepageType = "hot_spring"
 
 	HomepageTypeThemePark HomepageType = "theme_park"
+
+	HomepageTypeTransportHub HomepageType = "transport_hub"
+
+	HomepageTypeCity HomepageType = "city"
+
+	HomepageTypeRoute HomepageType = "route"
+
+	HomepageTypePhotoSpot HomepageType = "photo_spot"
+
+	HomepageTypeGear HomepageType = "gear"
 )
 
 // Circle domain model.
@@ -149,7 +159,6 @@ type Circle struct {
 	DisplaySubjectType       CircleDisplaySubjectType `json:"displaySubjectType" bson:"displaySubjectType"`
 	FollowEnabled            bool                     `json:"followEnabled" bson:"followEnabled"`
 	DefaultPublicGroupID     string                   `json:"defaultPublicGroupId" bson:"defaultPublicGroupId"`
-	ConversationID           string                   `json:"conversationId" bson:"conversationId"`
 	AutoSyncChat             bool                     `json:"autoSyncChat" bson:"autoSyncChat"`
 	SectionConfig            []CircleSectionConfig    `json:"sectionConfig" bson:"sectionConfig"`
 	StorageUsedBytes         int64                    `json:"storageUsedBytes" bson:"storageUsedBytes"`

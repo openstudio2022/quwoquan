@@ -88,7 +88,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
             );
         mediaPreparationIntent = await publicationQueue.beginMediaPreparation(
           command: preparationCommand,
-          authorPersonaId: activePersona.subAccountId,
+          authorPersonaId: activePersona.personaId,
           circleIds: confirmedSettings.isPublic
               ? confirmedSettings.circleIds
               : const <String>[],
@@ -137,7 +137,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       );
       final receipt = await publicationQueue.submit(
         command: command,
-        authorPersonaId: activePersona.subAccountId,
+        authorPersonaId: activePersona.personaId,
         circleIds: confirmedSettings.isPublic
             ? confirmedSettings.circleIds
             : const <String>[],

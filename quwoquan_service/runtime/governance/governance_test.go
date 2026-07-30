@@ -60,36 +60,6 @@ func TestCircuitBreaker_ClosesOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRateLimiter_AllowsWithinLimit(t *testing.T) {
-	rl := NewRateLimiter(5)
-	for i := 0; i < 5; i++ {
-		if !rl.Allow() {
-			t.Errorf("should allow request %d within limit", i)
-		}
-	}
-}
-
-func TestRateLimiter_DeniesOverLimit(t *testing.T) {
-	rl := NewRateLimiter(2)
-	rl.Allow()
-	rl.Allow()
-	if rl.Allow() {
-		t.Error("should deny third request with limit=2")
-	}
-}
-
-func TestRateLimiter_RefillsOverTime(t *testing.T) {
-	rl := NewRateLimiter(1)
-	rl.Allow()
-	if rl.Allow() {
-		t.Error("should deny immediately")
-	}
-	time.Sleep(1100 * time.Millisecond)
-	if !rl.Allow() {
-		t.Error("should allow after refill")
-	}
-}
-
 func TestRetry_SucceedsFirstTry(t *testing.T) {
 	called := 0
 	err := Retry(context.Background(), ResiliencePolicy{RetryMaxAttempts: 3}, func(_ context.Context) error {

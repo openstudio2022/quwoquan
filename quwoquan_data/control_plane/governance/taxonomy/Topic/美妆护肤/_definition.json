@@ -2,6 +2,7 @@
   "label": "美妆护肤",
   "labelEn": "Beauty & Skincare",
   "description": "美妆护肤化妆品相关内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

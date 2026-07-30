@@ -20,6 +20,10 @@ VERSIONED_API = re.compile(
     r"(?:^|[\s\"'`(=\[])/(?:internal/|callbacks/)?v[0-9]+/"
 )
 MEDIA_OBJECT_KEY = re.compile(r"(?:^|[\s\"'`(=])media/")
+IMMUTABLE_MEDIA_SLICE_ASSERTION = re.compile(
+    r"(?:public\s+(?:slice|fixture)|公共媒体).*(?:canonical|唯一).*/v[0-9]+/",
+    re.I,
+)
 THIRD_PARTY = re.compile(
     r"https?://(?:api\.openverse|api2?\.cursor|cursor\.com|openai\.com|github\.com|"
     r"restapi\.amap\.com|amap\.com)"
@@ -36,7 +40,7 @@ SCHEMA_IDENTITY = re.compile(
 )
 
 SCAN_ROOTS = [
-    "quwoquan_service/contracts/metadata",
+    "quwoquan_service/contracts",
     "quwoquan_service/internal/metadata",
     "quwoquan_service/services",
     "quwoquan_service/scripts",
@@ -44,7 +48,7 @@ SCAN_ROOTS = [
     "quwoquan_ops/cli",
     "quwoquan_ops/gate",
     "quwoquan_ops/portal/src",
-    "quwoquan_ops/observability/monitoring/alerts",
+    "quwoquan_ops/observability",
     "quwoquan_ops/tests",
     "quwoquan_app/lib/cloud/runtime/generated",
     "quwoquan_app/packages/quwoquan_cloud_contracts",
@@ -115,6 +119,8 @@ def line_is_excluded(line: str) -> bool:
         if not re.search(r"""["'`\s(=]/(?:internal/|callbacks/)?v[0-9]+/""", line):
             if not re.search(r"https?://[^/\s\"']+/(?:internal/|callbacks/)?v[0-9]+/", line):
                 return True
+    if IMMUTABLE_MEDIA_SLICE_ASSERTION.search(line):
+        return True
     if (
         THIRD_PARTY.search(line)
         or GO_MODULE.search(line)

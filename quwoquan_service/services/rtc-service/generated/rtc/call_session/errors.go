@@ -23,9 +23,7 @@ var (
 	ErrCannotAnswer               = errors.New("RTC.USER.cannot_answer")
 	ErrInvalidCallAction          = errors.New("RTC.USER.invalid_call_action")
 	ErrScreenShareConflict        = errors.New("RTC.USER.screen_share_conflict")
-	ErrVersionConflict            = errors.New("RTC.USER.version_conflict")
 	ErrIdempotencyConflict        = errors.New("RTC.USER.idempotency_conflict")
-	ErrRateLimited                = errors.New("RTC.USER.rate_limited")
 	ErrMediaTransportUnavailable  = errors.New("RTC.SYSTEM.media_transport_unavailable")
 	ErrAccountSecurityUnavailable = errors.New("RTC.SYSTEM.account_security_unavailable")
 	ErrInternalError              = errors.New("RTC.SYSTEM.internal_error")
@@ -109,22 +107,10 @@ func AppErrorFromScreenShareConflict(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "已有参与者正在共享屏幕", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
 }
 
-// AppErrorFromVersionConflict returns *AppError for RTC.USER.version_conflict (user_message from errors.yaml).
-func AppErrorFromVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrVersionConflict.Error()))
-	return rerrors.NewAppError(code, "通话状态已变更，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecovery("refresh", 0)
-}
-
 // AppErrorFromIdempotencyConflict returns *AppError for RTC.USER.idempotency_conflict (user_message from errors.yaml).
 func AppErrorFromIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrIdempotencyConflict.Error()))
 	return rerrors.NewAppError(code, "请求重复且内容不一致，请重新发起", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromRateLimited returns *AppError for RTC.USER.rate_limited (user_message from errors.yaml).
-func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 5)
 }
 
 // AppErrorFromMediaTransportUnavailable returns *AppError for RTC.SYSTEM.media_transport_unavailable (user_message from errors.yaml).

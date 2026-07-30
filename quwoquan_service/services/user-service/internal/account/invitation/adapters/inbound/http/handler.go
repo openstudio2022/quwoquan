@@ -43,13 +43,13 @@ func (handler *Handler) generate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, usergenerated.AppErrorFromInvalidArgument("invalid body"))
 		return
 	}
-	inviterSubAccountID, _ := body["subAccountId"].(string)
+	inviterPersonaID, _ := body["personaId"].(string)
 	channel, _ := body["channel"].(string)
 	inviteePhone, _ := body["inviteePhone"].(string)
 	record, err := handler.facade.Generate(
 		r.Context(),
 		actorAccountID,
-		inviterSubAccountID,
+		inviterPersonaID,
 		channel,
 		inviteePhone,
 	)
@@ -79,7 +79,7 @@ func (handler *Handler) list(w http.ResponseWriter, r *http.Request) {
 	records, err := handler.facade.List(
 		r.Context(),
 		actorAccountID,
-		r.URL.Query().Get("subAccountId"),
+		r.URL.Query().Get("personaId"),
 		r.URL.Query().Get("status"),
 		limit,
 		offset,
@@ -133,12 +133,12 @@ func publicResponse(record *invitationmodel.Invitation) map[string]any {
 		return map[string]any{}
 	}
 	return map[string]any{
-		"id":                  record.ID,
-		"inviterSubAccountId": record.InviterSubAccountID,
-		"channel":             record.Channel,
-		"status":              record.Status,
-		"expireAt":            record.ExpireAt,
-		"generatedAt":         record.GeneratedAt,
+		"id":               record.ID,
+		"inviterPersonaId": record.InviterPersonaID,
+		"channel":          record.Channel,
+		"status":           record.Status,
+		"expireAt":         record.ExpireAt,
+		"generatedAt":      record.GeneratedAt,
 	}
 }
 

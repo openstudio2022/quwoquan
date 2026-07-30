@@ -2,6 +2,10 @@
   "label": "胶片",
   "labelEn": "Film Photography",
   "description": "喜欢胶片摄影与复古影像",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Format/视觉风格/视觉调性/胶片感"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

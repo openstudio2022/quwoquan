@@ -218,6 +218,7 @@ def render_sourced_video_package(
         "vertical": identity.vertical,
         "topicId": request.topic_id,
         "contentType": "video",
+        "contentIdentity": "work",
         "carrier": "video",
         "title": request.title,
         "caption": request.caption,

@@ -9,7 +9,11 @@ SCRIPTS_ROOT = DATA_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from content.release.environment.topology import EnvironmentReleaseMode, resolve_environment_release_target
+from content.release.environment.topology import (
+    EnvironmentReleaseMode,
+    MediaDeliverySlice,
+    resolve_environment_release_target,
+)
 from content.release.model import DeploymentEnvironment
 
 
@@ -21,9 +25,14 @@ def test_local_release_targets_derive_ports_and_paths_from_ops_topology() -> Non
     assert beta.mongo_uri == "mongodb://127.0.0.1:18410/?directConnection=true"
     assert beta.media_sync_root is not None
     assert beta.media_sync_root.as_posix().endswith("/env/beta/local/beta-local/cache/media")
+    assert beta.api_base_url == "https://api.beta.quwoquan.com:18000"
+    assert beta.media_delivery_base_url == "https://cdn.beta.quwoquan.com:18100"
+    assert beta.media_base_url(MediaDeliverySlice.AVATAR).endswith("/media/avatar")
     assert gamma.mongo_uri == "mongodb://127.0.0.1:19410/?directConnection=true"
     assert gamma.media_sync_root is not None
     assert gamma.media_sync_root.as_posix().endswith("/env/gamma/local/gamma-local/cache/media")
+    assert gamma.api_base_url == "https://api.gamma.quwoquan.com:19000"
+    assert gamma.media_delivery_base_url == "https://cdn.gamma.quwoquan.com:19100"
 
 
 def test_alpha_release_target_is_local_import() -> None:
@@ -34,6 +43,8 @@ def test_alpha_release_target_is_local_import() -> None:
     assert target.mongo_uri == "mongodb://127.0.0.1:17410/?directConnection=true"
     assert target.media_sync_root is not None
     assert target.media_sync_root.as_posix().endswith("/env/alpha/local/alpha-local/cache/media")
+    assert target.api_base_url == "https://api.alpha.quwoquan.com:17000"
+    assert target.media_delivery_base_url == "https://cdn.alpha.quwoquan.com:17100"
 
 
 def test_prod_target_reports_only_missing_secret_key_names(monkeypatch) -> None:
@@ -52,3 +63,5 @@ def test_prod_target_reports_only_missing_secret_key_names(monkeypatch) -> None:
     assert target.mongo_uri == ""
     assert target.user_postgres_dsn == ""
     assert target.media_sync_root is None
+    assert target.api_base_url == "https://api.quwoquan.com"
+    assert target.media_delivery_base_url == "https://cdn.quwoquan.com"

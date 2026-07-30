@@ -1,7 +1,6 @@
 """Verify release-imported posts through the public content API."""
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
 from pathlib import Path
@@ -11,11 +10,22 @@ from urllib.parse import quote
 import yaml
 
 from core.control_types import ContentType
-from core.io import read_json, write_json
+from core.io import write_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
-from core.release_layout import payload_file
 from core.schema import assert_valid
-from content.release.environment.importers import assert_import_report_contract
+from content.release.environment.post_api_media_verification import (
+    PostApiCase,
+    PostApiVerificationError,
+    _object,
+    _require_media,
+    _required_text,
+    _verify_binary_media,
+    _verify_source_attribution,
+)
+from content.release.environment.post_api_release_cases import (
+    CreatorProfileCase,
+    read_post_and_creator_cases,
+)
 from content.release.environment.public_api_client import (
     PublicApiClient,
     PublicApiClientError,
@@ -26,48 +36,16 @@ from content.release.model import DeploymentEnvironment
 SERVICE_PAGINATION_CONTRACT_PATH = (
     REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/types.yaml"
 )
+FEED_PAGE_ID = "content.feed.list"
+POST_DETAIL_PAGE_ID = "content.post.get"
+USER_PROFILE_PAGE_ID = "user.profile"
 
 
-class PostApiVerificationError(ValueError):
-    """An imported post cannot be consumed through its public API."""
-
-
-@dataclass(frozen=True)
-class PostApiCase:
-    post_ref: str
-    post_id: str
-    content_type: ContentType
-    author_id: str
-    source_attribution: Mapping[str, Any] | None
-
-
-@dataclass(frozen=True)
-class CreatorProfileCase:
-    creator_ref: str
-    author_id: str
-    sub_account_id: str
-
-
-def _required_text(payload: Mapping[str, Any], field: str, *, endpoint: str) -> str:
-    value = payload.get(field)
-    if not isinstance(value, str) or not value.strip():
-        raise PostApiVerificationError(f"{endpoint} lacks required {field}")
-    return value.strip()
-
-
-def _object(value: Any, *, label: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping):
-        raise PostApiVerificationError(f"{label} must be an object")
-    return value
-
-
-def _normalized_post_ref(value: object) -> str:
-    ref = str(value or "").strip().replace("\\", "/")
-    if ref.startswith("posts/"):
-        ref = ref.removeprefix("posts/")
-    if not ref or ref.startswith("/") or ".." in ref.split("/"):
-        raise PostApiVerificationError("post reference is invalid")
-    return ref
+def _operation_payload(response: Any, *, endpoint: str) -> dict[str, Any]:
+    operation = getattr(response, "operation", None)
+    if operation is None:
+        raise PostApiVerificationError(f"{endpoint} lacks request trace evidence")
+    return operation.as_payload()
 
 
 def _post_feed_page_limit() -> int:
@@ -95,259 +73,11 @@ def _post_feed_page_limit() -> int:
     raise PostApiVerificationError("service pagination limit max is missing")
 
 
-def _read_cases(
-    *,
-    environment: DeploymentEnvironment,
-    release_id: str,
-    release_root: Path,
-    importer_report_path: Path,
-    creator_importer_report_path: Path,
-) -> tuple[list[PostApiCase], dict[str, CreatorProfileCase]]:
-    try:
-        desired = read_json(payload_file(release_root, "desired_state.json"))
-        report = assert_import_report_contract(
-            importer_report_path,
-            expected_release_id=release_id,
-        )
-        creator_report = assert_import_report_contract(
-            creator_importer_report_path,
-            expected_release_id=release_id,
-        )
-    except (OSError, TypeError, ValueError, RuntimeError) as exc:
-        raise PostApiVerificationError(f"post import evidence is invalid: {exc}") from exc
-    if desired.get("schema") != "quwoquan_data.release_desired_state":
-        raise PostApiVerificationError("release desired state schema is invalid")
-    if str(desired.get("releaseId") or "") != release_id:
-        raise PostApiVerificationError("release desired state releaseId mismatch")
-    if report.get("status") != "active":
-        raise PostApiVerificationError("post importer report is not active")
-    if creator_report.get("status") != "active":
-        raise PostApiVerificationError("creator importer report is not active")
-    if str(report.get("environment") or "") != environment.value:
-        raise PostApiVerificationError("post importer report environment mismatch")
-    desired_refs = _object(desired.get("desiredRefs"), label="release desiredRefs")
-    expected = {
-        _normalized_post_ref(value)
-        for value in desired_refs.get("posts", [])
-        if str(value or "").strip()
-    }
-    raw_creator_refs = desired_refs.get("creators", [])
-    if not isinstance(raw_creator_refs, list):
-        raise PostApiVerificationError("release desiredRefs.creators must be an array")
-    creators_by_author: dict[str, CreatorProfileCase] = {}
-    for raw_ref in raw_creator_refs:
-        creator_ref = _normalized_post_ref(raw_ref)
-        try:
-            profile = _object(
-                read_json(release_root / "payload" / "objects" / "creators" / creator_ref / "profile.json"),
-                label=f"creator profile {creator_ref}",
-            )
-        except (OSError, TypeError, ValueError) as exc:
-            raise PostApiVerificationError(
-                f"creator profile is unreadable for {creator_ref}: {exc}"
-            ) from exc
-        if profile.get("schema") != "quwoquan_data.creator_profile":
-            raise PostApiVerificationError(f"creator profile schema is invalid: {creator_ref}")
-        author_id = _required_text(profile, "authorId", endpoint=f"creator profile {creator_ref}")
-        sub_account_id = _required_text(
-            profile,
-            "subAccountId",
-            endpoint=f"creator profile {creator_ref}",
-        )
-        if author_id in creators_by_author:
-            raise PostApiVerificationError(f"duplicate creator authorId: {author_id}")
-        creators_by_author[author_id] = CreatorProfileCase(
-            creator_ref=creator_ref,
-            author_id=author_id,
-            sub_account_id=sub_account_id,
-        )
-    imported_authors = creator_report.get("authorIds")
-    if not isinstance(imported_authors, list) or {
-        str(value).strip() for value in imported_authors if str(value).strip()
-    } != set(creators_by_author):
-        raise PostApiVerificationError(
-            "creator importer receipt does not exactly match release creator profiles"
-        )
-    verified_creators = creator_report.get("verifiedCreatorIds")
-    if (
-        creator_report.get("projectionDatabase") != "quwoquan_user"
-        or not isinstance(verified_creators, list)
-        or {str(value).strip() for value in verified_creators if str(value).strip()}
-        != {case.creator_ref for case in creators_by_author.values()}
-    ):
-        raise PostApiVerificationError(
-            "creator importer readback does not exactly match release creator authority"
-        )
-    bindings = report.get("postBindings")
-    if not isinstance(bindings, list):
-        raise PostApiVerificationError("post importer report lacks postBindings")
-    cases: list[PostApiCase] = []
-    observed: set[str] = set()
-    post_ids: set[str] = set()
-    for index, raw in enumerate(bindings):
-        row = _object(raw, label=f"post binding {index}")
-        post_ref = _normalized_post_ref(row.get("postRef"))
-        if post_ref in observed:
-            raise PostApiVerificationError(f"duplicate imported post reference: {post_ref}")
-        post_id = _required_text(row, "postId", endpoint=f"post binding {index}")
-        if post_id in post_ids:
-            raise PostApiVerificationError(f"duplicate imported post id: {post_id}")
-        try:
-            content_type = ContentType(
-                _required_text(row, "contentType", endpoint=f"post binding {index}")
-            )
-        except ValueError as exc:
-            raise PostApiVerificationError(
-                f"post binding {index} has unsupported contentType"
-            ) from exc
-        if content_type is ContentType.HOMEPAGE:
-            raise PostApiVerificationError("homepage is not a post API carrier")
-        cases.append(
-            PostApiCase(
-                post_ref=post_ref,
-                post_id=post_id,
-                content_type=content_type,
-                author_id=_required_text(row, "authorId", endpoint=f"post binding {index}"),
-                source_attribution=_source_attribution(
-                    release_root,
-                    post_ref,
-                    content_type=content_type,
-                ),
-            )
-        )
-        observed.add(post_ref)
-        post_ids.add(post_id)
-    if observed != expected:
-        raise PostApiVerificationError("post importer bindings do not exactly match release desired state")
-    missing_creators = sorted({case.author_id for case in cases} - set(creators_by_author))
-    if missing_creators:
-        raise PostApiVerificationError(
-            f"post authors are not owned by the release creator import: {missing_creators[:3]}"
-        )
-    return sorted(cases, key=lambda case: case.post_ref), creators_by_author
-
-
-def _source_attribution(
-    release_root: Path,
-    post_ref: str,
-    *,
-    content_type: ContentType,
-) -> Mapping[str, Any] | None:
-    path = (
-        release_root
-        / "payload"
-        / "objects"
-        / "posts"
-        / post_ref
-        / "manifest.json"
-    )
-    try:
-        manifest = _object(read_json(path), label=f"post manifest {post_ref}")
-    except (OSError, TypeError, ValueError) as exc:
-        raise PostApiVerificationError(
-            f"post manifest is unreadable for {post_ref}: {exc}"
-        ) from exc
-    raw = manifest.get("sourceAttribution")
-    if raw is None:
-        if content_type is ContentType.VIDEO:
-            raise PostApiVerificationError(
-                f"video manifest lacks sourceAttribution: {post_ref}"
-            )
-        return None
-    return _object(raw, label=f"sourceAttribution {post_ref}")
-
-
-def _require_media(
-    payload: Mapping[str, Any],
-    content_type: ContentType,
-) -> tuple[list[str], str, str]:
-    if content_type is ContentType.ARTICLE:
-        _required_text(payload, "body", endpoint="article detail")
-        return [], "", ""
-    media_urls = payload.get("mediaUrls")
-    urls = [
-        str(url).strip()
-        for url in media_urls
-        if isinstance(url, str) and url.strip()
-    ] if isinstance(media_urls, list) else []
-    if not urls:
-        raise PostApiVerificationError(f"{content_type.value} detail has no media URLs")
-    cover_url = _required_text(payload, "coverUrl", endpoint=f"{content_type.value} detail")
-    video_url = ""
-    if content_type is ContentType.VIDEO:
-        video_url = _required_text(payload, "videoUrl", endpoint="video detail")
-    return urls, cover_url, video_url
-
-
-def _verify_binary_media(
-    client: PublicApiClient,
-    url: str,
-    *,
-    expected_kind: str,
-) -> None:
-    response = client.get_bytes(url)
-    if response.status not in {HTTPStatus.OK, HTTPStatus.PARTIAL_CONTENT}:
-        raise PostApiVerificationError(
-            f"public {expected_kind} media returned status={response.status}: {url}"
-        )
-    content_type = response.content_type.split(";", 1)[0].strip().lower()
-    if not content_type.startswith(f"{expected_kind}/"):
-        raise PostApiVerificationError(
-            f"public media MIME mismatch for {url}: {response.content_type!r}"
-        )
-    if not response.body:
-        raise PostApiVerificationError(f"public media returned empty bytes: {url}")
-    if expected_kind == "video":
-        if response.status != HTTPStatus.PARTIAL_CONTENT or not response.content_range.startswith(
-            "bytes "
-        ):
-            raise PostApiVerificationError(
-                f"public video does not honor byte ranges: {url}"
-            )
-        if b"ftyp" not in response.body[:64] and not response.body.startswith(
-            b"\x1a\x45\xdf\xa3"
-        ):
-            raise PostApiVerificationError(
-                f"public video first range is not a playable MP4/WebM header: {url}"
-            )
-
-
-def _verify_source_attribution(
-    payload: Mapping[str, Any],
-    case: PostApiCase,
-) -> None:
-    expected = case.source_attribution
-    if expected is None:
-        return
-    actual = _object(
-        payload.get("sourceAttribution"),
-        label=f"post detail sourceAttribution {case.post_ref}",
-    )
-    fields = (
-        "isOriginal",
-        "originalCreatorName",
-        "platform",
-        "sourcePostUrl",
-        "attributionText",
-        "rightsBasis",
-        "commercialAuthorizationStatus",
-        "publicationAdmission",
-        "watermarkStatus",
-        "audioRightsStatus",
-    )
-    drifted = [
-        field
-        for field in fields
-        if expected.get(field) is not None and actual.get(field) != expected.get(field)
-    ]
-    if drifted:
-        raise PostApiVerificationError(
-            f"post detail sourceAttribution drift for {case.post_ref}: {drifted}"
-        )
-
-
 def _verify_detail(client: PublicApiClient, case: PostApiCase) -> dict[str, Any]:
-    response = client.get_json(f"content/posts/{quote(case.post_id, safe='')}")
+    response = client.get_json(
+        f"content/posts/{quote(case.post_id, safe='')}",
+        page_id=POST_DETAIL_PAGE_ID,
+    )
     if response.status != HTTPStatus.OK:
         raise PostApiVerificationError(f"post detail returned non-200 for {case.post_ref}")
     payload = response.payload
@@ -357,28 +87,41 @@ def _verify_detail(client: PublicApiClient, case: PostApiCase) -> dict[str, Any]
         raise PostApiVerificationError(f"post detail author mismatch for {case.post_ref}")
     if _required_text(payload, "contentType", endpoint="post detail") != case.content_type.value:
         raise PostApiVerificationError(f"post detail content type mismatch for {case.post_ref}")
+    if _required_text(payload, "contentIdentity", endpoint="post detail") != "work":
+        raise PostApiVerificationError(f"post detail content identity mismatch for {case.post_ref}")
     media_urls, cover_url, video_url = _require_media(payload, case.content_type)
     _verify_source_attribution(payload, case)
-    probed: set[str] = set()
-    if cover_url:
-        _verify_binary_media(client, cover_url, expected_kind="image")
-        probed.add(cover_url)
-    if video_url:
-        _verify_binary_media(client, video_url, expected_kind="video")
-        probed.add(video_url)
-    expected_kind = "image" if case.content_type is ContentType.IMAGE else ""
-    for url in media_urls:
-        if url in probed:
-            continue
-        kind = expected_kind
-        if not kind:
-            continue
-        _verify_binary_media(client, url, expected_kind=kind)
-        probed.add(url)
+    observed_urls = {url for url in (*media_urls, cover_url, video_url) if url}
+    expected_urls = {asset.public_url for asset in case.media_assets}
+    if case.content_type is not ContentType.ARTICLE and observed_urls != expected_urls:
+        raise PostApiVerificationError(
+            f"post media URLs drift from release authority for {case.post_ref}"
+        )
+    probes: list[dict[str, Any]] = []
+    for asset in case.media_assets:
+        full_identity = asset.kind == "image"
+        probe = _verify_binary_media(
+            client,
+            asset.public_url,
+            expected_kind="video" if asset.kind == "video" else "image",
+            expected_bytes=asset.expected_bytes if full_identity else 0,
+            expected_sha256=asset.expected_sha256 if full_identity else "",
+            expected_mime_type=asset.expected_mime_type,
+        )
+        probes.append(
+            {
+                "assetId": asset.asset_id,
+                "kind": asset.kind,
+                "expectedBytes": asset.expected_bytes,
+                "expectedSha256": asset.expected_sha256,
+                **probe,
+            }
+        )
     return {
         "detailStatus": response.status,
-        "mediaReady": case.content_type is ContentType.ARTICLE or bool(probed),
-        "mediaProbeCount": len(probed),
+        "mediaReady": case.content_type is ContentType.ARTICLE or bool(probes),
+        "mediaProbeCount": len(probes),
+        "mediaProbes": probes,
         "sourceAttributionReady": True,
     }
 
@@ -386,15 +129,18 @@ def _verify_detail(client: PublicApiClient, case: PostApiCase) -> dict[str, Any]
 def _verify_author_profile(
     client: PublicApiClient,
     creator: CreatorProfileCase,
-) -> int:
-    response = client.get_json(f"user/{quote(creator.sub_account_id, safe='')}")
+) -> dict[str, Any]:
+    response = client.get_json(
+        f"user/{quote(creator.persona_id, safe='')}",
+        page_id=USER_PROFILE_PAGE_ID,
+    )
     if response.status != HTTPStatus.OK:
         raise PostApiVerificationError(
             "creator public profile returned "
             f"status={response.status} for canonical "
-            f"subAccountId={creator.sub_account_id} ({creator.creator_ref})"
+            f"personaId={creator.persona_id} ({creator.creator_ref})"
         )
-    if _required_text(response.payload, "subAccountId", endpoint="creator public profile") != creator.sub_account_id:
+    if _required_text(response.payload, "personaId", endpoint="creator public profile") != creator.persona_id:
         raise PostApiVerificationError(
             f"creator public profile identity mismatch for {creator.creator_ref}"
         )
@@ -402,27 +148,146 @@ def _verify_author_profile(
         raise PostApiVerificationError(
             f"creator public profile lacks display name for {creator.creator_ref}"
         )
-    return response.status
+    avatar_url = _required_text(
+        response.payload,
+        "avatarUrl",
+        endpoint="creator public profile",
+    )
+    if avatar_url != creator.avatar_url:
+        raise PostApiVerificationError(
+            f"creator public avatar URL drift for {creator.creator_ref}"
+        )
+    avatar_probe = _verify_binary_media(
+        client,
+        avatar_url,
+        expected_kind="image",
+        expected_bytes=creator.avatar_bytes,
+        expected_sha256=creator.avatar_sha256,
+        expected_mime_type=creator.avatar_mime_type,
+    )
+    return {
+        "creatorRef": creator.creator_ref,
+        "authorId": creator.author_id,
+        "personaId": creator.persona_id,
+        "profileStatus": response.status,
+        "avatarAssetId": creator.avatar_asset_id,
+        "avatarUrl": avatar_url,
+        "avatarMediaReady": True,
+        "avatarProbeCount": 1,
+        "avatarProbe": avatar_probe,
+    }
+
+
+def _feed_item_matches_release(
+    item: Mapping[str, Any],
+    *,
+    cases_by_id: Mapping[str, PostApiCase],
+    endpoint: str,
+) -> str | None:
+    post_id = _required_text(item, "postId", endpoint=endpoint)
+    case = cases_by_id.get(post_id)
+    if case is None:
+        return None
+    if _required_text(item, "contentIdentity", endpoint=endpoint) != "work":
+        raise PostApiVerificationError(
+            f"{endpoint} content identity mismatch for {case.post_ref}"
+        )
+    if _required_text(item, "authorId", endpoint=endpoint) != case.author_id:
+        raise PostApiVerificationError(f"{endpoint} author mismatch for {case.post_ref}")
+    if _required_text(item, "contentType", endpoint=endpoint) != case.content_type.value:
+        raise PostApiVerificationError(
+            f"{endpoint} content type mismatch for {case.post_ref}"
+        )
+    return post_id
+
+
+def _verify_visible_release_feed(
+    client: PublicApiClient,
+    *,
+    cases_by_id: Mapping[str, PostApiCase],
+    name: str,
+    query: dict[str, str],
+) -> dict[str, Any]:
+    response = client.get_json(
+        "content/feed",
+        page_id=FEED_PAGE_ID,
+        query=query,
+    )
+    if response.status != HTTPStatus.OK:
+        raise PostApiVerificationError(f"{name} feed returned non-200")
+    items = response.payload.get("items")
+    if not isinstance(items, list):
+        raise PostApiVerificationError(f"{name} feed lacks items")
+    matched = sorted(
+        post_id
+        for index, raw in enumerate(items)
+        if (
+            post_id := _feed_item_matches_release(
+                _object(raw, label=f"{name} feed item {index}"),
+                cases_by_id=cases_by_id,
+                endpoint=f"{name} feed",
+            )
+        )
+        is not None
+    )
+    if not matched:
+        raise PostApiVerificationError(
+            f"{name} feed does not expose any release-bound postId"
+        )
+    canonical_query = "&".join(f"{key}={value}" for key, value in query.items())
+    return {
+        "name": name,
+        "path": "/content/feed",
+        "query": canonical_query,
+        "status": response.status,
+        "releaseBound": True,
+        "matchedPostIds": matched,
+        "requests": [_operation_payload(response, endpoint=f"{name} feed")],
+    }
 
 
 def _verify_typed_feed(
     client: PublicApiClient,
     cases: list[PostApiCase],
-) -> dict[str, int]:
+) -> tuple[dict[str, int], list[dict[str, Any]]]:
     page_limit = _post_feed_page_limit()
+    cases_by_id = {case.post_id: case for case in cases}
     expected_by_type: dict[ContentType, dict[str, PostApiCase]] = {}
     for case in cases:
         expected_by_type.setdefault(case.content_type, {})[case.post_id] = case
     feed_status: dict[str, int] = {}
+    feed_queries = [
+        _verify_visible_release_feed(
+            client,
+            cases_by_id=cases_by_id,
+            name="discovery_work",
+            query={"identity": "work", "limit": str(page_limit)},
+        )
+    ]
     for content_type, expected in expected_by_type.items():
         cursor = ""
         seen: set[str] = set()
         seen_cursors: set[str] = set()
+        request_evidence: list[dict[str, Any]] = []
         while len(seen) < len(expected):
-            query = {"type": content_type.value, "limit": str(page_limit)}
+            query = {
+                "identity": "work",
+                "type": content_type.value,
+                "limit": str(page_limit),
+            }
             if cursor:
                 query["cursor"] = cursor
-            response = client.get_json("content/feed", query=query)
+            response = client.get_json(
+                "content/feed",
+                page_id=FEED_PAGE_ID,
+                query=query,
+            )
+            request_evidence.append(
+                _operation_payload(
+                    response,
+                    endpoint=f"typed {content_type.value} feed",
+                )
+            )
             if response.status != HTTPStatus.OK:
                 raise PostApiVerificationError(
                     f"typed feed returned non-200 for {content_type.value}"
@@ -436,14 +301,11 @@ def _verify_typed_feed(
                 expected_case = expected.get(post_id)
                 if expected_case is None:
                     continue
-                if _required_text(item, "authorId", endpoint="typed feed") != expected_case.author_id:
-                    raise PostApiVerificationError(
-                        f"typed feed author mismatch for {expected_case.post_ref}"
-                    )
-                if _required_text(item, "contentType", endpoint="typed feed") != content_type.value:
-                    raise PostApiVerificationError(
-                        f"typed feed content type mismatch for {expected_case.post_ref}"
-                    )
+                _feed_item_matches_release(
+                    item,
+                    cases_by_id=expected,
+                    endpoint=f"typed {content_type.value} feed",
+                )
                 seen.add(post_id)
                 feed_status[post_id] = response.status
             next_cursor = str(response.payload.get("nextCursor") or "").strip()
@@ -456,7 +318,44 @@ def _verify_typed_feed(
                 )
             seen_cursors.add(next_cursor)
             cursor = next_cursor
-    return feed_status
+        feed_queries.append(
+            {
+                "name": f"typed_{content_type.value}",
+                "path": "/content/feed",
+                "query": (
+                    f"identity=work&type={content_type.value}&limit={page_limit}"
+                ),
+                "status": HTTPStatus.OK,
+                "releaseBound": True,
+                "matchedPostIds": sorted(seen),
+                "requests": request_evidence,
+            }
+        )
+    feed_queries.extend(
+        (
+            _verify_visible_release_feed(
+                client,
+                cases_by_id=cases_by_id,
+                name="homepage_recommend",
+                query={
+                    "sort": "recommend",
+                    "channelId": "recommend",
+                    "limit": str(page_limit),
+                },
+            ),
+            _verify_visible_release_feed(
+                client,
+                cases_by_id=cases_by_id,
+                name="premium_stream",
+                query={
+                    "sort": "recommend",
+                    "channelId": "premium_stream",
+                    "limit": str(page_limit),
+                },
+            ),
+        )
+    )
+    return feed_status, feed_queries
 
 
 def write_post_api_verification(
@@ -469,31 +368,38 @@ def write_post_api_verification(
     creator_importer_report_path: Path,
     output_path: Path,
     api_base_url: str,
-    insecure_tls: bool,
-    resolve_host: str = "",
+    media_delivery_base_url: str,
 ) -> Path:
     """Write schema-validated, release-bound public post API evidence."""
     try:
-        client = PublicApiClient(
-            base_url=api_base_url,
-            insecure_tls=insecure_tls,
-            resolve_host=resolve_host.strip(),
-        )
-        cases, creators_by_author = _read_cases(
+        cases, creators_by_author = read_post_and_creator_cases(
             environment=environment,
             release_id=release_id,
             release_root=release_root,
             importer_report_path=importer_report_path,
             creator_importer_report_path=creator_importer_report_path,
+            media_delivery_base_url=media_delivery_base_url,
         )
-        feed_status = _verify_typed_feed(client, cases)
+        unauthenticated_client = PublicApiClient(
+            base_url=api_base_url,
+        )
+        guest = unauthenticated_client.login_fresh_guest()
+        client = unauthenticated_client.for_guest(guest)
+        feed_status, feed_queries = _verify_typed_feed(client, cases)
+        creator_rows = [
+            _verify_author_profile(client, creator)
+            for creator in sorted(
+                creators_by_author.values(),
+                key=lambda item: item.creator_ref,
+            )
+        ]
+        creator_status_by_author = {
+            str(row["authorId"]): int(row["profileStatus"])
+            for row in creator_rows
+        }
         rows = []
         for case in cases:
             detail = _verify_detail(client, case)
-            author_profile_status = _verify_author_profile(
-                client,
-                creators_by_author[case.author_id],
-            )
             rows.append(
                 {
                     "postRef": case.post_ref,
@@ -504,8 +410,9 @@ def write_post_api_verification(
                     "feedStatus": feed_status[case.post_id],
                     "mediaReady": detail["mediaReady"],
                     "mediaProbeCount": detail["mediaProbeCount"],
+                    "mediaProbes": detail["mediaProbes"],
                     "sourceAttributionReady": detail["sourceAttributionReady"],
-                    "authorProfileStatus": author_profile_status,
+                    "authorProfileStatus": creator_status_by_author[case.author_id],
                 }
             )
     except PublicApiClientError as exc:
@@ -523,13 +430,16 @@ def write_post_api_verification(
         "sourceImportReportRef": importer_ref,
         "creatorImportReportRef": creator_importer_ref,
         "apiBaseUrl": api_base_url.rstrip("/"),
+        "mediaDeliveryBaseUrl": media_delivery_base_url.rstrip("/"),
+        "guestActorHash": guest.guest_actor_hash,
+        "guestLogin": guest.login_operation.as_payload(),
         "verifiedAt": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "passed": True,
+        "feedQueries": feed_queries,
+        "creators": creator_rows,
         "posts": rows,
         "issues": [],
     }
-    if resolve_host:
-        payload["apiResolveHost"] = resolve_host
     try:
         assert_valid(payload, "release", "post_api_verification", label="post_api_verification")
     except (TypeError, ValueError) as exc:

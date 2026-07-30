@@ -2,6 +2,7 @@
   "label": "极简生活",
   "labelEn": "Minimalist Living",
   "description": "极简主义生活方式",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

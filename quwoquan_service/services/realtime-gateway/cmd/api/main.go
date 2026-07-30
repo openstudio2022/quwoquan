@@ -264,7 +264,7 @@ func run() error {
 	})
 	rootMux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		if result := readinessChecker.Check(r.Context()); result.Status != "ok" {
-			writeReadinessError(w)
+			httpadapter.WriteReadinessUnavailable(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -349,12 +349,6 @@ func run() error {
 	}
 	log.Printf("realtime-gateway listening on %s", server.Addr)
 	return rthttp.ListenAndServeGraceful(server, 15*time.Second)
-}
-
-func writeReadinessError(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusServiceUnavailable)
-	_, _ = w.Write([]byte(`{"status":"unavailable"}`))
 }
 
 func buildRedisRouter(cfg realtimeRuntimeConfig) (*rtredis.Router, rtredis.SceneConfig, error) {

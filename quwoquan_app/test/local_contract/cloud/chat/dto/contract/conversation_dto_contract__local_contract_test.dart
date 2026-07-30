@@ -53,6 +53,8 @@ void main() {
       expect(decoded.receiptEnabled, isFalse);
       expect(map.containsKey('_id'), isFalse);
       expect(map.containsKey('conversationId'), isFalse);
+      expect(map.containsKey('bindingType'), isFalse);
+      expect(map.containsKey('lifecyclePolicy'), isFalse);
     });
   });
 
@@ -80,17 +82,13 @@ void main() {
         ..remove('maxSeq')
         ..remove('memberCount')
         ..remove('messageCount')
-        ..remove('originType')
-        ..remove('bindingType')
-        ..remove('lifecyclePolicy');
+        ..remove('originType');
       final dto = ConversationDto.fromMap(wire);
 
       expect(dto.maxSeq, isZero);
       expect(dto.memberCount, isZero);
       expect(dto.messageCount, isZero);
       expect(dto.originType, equals('direct_init'));
-      expect(dto.bindingType, equals('none'));
-      expect(dto.lifecyclePolicy, equals('persistent'));
     });
   });
 
@@ -151,8 +149,6 @@ Map<String, dynamic> _conversationWire([
     'type': 'group',
     'creatorId': 'user_001',
     'originType': 'direct_init',
-    'bindingType': 'none',
-    'lifecyclePolicy': 'persistent',
     'maxSeq': 0,
     'memberCount': 0,
     'maxGroupSize': 1000,

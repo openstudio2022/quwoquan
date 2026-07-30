@@ -171,7 +171,7 @@ def _qunar_city_conflicts_entity(
         term_key = _normalized_title(term)
         if term_key and term_key != entity_key and entity_key.endswith(term_key):
             qualifier = entity_key[: -len(term_key)]
-            if len(qualifier) >= 2:
+            if len(qualifier) >= 2 and not _QUNAR_ENTITY_SPLIT_RE.search(qualifier):
                 qualifiers.add(qualifier)
     return bool(qualifiers) and not any(
         city_key in qualifier or qualifier in city_key

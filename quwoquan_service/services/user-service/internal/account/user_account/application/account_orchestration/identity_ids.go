@@ -4,19 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	xxhash "github.com/cespare/xxhash/v2"
-
 	runtimeid "quwoquan_service/runtime/id"
 	credentialmodel "quwoquan_service/services/user-service/internal/account/credential_binding/domain/model"
+	useridentity "quwoquan_service/services/user-service/internal/account/user_account/domain/user/identity"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 )
 
 const (
-	identityRuleVersion                    = "01"
-	identitySlotCount                      = 16384
-	identityHashFunction                   = "xxhash64"
-	ownerIDFormat                          = "uo_%s_%s_%s_%s"
-	subAccountIDFormat                     = "us_%s_%s_%s"
 	identityEntropyPrefix runtimeid.Prefix = "uid_"
 
 	originCodeAnonymousDevice = "ad"
@@ -63,21 +57,27 @@ func buildOwnerIdentityForOrigin(
 	if err != nil {
 		return identityDescriptor{}, err
 	}
-	logicalShard := computeLogicalShard(originCode, entropyBody)
-	rootPrefix := fmt.Sprintf("%04x", logicalShard)
+	ownerID, err := useridentity.NewOwnerID(originCode, entropyBody)
+	if err != nil {
+		return identityDescriptor{}, fmt.Errorf("build owner identity: %w", err)
+	}
 	return identityDescriptor{
-		OwnerID:      fmt.Sprintf(ownerIDFormat, identityRuleVersion, originCode, rootPrefix, entropyBody),
-		RootPrefix:   rootPrefix,
-		LogicalShard: logicalShard,
+		OwnerID:      ownerID.String(),
+		RootPrefix:   ownerID.LogicalShardHex(),
+		LogicalShard: ownerID.LogicalShard(),
 	}, nil
 }
 
-func buildSubAccountIdentity(rootPrefix string) (string, error) {
+func buildPersonaIdentity(rootPrefix string) (string, error) {
 	entropyBody, err := generateIdentityEntropyBody()
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(subAccountIDFormat, identityRuleVersion, strings.TrimSpace(rootPrefix), entropyBody), nil
+	personaID, err := useridentity.NewPersonaID(rootPrefix, entropyBody)
+	if err != nil {
+		return "", fmt.Errorf("build persona identity: %w", err)
+	}
+	return personaID.String(), nil
 }
 
 func generateIdentityEntropyBody() (string, error) {
@@ -87,20 +87,12 @@ func generateIdentityEntropyBody() (string, error) {
 	}
 	return strings.ToLower(strings.TrimPrefix(raw, string(identityEntropyPrefix))), nil
 }
-
-func computeLogicalShard(originCode, entropyBody string) int {
-	return int(computeRoutingHash(originCode, entropyBody) % identitySlotCount)
-}
-
-func computeRoutingHash(originCode, entropyBody string) uint64 {
-	seed := identityRuleVersion + "|" + strings.TrimSpace(originCode) + "|" + strings.TrimSpace(entropyBody)
-	return xxhash.Sum64String(seed)
-}
-
-func buildShardRoutingKey(originCode, entropyBody string) string {
-	routingHash := computeRoutingHash(originCode, entropyBody)
-	logicalShard := int(routingHash % identitySlotCount)
-	return fmt.Sprintf("%04x%016x", logicalShard, routingHash)
+func extractOwnerRootPrefix(ownerID string) (string, error) {
+	parsed, err := useridentity.ParseOwnerID(ownerID)
+	if err != nil {
+		return "", fmt.Errorf("parse owner identity: %w", err)
+	}
+	return parsed.LogicalShardHex(), nil
 }
 
 func identityOriginForCredentialType(credType string) (identityOrigin string, originCode string) {

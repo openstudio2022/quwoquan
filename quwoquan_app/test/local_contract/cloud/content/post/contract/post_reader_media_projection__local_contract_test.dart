@@ -39,4 +39,33 @@ void main() {
     expect(dto.videoUrl, 'media/video/s/asset/post-video-canonical');
     expect(dto.imageUrls, isEmpty);
   });
+
+  test('首页视频投影保留同 asset/version 的 HLS/CMAF typed 绑定', () {
+    final projection = decodeContentPostProjection(<String, Object?>{
+      'postId': 'post-video-adaptive',
+      'contentType': 'video',
+      'videoUrl': 'media/video/m/asset/mas-video-adaptive/v3/delivery.mp4',
+      'mediaAssetId': 'mas-video-adaptive',
+      'mediaAssetVersion': 3,
+      'hlsCmafMasterManifestUrl':
+          'media/video/m/asset/mas-video-adaptive/v3/hls/master.m3u8',
+      'hlsCmafDescriptorVersion': 1,
+    });
+
+    expect(projection.mediaAssetId, 'mas-video-adaptive');
+    expect(projection.mediaAssetVersion, 3);
+    expect(
+      projection.hlsCmafMasterManifestUrl,
+      'media/video/m/asset/mas-video-adaptive/v3/hls/master.m3u8',
+    );
+    expect(projection.hlsCmafDescriptorVersion, 1);
+    final wire = const ContentPostProjectionMapper().toWire(projection);
+    expect(wire['mediaAssetId'], 'mas-video-adaptive');
+    expect(wire['mediaAssetVersion'], 3);
+    expect(
+      wire['hlsCmafMasterManifestUrl'],
+      'media/video/m/asset/mas-video-adaptive/v3/hls/master.m3u8',
+    );
+    expect(wire['hlsCmafDescriptorVersion'], 1);
+  });
 }

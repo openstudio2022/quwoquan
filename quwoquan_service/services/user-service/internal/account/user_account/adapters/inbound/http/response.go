@@ -79,8 +79,8 @@ func userIDFromHeader(r *http.Request) string {
 	return strings.TrimSpace(current.Actor.AccountID)
 }
 
-// subAccountIDFromHeader 与 userIDFromHeader 同理，仅消费可信 Persona actor。
-func subAccountIDFromHeader(r *http.Request) string {
+// personaIDFromHeader 与 userIDFromHeader 同理，仅消费可信 Persona actor。
+func personaIDFromHeader(r *http.Request) string {
 	current, ok := operation.FromContext(r.Context())
 	if !ok {
 		return ""

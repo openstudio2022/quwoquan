@@ -9,6 +9,7 @@ import (
 	"time"
 
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	profileinteractiongenerated "quwoquan_service/services/content-service/generated/content/profile_interaction_activity_view"
 	activitymodel "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/domain/model"
 	activityports "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/domain/ports"
 )
@@ -60,20 +61,20 @@ func (s *ActivityQueryService) ListActivities(
 	}
 	if query.Direction != activitymodel.DirectionReceived &&
 		query.Direction != activitymodel.DirectionSent {
-		return ActivityPage{}, contentgenerated.AppErrorFromInteractionTypeInvalid(
+		return ActivityPage{}, profileinteractiongenerated.AppErrorFromInteractionTypeInvalid(
 			"profile interaction direction must be received or sent",
 		)
 	}
 	if query.ActivityType != activitymodel.TypeLike &&
 		query.ActivityType != activitymodel.TypeComment &&
 		query.ActivityType != activitymodel.TypeShare {
-		return ActivityPage{}, contentgenerated.AppErrorFromInteractionTypeInvalid(
+		return ActivityPage{}, profileinteractiongenerated.AppErrorFromInteractionTypeInvalid(
 			"profile interaction type must be like, comment, or share",
 		)
 	}
 	if query.ActivityType == activitymodel.TypeShare &&
 		query.ViewerPersonaID != query.OwnerPersonaID {
-		return ActivityPage{}, contentgenerated.AppErrorFromInteractionOwnerForbidden(
+		return ActivityPage{}, profileinteractiongenerated.AppErrorFromInteractionOwnerForbidden(
 			"profile share interaction is private to the active owner persona",
 		)
 	}
@@ -86,7 +87,7 @@ func (s *ActivityQueryService) ListActivities(
 	}
 	cursor, err := decodeActivityCursor(query.Cursor)
 	if err != nil {
-		return ActivityPage{}, contentgenerated.AppErrorFromInteractionCursorInvalid(
+		return ActivityPage{}, profileinteractiongenerated.AppErrorFromInteractionCursorInvalid(
 			err.Error(),
 		)
 	}
@@ -98,7 +99,7 @@ func (s *ActivityQueryService) ListActivities(
 		Limit:          limit,
 	})
 	if err != nil {
-		return ActivityPage{}, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+		return ActivityPage{}, profileinteractiongenerated.AppErrorFromInteractionReadModelUnavailable(
 			"list ProfileInteractionActivityView: " + err.Error(),
 		)
 	}

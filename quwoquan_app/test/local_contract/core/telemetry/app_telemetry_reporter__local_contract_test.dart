@@ -203,7 +203,7 @@ void main() {
       seekFailureCount: 0,
       seekCommandMaxMs: 80,
       seekSettleMaxMs: 120,
-      seekEvidenceSource: 'native_settled',
+      seekEvidenceSource: AppTelemetryValueSeekEvidenceSource.nativeSettled,
       devicePlatform: 'android',
       playbackMode: 'autoplay',
       ttffMs: 380,
@@ -225,6 +225,42 @@ void main() {
     expect(payload.extensions['effectivePlaybackMs'], 12000);
     expect(payload.extensions['devicePlatform'], 'android');
     expect(await reporter.record(payload), AppTelemetryRecordResult.accepted);
+  });
+
+  // spec_ref: specs/feature-tree/runtime/runtime-media/spec.md#sit-002
+  test('HLS source-switch 的六个 evidence 值来自 catalog codegen 且非法值本地拒绝', () {
+    AppTelemetryPayload payloadFor(String evidenceSource) =>
+        AppTelemetryPayload.videoPlaybackQoe(
+          readyMs: 1,
+          rebufferCount: 0,
+          rebufferMs: 0,
+          effectivePlaybackMs: 1,
+          seekCount: 1,
+          seekFailureCount: 0,
+          seekCommandMaxMs: 1,
+          seekSettleMaxMs: 1,
+          seekEvidenceSource: evidenceSource,
+          devicePlatform: 'android',
+          playbackMode: 'autoplay',
+        );
+
+    const sourceSwitchEvidence = <String>{
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchNativeSettled,
+      AppTelemetryValueSeekEvidenceSource
+          .sourceSwitchPositionReadbackNativeUnsupported,
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchNativeSettleTimeout,
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchSettleUnsupported,
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchCommandFailed,
+      AppTelemetryValueSeekEvidenceSource.sourceSwitchSuperseded,
+    };
+    expect(sourceSwitchEvidence, hasLength(6));
+    for (final evidenceSource in sourceSwitchEvidence) {
+      expect(AppTelemetryCatalog.validate(payloadFor(evidenceSource)), isNull);
+    }
+    expect(
+      AppTelemetryCatalog.validate(payloadFor('unregistered_source')),
+      'invalid_extension_value',
+    );
   });
 
   test('RTC 媒体 QoE 以强类型字段承载建连与重连事实', () async {

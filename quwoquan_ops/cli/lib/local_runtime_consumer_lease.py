@@ -54,7 +54,7 @@ def acquire_consumer_lease(
         f"{target.strip()}\0{device.strip()}\0{consumer.strip()}".encode("utf-8")
     ).hexdigest()
     payload: dict[str, Any] = {
-        "schema": "qwq.local_runtime_consumer_lease.v1",
+        "schema": "qwq.local_runtime_consumer_lease",
         "leaseId": lease_id,
         "target": target.strip(),
         "device": device.strip(),

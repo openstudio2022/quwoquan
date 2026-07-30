@@ -1,4 +1,4 @@
-dart_class: ContentPostImmersiveWireKeys
+wire_keys_class: ContentPostImmersiveWireKeys
 description: 沉浸器与详情并行 raw Map 扩展键名 SSOT
 keys:
 - const_name: tagRefs

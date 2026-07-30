@@ -8,11 +8,9 @@ import 'persona_lifecycle_test_support.dart';
 /// Persona Facet 的 test-only 强类型种子。
 final class TestPersonaSeed {
   const TestPersonaSeed({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.userHandle,
-    this.phone = '',
-    this.email = '',
     this.avatarUrl = '',
     this.backgroundUrl = '',
     this.bio = '',
@@ -27,11 +25,9 @@ final class TestPersonaSeed {
     this.retiredAt,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String displayName;
   final String userHandle;
-  final String phone;
-  final String email;
   final String avatarUrl;
   final String backgroundUrl;
   final String bio;
@@ -47,11 +43,9 @@ final class TestPersonaSeed {
 
   TestPersonaSeed copyWith({String? status, DateTime? retiredAt}) {
     return TestPersonaSeed(
-      subAccountId: subAccountId,
+      personaId: personaId,
       displayName: displayName,
       userHandle: userHandle,
-      phone: phone,
-      email: email,
       avatarUrl: avatarUrl,
       backgroundUrl: backgroundUrl,
       bio: bio,
@@ -87,25 +81,21 @@ final class TestPersonaFacets
   static List<TestPersonaSeed> defaultSeed() {
     return const <TestPersonaSeed>[
       TestPersonaSeed(
-        subAccountId: 'persona_primary',
+        personaId: 'persona_primary',
         displayName: '主分身',
         userHandle: 'main_handle',
-        phone: '13800000000',
-        email: 'main@example.com',
         avatarUrl: 'media/avatar/s/mock/user/primary/v1/avatar.png',
         isPrimary: true,
         isActive: true,
       ),
       TestPersonaSeed(
-        subAccountId: 'persona_photo',
+        personaId: 'persona_photo',
         displayName: '摄影分身',
         userHandle: 'photo_handle',
-        phone: '13800000000',
-        email: 'photo@example.com',
         avatarUrl: 'media/avatar/s/mock/user/photo/v1/avatar.png',
         isolationLevel: 'semi',
         inheritsProfileFromOwner: false,
-        overriddenProfileFields: <String>['email'],
+        overriddenProfileFields: <String>['displayName'],
       ),
     ];
   }
@@ -125,8 +115,8 @@ final class TestPersonaFacets
     return PersonaManagementSummaryViewData(
       items: _items.map(_view).toList(growable: false),
       quota: PersonaManagementQuotaViewData(
-        maxSubAccounts: 5,
-        usedSubAccounts: _items.length,
+        maxPersonas: 5,
+        usedPersonas: _items.length,
       ),
       activeContext: _activeContextView(_activeItem()),
     );
@@ -139,9 +129,9 @@ final class TestPersonaFacets
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String subAccountId,
+    String personaId,
   ) async {
-    final item = _item(subAccountId);
+    final item = _item(personaId);
     final activePersonaCount = _items
         .where((candidate) => candidate.status != 'retired')
         .length;
@@ -155,7 +145,7 @@ final class TestPersonaFacets
         ? 'blocked_active_persona'
         : 'allowed';
     return PersonaLifecycleGuardViewData(
-      subAccountId: subAccountId,
+      personaId: personaId,
       requestedAction: 'retire',
       allowed: reason == 'allowed',
       reason: reason,
@@ -164,16 +154,13 @@ final class TestPersonaFacets
   }
 
   @override
-  Future<SubAccountProfileViewData> getSubAccountProfile(
-    String subAccountId,
-  ) async {
-    final item = _item(subAccountId);
-    return SubAccountProfileViewData(
-      subAccountId: item.subAccountId,
+  Future<PersonaProfileViewData> getPersonaProfile(String personaId) async {
+    final item = _item(personaId);
+    return PersonaProfileViewData(
+      personaId: item.personaId,
       ownerUserId: 'owner-test',
       subjectType: 'persona',
       userHandle: item.userHandle,
-      username: item.userHandle,
       displayName: item.displayName,
       avatarUrl: item.avatarUrl,
       backgroundUrl: item.backgroundUrl,
@@ -197,7 +184,7 @@ final class TestPersonaFacets
   ) async {
     final id = 'persona-test-${++_version}';
     final item = _TestPersonaRecord(
-      subAccountId: id,
+      personaId: id,
       displayName: command.displayName,
       userHandle: 'qw_$id',
       avatarUrl: command.avatarUrl ?? '',
@@ -212,19 +199,11 @@ final class TestPersonaFacets
   Future<contracts.PersonaManagementItem> updatePersona(
     contracts.UpdatePersonaCommand command,
   ) async {
-    final item = _item(command.subAccountId);
+    final item = _item(command.personaId);
     final changedFields = <String>[];
     if (command.displayName != null) {
       item.displayName = command.displayName!;
       changedFields.add('displayName');
-    }
-    if (command.phone != null) {
-      item.phone = command.phone!;
-      changedFields.add('phone');
-    }
-    if (command.email != null) {
-      item.email = command.email!;
-      changedFields.add('email');
     }
     if (command.avatarUrl != null) {
       item.avatarUrl = command.avatarUrl!;
@@ -250,11 +229,11 @@ final class TestPersonaFacets
   Future<contracts.PersonaProfileSyncResult> applyPersonaProfileSync(
     contracts.ApplyPersonaProfileSyncCommand command,
   ) async {
-    final item = _item(command.subAccountId);
+    final item = _item(command.personaId);
     final targets = command.syncTargetIds ?? const <String>[];
     syncAppliedCount += 1;
     item.lastProfileSyncAt = DateTime.parse(_now());
-    item.lastProfileSyncSource = command.subAccountId;
+    item.lastProfileSyncSource = command.personaId;
     _version += 1;
     return contracts.PersonaProfileSyncResult(
       status: 'ok',
@@ -267,8 +246,8 @@ final class TestPersonaFacets
   Future<contracts.PersonaLifecycleGuard> retirePersona(
     contracts.RetirePersonaCommand command,
   ) async {
-    final item = _item(command.subAccountId);
-    final guard = await getPersonaLifecycleGuard(command.subAccountId);
+    final item = _item(command.personaId);
+    final guard = await getPersonaLifecycleGuard(command.personaId);
     if (!guard.allowed) {
       throw personaLifecycleGuardExceptionForReason(guard.reason);
     }
@@ -277,7 +256,7 @@ final class TestPersonaFacets
     item.retiredAt = DateTime.parse(_now());
     _version += 1;
     return contracts.PersonaLifecycleGuard(
-      subAccountId: command.subAccountId,
+      personaId: command.personaId,
       requestedAction: 'retire',
       allowed: true,
       reason: 'allowed',
@@ -289,7 +268,7 @@ final class TestPersonaFacets
   Future<contracts.ActivePersonaContext> activatePersona(
     contracts.ActivatePersonaCommand command,
   ) async {
-    final target = _item(command.subAccountId);
+    final target = _item(command.personaId);
     if (target.status == 'retired') {
       throw personaLifecycleGuardExceptionForReason('blocked_retired_persona');
     }
@@ -300,7 +279,7 @@ final class TestPersonaFacets
     _version += 1;
     return contracts.ActivePersonaContext(
       ownerUserId: 'owner-test',
-      subAccountId: target.subAccountId,
+      personaId: target.personaId,
       isolationLevel: target.isolationLevel,
       profileVisibility: target.profileVisibility,
       contextVersion: _version,
@@ -310,12 +289,12 @@ final class TestPersonaFacets
     );
   }
 
-  _TestPersonaRecord _item(String subAccountId) {
-    if (subAccountId.trim().isEmpty) {
-      throw ArgumentError.value(subAccountId, 'subAccountId');
+  _TestPersonaRecord _item(String personaId) {
+    if (personaId.trim().isEmpty) {
+      throw ArgumentError.value(personaId, 'personaId');
     }
     for (final item in _items) {
-      if (item.subAccountId == subAccountId) {
+      if (item.personaId == personaId) {
         return item;
       }
     }
@@ -344,11 +323,9 @@ final class TestPersonaFacets
 
   PersonaManagementItemViewData _view(_TestPersonaRecord item) {
     return PersonaManagementItemViewData(
-      subAccountId: item.subAccountId,
+      personaId: item.personaId,
       displayName: item.displayName,
       userHandle: item.userHandle,
-      phone: item.phone,
-      email: item.email,
       avatarUrl: item.avatarUrl,
       isolationLevel: item.isolationLevel,
       profileVisibility: item.profileVisibility,
@@ -368,7 +345,7 @@ final class TestPersonaFacets
 
   ActivePersonaContextViewData _activeContextView(_TestPersonaRecord item) {
     return ActivePersonaContextViewData(
-      subAccountId: item.subAccountId,
+      personaId: item.personaId,
       ownerUserId: 'owner-test',
       subjectType: 'persona',
       displayName: item.displayName,
@@ -381,11 +358,9 @@ final class TestPersonaFacets
 
   contracts.PersonaManagementItem _contract(_TestPersonaRecord item) {
     return contracts.PersonaManagementItem(
-      subAccountId: item.subAccountId,
+      personaId: item.personaId,
       displayName: item.displayName,
       userHandle: item.userHandle,
-      phone: item.phone,
-      email: item.email,
       avatarUrl: item.avatarUrl,
       backgroundUrl: item.backgroundUrl,
       bio: item.bio,
@@ -409,11 +384,9 @@ final class TestPersonaFacets
 
 final class _TestPersonaRecord {
   _TestPersonaRecord({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.userHandle,
-    this.phone = '',
-    this.email = '',
     this.avatarUrl = '',
     this.backgroundUrl = '',
     this.bio = '',
@@ -431,11 +404,9 @@ final class _TestPersonaRecord {
 
   factory _TestPersonaRecord.fromSeed(TestPersonaSeed seed) {
     return _TestPersonaRecord(
-      subAccountId: seed.subAccountId,
+      personaId: seed.personaId,
       displayName: seed.displayName,
       userHandle: seed.userHandle,
-      phone: seed.phone,
-      email: seed.email,
       avatarUrl: seed.avatarUrl,
       backgroundUrl: seed.backgroundUrl,
       bio: seed.bio,
@@ -454,11 +425,9 @@ final class _TestPersonaRecord {
     );
   }
 
-  final String subAccountId;
+  final String personaId;
   String displayName;
   final String userHandle;
-  String phone;
-  String email;
   String avatarUrl;
   String backgroundUrl;
   final String bio;

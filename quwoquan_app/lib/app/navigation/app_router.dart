@@ -57,7 +57,6 @@ import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/interest_onboarding_page.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
@@ -146,6 +145,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // 防自重定向：登录页本身永不再被路由守卫拦截，否则 login→login 死循环。
       if (done && loc == AppRoutePaths.loginPathTemplate) {
         return null;
+      }
+      if (done) {
+        final suspensionRedirect = accountSuspensionLoginRedirect(
+          session: auth,
+          currentLocation: state.uri.toString(),
+        );
+        if (suspensionRedirect != null) {
+          return suspensionRedirect;
+        }
       }
       // 受限路由守卫：未登录直达需要账号身份的页面时跳全屏登录并带回源。
       // 会话恢复中（restoring）暂不拦截，避免已登录用户出现误跳闪烁。
@@ -515,9 +523,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final entryArgs = state.extra is CreateEntryArguments
               ? state.extra! as CreateEntryArguments
               : null;
-          final initialHomepage = state.extra is HomepageCanonicalReference
-              ? state.extra! as HomepageCanonicalReference
-              : entryArgs?.homepage;
+          final initialHomepage = entryArgs?.homepage;
           final initialCircleId = entryArgs?.circleId;
           final initialCircleName = entryArgs?.circleName;
           final draftIdRaw = state.uri.queryParameters['draftId']?.trim();

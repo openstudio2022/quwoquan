@@ -1,0 +1,62 @@
+domain: ASSISTANT
+aggregate: SkillCatalog
+description: SkillCatalog 可信账号、授权读取与 canonical catalog source 的 fail-closed 错误。
+errors:
+- code: ASSISTANT.USER.skill_catalog_invalid_argument
+  kind: USER
+  reason: invalid_argument
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [ListSkills]
+  recovery_action: surface
+  dart_const: skillCatalogInvalidArgument
+  go_const: ErrSkillCatalogInvalidArgument
+  l10n_key: assistant.error.skill_catalog_invalid_argument
+  user_message:
+    zh: 技能目录请求参数有误
+    en: Skill catalog request is invalid
+- code: ASSISTANT.USER.skill_catalog_unauthorized
+  kind: USER
+  reason: skill_catalog_unauthorized
+  http_status: 401
+  emitted_by:
+  - surface: http
+    operations: [ListSkills]
+  recovery_action: surface
+  dart_const: skillCatalogUnauthorized
+  go_const: ErrSkillCatalogUnauthorized
+  l10n_key: assistant.error.skill_catalog_unauthorized
+  user_message:
+    zh: 请先登录后查看技能目录
+    en: Please sign in to view the skill catalog
+- code: ASSISTANT.SYSTEM.skill_catalog_consent_unavailable
+  kind: SYSTEM
+  reason: skill_catalog_consent_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [ListSkills]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: skillCatalogConsentUnavailable
+  go_const: ErrSkillCatalogConsentUnavailable
+  l10n_key: assistant.error.skill_catalog_consent_unavailable
+  user_message:
+    zh: 授权状态暂时无法读取，请稍后重试
+    en: Consent status is temporarily unavailable; please retry
+- code: ASSISTANT.SYSTEM.skill_catalog_unavailable
+  kind: SYSTEM
+  reason: skill_catalog_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [ListSkills]
+  recovery_action: retry
+  recovery_after_seconds: 3
+  dart_const: skillCatalogUnavailable
+  go_const: ErrSkillCatalogUnavailable
+  l10n_key: assistant.error.skill_catalog_unavailable
+  user_message:
+    zh: 技能目录暂时无法读取，请稍后重试
+    en: The skill catalog is temporarily unavailable; please retry

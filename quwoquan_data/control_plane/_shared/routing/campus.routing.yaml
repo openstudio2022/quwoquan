@@ -1,4 +1,3 @@
-version: 1
 routes:
   - match: { subjectKind: entity, subjectType: 机构/学校, intent: 新生攻略, audience: freshmanStudent }
     templateId: 学校_新生攻略

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
@@ -27,36 +26,13 @@ PLANE_KEY_HINTS = (
 class ProdDeployContractTest(unittest.TestCase):
     """prod-hosted 已退役 PROD_KUBECONFIG，改为按平面 SSH 凭据 + 硬校验。"""
 
-    def _write_release_manifest(self, path: Path, image_version: str) -> None:
-        access = yaml.safe_load(ACCESS_MANIFEST.read_text(encoding="utf-8")) or {}
-        images = {}
-        for plane in access.get("planes") or []:
-            for service in plane.get("rootlessGovernedComposeServices") or []:
-                digest = f"sha256:{'a' * 64}"
-                repository = f"registry.example.invalid/quwoquan/{service}"
-                ref = f"{repository}@{digest}"
-                images[service] = {
-                    "repository": repository,
-                    "digest": digest,
-                    "ref": ref,
-                    "attestations": {
-                        "spdxSbom": f"oci://{ref}#spdxSbom",
-                        "slsaProvenance": f"oci://{ref}#slsaProvenance",
-                    },
-                }
+    def _write_release_manifest(self, path: Path) -> None:
         payload = {
-            "schema": "mainline-release-artifact",
+            "schema": "release-evidence-manifest",
             "status": "deployable",
-            "versions": {"imageVersion": image_version},
-            "images": images,
+            "candidateId": "sha256:" + "b" * 64,
+            "artifactDigest": "sha256:" + "c" * 64,
         }
-        encoded = json.dumps(
-            payload,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        payload["manifestDigest"] = f"sha256:{hashlib.sha256(encoded).hexdigest()}"
         path.write_text(
             json.dumps(payload, ensure_ascii=False, sort_keys=True),
             encoding="utf-8",
@@ -82,10 +58,11 @@ class ProdDeployContractTest(unittest.TestCase):
         env.update(env_overrides)
         with tempfile.TemporaryDirectory() as tmp:
             release_manifest = Path(tmp) / "release-manifest.json"
-            self._write_release_manifest(release_manifest, env["IMAGE_VERSION"])
-            env.setdefault("RELEASE_MANIFEST", str(release_manifest))
+            self._write_release_manifest(release_manifest)
             manifest = json.loads(release_manifest.read_text(encoding="utf-8"))
-            env.setdefault("RELEASE_MANIFEST_DIGEST", manifest["manifestDigest"])
+            env.setdefault("RELEASE_EVIDENCE_DIGEST", manifest["artifactDigest"])
+            if env.get("DRY_RUN") != "true":
+                env.setdefault("RELEASE_MANIFEST", str(release_manifest))
             return subprocess.run(
                 ["bash", "quwoquan_ops/cli/prod/deploy_to_prod.sh"],
                 cwd=str(ROOT),

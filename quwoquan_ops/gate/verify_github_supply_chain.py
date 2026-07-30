@@ -19,6 +19,7 @@ REQUIRED_CODEOWNER_PATHS = {
     "/quwoquan_service/contracts/metadata/",
     "/specs/feature-tree/platform-ops-governance/",
 }
+ATTEST_ACTION = "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6"
 
 
 def verify_action_pins() -> list[str]:
@@ -62,7 +63,6 @@ def verify_production_execution_isolation() -> list[str]:
     failures: list[str] = []
     deploy_paths = {
         WORKFLOWS / "deploy-prod-auto.yml",
-        WORKFLOWS / "deploy-prod-gray.yml",
     }
     for path in sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]):
         text = path.read_text(encoding="utf-8")
@@ -81,6 +81,46 @@ def verify_production_execution_isolation() -> list[str]:
         elif "prod-release" in text:
             failures.append(
                 f"{path.relative_to(ROOT)} must not target the dedicated prod-release runner"
+            )
+    return failures
+
+
+def verify_release_attestation_controls() -> list[str]:
+    failures: list[str] = []
+    service_pipeline = WORKFLOWS / "service_pipeline.yml"
+    prod_workflow = WORKFLOWS / "deploy-prod-auto.yml"
+    verifier = ROOT / "quwoquan_ops/cli/prod/oci_supply_chain.py"
+    service_text = service_pipeline.read_text(encoding="utf-8")
+    prod_text = prod_workflow.read_text(encoding="utf-8")
+    verifier_text = verifier.read_text(encoding="utf-8")
+    for token in (
+        "id-token: write",
+        "attestations: write",
+        ATTEST_ACTION,
+        "sbom-path:",
+        "push-to-registry: true",
+        "oci_supply_chain.py extract-sbom",
+        "oci_supply_chain.py \"${ARGS[@]}\"",
+    ):
+        if token not in service_text:
+            failures.append(
+                f"{service_pipeline.relative_to(ROOT)} missing signed release control: {token}"
+            )
+    if "attestations: read" not in prod_text:
+        failures.append(
+            f"{prod_workflow.relative_to(ROOT)} must read signed OCI attestations"
+        )
+    for token in (
+        '"--bundle-from-oci"',
+        '"--signer-workflow"',
+        '"--cert-oidc-issuer"',
+        'OIDC_ISSUER = "https://token.actions.githubusercontent.com"',
+        '"{{json .SBOM}}"',
+        '"{{json .Provenance}}"',
+    ):
+        if token not in verifier_text:
+            failures.append(
+                f"{verifier.relative_to(ROOT)} missing cryptographic verification control: {token}"
             )
     return failures
 
@@ -106,6 +146,7 @@ def main() -> int:
         *verify_action_pins(),
         *verify_codeowners(),
         *verify_production_execution_isolation(),
+        *verify_release_attestation_controls(),
     ]
     if failures:
         for failure in failures:

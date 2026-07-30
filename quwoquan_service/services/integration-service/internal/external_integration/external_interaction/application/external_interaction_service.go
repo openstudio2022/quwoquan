@@ -10,15 +10,20 @@ import (
 
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
-	"quwoquan_service/services/integration-service/generated/external_integration/push_delivery"
+	externalgenerated "quwoquan_service/services/integration-service/generated/external_integration/external_interaction"
 )
 
 type ExternalInteractionStore interface {
 	reliabletask.Store
 	reliabletask.ProviderAttemptResultOutboxStore
-	reliabletask.DLQRecoveryStore
+	reliabletask.IdempotentDLQRecoveryStore
 	reliabletask.RetentionCleanupStore
 	reliabletask.MetricsStore
+	ListDeadTasks(
+		ctx context.Context,
+		taskTypes []string,
+		limit int,
+	) ([]reliabletask.DeadTaskRecord, error)
 	FindLatestTaskOutboxByAggregateID(
 		ctx context.Context,
 		aggregateID string,
@@ -141,7 +146,7 @@ func (s *ExternalInteractionService) Submit(ctx context.Context, req reliabletas
 	if req.Operation == reliabletask.ExternalInteractionOperationPush {
 		if err := ValidatePushDeliveryRequest(req); err != nil {
 			return reliabletask.ExternalInteractionAccepted{},
-				generated.AppErrorFromPushDeliveryInvalidRequest(err.Error())
+				externalgenerated.AppErrorFromInvalidExternalRequest(err.Error())
 		}
 	}
 	if req.Operation != reliabletask.ExternalInteractionOperationSmsOTP {
@@ -234,45 +239,92 @@ func (s *ExternalInteractionService) GetRequest(
 	}
 	return ExternalInteractionRequestState{
 		RequestID: requestID,
-		Operation: strings.TrimPrefix(task.TaskType, "external_interaction."),
+		Operation: strings.TrimPrefix(
+			task.TaskType,
+			reliabletask.ExternalInteractionTaskPrefix,
+		),
 		Status:    string(reliabletask.ExternalInteractionStatusAccepted),
 		UpdatedAt: task.UpdatedAt.UTC().Format(time.RFC3339),
 	}, true, nil
 }
 
 type ExternalDeadLetter struct {
-	RequestID  string `json:"requestId"`
-	Operation  string `json:"operation"`
-	Provider   string `json:"provider"`
-	FinalError string `json:"finalError"`
-	Retryable  bool   `json:"retryable"`
-	CreatedAt  string `json:"createdAt"`
+	DeadLetterID   string `json:"deadLetterId"`
+	TaskID         string `json:"taskId"`
+	RequestID      string `json:"requestId"`
+	Operation      string `json:"operation"`
+	Provider       string `json:"provider"`
+	FinalError     string `json:"finalError"`
+	Retryable      bool   `json:"retryable"`
+	RecoveryAction string `json:"recoveryAction"`
+	CreatedAt      string `json:"createdAt"`
 }
 
 func (s *ExternalInteractionService) ListDeadLetters(ctx context.Context, requestID string) ([]ExternalDeadLetter, error) {
+	requestID = strings.TrimSpace(requestID)
+	if requestID == "" {
+		return nil, fmt.Errorf("requestId is required")
+	}
+	taskTypes := make([]string, 0, len(s.policies))
+	for operation := range s.policies {
+		taskTypes = append(
+			taskTypes,
+			reliabletask.TaskTypeForExternalInteraction(operation),
+		)
+	}
+	sort.Strings(taskTypes)
+	deadTasks, err := s.store.ListDeadTasks(ctx, taskTypes, 0)
+	if err != nil {
+		return nil, err
+	}
 	attempts, err := s.ListAttempts(ctx, requestID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]ExternalDeadLetter, 0)
+	latestAttemptByTask := make(map[string]reliabletask.ProviderAttemptRecord)
 	for _, attempt := range attempts {
-		if attempt.Status != reliabletask.ExternalInteractionStatusFailed || attempt.Retryable {
+		current, found := latestAttemptByTask[attempt.TaskID]
+		if !found || attempt.CreatedAt.After(current.CreatedAt) {
+			latestAttemptByTask[attempt.TaskID] = attempt
+		}
+	}
+	out := make([]ExternalDeadLetter, 0)
+	for _, task := range deadTasks {
+		if task.AggregateID != requestID {
 			continue
 		}
+		attempt := latestAttemptByTask[task.TaskID]
+		finalError := "external interaction retry budget exhausted"
+		if task.LastFailure != nil && strings.TrimSpace(task.LastFailure.Message) != "" {
+			finalError = strings.TrimSpace(task.LastFailure.Message)
+		}
 		out = append(out, ExternalDeadLetter{
-			RequestID:  attempt.RequestID,
-			Operation:  attempt.Operation,
-			Provider:   attempt.Provider,
-			FinalError: attempt.NormalizedError,
-			Retryable:  attempt.Retryable,
-			CreatedAt:  attempt.CreatedAt.Format(time.RFC3339),
+			DeadLetterID:   "dead-letter-" + task.TaskID,
+			TaskID:         task.TaskID,
+			RequestID:      task.AggregateID,
+			Operation:      strings.TrimPrefix(task.TaskType, reliabletask.ExternalInteractionTaskPrefix),
+			Provider:       attempt.Provider,
+			FinalError:     finalError,
+			Retryable:      false,
+			RecoveryAction: "manual_recover",
+			CreatedAt:      task.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 	return out, nil
 }
 
-func (s *ExternalInteractionService) RecoverDeadTask(ctx context.Context, taskID string) error {
-	return s.store.RecoverDeadTask(ctx, taskID, s.now())
+func (s *ExternalInteractionService) RecoverDeadTask(
+	ctx context.Context,
+	taskID string,
+	idempotencyKey string,
+) error {
+	_, _, err := s.store.RecoverDeadTaskIdempotently(
+		ctx,
+		taskID,
+		idempotencyKey,
+		s.now(),
+	)
+	return err
 }
 
 func (s *ExternalInteractionService) CleanupRetention(ctx context.Context, policy reliabletask.RetentionPolicy) (reliabletask.RetentionCleanupResult, error) {
@@ -286,9 +338,7 @@ func (s *ExternalInteractionService) Metrics(ctx context.Context) (reliabletask.
 func supportedExternalOperation(operation string) bool {
 	switch operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP,
-		reliabletask.ExternalInteractionOperationPush,
-		reliabletask.ExternalInteractionOperationOneTapPhone,
-		reliabletask.ExternalInteractionOperationWebhook:
+		reliabletask.ExternalInteractionOperationPush:
 		return true
 	default:
 		return false

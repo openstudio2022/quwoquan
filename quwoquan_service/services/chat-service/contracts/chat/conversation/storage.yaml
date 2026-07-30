@@ -40,10 +40,6 @@ collections:
     entity: Conversation
     role: authoritative
     description: chat 域三个非 Message 聚合 outbox 的共享全序分配器（_id 为 outbox 集合名），与事件写入同事务推进。
-  chat_schema_migrations:
-    entity: Conversation
-    role: authoritative
-    description: 受租约保护的 chat 数据库架构迁移账本；记录前检、失败证据与完成水位，禁止以数据卷重置替代迁移。
   chat_projection_checkpoints:
     entity: Conversation
     role: projection

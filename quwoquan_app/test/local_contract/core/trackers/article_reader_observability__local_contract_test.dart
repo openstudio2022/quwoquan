@@ -64,6 +64,60 @@ void main() {
       expect(recorder.payloads[4].extensions['recoveryAction'], 'retry');
     },
   );
+
+  test('reader fallback 去重按 30 分钟 TTL 与 LRU 容量保持有界', () async {
+    var now = DateTime.utc(2026, 7, 28, 10);
+    final recorder = _CapturingRecorder();
+    final tracker = ArticleReaderObservability(
+      AnalyticsService.forTesting(telemetryReporter: recorder),
+      recorder,
+      fallbackDedupCapacity: 2,
+      fallbackDedupTtl: const Duration(minutes: 30),
+      now: () => now,
+    );
+
+    tracker.trackReaderFallback(
+      postId: 'post-1',
+      reason: 'long_document',
+      bookReaderEnabled: true,
+    );
+    tracker.trackReaderFallback(
+      postId: 'post-2',
+      reason: 'long_document',
+      bookReaderEnabled: true,
+    );
+    tracker.trackReaderFallback(
+      postId: 'post-3',
+      reason: 'long_document',
+      bookReaderEnabled: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(tracker.debugFallbackDedupEntryCount, 2);
+    expect(recorder.payloads, hasLength(3));
+
+    tracker.trackReaderFallback(
+      postId: 'post-1',
+      reason: 'long_document',
+      bookReaderEnabled: true,
+    );
+    tracker.trackReaderFallback(
+      postId: 'post-1',
+      reason: 'long_document',
+      bookReaderEnabled: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.payloads, hasLength(4));
+
+    now = now.add(const Duration(minutes: 31));
+    tracker.trackReaderFallback(
+      postId: 'post-1',
+      reason: 'long_document',
+      bookReaderEnabled: true,
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(recorder.payloads, hasLength(5));
+    expect(tracker.debugFallbackDedupEntryCount, 1);
+  });
 }
 
 final class _CapturingRecorder implements AppTelemetryRecorder {

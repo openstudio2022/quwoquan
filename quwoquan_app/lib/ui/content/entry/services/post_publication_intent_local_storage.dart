@@ -5,7 +5,7 @@ final class PostPublicationIntentLocalStorage {
 
   static String scopeKey(String? currentUserId) {
     final normalized = currentUserId?.trim() ?? '';
-    return 'post_publication_intents_v1:${normalized.isEmpty ? 'guest' : normalized}';
+    return 'post_publication_intents:${normalized.isEmpty ? 'guest' : normalized}';
   }
 
   static Future<void> clearForTerminalAccountClosure(

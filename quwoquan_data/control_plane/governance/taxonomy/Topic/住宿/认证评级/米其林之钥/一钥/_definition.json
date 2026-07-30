@@ -2,6 +2,7 @@
   "label": "一钥",
   "labelEn": "1 Key",
   "description": "米其林之钥一钥酒店",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

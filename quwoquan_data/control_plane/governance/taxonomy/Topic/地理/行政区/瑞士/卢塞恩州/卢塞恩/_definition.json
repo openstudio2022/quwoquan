@@ -1,0 +1,12 @@
+{
+  "label": "卢塞恩",
+  "labelEn": "Lucerne",
+  "description": "廊桥与湖山门户城市",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

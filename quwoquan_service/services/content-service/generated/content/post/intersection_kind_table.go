@@ -32,6 +32,7 @@ var IntersectionEvidenceRank = map[string]int{
 	"sharedTagSample":        60,
 	"followeeInObject":       10,
 	"followeeVisited":        10,
+	"followeeViewedObject":   10,
 	"followeeViewing":        10,
 	"alumniHere":             50,
 	"colleagueHere":          50,
@@ -69,6 +70,7 @@ var IntersectionIconKeyByKind = map[string]string{
 	"sharedTagSample":        "interest",
 	"followeeInObject":       "followHere",
 	"followeeVisited":        "placeHere",
+	"followeeViewedObject":   "viewing",
 	"followeeViewing":        "viewing",
 	"alumniHere":             "alumni",
 	"colleagueHere":          "work",
@@ -88,6 +90,30 @@ var IntersectionIconKeyByDimension = map[string]string{
 	"relationship": "people",
 }
 
+// IntersectionToneByIconKey: iconKey → 色板 token 名（registry.visualToneByIconKey）。
+// 云侧只下发色号名，端持 light/dark 成对调色板按主题取色；未登记 iconKey 查表落 ""。
+var IntersectionToneByIconKey = map[string]string{
+	"alumni":     "mist",
+	"attention":  "stone",
+	"circle":     "sage",
+	"contact":    "sage",
+	"discussion": "clay",
+	"followHere": "sage",
+	"interest":   "stone",
+	"like":       "clay",
+	"people":     "sage",
+	"place":      "tea",
+	"placeHere":  "tea",
+	"share":      "clay",
+	"viewing":    "sage",
+	"work":       "mist",
+}
+
+// IntersectionIconAssetByIconKey: iconKey → 远程图标资源相对路径（registry.iconAssetByIconKey）。
+// 值是数据发布 media 根下的 alpha 蒙版图路径；为空表示该图标仍走端侧 glyph 兜底。
+// 新增交集类型图标 = 发一次数据 + 登记一行，不需要发端。
+var IntersectionIconAssetByIconKey = map[string]string{}
+
 // IntersectionRouteIDByObjectKind: objectKind → 端路由逻辑名（registry.objectKinds[].routeId）。
 // 仅登记非空 routeId；不可导航对象（content/tag）缺省查表落 ""（map 零值）。
 var IntersectionRouteIDByObjectKind = map[string]string{
@@ -101,8 +127,7 @@ var IntersectionRouteIDByObjectKind = map[string]string{
 	"gear":       "homepageDetail",
 	"content":    "workBrowser",
 	"entity":     "homepageDetail",
-	"trip":       "tripDetail",
-	"meetup":     "meetupDetail",
+	"gathering":  "gatheringDetail",
 }
 
 // IntersectionAssetKindByObjectKind: objectKind → 对象视觉资产类型（registry.objectKinds[].assetKind）。
@@ -117,8 +142,77 @@ var IntersectionAssetKindByObjectKind = map[string]string{
 	"photo_spot": "coverImage",
 	"gear":       "coverImage",
 	"content":    "coverImage",
-	"trip":       "coverImage",
-	"meetup":     "coverImage",
+	"gathering":  "coverImage",
+}
+
+// IntersectionDimensionByObjectKind: objectKind → 共享标签 reason 的交集维度
+// （registry.objectKinds[].dimension）。取代服务端手写的 objectDimension switch。
+var IntersectionDimensionByObjectKind = map[string]string{
+	"person":     "interest",
+	"circle":     "relationship",
+	"school":     "identity",
+	"place":      "location",
+	"enterprise": "interest",
+	"route":      "location",
+	"photo_spot": "location",
+	"gear":       "interest",
+	"content":    "interest",
+	"entity":     "location",
+	"tag":        "interest",
+	"gathering":  "relationship",
+}
+
+// IntersectionLabelByObjectKind: objectKind → 展示名缺失时的兜底称谓
+// （registry.objectKinds[].label）。取代服务端手写的 objectLabel switch。
+var IntersectionLabelByObjectKind = map[string]string{
+	"person":     "同好",
+	"circle":     "同圈",
+	"school":     "同校",
+	"place":      "同游",
+	"enterprise": "同好",
+	"route":      "同游",
+	"photo_spot": "同游",
+	"gear":       "同好",
+	"content":    "同好",
+	"entity":     "同游",
+	"tag":        "同好",
+	"gathering":  "同圈",
+}
+
+// IntersectionObjectKindByObjectType: 开放 objectType 词汇 → objectKind 闭集
+// （registry.objectTypeBindings）。HomepageType 全集逐值登记，不留 default；
+// 未登记 objectType 查表落 ""，由消费方 fail-safe，而不是静默当成人物。
+var IntersectionObjectKindByObjectType = map[string]string{
+	"ancient_town":      "place",
+	"brand":             "enterprise",
+	"check_in_spot":     "place",
+	"circle":            "circle",
+	"city":              "place",
+	"company":           "enterprise",
+	"enterprise":        "enterprise",
+	"entity":            "place",
+	"gear":              "gear",
+	"heritage_site":     "place",
+	"homepage":          "place",
+	"hot_spring":        "place",
+	"hotel":             "place",
+	"museum":            "place",
+	"natural_landscape": "place",
+	"park":              "place",
+	"person":            "person",
+	"photo_spot":        "photo_spot",
+	"place":             "place",
+	"religious_site":    "place",
+	"restaurant":        "place",
+	"route":             "route",
+	"school":            "school",
+	"sight":             "place",
+	"theme_park":        "place",
+	"transport_hub":     "place",
+	"travel_photo":      "place",
+	"university":        "school",
+	"user":              "person",
+	"vehicle":           "gear",
 }
 
 // IntersectionActionKeysByKind: kind → 行动建议 actionKey 有序列表（registry.actionHintsByKind）。
@@ -130,23 +224,24 @@ var IntersectionActionKeysByKind = map[string][]string{
 	"coCreatedContent":       {"open_content", "message_person"},
 	"coLiked":                {"open_content", "follow_person"},
 	"coMemberCircle":         {"join_circle", "open_discussion"},
-	"coPlannedTrip":          {"join_trip", "start_companion"},
-	"coPresentHere":          {"meet_nearby", "join_meetup", "greet_person"},
+	"coPlannedTrip":          {"join_gathering", "start_gathering"},
+	"coPresentHere":          {"meet_nearby", "join_gathering", "greet_person"},
 	"coSharedContent":        {"open_content", "create_followup"},
 	"coVisitedEntity":        {"open_object", "open_route"},
-	"coWishlistedEntity":     {"start_companion", "view_official_deals", "open_route", "follow_object"},
+	"coWishlistedEntity":     {"start_gathering", "view_official_deals", "open_route", "follow_object"},
 	"colleagueHere":          {"open_object", "message_person"},
 	"commonContact":          {"greet_person", "message_person", "view_shared_people"},
 	"commonFollower":         {"follow_person", "message_person", "view_shared_people"},
 	"followeeDiscussedThis":  {"open_discussion", "open_content"},
 	"followeeInObject":       {"join_circle", "view_shared_people"},
+	"followeeViewedObject":   {"open_object", "view_shared_people"},
 	"followeeViewing":        {"open_content", "view_shared_people"},
 	"followeeVisited":        {"open_object", "open_route"},
-	"nearbyAffinity":         {"meet_nearby", "start_voice_room", "greet_person", "follow_person"},
+	"nearbyAffinity":         {"meet_nearby", "greet_person", "follow_person"},
 	"sameCohort":             {"greet_person", "open_object"},
 	"sameCompany":            {"message_person", "open_object"},
 	"sameDepartment":         {"greet_person", "open_object"},
-	"sameIndustry":           {"message_person", "open_object"},
+	"sameIndustry":           {"message_person", "follow_person"},
 	"sameMajor":              {"greet_person", "open_object"},
 	"sameSchool":             {"greet_person", "open_object"},
 	"sameTeam":               {"message_person", "open_object"},
@@ -158,31 +253,28 @@ var IntersectionActionKeysByKind = map[string][]string{
 	"wantToMeetSameInterest": {"express_interest", "join_topic_room", "greet_person", "follow_person"},
 }
 
-// IntersectionActionLabelByKey: actionKey → 终端 UI 短标签（registry.actionLabelByKey）。
-// 未登记 key 由消费方兜底 ask_assistant 标签。
-var IntersectionActionLabelByKey = map[string]string{
-	"ask_assistant":       "解释这条交集",
-	"book_hotel":          "订住宿",
-	"book_ticket":         "订门票",
-	"create_followup":     "发布跟进",
-	"express_interest":    "打个招呼",
-	"follow_object":       "关注对象",
-	"follow_person":       "关注TA",
-	"greet_person":        "打招呼",
-	"join_circle":         "加入圈子",
-	"join_meetup":         "报名",
-	"join_topic_room":     "进话题群",
-	"join_trip":           "加入同行",
-	"meet_nearby":         "附近碰头",
-	"message_person":      "私信",
-	"open_content":        "查看内容",
-	"open_discussion":     "进入讨论",
-	"open_object":         "查看对象",
-	"open_route":          "查看路线",
-	"start_companion":     "发起结伴",
-	"start_voice_room":    "进语音房",
-	"view_official_deals": "看官方优惠",
-	"view_shared_people":  "查看共同来源",
+// IntersectionActionLabelByKey: actionKey → 终端 UI 短标签（registry.actionLabelByKey）；未登记 key 由消费方兜底 ask_assistant 标签。
+var IntersectionActionLabelByKey = map[string]IntersectionText{
+	"ask_assistant":       {Text: "解释这条交集", L10nKey: "intersection.action.ask_assistant"},
+	"book_hotel":          {Text: "订住宿", L10nKey: "intersection.action.book_hotel"},
+	"book_ticket":         {Text: "订门票", L10nKey: "intersection.action.book_ticket"},
+	"create_followup":     {Text: "发布跟进", L10nKey: "intersection.action.create_followup"},
+	"express_interest":    {Text: "打个招呼", L10nKey: "intersection.action.express_interest"},
+	"follow_object":       {Text: "关注对象", L10nKey: "intersection.action.follow_object"},
+	"follow_person":       {Text: "关注TA", L10nKey: "intersection.action.follow_person"},
+	"greet_person":        {Text: "打招呼", L10nKey: "intersection.action.greet_person"},
+	"join_circle":         {Text: "加入圈子", L10nKey: "intersection.action.join_circle"},
+	"join_gathering":      {Text: "加入聚集", L10nKey: "intersection.action.join_gathering"},
+	"join_topic_room":     {Text: "进话题群", L10nKey: "intersection.action.join_topic_room"},
+	"meet_nearby":         {Text: "附近碰头", L10nKey: "intersection.action.meet_nearby"},
+	"message_person":      {Text: "私信", L10nKey: "intersection.action.message_person"},
+	"open_content":        {Text: "查看内容", L10nKey: "intersection.action.open_content"},
+	"open_discussion":     {Text: "进入讨论", L10nKey: "intersection.action.open_discussion"},
+	"open_object":         {Text: "查看对象", L10nKey: "intersection.action.open_object"},
+	"open_route":          {Text: "查看路线", L10nKey: "intersection.action.open_route"},
+	"start_gathering":     {Text: "发起聚集", L10nKey: "intersection.action.start_gathering"},
+	"view_official_deals": {Text: "看官方优惠", L10nKey: "intersection.action.view_official_deals"},
+	"view_shared_people":  {Text: "查看共同来源", L10nKey: "intersection.action.view_shared_people"},
 }
 
 // IntersectionMomentByKind: kind → 意图时态（registry.kinds[].moment，缺省 current）。
@@ -212,6 +304,7 @@ var IntersectionMomentByKind = map[string]string{
 	"sharedTagSample":        "current",
 	"followeeInObject":       "current",
 	"followeeVisited":        "retrospective",
+	"followeeViewedObject":   "retrospective",
 	"followeeViewing":        "current",
 	"alumniHere":             "current",
 	"colleagueHere":          "current",
@@ -232,7 +325,7 @@ var IntersectionGateKeys = []string{"login", "realName", "minorMode", "blocked",
 var IntersectionFeedbackKinds = []string{"notInterested", "dismiss", "rejectGreeting", "leaveCircle"}
 
 // IntersectionActionDispatch: 行动路由类别闭集（registry.actionDispatch，M0.7；assistant|navigate|message|companion|connect|commerce）。
-var IntersectionActionDispatch = []string{"assistant", "navigate", "message", "companion", "connect", "commerce"}
+var IntersectionActionDispatch = []string{"assistant", "navigate", "message", "gathering", "connect", "commerce"}
 
 // IntersectionActionTierByKey: actionKey → tier（light|heavy，registry.actionKeyMeta）。
 var IntersectionActionTierByKey = map[string]string{
@@ -245,17 +338,15 @@ var IntersectionActionTierByKey = map[string]string{
 	"follow_person":       "light",
 	"greet_person":        "light",
 	"join_circle":         "light",
-	"join_meetup":         "heavy",
+	"join_gathering":      "heavy",
 	"join_topic_room":     "heavy",
-	"join_trip":           "heavy",
 	"meet_nearby":         "heavy",
 	"message_person":      "heavy",
 	"open_content":        "light",
 	"open_discussion":     "light",
 	"open_object":         "light",
 	"open_route":          "light",
-	"start_companion":     "heavy",
-	"start_voice_room":    "heavy",
+	"start_gathering":     "heavy",
 	"view_official_deals": "light",
 	"view_shared_people":  "light",
 }
@@ -272,17 +363,15 @@ var IntersectionActionTargetAvailabilityByKey = map[string]string{
 	"follow_person":       "available",
 	"greet_person":        "available",
 	"join_circle":         "available",
-	"join_meetup":         "deferred",
-	"join_topic_room":     "available",
-	"join_trip":           "deferred",
+	"join_gathering":      "deferred",
+	"join_topic_room":     "deferred",
 	"meet_nearby":         "deferred",
 	"message_person":      "available",
 	"open_content":        "available",
 	"open_discussion":     "available",
 	"open_object":         "available",
 	"open_route":          "available",
-	"start_companion":     "available",
-	"start_voice_room":    "deferred",
+	"start_gathering":     "available",
 	"view_official_deals": "deferred",
 	"view_shared_people":  "available",
 }
@@ -298,17 +387,15 @@ var IntersectionRequiredGatesByActionKey = map[string][]string{
 	"follow_person":       {"login"},
 	"greet_person":        {"login", "greetPreference", "blocked"},
 	"join_circle":         {"login"},
-	"join_meetup":         {"login", "realName", "minorMode"},
+	"join_gathering":      {"login", "realName", "minorMode"},
 	"join_topic_room":     {"login", "minorMode"},
-	"join_trip":           {"login", "realName", "minorMode"},
 	"meet_nearby":         {"login", "realName", "minorMode", "mutualConsent", "fuzzyLocation", "rateLimit"},
 	"message_person":      {"login", "mutualConsent", "blocked", "rateLimit"},
 	"open_content":        {},
 	"open_discussion":     {"login"},
 	"open_object":         {},
 	"open_route":          {},
-	"start_companion":     {"login", "realName", "minorMode", "blocked", "rateLimit"},
-	"start_voice_room":    {"login", "realName", "minorMode"},
+	"start_gathering":     {"login", "realName", "minorMode", "blocked", "rateLimit"},
 	"view_official_deals": {},
 	"view_shared_people":  {"login"},
 }
@@ -320,22 +407,431 @@ var IntersectionActionDispatchByKey = map[string]string{
 	"book_hotel":          "commerce",
 	"book_ticket":         "commerce",
 	"create_followup":     "assistant",
-	"express_interest":    "connect",
+	"express_interest":    "message",
 	"follow_object":       "navigate",
 	"follow_person":       "navigate",
-	"greet_person":        "navigate",
+	"greet_person":        "message",
 	"join_circle":         "navigate",
-	"join_meetup":         "companion",
+	"join_gathering":      "gathering",
 	"join_topic_room":     "connect",
-	"join_trip":           "companion",
-	"meet_nearby":         "companion",
+	"meet_nearby":         "gathering",
 	"message_person":      "message",
 	"open_content":        "navigate",
 	"open_discussion":     "navigate",
 	"open_object":         "navigate",
 	"open_route":          "navigate",
-	"start_companion":     "companion",
-	"start_voice_room":    "connect",
+	"start_gathering":     "gathering",
 	"view_official_deals": "commerce",
 	"view_shared_people":  "navigate",
+}
+
+// IntersectionColdStartSupplyKeyByKind: kind → 供给计量口径（registry.coldStartSupply.supplyKeyByKind）。
+// 未登记的 kind 不受冷启动闸门约束（对象池天然等于用户池等情形）。
+var IntersectionColdStartSupplyKeyByKind = map[string]string{
+	"coMemberCircle":        "circle_membership",
+	"coVisitedEntity":       "post_declared_visit",
+	"coWishlistedEntity":    "entity_wishlist",
+	"followeeViewedObject":  "entity_page_view",
+	"followeeVisited":       "post_declared_visit",
+	"sharedCircle":          "circle_membership",
+	"sharedEntityAttention": "entity_page_view",
+}
+
+// IntersectionDeferredKinds: status == deferred 的 kind 集合（registry.kinds[].status）。
+// deferred = 可证数据源缺位，注册表登记占位但禁止产出；消费方必须在下发前整条丢弃，
+// 不得依赖「没有 producer」这种隐式保证（deferredReason 说明缺什么）。
+var IntersectionDeferredKinds = map[string]struct{}{
+	"alumni":                 {},
+	"alumniHere":             {},
+	"coCreatedContent":       {},
+	"coMemberCircle":         {},
+	"coPlannedTrip":          {},
+	"coPresentHere":          {},
+	"colleagueHere":          {},
+	"commonContact":          {},
+	"nearbyAffinity":         {},
+	"sameCohort":             {},
+	"sameCompany":            {},
+	"sameDepartment":         {},
+	"sameMajor":              {},
+	"sameSchool":             {},
+	"sameTeam":               {},
+	"sharedDiscussion":       {},
+	"wantToMeetSameInterest": {},
+}
+
+// IntersectionStatementSlots: 结论句槽位闭集（registry.statementTemplates.slots）。
+var IntersectionStatementSlots = []string{"subject", "countedSubject", "object", "count", "occupation", "place", "action"}
+
+// IntersectionStatementVariant 是一条可渲染模板：Template 带 {slot}，L10nKey 供端取译文。
+type IntersectionStatementVariant struct {
+	Template string
+	L10nKey  string
+}
+
+// IntersectionStatementForm 是单个 kind 的结论句模板族。
+// Counted 为零值表示该 kind 无计数降级句（缺具名对象时整条隐藏，不造名）。
+type IntersectionStatementForm struct {
+	Template       string
+	L10nKey        string
+	ActionFallback string
+	Counted        IntersectionStatementVariant
+	Variants       map[string]IntersectionStatementVariant
+}
+
+// IntersectionStatementFormByKind: kind → 结论句模板族（registry.statementTemplates.byKind）。
+// 未登记 kind 查表落零值，消费方必须据此不产出结论句（§20.4 降级链末级：隐藏）。
+var IntersectionStatementFormByKind = map[string]IntersectionStatementForm{
+	"coCommented": {
+		Template:       "{subject}{action}{object}",
+		L10nKey:        "intersection.statement.co_commented",
+		ActionFallback: "都讨论过",
+		Counted:        IntersectionStatementVariant{Template: "{subject}和你都讨论过{count}条相同内容", L10nKey: "intersection.statement.co_commented.counted"},
+	},
+	"coCreatedContent": {
+		Template: "{subject}都共创过{object}",
+		L10nKey:  "intersection.statement.co_created_content",
+	},
+	"coLiked": {
+		Template: "{subject}都点赞过{object}",
+		L10nKey:  "intersection.statement.co_liked",
+		Counted:  IntersectionStatementVariant{Template: "{subject}和你都点赞过{count}条相同内容", L10nKey: "intersection.statement.co_liked.counted"},
+	},
+	"coMemberCircle": {
+		Template: "{subject}都加入了{object}",
+		L10nKey:  "intersection.statement.co_member_circle",
+		Counted:  IntersectionStatementVariant{Template: "{subject}和你都加入了{count}个共同圈子", L10nKey: "intersection.statement.co_member_circle.counted"},
+	},
+	"coSharedContent": {
+		Template:       "{subject}{action}{object}",
+		L10nKey:        "intersection.statement.co_shared_content",
+		ActionFallback: "都转发过",
+		Counted:        IntersectionStatementVariant{Template: "{subject}和你都转发过{count}条相同内容", L10nKey: "intersection.statement.co_shared_content.counted"},
+	},
+	"coVisitedEntity": {
+		Template: "{subject}都去过{object}",
+		L10nKey:  "intersection.statement.co_visited_entity",
+		Counted:  IntersectionStatementVariant{Template: "{subject}和你都去过{count}个相同的地方", L10nKey: "intersection.statement.co_visited_entity.counted"},
+		Variants: map[string]IntersectionStatementVariant{
+			"personPlace": {Template: "你和{object}都去过{place}", L10nKey: "intersection.statement.co_visited_entity.person_place"},
+		},
+	},
+	"coWishlistedEntity": {
+		Template: "{subject}都想去{object}",
+		L10nKey:  "intersection.statement.co_wishlisted_entity",
+		Counted:  IntersectionStatementVariant{Template: "{subject}和你都想去{count}个相同的地方", L10nKey: "intersection.statement.co_wishlisted_entity.counted"},
+		Variants: map[string]IntersectionStatementVariant{
+			"personPlace": {Template: "你和{object}都想去{place}", L10nKey: "intersection.statement.co_wishlisted_entity.person_place"},
+		},
+	},
+	"commonContact": {
+		Template: "{subject}都是你和{object}的共同联系人",
+		L10nKey:  "intersection.statement.common_contact",
+		Variants: map[string]IntersectionStatementVariant{
+			"noObject": {Template: "{subject}都是你们的共同联系人", L10nKey: "intersection.statement.common_contact.no_object"},
+		},
+	},
+	"commonFollower": {
+		Template: "{subject}也关注了{object}",
+		L10nKey:  "intersection.statement.common_follower",
+	},
+	"followeeDiscussedThis": {
+		Template: "{subject}正在讨论{object}",
+		L10nKey:  "intersection.statement.followee_discussed_this",
+	},
+	"followeeInObject": {
+		Template: "{subject}在{object}",
+		L10nKey:  "intersection.statement.followee_in_object",
+	},
+	"followeeViewedObject": {
+		Template: "{countedSubject}也看过{object}",
+		L10nKey:  "intersection.statement.followee_viewed_object",
+	},
+	"followeeViewing": {
+		Template: "{subject}正在看{object}",
+		L10nKey:  "intersection.statement.followee_viewing",
+	},
+	"followeeVisited": {
+		Template: "{countedSubject}来过{object}",
+		L10nKey:  "intersection.statement.followee_visited",
+	},
+	"sameIndustry": {
+		Template: "你和{object}都是{occupation}",
+		L10nKey:  "intersection.statement.same_industry",
+	},
+	"sharedCircle": {
+		Template: "{subject}都加入了{object}",
+		L10nKey:  "intersection.statement.shared_circle",
+		Counted:  IntersectionStatementVariant{Template: "{subject}和你都加入了{count}个共同圈子", L10nKey: "intersection.statement.shared_circle.counted"},
+	},
+	"sharedDiscussion": {
+		Template:       "{subject}{action}{object}",
+		L10nKey:        "intersection.statement.shared_discussion",
+		ActionFallback: "都讨论过",
+		Counted:        IntersectionStatementVariant{Template: "{subject}和你都讨论过{count}条相同内容", L10nKey: "intersection.statement.shared_discussion.counted"},
+	},
+	"sharedEntityAttention": {
+		Template: "{subject}也看过{object}",
+		L10nKey:  "intersection.statement.shared_entity_attention",
+		Counted:  IntersectionStatementVariant{Template: "{subject}和你都看过{count}个相同对象", L10nKey: "intersection.statement.shared_entity_attention.counted"},
+	},
+	"sharedFollowees": {
+		Template: "{subject}也关注了{object}",
+		L10nKey:  "intersection.statement.shared_followees",
+	},
+	"sharedTagSample": {
+		Template: "{subject}都关注{object}",
+		L10nKey:  "intersection.statement.shared_tag_sample",
+		Variants: map[string]IntersectionStatementVariant{
+			"circleTag": {Template: "{subject}在圈子里常看{object}", L10nKey: "intersection.statement.shared_tag_sample.circle_tag"},
+		},
+	},
+}
+
+// IntersectionText 是一条可渲染文案：Text 为契约基线，L10nKey 供运营态覆盖与译文查询。
+// 查表落空得零值，消费方必须据此走降级链（省略该成分或整条隐藏），不得回退中文字面量。
+type IntersectionText struct {
+	Text    string
+	L10nKey string
+}
+
+// IntersectionRelationLabelByKind: kind → 代表人关系限定词（registry.presentationText.relationLabels）。
+var IntersectionRelationLabelByKind = map[string]IntersectionText{
+	"alumni":                {Text: "校友", L10nKey: "intersection.relation.alumni"},
+	"alumniHere":            {Text: "校友", L10nKey: "intersection.relation.alumni_here"},
+	"coMemberCircle":        {Text: "同圈成员", L10nKey: "intersection.relation.co_member_circle"},
+	"colleagueHere":         {Text: "同事", L10nKey: "intersection.relation.colleague_here"},
+	"commonContact":         {Text: "联系人", L10nKey: "intersection.relation.common_contact"},
+	"commonFollower":        {Text: "关注你的人", L10nKey: "intersection.relation.common_follower"},
+	"followeeDiscussedThis": {Text: "你关注的人", L10nKey: "intersection.relation.followee_discussed_this"},
+	"followeeInObject":      {Text: "你关注的人", L10nKey: "intersection.relation.followee_in_object"},
+	"followeeViewedObject":  {Text: "你关注的人", L10nKey: "intersection.relation.followee_viewed_object"},
+	"followeeViewing":       {Text: "你关注的人", L10nKey: "intersection.relation.followee_viewing"},
+	"followeeVisited":       {Text: "你关注的人", L10nKey: "intersection.relation.followee_visited"},
+	"sameCohort":            {Text: "校友", L10nKey: "intersection.relation.same_cohort"},
+	"sameCompany":           {Text: "同事", L10nKey: "intersection.relation.same_company"},
+	"sameDepartment":        {Text: "校友", L10nKey: "intersection.relation.same_department"},
+	"sameIndustry":          {Text: "同行", L10nKey: "intersection.relation.same_industry"},
+	"sameMajor":             {Text: "校友", L10nKey: "intersection.relation.same_major"},
+	"sameSchool":            {Text: "校友", L10nKey: "intersection.relation.same_school"},
+	"sameTeam":              {Text: "同事", L10nKey: "intersection.relation.same_team"},
+	"sharedCircle":          {Text: "同圈成员", L10nKey: "intersection.relation.shared_circle"},
+	"sharedFollowees":       {Text: "你关注的人", L10nKey: "intersection.relation.shared_followees"},
+}
+
+// IntersectionRelationLabelDefault: 未登记 kind 的关系限定词（空串表示主语不带关系限定）。
+var IntersectionRelationLabelDefault = IntersectionText{Text: "", L10nKey: "intersection.relation.default"}
+
+// IntersectionAnonymousActorLabelByKind: kind → 无具名代表人时的匿名主语（registry.presentationText.anonymousActorLabels）。
+var IntersectionAnonymousActorLabelByKind = map[string]IntersectionText{
+	"alumni":         {Text: "一位校友", L10nKey: "intersection.anonymous_actor.alumni"},
+	"alumniHere":     {Text: "一位校友", L10nKey: "intersection.anonymous_actor.alumni_here"},
+	"colleagueHere":  {Text: "一位同事", L10nKey: "intersection.anonymous_actor.colleague_here"},
+	"commonContact":  {Text: "一位联系人", L10nKey: "intersection.anonymous_actor.common_contact"},
+	"sameCohort":     {Text: "一位校友", L10nKey: "intersection.anonymous_actor.same_cohort"},
+	"sameCompany":    {Text: "一位同事", L10nKey: "intersection.anonymous_actor.same_company"},
+	"sameDepartment": {Text: "一位校友", L10nKey: "intersection.anonymous_actor.same_department"},
+	"sameIndustry":   {Text: "一位同行", L10nKey: "intersection.anonymous_actor.same_industry"},
+	"sameMajor":      {Text: "一位校友", L10nKey: "intersection.anonymous_actor.same_major"},
+	"sameSchool":     {Text: "一位校友", L10nKey: "intersection.anonymous_actor.same_school"},
+	"sameTeam":       {Text: "一位同事", L10nKey: "intersection.anonymous_actor.same_team"},
+}
+
+// IntersectionAnonymousActorLabelDefault: 未登记 kind 的匿名主语。
+var IntersectionAnonymousActorLabelDefault = IntersectionText{Text: "一位用户", L10nKey: "intersection.anonymous_actor.default"}
+
+// IntersectionSubjectPattern: 主语计数与组合语法（registry.presentationText.subjectPatterns）。
+var IntersectionSubjectPattern = map[string]IntersectionText{
+	"anonymousWithRelation":  {Text: "一位{relation}", L10nKey: "intersection.subject.anonymous_with_relation"},
+	"countedPlain":           {Text: "{count}人", L10nKey: "intersection.subject.counted_plain"},
+	"countedUnknownRelation": {Text: "{count}位用户", L10nKey: "intersection.subject.counted_unknown_relation"},
+	"countedWithRelation":    {Text: "{count}位{relation}", L10nKey: "intersection.subject.counted_with_relation"},
+	"namedWithMore":          {Text: "{subject}等{count}人", L10nKey: "intersection.subject.named_with_more"},
+	"namedWithMoreUnit":      {Text: "{subject}等{count}{unit}", L10nKey: "intersection.subject.named_with_more_unit"},
+	"relationPrefixedName":   {Text: "{relation}{name}", L10nKey: "intersection.subject.relation_prefixed_name"},
+	"singleUnknownRelation":  {Text: "1位用户", L10nKey: "intersection.subject.single_unknown_relation"},
+	"singleWithRelation":     {Text: "1位{relation}", L10nKey: "intersection.subject.single_with_relation"},
+}
+
+// IntersectionViewerSubjectByObjectType: 宿主对象即观察者自身时的主语（registry.presentationText.viewerSubjects）。
+var IntersectionViewerSubjectByObjectType = map[string]IntersectionText{
+	"circle":   {Text: "你和这个圈子", L10nKey: "intersection.viewer_subject.circle"},
+	"homepage": {Text: "你和这里", L10nKey: "intersection.viewer_subject.homepage"},
+}
+
+// IntersectionViewerSubjectSelfOnly: 仅指代观察者自身的主语。
+var IntersectionViewerSubjectSelfOnly = IntersectionText{Text: "你", L10nKey: "intersection.viewer_subject.self_only"}
+
+// IntersectionInteractionVerbByAction: 互动类型 → 动词短语（registry.presentationText.interactionVerbs）。
+var IntersectionInteractionVerbByAction = map[string]IntersectionText{
+	"comment": {Text: "评论过", L10nKey: "intersection.interaction_verb.comment"},
+	"like":    {Text: "赞过", L10nKey: "intersection.interaction_verb.like"},
+	"share":   {Text: "转发过", L10nKey: "intersection.interaction_verb.share"},
+}
+
+// IntersectionVerbJoinerPair: 两个动词短语之间的连接词。
+var IntersectionVerbJoinerPair = IntersectionText{Text: "和", L10nKey: "intersection.interaction_verb.joiner_pair"}
+
+// IntersectionVerbJoinerList: 三个及以上动词短语的列举连接词。
+var IntersectionVerbJoinerList = IntersectionText{Text: "、", L10nKey: "intersection.interaction_verb.joiner_list"}
+
+// IntersectionVerbJoinerLast: 末位动词短语之前的连接词。
+var IntersectionVerbJoinerLast = IntersectionText{Text: "并", L10nKey: "intersection.interaction_verb.joiner_last"}
+
+// IntersectionDimensionLabelByDimension: dimension → 展示名词（registry.presentationText.dimensionLabels）。
+var IntersectionDimensionLabelByDimension = map[string]IntersectionText{
+	"content":      {Text: "内容", L10nKey: "intersection.dimension.content"},
+	"identity":     {Text: "身份", L10nKey: "intersection.dimension.identity"},
+	"interest":     {Text: "兴趣", L10nKey: "intersection.dimension.interest"},
+	"location":     {Text: "地点", L10nKey: "intersection.dimension.location"},
+	"relationship": {Text: "关系", L10nKey: "intersection.dimension.relationship"},
+}
+
+// IntersectionPointClassLabelByPointClass: pointClass → 展示名词（registry.presentationText.pointClassLabels）。
+var IntersectionPointClassLabelByPointClass = map[string]IntersectionText{
+	"fact":        {Text: "事实交集", L10nKey: "intersection.point_class.fact"},
+	"recommended": {Text: "推荐交集", L10nKey: "intersection.point_class.recommended"},
+}
+
+// IntersectionKindLabelByKind: kind → 交集点短标签（registry.presentationText.kindLabels）。
+var IntersectionKindLabelByKind = map[string]IntersectionText{
+	"coCommented":           {Text: "共同讨论", L10nKey: "intersection.kind_label.co_commented"},
+	"coLiked":               {Text: "共同点赞", L10nKey: "intersection.kind_label.co_liked"},
+	"coSharedContent":       {Text: "共同转发", L10nKey: "intersection.kind_label.co_shared_content"},
+	"coVisitedEntity":       {Text: "共同去过", L10nKey: "intersection.kind_label.co_visited_entity"},
+	"coWishlistedEntity":    {Text: "共同想去", L10nKey: "intersection.kind_label.co_wishlisted_entity"},
+	"commonFollower":        {Text: "共同粉丝", L10nKey: "intersection.kind_label.common_follower"},
+	"followeeInObject":      {Text: "你关注的人在这里", L10nKey: "intersection.kind_label.followee_in_object"},
+	"followeeViewedObject":  {Text: "你关注的人看过", L10nKey: "intersection.kind_label.followee_viewed_object"},
+	"followeeVisited":       {Text: "关注的人来过", L10nKey: "intersection.kind_label.followee_visited"},
+	"sameIndustry":          {Text: "同行", L10nKey: "intersection.kind_label.same_industry"},
+	"sharedCircle":          {Text: "共同圈子", L10nKey: "intersection.kind_label.shared_circle"},
+	"sharedEntityAttention": {Text: "共同关注的对象", L10nKey: "intersection.kind_label.shared_entity_attention"},
+	"sharedFollowees":       {Text: "共同关注的人", L10nKey: "intersection.kind_label.shared_followees"},
+}
+
+// IntersectionPointTemplateByKind: kind → 交集点计数短句模板（registry.presentationText.pointTemplates）。
+var IntersectionPointTemplateByKind = map[string]IntersectionText{
+	"coCommented":           {Text: "讨论过{count}篇相同内容", L10nKey: "intersection.point.co_commented"},
+	"coLiked":               {Text: "点赞过{count}篇相同内容", L10nKey: "intersection.point.co_liked"},
+	"coSharedContent":       {Text: "转发过{count}篇相同内容", L10nKey: "intersection.point.co_shared_content"},
+	"coVisitedEntity":       {Text: "你和{object}都去过{sample}", L10nKey: "intersection.point.co_visited_entity"},
+	"coWishlistedEntity":    {Text: "你和{object}都想去{sample}", L10nKey: "intersection.point.co_wishlisted_entity"},
+	"commonFollower":        {Text: "{count}位共同粉丝", L10nKey: "intersection.point.common_follower"},
+	"followeeInObject":      {Text: "{count}位你关注的人在这里", L10nKey: "intersection.point.followee_in_object"},
+	"followeeViewedObject":  {Text: "{count}位你关注的人看过", L10nKey: "intersection.point.followee_viewed_object"},
+	"followeeVisited":       {Text: "{count}位你关注的人来过{object}", L10nKey: "intersection.point.followee_visited"},
+	"sameIndustry":          {Text: "都是{sample}", L10nKey: "intersection.point.same_industry"},
+	"sharedCircle":          {Text: "{count}个共同圈子", L10nKey: "intersection.point.shared_circle"},
+	"sharedEntityAttention": {Text: "都看过{count}个相同对象", L10nKey: "intersection.point.shared_entity_attention"},
+	"sharedFollowees":       {Text: "{count}位共同关注的人", L10nKey: "intersection.point.shared_followees"},
+}
+
+// IntersectionActorActionSummaryByKind: kind → 逐人证据的动作摘要（registry.presentationText.actorActionSummaries）。
+var IntersectionActorActionSummaryByKind = map[string]IntersectionText{
+	"followeeInObject":     {Text: "在这里", L10nKey: "intersection.actor_action.followee_in_object"},
+	"followeeViewedObject": {Text: "看过", L10nKey: "intersection.actor_action.followee_viewed_object"},
+	"followeeVisited":      {Text: "来过这里", L10nKey: "intersection.actor_action.followee_visited"},
+}
+
+// IntersectionObjectNameAffix 是对象名的一对包裹符号。
+type IntersectionObjectNameAffix struct {
+	Prefix string
+	Suffix string
+}
+
+// IntersectionObjectNameDefaultAffix: 普通对象名的包裹符号。
+var IntersectionObjectNameDefaultAffix = IntersectionObjectNameAffix{Prefix: "「", Suffix: "」"}
+
+// IntersectionObjectNameWorkTitleAffix: 作品类对象名的包裹符号。
+var IntersectionObjectNameWorkTitleAffix = IntersectionObjectNameAffix{Prefix: "《", Suffix: "》"}
+
+// IntersectionWorkTitleKinds: 宾语按作品名装饰的 kind 集合（registry.presentationText.objectNameDecorations.workTitleKinds）。
+var IntersectionWorkTitleKinds = map[string]struct{}{
+	"coCommented":           {},
+	"coCreatedContent":      {},
+	"coSharedContent":       {},
+	"followeeDiscussedThis": {},
+	"followeeViewing":       {},
+	"sharedDiscussion":      {},
+}
+
+// IntersectionAffinityChannelText 是概率通道单个渠道的具名 / 无名两种话术。
+type IntersectionAffinityChannelText struct {
+	Named   IntersectionText
+	Unnamed IntersectionText
+}
+
+// IntersectionAffinityStatementByChannel: 投放渠道 → 概率通道话术
+// （registry.presentationText.affinityStatements.byChannel）。
+var IntersectionAffinityStatementByChannel = map[string]IntersectionAffinityChannelText{
+	"circle": {
+		Named:   IntersectionText{Text: "你的圈子里最近在看{object}", L10nKey: "intersection.affinity.circle.named"},
+		Unnamed: IntersectionText{Text: "你的圈子里最近在看这些", L10nKey: "intersection.affinity.circle.unnamed"},
+	},
+	"followee": {
+		Named:   IntersectionText{Text: "你关注的人最近在看{object}", L10nKey: "intersection.affinity.followee.named"},
+		Unnamed: IntersectionText{Text: "你关注的人最近在看这些", L10nKey: "intersection.affinity.followee.unnamed"},
+	},
+	"general": {
+		Named:   IntersectionText{Text: "为你推荐{object}", L10nKey: "intersection.affinity.general.named"},
+		Unnamed: IntersectionText{Text: "为你推荐的相关内容", L10nKey: "intersection.affinity.general.unnamed"},
+	},
+}
+
+// IntersectionAffinityConfidenceLabelByDimension: dimension → 概率通道置信标注（registry.presentationText.affinityStatements）。
+var IntersectionAffinityConfidenceLabelByDimension = map[string]IntersectionText{
+	"identity":     {Text: "推荐认识", L10nKey: "intersection.affinity.confidence.identity"},
+	"relationship": {Text: "推荐认识", L10nKey: "intersection.affinity.confidence.relationship"},
+}
+
+// IntersectionAffinityConfidenceLabelDefault: 未登记 dimension 的概率通道置信标注。
+var IntersectionAffinityConfidenceLabelDefault = IntersectionText{Text: "可能感兴趣", L10nKey: "intersection.affinity.confidence_default"}
+
+// IntersectionConnectionSummaryTemplate: 对象页连接说明模板（registry.presentationText.connectionSummary）。
+var IntersectionConnectionSummaryTemplate = IntersectionText{Text: "你们已有{count}个共同点", L10nKey: "intersection.connection_summary"}
+
+// IntersectionSecondaryTextItemWithCount: 辅助说明单项带计数的组装模板（registry.presentationText.secondaryText）。
+var IntersectionSecondaryTextItemWithCount = IntersectionText{Text: "{label} {count}", L10nKey: "intersection.secondary_text.item_with_count"}
+
+// IntersectionSecondaryTextSeparator: 辅助说明各项之间的分隔符。
+var IntersectionSecondaryTextSeparator = IntersectionText{Text: " · ", L10nKey: "intersection.secondary_text.separator"}
+
+// IntersectionListSeparator: 样本名列表分隔符（registry.presentationText.listSeparator）。
+var IntersectionListSeparator = IntersectionText{Text: "、", L10nKey: "intersection.list_separator"}
+
+// IntersectionPlaceholderObjectNames: 通用占位对象名黑名单：命中即视为没有具名对象并走降级链。
+var IntersectionPlaceholderObjectNames = map[string]struct{}{
+	"同好":   {},
+	"同校":   {},
+	"同游":   {},
+	"相同内容": {},
+	"相同的人": {},
+	"这个对象": {},
+	"这些主题": {},
+	"这些内容": {},
+	"这里":   {},
+}
+
+// IntersectionPlaceholderRelationLabels: 通用占位关系称谓黑名单：命中即视为没有可用关系限定。
+var IntersectionPlaceholderRelationLabels = map[string]struct{}{
+	"共同传播":   {},
+	"共同关注":   {},
+	"共同点赞":   {},
+	"共同讨论":   {},
+	"同好":     {},
+	"同行足迹":   {},
+	"都关注此标签": {},
+}
+
+// IntersectionColdStartMinDistinctObjects: kind → 最小候选池规模（去重对象数）。
+// 语料供给低于该值时整类交集不展示：人人都命中的交集信息量为零（P0 稀释闸门）。
+var IntersectionColdStartMinDistinctObjects = map[string]int{
+	"coMemberCircle":        3,
+	"coVisitedEntity":       5,
+	"coWishlistedEntity":    5,
+	"followeeViewedObject":  8,
+	"followeeVisited":       5,
+	"sharedCircle":          3,
+	"sharedEntityAttention": 8,
 }

@@ -1,0 +1,38 @@
+service: api-edge
+domain: gateway
+capability: shared-rate-limit-admission
+
+metrics:
+  decisions_total: api_edge_admission_decisions_total # labels: environment, operation, outcome, failure_policy
+  duration_seconds: api_edge_admission_duration_seconds # labels: environment, outcome
+  readiness_status: runtime_health_check_status # labels: check
+
+privacy:
+  permitted_labels: [environment, operation, outcome, failure_policy, check]
+  prohibited_labels: [account_id, user_id, persona_id, device_id, network_address, credential, redis_key]
+
+slis:
+- id: admission_latency
+  description: shared Redis Lua admission 的 P95；不包含业务 owner 延迟。
+  sli: histogram_quantile(0.95, sum(rate(api_edge_admission_duration_seconds_bucket[5m])) by (le, environment))
+  objective: {p95_ms: 25}
+- id: state_availability
+  description: 所有 fail_closed operation 的共享状态不可用决定必须为零。
+  sli: sum(increase(api_edge_admission_decisions_total{outcome="state_unavailable_denied"}[5m]))
+  objective_max: 0
+- id: readiness
+  description: admission Redis 或 account security authority 不健康时实例从 ready pool 移除。
+  sli: min(runtime_health_check_status{check=~"admission_redis|account_security_authority"})
+  objective: 1
+
+failure_semantics:
+  redis_unavailable: apply_generated_operation_failure_policy_without_local_fallback
+  fail_closed: return_typed_503_without_reaching_owner
+  fail_open: allow_and_emit_explicit_state_unavailable_metric
+  rate_limited: return_typed_429_with_matching_retry_after_and_recovery_after_seconds
+
+release_gate:
+  rule: 同一 release digest 的 stable/gray 峰值总阈值、故障注入、指标告警 readback 任一不满足则停止放量。
+  rollback: restore_previous_api_edge_image_or_config_without_changing_shared_redis_keyspace
+
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_l2_api_edge_admission

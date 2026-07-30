@@ -6,206 +6,24 @@ import (
 	rerrors "quwoquan_service/runtime/errors"
 )
 
-// Circle error sentinels and helpers. user_message and transport semantics come from errors.yaml.
+// Object-owned Circle errors. Transport semantics come from errors.yaml.
 //
 //nolint:gochecknoglobals
 var (
-	ErrInvalidArgument                    = errors.New("CIRCLE.USER.invalid_argument")
-	ErrGroupNotFound                      = errors.New("CIRCLE.USER.group_not_found")
-	ErrGroupArchived                      = errors.New("CIRCLE.USER.group_archived")
-	ErrGroupParentInvalid                 = errors.New("CIRCLE.USER.group_parent_invalid")
-	ErrGroupDefaultConflict               = errors.New("CIRCLE.USER.group_default_conflict")
-	ErrGroupDefaultCannotArchive          = errors.New("CIRCLE.USER.group_default_cannot_archive")
-	ErrGroupVersionConflict               = errors.New("CIRCLE.USER.group_version_conflict")
-	ErrGroupIdempotencyConflict           = errors.New("CIRCLE.USER.group_idempotency_conflict")
-	ErrGroupStorageWriteFailed            = errors.New("CIRCLE.SYSTEM.group_storage_write_failed")
-	ErrGroupMembershipNotFound            = errors.New("CIRCLE.USER.group_membership_not_found")
-	ErrGroupMembershipAlreadyActive       = errors.New("CIRCLE.USER.group_membership_already_active")
-	ErrGroupMembershipFull                = errors.New("CIRCLE.USER.group_membership_full")
-	ErrGroupMembershipStateConflict       = errors.New("CIRCLE.USER.group_membership_state_conflict")
-	ErrGroupMembershipOwnerCannotLeave    = errors.New("CIRCLE.USER.group_membership_owner_cannot_leave")
-	ErrGroupMembershipOwnerCannotRemove   = errors.New("CIRCLE.USER.group_membership_owner_cannot_remove")
-	ErrGroupMembershipRoleInvalid         = errors.New("CIRCLE.USER.group_membership_role_invalid")
-	ErrGroupMembershipVersionConflict     = errors.New("CIRCLE.USER.group_membership_version_conflict")
-	ErrGroupMembershipIdempotencyConflict = errors.New("CIRCLE.USER.group_membership_idempotency_conflict")
-	ErrGroupMembershipStorageWriteFailed  = errors.New("CIRCLE.SYSTEM.group_membership_storage_write_failed")
-	ErrPlacementNotFound                  = errors.New("CIRCLE.USER.placement_not_found")
-	ErrPlacementAlreadyExists             = errors.New("CIRCLE.USER.placement_already_exists")
-	ErrPlacementVersionConflict           = errors.New("CIRCLE.USER.placement_version_conflict")
-	ErrPlacementIdempotencyConflict       = errors.New("CIRCLE.USER.placement_idempotency_conflict")
-	ErrPlacementStorageWriteFailed        = errors.New("CIRCLE.SYSTEM.placement_storage_write_failed")
-	ErrCircleNotFound                     = errors.New("CIRCLE.USER.not_found")
-	ErrCircleArchived                     = errors.New("CIRCLE.USER.circle_archived")
-	ErrCircleVersionConflict              = errors.New("CIRCLE.USER.circle_version_conflict")
-	ErrCircleIdempotencyConflict          = errors.New("CIRCLE.USER.circle_idempotency_conflict")
-	ErrCircleStorageWriteFailed           = errors.New("CIRCLE.SYSTEM.circle_storage_write_failed")
-	ErrJoinApprovalRequired               = errors.New("CIRCLE.USER.join_approval_required")
-	ErrAlreadyMember                      = errors.New("CIRCLE.USER.already_member")
-	ErrMembershipAlreadyActive            = errors.New("CIRCLE.USER.membership_already_active")
-	ErrMembershipNotFound                 = errors.New("CIRCLE.USER.membership_not_found")
-	ErrMembershipOwnerCannotLeave         = errors.New("CIRCLE.USER.membership_owner_cannot_leave")
-	ErrMembershipRoleInvalid              = errors.New("CIRCLE.USER.membership_role_invalid")
-	ErrMembershipStateConflict            = errors.New("CIRCLE.USER.membership_state_conflict")
-	ErrMembershipVersionConflict          = errors.New("CIRCLE.USER.membership_version_conflict")
-	ErrMembershipIdempotencyConflict      = errors.New("CIRCLE.USER.membership_idempotency_conflict")
-	ErrMembershipStorageWriteFailed       = errors.New("CIRCLE.SYSTEM.membership_storage_write_failed")
-	ErrBehaviorFactWriteFailed            = errors.New("CIRCLE.SYSTEM.behavior_fact_write_failed")
-	ErrBehaviorFactIdempotencyConflict    = errors.New("CIRCLE.USER.behavior_fact_idempotency_conflict")
-	ErrRateLimited                        = errors.New("CIRCLE.USER.rate_limited")
-	ErrNotMember                          = errors.New("CIRCLE.USER.not_member")
-	ErrPermissionDenied                   = errors.New("CIRCLE.USER.permission_denied")
-	ErrStorageQuotaExceeded               = errors.New("CIRCLE.USER.storage_quota_exceeded")
-	ErrFileNotFound                       = errors.New("CIRCLE.USER.file_not_found")
-	ErrFileParentInvalid                  = errors.New("CIRCLE.USER.file_parent_invalid")
-	ErrFileAssetInvalid                   = errors.New("CIRCLE.USER.file_asset_invalid")
-	ErrFileVersionConflict                = errors.New("CIRCLE.USER.file_version_conflict")
-	ErrFileIdempotencyConflict            = errors.New("CIRCLE.USER.file_idempotency_conflict")
-	ErrFileStorageWriteFailed             = errors.New("CIRCLE.SYSTEM.file_storage_write_failed")
-	ErrInternalError                      = errors.New("CIRCLE.SYSTEM.internal_error")
+	ErrInvalidArgument           = errors.New("CIRCLE.USER.invalid_argument")
+	ErrCircleNotFound            = errors.New("CIRCLE.USER.not_found")
+	ErrCircleArchived            = errors.New("CIRCLE.USER.circle_archived")
+	ErrCircleVersionConflict     = errors.New("CIRCLE.USER.circle_version_conflict")
+	ErrCircleIdempotencyConflict = errors.New("CIRCLE.USER.circle_idempotency_conflict")
+	ErrCircleStorageWriteFailed  = errors.New("CIRCLE.SYSTEM.circle_storage_write_failed")
+	ErrPermissionDenied          = errors.New("CIRCLE.USER.permission_denied")
+	ErrInternalError             = errors.New("CIRCLE.SYSTEM.internal_error")
 )
 
 // AppErrorFromInvalidArgument returns *AppError for CIRCLE.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrInvalidArgument.Error()))
 	return rerrors.NewAppError(code, "请求参数无效", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromGroupNotFound returns *AppError for CIRCLE.USER.group_not_found (user_message from errors.yaml).
-func AppErrorFromGroupNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupNotFound.Error()))
-	return rerrors.NewAppError(code, "群组不存在", debugMessage).WithMetadata("group_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupArchived returns *AppError for CIRCLE.USER.group_archived (user_message from errors.yaml).
-func AppErrorFromGroupArchived(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupArchived.Error()))
-	return rerrors.NewAppError(code, "群组已归档", debugMessage).WithMetadata("group_archived", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupParentInvalid returns *AppError for CIRCLE.USER.group_parent_invalid (user_message from errors.yaml).
-func AppErrorFromGroupParentInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupParentInvalid.Error()))
-	return rerrors.NewAppError(code, "上级群组无效或形成循环", debugMessage).WithMetadata("group_parent_invalid", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupDefaultConflict returns *AppError for CIRCLE.USER.group_default_conflict (user_message from errors.yaml).
-func AppErrorFromGroupDefaultConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupDefaultConflict.Error()))
-	return rerrors.NewAppError(code, "该圈子已存在默认公共群", debugMessage).WithMetadata("group_default_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupDefaultCannotArchive returns *AppError for CIRCLE.USER.group_default_cannot_archive (user_message from errors.yaml).
-func AppErrorFromGroupDefaultCannotArchive(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupDefaultCannotArchive.Error()))
-	return rerrors.NewAppError(code, "默认公共群不能归档", debugMessage).WithMetadata("group_default_cannot_archive", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromGroupVersionConflict returns *AppError for CIRCLE.USER.group_version_conflict (user_message from errors.yaml).
-func AppErrorFromGroupVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupVersionConflict.Error()))
-	return rerrors.NewAppError(code, "群组已更新，请刷新后重试", debugMessage).WithMetadata("group_version_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupIdempotencyConflict returns *AppError for CIRCLE.USER.group_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromGroupIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原群组命令不一致", debugMessage).WithMetadata("group_idempotency_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.group_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromGroupStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "群组操作失败，请稍后重试", debugMessage).WithMetadata("group_storage_write_failed", 500).WithRecovery("retry", 5)
-}
-
-// AppErrorFromGroupMembershipNotFound returns *AppError for CIRCLE.USER.group_membership_not_found (user_message from errors.yaml).
-func AppErrorFromGroupMembershipNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipNotFound.Error()))
-	return rerrors.NewAppError(code, "群组成员关系不存在", debugMessage).WithMetadata("group_membership_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupMembershipAlreadyActive returns *AppError for CIRCLE.USER.group_membership_already_active (user_message from errors.yaml).
-func AppErrorFromGroupMembershipAlreadyActive(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipAlreadyActive.Error()))
-	return rerrors.NewAppError(code, "已经加入该群组", debugMessage).WithMetadata("group_membership_already_active", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupMembershipFull returns *AppError for CIRCLE.USER.group_membership_full (user_message from errors.yaml).
-func AppErrorFromGroupMembershipFull(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipFull.Error()))
-	return rerrors.NewAppError(code, "群组成员已达上限", debugMessage).WithMetadata("group_membership_full", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromGroupMembershipStateConflict returns *AppError for CIRCLE.USER.group_membership_state_conflict (user_message from errors.yaml).
-func AppErrorFromGroupMembershipStateConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipStateConflict.Error()))
-	return rerrors.NewAppError(code, "群组成员状态已变化，请刷新后重试", debugMessage).WithMetadata("group_membership_state_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupMembershipOwnerCannotLeave returns *AppError for CIRCLE.USER.group_membership_owner_cannot_leave (user_message from errors.yaml).
-func AppErrorFromGroupMembershipOwnerCannotLeave(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipOwnerCannotLeave.Error()))
-	return rerrors.NewAppError(code, "群主不能直接退出群组", debugMessage).WithMetadata("group_membership_owner_cannot_leave", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromGroupMembershipOwnerCannotRemove returns *AppError for CIRCLE.USER.group_membership_owner_cannot_remove (user_message from errors.yaml).
-func AppErrorFromGroupMembershipOwnerCannotRemove(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipOwnerCannotRemove.Error()))
-	return rerrors.NewAppError(code, "群主不能被移除", debugMessage).WithMetadata("group_membership_owner_cannot_remove", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromGroupMembershipRoleInvalid returns *AppError for CIRCLE.USER.group_membership_role_invalid (user_message from errors.yaml).
-func AppErrorFromGroupMembershipRoleInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipRoleInvalid.Error()))
-	return rerrors.NewAppError(code, "群组成员角色无效", debugMessage).WithMetadata("group_membership_role_invalid", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromGroupMembershipVersionConflict returns *AppError for CIRCLE.USER.group_membership_version_conflict (user_message from errors.yaml).
-func AppErrorFromGroupMembershipVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipVersionConflict.Error()))
-	return rerrors.NewAppError(code, "群组成员状态已更新，请刷新后重试", debugMessage).WithMetadata("group_membership_version_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupMembershipIdempotencyConflict returns *AppError for CIRCLE.USER.group_membership_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromGroupMembershipIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原群组成员命令不一致", debugMessage).WithMetadata("group_membership_idempotency_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromGroupMembershipStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.group_membership_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromGroupMembershipStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrGroupMembershipStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "群组成员操作失败，请稍后重试", debugMessage).WithMetadata("group_membership_storage_write_failed", 500).WithRecovery("retry", 5)
-}
-
-// AppErrorFromPlacementNotFound returns *AppError for CIRCLE.USER.placement_not_found (user_message from errors.yaml).
-func AppErrorFromPlacementNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPlacementNotFound.Error()))
-	return rerrors.NewAppError(code, "圈内内容放置不存在", debugMessage).WithMetadata("placement_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromPlacementAlreadyExists returns *AppError for CIRCLE.USER.placement_already_exists (user_message from errors.yaml).
-func AppErrorFromPlacementAlreadyExists(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPlacementAlreadyExists.Error()))
-	return rerrors.NewAppError(code, "该内容已放置到目标圈子位置", debugMessage).WithMetadata("placement_already_exists", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromPlacementVersionConflict returns *AppError for CIRCLE.USER.placement_version_conflict (user_message from errors.yaml).
-func AppErrorFromPlacementVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPlacementVersionConflict.Error()))
-	return rerrors.NewAppError(code, "放置状态已更新，请刷新后重试", debugMessage).WithMetadata("placement_version_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromPlacementIdempotencyConflict returns *AppError for CIRCLE.USER.placement_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromPlacementIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPlacementIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原操作不一致，请刷新后重试", debugMessage).WithMetadata("placement_idempotency_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromPlacementStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.placement_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromPlacementStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPlacementStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "操作失败，请稍后重试", debugMessage).WithMetadata("placement_storage_write_failed", 500).WithRecovery("retry", 5)
 }
 
 // AppErrorFromCircleNotFound returns *AppError for CIRCLE.USER.not_found (user_message from errors.yaml).
@@ -238,136 +56,10 @@ func AppErrorFromCircleStorageWriteFailed(debugMessage string) *rerrors.AppError
 	return rerrors.NewAppError(code, "圈子操作失败，请稍后重试", debugMessage).WithMetadata("circle_storage_write_failed", 500).WithRecovery("retry", 0)
 }
 
-// AppErrorFromJoinApprovalRequired returns *AppError for CIRCLE.USER.join_approval_required (user_message from errors.yaml).
-func AppErrorFromJoinApprovalRequired(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrJoinApprovalRequired.Error()))
-	return rerrors.NewAppError(code, "该圈子需要审批才能加入", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
-}
-
-// AppErrorFromAlreadyMember returns *AppError for CIRCLE.USER.already_member (user_message from errors.yaml).
-func AppErrorFromAlreadyMember(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrAlreadyMember.Error()))
-	return rerrors.NewAppError(code, "您已经是该圈子成员", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromMembershipAlreadyActive returns *AppError for CIRCLE.USER.membership_already_active (user_message from errors.yaml).
-func AppErrorFromMembershipAlreadyActive(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipAlreadyActive.Error()))
-	return rerrors.NewAppError(code, "已经加入该圈子", debugMessage).WithMetadata("membership_already_active", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromMembershipNotFound returns *AppError for CIRCLE.USER.membership_not_found (user_message from errors.yaml).
-func AppErrorFromMembershipNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipNotFound.Error()))
-	return rerrors.NewAppError(code, "成员关系不存在", debugMessage).WithMetadata("membership_not_found", 404).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromMembershipOwnerCannotLeave returns *AppError for CIRCLE.USER.membership_owner_cannot_leave (user_message from errors.yaml).
-func AppErrorFromMembershipOwnerCannotLeave(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipOwnerCannotLeave.Error()))
-	return rerrors.NewAppError(code, "圈主不能直接退出圈子", debugMessage).WithMetadata("membership_owner_cannot_leave", 409).WithRecovery("surface", 0)
-}
-
-// AppErrorFromMembershipRoleInvalid returns *AppError for CIRCLE.USER.membership_role_invalid (user_message from errors.yaml).
-func AppErrorFromMembershipRoleInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipRoleInvalid.Error()))
-	return rerrors.NewAppError(code, "成员角色无效", debugMessage).WithMetadata("membership_role_invalid", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromMembershipStateConflict returns *AppError for CIRCLE.USER.membership_state_conflict (user_message from errors.yaml).
-func AppErrorFromMembershipStateConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipStateConflict.Error()))
-	return rerrors.NewAppError(code, "成员申请状态已变化，请刷新后重试", debugMessage).WithMetadata("membership_state_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromMembershipVersionConflict returns *AppError for CIRCLE.USER.membership_version_conflict (user_message from errors.yaml).
-func AppErrorFromMembershipVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipVersionConflict.Error()))
-	return rerrors.NewAppError(code, "成员状态已更新，请刷新后重试", debugMessage).WithMetadata("membership_version_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromMembershipIdempotencyConflict returns *AppError for CIRCLE.USER.membership_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromMembershipIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求与原命令不一致", debugMessage).WithMetadata("membership_idempotency_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromMembershipStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.membership_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromMembershipStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrMembershipStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "成员操作失败，请稍后重试", debugMessage).WithMetadata("membership_storage_write_failed", 500).WithRecovery("retry", 0)
-}
-
-// AppErrorFromBehaviorFactWriteFailed returns *AppError for CIRCLE.SYSTEM.behavior_fact_write_failed (user_message from errors.yaml).
-func AppErrorFromBehaviorFactWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrBehaviorFactWriteFailed.Error()))
-	return rerrors.NewAppError(code, "行为记录失败，请稍后重试", debugMessage).WithMetadata("behavior_fact_write_failed", 500).WithRecovery("retry", 0)
-}
-
-// AppErrorFromBehaviorFactIdempotencyConflict returns *AppError for CIRCLE.USER.behavior_fact_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromBehaviorFactIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrBehaviorFactIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复行为请求与原请求不一致", debugMessage).WithMetadata("behavior_fact_idempotency_conflict", 409).WithRecovery("refresh", 0)
-}
-
-// AppErrorFromRateLimited returns *AppError for CIRCLE.USER.rate_limited (user_message from errors.yaml).
-func AppErrorFromRateLimited(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrRateLimited.Error()))
-	return rerrors.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 60)
-}
-
-// AppErrorFromNotMember returns *AppError for CIRCLE.USER.not_member (user_message from errors.yaml).
-func AppErrorFromNotMember(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrNotMember.Error()))
-	return rerrors.NewAppError(code, "您不是该圈子成员", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
-}
-
 // AppErrorFromPermissionDenied returns *AppError for CIRCLE.USER.permission_denied (user_message from errors.yaml).
 func AppErrorFromPermissionDenied(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrPermissionDenied.Error()))
 	return rerrors.NewAppError(code, "权限不足", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
-}
-
-// AppErrorFromStorageQuotaExceeded returns *AppError for CIRCLE.USER.storage_quota_exceeded (user_message from errors.yaml).
-func AppErrorFromStorageQuotaExceeded(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrStorageQuotaExceeded.Error()))
-	return rerrors.NewAppError(code, "存储空间已满，无法上传", debugMessage).WithMetadata("quota_exceeded", 413).WithRecovery("surface", 0)
-}
-
-// AppErrorFromFileNotFound returns *AppError for CIRCLE.USER.file_not_found (user_message from errors.yaml).
-func AppErrorFromFileNotFound(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrFileNotFound.Error()))
-	return rerrors.NewAppError(code, "文件不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
-}
-
-// AppErrorFromFileParentInvalid returns *AppError for CIRCLE.USER.file_parent_invalid (user_message from errors.yaml).
-func AppErrorFromFileParentInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrFileParentInvalid.Error()))
-	return rerrors.NewAppError(code, "目标文件夹无效", debugMessage).WithMetadata("validation_failed", 422).WithRecovery("surface", 0)
-}
-
-// AppErrorFromFileAssetInvalid returns *AppError for CIRCLE.USER.file_asset_invalid (user_message from errors.yaml).
-func AppErrorFromFileAssetInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrFileAssetInvalid.Error()))
-	return rerrors.NewAppError(code, "媒体文件尚未就绪或不属于当前身份", debugMessage).WithMetadata("validation_failed", 422).WithRecovery("resubmit", 0)
-}
-
-// AppErrorFromFileVersionConflict returns *AppError for CIRCLE.USER.file_version_conflict (user_message from errors.yaml).
-func AppErrorFromFileVersionConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrFileVersionConflict.Error()))
-	return rerrors.NewAppError(code, "文件已被更新，请刷新后重试", debugMessage).WithMetadata("conflict", 409).WithRecovery("reload", 0)
-}
-
-// AppErrorFromFileIdempotencyConflict returns *AppError for CIRCLE.USER.file_idempotency_conflict (user_message from errors.yaml).
-func AppErrorFromFileIdempotencyConflict(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrFileIdempotencyConflict.Error()))
-	return rerrors.NewAppError(code, "重复请求内容不一致", debugMessage).WithMetadata("conflict", 409).WithRecovery("resubmit", 0)
-}
-
-// AppErrorFromFileStorageWriteFailed returns *AppError for CIRCLE.SYSTEM.file_storage_write_failed (user_message from errors.yaml).
-func AppErrorFromFileStorageWriteFailed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrFileStorageWriteFailed.Error()))
-	return rerrors.NewAppError(code, "文件服务暂不可用，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 503).WithRecovery("retry", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CIRCLE.SYSTEM.internal_error (user_message from errors.yaml).

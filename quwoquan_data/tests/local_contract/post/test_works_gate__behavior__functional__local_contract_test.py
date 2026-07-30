@@ -54,7 +54,7 @@ def test_work_article_passes_and_writes_verdict(tmp_path: Path, monkeypatch) -> 
     assert issues == []
     written = read_json(stage / works_gate.WORKS_VERDICT_FILE)
     assert written["decision"] == "work"
-    assert written["thresholdsVersion"] == verdict["thresholdsVersion"]
+    assert written["policyDigest"] == verdict["policyDigest"]
 
 
 def test_casual_article_is_blocked_before_compose(tmp_path: Path, monkeypatch) -> None:

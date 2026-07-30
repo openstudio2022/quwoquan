@@ -24,7 +24,6 @@ relationships:
   on_delete: retain
   reference_fields:
   - assetIds
-  - assetId
   target_object: content.MediaAsset
 capabilities:
 - queryable
@@ -42,6 +41,7 @@ business_rules:
 - 旧 public slice 只在成功激活后登记 cleanup candidate；删除前必须通过 Post 引用审计和保留期，run 不直接删除对象
 - pause/resume/rollback 与 worker 处理使用 command receipt + expectedVersion 保证幂等和并发安全
 lifecycle:
+  state_field: status
   states:
   - running
   - paused

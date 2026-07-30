@@ -1,5 +1,4 @@
 {
-  "version": 5,
   "baselineRequiredSuites": [
     "assistant_main_chain",
     "chat_avatar_sync",
@@ -151,7 +150,7 @@
       }
     },
     "mainline_auto_prod": {
-      "description": "main 自动 promotion 阻断链：只保留 15 分钟内能证明端云正确性的最小链路。包含 beta self-hosted 设备矩阵，以及 prod gray-initial 后的只读 health/inspect/doctor/integration probes。",
+      "description": "main 受控 promotion 的 Beta 设备阻断证据；Alpha、Gamma-local release-fast 与 Prod 5/25/100 单事务由主 workflow 分别执行。软目标 600 秒、硬门 1800 秒，1500 秒后停止晋级并预留恢复时间。",
       "readinessBlocking": true,
       "smokeCases": [
         "assistant_api_protocol_smoke",
@@ -232,7 +231,7 @@
       "budgetSeconds": 60,
       "longTailType": "environment_coupling",
       "currentRole": "gamma-local 推荐三场景（travel/premium/objectCards）黑盒可用性探针",
-      "currentPain": "此前 stackctl verify 对二期推荐能力零感知，policy overlay/对象卡种子回归无阻断点。",
+      "currentPain": "此前 stackctl verify 对二期推荐能力零感知，canonical policy/对象卡 release 回归无阻断点。",
       "optimizationPlan": "gamma-local 完整验证（manual_full/nightly_full/release_candidate）执行；--require-object-cards 在种子应用后开启。"
     },
     "media_publication_lifecycle_api_probe": {

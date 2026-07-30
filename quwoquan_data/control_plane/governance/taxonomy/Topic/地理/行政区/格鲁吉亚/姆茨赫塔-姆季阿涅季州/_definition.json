@@ -1,0 +1,12 @@
+{
+  "label": "姆茨赫塔-姆季阿涅季州",
+  "labelEn": "Mtskheta-Mtianeti",
+  "description": "大高加索山区",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -12,10 +12,13 @@ final class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
   final Duration duration;
   final Size size;
   final List<Duration> seekTargets = <Duration>[];
+  final List<DataSource> createdDataSources = <DataSource>[];
+  final Set<String> failCreateForUris = <String>{};
   int playCount = 0;
   int pauseCount = 0;
   int disposeCount = 0;
   bool failNextSeek = false;
+  bool failNextPositionReadback = false;
   Completer<void>? initializeCompleter;
   Completer<void>? disposeCompleter;
   Completer<void>? seekCompleter;
@@ -37,6 +40,10 @@ final class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
 
   @override
   Future<int?> createWithOptions(VideoCreationOptions options) async {
+    createdDataSources.add(options.dataSource);
+    if (failCreateForUris.contains(options.dataSource.uri)) {
+      throw StateError('injected create failure for ${options.dataSource.uri}');
+    }
     final playerId = _nextPlayerId++;
     _positions[playerId] = Duration.zero;
     return playerId;
@@ -92,6 +99,10 @@ final class FakeVideoPlayerPlatform extends VideoPlayerPlatform {
 
   @override
   Future<Duration> getPosition(int playerId) async {
+    if (failNextPositionReadback) {
+      failNextPositionReadback = false;
+      throw StateError('injected position readback failure');
+    }
     return _positions[playerId] ?? Duration.zero;
   }
 

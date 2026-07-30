@@ -58,6 +58,18 @@ client_projection:
     source: previewTrackVersion
     default: 'null'
     description: storyboard 预览轨版本
+  - name: hlsCmafMasterManifestUrl
+    dart_type: String
+    nullable: true
+    source: hlsCmafMasterManifestUrl
+    default: 'null'
+    description: asset/version 绑定的 HLS/CMAF master manifest；仅 capability 与 feature flag 同时开启时优先播放
+  - name: hlsCmafDescriptorVersion
+    dart_type: int
+    nullable: true
+    source: hlsCmafDescriptorVersion
+    default: 'null'
+    description: HLS/CMAF descriptor 版本；缺失或非法时必须继续使用 url 指向的同资产 progressive MP4
   - name: width
     dart_type: int
     nullable: true

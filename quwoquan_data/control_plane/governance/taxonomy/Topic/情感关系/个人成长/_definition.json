@@ -2,6 +2,7 @@
   "label": "个人成长",
   "labelEn": "Personal Growth",
   "description": "自我提升与内心成长",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

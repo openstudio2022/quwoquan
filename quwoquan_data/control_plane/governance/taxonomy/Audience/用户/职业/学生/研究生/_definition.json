@@ -2,6 +2,7 @@
   "label": "研究生",
   "labelEn": "Graduate Student",
   "description": "硕士或博士阶段在校学生",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

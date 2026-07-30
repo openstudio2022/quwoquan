@@ -2,6 +2,7 @@
   "label": "在校学生",
   "labelEn": "Student Life Stage",
   "description": "目前在校就读阶段",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

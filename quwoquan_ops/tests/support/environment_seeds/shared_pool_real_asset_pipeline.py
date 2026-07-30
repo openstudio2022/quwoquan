@@ -4,8 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import shutil
-import ssl
 import subprocess
 import sys
 import tempfile
@@ -42,18 +42,21 @@ if str(_CONTRACT_DIR) not in sys.path:
     sys.path.insert(0, str(_CONTRACT_DIR))
 from verify_content_fixture_comment_counts import realign_payload_counts  # noqa: E402
 
-PRIMARY_VIDEO_PUBLIC_SLICE_KEY = "media/video/s/video-primary-0001/post/video-content-0001/source.mp4"
+PRIMARY_VIDEO_PUBLIC_SLICE_KEY = "media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4"
 # 真实可播放样例视频源（CC0, H.264/AAC, faststart），随仓库提交，供服务端样例
 # 视频对象拷贝；远大于历史 24B ftyp 占位桩，用于拦截占位桩回退。
 PRIMARY_VIDEO_SOURCE_FILENAME = "primary_video.mp4"
 PRIMARY_VIDEO_MIN_BYTES = 4096
 PRIMARY_ATTACHMENT_PUBLIC_SLICE_KEY = (
-    "media/attachment/s/archived-attachment/post/fixture_chat_file_001/spec.txt"
+    "media/attachment/s/archived-attachment/post/fixture_chat_file_001/v1/spec.txt"
 )
 PRIMARY_ATTACHMENT_BYTES = (
     "Quwoquan contract attachment\n"
     "This deterministic text file validates chat attachment delivery.\n"
 ).encode("utf-8")
+
+PUBLIC_SLICE_KINDS = {"attachment", "avatar", "background", "image", "video"}
+PUBLIC_SLICE_VERSION_RE = re.compile(r"^v([1-9][0-9]*)$")
 
 ROLE_ORDER = [
     "leadAuthor",
@@ -140,7 +143,7 @@ CORE_USER_PRESETS = {
         "bio": "",
         "avatarSourceId": "portrait_archived_lifestyle_01",
         "backgroundSourceId": "scene_lifestyle_home_01",
-        "subAccountRefs": ["fixture_persona_daily", "fixture_persona_work"],
+        "personaRefs": ["fixture_persona_daily", "fixture_persona_work"],
         "tags": ["current", "author", "contact"],
         "format": "png",
     },
@@ -361,7 +364,35 @@ def circle_suffix(circle_id: str) -> str:
 
 
 def canonical_media_object_key(object_key: str) -> str:
-    return object_key.strip().lstrip("/")
+    normalized = object_key.strip().lstrip("/")
+    if "?" in normalized or "#" in normalized:
+        raise ValueError(f"fixture public slice must be query/fragment free: {object_key}")
+    parts = list(Path(normalized).parts)
+    if (
+        len(parts) < 5
+        or parts[0] != "media"
+        or parts[1] not in PUBLIC_SLICE_KINDS
+        or parts[2] != "s"
+    ):
+        raise ValueError(f"fixture media objectKey must be a public slice: {object_key}")
+    versions = [part for part in parts if PUBLIC_SLICE_VERSION_RE.fullmatch(part)]
+    if not versions:
+        parts.insert(len(parts) - 1, "v1")
+    elif len(versions) != 1:
+        raise ValueError(
+            f"fixture public slice must contain exactly one version segment: {object_key}"
+        )
+    elif versions[0] != "v1":
+        raise ValueError(f"fixture public slice canonical version must be v1: {object_key}")
+    return "/".join(parts)
+
+
+def media_object_key_version(object_key: str) -> int:
+    canonical = canonical_media_object_key(object_key)
+    version = next(
+        part for part in Path(canonical).parts if PUBLIC_SLICE_VERSION_RE.fullmatch(part)
+    )
+    return int(version[1:])
 
 
 def stable_unique(values: list[str]) -> list[str]:
@@ -549,7 +580,7 @@ def fetch_source(entry: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
                 return existing, download
     try:
         req = urllib.request.Request(str(entry["sourceUrl"]), headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=60, context=ssl._create_unverified_context()) as response:
+        with urllib.request.urlopen(req, timeout=60) as response:
             raw = response.read()
             content_type = response.headers.get_content_type()
     except Exception:
@@ -594,7 +625,7 @@ def derive_image(source_path: Path, object_key: str, width: int, height: int, ou
         cmd += ["-z", str(height), str(width), str(work), "--out", str(dst)]
         run_checked(cmd)
     raw = dst.read_bytes()
-    return {"objectKey": object_key, "version": 1, "mimeType": mime_for_ext(out_format), "width": width, "height": height, "sizeBytes": len(raw), "sourceHash": sha256_bytes(raw)}
+    return {"objectKey": object_key, "version": media_object_key_version(object_key), "mimeType": mime_for_ext(out_format), "width": width, "height": height, "sizeBytes": len(raw), "sourceHash": sha256_bytes(raw)}
 
 
 def render_group_composite(output_key: str, input_paths: list[Path]) -> dict[str, Any]:
@@ -606,7 +637,7 @@ def render_group_composite(output_key: str, input_paths: list[Path]) -> dict[str
         cwd=SERVICE_ROOT,
     )
     raw = dst.read_bytes()
-    return {"objectKey": output_key, "version": 1, "mimeType": "image/png", "width": 256, "height": 256, "sizeBytes": len(raw), "sourceHash": sha256_bytes(raw)}
+    return {"objectKey": output_key, "version": media_object_key_version(output_key), "mimeType": "image/png", "width": 256, "height": 256, "sizeBytes": len(raw), "sourceHash": sha256_bytes(raw)}
 
 
 def ensure_primary_delivery_video() -> None:
@@ -753,7 +784,7 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
                 "secondaryThemes": list(theme.get("adjacentThemes") or [])[:2],
                 "primaryRole": preset["role"],
                 "roleTags": sorted(set(ROLE_TAGS[preset["role"]] + list(preset.get("tags") or []))),
-                "subAccountRefs": list(preset.get("subAccountRefs") or []),
+                "personaRefs": list(preset.get("personaRefs") or []),
                 "themeTags": ordered_theme_tags(preset["themeId"], list(theme.get("adjacentThemes") or [])[:2]),
                 "postThemeRefs": [],
                 "circleThemeRefs": [],
@@ -804,7 +835,7 @@ def build_users(source_catalog: dict[str, Any], theme_catalog: dict[str, Any], r
                     "secondaryThemes": list(theme.get("adjacentThemes") or [])[:2],
                     "primaryRole": role,
                     "roleTags": sorted(set(ROLE_TAGS[role] + [theme['themeId']])),
-                    "subAccountRefs": [f"sub_account_{slug(theme['themeId'])}_{role_idx + 1:02d}"],
+                    "personaRefs": [f"persona_{slug(theme['themeId'])}_{role_idx + 1:02d}"],
                     "themeTags": ordered_theme_tags(theme["themeId"], list(theme.get("adjacentThemes") or [])[:2]),
                     "postThemeRefs": [],
                     "circleThemeRefs": [],
@@ -1446,7 +1477,7 @@ def build_user_pool_doc(
                 "avatarMedia": user["profile"]["avatar"],
                 "backgroundMedia": user["profile"]["background"],
                 "bio": user["bio"],
-                "subAccountRefs": user["subAccountRefs"],
+                "personaRefs": user["personaRefs"],
                 "tags": user["roleTags"],
                 "primaryTheme": user["primaryTheme"],
                 "secondaryThemes": user["secondaryThemes"],
@@ -1536,7 +1567,7 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
         "contentType": content_type,
         "contentIdentity": identity,
         "authorId": post["authorUserId"],
-        "subAccountId": post["authorUserId"],
+        "personaId": post["authorUserId"],
         "authorDisplayName": post["authorProfile"]["displayName"],
         "authorAvatarUrl": post["authorProfile"]["avatar"]["objectKey"],
         "authorBackgroundUrl": post["authorProfile"]["background"]["objectKey"],
@@ -1599,7 +1630,9 @@ def build_comment_thread_core_seed() -> dict[str, Any]:
     post_id = "fixture_photo_001"
 
     def avatar(uid: str) -> str:
-        return f"media/avatar/s/archived-avatar/user/{uid}/avatar.png"
+        return canonical_media_object_key(
+            f"media/avatar/s/archived-avatar/user/{uid}/avatar.png"
+        )
 
     repliers = [
         ("fixture_user_friend", "契约好友"),
@@ -1847,7 +1880,7 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
             "groupPersonaMix": user["groupPersonaMix"],
             "avatarObjectKey": user["profile"]["avatar"]["objectKey"],
             "backgroundObjectKey": user["profile"]["background"]["objectKey"],
-            "subAccountRefs": user["subAccountRefs"],
+            "personaRefs": user["personaRefs"],
             "tags": user["roleTags"],
             "media": {"avatar": user["profile"]["avatar"], "background": user["profile"]["background"]},
         })
@@ -1859,26 +1892,26 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
             "user_profile_core": {"description": "当前用户、作者用户、头像、昵称与统计。", "profiles": profiles},
-            "persona_core": {"description": "当前 sub-account、候选 sub-account 与 active context。", "activeSubAccountId": "fixture_persona_daily", "personas": [{"subAccountId": "fixture_persona_daily", "name": "日常我", "description": "默认日常 sub-account"}, {"subAccountId": "fixture_persona_work", "name": "工作我", "description": "工作场景 sub-account"}]},
+            "persona_core": {"description": "当前 persona、候选 persona 与 active context。", "activePersonaId": "fixture_persona_daily", "personas": [{"personaId": "fixture_persona_daily", "name": "日常我", "description": "默认日常 persona"}, {"personaId": "fixture_persona_work", "name": "工作我", "description": "工作场景 persona"}]},
             "profile_feed_core": {"description": "我的作品、作者作品、生活记录与评论。", "myPostIds": my_posts or ["fixture_moment_001", "fixture_photo_001"], "authorPostIds": author_posts or ["fixture_photo_001", "fixture_photo_002"], "commentIds": ["fixture_comment_photo_001"]},
             "relationship_core": {"description": "关注、互关、拉黑、可聊天、可通话能力矩阵。", "relationships": [{"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_photo", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_friend", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}, {"sourceUserId": "fixture_user_current", "targetUserId": "fixture_user_weekend_1", "following": True, "mutualFollow": True, "blocked": False, "canChat": True, "canCall": True}]},
             "greeting_core": {
                 "description": "打招呼破冰种子：一条待处理收件、一条已回复升级会话。",
-                "inbox": [{"id": "fixture_greeting_pending_001", "requesterSubAccountId": "user_travel_photographer", "targetSubAccountId": "fixture_user_current", "requestMessage": "你好，看到你的川西照片很棒，想交流一下路线", "status": "pending", "source": "profile", "createdAt": "2026-06-02T08:00:00Z", "updatedAt": "2026-06-02T08:00:00Z"}],
-                "outbox": [{"id": "fixture_greeting_replied_001", "requesterSubAccountId": "fixture_user_current", "targetSubAccountId": "user_street_photo", "requestMessage": "街拍作品很有味道，想请教构图", "status": "replied", "source": "profile", "promotedConversationId": "fixture_conversation_greeting_001", "createdAt": "2026-06-01T08:00:00Z", "updatedAt": "2026-06-01T09:00:00Z"}],
+                "inbox": [{"id": "fixture_greeting_pending_001", "requesterPersonaId": "user_travel_photographer", "targetPersonaId": "fixture_user_current", "requestMessage": "你好，看到你的川西照片很棒，想交流一下路线", "status": "pending", "source": "profile", "createdAt": "2026-06-02T08:00:00Z", "updatedAt": "2026-06-02T08:00:00Z"}],
+                "outbox": [{"id": "fixture_greeting_replied_001", "requesterPersonaId": "fixture_user_current", "targetPersonaId": "user_street_photo", "requestMessage": "街拍作品很有味道，想请教构图", "status": "replied", "source": "profile", "promotedConversationId": "fixture_conversation_greeting_001", "createdAt": "2026-06-01T08:00:00Z", "updatedAt": "2026-06-01T09:00:00Z"}],
             },
             "subject_follow_core": {
                 "description": "SubjectFollow 聚合种子：当前用户已关注的主页/圈子主体。",
                 "follows": [{"personaId": "fixture_user_current", "subjectType": "homepage", "subjectId": "homepage_sight_emeishan", "state": "following", "followedAt": "2026-05-24T08:00:00Z"}, {"personaId": "fixture_user_current", "subjectType": "circle", "subjectId": "circle_sichuan_travel", "state": "following", "followedAt": "2026-05-22T08:00:00Z"}],
             },
             "contact_discovery_core": {
-                "description": "通讯录哈希匹配种子；仅保存不可逆哈希和匹配后的 subAccountId，不含手机号原文。",
-                "records": [{"id": "fixture_contact_discovery_001", "ownerAccountId": "fixture_user_current", "hashedPhones": ["7e6ee9eaabde53f4a704fd4f7fb8f66df56fe3e5d596bbfe3bc8af3cbf50fa02"], "matchedSubAccountIds": ["fixture_user_photo"], "status": "completed", "matchCount": 1, "expireAt": "2026-12-31T23:59:59Z", "createdAt": "2026-07-20T00:00:00Z", "completedAt": "2026-07-20T00:00:01Z"}],
+                "description": "通讯录哈希匹配种子；仅保存不可逆哈希和匹配后的 personaId，不含手机号原文。",
+                "records": [{"id": "fixture_contact_discovery_001", "ownerAccountId": "fixture_user_current", "hashedPhones": ["7e6ee9eaabde53f4a704fd4f7fb8f66df56fe3e5d596bbfe3bc8af3cbf50fa02"], "matchedPersonaIds": ["fixture_user_photo"], "status": "completed", "matchCount": 1, "expireAt": "2026-12-31T23:59:59Z", "createdAt": "2026-07-20T00:00:00Z", "completedAt": "2026-07-20T00:00:01Z"}],
             },
-            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "user", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_sight_emeishan", "subjectType": "homepage", "displayName": "峨眉山", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_sight_emeishan", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
+            "following_subject_core": {"description": "关注对象动态 strip 种子。", "items": [{"subjectId": "user_travel_photographer", "subjectType": "persona", "displayName": "旅行摄影师", "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png", "coverUrl": "", "subtitle": "刚更新了川西路线", "targetRouteId": "user_profile", "targetObjectId": "user_travel_photographer", "followedAt": "2026-05-20T08:00:00Z", "lastVisitedAt": "2026-06-01T08:00:00Z", "latestChangedAt": "2026-06-02T00:30:00Z", "unreadChangeCount": 2, "hasUnreadChanges": True, "latestChangeReason": "发布了新内容"}, {"subjectId": "circle_sichuan_travel", "subjectType": "circle", "displayName": "四川旅行圈", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png", "subtitle": "圈内有新攻略", "targetRouteId": "circle_detail", "targetObjectId": "circle_sichuan_travel", "followedAt": "2026-05-22T08:00:00Z", "lastVisitedAt": "2026-06-02T01:00:00Z", "latestChangedAt": "2026-06-02T01:00:00Z", "unreadChangeCount": 0, "hasUnreadChanges": False, "latestChangeReason": ""}, {"subjectId": "homepage_sight_emeishan", "subjectType": "homepage", "displayName": "峨眉山", "avatarUrl": "", "coverUrl": "media/image/s/archived-image/post/fixture_photo_002/v1/cover.png", "subtitle": "地点动态有更新", "targetRouteId": "homepage_detail", "targetObjectId": "homepage_sight_emeishan", "followedAt": "2026-05-24T08:00:00Z", "lastVisitedAt": "2026-05-30T08:00:00Z", "latestChangedAt": "2026-06-01T12:20:00Z", "unreadChangeCount": 1, "hasUnreadChanges": True, "latestChangeReason": "新增问答和口碑"}]},
             "settings_core": {"description": "外观、通话设置与开发者诊断最小数据。", "appearance": {"themeMode": "system", "fontScale": 1.0}, "callSettings": {"allowVoiceCall": True, "allowVideoCall": True}, "diagnostics": [{"id": "fixture_ops_event_settings", "message": "契约设置诊断事件"}]},
         },
-        "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "greeting_core", "subject_follow_core", "contact_discovery_core", "following_subject_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": [FIXTURE_CURRENT_USER_DEFAULT_NICKNAME, "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "subAccountIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
+        "scenarios": [{"id": "user_profile_basic", "title": "用户主页与关系能力契约种子", "type": "user_profile", "domainId": "user", "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "greeting_core", "subject_follow_core", "contact_discovery_core", "following_subject_core", "settings_core"], "uiExpectations": {"userIds": ["fixture_user_current", "fixture_user_photo"], "textFragments": [FIXTURE_CURRENT_USER_DEFAULT_NICKNAME, "契约摄影师", "日常我"]}, "remoteExpectations": {"profileUserIds": ["fixture_user_current", "fixture_user_photo"], "personaIds": ["fixture_persona_daily", "fixture_persona_work"]}, "environments": {"alpha": {"enabled": True, "repository": "mock"}, "beta": {"enabled": True, "repository": "remote", "requiresSeedReset": True}, "gamma": {"enabled": True, "repository": "remote", "requiresSeedReset": True}}}],
     }
 
 
@@ -2229,6 +2262,7 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
         members_rows[conv_id] = [
             {
                 "userId": member_id,
+                "userHandle": member_id,
                 "displayName": "契约联系人"
                 if conv_id == "fixture_conv_direct"
                 and member_id == "fixture_user_friend"
@@ -2248,7 +2282,7 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
             continue
         seen.add(user_id)
         user = users_by_id[user_id]
-        contacts.append({"userId": user_id, "displayName": user["displayName"], "avatarUrl": user["profile"]["avatar"]["objectKey"], "relationState": "mutual" if "contact" in user["roleTags"] else "following", "source": "follow" if "contact" in user["roleTags"] else "circle", "bio": user["bio"], "avatarObjectKey": user["profile"]["avatar"]["objectKey"]})
+        contacts.append({"userId": user_id, "userHandle": user_id, "displayName": user["displayName"], "avatarUrl": user["profile"]["avatar"]["objectKey"], "relationState": "mutual" if "contact" in user["roleTags"] else "following", "source": "follow" if "contact" in user["roleTags"] else "circle", "bio": user["bio"], "avatarObjectKey": user["profile"]["avatar"]["objectKey"]})
     realtime_events = {
         "conv_001": [
             {
@@ -2261,7 +2295,7 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
                     "clientMsgId": "fixture_rt_conv_001_msg_13_client",
                     "senderId": "fixture_user_friend",
                     "senderDisplayNameSnapshot": "契约联系人",
-                    "senderAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
+                    "senderAvatarUrlSnapshot": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
                     "type": "text",
                     "content": "Fixture Realtime 新消息：咖啡馆门口见。",
                     "timestamp": iso_at(1010),

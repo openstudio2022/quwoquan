@@ -34,24 +34,31 @@ class LongPollTransport {
   bool _running = false;
   bool _disposed = false;
   int _consecutiveErrors = 0;
+  int _pollGeneration = 0;
+  Timer? _backoffTimer;
+  Completer<void>? _backoffCompleter;
   static const _maxConsecutiveErrors = 5;
 
   void start() {
     if (_running || _disposed) return;
     _running = true;
-    _poll();
+    final generation = ++_pollGeneration;
+    unawaited(_poll(generation));
   }
 
   void stop() {
     _running = false;
+    _pollGeneration++;
+    _cancelBackoff();
   }
 
-  Future<void> _poll() async {
-    while (_running && !_disposed) {
+  Future<void> _poll(int generation) async {
+    while (_running && !_disposed && generation == _pollGeneration) {
       try {
         final credential = await RealtimeConnectionCredential.resolveHttp(
           authTokenProvider,
         );
+        if (!_running || _disposed || generation != _pollGeneration) break;
         if (credential == null) {
           _running = false;
           break;
@@ -71,7 +78,7 @@ class LongPollTransport {
             .get(url, headers: headers)
             .timeout(Duration(seconds: config.longPollHoldSec + 10));
 
-        if (!_running || _disposed) break;
+        if (!_running || _disposed || generation != _pollGeneration) break;
 
         if (resp.statusCode == 200) {
           _consecutiveErrors = 0;
@@ -91,12 +98,14 @@ class LongPollTransport {
           _consecutiveErrors++;
         }
       } catch (_) {
+        if (!_running || _disposed || generation != _pollGeneration) break;
         _consecutiveErrors++;
         if (kDebugMode) {
           debugPrint('LongPollTransport: request failed');
         }
       }
 
+      if (!_running || _disposed || generation != _pollGeneration) break;
       if (_consecutiveErrors >= _maxConsecutiveErrors) {
         final backoff = Duration(
           seconds: (_consecutiveErrors - _maxConsecutiveErrors + 1).clamp(
@@ -104,14 +113,42 @@ class LongPollTransport {
             30,
           ),
         );
-        await Future<void>.delayed(backoff);
+        await _waitForBackoff(backoff);
       }
+    }
+  }
+
+  Future<void> _waitForBackoff(Duration duration) {
+    _cancelBackoff();
+    final completer = Completer<void>();
+    _backoffCompleter = completer;
+    _backoffTimer = Timer(duration, () {
+      _backoffTimer = null;
+      if (identical(_backoffCompleter, completer)) {
+        _backoffCompleter = null;
+      }
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    return completer.future;
+  }
+
+  void _cancelBackoff() {
+    _backoffTimer?.cancel();
+    _backoffTimer = null;
+    final completer = _backoffCompleter;
+    _backoffCompleter = null;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
     }
   }
 
   void dispose() {
     _disposed = true;
     _running = false;
+    _pollGeneration++;
+    _cancelBackoff();
     if (_ownsClient) {
       _client.close();
     }

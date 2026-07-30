@@ -1,69 +1,94 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
 package recommendation
-
-// N3-2 契约：FilterCandidates 的 pipeline 路径（RedisPipeliner 单 RTT 批量
-// SISMEMBER）与逐条回退路径语义逐位一致——negative 拦截、served/impressed
-// 双轨重复曝光过滤、空 contentID 跳过。防止两条路径漂移成第二真相源。
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
 
-// plainRedis 剥掉 PipelineRead，强制 FilterCandidates 走逐条回退路径。
-type plainRedis struct{ inner *mockRedisClient }
+var errSequentialRecommendationRead = errors.New(
+	"sequential recommendation Redis read is forbidden",
+)
 
-func (p plainRedis) Get(ctx context.Context, key string) (string, error) {
-	return p.inner.Get(ctx, key)
-}
-func (p plainRedis) Set(ctx context.Context, key, value string, ttl time.Duration) error {
-	return p.inner.Set(ctx, key, value, ttl)
-}
-func (p plainRedis) SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error) {
-	return p.inner.SetNX(ctx, key, value, ttl)
-}
-func (p plainRedis) Del(ctx context.Context, keys ...string) error {
-	return p.inner.Del(ctx, keys...)
-}
-func (p plainRedis) HIncrByFloat(ctx context.Context, key, field string, incr float64) error {
-	return p.inner.HIncrByFloat(ctx, key, field, incr)
-}
-func (p plainRedis) HGetAll(ctx context.Context, key string) (map[string]string, error) {
-	return p.inner.HGetAll(ctx, key)
-}
-func (p plainRedis) SAdd(ctx context.Context, key string, members ...string) error {
-	return p.inner.SAdd(ctx, key, members...)
-}
-func (p plainRedis) SRem(ctx context.Context, key string, members ...string) error {
-	return p.inner.SRem(ctx, key, members...)
-}
-func (p plainRedis) SMembers(ctx context.Context, key string) ([]string, error) {
-	return p.inner.SMembers(ctx, key)
-}
-func (p plainRedis) SIsMember(ctx context.Context, key, member string) (bool, error) {
-	return p.inner.SIsMember(ctx, key, member)
-}
-func (p plainRedis) Expire(ctx context.Context, key string, ttl time.Duration) error {
-	return p.inner.Expire(ctx, key, ttl)
+// pipelineOnlyReadRedis proves that every multi-read feed path uses
+// PipelineRead. Command writes remain available through the embedded fake, but
+// any sequential read fails the test immediately.
+type pipelineOnlyReadRedis struct {
+	*mockRedisClient
 }
 
-func seedFilterFixture(t *testing.T, processor SignalProcessor, memory ExposureMemory) {
+func (r *pipelineOnlyReadRedis) HGetAll(
+	context.Context,
+	string,
+) (map[string]string, error) {
+	return nil, errSequentialRecommendationRead
+}
+
+func (r *pipelineOnlyReadRedis) SMembers(
+	context.Context,
+	string,
+) ([]string, error) {
+	return nil, errSequentialRecommendationRead
+}
+
+func (r *pipelineOnlyReadRedis) SIsMember(
+	context.Context,
+	string,
+	string,
+) (bool, error) {
+	return false, errSequentialRecommendationRead
+}
+
+func seedCanonicalPipelineFixture(
+	t *testing.T,
+	hotPath *HotPath,
+	at time.Time,
+) {
 	t.Helper()
 	ctx := context.Background()
-	if err := memory.RecordServed(ctx, "u1", []FeedItem{{ContentID: "c_served"}}, time.Now()); err != nil {
+	if err := hotPath.RecordServed(
+		ctx,
+		"u1",
+		[]FeedItem{{ContentID: "c_served"}},
+		at,
+	); err != nil {
 		t.Fatalf("record served: %v", err)
 	}
-	if err := memory.RecordImpressed(ctx, "u1", "c_impressed", time.Now()); err != nil {
+	if err := hotPath.RecordImpressed(
+		ctx,
+		"u1",
+		"c_impressed",
+		at,
+	); err != nil {
 		t.Fatalf("record impressed: %v", err)
 	}
-	if err := processor.ProcessSignal(ctx, BehaviorSignal{
-		UserID: "u1", SessionID: "s1", ContentID: "c_neg", Action: "dislike",
-	}); err != nil {
-		t.Fatalf("process dislike: %v", err)
+	for _, signal := range []BehaviorSignal{
+		{
+			UserID: "u1", SessionID: "s1", ContentID: "c_neg",
+			Action: "dislike",
+		},
+		{
+			UserID: "u1", SessionID: "s1", ContentID: "c_hidden_author",
+			Action: "hide_author", AuthorID: "author-hidden",
+		},
+		{
+			UserID: "u1", SessionID: "s1", ContentID: "c_hidden_type",
+			Action: "hide_content_type", ContentType: "video",
+		},
+		{
+			UserID: "u1", SessionID: "s1", ContentID: "c_interest",
+			Action: "click", Tags: []string{"Topic/旅行"},
+		},
+	} {
+		if err := hotPath.ProcessSignal(ctx, signal); err != nil {
+			t.Fatalf("process %s: %v", signal.Action, err)
+		}
 	}
 }
 
-func filterFixtureCandidates() []ContentCandidate {
+func canonicalFilterFixtureCandidates() []ContentCandidate {
 	return []ContentCandidate{
 		{ContentID: "c_neg"},
 		{ContentID: "c_served"},
@@ -73,36 +98,57 @@ func filterFixtureCandidates() []ContentCandidate {
 	}
 }
 
-func assertFilterSemantics(t *testing.T, filtered []ContentCandidate, label string) {
-	t.Helper()
-	// 两条路径语义一致：negative/served/impressed 命中被过滤；空 contentID
-	// 候选同样被丢弃（逐条与 pipeline 路径都 continue 跳过）。
-	if len(filtered) != 1 {
-		t.Fatalf("%s: want exactly c_ok to survive, got %+v", label, filtered)
-	}
-	if filtered[0].ContentID != "c_ok" {
-		t.Fatalf("%s: c_ok must survive, got %+v", label, filtered)
-	}
-}
-
-func TestFilterCandidates_PipelineAndFallbackPathsAgree(t *testing.T) {
+func TestHotPathMultiReadsUseOnlyCanonicalPipeline(t *testing.T) {
 	ctx := context.Background()
+	at := time.Now().UTC()
+	redis := &pipelineOnlyReadRedis{mockRedisClient: newMockRedis()}
+	hotPath := NewHotPath(redis)
+	seedCanonicalPipelineFixture(t, hotPath, at)
 
-	// pipeline 路径（mockRedisClient 实现 RedisPipeliner）。
-	pipelineHP := NewHotPath(newMockRedis())
-	seedFilterFixture(t, pipelineHP, pipelineHP)
-	pipelineOut, err := pipelineHP.FilterCandidates(ctx, "u1", filterFixtureCandidates(), time.Now())
+	session, err := hotPath.GetSessionState(ctx, "u1", "s1")
 	if err != nil {
-		t.Fatalf("pipeline path: %v", err)
+		t.Fatalf("pipeline session state: %v", err)
 	}
-	assertFilterSemantics(t, pipelineOut, "pipeline path")
+	if session.TagWeights["Topic/旅行"] <= 0 {
+		t.Fatalf("pipeline session state lost tag weights: %+v", session)
+	}
 
-	// 逐条回退路径（plainRedis 不实现 RedisPipeliner）。
-	fallbackHP := NewHotPath(plainRedis{inner: newMockRedis()})
-	seedFilterFixture(t, fallbackHP, fallbackHP)
-	fallbackOut, err := fallbackHP.FilterCandidates(ctx, "u1", filterFixtureCandidates(), time.Now())
+	exclusions, err := hotPath.LoadHardExclusions(ctx, "u1")
 	if err != nil {
-		t.Fatalf("fallback path: %v", err)
+		t.Fatalf("pipeline hard exclusions: %v", err)
 	}
-	assertFilterSemantics(t, fallbackOut, "fallback path")
+	if !exclusions.NegativeContentIDs["c_neg"] ||
+		!exclusions.HiddenAuthors["author-hidden"] ||
+		!exclusions.HiddenContentTypes["video"] {
+		t.Fatalf("pipeline hard exclusions incomplete: %+v", exclusions)
+	}
+
+	filtered, err := hotPath.FilterCandidates(
+		ctx,
+		"u1",
+		canonicalFilterFixtureCandidates(),
+		at,
+	)
+	if err != nil {
+		t.Fatalf("pipeline exposure filter: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ContentID != "c_ok" {
+		t.Fatalf("pipeline filter result=%+v, want only c_ok", filtered)
+	}
+
+	relaxed, err := hotPath.FilterCandidatesRelaxedExposure(
+		ctx,
+		"u1",
+		canonicalFilterFixtureCandidates(),
+		at,
+	)
+	if err != nil {
+		t.Fatalf("pipeline relaxed exposure filter: %v", err)
+	}
+	if len(relaxed) != 3 ||
+		relaxed[0].ContentID != "c_served" ||
+		relaxed[1].ContentID != "c_impressed" ||
+		relaxed[2].ContentID != "c_ok" {
+		t.Fatalf("relaxed pipeline result=%+v", relaxed)
+	}
 }

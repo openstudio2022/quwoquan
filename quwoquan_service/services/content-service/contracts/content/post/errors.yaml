@@ -12,10 +12,26 @@ description: 'Post 对象与 content 域共享的结构化错误码声明。格�
 
   '
 errors:
+- code: CONTENT.USER.content_deleted
+  kind: USER
+  reason: content_deleted
+  http_status: 410
+  emitted_by:
+  - surface: http
+    operations: [GetPost]
+  recovery_action: surface
+  dart_const: contentDeleted
+  go_const: ErrContentDeleted
+  user_message:
+    zh: 内容已删除
+    en: Content has been deleted
 - code: CONTENT.USER.post_not_found
   kind: USER
   reason: not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetCounters, GetHelperRead, content.comment.CreateComment]
   recovery_action: surface
   dart_const: postNotFound
   go_const: ErrPostNotFound
@@ -26,6 +42,9 @@ errors:
   kind: USER
   reason: forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [SubmitPostPublication, UpdatePostSettings, PromotePostToWork]
   recovery_action: surface
   dart_const: forbiddenEdit
   go_const: ErrForbiddenEdit
@@ -36,6 +55,9 @@ errors:
   kind: USER
   reason: forbidden
   http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [DeletePost]
   recovery_action: surface
   dart_const: forbiddenDelete
   go_const: ErrForbiddenDelete
@@ -46,6 +68,68 @@ errors:
   kind: USER
   reason: unauthorized
   http_status: 401
+  emitted_by:
+  - surface: http
+    operations:
+    - GetFeed
+    - SubmitPostPublication
+    - DeletePost
+    - UpdatePostSettings
+    - PromotePostToWork
+    - GetAuthorImpact
+    - ListAuthorImpactEvidence
+    - GetMyFootprint
+    - GetEntityWishlistState
+    - GenerateArticleSummary
+    - GetMyIntersectionSummary
+    - ListMyIntersections
+    - GetObjectIntersections
+    - content.comment.BindMediaAssetsToComment
+    - content.comment.CreateComment
+    - content.comment.DeleteComment
+    - content.comment.HideComment
+    - content.comment.ListCommentsByAuthor
+    - content.comment.ListCommentsForPostAuthor
+    - content.comment.PinComment
+    - content.comment.RestoreComment
+    - content.comment.UnpinComment
+    - content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter
+    - content.content_behavior_fact.ReportBehaviors
+    - content.content_reaction.GetContentReactionState
+    - content.content_reaction.LikePost
+    - content.content_reaction.ReactToComment
+    - content.content_reaction.UnlikePost
+    - content.intersection_visit_state.MarkIntersectionsVisited
+    - content.outbound_share_fact.CreateOutboundShare
+    - content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
+    - content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
+    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.media_asset.RecordMediaProcessingResult
+    - content.media_asset.DiscardMediaAsset
+    - content.media_asset.GetMediaAssetDeliveryReference
+    - content.media_asset.GetMediaAssetReference
+    - content.media_asset.GetOwnedMediaAsset
+    - content.media_asset.SelectAutoVideoCover
+    - content.media_asset.SelectManualVideoCover
+    - content.media_asset.UpdateMediaAssetAccessPolicy
+    - content.media_original_access_fact.RequestOriginalImageAccess
+    - content.media_upload_session.AbortMediaUpload
+    - content.media_upload_session.CompleteMediaUpload
+    - content.media_upload_session.GetMediaUploadSession
+    - content.media_upload_session.InitMediaUpload
+    - content.post_moderation_case.DecidePostModeration
+    - content.post_moderation_case.GetCurrentPostModerationCase
+    - content.post_moderation_case.GetPostPublicationEligibility
+    - content.post_moderation_case.OpenPostModerationCase
+    - content.post_moderation_case.ReviewPostModerationCase
+    - content.post_moderation_case.SupersedePostModerationCase
+    - content.report.BeginReportReview
+    - content.report.CreateReport
+    - content.report.DismissReport
+    - content.report.GetReport
+    - content.report.ListMyReports
+    - content.report.ListReports
+    - content.report.ResolveReport
   recovery_action: surface
   dart_const: unauthorized
   go_const: ErrUnauthorized
@@ -56,67 +140,62 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations:
+    - GetFeed
+    - SubmitPostPublication
+    - ListUserPosts
+    - GetPost
+    - UpdatePostSettings
+    - PromotePostToWork
+    - GetAuthorImpact
+    - ListAuthorImpactEvidence
+    - GetMyFootprint
+    - GetEntityWishlistState
+    - GenerateArticleSummary
+    - ListMyIntersections
+    - GetObjectIntersections
+    - content.comment.CreateComment
+    - content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter
+    - content.content_behavior_fact.ReportBehaviors
+    - content.content_reaction.GetContentReactionState
+    - content.content_reaction.LikePost
+    - content.content_reaction.ReactToComment
+    - content.content_reaction.UnlikePost
+    - content.intersection_visit_state.MarkIntersectionsVisited
+    - content.outbound_share_fact.CreateOutboundShare
+    - content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived
+    - content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent
+    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.media_asset.RecordMediaProcessingResult
+    - content.media_asset.SelectAutoVideoCover
+    - content.media_asset.SelectManualVideoCover
+    - content.media_upload_session.AbortMediaUpload
+    - content.media_upload_session.CompleteMediaUpload
+    - content.media_upload_session.InitMediaUpload
+    - content.post_moderation_case.DecidePostModeration
+    - content.post_moderation_case.GetCurrentPostModerationCase
+    - content.post_moderation_case.OpenPostModerationCase
+    - content.post_moderation_case.ReviewPostModerationCase
+    - content.report.BeginReportReview
+    - content.report.CreateReport
+    - content.report.DismissReport
+    - content.report.ListMyReports
+    - content.report.ResolveReport
   recovery_action: surface
   dart_const: invalidArgument
   go_const: ErrInvalidArgument
   user_message:
     zh: 请求参数有误，请检查后重试
     en: Invalid request, please check and retry
-- code: CONTENT.USER.interaction_type_invalid
-  kind: USER
-  reason: interaction_type_invalid
-  http_status: 400
-  recovery_action: surface
-  dart_const: interactionTypeInvalid
-  go_const: ErrInteractionTypeInvalid
-  user_message:
-    zh: 不支持的互动类型
-    en: Unsupported interaction type
-- code: CONTENT.USER.interaction_cursor_invalid
-  kind: USER
-  reason: interaction_cursor_invalid
-  http_status: 400
-  recovery_action: refresh
-  dart_const: interactionCursorInvalid
-  go_const: ErrInteractionCursorInvalid
-  user_message:
-    zh: 列表状态已更新，请刷新后重试
-    en: The list changed, refresh and retry
-- code: CONTENT.USER.interaction_owner_forbidden
-  kind: USER
-  reason: interaction_owner_forbidden
-  http_status: 403
-  recovery_action: surface
-  dart_const: interactionOwnerForbidden
-  go_const: ErrInteractionOwnerForbidden
-  user_message:
-    zh: 无权查看该互动记录
-    en: You cannot view this interaction history
-- code: CONTENT.SYSTEM.interaction_read_model_unavailable
-  kind: SYSTEM
-  reason: interaction_read_model_unavailable
-  http_status: 503
-  recovery_action: retry
-  recovery_after_seconds: 3
-  dart_const: interactionReadModelUnavailable
-  go_const: ErrInteractionReadModelUnavailable
-  user_message:
-    zh: 互动记录暂时不可用，请稍后重试
-    en: Interaction history is temporarily unavailable
-- code: CONTENT.USER.assistant_mention_context_missing
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: assistantMentionContextMissing
-  go_const: ErrAssistantMentionContextMissing
-  user_message:
-    zh: 小趣暂时无法识别这条评论的上下文
-    en: Xiaoqu cannot resolve this comment context yet
 - code: CONTENT.USER.invalid_content_type
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [SubmitPostPublication, PromotePostToWork]
   recovery_action: surface
   dart_const: invalidContentType
   go_const: ErrInvalidContentType
@@ -127,6 +206,9 @@ errors:
   kind: USER
   reason: rate_limited
   http_status: 429
+  emitted_by:
+  - surface: http
+    operations: [SubmitPostPublication]
   recovery_action: retry
   recovery_after_seconds: 60
   dart_const: rateLimited
@@ -134,10 +216,28 @@ errors:
   user_message:
     zh: 操作太频繁，请稍后重试
     en: Too many requests, please retry later
+- code: CONTENT.SYSTEM.feed_capacity_unavailable
+  kind: SYSTEM
+  reason: feed_capacity_unavailable
+  http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [GetFeed]
+  recovery_action: retry
+  recovery_after_seconds: 1
+  recovery: {action: retry, disruptionLevel: snackbar, afterSeconds: 1}
+  dart_const: feedCapacityUnavailable
+  go_const: ErrFeedCapacityUnavailable
+  user_message:
+    zh: 内容服务繁忙，请稍后重试
+    en: Content service is busy, please retry shortly
 - code: CONTENT.USER.content_too_long
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [SubmitPostPublication]
   recovery_action: surface
   dart_const: contentTooLong
   go_const: ErrContentTooLong
@@ -148,46 +248,49 @@ errors:
   kind: USER
   reason: publication_rejected
   http_status: 422
+  emitted_by:
+  - surface: http
+    operations: [SubmitPostPublication]
   recovery_action: surface
   dart_const: publicationRejected
   go_const: ErrPublicationRejected
   user_message:
     zh: 内容未通过发布安全检查，请修改后重试
     en: Content did not pass publication safety checks
-- code: CONTENT.USER.post_immutable_after_publish
-  kind: USER
-  reason: forbidden
-  http_status: 409
-  recovery_action: surface
-  dart_const: postImmutableAfterPublish
-  go_const: ErrPostImmutableAfterPublish
-  user_message:
-    zh: 内容发布后不可修改
-    en: Published content is immutable
-- code: CONTENT.USER.public_required_for_circle_distribution
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: publicRequiredForCircleDistribution
-  go_const: ErrPublicRequiredForCircleDistribution
-  user_message:
-    zh: 发布到圈子前需设置为公开
-    en: Post must be public before distributing to circles
-- code: CONTENT.USER.invalid_moment_payload
-  kind: USER
-  reason: invalid_argument
-  http_status: 400
-  recovery_action: surface
-  dart_const: invalidMomentPayload
-  go_const: ErrInvalidMomentPayload
-  user_message:
-    zh: 微趣内容为空，正文/图片/视频至少填写一项
-    en: Moment payload is empty; at least body/image/video is required
 - code: CONTENT.USER.version_conflict
   kind: USER
   reason: version_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations:
+    - SubmitPostPublication
+    - DeletePost
+    - UpdatePostSettings
+    - PromotePostToWork
+    - content.comment.BindMediaAssetsToComment
+    - content.comment.CreateComment
+    - content.comment.DeleteComment
+    - content.comment.HideComment
+    - content.comment.PinComment
+    - content.comment.RestoreComment
+    - content.comment.UnpinComment
+    - content.content_reaction.LikePost
+    - content.content_reaction.ReactToComment
+    - content.content_reaction.UnlikePost
+    - content.media_asset.DiscardMediaAsset
+    - content.media_asset.RecordMediaProcessingResult
+    - content.media_asset.SelectAutoVideoCover
+    - content.media_asset.SelectManualVideoCover
+    - content.media_asset.UpdateMediaAssetAccessPolicy
+    - content.media_upload_session.AbortMediaUpload
+    - content.media_upload_session.CompleteMediaUpload
+    - content.post_moderation_case.DecidePostModeration
+    - content.post_moderation_case.ReviewPostModerationCase
+    - content.post_moderation_case.SupersedePostModerationCase
+    - content.report.BeginReportReview
+    - content.report.DismissReport
+    - content.report.ResolveReport
   recovery_action: refresh
   dart_const: versionConflict
   go_const: ErrVersionConflict
@@ -198,26 +301,89 @@ errors:
   kind: USER
   reason: idempotency_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations:
+    - SubmitPostPublication
+    - DeletePost
+    - UpdatePostSettings
+    - PromotePostToWork
+    - content.comment.BindMediaAssetsToComment
+    - content.comment.CreateComment
+    - content.comment.DeleteComment
+    - content.comment.HideComment
+    - content.comment.PinComment
+    - content.comment.RestoreComment
+    - content.comment.UnpinComment
+    - content.content_reaction.LikePost
+    - content.content_reaction.ReactToComment
+    - content.content_reaction.UnlikePost
+    - content.outbound_share_fact.CreateOutboundShare
+    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.media_asset.DiscardMediaAsset
+    - content.media_asset.RecordMediaProcessingResult
+    - content.media_asset.SelectAutoVideoCover
+    - content.media_asset.SelectManualVideoCover
+    - content.media_asset.UpdateMediaAssetAccessPolicy
+    - content.media_original_access_fact.RequestOriginalImageAccess
+    - content.media_upload_session.AbortMediaUpload
+    - content.media_upload_session.CompleteMediaUpload
+    - content.media_upload_session.InitMediaUpload
+    - content.post_moderation_case.DecidePostModeration
+    - content.post_moderation_case.OpenPostModerationCase
+    - content.post_moderation_case.ReviewPostModerationCase
+    - content.post_moderation_case.SupersedePostModerationCase
+    - content.report.BeginReportReview
+    - content.report.CreateReport
+    - content.report.DismissReport
+    - content.report.ResolveReport
   recovery_action: refresh
   dart_const: idempotencyConflict
   go_const: ErrIdempotencyConflict
   user_message:
     zh: 重复请求与原操作不一致，请刷新后重试
     en: The repeated request differs from the original operation
-- code: CONTENT.USER.circle_distribution_forbidden
-  kind: USER
-  reason: forbidden
-  http_status: 403
-  recovery_action: surface
-  dart_const: circleDistributionForbidden
-  go_const: ErrCircleDistributionForbidden
-  user_message:
-    zh: 无权修改圈子分发关系
-    en: Not allowed to modify circle distribution
 - code: CONTENT.SYSTEM.storage_write_failed
   kind: SYSTEM
   reason: storage_write_failed
   http_status: 500
+  emitted_by:
+  - surface: http
+    operations:
+    - SubmitPostPublication
+    - DeletePost
+    - UpdatePostSettings
+    - PromotePostToWork
+    - content.comment.BindMediaAssetsToComment
+    - content.comment.CreateComment
+    - content.comment.DeleteComment
+    - content.comment.HideComment
+    - content.comment.PinComment
+    - content.comment.RestoreComment
+    - content.comment.UnpinComment
+    - content.content_reaction.LikePost
+    - content.content_reaction.ReactToComment
+    - content.content_reaction.UnlikePost
+    - content.content_behavior_fact.ReportBehaviors
+    - content.intersection_visit_state.MarkIntersectionsVisited
+    - content.outbound_share_fact.CreateOutboundShare
+    - content.profile_interaction_read_fact.UpdateProfileInteractionState
+    - content.media_asset.DiscardMediaAsset
+    - content.media_asset.RecordMediaProcessingResult
+    - content.media_asset.SelectAutoVideoCover
+    - content.media_asset.SelectManualVideoCover
+    - content.media_asset.UpdateMediaAssetAccessPolicy
+    - content.media_upload_session.AbortMediaUpload
+    - content.media_upload_session.CompleteMediaUpload
+    - content.media_upload_session.InitMediaUpload
+    - content.post_moderation_case.DecidePostModeration
+    - content.post_moderation_case.OpenPostModerationCase
+    - content.post_moderation_case.ReviewPostModerationCase
+    - content.post_moderation_case.SupersedePostModerationCase
+    - content.report.BeginReportReview
+    - content.report.CreateReport
+    - content.report.DismissReport
+    - content.report.ResolveReport
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: storageWriteFailed
@@ -229,6 +395,38 @@ errors:
   kind: SYSTEM
   reason: storage_read_failed
   http_status: 500
+  emitted_by:
+  - surface: http
+    operations:
+    - GetFeed
+    - ListUserPosts
+    - GetPost
+    - GetAuthorImpact
+    - ListAuthorImpactEvidence
+    - GetAppConfig
+    - GetCounters
+    - GetMyFootprint
+    - GetEntityWishlistState
+    - GetHelperRead
+    - GetMyIntersectionSummary
+    - ListMyIntersections
+    - GetObjectIntersections
+    - content.comment.ListCommentReplies
+    - content.comment.ListComments
+    - content.comment.ListCommentsByAuthor
+    - content.comment.ListCommentsForPostAuthor
+    - content.content_reaction.GetContentReactionState
+    - content.media_asset.GetMediaAsset
+    - content.media_asset.GetMediaAssetDeliveryReference
+    - content.media_asset.GetMediaAssetReference
+    - content.media_asset.GetOwnedMediaAsset
+    - content.media_original_access_fact.RequestOriginalImageAccess
+    - content.media_upload_session.GetMediaUploadSession
+    - content.post_moderation_case.GetCurrentPostModerationCase
+    - content.post_moderation_case.GetPostPublicationEligibility
+    - content.report.GetReport
+    - content.report.ListMyReports
+    - content.report.ListReports
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: storageReadFailed
@@ -240,6 +438,9 @@ errors:
   kind: SYSTEM
   reason: required_dependency_unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [GetFeed, SubmitPostPublication, GetHelperRead, content.content_behavior_fact.ReportBehaviors]
   recovery_action: retry
   recovery_after_seconds: 5
   dart_const: requiredDependencyUnavailable
@@ -251,6 +452,9 @@ errors:
   kind: SYSTEM
   reason: internal_error
   http_status: 500
+  emitted_by:
+  - surface: http
+    operations: [GetFeed, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, GetMyIntersectionSummary, ListMyIntersections, GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
   recovery_action: surface
   dart_const: internalError
   go_const: ErrInternalError
@@ -261,6 +465,9 @@ errors:
   kind: MIDDLEWARE
   reason: timeout
   http_status: 504
+  emitted_by:
+  - surface: http
+    operations: [GetFeed, content.content_behavior_fact.ReportBehaviors]
   recovery_action: retry
   recovery_after_seconds: 10
   dart_const: upstreamTimeout

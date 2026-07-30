@@ -2,6 +2,7 @@
   "label": "森林草原",
   "labelEn": "Forest & Grassland",
   "description": "森林与草原生态系统",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

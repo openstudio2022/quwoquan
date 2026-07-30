@@ -67,7 +67,7 @@ func TestSubmitPostPublicationAllTypes(t *testing.T) {
 			if tc.contentType == "image" || tc.contentType == "video" {
 				assetID := createReadyPublicationMediaAsset(
 					t,
-					identity.AnonymousFallbackSubAccountID,
+					identity.AnonymousFallbackPersonaID,
 					tc.contentType,
 				)
 				payload["mediaAssetIds"] = []string{assetID}
@@ -262,12 +262,12 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsTombstone(t *testing.T) {
 
 	restartedStore := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
 	restartedHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
-			subAccountID := identity.AnonymousFallbackSubAccountID
+		if strings.TrimSpace(r.Header.Get("X-Client-Persona-Id")) == "" {
+			personaID := identity.AnonymousFallbackPersonaID
 			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
-				subAccountID = userID
+				personaID = userID
 			}
-			r.Header.Set("X-Client-Sub-Account-Id", subAccountID)
+			r.Header.Set("X-Client-Persona-Id", personaID)
 		}
 		contenhttp.NewContentHandler(
 			nil,

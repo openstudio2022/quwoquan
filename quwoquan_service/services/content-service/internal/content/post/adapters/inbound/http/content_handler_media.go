@@ -94,30 +94,34 @@ func (h *ContentHandler) handleGetMediaAssetDeliveryReference(w http.ResponseWri
 func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter, r *http.Request) {
 	mediaID := pathParamAfter(r.URL.Path, "/internal/content/media/", ":processing-result")
 	var body struct {
-		Processing                   mediamodel.ProcessingStatus `json:"processingStatus"`
-		FailureReason                string                      `json:"failureReason"`
-		ProcessorProfile             string                      `json:"processorProfile"`
-		ImageWidth                   int                         `json:"imageWidth"`
-		ImageHeight                  int                         `json:"imageHeight"`
-		ImageDeliveryContentType     string                      `json:"imageDeliveryContentType"`
-		ImageNormalizedObjectKey     string                      `json:"imageNormalizedObjectKey"`
-		ImagePublicSliceKey          string                      `json:"imagePublicSliceKey"`
-		ImageDominantColor           string                      `json:"imageDominantColor"`
-		ImageLQIP                    string                      `json:"imageLqip"`
-		ImageContentProfile          string                      `json:"imageContentProfile"`
-		ImageDerivativePolicyVersion int                         `json:"imageDerivativePolicyVersion"`
-		VerifiedDurationMs           int64                       `json:"verifiedDurationMs"`
-		VideoWidth                   int                         `json:"videoWidth"`
-		VideoHeight                  int                         `json:"videoHeight"`
-		VideoCodec                   string                      `json:"videoCodec"`
-		VideoContainer               string                      `json:"videoContainer"`
-		VideoAudioCodec              string                      `json:"videoAudioCodec"`
-		VideoKeyframeIntervalMs      int                         `json:"videoKeyframeIntervalMs"`
-		VideoFastStart               bool                        `json:"videoFastStart"`
-		VideoPublicSliceKey          string                      `json:"videoPublicSliceKey"`
-		CoverPublicSliceKey          string                      `json:"coverPublicSliceKey"`
-		PreviewTrackVersion          int                         `json:"previewTrackVersion"`
-		PreviewTrackManifestSliceKey string                      `json:"previewTrackManifestSliceKey"`
+		Processing                    mediamodel.ProcessingStatus `json:"processingStatus"`
+		FailureReason                 string                      `json:"failureReason"`
+		ProcessorProfile              string                      `json:"processorProfile"`
+		ImageWidth                    int                         `json:"imageWidth"`
+		ImageHeight                   int                         `json:"imageHeight"`
+		ImageDeliveryMimeType         string                      `json:"imageDeliveryMimeType"`
+		ImageNormalizedObjectKey      string                      `json:"imageNormalizedObjectKey"`
+		ImagePublicSliceKey           string                      `json:"imagePublicSliceKey"`
+		ImageDominantColor            string                      `json:"imageDominantColor"`
+		ImageLQIP                     string                      `json:"imageLqip"`
+		ImageContentProfile           string                      `json:"imageContentProfile"`
+		ImageDerivativePolicyVersion  int                         `json:"imageDerivativePolicyVersion"`
+		VerifiedDurationMs            int64                       `json:"verifiedDurationMs"`
+		VideoWidth                    int                         `json:"videoWidth"`
+		VideoHeight                   int                         `json:"videoHeight"`
+		VideoCodec                    mediamodel.VideoCodec       `json:"videoCodec"`
+		VideoContainer                mediamodel.MediaContainer   `json:"videoContainer"`
+		VideoAudioCodec               mediamodel.AudioCodec       `json:"videoAudioCodec"`
+		VideoKeyframeIntervalMs       int                         `json:"videoKeyframeIntervalMs"`
+		VideoFastStart                bool                        `json:"videoFastStart"`
+		VideoPublicSliceKey           string                      `json:"videoPublicSliceKey"`
+		CoverPublicSliceKey           string                      `json:"coverPublicSliceKey"`
+		PreviewTrackVersion           int                         `json:"previewTrackVersion"`
+		PreviewTrackManifestSliceKey  string                      `json:"previewTrackManifestSliceKey"`
+		HLSCMAFDescriptorVersion      int                         `json:"hlsCmafDescriptorVersion"`
+		HLSCMAFDescriptorSliceKey     string                      `json:"hlsCmafDescriptorSliceKey"`
+		HLSCMAFMasterManifestSliceKey string                      `json:"hlsCmafMasterManifestSliceKey"`
+		HLSCMAFRenditionCount         int                         `json:"hlsCmafRenditionCount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
@@ -126,7 +130,7 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 	descriptor := mediamodel.MediaProcessingDescriptor{}
 	if body.ImageWidth != 0 ||
 		body.ImageHeight != 0 ||
-		strings.TrimSpace(body.ImageDeliveryContentType) != "" ||
+		strings.TrimSpace(body.ImageDeliveryMimeType) != "" ||
 		strings.TrimSpace(body.ImageNormalizedObjectKey) != "" ||
 		strings.TrimSpace(body.ImagePublicSliceKey) != "" ||
 		strings.TrimSpace(body.ImageDominantColor) != "" ||
@@ -137,7 +141,7 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 			ProcessorProfile:         body.ProcessorProfile,
 			ImageWidth:               body.ImageWidth,
 			ImageHeight:              body.ImageHeight,
-			ImageDeliveryContentType: body.ImageDeliveryContentType,
+			ImageDeliveryMimeType:    body.ImageDeliveryMimeType,
 			ImageNormalizedObjectKey: body.ImageNormalizedObjectKey,
 			ImagePublicSliceKey:      body.ImagePublicSliceKey,
 			ImageDominantColor:       body.ImageDominantColor,
@@ -149,29 +153,37 @@ func (h *ContentHandler) handleRecordMediaProcessingResult(w http.ResponseWriter
 	if body.VerifiedDurationMs != 0 ||
 		body.VideoWidth != 0 ||
 		body.VideoHeight != 0 ||
-		strings.TrimSpace(body.VideoCodec) != "" ||
-		strings.TrimSpace(body.VideoContainer) != "" ||
-		strings.TrimSpace(body.VideoAudioCodec) != "" ||
+		body.VideoCodec != "" ||
+		body.VideoContainer != "" ||
+		body.VideoAudioCodec != "" ||
 		body.VideoKeyframeIntervalMs != 0 ||
 		body.VideoFastStart ||
 		strings.TrimSpace(body.VideoPublicSliceKey) != "" ||
 		strings.TrimSpace(body.CoverPublicSliceKey) != "" ||
 		body.PreviewTrackVersion != 0 ||
-		strings.TrimSpace(body.PreviewTrackManifestSliceKey) != "" {
+		strings.TrimSpace(body.PreviewTrackManifestSliceKey) != "" ||
+		body.HLSCMAFDescriptorVersion != 0 ||
+		strings.TrimSpace(body.HLSCMAFDescriptorSliceKey) != "" ||
+		strings.TrimSpace(body.HLSCMAFMasterManifestSliceKey) != "" ||
+		body.HLSCMAFRenditionCount != 0 {
 		descriptor.Video = mediamodel.VideoProcessingDescriptor{
-			ProcessorProfile:             body.ProcessorProfile,
-			VerifiedDurationMs:           body.VerifiedDurationMs,
-			VideoWidth:                   body.VideoWidth,
-			VideoHeight:                  body.VideoHeight,
-			VideoCodec:                   body.VideoCodec,
-			VideoContainer:               body.VideoContainer,
-			VideoAudioCodec:              body.VideoAudioCodec,
-			VideoKeyframeIntervalMs:      body.VideoKeyframeIntervalMs,
-			VideoFastStart:               body.VideoFastStart,
-			VideoPublicSliceKey:          body.VideoPublicSliceKey,
-			CoverPublicSliceKey:          body.CoverPublicSliceKey,
-			PreviewTrackVersion:          body.PreviewTrackVersion,
-			PreviewTrackManifestSliceKey: body.PreviewTrackManifestSliceKey,
+			ProcessorProfile:              body.ProcessorProfile,
+			VerifiedDurationMs:            body.VerifiedDurationMs,
+			VideoWidth:                    body.VideoWidth,
+			VideoHeight:                   body.VideoHeight,
+			VideoCodec:                    body.VideoCodec,
+			VideoContainer:                body.VideoContainer,
+			VideoAudioCodec:               body.VideoAudioCodec,
+			VideoKeyframeIntervalMs:       body.VideoKeyframeIntervalMs,
+			VideoFastStart:                body.VideoFastStart,
+			VideoPublicSliceKey:           body.VideoPublicSliceKey,
+			CoverPublicSliceKey:           body.CoverPublicSliceKey,
+			PreviewTrackVersion:           body.PreviewTrackVersion,
+			PreviewTrackManifestSliceKey:  body.PreviewTrackManifestSliceKey,
+			HLSCMAFDescriptorVersion:      body.HLSCMAFDescriptorVersion,
+			HLSCMAFDescriptorSliceKey:     body.HLSCMAFDescriptorSliceKey,
+			HLSCMAFMasterManifestSliceKey: body.HLSCMAFMasterManifestSliceKey,
+			HLSCMAFRenditionCount:         body.HLSCMAFRenditionCount,
 		}
 	}
 	result, err := h.mediaService.RecordMediaProcessingResult(r.Context(), mediaapp.RecordMediaProcessingResultCommand{
@@ -208,14 +220,14 @@ type mediaAssetHTTPResponse struct {
 	AssetID                      string                      `json:"assetId"`
 	Version                      int64                       `json:"version"`
 	MediaType                    string                      `json:"mediaType"`
-	ContentType                  string                      `json:"contentType"`
+	MimeType                     string                      `json:"mimeType"`
 	FileSize                     int64                       `json:"fileSize"`
 	Status                       mediamodel.ProcessingStatus `json:"status"`
 	AccessPolicy                 mediamodel.AccessPolicy     `json:"accessPolicy"`
 	CDNURL                       string                      `json:"cdnUrl"`
 	ImageWidth                   int                         `json:"imageWidth,omitempty"`
 	ImageHeight                  int                         `json:"imageHeight,omitempty"`
-	ImageDeliveryContentType     string                      `json:"imageDeliveryContentType,omitempty"`
+	ImageDeliveryMimeType        string                      `json:"imageDeliveryMimeType,omitempty"`
 	ImageDominantColor           string                      `json:"imageDominantColor,omitempty"`
 	ImageLQIP                    string                      `json:"imageLqip,omitempty"`
 	ImageContentProfile          string                      `json:"imageContentProfile,omitempty"`
@@ -225,11 +237,11 @@ type mediaAssetHTTPResponse struct {
 func mediaAssetHTTPResponseFromSlice(asset mediaapp.MediaAssetSlice) mediaAssetHTTPResponse {
 	return mediaAssetHTTPResponse{
 		AssetID: asset.AssetID, Version: asset.Version, MediaType: asset.MediaType,
-		ContentType: asset.ContentType, FileSize: asset.FileSize, Status: asset.ProcessingStatus,
+		MimeType: asset.MimeType, FileSize: asset.FileSize, Status: asset.ProcessingStatus,
 		AccessPolicy: asset.AccessPolicy, CDNURL: asset.DeliveryURL,
 		ImageWidth: asset.ImageWidth, ImageHeight: asset.ImageHeight,
-		ImageDeliveryContentType: asset.ImageDeliveryContentType,
-		ImageDominantColor:       asset.ImageDominantColor, ImageLQIP: asset.ImageLQIP,
+		ImageDeliveryMimeType: asset.ImageDeliveryMimeType,
+		ImageDominantColor:    asset.ImageDominantColor, ImageLQIP: asset.ImageLQIP,
 		ImageContentProfile:          asset.ImageContentProfile,
 		ImageDerivativePolicyVersion: asset.ImageDerivativePolicyVersion,
 	}
@@ -316,14 +328,50 @@ func mediaCoverSelectionResponse(result mediaapp.MediaAssetCommandResult) mediaC
 }
 
 func (h *ContentHandler) handleGenerateArticleSummary(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Title string `json:"title"`
-		Body  string `json:"body"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+	if strings.TrimSpace(r.Header.Get("Idempotency-Key")) == "" {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"缺少幂等键",
+				"GenerateArticleSummary requires Idempotency-Key",
+			),
+		)
 		return
 	}
-	summary := h.postService.GenerateArticleSummary(body.Title, body.Body)
+	payload, err := BindGeneratedRequestBodyFromRequest(
+		r,
+		"GenerateArticleSummary",
+	)
+	if err != nil {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"请求体字段不合法",
+				err.Error(),
+			),
+		)
+		return
+	}
+	title, titleOK := payload["title"].(string)
+	body, bodyOK := payload["body"].(string)
+	if (payload["title"] != nil && !titleOK) ||
+		(payload["body"] != nil && !bodyOK) ||
+		(strings.TrimSpace(title) == "" && strings.TrimSpace(body) == "") {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"标题与正文不能同时为空",
+				"GenerateArticleSummary requires string title or body",
+			),
+		)
+		return
+	}
+	summary := h.postService.GenerateArticleSummary(title, body)
 	writeJSON(w, http.StatusOK, map[string]any{"summary": summary})
 }

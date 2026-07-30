@@ -554,7 +554,7 @@ List<ProcessTimelineFrame> buildProcessTimelineFromSnapshots({
   return normalizeProcessTimeline(mergedByStep.values.toList(growable: false));
 }
 
-extension ProcessTimelineFrameCompat on ProcessTimelineFrame {
+extension ProcessTimelineFrameDomainSemantics on ProcessTimelineFrame {
   bool get hasVisibleContent {
     return headline.trim().isNotEmpty ||
         detail.trim().isNotEmpty ||

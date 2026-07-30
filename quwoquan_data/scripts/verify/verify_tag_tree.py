@@ -12,6 +12,10 @@
   R10 - 引用格式：tagRef 格式必须以 Topic/Audience/Format/Entity 开头
   R11 - 菜系/业态正交：Entity/地点/餐厅/* 不得与 Topic/美食餐饮/菜系/** 重名
   R12 - 品类/业态防混：Topic/美食餐饮/品类/* 与 Entity/地点/餐厅/* 不得完全同名
+  R13 - 跨组重名：同一 label 跨 group 出现时两侧必须声明 axisRole 确认正交
+  R14 - 同轴重复：同一 group 内跨 dimension 重名直接阻断（必然产生孤儿）
+  R15 - 自嵌套：禁止 X/Y/Y 形态
+  R16 - 快照一致：_taxonomy.json 的 dimension 集合必须与磁盘一致
 
 用法:
   python3 scripts/verify/verify_tag_tree.py
@@ -36,6 +40,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT
+from verify.tag_axis_uniqueness import check_axis_uniqueness
+from verify.tag_geo_coverage import check_overseas_coverage
 
 TAGS_ROOT = CONTROL_PLANE_TAXONOMY_ROOT
 GROUPS = ["Topic", "Audience", "Format", "Entity"]
@@ -122,11 +128,17 @@ def check_r2_dimensions():
             if not subdim_dir.exists():
                 errors.append(f"R2: 缺少 Topic/地理 子维度: {subdim}")
 
-    # 检查 Topic/旅行/ 的 7 个必需子维度
+    # 检查 Topic/旅行/ 的必需子维度。
+    # 住宿不在此列：住宿的唯一真相源是 Topic/住宿，旅行侧不再维护第二棵住宿树（R14）。
+    # 创作者类型也不在此列：它是「人」，属 Audience/创作者/垂类身份。
     REQUIRED_TRAVEL_SUBDIMS = [
         "旅行主题", "玩法", "出行方式", "行程形态",
-        "旅行时长", "住宿", "旅行筹备",
+        "旅行时长", "旅行筹备", "预算档次", "同行人", "体能强度",
     ]
+    FORBIDDEN_TRAVEL_SUBDIMS = {
+        "住宿": "Topic/住宿",
+        "创作者类型": "Audience/创作者/垂类身份",
+    }
     travel_root = TAGS_ROOT / "Topic" / "旅行"
     if travel_root.exists():
         for subdim in REQUIRED_TRAVEL_SUBDIMS:
@@ -135,6 +147,10 @@ def check_r2_dimensions():
                 errors.append(f"R2: 缺少 Topic/旅行 子维度: {subdim}")
             elif not (subdim_dir / "_dimension.json").exists():
                 warnings.append(f"R2: Topic/旅行/{subdim} 缺少 _dimension.json")
+        for subdim, canonical in FORBIDDEN_TRAVEL_SUBDIMS.items():
+            if (travel_root / subdim).exists():
+                errors.append(
+                    f"R2: Topic/旅行/{subdim} 已收敛到 {canonical}，不得恢复第二棵树")
 
     # 检查 Topic/美食餐饮/ 的 9 个必需子维度
     REQUIRED_FOOD_SUBDIMS = [
@@ -263,6 +279,9 @@ def check_r5_geo_completeness():
         for city in cities:
             if not (prov_dir / city).exists():
                 errors.append(f"R5: {province} 缺少：{city}")
+
+    # 境外与港澳台最小集（实现见 tag_geo_coverage）
+    errors.extend(check_overseas_coverage(TAGS_ROOT))
 
 
 # ─────────────────────────────────────────────
@@ -421,6 +440,13 @@ def check_r12_category_entity_no_homonym():
 
 
 # ─────────────────────────────────────────────
+# R13-R16: 跨维度语义唯一性（实现见 tag_axis_uniqueness）
+# ─────────────────────────────────────────────
+def check_r13_r16_axis_uniqueness():
+    errors.extend(check_axis_uniqueness(TAGS_ROOT, GROUPS))
+
+
+# ─────────────────────────────────────────────
 # 深度均衡报告
 # ─────────────────────────────────────────────
 def depth_report():
@@ -478,6 +504,7 @@ def main(argv: list[str] | None = None):
         check_r5_geo_completeness()
         check_r11_restaurant_cuisine_orthogonality()
         check_r12_category_entity_no_homonym()
+        check_r13_r16_axis_uniqueness()
 
     total, geo_count, non_geo = check_r7_total(args.min_total, args.min_non_geo)
 

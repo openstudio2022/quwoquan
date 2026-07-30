@@ -10,10 +10,24 @@ import (
 //
 //nolint:gochecknoglobals
 var (
+	ErrClaimMaterialMissing    = errors.New("ENTITY.USER.claim_material_missing")
+	ErrAlreadyClaimed          = errors.New("ENTITY.USER.already_claimed")
 	ErrClaimNotFound           = errors.New("ENTITY.USER.claim_not_found")
 	ErrDuplicatePendingClaim   = errors.New("ENTITY.USER.duplicate_pending_claim")
 	ErrInvalidClaimMaterialURL = errors.New("ENTITY.USER.invalid_claim_material_url")
 )
+
+// AppErrorFromClaimMaterialMissing returns *AppError for ENTITY.USER.claim_material_missing (user_message from errors.yaml).
+func AppErrorFromClaimMaterialMissing(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrClaimMaterialMissing.Error()))
+	return rerrors.NewAppError(code, "认领材料不完整，请补充后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
+}
+
+// AppErrorFromAlreadyClaimed returns *AppError for ENTITY.USER.already_claimed (user_message from errors.yaml).
+func AppErrorFromAlreadyClaimed(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrAlreadyClaimed.Error()))
+	return rerrors.NewAppError(code, "该主页已被认领", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
+}
 
 // AppErrorFromClaimNotFound returns *AppError for ENTITY.USER.claim_not_found (user_message from errors.yaml).
 func AppErrorFromClaimNotFound(debugMessage string) *rerrors.AppError {

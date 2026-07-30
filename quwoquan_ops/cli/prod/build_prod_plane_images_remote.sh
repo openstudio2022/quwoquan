@@ -2,7 +2,7 @@
 set -euo pipefail
 
 KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
-HOST="${PROD_SSH_HOST:-118.31.239.122}"
+HOST="${PROD_SSH_HOST:-}"
 ACCOUNT="prod-service-svc"
 WORKSPACE_ROOT="/home/${ACCOUNT}/bootstrap/prod-build-workspace"
 SERVICES=""
@@ -27,6 +27,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$SERVICES" ]] || { echo "FAIL: --services is required" >&2; exit 2; }
+[[ -n "$HOST" ]] || { echo "FAIL: --host or PROD_SSH_HOST is required" >&2; exit 2; }
 KEY_FILE="${KEY_DIR%/}/${ACCOUNT}"
 [[ -f "$KEY_FILE" ]] || { echo "FAIL: missing key file: $KEY_FILE" >&2; exit 2; }
 
@@ -41,9 +42,9 @@ export QWQ_COMPOSE_OBJECT_STORAGE_BUCKET=build-only
 export QWQ_COMPOSE_OBJECT_STORAGE_REGION=build-only
 export QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID=build-only
 export QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET=build-only
-export QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN=build-only.invalid
+export QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL=https://cdn.example.invalid
+export QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL=https://upload.example.invalid
 export QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY=build-only
-export QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE=/dev/null
 for svc in ${SERVICES//,/ }; do
   echo \"[remote-build] \$svc\"
   fragment=\"quwoquan_service/services/\${svc}/deploy/compose.yaml\"

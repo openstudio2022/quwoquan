@@ -29,7 +29,6 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             "api.quwoquan.com",
             "ops.quwoquan.com",
             "cdn.quwoquan.com",
-            "upload.quwoquan.com",
             "quwoquan.com",
             "redir https://quwoquan.com{uri} 308",
             "root * /srv/web",
@@ -41,6 +40,9 @@ class ProdColdStartRenderContractTest(unittest.TestCase):
             self.assertIn(token, caddy)
         for forbidden in ("local_certs", "tls internal", ".test", "\n:80 {"):
             self.assertNotIn(forbidden, caddy)
+        self.assertNotIn("upload.quwoquan.com {", caddy)
+        self.assertEqual(caddy.count("\napi.quwoquan.com {"), 1)
+        self.assertEqual(caddy.count("\nquwoquan.com {"), 1)
         self.assertNotIn(
             'header {\n\t\t\tContent-Type "text/html; charset=utf-8"',
             caddy,

@@ -1,0 +1,259 @@
+api_routes:
+- method: POST
+  path: /control-plane/product/account-enforcement-cases/moderation
+  operation: OpenAccountModerationCase
+  actor: account
+  security:
+    auth_mode: required
+  request_entity: OpenAccountModerationCaseRequest
+  request_body_kind: object
+  response_entity: AccountEnforcementCaseResult
+  authorization:
+    principal: operator
+    scopes: [ops.account.moderation.write]
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 2000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - OPS.USER.account_enforcement_case_invalid_argument
+  - OPS.USER.account_enforcement_idempotency_conflict
+  - OPS.USER.account_enforcement_source_decision_conflict
+  - OPS.SYSTEM.account_enforcement_case_storage_write_failed
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_account_enforcement_case_command
+    trace: true
+    attributes: [operation, outcome]
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  application:
+    kind: command
+    facet: AccountEnforcementCaseCommandFacade
+    method: openModerationCase
+    aggregate_owner: AccountEnforcementCase
+    mutation_target: AccountEnforcementCase
+    invariant_target: AccountEnforcementCase
+  description: 创建显式 moderation case；受信 operator 与证据只保留在 Product Ops。
+  commercial:
+    status: blocked
+    block_reason: Gamma 真实 OIDC、服务身份、UserAccount 与设备 Journey 尚未证明
+    gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
+    target_story: account-moderation-and-appeal-enforcement
+- method: POST
+  path: /control-plane/product/account-enforcement-cases/appeal
+  operation: OpenAccountAppealCase
+  actor: account
+  security:
+    auth_mode: required
+  request_entity: OpenAccountAppealCaseRequest
+  request_body_kind: object
+  response_entity: AccountEnforcementCaseResult
+  authorization:
+    principal: operator
+    scopes: [ops.account.appeal.write]
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 2000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - OPS.USER.account_enforcement_case_invalid_argument
+  - OPS.USER.account_enforcement_idempotency_conflict
+  - OPS.USER.account_enforcement_source_decision_conflict
+  - OPS.SYSTEM.account_enforcement_case_storage_write_failed
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_account_enforcement_case_command
+    trace: true
+    attributes: [operation, outcome]
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  application:
+    kind: command
+    facet: AccountEnforcementCaseCommandFacade
+    method: openAppealCase
+    aggregate_owner: AccountEnforcementCase
+    mutation_target: AccountEnforcementCase
+    invariant_target: AccountEnforcementCase
+  description: 从既有受信 intake 与已投递 suspend decision 创建 appeal case；不提供用户申诉入口。
+  commercial:
+    status: blocked
+    block_reason: Gamma 真实 OIDC、服务身份、UserAccount 与设备 Journey 尚未证明
+    gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
+    target_story: account-moderation-and-appeal-enforcement
+- method: POST
+  path: /control-plane/product/account-enforcement-cases/{caseId}:review
+  operation: ReviewAccountEnforcementCase
+  actor: account
+  security:
+    auth_mode: required
+  request_bindings:
+    path:
+    - name: caseId
+      field: caseId
+  request_entity: ReviewAccountEnforcementCaseRequest
+  request_body_kind: object
+  response_entity: AccountEnforcementCaseResult
+  authorization:
+    principal: operator
+    scopes: [ops.account.enforcement.review]
+    ownership_policy: distinct_dual_operator_approval
+  reliability:
+    timeout_ms: 2000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - OPS.USER.account_enforcement_case_invalid_argument
+  - OPS.USER.account_enforcement_case_not_found
+  - OPS.USER.account_enforcement_idempotency_conflict
+  - OPS.USER.account_enforcement_case_closed
+  - OPS.USER.account_enforcement_review_conflict
+  - OPS.USER.account_enforcement_source_decision_conflict
+  - OPS.SYSTEM.account_enforcement_case_storage_read_failed
+  - OPS.SYSTEM.account_enforcement_case_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_account_enforcement_case_command
+    trace: true
+    attributes: [operation, outcome]
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  application:
+    kind: command
+    facet: AccountEnforcementCaseCommandFacade
+    method: reviewCase
+    aggregate_owner: AccountEnforcementCase
+    mutation_target: AccountEnforcementCase
+    invariant_target: AccountEnforcementCase
+  description: 提交单个 reviewer 的批准或拒绝；第二名独立批准者原子签发 decision 与 outbox。
+  commercial:
+    status: blocked
+    block_reason: Gamma 真实双签、服务身份、UserAccount 与跨域收敛尚未证明
+    gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
+    target_story: account-moderation-and-appeal-enforcement
+- method: POST
+  path: /control-plane/product/account-enforcement-cases/{caseId}:retry-delivery
+  operation: RetryAccountEnforcementDelivery
+  actor: account
+  security:
+    auth_mode: required
+  request_bindings:
+    path:
+    - name: caseId
+      field: caseId
+  response_entity: AccountEnforcementCaseResult
+  authorization:
+    principal: operator
+    scopes: [ops.account.enforcement.recover]
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 2000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes:
+  - OPS.USER.account_enforcement_case_invalid_argument
+  - OPS.USER.account_enforcement_case_not_found
+  - OPS.USER.account_enforcement_idempotency_conflict
+  - OPS.USER.account_enforcement_source_decision_conflict
+  - OPS.SYSTEM.account_enforcement_case_storage_read_failed
+  - OPS.SYSTEM.account_enforcement_case_storage_write_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_account_enforcement_delivery_recovery
+    trace: true
+    attributes: [operation, outcome]
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  application:
+    kind: command
+    facet: AccountEnforcementCaseCommandFacade
+    method: retryDelivery
+    aggregate_owner: AccountEnforcementCase
+    mutation_target: AccountEnforcementCase
+    invariant_target: AccountEnforcementCase
+  description: 仅将同一 approved decision 的 terminal DLQ 重置为待投递，不签发新 decision。
+  commercial:
+    status: blocked
+    block_reason: Gamma 真实恢复演练与受保护 Prod 操作尚未证明
+    gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
+    target_story: account-moderation-and-appeal-enforcement
+- method: GET
+  path: /control-plane/product/account-enforcement-cases/{caseId}
+  operation: GetAccountEnforcementCase
+  actor: account
+  security:
+    auth_mode: required
+  request_bindings:
+    path:
+    - name: caseId
+      field: caseId
+  response_entity: AccountEnforcementCaseResult
+  authorization:
+    principal: operator
+    scopes: [ops.account.enforcement.read]
+    ownership_policy: operator_scope
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - OPS.USER.account_enforcement_case_invalid_argument
+  - OPS.USER.account_enforcement_case_not_found
+  - OPS.SYSTEM.account_enforcement_case_storage_read_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: redacted
+  telemetry:
+    metric: ops_account_enforcement_case_read
+    trace: true
+    attributes: [operation, outcome]
+  slo:
+    latency_p95_ms: 600
+    availability_percent: 99.9
+  application:
+    kind: query
+    facet: AccountEnforcementCaseQueryFacade
+    method: getCase
+    reader: AccountEnforcementCaseReader
+    slice: AccountEnforcementCaseResult
+  description: 读取不含账号、证据、intake 和审核人身份的 case/delivery 状态。
+  commercial:
+    status: blocked
+    block_reason: Gamma 真实控制面读取与审计证据尚未证明
+    gap_id: OPS_ACCOUNT_ENFORCEMENT_GAMMA_EVIDENCE
+    target_story: account-moderation-and-appeal-enforcement
+consumers:
+- name: ops-portal
+  capabilities:
+  - account_moderation_case
+  - account_appeal_case
+  - account_enforcement_delivery_recovery

@@ -2,6 +2,7 @@
   "label": "苏菜",
   "labelEn": "Jiangsu Cuisine",
   "description": "江苏淮扬菜系",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00",
   "aliases": [

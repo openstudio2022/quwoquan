@@ -909,30 +909,6 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def inspect_android_local_ca(raw_path: str) -> dict[str, str]:
-    if not raw_path.strip():
-        return {"state": "not_provided"}
-    path = Path(raw_path).expanduser()
-    if not path.is_file():
-        return {"state": "missing", "path": str(path)}
-    content = path.read_bytes()
-    if b"quwoquan-local-debug-placeholder" in content:
-        return {"state": "placeholder", "path": str(path)}
-    certificate = run(
-        ["openssl", "x509", "-noout", "-fingerprint", "-sha256", "-in", str(path)],
-        check=False,
-        timeout=15,
-    )
-    if certificate.returncode != 0:
-        return {"state": "invalid", "path": str(path)}
-    return {
-        "state": "valid",
-        "path": str(path),
-        "sha256Fingerprint": certificate.stdout.strip(),
-        "sha256": sha256_file(path),
-    }
-
-
 def build_provenance() -> dict[str, Any]:
     revision = run(
         ["git", "rev-parse", "HEAD"],
@@ -1310,7 +1286,6 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "startupSequence": sequence,
         "timings": timings,
         "apkSha256": sha256_file(apk) if args.android_install and apk.is_file() else None,
-        "localCa": inspect_android_local_ca(args.android_local_ca_path),
         "screenshots": [item.to_json() for item in analyses],
     }
 
@@ -1359,6 +1334,9 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         raise ValueError("physical iOS startup probes require --skip-screenshots")
     launch_pid: int | None = None
     ios_log: str | None = None
+    scene_launcher = (
+        "xcrun_devicectl" if args.ios_physical else "xcrun_simctl"
+    )
     if args.ios_physical:
         if args.ios_install and app.exists():
             run(
@@ -1490,6 +1468,17 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     )
     watchdog_evidence = extract_startup_watchdog_evidence(ios_log)
     watchdog_evidence["canonicalTerminal"] = terminal_surface
+    scene_started = (
+        bool(
+            re.search(
+                r"ios_(?:did_finish_launching|dart_startup_attempt|"
+                r"startup_safe_terminal)",
+                ios_log,
+            )
+        )
+        if args.ios_physical
+        else launch_pid is not None
+    )
     attempt_id = str(watchdog_evidence.get("attemptId") or "").strip()
     launch_mode = str(watchdog_evidence.get("launchMode") or "").strip()
     runtime_configuration_complete = (
@@ -1541,7 +1530,8 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     blue_screen_detected = native_static_at_deadline and not terminal_surface_classified
     plain_background_detected = native_static_at_deadline and not terminal_surface_classified
     passed = (
-        ttid_within_budget
+        scene_started
+        and ttid_within_budget
         and not blue_screen_detected
         and not plain_background_detected
         and terminal_surface_classified
@@ -1577,6 +1567,9 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "platform": "ios",
         "device": args.ios_device,
         "deviceKind": "physical" if args.ios_physical else "simulator",
+        "sceneLaunchUsed": True,
+        "sceneStarted": scene_started,
+        "sceneLauncher": scene_launcher,
         "passed": passed,
         "visibleByMs": args.ios_visible_by_ms,
         "firstVisibleMs": first_visible,
@@ -1691,11 +1684,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_ANDROID_MAIN_ACTIVITY,
     )
     parser.add_argument("--android-apk", default=str(DEFAULT_ANDROID_APK))
-    parser.add_argument(
-        "--android-local-ca-path",
-        default="",
-        help="Inspect the debug CA used to build the Android APK and record its fingerprint.",
-    )
     parser.add_argument("--android-install", action="store_true")
     parser.add_argument(
         "--android-offsets-ms",
@@ -1941,9 +1929,17 @@ def main() -> int:
                             "launchVisual": result.get("launchVisual"),
                         }
                     )
+                else:
+                    sample.update(
+                        {
+                            "sceneLaunchUsed": result.get("sceneLaunchUsed"),
+                            "sceneStarted": result.get("sceneStarted"),
+                            "sceneLauncher": result.get("sceneLauncher"),
+                        }
+                    )
                 samples.append(sample)
             evidence = {
-                "schema": "qwq.startup-runtime-evidence.v1",
+                "schema": "qwq.startup-runtime-evidence",
                 "runtimeEnv": args.runtime_env,
                 "runtimeTarget": matrix_case,
                 "platform": platform,

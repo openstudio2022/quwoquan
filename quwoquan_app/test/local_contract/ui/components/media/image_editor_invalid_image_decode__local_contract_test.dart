@@ -5,8 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/image/editor/panels/image_editor_operation_panel.dart';
+import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/infrastructure/local/content/filter_catalog/verified_filter_catalog_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../support/cloud_services/object_doubles/content/alpha_filter_catalog_query.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -34,6 +39,15 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          imageEditorFilterRepositoryProvider.overrideWithValue(
+            ImageEditorFilterRepository(
+              catalogLoader: () async => imageEditorFilterConfigFromSnapshot(
+                await AlphaFilterCatalogQuery().getActiveFilterCatalog(),
+              ),
+            ),
+          ),
+        ],
         child: MaterialApp(
           home: ImageEditorPage(
             initialPath: first.path,

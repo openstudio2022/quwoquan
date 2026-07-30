@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 	"strings"
+
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 )
 
 // relatedScanCap 限制 TagNodeView 的 related / cooccurrence / related-objects 倒排扫描规模，
@@ -150,7 +152,7 @@ func (s *TagService) RelatedTags(ctx context.Context, tagRef string, limit int) 
 	if err != nil {
 		return nil, err
 	}
-	if anchor == nil || anchor.LifecycleStatus != "active" {
+	if anchor == nil || !lifecycle.IsUsable(anchor.LifecycleStatus) {
 		return out, nil
 	}
 	counts, err := s.cooccurrenceCounts(ctx, tagRef)
@@ -162,7 +164,7 @@ func (s *TagService) RelatedTags(ctx context.Context, tagRef string, limit int) 
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
-		if node == nil || node.LifecycleStatus != "active" {
+		if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 			continue
 		}
 		view := RelatedTagView{TagRef: t, Label: node.Label, CooccurCount: c}
@@ -199,7 +201,7 @@ func (s *TagService) TagCooccurrence(ctx context.Context, tagRef string, minCoun
 	if err != nil {
 		return nil, err
 	}
-	if anchor == nil || anchor.LifecycleStatus != "active" {
+	if anchor == nil || !lifecycle.IsUsable(anchor.LifecycleStatus) {
 		return out, nil
 	}
 	counts, err := s.cooccurrenceCounts(ctx, tagRef)
@@ -215,7 +217,7 @@ func (s *TagService) TagCooccurrence(ctx context.Context, tagRef string, minCoun
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
-		if node == nil || node.LifecycleStatus != "active" {
+		if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 			continue
 		}
 		pairs = append(pairs, TagCooccurrenceView{TagA: tagRef, TagB: t, CooccurCount: c})
@@ -255,7 +257,7 @@ func (s *TagService) SearchByTags(ctx context.Context, tagRefs []string, objectT
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
-		if node != nil && node.LifecycleStatus == "active" {
+		if node != nil && lifecycle.IsUsable(node.LifecycleStatus) {
 			activeRefs = append(activeRefs, tagRef)
 		}
 	}
@@ -350,7 +352,7 @@ func (s *TagService) RelatedObjects(ctx context.Context, objectID, objectType st
 		if nodeErr != nil {
 			return nil, nodeErr
 		}
-		if node == nil || node.LifecycleStatus != "active" {
+		if node == nil || !lifecycle.IsUsable(node.LifecycleStatus) {
 			continue
 		}
 		idxs, err := s.objects.FindObjectsByTagRef(ctx, t, "", relatedScanCap)

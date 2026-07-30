@@ -107,7 +107,7 @@ def build_docs(fixture: dict, created_at_base: datetime | None = None) -> list[d
                 "postId": post["id"],
                 "postRef": post["id"],
                 "authorId": author_id,
-                "subAccountId": author_id,
+                "personaId": author_id,
                 "authorDisplayNameSnapshot": author["displayName"],
                 "authorAvatarUrlSnapshot": author["avatarObjectKey"],
                 "personaContextVersion": int(defaults["personaContextVersion"]),

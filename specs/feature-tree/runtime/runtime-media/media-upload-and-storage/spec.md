@@ -47,6 +47,7 @@
 ### REQ-003 上传与公开媒体交付 authority 单轨
 
 - App、媒体服务与对象存储必须对同一 `assetId/publicSliceKey` 收敛，Android/iOS 不得生成端侧替代身份。
+- path-versioned public slice 只允许 query-free 公开交付；原图或处理中私有 object 只允许短期 signed URL，私有 key 不得进入 public-slice builder，public slice 不得追加签名或版本 query。
 - 图片、视频、短文本配图、文章封面与正文图均先完成上传，再只以
   `mediaAssetIds` 进入 Post 发布；文章 manifest 只允许资产身份与展示元数据，
   服务端绑定后补充 canonical `publicSliceKey`。

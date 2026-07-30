@@ -15,12 +15,11 @@ void main() {
         overrides: [
           personaQueryProvider.overrideWith(
             (ref, surface) => ContactPersonaQueryFake(
-              profile: SubAccountProfileViewData(
-                subAccountId: 'persona-alice',
+              profile: PersonaProfileViewData(
+                personaId: 'persona-alice',
                 ownerUserId: 'owner-alice',
                 subjectType: 'persona',
                 userHandle: 'alice',
-                username: 'alice',
                 displayName: 'Alice',
                 avatarUrl: '',
                 backgroundUrl: '',
@@ -55,10 +54,7 @@ void main() {
 
     expect(find.text('Alice'), findsOneWidget);
     expect(find.textContaining('alice'), findsOneWidget);
-    expect(
-      find.text(ContactText.addContactConfirmSourceScan),
-      findsOneWidget,
-    );
+    expect(find.text(ContactText.addContactConfirmSourceScan), findsOneWidget);
     expect(find.text(ContactText.addContactSheetTitle), findsWidgets);
   });
 }
@@ -71,10 +67,22 @@ final class _ConfirmCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: 'persona-current',
-      targetSubAccountId: targetUserId,
+      viewerPersonaId: 'persona-current',
+      targetPersonaId: targetUserId,
       relationState: 'not_following',
       canFollow: true,
+      canUnfollow: false,
+      canFollowBack: false,
+      canGreet: true,
+      canOpenConversation: false,
+      canCreateDirectConversation: false,
+      canSendMessage: false,
+      hasPendingGreeting: false,
+      hasFormalConversation: false,
+      canStartVoiceCall: false,
+      canStartVideoCall: false,
+      isBlocked: false,
+      isBlockedBy: false,
     );
   }
 }

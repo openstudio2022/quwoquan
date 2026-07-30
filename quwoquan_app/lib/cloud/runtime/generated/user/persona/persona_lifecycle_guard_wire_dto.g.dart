@@ -2,14 +2,14 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class PersonaLifecycleGuardWireDto {
-  final String subAccountId;
+  final String personaId;
   final String requestedAction;
   final bool allowed;
   final String reason;
   final bool requiresSuccessor;
 
   PersonaLifecycleGuardWireDto({
-    this.subAccountId = '',
+    this.personaId = '',
     this.requestedAction = 'retire',
     this.allowed = false,
     this.reason = 'allowed',
@@ -18,7 +18,7 @@ class PersonaLifecycleGuardWireDto {
 
   factory PersonaLifecycleGuardWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaLifecycleGuardWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? '',
+      personaId: m['personaId']?.toString() ?? '',
       requestedAction: m['requestedAction']?.toString() ?? 'retire',
       allowed: m['allowed'] as bool? ?? false,
       reason: m['reason']?.toString() ?? 'allowed',
@@ -28,7 +28,7 @@ class PersonaLifecycleGuardWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'requestedAction': requestedAction,
       'allowed': allowed,
       'reason': reason,
@@ -37,14 +37,14 @@ class PersonaLifecycleGuardWireDto {
   }
 
   PersonaLifecycleGuardWireDto copyWith({
-    String? subAccountId,
+    String? personaId,
     String? requestedAction,
     bool? allowed,
     String? reason,
     bool? requiresSuccessor,
   }) {
     return PersonaLifecycleGuardWireDto(
-      subAccountId: subAccountId ?? this.subAccountId,
+      personaId: personaId ?? this.personaId,
       requestedAction: requestedAction ?? this.requestedAction,
       allowed: allowed ?? this.allowed,
       reason: reason ?? this.reason,

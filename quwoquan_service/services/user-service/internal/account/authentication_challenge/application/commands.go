@@ -7,14 +7,15 @@ import (
 )
 
 type CreateChallengeCommand struct {
-	ID              string
-	AccountID       string
-	Purpose         string
-	Channel         string
-	DestinationHash string
-	SecretRef       string
-	IdempotencyKey  string
-	ExpiresAt       time.Time
+	ID               string
+	AccountID        string
+	Purpose          string
+	Channel          string
+	DestinationHash  string
+	SecretRef        string
+	BindingTicketRef string
+	IdempotencyKey   string
+	ExpiresAt        time.Time
 }
 
 // VerifyChallengeCommand 支持按 challengeId 精确验证，也支持调用方只持有

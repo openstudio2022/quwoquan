@@ -15,7 +15,7 @@ var (
 	ErrLocationPermissionRequired  = errors.New("INTEGRATION.USER.location_permission_required")
 	ErrUpstreamTimeout             = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
 	ErrLocationProviderUnavailable = errors.New("INTEGRATION.MIDDLEWARE.location_provider_unavailable")
-	ErrInternalError               = errors.New("INTEGRATION.SYSTEM.internal_error")
+	ErrLocationInternalError       = errors.New("INTEGRATION.SYSTEM.location_internal_error")
 )
 
 // AppErrorFromLocationUnavailable returns *AppError for INTEGRATION.USER.location_unavailable (user_message from errors.yaml).
@@ -48,8 +48,8 @@ func AppErrorFromLocationProviderUnavailable(debugMessage string) *rerrors.AppEr
 	return rerrors.NewAppError(code, "位置服务暂不可用，请稍后重试", debugMessage).WithMetadata("location_provider_unavailable", 503).WithRecovery("retry", 5)
 }
 
-// AppErrorFromInternalError returns *AppError for INTEGRATION.SYSTEM.internal_error (user_message from errors.yaml).
-func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
+// AppErrorFromLocationInternalError returns *AppError for INTEGRATION.SYSTEM.location_internal_error (user_message from errors.yaml).
+func AppErrorFromLocationInternalError(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrLocationInternalError.Error()))
 	return rerrors.NewAppError(code, "位置服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 5)
 }

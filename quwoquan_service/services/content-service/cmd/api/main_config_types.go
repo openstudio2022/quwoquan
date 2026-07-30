@@ -19,11 +19,23 @@ type redisSceneCfg struct {
 	} `yaml:"pool"`
 }
 
+type feedRuntimeConfig struct {
+	ActiveSupplyCacheTTLMS            int   `yaml:"active_supply_cache_ttl_ms"`
+	ActiveSupplyCacheJitterMS         int   `yaml:"active_supply_cache_jitter_ms"`
+	MaxInflight                       int   `yaml:"max_inflight"`
+	MaximumRecallSources              int   `yaml:"maximum_recall_sources"`
+	MaximumUnterminatedCallsPerSource int   `yaml:"maximum_unterminated_calls_per_source"`
+	RankedWindowQuotaShardCount       int   `yaml:"ranked_window_quota_shard_count"`
+	RankedWindowMaximumLiveRecords    int   `yaml:"ranked_window_maximum_live_records_per_shard"`
+	RankedWindowMaximumLiveBytes      int64 `yaml:"ranked_window_maximum_live_bytes_per_shard"`
+	DeliveryPageQuotaShardCount       int   `yaml:"delivery_page_quota_shard_count"`
+	DeliveryPageMaximumLiveRecords    int   `yaml:"delivery_page_maximum_live_records_per_shard"`
+	DeliveryPageMaximumLiveBytes      int64 `yaml:"delivery_page_maximum_live_bytes_per_shard"`
+}
+
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 	Service struct {
 		HTTP struct {
@@ -85,17 +97,20 @@ type config struct {
 		VectorRecallEnabled bool `yaml:"vector_recall_enabled"`
 	} `yaml:"embedding"`
 
+	Feed feedRuntimeConfig `yaml:"feed"`
+
 	OSS struct {
-		Endpoint        string `yaml:"endpoint"`
-		Bucket          string `yaml:"bucket"`
-		Region          string `yaml:"region"`
-		AccessKeyID     string `yaml:"access_key_id"`
-		AccessKeySecret string `yaml:"access_key_secret"`
-		CDNDomain       string `yaml:"cdn_domain"`
-		CDNSignKey      string `yaml:"cdn_sign_key"`
-		PresignTTLMin   int    `yaml:"presign_ttl_minutes"`
-		CDNTTLMin       int    `yaml:"cdn_ttl_minutes"`
-		UseSSL          bool   `yaml:"use_ssl"`
+		Endpoint             string `yaml:"endpoint"`
+		Bucket               string `yaml:"bucket"`
+		Region               string `yaml:"region"`
+		AccessKeyID          string `yaml:"access_key_id"`
+		AccessKeySecret      string `yaml:"access_key_secret"`
+		MediaDeliveryBaseURL string `yaml:"media_delivery_base_url"`
+		MediaUploadBaseURL   string `yaml:"media_upload"`
+		CDNSignKey           string `yaml:"cdn_sign_key"`
+		PresignTTLMin        int    `yaml:"presign_ttl_minutes"`
+		CDNTTLMin            int    `yaml:"cdn_ttl_minutes"`
+		UseSSL               bool   `yaml:"use_ssl"`
 	} `yaml:"oss"`
 
 	// MediaProcessing 配置强制启用的进程内 Worker；它是 media outbox
@@ -104,6 +119,7 @@ type config struct {
 		IntervalMs          int    `yaml:"interval_ms"`
 		FFmpegPath          string `yaml:"ffmpeg_path"`
 		FFprobePath         string `yaml:"ffprobe_path"`
+		HLSCMAFEnabled      bool   `yaml:"hls_cmaf_enabled"`
 		WorkDir             string `yaml:"work_dir"`
 		JobTimeoutMs        int    `yaml:"job_timeout_ms"`
 		MinWorkDirFreeBytes int64  `yaml:"min_work_dir_free_bytes"`

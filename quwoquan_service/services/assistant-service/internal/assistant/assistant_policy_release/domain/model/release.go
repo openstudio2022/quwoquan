@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_conversation"
 )
 
 var (
@@ -46,9 +48,8 @@ type LearningContextPolicy struct {
 
 type Release struct {
 	PolicyID              string                `json:"policyId" bson:"policyId"`
-	ReleaseVersion        string                `json:"releaseVersion" bson:"releaseVersion"`
+	ReleaseDigest         string                `json:"releaseDigest" bson:"releaseDigest"`
 	AggregateVersion      int                   `json:"aggregateVersion" bson:"aggregateVersion"`
-	CanonicalDigest       string                `json:"canonicalDigest" bson:"canonicalDigest"`
 	DefaultTemplateID     string                `json:"defaultTemplateId" bson:"defaultTemplateId"`
 	Templates             []Template            `json:"templates" bson:"templates"`
 	RoutingRules          []RoutingRule         `json:"routingRules" bson:"routingRules"`
@@ -65,7 +66,7 @@ func Stage(input Release, now time.Time) (Release, error) {
 	if err != nil {
 		return Release{}, err
 	}
-	if normalized.CanonicalDigest != digest {
+	if normalized.ReleaseDigest != digest {
 		return Release{}, ErrDigestMismatch
 	}
 	normalized.AggregateVersion = 1
@@ -80,14 +81,12 @@ func Digest(input Release) (string, error) {
 	}
 	payload := struct {
 		PolicyID              string                `json:"policyId"`
-		ReleaseVersion        string                `json:"releaseVersion"`
 		DefaultTemplateID     string                `json:"defaultTemplateId"`
 		Templates             []Template            `json:"templates"`
 		RoutingRules          []RoutingRule         `json:"routingRules"`
 		LearningContextPolicy LearningContextPolicy `json:"learningContextPolicy"`
 	}{
 		PolicyID:              normalized.PolicyID,
-		ReleaseVersion:        normalized.ReleaseVersion,
 		DefaultTemplateID:     normalized.DefaultTemplateID,
 		Templates:             normalized.Templates,
 		RoutingRules:          normalized.RoutingRules,
@@ -101,13 +100,12 @@ func Digest(input Release) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func normalize(input Release, requireCanonicalDigest bool) (Release, error) {
+func normalize(input Release, requireReleaseDigest bool) (Release, error) {
 	input.PolicyID = strings.TrimSpace(input.PolicyID)
-	input.ReleaseVersion = strings.TrimSpace(input.ReleaseVersion)
-	input.CanonicalDigest = strings.ToLower(strings.TrimSpace(input.CanonicalDigest))
+	input.ReleaseDigest = strings.TrimSpace(input.ReleaseDigest)
 	input.DefaultTemplateID = strings.TrimSpace(input.DefaultTemplateID)
-	if input.PolicyID == "" || input.ReleaseVersion == "" ||
-		(requireCanonicalDigest && input.CanonicalDigest == "") ||
+	if input.PolicyID == "" ||
+		(requireReleaseDigest && !isCanonicalReleaseDigest(input.ReleaseDigest)) ||
 		input.DefaultTemplateID == "" ||
 		len(input.Templates) == 0 || len(input.Templates) > 128 ||
 		len(input.RoutingRules) > 256 {
@@ -126,6 +124,11 @@ func normalize(input Release, requireCanonicalDigest bool) (Release, error) {
 		if template.TemplateID == "" || template.SkillID == "" ||
 			template.DomainID == "" || template.PromptPolicy == "" ||
 			template.SearchIntensity == "" {
+			return Release{}, ErrInvalidArgument
+		}
+		if _, parseErr := assistantgenerated.ParseSearchIntensity(
+			template.SearchIntensity,
+		); parseErr != nil {
 			return Release{}, ErrInvalidArgument
 		}
 		if _, duplicate := templateIDs[template.TemplateID]; duplicate {
@@ -179,6 +182,14 @@ func normalize(input Release, requireCanonicalDigest bool) (Release, error) {
 	}
 	input.LearningContextPolicy = policy
 	return input, nil
+}
+
+func isCanonicalReleaseDigest(value string) bool {
+	if len(value) != sha256.Size*2 || value != strings.ToLower(value) {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 func normalizeLearningContextPolicy(

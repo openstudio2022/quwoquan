@@ -232,7 +232,7 @@ func TestCommentMetadataDeclaresTransactionalOutboxAndNamedReadModels(t *testing
 		"CommentPinChanged",
 		"CommentAttachmentsBound",
 	} {
-		if eventChannels[eventName] != "outbox" {
+		if eventChannels[eventName] != "transactional_outbox" {
 			t.Errorf("%s must be emitted through the Comment outbox", eventName)
 		}
 	}

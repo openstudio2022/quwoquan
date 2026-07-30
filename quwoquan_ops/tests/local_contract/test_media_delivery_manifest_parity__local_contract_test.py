@@ -9,11 +9,41 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.media_delivery_manifest import build_media_delivery_url
 from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as smoke
 from quwoquan_ops.cli import stackctl
 
 
 class MediaDeliveryManifestParityTest(unittest.TestCase):
+    def test_attachment_and_background_share_image_origin_without_new_role(self) -> None:
+        public_bases = get_target(
+            load_environment_topology(), "gamma-local"
+        )["publicBases"]
+        attachment = build_media_delivery_url(
+            public_bases,
+            {
+                "mediaType": "attachment",
+                "publicSliceKey": "media/attachment/s/a/v1/source.pdf",
+                "version": 1,
+            },
+        )
+        background = build_media_delivery_url(
+            public_bases,
+            {
+                "mediaType": "background",
+                "publicSliceKey": "media/background/s/b/v1/source.webp",
+                "version": 1,
+            },
+        )
+        self.assertEqual(
+            attachment,
+            "https://cdn.gamma.quwoquan.com:19100/media/attachment/s/a/v1/source.pdf",
+        )
+        self.assertEqual(
+            background,
+            "https://cdn.gamma.quwoquan.com:19100/media/background/s/b/v1/source.webp",
+        )
+
     def test_gamma_topology_keeps_distinct_image_and_upload_bases(self) -> None:
         topology = load_environment_topology()
         target = get_target(topology, "gamma-local")
@@ -33,7 +63,7 @@ class MediaDeliveryManifestParityTest(unittest.TestCase):
         argv = command["argv"]
         self.assertEqual(
             argv[argv.index("--media-image-base-url") + 1],
-            "https://cdn.gamma.quwoquan.com:19100",
+            "https://cdn.gamma.quwoquan.com:19100/media/image",
         )
         self.assertEqual(
             argv[argv.index("--media-upload-base-url") + 1],

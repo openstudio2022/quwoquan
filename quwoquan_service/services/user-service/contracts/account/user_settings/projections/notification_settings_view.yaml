@@ -1,7 +1,7 @@
 read_model: NotificationSettingsView
 description: Account owner 的通知设置 typed slice。
 source_entities:
-- UserSetting
+- UserSettings
 consumers:
 - app
 fields:

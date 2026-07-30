@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -165,6 +166,7 @@ access:
 relationships: []
 business_rules: [identity_is_stable]
 lifecycle:
+  state_field: status
   states: [active]
 `
 }
@@ -176,6 +178,8 @@ description: read model
 identity: {fields: [id], version_source: checkpoint}
 access: {commands: none, queries: named_reader, cross_context: public_contract_only}
 relationships: []
+lifecycle:
+  immutable: true
 `
 }
 
@@ -207,6 +211,7 @@ api_routes:
     path: ` + path + `
     operation: ` + operation + `
     actor: persona_or_device
+` + requestBindingsFixture(path) + `
     security: {auth_mode: public}
     application:
       kind: query
@@ -231,6 +236,7 @@ api_routes:
     path: ` + path + `
     operation: ` + operation + `
     actor: account
+` + requestBindingsFixture(path) + `
     security: {auth_mode: required}
     application:
       kind: command
@@ -249,18 +255,63 @@ api_routes:
 `
 }
 
+var fixturePathParameterPattern = regexp.MustCompile(`\{([^{}]+)\}`)
+var fixtureOperationPattern = regexp.MustCompile(`(?m)^\s*operation:\s*([A-Za-z0-9_]+)\s*$`)
+
+func requestBindingsFixture(path string) string {
+	matches := fixturePathParameterPattern.FindAllStringSubmatch(path, -1)
+	if len(matches) == 0 {
+		return ""
+	}
+	var result strings.Builder
+	result.WriteString("    request_bindings:\n      path:\n")
+	for _, match := range matches {
+		name := strings.TrimSpace(match[1])
+		result.WriteString("        - {name: " + name + ", field: " + name + "}\n")
+	}
+	return strings.TrimSuffix(result.String(), "\n")
+}
+
 func writeObjectFixture(t *testing.T, metadataDir, relativeDir, object, operations string) {
 	t.Helper()
 	writeSchemas(t, metadataDir)
 	parts := strings.Split(relativeDir, "/")
+	objectSlug := strings.ReplaceAll(parts[len(parts)-1], "-", "_")
+	errorReason := "fixture_" + objectSlug + "_unavailable"
+	errorCode := "CONTENT.SYSTEM." + errorReason
+	operations = strings.ReplaceAll(operations, "CONTENT.SYSTEM.unavailable", errorCode)
 	writeFile(t, filepath.Join(metadataDir, parts[0], parts[1], "context.yaml"), contextPacket())
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "object.yaml"), object)
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "operations.yaml"), operations)
+	if strings.Contains(operations, errorCode) {
+		var operationBindings strings.Builder
+		for _, match := range fixtureOperationPattern.FindAllStringSubmatch(operations, -1) {
+			operationBindings.WriteString("        - " + match[1] + "\n")
+		}
+		writeFile(t, filepath.Join(metadataDir, relativeDir, "errors.yaml"), `
+errors:
+  - code: `+errorCode+`
+    kind: SYSTEM
+    reason: `+errorReason+`
+    http_status: 503
+    emitted_by:
+      - surface: http
+        operations:
+`+operationBindings.String()+`    recovery_action: retry
+    recovery_after_seconds: 1
+`)
+	}
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "fields.yaml"), `
 fields:
   - name: id
     type: string
     role: authoritative_state
+  - name: status
+    type: enum
+    enum_ref: TestStatus
+    role: authoritative_state
+enums:
+  TestStatus: [active]
 `)
 	role := "authoritative"
 	backend := "mongodb"
@@ -272,9 +323,28 @@ fields:
 	}
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "storage.yaml"), "backend: "+backend+"\nrole: "+role)
 	writeFile(t, filepath.Join(metadataDir, relativeDir, "events.yaml"), `
-events: []
-subscriptions: [test.ObjectHydrated]
+events:
+  - name: FixtureObjectHydrated
+    producer: fixture
+    consumers: [fixture-projector]
+    channel: event_store
+    payload_entity: `+pascalCaseFixtureObject(parts[len(parts)-1])+`
+    payload_fields: [id, status]
+subscriptions: [FixtureObjectHydrated]
 `)
+}
+
+func pascalCaseFixtureObject(value string) string {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+	for index := range parts {
+		if parts[index] == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(parts[index][:1]) + parts[index][1:]
+	}
+	return strings.Join(parts, "")
 }
 
 func writeSchemas(t *testing.T, metadataDir string) {
@@ -283,6 +353,7 @@ func writeSchemas(t *testing.T, metadataDir string) {
 	for _, name := range []string{
 		"context.schema.json", "object.schema.json", "fields.schema.json",
 		"operations.schema.json", "storage.schema.json", "events.schema.json",
+		"errors.schema.json", "privacy.schema.json",
 		"contract_graph.schema.json",
 	} {
 		data, err := os.ReadFile(filepath.Join(repositorySchemaRoot, name))

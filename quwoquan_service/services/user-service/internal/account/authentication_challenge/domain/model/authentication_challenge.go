@@ -48,14 +48,15 @@ const (
 )
 
 type CreateParams struct {
-	ID              string
-	AccountID       string
-	Purpose         string
-	Channel         string
-	DestinationHash string
-	SecretRef       string
-	ExpiresAt       time.Time
-	CreatedAt       time.Time
+	ID               string
+	AccountID        string
+	Purpose          string
+	Channel          string
+	DestinationHash  string
+	SecretRef        string
+	BindingTicketRef string
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
 }
 
 // State 是对象专属 Store 的持久化形态。SecretRef 与 CompletionFingerprint
@@ -67,6 +68,7 @@ type State struct {
 	Channel               string
 	DestinationHash       string
 	SecretRef             string
+	BindingTicketRef      string
 	Status                Status
 	AttemptCount          int
 	ExpiresAt             time.Time
@@ -79,18 +81,19 @@ type State struct {
 
 // Snapshot 是 application 可返回的脱敏聚合快照，不含 secretRef 或完成凭据指纹。
 type Snapshot struct {
-	ID              string
-	AccountID       string
-	Purpose         string
-	Channel         string
-	DestinationHash string
-	Status          Status
-	AttemptCount    int
-	ExpiresAt       time.Time
-	CreatedAt       time.Time
-	CompletedAt     *time.Time
-	Version         int64
-	UpdatedAt       time.Time
+	ID               string
+	AccountID        string
+	Purpose          string
+	Channel          string
+	DestinationHash  string
+	BindingTicketRef string
+	Status           Status
+	AttemptCount     int
+	ExpiresAt        time.Time
+	CreatedAt        time.Time
+	CompletedAt      *time.Time
+	Version          int64
+	UpdatedAt        time.Time
 }
 
 type AuthenticationChallenge struct {
@@ -99,17 +102,18 @@ type AuthenticationChallenge struct {
 
 func New(params CreateParams) (AuthenticationChallenge, error) {
 	state := State{
-		ID:              strings.TrimSpace(params.ID),
-		AccountID:       strings.TrimSpace(params.AccountID),
-		Purpose:         strings.TrimSpace(params.Purpose),
-		Channel:         strings.TrimSpace(params.Channel),
-		DestinationHash: strings.TrimSpace(params.DestinationHash),
-		SecretRef:       strings.TrimSpace(params.SecretRef),
-		Status:          StatusPending,
-		ExpiresAt:       params.ExpiresAt.UTC(),
-		CreatedAt:       params.CreatedAt.UTC(),
-		Version:         1,
-		UpdatedAt:       params.CreatedAt.UTC(),
+		ID:               strings.TrimSpace(params.ID),
+		AccountID:        strings.TrimSpace(params.AccountID),
+		Purpose:          strings.TrimSpace(params.Purpose),
+		Channel:          strings.TrimSpace(params.Channel),
+		DestinationHash:  strings.TrimSpace(params.DestinationHash),
+		SecretRef:        strings.TrimSpace(params.SecretRef),
+		BindingTicketRef: strings.TrimSpace(params.BindingTicketRef),
+		Status:           StatusPending,
+		ExpiresAt:        params.ExpiresAt.UTC(),
+		CreatedAt:        params.CreatedAt.UTC(),
+		Version:          1,
+		UpdatedAt:        params.CreatedAt.UTC(),
 	}
 	return Restore(state)
 }
@@ -121,6 +125,7 @@ func Restore(state State) (AuthenticationChallenge, error) {
 	state.Channel = strings.TrimSpace(state.Channel)
 	state.DestinationHash = strings.TrimSpace(state.DestinationHash)
 	state.SecretRef = strings.TrimSpace(state.SecretRef)
+	state.BindingTicketRef = strings.TrimSpace(state.BindingTicketRef)
 	state.CompletionFingerprint = strings.TrimSpace(state.CompletionFingerprint)
 	state.ExpiresAt = state.ExpiresAt.UTC()
 	state.CreatedAt = state.CreatedAt.UTC()
@@ -141,18 +146,19 @@ func (challenge AuthenticationChallenge) State() State {
 func (challenge AuthenticationChallenge) Snapshot() Snapshot {
 	state := challenge.State()
 	return Snapshot{
-		ID:              state.ID,
-		AccountID:       state.AccountID,
-		Purpose:         state.Purpose,
-		Channel:         state.Channel,
-		DestinationHash: state.DestinationHash,
-		Status:          state.Status,
-		AttemptCount:    state.AttemptCount,
-		ExpiresAt:       state.ExpiresAt,
-		CreatedAt:       state.CreatedAt,
-		CompletedAt:     cloneTime(state.CompletedAt),
-		Version:         state.Version,
-		UpdatedAt:       state.UpdatedAt,
+		ID:               state.ID,
+		AccountID:        state.AccountID,
+		Purpose:          state.Purpose,
+		Channel:          state.Channel,
+		DestinationHash:  state.DestinationHash,
+		BindingTicketRef: state.BindingTicketRef,
+		Status:           state.Status,
+		AttemptCount:     state.AttemptCount,
+		ExpiresAt:        state.ExpiresAt,
+		CreatedAt:        state.CreatedAt,
+		CompletedAt:      cloneTime(state.CompletedAt),
+		Version:          state.Version,
+		UpdatedAt:        state.UpdatedAt,
 	}
 }
 
@@ -298,8 +304,15 @@ func validateState(state State) error {
 		invalidText(state.Purpose, 64) ||
 		invalidText(state.Channel, 32) ||
 		invalidOptionalText(state.DestinationHash, 256) ||
+		invalidOptionalText(state.BindingTicketRef, 64) ||
 		invalidText(state.SecretRef, 1024) {
 		return fmt.Errorf("%w: identity or immutable attributes are invalid", ErrInvalidChallenge)
+	}
+	if state.Purpose != "bind_phone" && state.BindingTicketRef != "" {
+		return fmt.Errorf(
+			"%w: only bind_phone challenges may carry a binding ticket scope",
+			ErrInvalidChallenge,
+		)
 	}
 	if !state.Status.Valid() ||
 		state.AttemptCount < 0 ||

@@ -24,10 +24,9 @@ func (s *PostService) GetAppConfig() map[string]any {
 		featureFlags[key] = value
 	}
 	payload := map[string]any{
-		"schema":         "app_remote_config",
-		"packageVersion": "embedded-content-service",
-		"fetchedAt":      time.Now().UTC().Format(time.RFC3339),
-		"maxAgeSec":      21600,
+		"schema":    "app_remote_config",
+		"fetchedAt": time.Now().UTC().Format(time.RFC3339),
+		"maxAgeSec": 21600,
 		"activationPolicy": map[string]any{
 			"default":       "next_session",
 			"kill_switches": "immediate",

@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan integration API
-    version: v1
+    version: canonical
 paths:
     /integration/location/nearby:
         get:
@@ -16,6 +16,27 @@ paths:
                 method: getNearbyLocations
                 reader: NearbyLocationReader
                 slice: LocationPoiListSlice
+            parameters:
+                - name: lat
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: lng
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: radiusMeters
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -44,6 +65,32 @@ paths:
                 method: searchLocations
                 reader: LocationSearchReader
                 slice: LocationPoiListSlice
+            parameters:
+                - name: q
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cityCode
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: lat
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: lng
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -156,7 +203,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ExternalInteractionAttempt'
+                                $ref: '#/components/schemas/ExternalInteractionAttemptFact'
                 default:
                     description: Runtime failure
                     content:
@@ -177,13 +224,19 @@ paths:
                 method: listDeadLetters
                 reader: ExternalInteractionDeadLetterReader
                 slice: ExternalInteractionDeadLetterListSlice
+            parameters:
+                - name: requestId
+                  in: query
+                  required: true
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ExternalInteractionDeadLetter'
+                                $ref: '#/components/schemas/ExternalInteractionDeadLetterFact'
                 default:
                     description: Runtime failure
                     content:
@@ -268,15 +321,15 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ExternalInteractionAccepted
             x-contract-placeholder: true
-        ExternalInteractionAttempt:
+        ExternalInteractionAttemptFact:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ExternalInteractionAttempt
+            x-contract-entity: ExternalInteractionAttemptFact
             x-contract-placeholder: true
-        ExternalInteractionDeadLetter:
+        ExternalInteractionDeadLetterFact:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ExternalInteractionDeadLetter
+            x-contract-entity: ExternalInteractionDeadLetterFact
             x-contract-placeholder: true
         ExternalInteractionMetricsSnapshot:
             type: object

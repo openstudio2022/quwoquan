@@ -21,7 +21,8 @@ fields:
   ops_exposure: read
   role: authoritative_state
 - name: status
-  type: string
+  type: enum
+  enum_ref: AssistantPolicyRolloutStatus
   constraints:
   - NOT_NULL
   classification: INTERNAL
@@ -109,7 +110,7 @@ members:
       api_exposure: drop
       ops_exposure: read
       role: authoritative_state
-    - name: releaseVersion
+    - name: releaseDigest
       type: string
       constraints:
       - NOT_NULL
@@ -119,3 +120,6 @@ members:
       ops_exposure: read
       role: authoritative_state
     description: cohort 到同 policy immutable release 的当前或上一映射。
+enums:
+  AssistantPolicyRolloutStatus:
+    values: [active]

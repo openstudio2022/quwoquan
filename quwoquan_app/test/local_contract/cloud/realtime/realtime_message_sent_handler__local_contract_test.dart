@@ -82,7 +82,7 @@ void main() {
         'seq': 9,
         'clientMsgId': 'removed_client',
         'senderId': 'persona_sender',
-        'senderSubAccountId': 'removed_alias',
+        'senderPersonaId': 'removed_alias',
         'type': 'text',
         'content': 'removed',
         'timestamp': '2026-07-15T08:00:01Z',

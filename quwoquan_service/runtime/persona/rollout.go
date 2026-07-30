@@ -28,7 +28,7 @@ type Input struct {
 
 type CurrentPersona struct {
 	UserID            string   `json:"userId"`
-	PersonaID         string   `json:"subAccountId"`
+	PersonaID         string   `json:"personaId"`
 	Username          string   `json:"username,omitempty"`
 	Nickname          string   `json:"nickname,omitempty"`
 	Phone             string   `json:"phone,omitempty"`
@@ -52,7 +52,7 @@ type Plan struct {
 
 type PlannedPersona struct {
 	UserID          string              `json:"userId"`
-	PersonaID       string              `json:"subAccountId"`
+	PersonaID       string              `json:"personaId"`
 	UserHandle      string              `json:"userHandle"`
 	DisplayName     string              `json:"displayName"`
 	Phone           string              `json:"phone,omitempty"`
@@ -63,7 +63,7 @@ type PlannedPersona struct {
 }
 
 type HandleConflict struct {
-	PersonaID      string `json:"subAccountId"`
+	PersonaID      string `json:"personaId"`
 	Requested      string `json:"requested"`
 	Assigned       string `json:"assigned"`
 	ResolutionRule string `json:"resolutionRule"`
@@ -79,7 +79,7 @@ type ValidationReport struct {
 
 type ValidationFinding struct {
 	Code      string `json:"code"`
-	PersonaID string `json:"subAccountId,omitempty"`
+	PersonaID string `json:"personaId,omitempty"`
 	Surface   string `json:"surface,omitempty"`
 	Message   string `json:"message"`
 }
@@ -146,7 +146,7 @@ func BuildMigrationPlan(input Input) Plan {
 				"follow":  cloneStrings(persona.FollowSubjectIDs),
 			},
 			SourceFields: map[string]string{
-				"userHandle": "username|nickname|subAccountId",
+				"userHandle": "username|nickname|personaId",
 				"phone":      "persona.phone|primary.phone",
 				"email":      "persona.email|primary.email",
 			},
@@ -179,7 +179,7 @@ func ValidatePlan(plan Plan, input Input) ValidationReport {
 			findings = append(findings, ValidationFinding{
 				Code:      "missing_identity",
 				PersonaID: persona.PersonaID,
-				Message:   "userId 或 subAccountId 为空，无法执行迁移",
+				Message:   "userId 或 personaId 为空，无法执行迁移",
 			})
 			failed = append(failed, persona.PersonaID)
 		}

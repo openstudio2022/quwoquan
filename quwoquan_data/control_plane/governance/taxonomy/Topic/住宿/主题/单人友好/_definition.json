@@ -2,6 +2,7 @@
   "label": "单人友好",
   "labelEn": "Solo-friendly",
   "description": "适合独自旅行者的住宿",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

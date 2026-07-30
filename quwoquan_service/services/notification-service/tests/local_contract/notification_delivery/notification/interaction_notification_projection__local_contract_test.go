@@ -149,8 +149,8 @@ func TestProjectionCoversSevenSourcesWithStableIdentity(t *testing.T) {
 		{
 			name: "greeting notifies target when allowed",
 			event: flatEvent("GreetingRequestSent", "greeting:g-1:GreetingRequestSent", map[string]string{
-				"id": "g-1", "requesterSubAccountId": "actor-1",
-				"targetSubAccountId": "author-1", "targetAllowsStrangerGreeting": "true",
+				"id": "g-1", "requesterPersonaId": "actor-1",
+				"targetPersonaId": "author-1", "targetAllowsStrangerGreeting": "true",
 			}),
 			recipient: "author-1", messageType: "social", source: "greeting",
 			targetType: "greeting", targetID: "g-1",
@@ -377,15 +377,15 @@ func TestProjectionSkipsNonNotifiableEvents(t *testing.T) {
 		{
 			name: "greeting blocked by stranger policy",
 			event: flatEvent("GreetingRequestSent", "greeting:g-2:GreetingRequestSent", map[string]string{
-				"id": "g-2", "requesterSubAccountId": "actor-1",
-				"targetSubAccountId": "author-1", "targetAllowsStrangerGreeting": "false",
+				"id": "g-2", "requesterPersonaId": "actor-1",
+				"targetPersonaId": "author-1", "targetAllowsStrangerGreeting": "false",
 			}),
 		},
 		{
 			name: "greeting cancel is not in the trigger matrix",
 			event: flatEvent("GreetingRequestCancelled", "greeting:g-1:GreetingRequestCancelled", map[string]string{
-				"id": "g-1", "requesterSubAccountId": "actor-1",
-				"targetSubAccountId": "author-1", "targetAllowsStrangerGreeting": "true",
+				"id": "g-1", "requesterPersonaId": "actor-1",
+				"targetPersonaId": "author-1", "targetAllowsStrangerGreeting": "true",
 			}),
 		},
 		{

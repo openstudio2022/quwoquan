@@ -27,7 +27,7 @@ func TestRedisEventPublisherPreservesStableOutboxEventID(t *testing.T) {
 	}
 	publisher := NewRedisEventPublisherWithTransport(transport, "content-service", nil)
 	if err := publisher.Publish(ctx, runtimemessaging.DomainEvent{
-		EventID:       "evt-post-42-v2",
+		EventID:       "evt-post-42-published",
 		Type:          "PostPublished",
 		AggregateType: "Post",
 		AggregateID:   "post-42",
@@ -50,7 +50,7 @@ func TestRedisEventPublisherPreservesStableOutboxEventID(t *testing.T) {
 		if err := json.Unmarshal([]byte(message.Payload), &envelope); err != nil {
 			t.Fatalf("decode envelope: %v", err)
 		}
-		if envelope.Meta.MessageID != "evt-post-42-v2" || envelope.Payload.EventID != "evt-post-42-v2" {
+		if envelope.Meta.MessageID != "evt-post-42-published" || envelope.Payload.EventID != "evt-post-42-published" {
 			t.Fatalf("stable identity lost: meta=%q payload=%q", envelope.Meta.MessageID, envelope.Payload.EventID)
 		}
 	case <-time.After(time.Second):

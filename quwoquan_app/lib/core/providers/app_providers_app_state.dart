@@ -144,22 +144,21 @@ class UserDataNotifier extends Notifier<User?> {
       final backgroundUrl = isLocalFileImageSource(profile.backgroundUrl)
           ? profile.backgroundUrl
           : resolveContentMediaUrl(profile.backgroundUrl);
-      final subAccountId = profile.subAccountId.isNotEmpty
-          ? profile.subAccountId
+      final personaId = profile.personaId.isNotEmpty
+          ? profile.personaId
           : userId;
       state = User(
-        id: subAccountId,
-        username: profile.username.isNotEmpty ? profile.username : userId,
+        id: personaId,
+        userHandle: profile.userHandle,
         displayName: profile.displayName.isNotEmpty
             ? profile.displayName
             : null,
         avatarUrl: avatarUrl,
-        avatar: avatarUrl,
         bio: profile.bio.isNotEmpty ? profile.bio : null,
         backgroundImage: backgroundUrl.isNotEmpty ? backgroundUrl : null,
         metadata: <String, dynamic>{
           'ownerUserId': profile.ownerUserId,
-          'subAccountId': profile.subAccountId,
+          'personaId': profile.personaId,
           'subjectType': profile.subjectType,
           'avatarVersion': profile.avatarVersion,
         },
@@ -182,8 +181,8 @@ final userDataProvider = NotifierProvider<UserDataNotifier, User?>(() {
 /// 当前用户 ID — 以 User 快照为准；环境包可显式注入测试/预置用户。
 final currentUserIdProvider = Provider<String>((ref) {
   final authSession = ref.watch(authSessionControllerProvider);
-  if (authSession.activeSubAccountId.isNotEmpty) {
-    return authSession.activeSubAccountId;
+  if (authSession.activePersonaId.isNotEmpty) {
+    return authSession.activePersonaId;
   }
   final profileUserId = ref.watch(userDataProvider)?.id;
   if (profileUserId != null && profileUserId.isNotEmpty) {

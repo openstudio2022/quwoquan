@@ -56,8 +56,10 @@ void main() {
       final worksCanvas = File(
         '$root/quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart',
       ).readAsStringSync();
-      expect(worksCanvas, contains('allowImplicitScrolling: false'));
-      expect(worksCanvas, contains('final keepAlive = widget.isVisible && isCurrent'));
+      // 相邻页只允许 Flutter 预布局；真正的 controller/session 仍由
+      // isCurrent + _KeepAliveStage 双门约束为 N+1 有界集合。
+      expect(worksCanvas, contains('allowImplicitScrolling: true'));
+      expect(worksCanvas, contains('final keepAlive = shouldInitialize'));
       expect(worksCanvas, contains('_KeepAliveStage('));
 
       final mediaDownloadCache = File(

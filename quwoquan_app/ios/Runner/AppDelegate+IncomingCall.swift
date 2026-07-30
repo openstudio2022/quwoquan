@@ -8,8 +8,10 @@ private let incomingCallBootstrapPluginKey =
   "QuwoquanIncomingCallBootstrapPlugin"
 
 extension AppDelegate: PKPushRegistryDelegate, CallkitIncomingAppDelegate {
-  func configureIncomingCallInfrastructure() {
-    guard let registrar = registrar(
+  func configureIncomingCallInfrastructure(
+    pluginRegistry: FlutterPluginRegistry
+  ) {
+    guard let registrar = pluginRegistry.registrar(
       forPlugin: incomingCallBootstrapPluginKey
     ) else {
       return

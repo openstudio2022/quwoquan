@@ -10,13 +10,13 @@ final class AlphaPersonaRelationshipFacet
         BlockedListQuery,
         RelationshipCapabilityQuery {
   AlphaPersonaRelationshipFacet({
-    this.viewerSubAccountId = 'fixture_user_current',
+    this.viewerPersonaId = 'fixture_user_current',
     ObjectScenarioSeedReader? fixtures,
   }) : _relationshipRows = _loadRelationships(
          fixtures ?? objectScenarioSeedReader,
        );
 
-  final String viewerSubAccountId;
+  final String viewerPersonaId;
   final Map<String, Map<String, Object?>> _relationshipRows;
   final Map<String, BlockedUserListItem> _blocked =
       <String, BlockedUserListItem>{};
@@ -43,19 +43,19 @@ final class AlphaPersonaRelationshipFacet
   @override
   Future<BlockCommandResult> blockUser(BlockUserCommand command) async {
     final now = DateTime.now().toUtc();
-    final replayed = _blocked.containsKey(command.targetSubAccountId);
+    final replayed = _blocked.containsKey(command.targetPersonaId);
     _blocked.putIfAbsent(
-      command.targetSubAccountId,
+      command.targetPersonaId,
       () => BlockedUserListItem(
-        targetSubAccountId: command.targetSubAccountId,
-        displayName: command.targetSubAccountId,
+        targetPersonaId: command.targetPersonaId,
+        displayName: command.targetPersonaId,
         userHandle: '',
         avatarUrl: '',
         blockedAt: now,
       ),
     );
     return BlockCommandResult(
-      targetSubAccountId: command.targetSubAccountId,
+      targetPersonaId: command.targetPersonaId,
       blocked: true,
       idempotentReplay: replayed,
       updatedAt: now,
@@ -65,9 +65,9 @@ final class AlphaPersonaRelationshipFacet
   @override
   Future<BlockCommandResult> unblockUser(UnblockUserCommand command) async {
     final now = DateTime.now().toUtc();
-    final removed = _blocked.remove(command.targetSubAccountId) != null;
+    final removed = _blocked.remove(command.targetPersonaId) != null;
     return BlockCommandResult(
-      targetSubAccountId: command.targetSubAccountId,
+      targetPersonaId: command.targetPersonaId,
       blocked: false,
       idempotentReplay: !removed,
       updatedAt: now,
@@ -87,9 +87,9 @@ final class AlphaPersonaRelationshipFacet
   Future<RelationshipCapabilityResult> getRelationshipCapability(
     GetRelationshipCapabilityQuery query,
   ) async {
-    final target = query.targetSubAccountId;
+    final target = query.targetPersonaId;
     final row = _relationshipRows[target];
-    final isSelf = target == viewerSubAccountId;
+    final isSelf = target == viewerPersonaId;
     final isBlocked = _blocked.containsKey(target) || row?['blocked'] == true;
     final isFollowing = row?['following'] == true;
     final isFollowedBy = row?['mutualFollow'] == true;
@@ -108,8 +108,8 @@ final class AlphaPersonaRelationshipFacet
     final canSendMessage = !isBlocked && (isMutual || hasFormalConversation);
     final hasPendingGreeting = row?['hasPendingGreeting'] == true;
     return RelationshipCapabilityResult(
-      viewerSubAccountId: viewerSubAccountId,
-      targetSubAccountId: target,
+      viewerPersonaId: viewerPersonaId,
+      targetPersonaId: target,
       relationState: relationState,
       canFollow:
           !isBlocked &&

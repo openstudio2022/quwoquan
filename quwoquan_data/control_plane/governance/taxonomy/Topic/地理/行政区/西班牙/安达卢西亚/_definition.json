@@ -1,0 +1,12 @@
+{
+  "label": "安达卢西亚",
+  "labelEn": "Andalusia",
+  "description": "南部摩尔文化与弗拉门戈腹地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001
 
 import 'dart:io';
 import 'dart:convert';
@@ -6,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/core/models/client_state_sync.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 void main() {
@@ -37,6 +39,16 @@ void main() {
   });
 
   group('client state sync outbox', () {
+    test('远程同步配置拒绝字符串化数值与布尔值', () {
+      expect(
+        () => ClientStateSyncConfig.fromMap(<String, dynamic>{
+          'max_batch_size': '20',
+          'flush_on_network_recovered': 'true',
+        }, fallback: ClientStateSyncConfig.defaults()),
+        throwsFormatException,
+      );
+    });
+
     test('follow 在 flush 窗口内回到已确认状态时会移除 pending entry', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -44,7 +56,7 @@ void main() {
       final notifier = container.read(clientStateSyncOutboxProvider.notifier);
 
       notifier.enqueueFollow(
-        subAccountId: 'profile-1',
+        personaId: 'profile-1',
         currentFollowing: false,
         shouldFollow: true,
         sourceSurfaceId: 'userProfile',
@@ -57,7 +69,7 @@ void main() {
       expect(state.entries.single.sourceSurfaceId, 'userProfile');
 
       notifier.enqueueFollow(
-        subAccountId: 'profile-1',
+        personaId: 'profile-1',
         currentFollowing: true,
         shouldFollow: false,
         sourceSurfaceId: 'userProfile',
@@ -101,7 +113,7 @@ void main() {
       final notifier = container.read(clientStateSyncOutboxProvider.notifier);
 
       notifier.enqueueFollow(
-        subAccountId: 'profile-1',
+        personaId: 'profile-1',
         currentFollowing: true,
         shouldFollow: false,
         sourceSurfaceId: 'userProfile',
@@ -135,7 +147,7 @@ void main() {
       );
 
       notifier.enqueueFollow(
-        subAccountId: 'profile-1',
+        personaId: 'profile-1',
         currentFollowing: false,
         shouldFollow: true,
         sourceSurfaceId: 'userProfile',
@@ -150,10 +162,10 @@ void main() {
       expect(state.entries, isEmpty);
     });
 
-    test('hydrate 旧 guard-only 持久化条目时不会误恢复为待同步请求', () async {
+    test('旧 needsRemoteSync 持久化形态失效清除且不迁移', () async {
       final box = await Hive.openBox<String>('client_interaction_state');
       await box.put(
-        'client_state_sync_outbox_v1',
+        'client_state_sync_outbox',
         jsonEncode({
           'entries': [
             {
@@ -178,10 +190,18 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      container.read(clientStateSyncOutboxProvider);
+      await Future<void>.delayed(const Duration(milliseconds: 30));
 
       final state = container.read(clientStateSyncOutboxProvider);
       expect(state.entries, isEmpty);
+      final persistedBox = Hive.isBoxOpen('client_interaction_state')
+          ? Hive.box<String>('client_interaction_state')
+          : await Hive.openBox<String>('client_interaction_state');
+      final persisted = jsonDecode(
+        persistedBox.get('client_state_sync_outbox')!,
+      );
+      expect(persisted, <String, Object?>{'entries': <Object?>[]});
     });
 
     test('账号 closed 终态清除交互投影与 outbox 并停止旧 notifier 入队', () async {
@@ -210,7 +230,7 @@ void main() {
       final box = Hive.box<String>('client_interaction_state');
       expect(box, isEmpty);
       expect(
-        container.read(userRelationshipStateProvider).followingSubAccountIds,
+        container.read(userRelationshipStateProvider).followingPersonaIds,
         isEmpty,
       );
       expect(

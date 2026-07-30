@@ -69,10 +69,10 @@ void main() {
       );
     });
 
-    test('ended + timeout/busy/rejected → 对方未接听', () {
+    test('ended + noAnswer/timeout/rejected → 对方未接听', () {
       for (final reason in [
+        EndReason.noAnswer,
         EndReason.timeout,
-        EndReason.busy,
         EndReason.rejected,
       ]) {
         expect(
@@ -87,23 +87,23 @@ void main() {
       }
     });
 
-    test('ended + initiatorHangup → 对方已离开', () {
+    test('ended + lastLeave → 对方已离开', () {
       expect(
         resolveCallStage(
           status: CallStatus.ended,
           connectedPeerCount: 0,
-          endReason: EndReason.initiatorHangup,
+          endReason: EndReason.lastLeave,
         ),
         CallStage.peerLeft,
       );
     });
 
-    test('ended + completed/unknown → 已结束', () {
+    test('ended + normal/null → 已结束', () {
       expect(
         resolveCallStage(
           status: CallStatus.ended,
           connectedPeerCount: 0,
-          endReason: EndReason.completed,
+          endReason: EndReason.normal,
         ),
         CallStage.ended,
       );

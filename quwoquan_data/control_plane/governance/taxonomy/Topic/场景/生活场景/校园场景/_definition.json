@@ -2,6 +2,7 @@
   "label": "校园场景",
   "labelEn": "Campus Daily Scene",
   "description": "图书馆、教室、宿舍、食堂、操场等校园空间场景",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

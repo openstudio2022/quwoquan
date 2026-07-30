@@ -2,6 +2,8 @@
 // Source: rtc/rtc/call_session/events.yaml
 // ignore_for_file: prefer_const_constructors
 
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart' show CallType, EndReason;
+
 /// Gateway `type` string for each metadata event (`client_ws_type`).
 /// Event `CallInitiated`
 const rtcWsTypeCallInitiated = 'call.initiated';
@@ -44,7 +46,7 @@ class RtcCallInitiatedPayload {
   });
 
   final String? callId;
-  final String? callType;
+  final CallType? callType;
   final String? initiatorId;
   final String? initiatorRingtoneId;
   final String? conversationId;
@@ -55,7 +57,7 @@ class RtcCallInitiatedPayload {
   factory RtcCallInitiatedPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallInitiatedPayload(
       callId: payload['callId'] as String?,
-      callType: payload['callType'] as String?,
+      callType: payload['callType'] == null ? null : CallType.fromString(payload['callType'] as String),
       initiatorId: payload['initiatorId'] as String?,
       initiatorRingtoneId: payload['initiatorRingtoneId'] as String?,
       conversationId: payload['conversationId'] as String?,
@@ -72,7 +74,7 @@ class RtcCallRingingPayload {
     this.eventId,
     this.callId,
     this.targetPersonaId,
-    this.callType = 'audio',
+    this.callType = CallType.audio,
     this.callerName,
     this.callerAvatarUrl,
     this.sourceLabel,
@@ -84,7 +86,7 @@ class RtcCallRingingPayload {
   final String? eventId;
   final String? callId;
   final String? targetPersonaId;
-  final String callType;
+  final CallType callType;
   final String? callerName;
   final String? callerAvatarUrl;
   final String? sourceLabel;
@@ -97,7 +99,7 @@ class RtcCallRingingPayload {
       eventId: payload['eventId'] as String?,
       callId: payload['callId'] as String?,
       targetPersonaId: payload['targetPersonaId'] as String?,
-      callType: payload['callType'] as String? ?? 'audio',
+      callType: payload['callType'] == null ? CallType.audio : CallType.fromString(payload['callType'] as String),
       callerName: payload['callerName'] as String?,
       callerAvatarUrl: payload['callerAvatarUrl'] as String?,
       sourceLabel: payload['sourceLabel'] as String?,
@@ -162,10 +164,10 @@ class RtcCallEndedPayload {
   });
 
   final String? callId;
-  final String? callType;
+  final CallType? callType;
   final String? initiatorId;
   final String? conversationId;
-  final String? endReason;
+  final EndReason? endReason;
   final int? durationMs;
   final int? participantCount;
   final String? startedAt;
@@ -174,10 +176,10 @@ class RtcCallEndedPayload {
   factory RtcCallEndedPayload.fromWire(Map<String, dynamic> payload) {
     return RtcCallEndedPayload(
       callId: payload['callId'] as String?,
-      callType: payload['callType'] as String?,
+      callType: payload['callType'] == null ? null : CallType.fromString(payload['callType'] as String),
       initiatorId: payload['initiatorId'] as String?,
       conversationId: payload['conversationId'] as String?,
-      endReason: payload['endReason'] as String?,
+      endReason: payload['endReason'] == null ? null : EndReason.fromString(payload['endReason'] as String),
       durationMs: (payload['durationMs'] as num?)?.toInt(),
       participantCount: (payload['participantCount'] as num?)?.toInt(),
       startedAt: payload['startedAt'] as String?,

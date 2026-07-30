@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show CircleJoinPolicy;
 
 Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -54,7 +56,7 @@ void main() {
             isDark: false,
             role: CircleRole.visitor,
             joinStatus: 'none',
-            joinPolicy: 'approval',
+            joinPolicy: CircleJoinPolicy.approval,
           ),
         ),
       );
@@ -82,6 +84,26 @@ void main() {
         find.text(ObjectHomepageText.circleActionEnterDiscussion),
         findsOneWidget,
       );
+    });
+
+    testWidgets('仅邀请圈子展示不可主动触发的加入动作', (tester) async {
+      var called = false;
+      await tester.pumpWidget(
+        _wrap(
+          CircleActionBar(
+            isDark: false,
+            role: CircleRole.visitor,
+            joinStatus: 'none',
+            joinPolicy: CircleJoinPolicy.inviteOnly,
+            onJoinCircle: () => called = true,
+          ),
+        ),
+      );
+
+      expect(find.text(CommunityText.circleJoinInviteOnly), findsOneWidget);
+      await tester.tap(find.text(CommunityText.circleJoinInviteOnly));
+      await tester.pump();
+      expect(called, isFalse);
     });
   });
 
@@ -118,7 +140,9 @@ void main() {
         ),
       );
 
-      await tester.tap(find.text(ObjectHomepageText.circleActionEnterDiscussion));
+      await tester.tap(
+        find.text(ObjectHomepageText.circleActionEnterDiscussion),
+      );
       await tester.pump();
 
       expect(called, isTrue);

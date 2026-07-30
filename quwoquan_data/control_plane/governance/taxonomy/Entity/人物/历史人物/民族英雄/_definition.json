@@ -2,6 +2,7 @@
   "label": "民族英雄",
   "labelEn": "National Hero",
   "description": "保家卫国的民族英雄",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

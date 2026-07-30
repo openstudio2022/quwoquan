@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/assistant/generated/assistant_errors.g.dart';
@@ -37,7 +38,7 @@ class _EmptyAssistantHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   }) async {
     return null;
@@ -582,9 +583,9 @@ void main() {
                 eventType: 'process_commit',
                 payload: const <String, dynamic>{
                   'process': <String, dynamic>{
-                    'processId': 'evidence_review',
+                    'processId': 'assessing',
                     'scope': 'aggregation',
-                    'stage': 'evidence_review',
+                    'stage': 'assessing',
                     'status': 'completed',
                     'order': 2,
                     'summary': '已整理检索要点。',
@@ -618,8 +619,14 @@ void main() {
             state.transcript[1] as AssistantAnswerTranscriptRow;
         final secondAssistant =
             state.transcript[3] as AssistantAnswerTranscriptRow;
-        expect(firstAssistant.runArtifacts['processTimeline'], isNotEmpty);
-        expect(secondAssistant.runArtifacts['processTimeline'], isNotEmpty);
+        expect(
+          firstAssistant.persisted.toMap()[assistantProcessTimelineField],
+          isNotEmpty,
+        );
+        expect(
+          secondAssistant.persisted.toMap()[assistantProcessTimelineField],
+          isNotEmpty,
+        );
         expect(firstAssistant.id, isNot(secondAssistant.id));
       },
     );
@@ -637,9 +644,9 @@ void main() {
                   'finalAnswer': 'journal 过期后恢复的回答',
                   'processes': <Map<String, dynamic>>[
                     <String, dynamic>{
-                      'processId': 'evidence_review',
+                      'processId': 'assessing',
                       'scope': 'aggregation',
-                      'stage': 'evidence_review',
+                      'stage': 'assessing',
                       'status': 'completed',
                       'order': 2,
                       'summary': '已从终态快照恢复证据。',
@@ -726,9 +733,9 @@ void main() {
                 eventType: 'process_append',
                 payload: const <String, dynamic>{
                   'process': <String, dynamic>{
-                    'processId': 'tool_execution',
+                    'processId': 'searching',
                     'scope': 'skill',
-                    'stage': 'tool_execution',
+                    'stage': 'searching',
                     'status': 'completed',
                     'order': 1,
                     'toolName': 'web_search',
@@ -740,9 +747,9 @@ void main() {
                 eventType: 'process_commit',
                 payload: const <String, dynamic>{
                   'process': <String, dynamic>{
-                    'processId': 'evidence_review',
+                    'processId': 'assessing',
                     'scope': 'aggregation',
-                    'stage': 'evidence_review',
+                    'stage': 'assessing',
                     'status': 'completed',
                     'order': 2,
                     'searchedDocumentCount': 3,
@@ -799,9 +806,9 @@ void main() {
               eventType: 'process_commit',
               payload: const <String, dynamic>{
                 'process': <String, dynamic>{
-                  'processId': 'evidence_review',
+                  'processId': 'assessing',
                   'scope': 'aggregation',
-                  'stage': 'evidence_review',
+                  'stage': 'assessing',
                   'status': 'completed',
                   'order': 1,
                   'searchedDocumentCount': 3,
@@ -821,9 +828,9 @@ void main() {
               eventType: 'process_commit',
               payload: const <String, dynamic>{
                 'process': <String, dynamic>{
-                  'processId': 'answer_generation',
+                  'processId': 'answering',
                   'scope': 'root',
-                  'stage': 'answer_generation',
+                  'stage': 'answering',
                   'status': 'completed',
                   'order': 2,
                 },
@@ -851,7 +858,8 @@ void main() {
       final assistantRow =
           state.transcript.last as AssistantAnswerTranscriptRow;
       final processTimeline =
-          assistantRow.runArtifacts['processTimeline'] as List<dynamic>;
+          assistantRow.persisted.toMap()[assistantProcessTimelineField]
+              as List<dynamic>;
       expect(
         processTimeline.cast<Map>().any(
           (frame) =>
@@ -1027,15 +1035,14 @@ void main() {
       expect(repository.learningFacts, hasLength(1));
       final fact = repository.learningFacts.single;
       expect(fact.eventId, 'fb:atn_test_personal:useful');
-      expect(fact.eventVersion, 1);
       expect(fact.assistantTurnId, 'atn_test_personal');
-      expect(fact.factType, AssistantLearningFactType.userFeedback);
+      expect(fact.factType, AssistantLearningFactType.userFeedback.wireName);
       expect(
         fact.referralSource,
-        AssistantReferralSource.assistantConversation,
+        AssistantReferralSource.assistantConversation.wireName,
       );
       expect(fact.domainId, 'assistant');
-      expect(fact.feedbackType, FeedbackType.useful);
+      expect(fact.feedbackType, FeedbackType.useful.wireName);
       expect(fact.trainingEligible, isFalse);
       expect(controller.pendingFeedbackEventCount, 0);
 
@@ -1427,8 +1434,9 @@ void main() {
       final regenerated = repository.learningFacts
           .where(
             (fact) =>
-                fact.factType == AssistantLearningFactType.interactionOutcome &&
-                fact.feedbackType == FeedbackType.regenerated,
+                fact.factType ==
+                    AssistantLearningFactType.interactionOutcome.wireName &&
+                fact.feedbackType == FeedbackType.regenerated.wireName,
           )
           .toList();
       expect(regenerated, isNotEmpty);
@@ -1445,7 +1453,7 @@ class _SwitchRecordingHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   }) async {
     if (conversationId.isNotEmpty) {
@@ -1474,7 +1482,7 @@ ProviderContainer _containerWith({
       ),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'persona_test',
+          personaId: 'persona_test',
           ownerUserId: 'user_test',
           displayName: '测试分身',
           avatarUrl: '',
@@ -1523,7 +1531,7 @@ Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
       ],
     ),
   );
-  final snapshot = await loader.load(subAccountId: 'persona_test');
+  final snapshot = await loader.load(personaId: 'persona_test');
   return snapshot!;
 }
 
@@ -1609,28 +1617,28 @@ class _FakeAssistantRepository extends AlphaAssistantFacets {
   }
 
   /// 记录单轨学习事实 command；可按 eventId 模拟失败以覆盖重试语义。
-  final List<AppendAssistantLearningFactRequest> learningFacts =
-      <AppendAssistantLearningFactRequest>[];
+  final List<AssistantLearningFactAppendCommand> learningFacts =
+      <AssistantLearningFactAppendCommand>[];
   bool failLearningFactAppend = false;
   final Set<String> rejectedLearningFactIds = <String>{};
 
   @override
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AppendAssistantLearningFactRequest request,
+  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+    required AssistantLearningFactAppendCommand request,
   }) async {
     learningFacts.add(request);
     if (failLearningFactAppend ||
         rejectedLearningFactIds.contains(request.eventId)) {
       throw StateError('learning append unavailable (test)');
     }
-    return AssistantLearningFactReceipt(
+    return AssistantLearningFactAppendReceipt(
       eventId: request.eventId,
-      eventVersion: request.eventVersion,
       accepted: true,
       deduplicated: false,
       appendSequence: learningFacts.length,
-      payloadDigest: 'test',
-      recordedAt: DateTime.now().toUtc().toIso8601String(),
+      payloadDigest:
+          '0000000000000000000000000000000000000000000000000000000000000000',
+      recordedAt: DateTime.now().toUtc(),
     );
   }
 
@@ -1755,9 +1763,7 @@ class _FakeAppMessageQuery implements AppMessageQuery {
   ) async {
     return AppMessageInboxSlice(
       items: <AppMessage>[
-        await getAppMessage(
-          const GetAppMessageQuery(messageId: 'msg_test_personal'),
-        ),
+        await getAppMessage(GetAppMessageQuery(messageId: 'msg_test_personal')),
       ],
     );
   }
@@ -1772,7 +1778,7 @@ class _FakeAssistantHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String subAccountId,
+    required String personaId,
     String conversationId = '',
   }) async {
     loadCount += 1;

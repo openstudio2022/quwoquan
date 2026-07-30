@@ -1,0 +1,13 @@
+{
+  "label": "轻松休闲",
+  "labelEn": "Leisurely",
+  "description": "以乘车观光与短距步行为主，日均步行低于 5 公里",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

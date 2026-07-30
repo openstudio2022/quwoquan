@@ -85,6 +85,7 @@ type IntersectionHintDoc struct {
 type PostDoc struct {
 	PostRef               string                   `json:"postRef" bson:"postRef"`
 	ContentType           string                   `json:"contentType" bson:"contentType"`
+	ContentIdentity       string                   `json:"contentIdentity" bson:"contentIdentity"`
 	Title                 string                   `json:"title" bson:"title"`
 	Body                  string                   `json:"body" bson:"body"`
 	Angle                 string                   `json:"angle" bson:"angle"`
@@ -143,6 +144,86 @@ type ReleaseDesiredState struct {
 		Posts    []string `json:"posts"`
 		Entities []string `json:"entities"`
 	} `json:"desiredRefs"`
+}
+
+// ReleaseBinding is the immutable identity shared by the canonical release
+// header and its attestation. ManifestDigest is the attested digest of the
+// complete payload, not a digest derived from a mutable environment report.
+type ReleaseBinding struct {
+	ReleaseID      string
+	SourceOwner    string
+	ReleaseKind    string
+	ManifestDigest string
+}
+
+func LoadReleaseBinding(releaseRoot string) (ReleaseBinding, error) {
+	empty := ReleaseBinding{}
+	headerPath := filepath.Join(releaseRoot, "payload", "release.json")
+	attestationPath := filepath.Join(releaseRoot, "attestations", "release.json")
+	var header struct {
+		Schema      string `json:"schema"`
+		ReleaseID   string `json:"releaseId"`
+		SourceOwner string `json:"sourceOwner"`
+		ReleaseKind string `json:"releaseKind"`
+	}
+	if err := loadReleaseJSON(headerPath, &header); err != nil {
+		return empty, fmt.Errorf("load release header: %w", err)
+	}
+	var attestation struct {
+		Schema        string `json:"schema"`
+		ReleaseID     string `json:"releaseId"`
+		SourceOwner   string `json:"sourceOwner"`
+		ReleaseKind   string `json:"releaseKind"`
+		PayloadSHA256 string `json:"payloadSha256"`
+	}
+	if err := loadReleaseJSON(attestationPath, &attestation); err != nil {
+		return empty, fmt.Errorf("load release attestation: %w", err)
+	}
+	for path, values := range map[string][2]string{
+		headerPath + ":schema":           {header.Schema, "quwoquan_data.release"},
+		headerPath + ":sourceOwner":      {header.SourceOwner, "qwq_data"},
+		headerPath + ":releaseKind":      {header.ReleaseKind, "content"},
+		attestationPath + ":schema":      {attestation.Schema, "quwoquan_data.release_attestation"},
+		attestationPath + ":sourceOwner": {attestation.SourceOwner, "qwq_data"},
+		attestationPath + ":releaseKind": {attestation.ReleaseKind, "content"},
+	} {
+		if strings.TrimSpace(values[0]) != values[1] {
+			return empty, fmt.Errorf("%s must be %q", path, values[1])
+		}
+	}
+	headerReleaseID := strings.TrimSpace(header.ReleaseID)
+	attestedReleaseID := strings.TrimSpace(attestation.ReleaseID)
+	if headerReleaseID == "" || headerReleaseID != attestedReleaseID {
+		return empty, fmt.Errorf(
+			"release header/attestation releaseId drift: header=%q attestation=%q",
+			headerReleaseID,
+			attestedReleaseID,
+		)
+	}
+	manifestDigest := strings.TrimSpace(attestation.PayloadSHA256)
+	if !sha256Pattern.MatchString(manifestDigest) {
+		return empty, fmt.Errorf(
+			"%s: payloadSha256 must use canonical sha256:<64 lowercase hex>",
+			attestationPath,
+		)
+	}
+	return ReleaseBinding{
+		ReleaseID:      headerReleaseID,
+		SourceOwner:    "qwq_data",
+		ReleaseKind:    "content",
+		ManifestDigest: manifestDigest,
+	}, nil
+}
+
+func loadReleaseJSON(path string, target any) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, target); err != nil {
+		return fmt.Errorf("decode %s: %w", path, err)
+	}
+	return nil
 }
 
 type creatorProfileDoc struct {
@@ -306,6 +387,7 @@ func missingDesiredRefs(filter map[string]bool, loadedRefs []string) []string {
 
 type postManifest struct {
 	ContentType           string                   `json:"contentType"`
+	ContentIdentity       string                   `json:"contentIdentity"`
 	Title                 string                   `json:"title"`
 	Caption               string                   `json:"caption"`
 	DisplayTitle          string                   `json:"displayTitle"`
@@ -703,6 +785,17 @@ func validateEntityAssetManifest(manifest *EntityAssetManifestDoc, ref string) e
 	return nil
 }
 
+func canonicalImportedContentIdentity(raw string) (string, error) {
+	identity := strings.ToLower(strings.TrimSpace(raw))
+	if identity == "" {
+		return "", fmt.Errorf("canonical release post contentIdentity is required")
+	}
+	if identity != "work" {
+		return "", fmt.Errorf("canonical release post contentIdentity must be work")
+	}
+	return identity, nil
+}
+
 // LoadPosts 从对象闭包的 posts/ 加载内容；filter 使用相对 posts/ 的对象引用。
 func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 	postsRoot := filepath.Join(publishRoot, "posts")
@@ -817,9 +910,14 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if len(assets) == 0 && m.ArticleAssetManifest != nil {
 			assets = m.ArticleAssetManifest.Assets
 		}
+		contentIdentity, err := canonicalImportedContentIdentity(m.ContentIdentity)
+		if err != nil {
+			return fmt.Errorf("%s: %w", postRef, err)
+		}
 		docs = append(docs, PostDoc{
 			PostRef:               postRef,
 			ContentType:           m.ContentType,
+			ContentIdentity:       contentIdentity,
 			Title:                 title,
 			Body:                  body,
 			Angle:                 angle,

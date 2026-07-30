@@ -23,7 +23,7 @@ func TestListUserPosts(t *testing.T) {
 	}
 	submitPublishedPostWithAuthor(t, "other_author", `{"contentType":"image","title":"other post"}`)
 
-	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/posts?limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/posts?limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -42,7 +42,7 @@ func TestListUserPosts(t *testing.T) {
 func TestListUserPostsEmpty(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/nonexistent_user/posts?limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/personas/nonexistent_user/posts?limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -100,8 +100,8 @@ func TestListUserPostsBlockedViewerReceivesEmptyPage(t *testing.T) {
 	}
 
 	// 被拉黑 viewer：空页。
-	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/posts?limit=20", nil)
-	req.Header.Set("X-Client-Sub-Account-Id", viewerID)
+	req := httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/posts?limit=20", nil)
+	req.Header.Set("X-Client-Persona-Id", viewerID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -115,7 +115,7 @@ func TestListUserPostsBlockedViewerReceivesEmptyPage(t *testing.T) {
 		t.Fatalf("blocked viewer must not see author posts, got %d items", len(items))
 	}
 	detailReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
-	detailReq.Header.Set("X-Client-Sub-Account-Id", viewerID)
+	detailReq.Header.Set("X-Client-Persona-Id", viewerID)
 	detailRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(detailRec, detailReq)
 	if detailRec.Code != http.StatusNotFound {
@@ -127,8 +127,8 @@ func TestListUserPostsBlockedViewerReceivesEmptyPage(t *testing.T) {
 	}
 
 	// 无关 viewer：仍可见。
-	req = httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/posts?limit=20", nil)
-	req.Header.Set("X-Client-Sub-Account-Id", "viewer_unrelated_list_test")
+	req = httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/posts?limit=20", nil)
+	req.Header.Set("X-Client-Persona-Id", "viewer_unrelated_list_test")
 	rec = httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -143,8 +143,8 @@ func TestListUserPostsBlockedViewerReceivesEmptyPage(t *testing.T) {
 	}
 
 	// 作者本人：不受影响。
-	req = httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/posts?limit=20", nil)
-	req.Header.Set("X-Client-Sub-Account-Id", authorID)
+	req = httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/posts?limit=20", nil)
+	req.Header.Set("X-Client-Persona-Id", authorID)
 	rec = httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

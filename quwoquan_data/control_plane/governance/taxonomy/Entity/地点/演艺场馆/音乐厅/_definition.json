@@ -2,6 +2,7 @@
   "label": "音乐厅",
   "labelEn": "Concert Hall",
   "description": "交响乐与室内乐演奏场馆",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

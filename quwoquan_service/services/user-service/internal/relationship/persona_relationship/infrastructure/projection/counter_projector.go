@@ -219,7 +219,7 @@ func resolveOwnerID(
 		FROM (
 			SELECT user_id AS owner_id, 0 AS priority
 			FROM personas
-			WHERE sub_account_id = $1
+			WHERE persona_id = $1
 			UNION ALL
 			SELECT user_id AS owner_id, 1 AS priority
 			FROM user_profiles

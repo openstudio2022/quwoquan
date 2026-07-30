@@ -1,0 +1,12 @@
+{
+  "label": "北海道",
+  "labelEn": "Hokkaido",
+  "description": "最北大岛，雪境与自然景观代表",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -2,6 +2,7 @@
   "label": "媒介与场景偏好",
   "labelEn": "Media & Scene Preference",
   "description": "内容形态与时间场景的倾向（承接原作息中的媒介项）",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

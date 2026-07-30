@@ -6,6 +6,7 @@ from enum import StrEnum
 import os
 from pathlib import Path
 from typing import Any, Mapping
+from urllib.parse import urlsplit, urlunsplit
 
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, REPO_ROOT
@@ -26,6 +27,12 @@ class EnvironmentReleaseMode(StrEnum):
     HOSTED_IMPORT = "hosted-import"
 
 
+class MediaDeliverySlice(StrEnum):
+    AVATAR = "avatar"
+    IMAGE = "image"
+    VIDEO = "video"
+
+
 @dataclass(frozen=True, slots=True)
 class EnvironmentReleaseTarget:
     environment: DeploymentEnvironment
@@ -34,9 +41,7 @@ class EnvironmentReleaseTarget:
     mongo_uri: str
     user_postgres_dsn: str
     media_sync_root: Path | None
-    media_avatar_base_url: str
-    media_image_base_url: str
-    media_video_base_url: str
+    media_delivery_base_url: str
     api_base_url: str
     missing_requirements: tuple[str, ...]
 
@@ -44,13 +49,10 @@ class EnvironmentReleaseTarget:
     def import_ready(self) -> bool:
         return self.mode is not EnvironmentReleaseMode.PROJECTION_ONLY and not self.missing_requirements
 
-    @property
-    def api_resolve_host(self) -> str:
-        return ""
-
-    @property
-    def api_insecure_tls(self) -> bool:
-        return False
+    def media_base_url(self, media_slice: MediaDeliverySlice) -> str:
+        return (
+            f"{self.media_delivery_base_url.rstrip('/')}/media/{media_slice.value}"
+        )
 
 
 def _mapping(value: Any, *, label: str) -> Mapping[str, Any]:
@@ -79,9 +81,10 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
     release = _mapping(target.get("dataRelease"), label=f"{target_name}.dataRelease")
     mode = EnvironmentReleaseMode(str(release.get("mode") or ""))
     public_bases = _mapping(target.get("publicBases"), label=f"{target_name}.publicBases")
-    media_avatar_base_url = str(public_bases.get("mediaAvatar") or "").rstrip("/")
-    media_image_base_url = str(public_bases.get("mediaImage") or "").rstrip("/")
-    media_video_base_url = str(public_bases.get("mediaVideo") or "").rstrip("/")
+    media_image = urlsplit(str(public_bases.get("mediaImage") or ""))
+    media_delivery_base_url = urlunsplit(
+        (media_image.scheme, media_image.netloc, "", "", "")
+    )
     api_base_url = str(public_bases.get("api") or "").rstrip("/")
     missing: list[str] = []
 
@@ -93,9 +96,7 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
             mongo_uri="",
             user_postgres_dsn="",
             media_sync_root=None,
-            media_avatar_base_url=media_avatar_base_url,
-            media_image_base_url=media_image_base_url,
-            media_video_base_url=media_video_base_url,
+            media_delivery_base_url=media_delivery_base_url,
             api_base_url=api_base_url,
             missing_requirements=(),
         )
@@ -119,9 +120,7 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
                 f"postgres://quwoquan:quwoquan@127.0.0.1:{postgres_port}/quwoquan?sslmode=disable"
             ),
             media_sync_root=OUTPUT_ROOT / "env" / environment.value / "local" / target_name / media_ref,
-            media_avatar_base_url=media_avatar_base_url,
-            media_image_base_url=media_image_base_url,
-            media_video_base_url=media_video_base_url,
+            media_delivery_base_url=media_delivery_base_url,
             api_base_url=api_base_url,
             missing_requirements=(),
         )
@@ -146,9 +145,7 @@ def resolve_environment_release_target(env: str) -> EnvironmentReleaseTarget:
         mongo_uri=mongo_uri,
         user_postgres_dsn=user_postgres_dsn,
         media_sync_root=Path(media_root).expanduser() if media_root else None,
-        media_avatar_base_url=media_avatar_base_url,
-        media_image_base_url=media_image_base_url,
-        media_video_base_url=media_video_base_url,
+        media_delivery_base_url=media_delivery_base_url,
         api_base_url=api_base_url,
         missing_requirements=tuple(missing),
     )

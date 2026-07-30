@@ -1,0 +1,13 @@
+{
+  "label": "情侣同行",
+  "labelEn": "Couple",
+  "description": "两人情侣出行，关注私密性与纪念性体验",
+  "axisRole": "topic",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:31:34.168145+00:00"
+}

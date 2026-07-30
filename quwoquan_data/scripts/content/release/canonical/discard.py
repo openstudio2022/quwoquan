@@ -6,8 +6,14 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from core.io import read_json
 from core.paths import OUTPUT_ROOT, RELEASE_ROOT
 from content.release.canonical.object_transaction_contract import _safe_id
+from content.release.canonical.acceptance_lease import validate_lease_event
+from content.release.canonical.release_operation_lock import (
+    release_operation_guard,
+    release_operation_lock_root,
+)
 
 
 def _active_release_processes(release_id: str) -> tuple[str, ...]:
@@ -21,7 +27,15 @@ def _active_release_processes(release_id: str) -> tuple[str, ...]:
     )
     if process.returncode:
         raise RuntimeError("unable to inspect active release commands before discard")
-    active_commands = ("ship apply", "ship rollback", "ship verify", "release aggregate", "release baseline")
+    active_commands = (
+        "ship apply",
+        "ship rollback",
+        "ship verify",
+        "release aggregate",
+        "release baseline",
+        "release lifecycle-exit",
+        "release acceptance-lease",
+    )
     return tuple(
         line.strip()
         for line in process.stdout.splitlines()
@@ -42,6 +56,118 @@ def _environment_evidence_roots(*, output_root: Path, release_id: str) -> tuple[
     )
 
 
+def _acceptance_protection_refs(
+    *,
+    output_root: Path,
+    release_id: str,
+    evidence_roots: tuple[Path, ...],
+) -> tuple[Path, ...]:
+    """Return completed readiness receipts or explicit acceptance leases.
+
+    A passed readiness receipt can be referenced by Ops readiness and real-device
+    UAT long after the writer process exits.  Acceptance leases may live in an
+    Ops-owned run outside the Data release run, so they are discovered across
+    environment run roots and bound by their releaseId.
+    """
+
+    protected: set[Path] = set()
+    for evidence_root in evidence_roots:
+        for path in evidence_root.rglob("release-readiness.json"):
+            try:
+                document = read_json(path)
+            except (OSError, TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    f"GATE_BLOCK unreadable release readiness evidence: {path}"
+                ) from exc
+            if not isinstance(document, dict):
+                raise RuntimeError(
+                    f"GATE_BLOCK invalid release readiness evidence: {path}"
+                )
+            if document.get("passed") is not True:
+                continue
+            if (
+                document.get("schema")
+                != "quwoquan_data.environment_release_readiness"
+                or document.get("releaseId") != release_id
+            ):
+                raise RuntimeError(
+                    f"GATE_BLOCK invalid passed release readiness evidence: {path}"
+                )
+            protected.add(path)
+
+    environment_root = output_root / "env"
+    if environment_root.is_dir():
+        lease_events: dict[str, tuple[Path, dict]] = {}
+        for path in environment_root.glob(
+            "*/runs/release-acceptance/*/*/*/acceptance-lease.json"
+        ):
+            try:
+                document = read_json(path)
+            except (OSError, TypeError, ValueError) as exc:
+                if release_id in path.parts:
+                    raise RuntimeError(
+                        f"GATE_BLOCK unreadable acceptance lease: {path}"
+                    ) from exc
+                continue
+            if not isinstance(document, dict):
+                if release_id in path.parts:
+                    raise RuntimeError(
+                        f"GATE_BLOCK invalid acceptance lease: {path}"
+                    )
+                continue
+            if document.get("releaseId") != release_id:
+                if release_id in path.parts:
+                    raise RuntimeError(
+                        f"GATE_BLOCK acceptance lease releaseId drift: {path}"
+                    )
+                continue
+            issues = validate_lease_event(
+                document,
+                path=path,
+                output_root=output_root,
+            )
+            if issues:
+                raise RuntimeError(
+                    "GATE_BLOCK invalid acceptance lease: "
+                    + "; ".join(issues)
+                )
+            ref = path.relative_to(output_root).as_posix()
+            lease_events[ref] = (path, document)
+        revoked: set[str] = set()
+        for _ref, (path, document) in lease_events.items():
+            if document.get("action") != "revoke":
+                continue
+            predecessor = str(document.get("predecessorEventRef") or "")
+            acquired = lease_events.get(predecessor)
+            if acquired is None:
+                raise RuntimeError(
+                    f"GATE_BLOCK acceptance revoke has no bound acquire: {path}"
+                )
+            _acquire_path, acquire = acquired
+            if acquire.get("action") != "acquire" or any(
+                acquire.get(field) != document.get(field)
+                for field in (
+                    "environment",
+                    "releaseId",
+                    "manifestDigest",
+                    "leaseId",
+                    "holder",
+                    "purpose",
+                    "importRunId",
+                    "verifyRunId",
+                    "readinessRef",
+                )
+            ):
+                raise RuntimeError(
+                    f"GATE_BLOCK acceptance revoke identity drift: {path}"
+                )
+            revoked.add(predecessor)
+        for ref, (path, document) in lease_events.items():
+            if document.get("action") == "acquire" and ref not in revoked:
+                protected.add(path)
+    return tuple(sorted(protected))
+
+
 def discard_release(
     release_id: str,
     *,
@@ -60,18 +186,34 @@ def discard_release(
     release = release_root / normalized_id
     if not release.is_dir():
         raise FileNotFoundError(f"release output does not exist: {normalized_id}")
-    active_processes = _active_release_processes(normalized_id)
-    if active_processes:
-        raise RuntimeError(
-            "GATE_BLOCK active release command owns release: " + "; ".join(active_processes)
+    with release_operation_guard(
+        lock_root=release_operation_lock_root(release_root),
+        release_ids=(normalized_id,),
+        exclusive_releases=True,
+    ):
+        active_processes = _active_release_processes(normalized_id)
+        if active_processes:
+            raise RuntimeError(
+                "GATE_BLOCK active release command owns release: " + "; ".join(active_processes)
+            )
+        evidence_roots = _environment_evidence_roots(
+            output_root=output_root,
+            release_id=normalized_id,
         )
-    evidence_roots = _environment_evidence_roots(
-        output_root=output_root,
-        release_id=normalized_id,
-    )
-    shutil.rmtree(release)
-    for evidence_root in evidence_roots:
-        shutil.rmtree(evidence_root)
+        protected = _acceptance_protection_refs(
+            output_root=output_root,
+            release_id=normalized_id,
+            evidence_roots=evidence_roots,
+        )
+        if protected:
+            refs = "; ".join(str(path) for path in protected)
+            raise RuntimeError(
+                "GATE_BLOCK release is protected by acceptance evidence; "
+                f"canonical acceptance revocation is required before discard: {refs}"
+            )
+        shutil.rmtree(release)
+        for evidence_root in evidence_roots:
+            shutil.rmtree(evidence_root)
 
 
 def handle_discard(args: argparse.Namespace) -> None:

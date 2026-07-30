@@ -11,9 +11,10 @@ api_routes:
     mutation_target: Invitation
     invariant_target: Invitation
   description: 为当前受信 Account 所拥有的 Persona 生成或复用邀请
-  writable_fields: [subAccountId, channel, inviteePhone]
+  request_entity: GenerateInvitationCommand
+  request_body_kind: object
   response_entity: Invitation
-  response_fields: [id, inviterSubAccountId, channel, linkCode, status, expireAt, generatedAt]
+  response_fields: [id, inviterPersonaId, channel, linkCode, status, expireAt, generatedAt]
   authorization:
     principal: persona
     ownership_policy: current_account_owns_inviter_persona
@@ -23,7 +24,7 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: required
-  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.INVITATION.daily_limit_exceeded, USER.SYSTEM.internal_error]
+  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.INVITATION.daily_limit_exceeded, USER.SYSTEM.internal_error, USER.AUTH.account_deleted, USER.AUTH.account_security_unavailable, USER.AUTH.account_suspended, USER.AUTH.token_stale]
   privacy:
     request_classification: SENSITIVE
     response_classification: SENSITIVE
@@ -46,6 +47,12 @@ api_routes:
 - method: GET
   path: /user/invites
   operation: ListInvitations
+  request_bindings:
+    query:
+    - {name: personaId, field: personaId, required: false}
+    - {name: status, field: status, required: false}
+    - {name: limit, field: limit, required: false}
+    - {name: offset, field: offset, required: false}
   actor: persona
   application:
     kind: query
@@ -54,9 +61,8 @@ api_routes:
     reader: InvitationListReader
     slice: InvitationListSlice
   description: 查询当前 Account 所拥有 Persona 发出的邀请
-  query_params: [subAccountId, status, limit, offset]
   response_entity: Invitation
-  response_fields: [id, inviterSubAccountId, channel, linkCode, status, expireAt, generatedAt, acceptedAt, convertedAt]
+  response_fields: [id, inviterPersonaId, channel, linkCode, status, expireAt, generatedAt, acceptedAt, convertedAt]
   authorization:
     principal: persona
     ownership_policy: current_account_owns_inviter_persona
@@ -66,7 +72,7 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: none
-  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.SYSTEM.internal_error]
+  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.SYSTEM.internal_error, USER.AUTH.account_deleted, USER.AUTH.account_security_unavailable, USER.AUTH.account_suspended, USER.AUTH.token_stale]
   privacy:
     request_classification: INTERNAL
     response_classification: SENSITIVE
@@ -89,6 +95,9 @@ api_routes:
 - method: GET
   path: /invites/{linkCode}
   operation: GetInvitationByCode
+  request_bindings:
+    path:
+    - {name: linkCode, field: linkCode}
   actor: none
   application:
     kind: query
@@ -97,9 +106,8 @@ api_routes:
     reader: InvitationByCodeReader
     slice: InvitationPublicSlice
   description: 根据邀请码读取最小公开邀请信息并记录首次送达
-  path_params: [linkCode]
   response_entity: Invitation
-  response_fields: [id, inviterSubAccountId, channel, status, expireAt, generatedAt]
+  response_fields: [id, inviterPersonaId, channel, status, expireAt, generatedAt]
   authorization:
     principal: public
     ownership_policy: public_link_code
@@ -132,6 +140,9 @@ api_routes:
 - method: POST
   path: /invites/{linkCode}/accept
   operation: AcceptInvitation
+  request_bindings:
+    path:
+    - {name: linkCode, field: linkCode}
   actor: account
   application:
     kind: command
@@ -141,9 +152,8 @@ api_routes:
     mutation_target: Invitation
     invariant_target: Invitation
   description: 当前已认证 Account 幂等接受仍有效的邀请
-  path_params: [linkCode]
   response_entity: Invitation
-  response_fields: [id, inviterSubAccountId, channel, status, expireAt, acceptedAt]
+  response_fields: [id, inviterPersonaId, channel, status, expireAt, acceptedAt]
   authorization:
     principal: account
     ownership_policy: authenticated_invitee
@@ -153,7 +163,7 @@ api_routes:
     retry_mode: idempotent
     max_attempts: 2
     idempotency: required
-  error_codes: [USER.USER.unauthorized, USER.INVITATION.not_found, USER.INVITATION.expired, USER.SYSTEM.internal_error]
+  error_codes: [USER.USER.unauthorized, USER.INVITATION.not_found, USER.INVITATION.expired, USER.SYSTEM.internal_error, USER.AUTH.account_deleted, USER.AUTH.account_security_unavailable, USER.AUTH.account_suspended, USER.AUTH.token_stale, USER.INVITATION.invalid_transition]
   privacy:
     request_classification: SENSITIVE
     response_classification: SENSITIVE

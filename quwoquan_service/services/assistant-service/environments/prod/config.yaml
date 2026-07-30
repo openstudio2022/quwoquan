@@ -2,8 +2,8 @@ overrides:
   sys.assistant-service.account_security_authority.base_url: http://user-service:18081
   sys.assistant-service.account_security_authority.timeout_ms: 300
   sys.assistant-service.notification_service.base_url: http://notification-service:18087
-  sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/2026-07-26.1.json
-  sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/2026-07-26.1.json
+  sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc.json
+  sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/revision-2.json
   sys.assistant-service.redis.general.mode: cluster
   sys.assistant-service.redis.general.tls: true
   sys.assistant-service.redis.rec.mode: cluster

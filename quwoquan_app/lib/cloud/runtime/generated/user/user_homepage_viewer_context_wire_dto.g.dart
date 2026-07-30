@@ -2,14 +2,14 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class UserHomepageViewerContextWireDto {
-  final String viewerSubAccountId;
+  final String viewerPersonaId;
   final bool isOwner;
   final bool isGuest;
   final String relationToTarget;
   final bool canViewFullProfile;
 
   UserHomepageViewerContextWireDto({
-    this.viewerSubAccountId = '',
+    this.viewerPersonaId = '',
     this.isOwner = false,
     this.isGuest = false,
     this.relationToTarget = 'not_following',
@@ -18,7 +18,7 @@ class UserHomepageViewerContextWireDto {
 
   factory UserHomepageViewerContextWireDto.fromMap(Map<String, dynamic> m) {
     return UserHomepageViewerContextWireDto(
-      viewerSubAccountId: m['viewerSubAccountId']?.toString() ?? '',
+      viewerPersonaId: m['viewerPersonaId']?.toString() ?? '',
       isOwner: m['isOwner'] as bool? ?? false,
       isGuest: m['isGuest'] as bool? ?? false,
       relationToTarget: m['relationToTarget']?.toString() ?? 'not_following',
@@ -28,7 +28,7 @@ class UserHomepageViewerContextWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'viewerSubAccountId': viewerSubAccountId,
+      'viewerPersonaId': viewerPersonaId,
       'isOwner': isOwner,
       'isGuest': isGuest,
       'relationToTarget': relationToTarget,
@@ -37,14 +37,14 @@ class UserHomepageViewerContextWireDto {
   }
 
   UserHomepageViewerContextWireDto copyWith({
-    String? viewerSubAccountId,
+    String? viewerPersonaId,
     bool? isOwner,
     bool? isGuest,
     String? relationToTarget,
     bool? canViewFullProfile,
   }) {
     return UserHomepageViewerContextWireDto(
-      viewerSubAccountId: viewerSubAccountId ?? this.viewerSubAccountId,
+      viewerPersonaId: viewerPersonaId ?? this.viewerPersonaId,
       isOwner: isOwner ?? this.isOwner,
       isGuest: isGuest ?? this.isGuest,
       relationToTarget: relationToTarget ?? this.relationToTarget,

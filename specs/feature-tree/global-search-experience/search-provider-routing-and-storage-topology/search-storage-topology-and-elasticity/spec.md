@@ -90,7 +90,7 @@
 - THEN up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成
 - AND health 全 healthy（search-service -> 200）
 - AND verify 全 checks passed。
-- THEN /search 返回 200，信封含 requestId/rankingVersion/experimentBucket 与 hit 级 rankReasons/rankPosition；/search/feedback 返回 202 accepted。
+- THEN /search 返回 200，信封含 requestId/experimentBucket 与 hit 级 rankReasons/rankPosition；/search/feedback 返回 202 accepted。
 
 <a id="gwt-003"></a>
 ### GWT-003 真集群高并发容量、稳定性与可重复性准出
@@ -100,7 +100,7 @@
 - WHEN 在 prod-sim 或原生 ES/OpenSearch 真集群执行 warm/cold cache、热点/长尾、混合读写、backfill 并发、ES restart、Redis delay、突刺与长稳压测。
 - WHEN 在多副本环境对同 viewer/session/query/filter 连续重复查询，覆盖 refresh、replica 切换与 cold/warm cache。
 - THEN 回填 measured RPS/P95/P99、错误率、degrade rate、cache hit、ES heap/GC/threadpool queue、Redis lag、index freshness、饱和点与扩容阈值。
-- THEN TopN objectType+objectId 序列在稳定数据和同 rankingVersion/policyVersion/indexVersion 下不跳变；合法变化可解释。
+- THEN TopN objectType+objectId 序列在同一派生读模型快照与实验分桶下不跳变；合法变化可由真实索引发布摘要与请求归因解释。
 - THEN 未达 SLO 自动 NO-GO，不得用 local-gamma 单节点结果替代。
 
 <a id="gwt-004"></a>
@@ -108,7 +108,7 @@
 
 - GIVEN /search query log、/search/feedback、queryheat、Redis Stream、content-service consumer、FeatureStore 与 RuleScorer 已装配。
 - WHEN 用户搜索并点击结果，search-service 记录 query/feedback，queryheat 生成 relatedTerms/termHeat，搜索信号发布到 Redis，content-service 消费并写入 rm_recommend_feature。
-- THEN 搜索结果页排序可消费 termHeat 并输出 rankReasons/rankingVersion/experimentBucket。
+- THEN 搜索结果页排序可消费 termHeat 并输出 rankReasons/experimentBucket。
 - THEN 推荐 Feed scorer 可读取 searchTermAffinity/searchTermHeat/searchTopObjectAffinity 并影响候选得分。
 - THEN AB bucket 可按 control/term_heat 查询；线上收益显著性作为发布后观察项。
 

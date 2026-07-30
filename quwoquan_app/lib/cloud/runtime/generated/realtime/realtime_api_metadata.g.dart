@@ -42,12 +42,12 @@ class RealtimeApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'GetPersonaPresence': 'required',
-    'GetRealtimeConfig': 'required',
-    'HealthCheck': 'required',
+    'GetRealtimeConfig': 'public',
+    'HealthCheck': 'public',
     'IssueConnectionTicket': 'required',
     'LongPoll': 'required',
-    'Metrics': 'required',
-    'ReadinessCheck': 'required',
+    'Metrics': 'public',
+    'ReadinessCheck': 'public',
     'RecoverRealtimeAccountClosureDeadLetter': 'required',
     'WebSocketUpgrade': 'required',
   };

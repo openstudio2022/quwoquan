@@ -58,7 +58,7 @@ void main() {
       ]);
       expect(
         media.initCommands.map((command) => command.expectedSha256),
-        everyElement(startsWith('sha256:')),
+        everyElement(matches(RegExp(r'^[0-9a-f]{64}$'))),
       );
       expect(uploads.map((call) => call.uri.toString()).toList(), <String>[
         'https://upload.quwoquan.test/session_1',

@@ -22,7 +22,7 @@
 - [`JNY-007 / SCN-013`](../spec.md#scn-013) — 在“私建群、圈子群、组织节点群与主页相关群入口”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
 - [`JNY-008 / SCN-014`](../spec.md#scn-014) — 在“实体主页到圈子、组织节点、群单元与会话协作”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
 - [`JNY-010 / SCN-023`](../spec.md#scn-023) — 在“对象对外分享分发”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
-- [`JNY-011 / SCN-027`](../spec.md#scn-027) — 在“附近同趣·结伴同行·线下局”中，维护 Circle、CircleGroup、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
+- [`JNY-011 / SCN-027`](../spec.md#scn-027) — 在“结伴同行与线下相聚”中，维护 Circle、CircleGroup、Gathering、Membership 与内容放置关系，并公开加入、协作和群绑定结果。
 
 ## 4. 架构与数据流
 

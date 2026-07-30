@@ -1,7 +1,10 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
+
 import 'dart:io';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_page_mode_strategy.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
@@ -11,8 +14,66 @@ import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/components/pageflip/spread_model.dart';
 import 'package:quwoquan_app/components/pageflip/types.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 
 void main() {
+  testWidgets('article page textures stay inside the current page window', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final pages = List<ArticlePageData>.unmodifiable(
+      List<ArticlePageData>.generate(
+        12,
+        (index) => ArticlePageData(
+          id: 'page_$index',
+          title: 'Page $index',
+          body: 'Bounded page texture cache $index',
+        ),
+      ),
+    );
+    final debugStates = <ArticleReadOnlyBookDebugState>[];
+    var initialPage = 1;
+    late StateSetter rebuildDeck;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            rebuildDeck = setState;
+            return ArticleReadOnlyBookDeck(
+              pages: pages,
+              template: ArticleTemplatePreset.gentle,
+              fontPreset: ArticleFontPreset.clean,
+              metrics: ArticleCanvasMetrics.snapshot(),
+              initialPage: initialPage,
+              onDebugStateChanged: debugStates.add,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final page in <int>[4, 7, 10]) {
+      rebuildDeck(() => initialPage = page);
+      await tester.pumpAndSettle();
+    }
+
+    final latest = debugStates.lastWhere(
+      (state) => state.currentPageIndex == 10,
+    );
+    expect(
+      latest.availableSnapshotIndices.length,
+      lessThanOrEqualTo(ArticleReadOnlyBookDeck.maxResidentPageTextures),
+    );
+    expect(
+      latest.availableSnapshotIndices,
+      everyElement(isIn(<int>{9, 10, 11})),
+    );
+    expect(latest.pendingCaptureIndices, everyElement(isIn(<int>{9, 10, 11})));
+  });
+
   test('article reader pipelines isolate forward and backward outputs', () {
     final forwardScene = _interactiveScene(
       initialPage: 1,

@@ -5,7 +5,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadat
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/feed_object_card_dto.g.dart';
 
 export 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -16,9 +15,11 @@ import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 import 'package:quwoquan_app/cloud/services/content/content_repository_contract.dart'
     show
+        ContentDiscoveryFeedQuery,
         ContentReadRepository,
         ContentWriteRepository,
         ContentEngagementRepository,

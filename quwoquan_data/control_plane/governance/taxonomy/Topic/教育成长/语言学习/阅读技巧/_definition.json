@@ -2,6 +2,7 @@
   "label": "阅读技巧",
   "labelEn": "Reading Skills",
   "description": "外语阅读理解技巧",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

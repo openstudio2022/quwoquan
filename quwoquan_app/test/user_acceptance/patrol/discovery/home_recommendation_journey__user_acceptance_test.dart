@@ -38,17 +38,9 @@
 ///      span 跳转由上述 local_contract 守护、数据就绪由 gamma-local smoke 证明，本用例
 ///      用「作者头像→用户主页」覆盖对象跳转链路。
 ///
-/// 执行方式（本地，emulator 访问宿主用 10.0.2.2）：
-///   patrol test --target test/user_acceptance/patrol/discovery/home_recommendation_journey__user_acceptance_test.dart \
-///     -d emulator-5554 \
-///     --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma \
-///     --dart-define=RUN_T4_PATROL=true \
-///     --dart-define=CLOUD_GATEWAY_BASE_URL=http://10.0.2.2:19000 \
-///     --dart-define=API_CONTRACT_BASE_URL=http://10.0.2.2:19000 \
-///     --dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://10.0.2.2:19100 \
-///     --dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://10.0.2.2:19100 \
-///     --dart-define=APP_CURRENT_USER_ID=us_01_3278_01kvevr8s7s3b0arr7x3p27efe \
-///     --dart-define=TEST_AUTH_TOKEN=local-patrol-token
+/// 执行方式：由 `run_environment_patrol_smoke.py` 消费 `gamma-local` topology
+/// 投影全部 canonical HTTPS/WSS endpoint，并在 Android 上安装 target 端口的
+/// `adb reverse`。禁止手工注入 HTTP 或私有 IP URL。
 library;
 
 import 'package:flutter/cupertino.dart';

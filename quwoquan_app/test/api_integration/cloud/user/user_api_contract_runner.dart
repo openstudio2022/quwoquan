@@ -9,7 +9,7 @@
 /// ```
 /// flutter test test/api_integration/cloud/user/user_api_contract_runner.dart \
 ///   --dart-define=API_CONTRACT_ENV=gamma \
-///   --dart-define=API_CONTRACT_BASE_URL=https://gamma-api.quwoquan.com
+///   --dart-define=API_CONTRACT_BASE_URL=https://api.gamma.quwoquan.com
 /// ```
 library;
 
@@ -124,7 +124,7 @@ Future<AuthSessionGrant> _loginDisposableAccount(String purpose) async {
   );
   _session = session;
   _ownerId = session.ownerId;
-  _personaId = session.activeSub?.subAccountId;
+  _personaId = session.activePersona?.personaId;
   _tokenProvider.accessToken = session.accessToken;
   return session;
 }
@@ -179,7 +179,7 @@ void main() {
     expect(_session.accessToken, isNotEmpty);
     expect(_session.refreshToken, isNotEmpty);
     expect(_session.ownerId, isNotEmpty);
-    expect(_session.activeSub?.subAccountId, isNotEmpty);
+    expect(_session.activePersona?.personaId, isNotEmpty);
   });
 
   test('相同安装身份匿名登录幂等复用 Owner 与 Persona', () async {
@@ -191,7 +191,7 @@ void main() {
     _tokenProvider.accessToken = original.accessToken;
 
     expect(replay.ownerId, original.ownerId);
-    expect(replay.activeSub?.subAccountId, original.activeSub?.subAccountId);
+    expect(replay.activePersona?.personaId, original.activePersona?.personaId);
     expect(replay.accessToken, isNotEmpty);
     expect(replay.refreshToken, isNotEmpty);
   });

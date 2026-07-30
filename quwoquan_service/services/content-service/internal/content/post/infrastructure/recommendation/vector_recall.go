@@ -3,6 +3,7 @@ package recommendation
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -49,6 +50,9 @@ func NewVectorRecallWithEmbedding(
 }
 
 func (v *VectorRecallWithEmbedding) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
+	if strings.TrimSpace(req.ActiveReleaseID) != "" {
+		return nil, rtrec.SkipRecall("release-bound vector recall requires an indexed release filter")
+	}
 	if len(req.Tags) == 0 {
 		return nil, rtrec.SkipRecall("vector recall requires interest tags")
 	}
@@ -88,6 +92,7 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 				"limit":         limit,
 			},
 		},
+		bson.M{"$match": bson.M{"accountRestricted": bson.M{"$ne": true}}},
 		bson.M{
 			"$project": bson.M{
 				"_id":                  1,
@@ -98,6 +103,10 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 				"entityRefs":           1,
 				"contentVertical":      1,
 				"sourceTaskId":         1,
+				"sourceOwner":          1,
+				"releaseId":            1,
+				"manifestDigest":       1,
+				"lifecycleStatus":      1,
 				"coverUrl":             1,
 				"thumbnailUrl":         1,
 				"videoUrl":             1,
@@ -130,6 +139,10 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 		EntityRefs           []string       `bson:"entityRefs"`
 		ContentVertical      string         `bson:"contentVertical"`
 		SourceTaskID         string         `bson:"sourceTaskId"`
+		SourceOwner          string         `bson:"sourceOwner"`
+		ReleaseID            string         `bson:"releaseId"`
+		ManifestDigest       string         `bson:"manifestDigest"`
+		LifecycleStatus      string         `bson:"lifecycleStatus"`
 		CoverURL             string         `bson:"coverUrl"`
 		ThumbnailURL         string         `bson:"thumbnailUrl"`
 		VideoURL             string         `bson:"videoUrl"`
@@ -189,6 +202,10 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 			QualityScore:    qualityScore,
 			ContentVertical: contentVertical,
 			SupplySource:    supplySource,
+			SourceOwner:     doc.SourceOwner,
+			ReleaseID:       doc.ReleaseID,
+			ManifestDigest:  doc.ManifestDigest,
+			LifecycleStatus: doc.LifecycleStatus,
 		})
 	}
 	return out, nil

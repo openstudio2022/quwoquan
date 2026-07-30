@@ -400,6 +400,27 @@ func TestReviewDuplicateActiveCreateConflictsAndListFiltersDeleted(t *testing.T)
 	}
 }
 
+func TestReviewListRejectsMissingHomepageButPreservesOfflineHistory(t *testing.T) {
+	t.Parallel()
+	facade, _ := newTestFacade(t)
+
+	if _, err := facade.ListByHomepage(context.Background(), ListQuery{
+		HomepageID: "hp-missing",
+	}); !errorsIsCode(err, generated.ErrHomepageNotFound) {
+		t.Fatalf("missing homepage review list must return canonical not found: %v", err)
+	}
+
+	page, err := facade.ListByHomepage(context.Background(), ListQuery{
+		HomepageID: "hp-offline",
+	})
+	if err != nil {
+		t.Fatalf("offline homepage must preserve readable review history: %v", err)
+	}
+	if len(page.Items) != 0 {
+		t.Fatalf("expected empty preserved history fixture, got %+v", page.Items)
+	}
+}
+
 func errorsIsCode(err error, sentinel error) bool {
 	if err == nil || sentinel == nil {
 		return false

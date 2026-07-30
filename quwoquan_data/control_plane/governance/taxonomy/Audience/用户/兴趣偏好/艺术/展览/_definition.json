@@ -2,6 +2,7 @@
   "label": "展览",
   "labelEn": "Exhibition",
   "description": "喜欢看展与艺术活动",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

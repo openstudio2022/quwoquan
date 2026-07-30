@@ -269,12 +269,8 @@ class IntersectionEntity extends StatelessWidget {
 
   List<Widget> _chips(BuildContext context) {
     final chips = <Widget>[
-      _Chip(
-        label: DiscoveryFeedText.intersectionDimensionShortLabel(
-          reason.dimension,
-        ),
-        tone: _ChipTone.dimension,
-      ),
+      if (_dimensionLabel.isNotEmpty)
+        _Chip(label: _dimensionLabel, tone: _ChipTone.dimension),
     ];
     final pointChip = _pointCountChipLabel();
     if (pointChip.isNotEmpty) {
@@ -288,6 +284,19 @@ class IntersectionEntity extends StatelessWidget {
       chips.add(_Chip(label: _classLabel, tone: _ChipTone.affinity));
     }
     return chips;
+  }
+
+  /// 维度弱标只认云侧 `dimensionPointSummary[].label`（注册表 `dimensionLabels` 渲染）。
+  /// 端侧不再持第二份维度文案表；云侧未下发时不渲染该 chip。
+  String get _dimensionLabel {
+    final dimension = reason.dimension.trim();
+    if (dimension.isEmpty) return '';
+    for (final tally in reason.dimensionPointSummary) {
+      if (tally.dimension.trim() == dimension) {
+        return tally.label.trim();
+      }
+    }
+    return '';
   }
 
   String _pointCountChipLabel() {
@@ -391,9 +400,9 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // objectKind 一等字段为真相源（codegen UnifiedObjectKind）；未知/缺省按 person 头像形状降级。
-    final kind =
-        UnifiedObjectKind.fromWire(objectKind) ?? UnifiedObjectKind.person;
+    // objectKind 一等字段为真相源（codegen UnifiedObjectKind）。未知 kind 不得回落成
+    // person：圆形头像 + 人像图标会把一个地点/器材说成是个人。未知一律走中性对象形状。
+    final kind = UnifiedObjectKind.fromWire(objectKind);
     final accent = AppColors.iosAccent(context);
     final radius = kind == UnifiedObjectKind.person
         ? BorderRadius.circular(size)
@@ -422,8 +431,11 @@ class _Avatar extends StatelessWidget {
     );
   }
 
-  IconData _iconFor(UnifiedObjectKind kind) {
+  IconData _iconFor(UnifiedObjectKind? kind) {
     switch (kind) {
+      // 云侧登记了新 objectKind 而端侧尚未 codegen：给中性对象图标，不冒充任何已知类型。
+      case null:
+        return CupertinoIcons.square_stack_3d_up;
       case UnifiedObjectKind.person:
         return CupertinoIcons.person_crop_circle_fill;
       case UnifiedObjectKind.place:
@@ -443,10 +455,8 @@ class _Avatar extends StatelessWidget {
         return CupertinoIcons.bag_fill;
       case UnifiedObjectKind.content:
         return CupertinoIcons.doc_text_fill;
-      // §22.2 行程/活动 objectKind（结构就位，保持图标语义可辨识）。
-      case UnifiedObjectKind.trip:
-        return CupertinoIcons.map_fill;
-      case UnifiedObjectKind.meetup:
+      // trip / meetup 已由领域模型收敛为唯一 Gathering 对象。
+      case UnifiedObjectKind.gathering:
         return CupertinoIcons.person_2_fill;
     }
   }

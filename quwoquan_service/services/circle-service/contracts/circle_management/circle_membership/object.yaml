@@ -40,6 +40,7 @@ business_rules:
 - joinPolicy=approval 的圈子 Join 进入 pending；Approve/Reject 仅 owner/active admin，且只对 pending 态生效（否则 membership_state_conflict）
 - Approve 达成 active 发布 CircleMembershipJoined；Reject 发布 CircleMembershipRejected，被拒 persona 可重新申请
 lifecycle:
+  state_field: state
   states:
   - pending
   - active

@@ -9,6 +9,7 @@ import (
 
 	platformredis "quwoquan_service/internal/platform/redis"
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/controlplane"
 	rtredis "quwoquan_service/runtime/redis"
 	eventrecordgenerated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/logsink"
@@ -36,9 +37,7 @@ type redisSceneCfg struct {
 
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 	Service struct {
 		Name string `yaml:"name"`
@@ -70,6 +69,16 @@ type config struct {
 		BaseURL   string `yaml:"base_url"`
 		TimeoutMS int    `yaml:"timeout_ms"`
 	} `yaml:"account_security_authority"`
+	AccountEnforcement struct {
+		RequestTimeoutMS int `yaml:"request_timeout_ms"`
+		PollIntervalMS   int `yaml:"poll_interval_ms"`
+		LeaseDurationMS  int `yaml:"lease_duration_ms"`
+		InitialBackoffMS int `yaml:"initial_backoff_ms"`
+		MaxBackoffMS     int `yaml:"max_backoff_ms"`
+		MaxPendingAgeMS  int `yaml:"max_pending_age_ms"`
+		MaxAttempts      int `yaml:"max_attempts"`
+		BatchSize        int `yaml:"batch_size"`
+	} `yaml:"account_enforcement"`
 	MongoDB struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
@@ -368,47 +377,54 @@ func resolveLogSinkBinding(
 	}
 }
 
-func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
-	_ = configVersion
-	if strings.TrimSpace(imageVersion) == "" {
-		return nil
+func validateRuntimeConfigurationIdentity(cfg config, configVersion, imageVersion string) error {
+	fileVersion := strings.TrimSpace(cfg.Config.Version)
+	environmentVersion := strings.TrimSpace(configVersion)
+	if environmentVersion != "" && fileVersion != "" && fileVersion != environmentVersion {
+		return fmt.Errorf(
+			"CONFIG_VERSION mismatch: env=%s file=%s",
+			environmentVersion,
+			fileVersion,
+		)
 	}
-	min := strings.TrimSpace(cfg.Config.MinImageVersion)
-	max := strings.TrimSpace(cfg.Config.MaxImageVersion)
-	if min != "" && compareSemver(imageVersion, min) < 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s < min_image_version=%s", imageVersion, min)
-	}
-	if max != "" && compareSemver(imageVersion, max) > 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s > max_image_version=%s", imageVersion, max)
-	}
-	return nil
-}
-
-func compareSemver(a, b string) int {
-	ap := parseSemver(a)
-	bp := parseSemver(b)
-	for i := 0; i < 3; i++ {
-		if ap[i] < bp[i] {
-			return -1
-		}
-		if ap[i] > bp[i] {
-			return 1
-		}
-	}
-	return 0
-}
-
-func parseSemver(raw string) [3]int {
-	trimmed := strings.TrimPrefix(strings.TrimSpace(raw), "v")
-	parts := strings.Split(trimmed, ".")
-	out := [3]int{}
-	for i := 0; i < len(parts) && i < 3; i++ {
-		out[i], _ = strconv.Atoi(parts[i])
-	}
-	return out
+	return controlplane.ValidateImageIdentity(imageVersion)
 }
 
 func validateRequiredRuntimeConfig(cfg config, appEnv ...string) error {
+	if strings.TrimSpace(cfg.AccountSecurityAuthority.BaseURL) == "" {
+		return fmt.Errorf("account_security_authority.base_url is required")
+	}
+	if cfg.AccountSecurityAuthority.TimeoutMS <= 0 ||
+		cfg.AccountSecurityAuthority.TimeoutMS > 5000 {
+		return fmt.Errorf("account_security_authority.timeout_ms must be within 1..5000")
+	}
+	if cfg.AccountEnforcement.RequestTimeoutMS <= 0 ||
+		cfg.AccountEnforcement.RequestTimeoutMS > 10000 {
+		return fmt.Errorf("account_enforcement.request_timeout_ms must be within 1..10000")
+	}
+	if cfg.AccountEnforcement.PollIntervalMS <= 0 ||
+		cfg.AccountEnforcement.PollIntervalMS > 60000 {
+		return fmt.Errorf("account_enforcement.poll_interval_ms must be within 1..60000")
+	}
+	if cfg.AccountEnforcement.LeaseDurationMS < cfg.AccountEnforcement.RequestTimeoutMS ||
+		cfg.AccountEnforcement.LeaseDurationMS > 120000 {
+		return fmt.Errorf("account_enforcement.lease_duration_ms must cover request timeout and stay within 120000")
+	}
+	if cfg.AccountEnforcement.InitialBackoffMS <= 0 ||
+		cfg.AccountEnforcement.MaxBackoffMS < cfg.AccountEnforcement.InitialBackoffMS ||
+		cfg.AccountEnforcement.MaxBackoffMS > 300000 {
+		return fmt.Errorf("account_enforcement backoff bounds are invalid")
+	}
+	if cfg.AccountEnforcement.MaxPendingAgeMS < cfg.AccountEnforcement.RequestTimeoutMS ||
+		cfg.AccountEnforcement.MaxPendingAgeMS > 3600000 {
+		return fmt.Errorf("account_enforcement.max_pending_age_ms is invalid")
+	}
+	if cfg.AccountEnforcement.MaxAttempts < 1 || cfg.AccountEnforcement.MaxAttempts > 20 {
+		return fmt.Errorf("account_enforcement.max_attempts must be within 1..20")
+	}
+	if cfg.AccountEnforcement.BatchSize < 1 || cfg.AccountEnforcement.BatchSize > 100 {
+		return fmt.Errorf("account_enforcement.batch_size must be within 1..100")
+	}
 	if strings.TrimSpace(cfg.MongoDB.URI) == "" {
 		return fmt.Errorf("mongodb.uri is required")
 	}
@@ -490,15 +506,6 @@ func postgresTelemetrySchema(appEnv string) string {
 		return "telemetry_local_beta"
 	default:
 		return ""
-	}
-}
-
-func operatorOIDCRequired(appEnv string) bool {
-	switch strings.ToLower(strings.TrimSpace(appEnv)) {
-	case "alpha", "beta", "gamma":
-		return false
-	default:
-		return true
 	}
 }
 

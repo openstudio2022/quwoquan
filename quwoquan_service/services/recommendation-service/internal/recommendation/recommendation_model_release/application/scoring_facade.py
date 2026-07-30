@@ -6,7 +6,7 @@ module owns scenario/release selection and the single/batch query semantics.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import Protocol
 
 from generated.recommendation.recommendation_model_release.models.request_response import (
     BatchModelScoreRequest,
@@ -17,7 +17,7 @@ from generated.recommendation.recommendation_model_release.models.request_respon
 
 
 class ScorerPort(Protocol):
-    model_version: str
+    scorer_kind: str
 
     def score(self, request: ModelScoreRequest) -> ModelScoreResponse: ...
 
@@ -58,21 +58,20 @@ class RecommendationScoringQueryFacade:
         if not request.candidates:
             return ModelScoreResponse(scores=[])
 
-        context: dict[str, Any] = request.context or {}
-        release = str(context.get("modelVersion", "champion"))
-        scorer = self._registry.resolve(request.scenario, release)
+        channel = str(request.modelChannel or "champion")
+        scorer = self._registry.resolve(request.scenario, channel)
         if scorer is None:
             raise UnsupportedScenarioError(
                 request.scenario,
                 self._registry.supported_scenarios(),
             )
 
-        model_version = str(
-            getattr(scorer, "model_version", getattr(scorer, "_model_version", "unknown"))
+        scorer_kind = str(
+            getattr(scorer, "scorer_kind", getattr(scorer, "_scorer_kind", "unknown"))
         )
         return self._capacity_score(
             request,
-            model_version,
+            scorer_kind,
             lambda: scorer.score(request),
         )
 

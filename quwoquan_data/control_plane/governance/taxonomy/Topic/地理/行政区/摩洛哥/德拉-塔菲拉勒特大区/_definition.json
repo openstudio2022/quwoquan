@@ -1,0 +1,12 @@
+{
+  "label": "德拉-塔菲拉勒特大区",
+  "labelEn": "Drâa-Tafilalet",
+  "description": "撒哈拉沙丘与绿洲带",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

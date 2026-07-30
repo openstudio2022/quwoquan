@@ -1,5 +1,5 @@
 read_model: UserHomepageBundleWire
-description: 'GET /user/{subAccountId}/homepage-bundle 响应 wire（主页首屏聚合真相源，锁定决策 #1）。
+description: 'GET /user/{personaId}/homepage-bundle 响应 wire（主页首屏聚合真相源，锁定决策 #1）。
 
   只聚合「身份域真相」：profile（公开档案）/ stats（统计计数）/ relationshipCapability（viewer→target
 
@@ -24,17 +24,17 @@ client_projection:
   base_class: ''
   output_path: cloud/runtime/generated/user/user_homepage_bundle_wire_dto.g.dart
   dart_imports:
-  - sub_account_profile_wire_dto.g.dart
+  - persona_profile_wire_dto.g.dart
   - account/user_account_stats_wire_dto.g.dart
   - relationship_capability_wire_dto.g.dart
   - user_homepage_tab_counts_wire_dto.g.dart
   - user_homepage_viewer_context_wire_dto.g.dart
   fields:
   - name: profile
-    dart_type: SubAccountProfileWireDto
+    dart_type: PersonaProfileWireDto
     nullable: true
     source: profile
-    map_from_string_key_class: SubAccountProfileWireDto
+    map_from_string_key_class: PersonaProfileWireDto
   - name: stats
     dart_type: UserProfileStatsWireDto
     nullable: true

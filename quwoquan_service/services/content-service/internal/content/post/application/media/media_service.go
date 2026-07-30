@@ -603,12 +603,12 @@ func (s *MediaService) GetOwnedReadyMediaAssetReference(
 		)
 	}
 	if strings.TrimSpace(slice.AssetID) == "" || strings.TrimSpace(slice.OwnerID) == "" ||
-		strings.TrimSpace(slice.ContentType) == "" || slice.FileSize <= 0 {
+		strings.TrimSpace(slice.MimeType) == "" || slice.FileSize <= 0 {
 		return MediaAssetReferenceSlice{}, unavailable(errors.New("MediaAsset owner projection is incomplete"))
 	}
 	return MediaAssetReferenceSlice{
 		AssetID: slice.AssetID, OwnerPersonaID: slice.OwnerID,
-		ProcessingStatus: slice.ProcessingStatus, ContentType: slice.ContentType,
+		ProcessingStatus: slice.ProcessingStatus, MimeType: slice.MimeType,
 		FileSize: slice.FileSize,
 	}, nil
 }
@@ -627,7 +627,7 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 		)
 	}
 	if strings.TrimSpace(slice.AssetID) == "" || strings.TrimSpace(slice.OwnerID) == "" ||
-		strings.TrimSpace(slice.MediaType) == "" || strings.TrimSpace(slice.ContentType) == "" ||
+		strings.TrimSpace(slice.MediaType) == "" || strings.TrimSpace(slice.MimeType) == "" ||
 		slice.FileSize <= 0 || strings.TrimSpace(slice.DeliveryURL) == "" {
 		return MediaAssetDeliveryReferenceSlice{}, unavailable(errors.New("MediaAsset delivery projection is incomplete"))
 	}
@@ -639,7 +639,7 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 			slice.MediaType,
 			slice.AssetID,
 			slice.Version,
-			slice.ContentType,
+			slice.MimeType,
 		)
 	}
 	if publicSliceKey == "" {
@@ -650,23 +650,27 @@ func (s *MediaService) GetOwnedReadyMediaAssetDeliveryReference(
 	return MediaAssetDeliveryReferenceSlice{
 		AssetID: slice.AssetID, OwnerPersonaID: slice.OwnerID,
 		ProcessingStatus: slice.ProcessingStatus, MediaType: slice.MediaType,
-		ContentType: slice.ContentType, FileSize: slice.FileSize,
-		PublicSliceKey:               publicSliceKey,
-		DeliveryURL:                  slice.DeliveryURL,
-		ImageWidth:                   slice.ImageWidth,
-		ImageHeight:                  slice.ImageHeight,
-		ImageDeliveryContentType:     slice.ImageDeliveryContentType,
-		ImageDominantColor:           slice.ImageDominantColor,
-		ImageLQIP:                    slice.ImageLQIP,
-		ImageContentProfile:          slice.ImageContentProfile,
-		ImageDerivativePolicyVersion: slice.ImageDerivativePolicyVersion,
-		VerifiedDurationMs:           slice.VerifiedDurationMs,
-		VideoWidth:                   slice.VideoWidth,
-		VideoHeight:                  slice.VideoHeight,
-		VideoPublicSliceKey:          slice.VideoPublicSliceKey,
-		CoverPublicSliceKey:          slice.CoverPublicSliceKey,
-		PreviewTrackVersion:          slice.PreviewTrackVersion,
-		PreviewTrackManifestSliceKey: slice.PreviewTrackManifestSliceKey,
+		MimeType: slice.MimeType, FileSize: slice.FileSize,
+		PublicSliceKey:                publicSliceKey,
+		DeliveryURL:                   slice.DeliveryURL,
+		ImageWidth:                    slice.ImageWidth,
+		ImageHeight:                   slice.ImageHeight,
+		ImageDeliveryMimeType:         slice.ImageDeliveryMimeType,
+		ImageDominantColor:            slice.ImageDominantColor,
+		ImageLQIP:                     slice.ImageLQIP,
+		ImageContentProfile:           slice.ImageContentProfile,
+		ImageDerivativePolicyVersion:  slice.ImageDerivativePolicyVersion,
+		VerifiedDurationMs:            slice.VerifiedDurationMs,
+		VideoWidth:                    slice.VideoWidth,
+		VideoHeight:                   slice.VideoHeight,
+		VideoPublicSliceKey:           slice.VideoPublicSliceKey,
+		CoverPublicSliceKey:           slice.CoverPublicSliceKey,
+		PreviewTrackVersion:           slice.PreviewTrackVersion,
+		PreviewTrackManifestSliceKey:  slice.PreviewTrackManifestSliceKey,
+		HLSCMAFDescriptorVersion:      slice.HLSCMAFDescriptorVersion,
+		HLSCMAFDescriptorSliceKey:     slice.HLSCMAFDescriptorSliceKey,
+		HLSCMAFMasterManifestSliceKey: slice.HLSCMAFMasterManifestSliceKey,
+		HLSCMAFRenditionCount:         slice.HLSCMAFRenditionCount,
 	}, nil
 }
 

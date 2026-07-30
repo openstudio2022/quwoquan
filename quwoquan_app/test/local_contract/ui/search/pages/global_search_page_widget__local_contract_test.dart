@@ -86,11 +86,11 @@ GoRouter _buildRouter({
       ),
       GoRoute(
         path: AppRoutePaths.userProfilePathTemplate.replaceAll(
-          '{username}',
-          ':username',
+          '{userHandle}',
+          ':userHandle',
         ),
         builder: (context, state) {
-          return Text('user:${state.pathParameters['username']}');
+          return Text('user:${state.pathParameters['userHandle']}');
         },
       ),
     ],
@@ -581,10 +581,10 @@ void main() {
     await tester.tap(find.text('王芳').last);
     await _pumpUntil(
       tester,
-      condition: () => find.text('user:user_wang_fang').evaluate().isNotEmpty,
+      condition: () => find.text('user:wang_fang_public').evaluate().isNotEmpty,
     );
 
-    expect(find.text('user:user_wang_fang'), findsOneWidget);
+    expect(find.text('user:wang_fang_public'), findsOneWidget);
     expect(find.text('chat:conv_002'), findsNothing);
   });
 
@@ -710,6 +710,7 @@ class _FakeSearchRepository implements SearchRepository {
             payload: SearchHitPayloadChatContact(
               ChatContactSearchItemDto(
                 contactId: 'user_li_ming',
+                userHandle: 'li_ming_public',
                 displayName: '李明',
                 conversationId: 'conv_001',
               ),
@@ -723,6 +724,7 @@ class _FakeSearchRepository implements SearchRepository {
             payload: SearchHitPayloadChatContact(
               ChatContactSearchItemDto(
                 contactId: 'user_li_xiang',
+                userHandle: 'li_xiang_public',
                 displayName: '李想',
                 conversationId: 'conv_007',
               ),
@@ -736,6 +738,7 @@ class _FakeSearchRepository implements SearchRepository {
             payload: SearchHitPayloadChatContact(
               ChatContactSearchItemDto(
                 contactId: 'user_li_qing',
+                userHandle: 'li_qing_public',
                 displayName: '李青',
                 conversationId: 'conv_008',
               ),
@@ -749,6 +752,7 @@ class _FakeSearchRepository implements SearchRepository {
             payload: SearchHitPayloadChatContact(
               ChatContactSearchItemDto(
                 contactId: 'user_li_yue',
+                userHandle: 'li_yue_public',
                 displayName: '李悦',
                 conversationId: 'conv_009',
               ),
@@ -762,6 +766,7 @@ class _FakeSearchRepository implements SearchRepository {
             payload: SearchHitPayloadChatContact(
               ChatContactSearchItemDto(
                 contactId: 'user_li_ze',
+                userHandle: 'li_ze_public',
                 displayName: '李泽',
                 conversationId: 'conv_010',
               ),
@@ -778,6 +783,7 @@ class _FakeSearchRepository implements SearchRepository {
             payload: SearchHitPayloadChatContact(
               ChatContactSearchItemDto(
                 contactId: 'user_wang_fang',
+                userHandle: 'wang_fang_public',
                 displayName: '王芳',
               ),
             ),
@@ -994,7 +1000,7 @@ class _FakeAssistantRepository implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     return AssistantSearchResultView(

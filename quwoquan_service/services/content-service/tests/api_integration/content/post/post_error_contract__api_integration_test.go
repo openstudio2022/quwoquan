@@ -88,7 +88,7 @@ func TestPost_ErrorCases(t *testing.T) {
 // header returns 401 when authentication middleware is enforced.
 // contract.yaml: post_unauthorized / go_func: TestPost_Unauthorized_Returns401
 //
-// NOTE: The current handler still falls back to a structured anonymous subAccountId
+// NOTE: The current handler still falls back to a structured anonymous personaId
 // when X-Client-User-Id is absent (no auth middleware yet). When auth is added,
 // update assertion to expect 401. Currently validates that the endpoint responds
 // without a 5xx error.

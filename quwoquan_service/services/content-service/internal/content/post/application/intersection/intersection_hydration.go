@@ -102,9 +102,54 @@ func visibleIntersectionPoints(r IntersectionReasonView) []IntersectionPointView
 	}}
 }
 
+// hydratePointPresentation 用 registry.presentationText 补齐点级与逐人证据的展示文案。
+//
+// 生产者（infrastructure/recommendation）只产结构化事实——kind、计数、对象引用——
+// 文案在此按 kind 查表渲染。生产者已显式给出的文本不覆盖：fixture 与迁移期
+// 仍可自带文案，注册表只负责补缺。
+func hydratePointPresentation(r IntersectionReasonView) IntersectionReasonView {
+	for i, p := range r.IntersectionPoints {
+		kind := strings.TrimSpace(p.SourceRef)
+		if kind == "" {
+			continue
+		}
+		if strings.TrimSpace(p.Label) == "" {
+			r.IntersectionPoints[i].Label = kindLabelText(kind)
+		}
+		if strings.TrimSpace(p.DisplayText) == "" {
+			r.IntersectionPoints[i].DisplayText = pointDisplayTextFor(kind, map[string]string{
+				"count":  strconv.Itoa(p.Count),
+				"object": strings.TrimSpace(r.DisplayName),
+				"sample": firstSampleName(p.SampleText),
+			})
+		}
+	}
+	for i, actor := range r.ActorEvidence {
+		kind := firstNonEmpty(actor.SourceRef, r.Kind, r.Source)
+		if strings.TrimSpace(actor.RelationLabel) == "" {
+			r.ActorEvidence[i].RelationLabel = relationLabelText(kind)
+		}
+		if strings.TrimSpace(actor.ActionSummaryText) == "" {
+			r.ActorEvidence[i].ActionSummaryText = actorActionSummaryText(kind)
+		}
+	}
+	return r
+}
+
+// firstSampleName 取点级样本的首项（样本按注册表分隔符拼接）。
+func firstSampleName(sampleText string) string {
+	name := strings.TrimSpace(sampleText)
+	if idx := strings.Index(name, listSeparatorText()); idx > 0 {
+		return strings.TrimSpace(name[:idx])
+	}
+	return name
+}
+
 func HydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 	points := visibleIntersectionPoints(r)
 	r.IntersectionPoints = points
+	r = hydratePointPresentation(r)
+	points = r.IntersectionPoints
 	byDimension := map[string]*IntersectionDimensionTallyView{}
 	order := []string{}
 	fact := 0
@@ -124,7 +169,7 @@ func HydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 		if !ok {
 			tally = &IntersectionDimensionTallyView{
 				Dimension: dim,
-				Label:     intersectionDimensionLabels[dim],
+				Label:     dimensionLabelText(dim),
 			}
 			byDimension[dim] = tally
 			order = append(order, dim)
@@ -146,9 +191,9 @@ func HydratePointSummary(r IntersectionReasonView) IntersectionReasonView {
 	}
 	if r.PointClassLabel == "" {
 		if recommended > 0 && fact == 0 {
-			r.PointClassLabel = "推荐交集"
+			r.PointClassLabel = pointClassLabelText("recommended")
 		} else {
-			r.PointClassLabel = "事实交集"
+			r.PointClassLabel = pointClassLabelText("fact")
 		}
 	}
 	if r.RankState == "" {
@@ -197,6 +242,10 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 			r.PrimaryText = computed
 			r.PrimarySpans = nil
 		}
+		// l10nKey 与文本同源：同一份模板渲染结果，缺模板时留空（端继续用 primaryText）。
+		if strings.TrimSpace(r.PrimaryTextL10nKey) == "" {
+			r.PrimaryTextL10nKey = ExplainPrimaryTextL10nKey(r, anchor)
+		}
 	}
 	if strings.TrimSpace(r.SecondaryText) == "" {
 		r.SecondaryText = explainSecondaryText(r, anchor)
@@ -221,6 +270,12 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 	}
 	if strings.TrimSpace(r.IconKey) == "" {
 		r.IconKey = iconKeyForReason(r)
+	}
+	if strings.TrimSpace(r.Tone) == "" {
+		r.Tone = toneForIconKey(r.IconKey)
+	}
+	if r.TypeVisual == nil {
+		r.TypeVisual = typeVisualForIconKey(r.IconKey)
 	}
 	r = HydrateInteractionContract(r)
 	if !ValidateDisplayStatement(r) {
@@ -254,6 +309,23 @@ func iconKeyForReason(r IntersectionReasonView) string {
 // 未登记 kind 返回空串，由 iconKeyForReason 走 dimension 末级回退。
 func iconKeyForKind(kind string) string {
 	return generated.IntersectionIconKeyByKind[strings.TrimSpace(kind)]
+}
+
+// toneForIconKey 查 iconKey → 色板 token 名（registry.visualToneByIconKey）。
+// 云侧只指派色号，具体色值由端持 light/dark 成对调色板决定——同一色值在明暗两种
+// 模式下的明度是反的，下发单个色值必然在某一模式下不可读。
+func toneForIconKey(iconKey string) string {
+	return generated.IntersectionToneByIconKey[strings.TrimSpace(iconKey)]
+}
+
+// typeVisualForIconKey 产出类型图标的远程资源引用（§21.5.2 零发版视觉扩展位）。
+// registry 未登记该 iconKey 的资源时返回 nil，端退回本地 glyph；两种情况端侧表现一致。
+func typeVisualForIconKey(iconKey string) *IntersectionVisualView {
+	asset := strings.TrimSpace(generated.IntersectionIconAssetByIconKey[strings.TrimSpace(iconKey)])
+	if asset == "" {
+		return nil
+	}
+	return &IntersectionVisualView{AssetKind: "icon", ImageURL: asset}
 }
 
 // objectVisualForReason 产出尾部对象视觉（§21.5.1 槽③）：该 reason 指向的主对象封面 /
@@ -609,26 +681,8 @@ func DisplayStatementTextAllowed(r IntersectionReasonView, text string) bool {
 	if rawInteractionStatsPattern.MatchString(primary) {
 		return false
 	}
-	for _, banned := range []string{
-		"共同好友",
-		"都来这里互动过",
-		"在这里互动过",
-		"同读者",
-		"相近主题",
-		"TA的内容",
-		"相关圈子",
-		"我的连接",
-		"我的影响力",
-		"这条记录",
-		"这篇内容",
-		"当前内容",
-		"你和这里",
-		"你和这个圈子",
-		"你们有共同",
-	} {
-		if strings.Contains(primary, banned) {
-			return false
-		}
+	if hasViewerScopedSubject(primary) {
+		return false
 	}
 	target := IntersectionTargetForReason(r)
 	if target == nil || !displayObjectTargetAllowed(target) {
@@ -656,6 +710,7 @@ func normalizedDisplayBinding(value string) string {
 func hideDisplayStatement(r IntersectionReasonView) IntersectionReasonView {
 	r.DisplayBinding = DisplayBindingHidden
 	r.PrimaryText = ""
+	r.PrimaryTextL10nKey = ""
 	r.PrimarySpans = nil
 	r.ActionHints = nil
 	return r
@@ -741,7 +796,7 @@ func hasMeaningfulRepresentativeActor(r IntersectionReasonView) bool {
 		return false
 	}
 	name := strings.TrimSpace(actor.DisplayName)
-	if strings.HasPrefix(name, "一位") || name == "用户" {
+	if isAnonymousActorName(name) {
 		return false
 	}
 	if !isMeaningfulRepresentativeRelationLabel(actor.RelationLabel) {
@@ -761,6 +816,11 @@ func JoinedSpanText(spans []IntersectionTextSpanView) string {
 	return b.String()
 }
 
+// primaryStatementSpansForReason 产出结论句 spans。
+//
+// 模板真相源是 registry.statementTemplates（codegen generated.IntersectionStatementFormByKind），
+// 与 ExplainPrimaryText 共用同一次渲染，因此不再有「文本一份模板、spans 另一份模板」的
+// 双写风险；两者的一致性由 statementRenderForReason 结构性保证。
 func primaryStatementSpansForReason(
 	r IntersectionReasonView,
 	anchor IntersectionPointView,
@@ -769,74 +829,13 @@ func primaryStatementSpansForReason(
 	if r.IntersectionClass == "affinity" {
 		return affinityPrimaryStatementSpansForReason(r, anchor, target)
 	}
-	objectName := renderedObjectNameForReason(r, anchor.SourceRef)
-	if anchor.SourceRef == "commonContact" {
-		objectName = concreteObjectNameForReason(r)
-	}
-	if objectName == "" {
-		// V3 计数降级句（与 countedFallbackPrimaryText 同源模板）：主语 spans 保留
-		// 代表人可点击锚点，谓语 + 纯计数宾语为 plain——join(spans)==primaryText 成立。
-		predicate := countedFallbackPredicate(anchor.SourceRef)
-		phrase := countedFallbackObjectPhrase(anchor.SourceRef, anchor.Count)
-		if predicate == "" || phrase == "" {
-			return nil
-		}
-		subject := representativeSubjectSpans(r, anchor)
-		if len(subject) == 0 {
-			return nil
-		}
-		return append(subject, plainSpan(predicate+phrase))
-	}
-	if target == nil {
+	render := statementRenderForReason(r, anchor, target)
+	if render.usesObject && target == nil {
+		// 句中有对象位却没有可导航 target：这类 spans 无法满足「对象可点击」展示合同，
+		// 整条放弃而不是降级成不可点的纯文本对象（否则用户点不动却看得见）。
 		return nil
 	}
-	subject := representativeSubjectSpans(r, anchor)
-	if len(subject) == 0 {
-		return nil
-	}
-	object := IntersectionTextSpanView{Text: objectName, Role: "object", Target: target}
-	switch anchor.SourceRef {
-	case "sharedFollowees", "commonFollower", "sharedEntityAttention":
-		return append(append(subject, plainSpan("也关注了")), object)
-	case "commonContact":
-		return append(append(append(subject, plainSpan("都是你和")), object), plainSpan("的共同联系人"))
-	case "sharedCircle", "coMemberCircle":
-		return append(append(subject, plainSpan("都加入了")), object)
-	case "coCommented", "sharedDiscussion":
-		action := interactionActionPhraseForReason(r)
-		if action == "" {
-			action = "都讨论过"
-		}
-		return append(append(subject, plainSpan(action)), object)
-	case "coSharedContent":
-		action := interactionActionPhraseForReason(r)
-		if action == "" {
-			action = "都转发过"
-		}
-		return append(append(subject, plainSpan(action)), object)
-	case "coCreatedContent":
-		return append(append(subject, plainSpan("都共创过")), object)
-	case "coVisitedEntity":
-		return append(append(subject, plainSpan("都去过")), object)
-	case "coWishlistedEntity":
-		return append(append(subject, plainSpan("都想去")), object)
-	case "followeeVisited":
-		countedSubject := countedRepresentativeSubject(r, anchor, anchorAggregateCount(r, anchor))
-		countedSpans := splitCountSpan(
-			countedSubject,
-			anchorAggregateCount(r, anchor),
-			countTargetForReason(r, anchor),
-		)
-		return append(append(countedSpans, plainSpan("来过")), object)
-	case "followeeInObject":
-		return append(append(subject, plainSpan("在")), object)
-	case "followeeViewing":
-		return append(append(subject, plainSpan("正在看")), object)
-	case "followeeDiscussedThis":
-		return append(append(subject, plainSpan("正在讨论")), object)
-	default:
-		return nil
-	}
+	return render.spans
 }
 
 func affinityPrimaryStatementSpansForReason(

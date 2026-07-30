@@ -1,12 +1,12 @@
 events:
 - name: AssistantLearningFactAppended
   producer: assistant-service
-  consumers: []
+  consumers:
+  - assistant-learning-projection
   channel: transactional_outbox
   payload_entity: AssistantLearningFact
   payload_fields:
   - eventId
-  - eventVersion
   - appendSequence
   - factType
   - userId

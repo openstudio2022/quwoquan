@@ -2,6 +2,7 @@
   "label": "5K以下",
   "labelEn": "Below 5K",
   "description": "月薪5000元以下",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

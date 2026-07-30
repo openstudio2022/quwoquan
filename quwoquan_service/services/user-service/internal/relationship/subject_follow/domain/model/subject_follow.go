@@ -20,8 +20,8 @@ const (
 	CommandUnfollow = "UnfollowSubject"
 )
 
-// allowedSubjectTypes 与 metadata FollowSubjectType 枚举同源
-// （contracts/metadata/_shared/types.yaml）。
+// allowedSubjectTypes 是 metadata FollowSubjectKind 在 SubjectFollow
+// 能力内的允许子集；persona 关系只归 PersonaRelationship。
 var allowedSubjectTypes = map[string]struct{}{
 	"homepage": {},
 	"circle":   {},

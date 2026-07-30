@@ -74,7 +74,7 @@ void main() {
           .updateSettings(
             themeMode: AppearanceThemeMode.dark,
             fontSizePreset: AppearanceFontSizePreset.xl,
-            applyScope: AppearanceApplyScope.currentSubAccount,
+            applyScope: AppearanceApplyScope.currentPersona,
           );
 
       final state = container.read(appearanceSettingsControllerProvider);
@@ -117,7 +117,7 @@ void main() {
       await notifier.updateSettings(
         themeMode: AppearanceThemeMode.dark,
         fontSizePreset: AppearanceFontSizePreset.lg,
-        applyScope: AppearanceApplyScope.currentSubAccount,
+        applyScope: AppearanceApplyScope.currentPersona,
       );
       expect(
         container.read(appearanceSettingsControllerProvider).hasPendingSync,

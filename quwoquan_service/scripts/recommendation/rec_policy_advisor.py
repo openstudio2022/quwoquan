@@ -4,7 +4,7 @@
 
 读取 services/recommendation-service/contracts/recommendation/recommendation_model_release/policy.yaml 的 guardrails（唯一
 真相源：metric / baselinePreset / minRatio / minSamples / window / action），对照
-按 cohort（preset × segment × bucket × policyVersion）观测到的 KPI，产出结构化
+按 cohort（preset × segment × bucket × policyDigest）观测到的 KPI，产出结构化
 "建议"，并且**至多**把候选策略推进到 product-ops 控制面的 `:simulate`（停在
 simulated 态）。
 
@@ -17,11 +17,11 @@ simulated 态）。
 
 指标来源（二选一）：
   --metrics-file FILE   规范、可单测：预聚合的 cohort 指标 JSON（schema 见下）。
-  --mongodb-uri URI     便捷：从 rec_learning_events 按 labels 聚合（bucket/policyVersion）。
+  --mongodb-uri URI     便捷：从 rec_learning_events 按 labels 聚合（bucket/policyDigest）。
 
 cohort 指标文件 schema：
   {
-    "policyVersion": "v1",
+    "policyDigest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "window": "24h",
     "cohorts": [
       {"preset": "control", "segment": "none", "bucket": "control",
@@ -36,7 +36,7 @@ cohort 指标文件 schema：
   python3 scripts/recommendation/rec_policy_advisor.py --metrics-file cohorts.json --output report.json
   # 仅当人决定让某候选进入 simulated 演练时（仍停在 simulated）：
   python3 scripts/recommendation/rec_policy_advisor.py --metrics-file cohorts.json \
-      --simulate --policy-id policy_discovery_rank_v12 \
+      --simulate --policy-id policy_discovery_rank \
       --product-ops-url http://127.0.0.1:18090
 """
 from __future__ import annotations
@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.request
 from datetime import datetime, timezone
@@ -63,12 +64,12 @@ VERDICT_HOLD = "hold"  # insufficient samples / missing baseline
 VERDICT_REJECT = "reject"  # at least one guardrail floor breached
 
 ACTION_SUGGEST_ONLY = "suggest_only"
+SHA256_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
-def load_guardrails(policy_path: str) -> tuple[str, str, list[dict]]:
+def load_guardrails(policy_path: str) -> tuple[str, list[dict]]:
     with open(policy_path, "r", encoding="utf-8") as f:
         policy = yaml.safe_load(f)
-    policy_version = str(policy.get("policyVersion", ""))
     default_preset = str(policy.get("defaultPreset", ""))
     guardrails = policy.get("guardrails") or []
     normalized = []
@@ -92,7 +93,17 @@ def load_guardrails(policy_path: str) -> tuple[str, str, list[dict]]:
                 "action": action,
             }
         )
-    return policy_version, default_preset, normalized
+    return default_preset, normalized
+
+
+def require_policy_digest(value: object, *, source: str) -> str:
+    digest = str(value or "").strip()
+    if not SHA256_DIGEST_RE.fullmatch(digest):
+        raise ValueError(
+            f"{source}.policyDigest must be the sha256 digest emitted by "
+            "recpolicy.Store.EffectiveHash()"
+        )
+    return digest
 
 
 def cohort_key(c: dict) -> str:
@@ -113,7 +124,8 @@ def find_baseline(cohorts: list[dict], baseline_preset: str) -> dict | None:
     return max(matches, key=lambda c: int(c.get("samples", 0))) if matches else None
 
 
-def evaluate(cohorts: list[dict], guardrails: list[dict], policy_version: str) -> dict:
+def evaluate(cohorts: list[dict], guardrails: list[dict], policy_digest: str) -> dict:
+    policy_digest = require_policy_digest(policy_digest, source="evaluation")
     findings: list[dict] = []
     # Per-candidate roll-up of guardrail outcomes.
     candidate_verdicts: dict[str, dict] = {}
@@ -174,7 +186,7 @@ def evaluate(cohorts: list[dict], guardrails: list[dict], policy_version: str) -
     suggestions = sorted(candidate_verdicts.values(), key=lambda e: e["cohort"])
     return {
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "policyVersion": policy_version,
+        "policyDigest": policy_digest,
         "guardrails": guardrails,
         "findings": findings,
         "suggestions": suggestions,
@@ -184,10 +196,11 @@ def evaluate(cohorts: list[dict], guardrails: list[dict], policy_version: str) -
 def metrics_from_file(path: str) -> tuple[list[dict], str]:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return data.get("cohorts") or [], str(data.get("policyVersion", ""))
+    digest = require_policy_digest(data.get("policyDigest"), source=path)
+    return data.get("cohorts") or [], digest
 
 
-def metrics_from_mongo(uri: str, db_name: str, scenario: str, window_hours: int) -> list[dict]:  # pragma: no cover - needs live mongo
+def metrics_from_mongo(uri: str, db_name: str, scenario: str, window_hours: int) -> tuple[list[dict], str]:  # pragma: no cover - needs live mongo
     from pymongo import MongoClient
     from datetime import timedelta
 
@@ -197,9 +210,15 @@ def metrics_from_mongo(uri: str, db_name: str, scenario: str, window_hours: int)
         since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
         # Group impressions/engagements by the resolved scoring preset label.
         cohorts: dict[str, dict] = {}
+        policy_digests: set[str] = set()
 
         def bucket_of(doc: dict) -> str:
             labels = doc.get("labels") or {}
+            policy_digests.add(
+                require_policy_digest(
+                    labels.get("policyDigest"), source="rec_learning_events.labels"
+                )
+            )
             return str(labels.get("scoringPreset") or labels.get("bucket") or "control")
 
         for doc in coll.find({"eventType": "rec_impression", "scenario": scenario, "createdAt": {"$gte": since}}):
@@ -220,7 +239,12 @@ def metrics_from_mongo(uri: str, db_name: str, scenario: str, window_hours: int)
             imp = max(c["samples"], 1)
             c["metrics"]["ctr"] = c.pop("_clicks") / imp
             c["metrics"]["engagement"] = c.pop("_eng") / imp
-        return list(cohorts.values())
+        if len(policy_digests) != 1:
+            raise ValueError(
+                "rec_learning_events must contain exactly one policyDigest per "
+                f"advisor window; got {sorted(policy_digests)}"
+            )
+        return list(cohorts.values()), next(iter(policy_digests))
     finally:
         client.close()
 
@@ -267,22 +291,26 @@ def main() -> int:
         return 2
 
     try:
-        policy_version, _default_preset, guardrails = load_guardrails(args.policy)
+        _default_preset, guardrails = load_guardrails(args.policy)
     except (OSError, ValueError) as e:
         print(f"FAIL: load guardrails: {e}", file=sys.stderr)
         return 2
 
-    if args.metrics_file:
-        cohorts, file_version = metrics_from_file(args.metrics_file)
-        if file_version:
-            policy_version = file_version
-    elif args.mongodb_uri:
-        cohorts = metrics_from_mongo(args.mongodb_uri, args.db, args.scenario, args.window_hours)
-    else:
-        print("FAIL: provide --metrics-file or --mongodb-uri", file=sys.stderr)
+    try:
+        if args.metrics_file:
+            cohorts, policy_digest = metrics_from_file(args.metrics_file)
+        elif args.mongodb_uri:
+            cohorts, policy_digest = metrics_from_mongo(
+                args.mongodb_uri, args.db, args.scenario, args.window_hours
+            )
+        else:
+            print("FAIL: provide --metrics-file or --mongodb-uri", file=sys.stderr)
+            return 2
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        print(f"FAIL: load metrics: {e}", file=sys.stderr)
         return 2
 
-    report = evaluate(cohorts, guardrails, policy_version)
+    report = evaluate(cohorts, guardrails, policy_digest)
 
     simulate_result = None
     if args.simulate:

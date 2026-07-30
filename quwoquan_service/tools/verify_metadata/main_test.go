@@ -2,12 +2,183 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	"quwoquan_service/internal/metadata/validate"
 	"quwoquan_service/internal/testsupport/contractsview"
 )
+
+func TestInvocationRequestShapeUsesOneCanonicalRequestEntity(t *testing.T) {
+	t.Parallel()
+
+	fields := requestInvocationFieldsDocument{
+		Types: map[string]requestInvocationEntity{
+			"BodylessQuery": {
+				Fields: []requestInvocationField{
+					{Name: "objectId"},
+					{Name: "cursor"},
+					{Name: "revision"},
+					{Name: "accountId"},
+				},
+			},
+			"BodyCommand": {
+				Fields: []requestInvocationField{
+					{Name: "objectId"},
+					{Name: "title"},
+				},
+			},
+		},
+	}
+	testCases := []struct {
+		name      string
+		operation serviceOperationEntityDocument
+		wantIssue string
+	}{
+		{
+			name: "bodyless invocation is fully position-bound",
+			operation: serviceOperationEntityDocument{
+				Operation:       "GetObject",
+				RequestEntity:   "BodylessQuery",
+				RequestBodyKind: "none",
+				RequestBindings: requestInvocationBindings{
+					Path: []requestInvocationBinding{
+						{Name: "objectId", Field: "objectId"},
+					},
+					Query: []requestInvocationBinding{
+						{Name: "cursor", Field: "cursor"},
+					},
+					Header: []requestInvocationBinding{
+						{Name: "If-Match", Field: "revision"},
+					},
+					Injected: []requestInvocationBinding{
+						{Name: "accountId", Field: "accountId"},
+					},
+				},
+			},
+		},
+		{
+			name: "bodyless invocation rejects an unbound field",
+			operation: serviceOperationEntityDocument{
+				Operation:       "GetObject",
+				RequestEntity:   "BodylessQuery",
+				RequestBodyKind: "none",
+				RequestBindings: requestInvocationBindings{
+					Path: []requestInvocationBinding{
+						{Name: "objectId", Field: "objectId"},
+					},
+				},
+			},
+			wantIssue: "request_body_kind=none leaves",
+		},
+		{
+			name: "body operation keeps unbound fields in the body",
+			operation: serviceOperationEntityDocument{
+				Operation:       "UpdateObject",
+				RequestEntity:   "BodyCommand",
+				RequestBodyKind: "object",
+				RequestBindings: requestInvocationBindings{
+					Path: []requestInvocationBinding{
+						{Name: "objectId", Field: "objectId"},
+					},
+				},
+			},
+		},
+		{
+			name: "body operation rejects a fully position-bound entity",
+			operation: serviceOperationEntityDocument{
+				Operation:       "UpdateObject",
+				RequestEntity:   "BodyCommand",
+				RequestBodyKind: "object",
+				RequestBindings: requestInvocationBindings{
+					Path: []requestInvocationBinding{
+						{Name: "objectId", Field: "objectId"},
+					},
+					Query: []requestInvocationBinding{
+						{Name: "title", Field: "title"},
+					},
+				},
+			},
+			wantIssue: "has no body fields",
+		},
+		{
+			name: "binding must reference the request entity",
+			operation: serviceOperationEntityDocument{
+				Operation:       "UpdateObject",
+				RequestEntity:   "BodyCommand",
+				RequestBodyKind: "object",
+				RequestBindings: requestInvocationBindings{
+					Header: []requestInvocationBinding{
+						{Name: "X-Missing", Field: "missing"},
+					},
+				},
+			},
+			wantIssue: "is absent from request_entity",
+		},
+		{
+			name: "request entity must exist",
+			operation: serviceOperationEntityDocument{
+				Operation:       "MissingObject",
+				RequestEntity:   "MissingRequest",
+				RequestBodyKind: "none",
+			},
+			wantIssue: "is absent from fields.yaml",
+		},
+		{
+			name: "bodyless invocation still requires one request entity",
+			operation: serviceOperationEntityDocument{
+				Operation:       "MissingRequestEntity",
+				RequestBodyKind: "none",
+			},
+			wantIssue: "requires request_entity",
+		},
+		{
+			name: "one field cannot have two canonical positions",
+			operation: serviceOperationEntityDocument{
+				Operation:       "DuplicateBinding",
+				RequestEntity:   "BodyCommand",
+				RequestBodyKind: "object",
+				RequestBindings: requestInvocationBindings{
+					Path: []requestInvocationBinding{
+						{Name: "objectId", Field: "objectId"},
+					},
+					Header: []requestInvocationBinding{
+						{Name: "X-Object-Id", Field: "objectId"},
+					},
+				},
+			},
+			wantIssue: "bound to both path and header",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			issues := validateInvocationRequestShape(
+				testCase.operation,
+				"Object",
+				fields,
+			)
+			if testCase.wantIssue == "" {
+				if len(issues) != 0 {
+					t.Fatalf("unexpected issues: %v", issues)
+				}
+				return
+			}
+			if !containsIssue(issues, testCase.wantIssue) {
+				t.Fatalf("issues %v do not contain %q", issues, testCase.wantIssue)
+			}
+		})
+	}
+}
+
+func containsIssue(issues []string, target string) bool {
+	for _, issue := range issues {
+		if strings.Contains(issue, target) {
+			return true
+		}
+	}
+	return false
+}
 
 func TestRepositoryMetadataUsesObjectFirstSingleTrack(t *testing.T) {
 	metadataDir := contractsview.Build(t)

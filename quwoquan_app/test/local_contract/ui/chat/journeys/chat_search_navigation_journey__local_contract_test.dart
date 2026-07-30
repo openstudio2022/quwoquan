@@ -37,6 +37,9 @@ Widget _buildApp() {
   );
   return ProviderScope(
     overrides: [
+      authSessionControllerProvider.overrideWith(
+        TestAuthenticatedSessionController.new,
+      ),
       realtimeConnectionManagerProvider.overrideWith(
         () => RealtimeConnectionNotifier(
           delegateFactory:

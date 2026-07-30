@@ -1,5 +1,6 @@
 import '../operation_request_payload.dart';
 import 'persona_relationship_contracts.dart';
+part '../generated/requests/user/contact_discovery_contracts.requests.g.dart';
 
 abstract interface class ContactDiscoveryCommandWriter {
   Future<ContactDiscoveryResult> initiateContactDiscovery(
@@ -17,40 +18,10 @@ abstract interface class ContactDiscoveryQuery {
   );
 }
 
-final class InitiateContactDiscoveryCommand {
-  InitiateContactDiscoveryCommand({required List<String> hashedPhones})
-    : hashedPhones = List<String>.unmodifiable(
-        hashedPhones
-            .map((value) => value.trim())
-            .where((value) => value.isNotEmpty),
-      ) {
-    if (this.hashedPhones.isEmpty) {
-      throw ArgumentError.value(
-        hashedPhones,
-        'hashedPhones',
-        'must not be empty',
-      );
-    }
-  }
-
-  final List<String> hashedPhones;
-}
-
-final class GetLatestContactDiscoveryQuery {
-  const GetLatestContactDiscoveryQuery();
-}
-
-final class DismissContactDiscoveryCommand {
-  DismissContactDiscoveryCommand({required String discoveryId})
-    : discoveryId = _required(discoveryId, 'discoveryId');
-
-  final String discoveryId;
-}
-
 final class ContactDiscoveryMatchResult {
   const ContactDiscoveryMatchResult({
     required this.hashedPhone,
-    required this.subAccountId,
+    required this.personaId,
     required this.userHandle,
     required this.displayName,
     required this.avatarVersion,
@@ -60,7 +31,7 @@ final class ContactDiscoveryMatchResult {
   });
 
   final String hashedPhone;
-  final String subAccountId;
+  final String personaId;
   final String userHandle;
   final String displayName;
   final String? avatarUrl;
@@ -73,7 +44,7 @@ final class ContactDiscoveryResult {
   const ContactDiscoveryResult({
     required this.id,
     required this.status,
-    required this.matchedSubAccountIds,
+    required this.matchedPersonaIds,
     required this.matchCount,
     required this.matches,
     this.expireAt,
@@ -82,7 +53,7 @@ final class ContactDiscoveryResult {
 
   final String id;
   final String status;
-  final List<String> matchedSubAccountIds;
+  final List<String> matchedPersonaIds;
   final int matchCount;
   final List<ContactDiscoveryMatchResult> matches;
   final DateTime? expireAt;
@@ -95,29 +66,9 @@ final class ContactDiscoveryDismissResult {
   final String status;
 }
 
-CloudOperationRequestPayload encodeInitiateContactDiscoveryCommand(
-  InitiateContactDiscoveryCommand command,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{'hashedPhones': command.hashedPhones},
-  );
-}
-
-CloudOperationRequestPayload encodeGetLatestContactDiscoveryQuery(
-  GetLatestContactDiscoveryQuery query,
-) => const CloudOperationRequestPayload();
-
-CloudOperationRequestPayload encodeDismissContactDiscoveryCommand(
-  DismissContactDiscoveryCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'id': command.discoveryId},
-  );
-}
-
 ContactDiscoveryResult decodeContactDiscoveryResult(Object? response) {
   final root = _object(response, 'ContactDiscoveryResult');
-  final rawIDs = root['matchedSubAccountIds'];
+  final rawIDs = root['matchedPersonaIds'];
   final rawMatches = root['matches'];
   final matchedIDs = rawIDs is List<Object?>
       ? rawIDs
@@ -132,7 +83,7 @@ ContactDiscoveryResult decodeContactDiscoveryResult(Object? response) {
               final capability = item['relationshipCapability'];
               return ContactDiscoveryMatchResult(
                 hashedPhone: _requiredField(item, 'hashedPhone'),
-                subAccountId: _requiredField(item, 'subAccountId'),
+                personaId: _requiredField(item, 'personaId'),
                 userHandle: _requiredField(item, 'userHandle'),
                 displayName: _requiredField(item, 'displayName'),
                 avatarUrl: _optionalString(item['avatarUrl']),
@@ -148,7 +99,7 @@ ContactDiscoveryResult decodeContactDiscoveryResult(Object? response) {
   return ContactDiscoveryResult(
     id: _requiredField(root, 'id'),
     status: _requiredField(root, 'status'),
-    matchedSubAccountIds: matchedIDs,
+    matchedPersonaIds: matchedIDs,
     matchCount: _integer(root['matchCount'], fallback: matches.length),
     matches: matches,
     expireAt: _optionalTimestamp(root['expireAt']),
@@ -190,12 +141,4 @@ int _integer(Object? value, {int fallback = 0}) {
 DateTime? _optionalTimestamp(Object? value) {
   final text = _optionalString(value);
   return text == null ? null : DateTime.parse(text).toUtc();
-}
-
-String _required(String value, String name) {
-  final text = value.trim();
-  if (text.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return text;
 }

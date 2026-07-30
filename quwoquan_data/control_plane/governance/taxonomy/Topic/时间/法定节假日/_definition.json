@@ -2,6 +2,7 @@
   "label": "法定节假日",
   "labelEn": "National Holidays",
   "description": "中国法定节假日",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

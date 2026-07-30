@@ -148,7 +148,7 @@ class _ConnectedContentShareSheetState
   void initState() {
     super.initState();
     _payload = AppForwardPayload(
-      kind: AppForwardSubjectKind.post,
+      kind: AppForwardSubjectKind.contentPost,
       title: widget.template.shareTitle,
       subtitle: widget.template.shareSummary,
       thumbnailUrl: widget.template.coverUrl,
@@ -607,8 +607,10 @@ class _ConnectedContentShareSheetState
       await writer.appendOutboundShare(
         CreateContentOutboundShareCommand(
           postId: widget.template.postId,
-          channel: result.actionId,
-          destinationKind: result.destinationKind!,
+          channel: OutboundShareChannel.fromString(result.actionId),
+          destinationKind: OutboundShareDestinationKind.fromString(
+            result.destinationKind!,
+          ),
           destination: result.destination,
           referralId: referralId,
           providerReceiptId: result.providerReceiptId!,

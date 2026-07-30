@@ -13,8 +13,8 @@
         {
           "userId": "fixture_user_current",
           "displayName": "新同学_260622_6698692",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
           "bio": "",
           "stats": {
             "followingCount": 96,
@@ -138,9 +138,9 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
-          "subAccountRefs": [
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
+          "personaRefs": [
             "fixture_persona_daily",
             "fixture_persona_work"
           ],
@@ -151,7 +151,7 @@
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -160,7 +160,7 @@
               "sourceHash": "sha256:a46dcf5bfd715a61572f6867446d1acb0d3054fc6c235d75413729c96b883650"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_current/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -173,8 +173,8 @@
         {
           "userId": "fixture_user_photo",
           "displayName": "契约摄影师",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
           "bio": "作者主页契约数据。",
           "stats": {
             "followingCount": 96,
@@ -291,9 +291,9 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
-          "subAccountRefs": [],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
+          "personaRefs": [],
           "tags": [
             "author",
             "contact",
@@ -301,7 +301,7 @@
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -310,7 +310,7 @@
               "sourceHash": "sha256:6502fcc381a5f4e985749a0a1521abeb6f7ab54057662738f53979d3400892cc"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_photo/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -323,8 +323,8 @@
         {
           "userId": "fixture_user_travel",
           "displayName": "契约旅行家",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
           "bio": "旅行、天气和行程记录作者。",
           "stats": {
             "followingCount": 96,
@@ -442,9 +442,9 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
-          "subAccountRefs": [],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
+          "personaRefs": [],
           "tags": [
             "author",
             "contact",
@@ -452,7 +452,7 @@
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -461,7 +461,7 @@
               "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_travel/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -474,8 +474,8 @@
         {
           "userId": "fixture_user_article",
           "displayName": "契约撰稿人",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_article/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_article/v1/background.png",
           "bio": "文章、攻略与长图文作者。",
           "stats": {
             "followingCount": 96,
@@ -553,9 +553,9 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_article/background.png",
-          "subAccountRefs": [],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_article/v1/background.png",
+          "personaRefs": [],
           "tags": [
             "article",
             "author",
@@ -563,7 +563,7 @@
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -572,7 +572,7 @@
               "sourceHash": "sha256:a65a83ac7cb4ca02c18108bed8922a7a1c238871fbbd844848afc11ae9427d6c"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_article/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_article/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -585,8 +585,8 @@
         {
           "userId": "fixture_user_friend",
           "displayName": "契约好友",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_friend/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_friend/v1/background.png",
           "bio": "与当前用户互关的同好。",
           "stats": {
             "followingCount": 96,
@@ -706,16 +706,16 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_friend/background.png",
-          "subAccountRefs": [],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_friend/v1/background.png",
+          "personaRefs": [],
           "tags": [
             "contact",
             "direct-chat"
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_friend/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -724,7 +724,7 @@
               "sourceHash": "sha256:8e87b258e620ace60d04fb5111b628106e44786505233f83508351b5a1b1aaf7"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_friend/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_friend/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -737,8 +737,8 @@
         {
           "userId": "fixture_user_weekend_1",
           "displayName": "契约同伴一",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_weekend_1/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_weekend_1/v1/background.png",
           "bio": "周末群成员，也是联系人同好。",
           "stats": {
             "followingCount": 96,
@@ -864,9 +864,9 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_1/background.png",
-          "subAccountRefs": [],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_1/v1/background.png",
+          "personaRefs": [],
           "tags": [
             "contact",
             "group-member",
@@ -874,7 +874,7 @@
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -883,7 +883,7 @@
               "sourceHash": "sha256:f70940c147e344f69f607bf39c408003f44df3bf0f67b8de5243f77c11345361"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_1/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_1/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -896,8 +896,8 @@
         {
           "userId": "fixture_user_weekend_2",
           "displayName": "契约同伴二",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_weekend_2/background.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_weekend_2/v1/background.png",
           "bio": "周末群成员，提供路线建议。",
           "stats": {
             "followingCount": 96,
@@ -1027,9 +1027,9 @@
               ]
             }
           ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_2/background.png",
-          "subAccountRefs": [],
+          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_2/v1/background.png",
+          "personaRefs": [],
           "tags": [
             "circle-owner",
             "contact",
@@ -1037,7 +1037,7 @@
           ],
           "media": {
             "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/avatar.png",
+              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 512,
@@ -1046,7 +1046,7 @@
               "sourceHash": "sha256:8a3ae06e776a6441eb747732d62cd5562b2d0cd1e7d5d8f125407d252bce583d"
             },
             "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_2/background.png",
+              "objectKey": "media/background/s/archived-avatar/user/fixture_user_weekend_2/v1/background.png",
               "version": 1,
               "mimeType": "image/png",
               "width": 1600,
@@ -1139,7 +1139,7 @@
           "fixture_user_current",
           "fixture_user_photo"
         ],
-        "subAccountIds": [
+        "personaIds": [
           "fixture_persona_daily",
           "fixture_persona_work"
         ]

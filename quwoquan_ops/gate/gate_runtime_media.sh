@@ -87,7 +87,6 @@ echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose co
   cd "${ROOT_DIR}"
   python3 -m unittest \
     quwoquan_ops.tests.local_contract.test_environment_patrol_smoke__local_contract_test \
-    quwoquan_ops.tests.local_contract.test_local_gamma_media__local_contract_test \
     quwoquan_ops.tests.local_contract.test_runtime_media_t4_evidence__local_contract_test \
     quwoquan_ops.tests.local_contract.test_video_playback_canary__local_contract_test \
     quwoquan_ops.tests.local_contract.test_prod_rollout_stage__local_contract_test

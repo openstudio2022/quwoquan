@@ -11,6 +11,17 @@ errors:
 - code: USER.AUTH.credential_conflict
   kind: AUTH
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - BindCarrierPhoneCredential
+    - BindPhoneCredential
+    - CompleteFederatedPhoneBinding
+    - user.account_session.LoginOneTap
+    - user.account_session.LoginWithAlipay
+    - user.account_session.LoginWithPhone
+    - user.account_session.LoginWithQq
+    - user.account_session.LoginWithWechat
   http_status: 409
   recovery:
     action: surface
@@ -24,6 +35,10 @@ errors:
 - code: USER.AUTH.last_credential
   kind: AUTH
   reason: constraint_violation
+  emitted_by:
+  - surface: http
+    operations:
+    - UnbindCredential
   http_status: 400
   recovery:
     action: surface

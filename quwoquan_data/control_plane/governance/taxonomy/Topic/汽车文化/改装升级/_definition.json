@@ -2,6 +2,7 @@
   "label": "改装升级",
   "labelEn": "Car Modification",
   "description": "汽车改装与升级",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

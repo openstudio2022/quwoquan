@@ -1,0 +1,12 @@
+{
+  "label": "锡安国家公园",
+  "labelEn": "Zion National Park",
+  "description": "峡谷徒步与垂直岩壁",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

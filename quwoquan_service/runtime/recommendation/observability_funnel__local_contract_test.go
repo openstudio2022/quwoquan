@@ -97,8 +97,7 @@ func TestRecordServedItemsByAttribution(t *testing.T) {
 		"travel_photography",
 		"data_engineering",
 		"collab_i2i",
-		"rank-v1",
-		"reason-v1",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"none",
 		"unknown",
 	}
@@ -109,7 +108,7 @@ func TestRecordServedItemsByAttribution(t *testing.T) {
 		ContentVertical: "travel_photography",
 		SupplySource:    "data_engineering",
 		RecallPath:      "collab_i2i",
-	}}, "discovery", "rank-v1", "reason-v1", "")
+	}}, "discovery", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "")
 
 	if got := testutil.ToFloat64(feedServedByAttributionTotal.WithLabelValues(labels...)) - before; got != 1 {
 		t.Fatalf("served attribution delta = %v, want 1", got)
@@ -124,8 +123,7 @@ func TestRecordBehaviorIngest_AttributionLabels(t *testing.T) {
 		"travel_photography",
 		"data_engineering",
 		"collab_u2i",
-		"rank-v2",
-		"reason-v2",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"fact",
 		"unknown",
 	}
@@ -138,8 +136,7 @@ func TestRecordBehaviorIngest_AttributionLabels(t *testing.T) {
 		ContentVertical:   "Travel_Photography",
 		SupplySource:      "Data_Engineering",
 		RecallPath:        "Collab_U2I",
-		RankingVersion:    "Rank-V2",
-		ReasonVersion:     "Reason-V2",
+		PolicyDigest:      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		IntersectionClass: "Fact",
 	})
 

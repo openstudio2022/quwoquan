@@ -198,8 +198,7 @@ void main() {
       final page = await repo.listDiscoveryFeedPage(category: 'all');
       expect(page.feedRequestId, isNotNull);
       expect(page.feedRequestId, isNotEmpty);
-      expect(page.rankingVersion, isNotEmpty);
-      expect(page.reasonVersion, isNotEmpty);
+      expect(page.policyDigest, isNotEmpty);
     });
 
     test('listDiscoveryFeedPage 回显端侧传入的 feedRequestId', () async {
@@ -245,28 +244,6 @@ void main() {
         () async => await repo.getPost(postId: 'nonexistent'),
         throwsException,
       );
-    });
-
-    test('updatePostSettings / promotePostToWork 返回结果', () async {
-      const existingPostId = 'fixture_photo_001';
-      final settings = await repo.updatePostSettings(
-        postId: existingPostId,
-        body: UpdatePostSettingsRequestWire.fromMap({
-          'assistantUsePolicy': 'exclude',
-        }),
-      );
-      final promoted = await repo.promotePostToWork(
-        postId: existingPostId,
-        body: PromotePostToWorkRequestWire.fromMap({
-          'contentType': 'image',
-          'title': '整理后的作品',
-        }),
-      );
-
-      expect(settings, isA<PostBaseDto>());
-      expect(settings.id, existingPostId);
-      expect(promoted, isA<PostBaseDto>());
-      expect(promoted.id, existingPostId);
     });
 
     test('getAppConfig 返回 feature flags 与 gray release 结构', () async {
@@ -327,12 +304,12 @@ void main() {
 
     test('getPost 支持用户主页互动 targetContentId 关联内容', () async {
       final image = await repo.getPost(postId: 'nature_photographer_p1');
-      final video = await repo.getPost(postId: 'nature_photographer_v2');
+      final video = await repo.getPost(postId: 'nature_photographer_video');
       final article = await repo.getPost(postId: 'nature_photographer_a2');
 
       expect(image.post.id, 'nature_photographer_p1');
       expect(image.post.displayFormat, 'image');
-      expect(video.post.id, 'nature_photographer_v2');
+      expect(video.post.id, 'nature_photographer_video');
       expect(video.post.isVideoLike, isTrue);
       expect(article.post.id, 'nature_photographer_a2');
       expect(article.post.isArticleLike, isTrue);
@@ -375,26 +352,6 @@ void main() {
     test('getCounters 返回计数器', () async {
       final counters = await repo.getCounters(postId: 'test');
       expect(counters, isA<PostEngagementCounters>());
-    });
-
-    test('接口包含 identity create-flow 关键 API 方法', () {
-      final methods = <String>[
-        'createPost',
-        'publishPost',
-        'updatePostSettings',
-        'promotePostToWork',
-        'updatePost',
-        'deletePost',
-      ];
-      expect(
-        methods,
-        containsAll(<String>[
-          'createPost',
-          'publishPost',
-          'updatePostSettings',
-          'promotePostToWork',
-        ]),
-      );
     });
   });
 

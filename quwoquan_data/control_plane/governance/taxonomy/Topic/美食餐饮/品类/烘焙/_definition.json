@@ -2,6 +2,7 @@
   "label": "烘焙",
   "labelEn": "Bakery",
   "description": "面包蛋糕饼干等烘焙",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

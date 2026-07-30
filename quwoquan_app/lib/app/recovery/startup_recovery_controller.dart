@@ -88,6 +88,11 @@ final class StartupRecoveryController extends ChangeNotifier {
         latestBuild: result.latestBuild,
         updateUrl: result.updateUrl,
         recoveryUrl: result.recoveryUrl,
+        trustedBaseUrls: <String>[
+          nativeContext.recoveryBaseUrl,
+          nativeContext.publicWebUrl,
+          nativeContext.appDownloadBaseUrl,
+        ],
       )) {
         _visibleCheckTimer?.cancel();
         notifyListeners();

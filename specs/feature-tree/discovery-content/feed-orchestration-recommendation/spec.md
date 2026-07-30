@@ -44,9 +44,10 @@
 - [`quality-score-cold-start`](./quality-score-cold-start/spec.md)：在缺少用户行为时以内容质量分和受控先验排序，并在反馈到达后逐步让位于个性化信号。
 - [`ranking-calibration`](./ranking-calibration/spec.md)：以点击、完成和负反馈校准排序分，使预测分与真实结果在声明窗口内对齐。
 - [`realtime-feed-baseline`](./realtime-feed-baseline/spec.md)：统一 sessionId / feedRequestId 归因。
+- [`streaming-feed-performance`](./streaming-feed-performance/spec.md)：统一首屏、长滚动、弱网、峰值、长会话与视频书的有界资源、恢复终态和 typed 性能证据。
 - [`time-decay-contextual-ranking`](./time-decay-contextual-ranking/spec.md)：按时间衰减、时段、季节和事件上下文调整候选分数，同时保持策略版本可解释。
 - [`travel-vertical-recommendation`](./travel-vertical-recommendation/spec.md)：推荐召回、fallback 和交集理由通道均使用同一 channel/vertical 口径。
-- [`unified-items-cursor`](./unified-items-cursor/spec.md)：feed 查询快照必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `QuerySnapshot` 为准。
+- [`unified-items-cursor`](./unified-items-cursor/spec.md)：feed 查询快照遵守 runtime-client-foundation 的本地缓存规则，只从 content-service canonical Post/cursor contract 派生且不维护对象策略台账。
 
 ## 5. 能力要求
 
@@ -69,14 +70,21 @@
 - 时间：首屏、翻页、刷新、续接、曝光窗口、疲劳窗口与内容新鲜度按统一 cursor/session 语义解释。
 - 交集：feed 卡片、交集 spotlight、对象主页和我的交集收件箱都只消费服务端 `IntersectionReason.primaryText` 与同源交集字段，禁止本地拼装第二套交集理由。
 - 旅行垂类：`subCategory=travel` 归一为 `vertical=travel_photography`，召回和 fallback 都不得混入非旅行内容。
-- P0+ 观测归因闭环：feed 下发、App 行为上报、content-service raw event、learning context 和 Prometheus 分桶指标统一携带 `feedRequestId/channelId/contentVertical/supplySource/recallPath/rankingVersion/reasonVersion/intersectionSourceRef/intersectionClass`，支持按首页、旅行、精品、UGC、数据工程、召回路径和交集类别评价效果。
+- P0+ 观测归因闭环：feed 下发、App 行为上报、content-service raw event、learning context 和 Prometheus 分桶指标统一携带 `feedRequestId/channelId/contentVertical/supplySource/recallPath/policyDigest/intersectionSourceRef/intersectionClass`，支持按首页、旅行、精品、UGC、数据工程、召回路径、唯一策略摘要和交集类别评价效果。
 - `GET /content/feed` 是内容 feed 读取入口；`sort=recommend`、cursor、sessionId、feedRequestId 必须保持端云一致。
 - `POST /content/behaviors` 是行为回流入口
 - 新增行为字段与 action 必须 metadata-first
 - 端侧统一上报通道、分级采样、clientEventId 幂等与 feedRequestId 归因见 L3 `feedback-ingestion-sampling`。
 - 推荐排序运行时只通过 `runtime/recommendation` 引擎与 `recommendation/recommendation/recommendation_model_release/policy.yaml`（或其 codegen 产物）消费策略，禁止在 UI、Repository 或 intersection 另起 ranker。
-- 推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率；P0+ 归因指标必须能按 `channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class` 分桶。
+- 推荐 SLO/KPI 可观测：延迟、空 feed、fallback、重复曝光率、CTR、停留、完成率、负反馈率；P0+ 归因指标必须能按 `channel/vertical/supply_source/recall_path/policy_digest/intersection_class` 分桶。
 - `科技 / 汽车` 与校园、旅行、摄影一致，手机端统一双列发现流；文章、长评、口碑等强解释内容通过详情页与对象页承接，而不是在首页单独切一套 full-span 主布局。
+
+<a id="req-003"></a>
+### REQ-003 首页流式性能与可用性端云闭环
+
+- 首屏、翻页、刷新、视频准备、弱网恢复与长会话必须共用 canonical feed/media/cache/runtime-governance 契约，不在 UI 、Repository 或环境装配中建立第二真相源。
+- 服务端 query 放大、数据库扫描、并发、缓存与依赖时间，以及 App 列表窗口、图片字节、视频解码槽位和长会话集合均须有明确上限与可观测退出路径。
+- 性能验收只使用 typed telemetry、真实 Remote composition、对象级 typed double 与受控真机/环境证据；不以源码 grep、空门禁、fixture 或无分母的样本代替可用性证明。
 
 ## 6. 契约与依赖
 
@@ -99,3 +107,12 @@
 - THEN 行为上报（impression/click/dwell/like/favorite/share/dislike/report）可进入统一行为契约，强负反馈只影响未来窗口。
 - THEN 端侧反馈经单一 BehaviorReporter 通道分级上报（强信号即时、弱信号采样合并），clientEventId 幂等、feedRequestId 归因闭环，不双通道重复上报。
 - THEN 推荐 SLO/KPI 有真相源，至少覆盖 feed 延迟、空结果率、fallback 率、重复曝光率、CTR、停留、完成率与负反馈率。
+
+<a id="sit-002"></a>
+### SIT-002 首页流式性能与可用性 SIT
+
+- GIVEN 首页在正常网络、受控弱网、并发峰值、持续滚动与长会话中消费真实 Remote feed 与 media。
+- WHEN 用户首刷、翻页、跨频道、打开视频书、切集、前后台恢复或离线重入。
+- THEN 请求、状态、内存、磁盘、图片和视频资源全部有界，取消或过期 generation 不回写，已有内容不被分页失败遮挡。
+- AND 依赖故障在声明预算内返回 canonical failure 或明确允许的缓存/降级结果，不无限等待、重试放大或伪造成功。
+- AND typed telemetry 能以分母还原首屏、滚动、视频 QoE、缓存、ANR/卡顿与内存压力，并与 SLO/告警同源。

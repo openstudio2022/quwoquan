@@ -23,6 +23,13 @@ from content.execution.queue.core import _load_jobs
 _FLEET_TASK_STATUSES = frozenset(
     {"ready", "processing", "retry_wait", "succeeded", "dead"}
 )
+_FLEET_ACCEPTED_CONTENT_STATUSES = frozenset(
+    {
+        "MEASURED",
+        "GATE_BLOCK_NO_COMMERCIAL_BATCH",
+        "GATE_BLOCK_INCOMPLETE_COMMERCIAL_BATCH",
+    }
+)
 _STACKCTL_PATH = REPO_ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
     QueueJobStage.AUTHOR: frozenset({"build_homepage", "post_author"}),
@@ -60,6 +67,8 @@ class ReliableTaskFleetReport:
     total: int
     succeeded: int
     outcomes: tuple[ReliableTaskFleetOutcome, ...]
+    passed: bool = True
+    accepted_content_throughput_status: str = "MEASURED"
 
     @classmethod
     def from_document(cls, value: object) -> "ReliableTaskFleetReport":
@@ -73,12 +82,28 @@ class ReliableTaskFleetReport:
         raw_outcomes = value.get("taskOutcomes")
         if not isinstance(raw_outcomes, list):
             raise ValueError("ReliableTask fleet report taskOutcomes must be an array")
+        passed = value.get("passed")
+        accepted_status = str(
+            value.get("acceptedContentThroughputStatus") or ""
+        ).strip()
+        if not isinstance(passed, bool):
+            raise ValueError("ReliableTask fleet report passed must be a boolean")
+        if accepted_status not in _FLEET_ACCEPTED_CONTENT_STATUSES:
+            raise ValueError(
+                "ReliableTask fleet report accepted throughput status is invalid"
+            )
         outcomes = tuple(ReliableTaskFleetOutcome.from_document(item) for item in raw_outcomes)
         if total < 1 or succeeded < 0 or len(outcomes) != total:
             raise ValueError("ReliableTask fleet report outcome count is invalid")
         if len({outcome.job_id for outcome in outcomes}) != len(outcomes):
             raise ValueError("ReliableTask fleet report contains duplicate job outcomes")
-        return cls(total=total, succeeded=succeeded, outcomes=outcomes)
+        return cls(
+            total=total,
+            succeeded=succeeded,
+            outcomes=outcomes,
+            passed=passed,
+            accepted_content_throughput_status=accepted_status,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -511,11 +536,6 @@ def run_reliabletask_fleet(
         label="reliabletask_fleet_report",
     )
     decoded = ReliableTaskFleetReport.from_document(report)
-    if stage is QueueJobStage.PUBLISH and report.get("passed") is not True:
-        raise RuntimeError(
-            "ReliableTask publish 未形成 accepted commercial throughput："
-            f"{report.get('acceptedContentThroughputStatus')}"
-        )
     return decoded
 
 

@@ -24,7 +24,7 @@ final followingSubjectsProvider = FutureProvider<List<FollowingSubjectResult>>((
 ) async {
   final slice = await ref
       .watch(followingSubjectQueryProvider)
-      .listFollowingSubjects(const ListFollowingSubjectsQuery(limit: 20));
+      .listFollowingSubjects(ListFollowingSubjectsQuery(limit: 20));
   return slice.items;
 });
 
@@ -117,7 +117,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
                         final item = items[index];
                         return FollowingSubjectAvatarTile(
                           key: ValueKey<String>(
-                            'following-subject-${item.subjectType}-${item.subjectId}',
+                            'following-subject-${item.subjectType.wireValue}-${item.subjectId}',
                           ),
                           item: item,
                           isDark: isDark,
@@ -147,21 +147,27 @@ class FollowingSubjectStrip extends ConsumerWidget {
       onSubjectOpen!(item);
     } else {
       switch (item.subjectType) {
-        case 'user':
+        case FollowSubjectKind.persona:
           context.push(
-            AppRoutePaths.userProfile(username: item.targetObjectId),
+            AppRoutePaths.userProfile(userHandle: item.targetObjectId),
           );
-        case 'circle':
+        case FollowSubjectKind.circle:
           context.push(
             AppRoutePaths.circleDetail(id: item.targetObjectId),
             extra: const CircleDetailPageRouteExtra(
               referralSource: ReferralSource.organicFeed,
             ),
           );
-        case 'homepage':
+        case FollowSubjectKind.homepage:
           context.push(AppRoutePaths.homepageDetail(id: item.targetObjectId));
-        default:
-          return;
+        case FollowSubjectKind.location:
+          context.push(
+            AppRoutePaths.locationPlaceLanding(
+              placeId: item.targetObjectId,
+              name: item.displayName,
+              source: ReferralSource.organicFeed.name,
+            ),
+          );
       }
     }
     // R20/R21 · 关注频道点击埋点（红点命中时带 unread 信号，驱动频道价值漏斗）。
@@ -174,7 +180,7 @@ class FollowingSubjectStrip extends ConsumerWidget {
                 ? 'open_subject_with_unread'
                 : 'open_subject',
             pageName: 'HomePage',
-            targetType: item.subjectType,
+            targetType: item.subjectType.wireValue,
             targetKey: item.subjectId,
           ),
     );
@@ -226,7 +232,7 @@ class FollowingSubjectAvatarTile extends StatelessWidget {
                   bottom: -AppSpacing.two,
                   child: _FollowingSubjectTypeBadge(
                     key: ValueKey<String>(
-                      'following-subject-type-${item.subjectType}-${item.subjectId}',
+                      'following-subject-type-${item.subjectType.wireValue}-${item.subjectId}',
                     ),
                     type: item.subjectType,
                     isDark: isDark,
@@ -268,7 +274,7 @@ class _FollowingSubjectTypeBadge extends StatelessWidget {
     required this.isDark,
   });
 
-  final String type;
+  final FollowSubjectKind type;
   final bool isDark;
 
   @override
@@ -301,28 +307,28 @@ class _FollowingSubjectTypeBadge extends StatelessWidget {
 
   Color _accentColor(BuildContext context) {
     return switch (type) {
-      'user' => AppColors.iosAccent(context),
-      'circle' => AppColors.success,
-      'homepage' => AppColors.warning,
-      _ => AppColors.iosAccent(context),
+      FollowSubjectKind.persona => AppColors.iosAccent(context),
+      FollowSubjectKind.circle => AppColors.success,
+      FollowSubjectKind.homepage => AppColors.warning,
+      FollowSubjectKind.location => AppColors.iosSystemCyanAccent,
     };
   }
 
   IconData get _icon {
     return switch (type) {
-      'user' => CupertinoIcons.person_fill,
-      'circle' => CupertinoIcons.person_2_fill,
-      'homepage' => CupertinoIcons.location_solid,
-      _ => CupertinoIcons.question_circle,
+      FollowSubjectKind.persona => CupertinoIcons.person_fill,
+      FollowSubjectKind.circle => CupertinoIcons.person_2_fill,
+      FollowSubjectKind.homepage => CupertinoIcons.house_fill,
+      FollowSubjectKind.location => CupertinoIcons.location_solid,
     };
   }
 
   String get _label {
     return switch (type) {
-      'user' => ContentText.followingSubjectTypeUser,
-      'circle' => ContentText.followingSubjectTypeCircle,
-      'homepage' => ContentText.followingSubjectTypeObject,
-      _ => ContentText.followingSubjectTypeUser,
+      FollowSubjectKind.persona => ContentText.followingSubjectTypeUser,
+      FollowSubjectKind.circle => ContentText.followingSubjectTypeCircle,
+      FollowSubjectKind.homepage ||
+      FollowSubjectKind.location => ContentText.followingSubjectTypeObject,
     };
   }
 }
@@ -352,7 +358,7 @@ class _FollowingSubjectAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = item.avatarUrl.isNotEmpty ? item.avatarUrl : item.coverUrl;
-    final radius = item.subjectType == 'user'
+    final radius = item.subjectType == FollowSubjectKind.persona
         ? AppSpacing.radiusTwentyEight
         : AppSpacing.radiusTen;
     return ClipRRect(
@@ -391,12 +397,12 @@ class _FollowingSubjectAvatar extends StatelessWidget {
     );
   }
 
-  IconData _fallbackIcon(String type) {
+  IconData _fallbackIcon(FollowSubjectKind type) {
     return switch (type) {
-      'user' => CupertinoIcons.person_fill,
-      'circle' => CupertinoIcons.person_2_fill,
-      'homepage' => CupertinoIcons.location_solid,
-      _ => CupertinoIcons.question_circle,
+      FollowSubjectKind.persona => CupertinoIcons.person_fill,
+      FollowSubjectKind.circle => CupertinoIcons.person_2_fill,
+      FollowSubjectKind.homepage => CupertinoIcons.house_fill,
+      FollowSubjectKind.location => CupertinoIcons.location_solid,
     };
   }
 }

@@ -16,7 +16,7 @@ func writeControlPlaneUnauthorized(w http.ResponseWriter, r *http.Request, debug
 	rterr.WriteHTTPError(
 		w,
 		rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleOps, rterr.KindUser, "unauthorized"),
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "unauthorized"),
 			"请先登录",
 			debugMessage,
 		),

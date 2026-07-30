@@ -2,6 +2,7 @@
   "label": "Reaction反应",
   "labelEn": "Reaction Video",
   "description": "对内容做出即时反应",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

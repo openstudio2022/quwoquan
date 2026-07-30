@@ -28,17 +28,17 @@ func TestHotPathClosedSubjectCannotRematerializeState(t *testing.T) {
 	ctx := context.Background()
 
 	if err := hotPath.ProcessSignal(ctx, BehaviorSignal{
-		UserID:       "closed-user",
-		SessionID:    "session-1",
+		UserID:        "closed-user",
+		SessionID:     "session-1",
 		ClientEventID: "event-1",
-		ContentID:    "post-1",
-		Action:       "like",
-		Tags:         []string{"travel"},
+		ContentID:     "post-1",
+		Action:        "like",
+		Tags:          []string{"travel"},
 	}); err != nil {
 		t.Fatalf("closed-subject signal should be acknowledged: %v", err)
 	}
 	accepted, err := hotPath.AcceptEvent(ctx, BehaviorSignal{
-		UserID:       "closed-user",
+		UserID:        "closed-user",
 		ClientEventID: "event-1",
 	})
 	if err != nil {

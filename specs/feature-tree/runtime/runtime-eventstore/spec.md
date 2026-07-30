@@ -43,6 +43,7 @@ MongoDB events 集合持久化领域事件（aggregate_id, event_type, payload, 
 ### REQ-002 事件 schema 必须与 events.yaml 定义一致
 
 - 事件 schema 必须与 events.yaml 定义一致。
+- 每个事件必须用 `payload_entity` 引用 canonical payload shape；outbox 事件必须至少声明一个 consumer，其他无 consumer 事件必须声明 `no_consumer_reason`，且 consumer 与 reason 不得同时存在。
 - 事件 payload 必须遵循 fields.yaml 的 classification 策略。
 - 事件必须包含 OTEL traceID。
 
@@ -60,6 +61,7 @@ MongoDB events 集合持久化领域事件（aggregate_id, event_type, payload, 
 - GIVEN 执行“runtime eventstore 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“runtime eventstore 能力”对应动作。
 - THEN 直属 Story 共同交付“MongoDB events 集合持久化领域事件（aggregate_id, event_type, payload, timestamp, trace_id）”，失败终态可区分且不产生伪成功事实。
+- THEN 任一事件缺失/悬空 `payload_entity`、outbox 无 consumer、无 consumer 且无 reason 或 consumer/reason 冲突时，metadata compiler 全局失败，不保留服务特例。
 
 ## 8. 开放事项
 

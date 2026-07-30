@@ -1,7 +1,7 @@
 # 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
 services:
   content-service:
-    image: "${QWQ_COMPOSE_CONTENT_SERVICE_IMAGE:-localhost/quwoquan_service_content-service:latest}"
+    image: "${QWQ_COMPOSE_CONTENT_SERVICE_IMAGE:?fixed content-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/content-service/build/Dockerfile
@@ -14,7 +14,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_CONTENT_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       MONGO_URI: "${QWQ_COMPOSE_MONGO_URI:-mongodb://mongodb:27017}"
       REPORT_DATABASE_URL: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
       CONTENT_REPORT_ACCOUNT_BACKFILL_FILE: /etc/qwq-config/report-account-backfill.json
@@ -26,16 +26,16 @@ services:
       CONTENT_OSS_REGION: "${QWQ_COMPOSE_OBJECT_STORAGE_REGION:?QWQ_COMPOSE_OBJECT_STORAGE_REGION is required}"
       CONTENT_OSS_ACCESS_KEY_ID: "${QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID:?QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID is required}"
       CONTENT_OSS_ACCESS_KEY_SECRET: "${QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET:?QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET is required}"
-      CONTENT_CDN_DOMAIN: "${QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN:?QWQ_COMPOSE_OBJECT_STORAGE_CDN_DOMAIN is required}"
+      CONTENT_MEDIA_DELIVERY_BASE_URL: "${QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL:?QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL is required}"
+      CONTENT_MEDIA_UPLOAD_BASE_URL: "${QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL:?QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL is required}"
       CONTENT_CDN_SIGN_KEY: "${QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY:?QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY is required}"
       CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET: "${CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET:?CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET is required}"
-      SSL_CERT_FILE: /etc/ssl/local-ca/object-storage-ca.crt
       SEARCH_ES_ENABLED: "${QWQ_COMPOSE_SEARCH_ES_ENABLED:-true}"
       SEARCH_ES_ENDPOINTS: "${QWQ_COMPOSE_SEARCH_ES_ENDPOINTS:-http://elasticsearch:9200}"
       REC_MODEL_SERVICE_ENABLED: "true"
       REC_MODEL_SERVICE_URL: http://recommendation-service:8000
-      # N2-2 per-env 推荐 policy：gamma-local overlay 开启 objectCards
-      # （30s 热更；overlay 与 metadata 的差异范围由 verify_gamma_policy_overlay.py 门禁）。
+      # 推荐 policy 只消费 content-service canonical resource；30s 热更仍执行
+      # validate-before-swap，发布身份由内容摘要承担。
       QWQ_REC_POLICY_PATH: /etc/qwq-rec-policy/policy.yaml
       # Non-prod binds ext.embed.protocol_fixture; compose still injects fixture
       # materials for Binding descriptor parity. Prod alone uses openai_compatible.
@@ -67,7 +67,6 @@ services:
       - "${QWQ_COMPOSE_CONTENT_PORT:-19220}:18080"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
-      - ${QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE:?QWQ_COMPOSE_OBJECT_STORAGE_CA_FILE is required}:/etc/ssl/local-ca/object-storage-ca.crt:ro
       - ${QWQ_COMPOSE_REC_POLICY_SOURCE:?QWQ_COMPOSE_REC_POLICY_SOURCE is required}:/etc/qwq-rec-policy/policy.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1"]

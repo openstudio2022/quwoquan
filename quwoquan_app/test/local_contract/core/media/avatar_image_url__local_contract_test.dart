@@ -3,7 +3,7 @@ import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 
 void main() {
   const avatarKey =
-      'media/avatar/s/avatar-primary-0001/persona/persona-primary/avatar.png';
+      'media/avatar/s/avatar-primary-0001/persona/persona-primary/v1/avatar.png';
 
   group('resolveAvatarImageUrl', () {
     test('未注入运行时端点时不构造头像网络候选', () {
@@ -24,14 +24,31 @@ void main() {
       );
     });
 
-    test('显式版本覆盖输入 query 中陈旧版本', () {
+    test('显式版本与路径内唯一版本不一致时 fail-closed', () {
       expect(
         resolveAvatarImageUrl(
-          'https://avatar.example.com/$avatarKey?v=3',
+          'https://avatar.example.com/media/avatar/s/avatar-primary-0001/persona/persona-primary/v3/avatar.png',
           avatarCdnBaseUrl: 'https://avatar.example.com',
           avatarVersion: 18,
         ),
-        'https://avatar.example.com/$avatarKey?v=18',
+        isEmpty,
+      );
+    });
+
+    test('拒绝无版本路径与 query 版本信封', () {
+      expect(
+        resolveAvatarImageUrl(
+          'media/avatar/s/avatar-primary-0001/persona/persona-primary/avatar.png',
+          avatarCdnBaseUrl: 'https://avatar.example.com',
+        ),
+        isEmpty,
+      );
+      expect(
+        resolveAvatarImageUrl(
+          '$avatarKey?v=1',
+          avatarCdnBaseUrl: 'https://avatar.example.com',
+        ),
+        isEmpty,
       );
     });
 

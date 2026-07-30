@@ -7,6 +7,7 @@ events:
   - chat-service
   - content-service
   channel: event_store
+  payload_entity: PersonaRelationship
   payload_fields:
   - eventId
   - pairId
@@ -22,6 +23,7 @@ events:
   - recommendation-engine
   - content-service
   channel: event_store
+  payload_entity: PersonaRelationship
   payload_fields:
   - eventId
   - pairId
@@ -39,6 +41,7 @@ events:
   - recommendation-engine
   - content-service
   channel: event_store
+  payload_entity: PersonaRelationship
   payload_fields:
   - eventId
   - pairId

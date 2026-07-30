@@ -27,12 +27,12 @@
 <a id="req-001"></a>
 ### REQ-001 chat-list-local-cache — 会话列表本地缓存与时间戳驱动端云同步
 
-- 会话对象缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `Conversation` 为准。
+- 会话对象缓存必须遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，并只从 chat-service canonical Conversation projection 派生，不维护对象策略台账。
 
 <a id="req-002"></a>
-### REQ-002 会话对象缓存必须遵守 runtime-client-foundation/local-cache-architecture，对象策略以 object-cache-policy.yaml 中 Conversation 为准
+### REQ-002 会话对象缓存遵守统一派生缓存边界
 
-- 会话对象缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `Conversation` 为准。
+- 会话对象缓存必须遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，字段只引用 chat-service canonical [`chat_conversation`](../../../../../quwoquan_service/services/chat-service/contracts/chat/conversation/projections/chat_conversation.yaml) projection。
 - 群头像以 `groupAvatarVersion` 失效，成员头像宫格以 `membersRosterRevision` 失效；头像字节清理不得删除会话列表投影。
 - UI 层消费统一缓存输出语义，至少能区分本地命中、后台刷新、离线、pendingWrite。
 
@@ -47,7 +47,7 @@
 
 - GIVEN 发起或接收消息的用户具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“chat-list-local-cache — 会话列表本地缓存与时间戳驱动端云同步”对应的公开行为。
-- THEN 会话对象缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `Conversation` 为准。
+- THEN 会话对象缓存遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，且不把派生缓存作为 Conversation 写真相源。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

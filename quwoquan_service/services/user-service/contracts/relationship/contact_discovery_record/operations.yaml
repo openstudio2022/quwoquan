@@ -1,203 +1,214 @@
-description: 通讯录发现——哈希匹配已注册用户，结果只暴露 subAccountId
+description: 通讯录发现——哈希匹配已注册用户，结果只暴露 personaId
 api_routes:
-- method: POST
-  path: /owner/contact-discovery
-  operation: InitiateContactDiscovery
-  actor: account
-  application:
-    kind: command
-    facet: ContactDiscoveryCommandFacade
-    method: initiateContactDiscovery
-    aggregate_owner: ContactDiscoveryRecord
-    mutation_target: ContactDiscoveryRecord
-    invariant_target: ContactDiscoveryRecord
-  description: 上传哈希手机号列表，触发异步匹配
-  request_fields:
-  - hashedPhones
-  response_fields:
-  - id
-  - status
-  - expireAt
-  client_contract:
-    dart_import: ../user/contact_discovery_contracts.dart
-    request_type: InitiateContactDiscoveryCommand
-    response_type: ContactDiscoveryResult
-    request_encoder: encodeInitiateContactDiscoveryCommand
-    response_decoder: decodeContactDiscoveryResult
-  rate_limit: 5次/24h/ownerAccountId
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 3000
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.USER.invalid_argument
-  - USER.CONTACT.rate_limited
-  - USER.CONTACT.too_many_contacts
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: SENSITIVE
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_contact_discovery_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 800
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-- method: GET
-  path: /owner/contact-discovery/latest
-  operation: GetLatestContactDiscovery
-  actor: account
-  application:
-    kind: query
-    facet: ContactDiscoveryQueryFacade
-    method: getLatestContactDiscovery
-    reader: GetLatestContactDiscoveryReader
-    slice: GetLatestContactDiscoverySlice
-  description: '获取最近一次发现结果。matchedSubAccountIds 保留为隐私基线（仅 ID）； matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的
-    hashedPhone（端侧据此映射回本地通讯录显示名）、 精简 profile 与关系能力位，驱动「添加 / 已添加」。
+  - method: POST
+    path: /owner/contact-discovery
+    operation: InitiateContactDiscovery
+    actor: account
+    application:
+      kind: command
+      facet: ContactDiscoveryCommandFacade
+      method: initiateContactDiscovery
+      aggregate_owner: ContactDiscoveryRecord
+      mutation_target: ContactDiscoveryRecord
+      invariant_target: ContactDiscoveryRecord
+    description: 上传哈希手机号列表，触发异步匹配
+    response_fields:
+      - id
+      - status
+      - expireAt
+    client_contract:
+      dart_import: ../user/contact_discovery_contracts.dart
+      response_type: ContactDiscoveryResult
+      response_decoder: decodeContactDiscoveryResult
+    rate_limit: 5次/24h/ownerAccountId
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.invalid_argument
+      - USER.CONTACT.rate_limited
+      - USER.CONTACT.too_many_contacts
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_contact_discovery_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+    request_entity: InitiateContactDiscoveryCommand
+    request_body_kind: object
+  - method: GET
+    path: /owner/contact-discovery/latest
+    operation: GetLatestContactDiscovery
+    actor: account
+    application:
+      kind: query
+      facet: ContactDiscoveryQueryFacade
+      method: getLatestContactDiscovery
+      reader: GetLatestContactDiscoveryReader
+      slice: GetLatestContactDiscoverySlice
+    description: '获取最近一次发现结果。matchedPersonaIds 保留为隐私基线（仅 ID）； matches[] 为富化投影 ContactDiscoveryMatchWire，回显发起者上传的 hashedPhone（端侧据此映射回本地通讯录显示名）、 精简 profile 与关系能力位，驱动「添加 / 已添加」。
 
-    '
-  response_entity: ContactDiscoveryRecord
-  response_read_models:
-  - ContactDiscoveryMatchWire
-  response_fields:
-  - id
-  - status
-  - matchedSubAccountIds
-  - matchCount
-  - expireAt
-  - completedAt
-  client_contract:
-    dart_import: ../user/contact_discovery_contracts.dart
-    request_type: GetLatestContactDiscoveryQuery
-    response_type: ContactDiscoveryResult
-    request_encoder: encodeGetLatestContactDiscoveryQuery
-    response_decoder: decodeContactDiscoveryResult
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: none
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.CONTACT.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: PUBLIC
-    response_classification: SENSITIVE
-    log_policy: metadata_only
-  telemetry:
-    metric: user_contact_discovery_query
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
-- method: DELETE
-  path: /owner/contact-discovery/{id}
-  operation: DismissContactDiscovery
-  actor: account
-  application:
-    kind: command
-    facet: ContactDiscoveryCommandFacade
-    method: dismissContactDiscovery
-    aggregate_owner: ContactDiscoveryRecord
-    mutation_target: ContactDiscoveryRecord
-    invariant_target: ContactDiscoveryRecord
-  description: 主动删除/忽略发现记录
-  path_params:
-  - id
-  response_fields:
-  - status
-  client_contract:
-    dart_import: ../user/contact_discovery_contracts.dart
-    request_type: DismissContactDiscoveryCommand
-    response_type: ContactDiscoveryDismissResult
-    request_encoder: encodeDismissContactDiscoveryCommand
-    response_decoder: decodeContactDiscoveryDismissResult
-  authorization:
-    principal: account
-    ownership_policy: current_account_owner
-  reliability:
-    timeout_ms: 1500
-    cancellation: supported
-    retry_mode: idempotent
-    max_attempts: 2
-    idempotency: required
-  error_codes:
-  - USER.USER.unauthorized
-  - USER.CONTACT.not_found
-  - USER.SYSTEM.internal_error
-  privacy:
-    request_classification: INTERNAL
-    response_classification: INTERNAL
-    log_policy: metadata_only
-  telemetry:
-    metric: user_contact_discovery_command
-    trace: true
-    attributes:
-    - operation
-    - outcome
-    - error_code
-  slo:
-    latency_p95_ms: 500
-    availability_percent: 99.9
-  commercial:
-    status: ready
-  security:
-    auth_mode: required
+'
+    response_entity: ContactDiscoveryRecord
+    response_read_models:
+      - ContactDiscoveryMatchWire
+    response_fields:
+      - id
+      - status
+      - matchedPersonaIds
+      - matchCount
+      - expireAt
+      - completedAt
+    client_contract:
+      dart_import: ../user/contact_discovery_contracts.dart
+      response_type: ContactDiscoveryResult
+      response_decoder: decodeContactDiscoveryResult
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.CONTACT.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: PUBLIC
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: user_contact_discovery_query
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+    request_entity: GetLatestContactDiscoveryQuery
+    request_body_kind: none
+  - method: DELETE
+    path: /owner/contact-discovery/{id}
+    operation: DismissContactDiscovery
+    request_bindings:
+      path:
+        - name: id
+          field: id
+    actor: account
+    application:
+      kind: command
+      facet: ContactDiscoveryCommandFacade
+      method: dismissContactDiscovery
+      aggregate_owner: ContactDiscoveryRecord
+      mutation_target: ContactDiscoveryRecord
+      invariant_target: ContactDiscoveryRecord
+    description: 主动删除/忽略发现记录
+    response_fields:
+      - status
+    client_contract:
+      dart_import: ../user/contact_discovery_contracts.dart
+      response_type: ContactDiscoveryDismissResult
+      response_decoder: decodeContactDiscoveryDismissResult
+    authorization:
+      principal: account
+      ownership_policy: current_account_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.CONTACT.not_found
+      - USER.SYSTEM.internal_error
+      - USER.AUTH.account_deleted
+      - USER.AUTH.account_security_unavailable
+      - USER.AUTH.account_suspended
+      - USER.AUTH.token_stale
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: user_contact_discovery_command
+      trace: true
+      attributes:
+        - operation
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    commercial:
+      status: ready
+    security:
+      auth_mode: required
+    request_entity: DismissContactDiscoveryCommand
+    request_body_kind: none
 consumers:
-- name: app
-  capabilities:
-  - initiate_discovery
-  - read_discovery_result
-  - dismiss_discovery
+  - name: app
+    capabilities:
+      - initiate_discovery
+      - read_discovery_result
+      - dismiss_discovery
 contract_test:
   scenarios:
-  - name: discovery_result_isolation
-    description: 匹配结果不含 ownerAccountId
-    assertions:
-    - response.matchedSubAccountIds 不为空
-    - response 不含 ownerAccountId 字段
-    - response 不含 hashedPhones 字段
-  - name: discovery_rate_limit
-    description: 超过 5 次/24h 触发限流
-    assertions:
-    - 第 6 次请求 → USER.CONTACT.rate_limited
-  - name: discovery_ttl_cleanup
-    description: 72h 后记录不可查询
-    assertions:
-    - expire_at 过期后 GET latest → 404 或空结果
-  - name: discovery_match_projection
-    description: matches[] 富化投影回显发起者自身上传的 hashedPhone，并附带命中用户精简 profile 与能力位
-    assertions:
-    - matches[].hashedPhone 属于本次发起者上传的哈希集合
-    - matches[].subAccountId 与 matchedSubAccountIds 一致
-    - matches[] 不含其它用户的手机号原文或 ownerAccountId
-    - matches[].relationshipCapability 可驱动 canFollow / 已关注 判定
+    - name: discovery_result_isolation
+      description: 匹配结果不含 ownerAccountId
+      assertions:
+        - response.matchedPersonaIds 不为空
+        - response 不含 ownerAccountId 字段
+        - response 不含 hashedPhones 字段
+    - name: discovery_rate_limit
+      description: 超过 5 次/24h 触发限流
+      assertions:
+        - 第 6 次请求 → USER.CONTACT.rate_limited
+    - name: discovery_ttl_cleanup
+      description: 72h 后记录不可查询
+      assertions:
+        - expire_at 过期后 GET latest → 404 或空结果
+    - name: discovery_match_projection
+      description: matches[] 富化投影回显发起者自身上传的 hashedPhone，并附带命中用户精简 profile 与能力位
+      assertions:
+        - matches[].hashedPhone 属于本次发起者上传的哈希集合
+        - matches[].personaId 与 matchedPersonaIds 一致
+        - matches[] 不含其它用户的手机号原文或 ownerAccountId
+        - matches[].relationshipCapability 可驱动 canFollow / 已关注 判定

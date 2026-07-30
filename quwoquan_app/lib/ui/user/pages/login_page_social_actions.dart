@@ -1,33 +1,24 @@
 part of 'login_page.dart';
 
 extension _LoginPageSocialActions on _LoginFrameHostState {
-  void _handleOtherMethod(String method) {
-    _trackLoginEvent(
-      'login_method_clicked',
-      targetKey: method,
-      payload: <String, dynamic>{'state': _presentation.kind.name},
-    );
-    if (method == 'phone') {
-      _setSocialMethodFeedback('');
-      _enterPhoneOtp();
-      return;
+  void _handleSocialMethod(String method) {
+    final capability = _socialMethodAvailability[method];
+    if (capability?.isAvailable != true) return;
+    if (_flow.isBusy) {
+      if (_flow.step != LoginStep.socialAuthorizing ||
+          _flow.provider == method) {
+        return;
+      }
+      _cancelActiveAttempt();
+      _restoreRoot();
     }
-    if (method == 'wechat' || method == 'alipay' || method == 'qq') {
-      unawaited(_handleSocialLogin(method));
-      return;
-    }
-    _replacePresentation(
-      LoginEntryPresentation(
-        kind: _presentation.kind,
-        accountHint: _presentation.accountHint,
-        carrierHint: _presentation.carrierHint,
-        phoneOtpState: _presentation.phoneOtpState,
-        message: FoundationText.loginQuickLoginUnavailableHint,
-        primaryAction: _presentation.primaryAction,
-        primaryProvider: _presentation.primaryProvider,
-        quickLoginPhone: _presentation.quickLoginPhone,
-      ),
-    );
+    final intent = switch (method) {
+      'wechat' => LoginPendingIntent.socialWechat,
+      'qq' => LoginPendingIntent.socialQq,
+      'alipay' => LoginPendingIntent.socialAlipay,
+      _ => null,
+    };
+    if (intent != null) unawaited(_runWithConsent(intent));
   }
 
   Future<Map<String, NativeAuthCapability>>
@@ -42,8 +33,8 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
     final capabilities = await Future.wait(
       <NativeAuthProvider>[
         NativeAuthProvider.wechat,
-        NativeAuthProvider.alipay,
         NativeAuthProvider.qq,
+        NativeAuthProvider.alipay,
       ].map((provider) async {
         if (staticallyAvailable[provider] != true) {
           return NativeAuthCapability(
@@ -57,25 +48,12 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
               .getCapability(provider)
               .timeout(_LoginFrameHostState._probeTimeout);
         } on TimeoutException {
-          _trackLoginEvent(
-            'login_social_capability_unavailable',
-            targetKey: provider.name,
-            payload: const <String, dynamic>{'reason': 'timeout'},
-          );
           return NativeAuthCapability(
             provider: provider,
             availability: NativeAuthAvailability.probeTimeout,
             reason: 'timeout',
           );
-        } catch (error) {
-          _trackLoginEvent(
-            'login_social_capability_unavailable',
-            targetKey: provider.name,
-            payload: <String, dynamic>{
-              'reason': 'runtime_failure',
-              'errorType': error.runtimeType.toString(),
-            },
-          );
+        } catch (_) {
           return NativeAuthCapability(
             provider: provider,
             availability: NativeAuthAvailability.sdkUnavailable,
@@ -90,44 +68,16 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
     };
   }
 
-  String _socialMethodForRemembered(AuthRememberedLoginMethod method) {
-    return switch (method) {
-      AuthRememberedLoginMethod.wechat => 'wechat',
-      AuthRememberedLoginMethod.qq => 'qq',
-      AuthRememberedLoginMethod.alipay => 'alipay',
-      _ => '',
-    };
-  }
-
-  void _setSocialMethodFeedback(String message) {
-    _replaceSocialMethodFeedback(message);
-  }
-
-  String _socialCapabilityMessage(NativeAuthAvailability availability) {
-    return switch (availability) {
-      NativeAuthAvailability.notConfigured =>
-        FoundationText.loginSocialNotConfigured,
-      NativeAuthAvailability.clientNotInstalled =>
-        FoundationText.loginSocialClientNotInstalled,
-      NativeAuthAvailability.probeTimeout =>
-        FoundationText.loginSocialProbeTimeout,
-      NativeAuthAvailability.sdkUnavailable =>
-        FoundationText.loginSocialSdkUnavailable,
-      NativeAuthAvailability.unsupportedPlatform ||
-      NativeAuthAvailability.available => '',
-    };
-  }
-
   NativeAuthProvider _nativeAuthProviderFor(String method) {
     return switch (method) {
       'wechat' => NativeAuthProvider.wechat,
       'alipay' => NativeAuthProvider.alipay,
       'qq' => NativeAuthProvider.qq,
-      _ => throw ArgumentError.value(method, 'method', 'not a social provider'),
+      _ => throw ArgumentError.value(method, 'method', 'unsupported provider'),
     };
   }
 
-  Future<AuthSessionGrant> _socialLoginByMethod(
+  Future<FederatedLoginOutcome> _socialLoginByMethod(
     String method,
     String authCode,
     String deviceId,
@@ -141,6 +91,8 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
           deviceId: deviceId,
           platform: platform,
           appVersion: CloudRequestHeaders.appVersion,
+          agreementVersion: AuthLegalConfig.agreementVersion,
+          privacyVersion: AuthLegalConfig.privacyVersion,
         ),
       ),
       'alipay' => writer.loginWithAlipay(
@@ -149,6 +101,8 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
           deviceId: deviceId,
           platform: platform,
           appVersion: CloudRequestHeaders.appVersion,
+          agreementVersion: AuthLegalConfig.agreementVersion,
+          privacyVersion: AuthLegalConfig.privacyVersion,
         ),
       ),
       'qq' => writer.loginWithQq(
@@ -157,9 +111,11 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
           deviceId: deviceId,
           platform: platform,
           appVersion: CloudRequestHeaders.appVersion,
+          agreementVersion: AuthLegalConfig.agreementVersion,
+          privacyVersion: AuthLegalConfig.privacyVersion,
         ),
       ),
-      _ => throw ArgumentError.value(method, 'method', 'not a social provider'),
+      _ => throw ArgumentError.value(method, 'method', 'unsupported provider'),
     };
   }
 
@@ -172,52 +128,34 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
     };
   }
 
-  Future<void> _handleSocialLogin(String method) async {
-    if (_presentation.kind == LoginEntryKind.submitting) {
-      return;
-    }
+  Future<void> _handleSocialLogin(
+    String method, {
+    bool consentChecked = false,
+  }) async {
+    if (_flow.isBusy || _flowController.terminalClaimed) return;
     final capability = _socialMethodAvailability[method];
-    if (capability == null || !capability.isAvailable) {
-      final message = capability == null
-          ? FoundationText.loginSocialProbeTimeout
-          : _socialCapabilityMessage(capability.availability);
-      _setSocialMethodFeedback(message);
-      _trackLoginEvent(
-        'login_social_capability_unavailable',
-        targetKey: method,
-        payload: <String, dynamic>{
-          'reason': capability?.availability.name ?? 'resolving',
-        },
-      );
+    if (capability?.isAvailable != true) return;
+    if (_flow.consentState != LoginConsentState.accepted && !consentChecked) {
+      _handleSocialMethod(method);
       return;
     }
-    _setSocialMethodFeedback('');
-    if (!_agreementAccepted) {
-      _showAgreementValidation();
-      return;
-    }
-    _invalidateEntryResolution();
-    final attempt = _beginLoginAttempt();
-    final latency = Stopwatch()..start();
-    final entryBeforeSubmit = _presentation;
-    _replacePresentation(
-      LoginEntryPresentation(
-        kind: LoginEntryKind.submitting,
-        accountHint: entryBeforeSubmit.accountHint,
-        carrierHint: entryBeforeSubmit.carrierHint,
-        phoneOtpState: entryBeforeSubmit.phoneOtpState,
-        primaryAction: entryBeforeSubmit.primaryAction,
-        primaryProvider: entryBeforeSubmit.primaryProvider,
-        quickLoginPhone: entryBeforeSubmit.quickLoginPhone,
+    final attempt = _beginLoginAttempt(LoginOperation.openingProvider);
+    final stopwatch = Stopwatch()..start();
+    _transitionFlow(
+      _flow.copyWith(
+        step: LoginStep.socialAuthorizing,
+        provider: method,
+        operation: LoginOperation.openingProvider,
+        entryMode: LoginEntryMode.social,
+        feedback: null,
       ),
+      action: 'login_social_authorization',
+      result: 'started',
     );
     try {
       final session = ref.read(authSessionControllerProvider);
       final stored = await ref.read(authSessionStoreProvider).read();
-      final deviceId = session.installId.isNotEmpty
-          ? session.installId
-          : stored.installId;
-      final bridge = ref.read(nativeAuthBridgeProvider);
+      if (!_isCurrentLoginAttempt(attempt)) return;
       final authorizationPayload = method == 'alipay'
           ? (await ref
                     .read(authenticationChallengeCommandWriterProvider)
@@ -226,125 +164,257 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
                         platform: CloudRequestHeaders.platform(),
                         appVersion: CloudRequestHeaders.appVersion,
                       ),
-                    ))
+                    )
+                    .timeout(_LoginFrameHostState._requestTimeout))
                 .authorizationPayload
           : '';
-      final ticket = await bridge.signIn(
-        _nativeAuthProviderFor(method),
-        authorizationPayload: authorizationPayload,
-      );
-      if (!mounted || _activeAttempt != attempt) {
-        return;
-      }
-      if (ticket.ticket.trim().isEmpty) {
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      final ticket = await ref
+          .read(nativeAuthBridgeProvider)
+          .signIn(
+            _nativeAuthProviderFor(method),
+            authorizationPayload: authorizationPayload,
+          )
+          .timeout(_LoginFrameHostState._providerTimeout);
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      final authCode = ticket.ticket.trim();
+      if (authCode.isEmpty) {
         throw StateError('$method authorization ticket is empty');
       }
-      final result = await _socialLoginByMethod(
+      _flowController.replace(
+        _flow.copyWith(operation: LoginOperation.exchangingTicket),
+      );
+      final outcome = await _socialLoginByMethod(
         method,
-        ticket.ticket.trim(),
-        deviceId,
+        authCode,
+        session.installId.isNotEmpty ? session.installId : stored.installId,
         CloudRequestHeaders.platform(),
-      );
-      if (!mounted || _activeAttempt != attempt) {
-        return;
-      }
-      await ref
-          .read(authSessionControllerProvider.notifier)
-          .applyRememberedLoginGrant(
-            result,
-            rememberedLoginMethod: _rememberedMethodFor(method),
-            rememberedLoginMaskedIdentifier: ticket.maskedAccount,
+      ).timeout(_LoginFrameHostState._requestTimeout);
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      if (outcome.status == FederatedLoginStatus.authenticated) {
+        final grant = outcome.session;
+        if (grant == null) {
+          throw const FormatException(
+            'authenticated social outcome is missing session',
           );
-      _trackLoginEvent(
-        'login_success',
-        targetKey: method,
-        payload: <String, dynamic>{
-          'state': entryBeforeSubmit.kind.name,
-          'durationMs': latency.elapsedMilliseconds,
-        },
-      );
-      _completeLogin();
-    } catch (error) {
-      if (!mounted || _activeAttempt != attempt) {
+        }
+        await ref
+            .read(authSessionControllerProvider.notifier)
+            .applyRememberedLoginGrant(
+              grant,
+              rememberedLoginMethod: _rememberedMethodFor(method),
+              rememberedLoginMaskedIdentifier: ticket.maskedAccount,
+            );
+        if (!_isCurrentLoginAttempt(attempt)) return;
+        _trackLoginOperation(
+          operationId: 'login_social_$method',
+          result: 'success',
+          provider: method,
+          durationMs: stopwatch.elapsedMilliseconds,
+        );
+        _completeLogin();
         return;
       }
-      final normalizedError = _normalizeSocialError(error);
+      final bindingTicket = outcome.bindingTicket?.trim() ?? '';
+      if (bindingTicket.isEmpty || outcome.expiresInSeconds <= 0) {
+        throw const FormatException(
+          'phone binding outcome is missing a valid ticket',
+        );
+      }
+      _phoneController.clear();
+      _otpController.clear();
+      _lastAutoVerifiedCode = '';
+      _transitionFlow(
+        LoginFlowState(
+          step: LoginStep.socialPhoneEntry,
+          flowId: _flow.flowId,
+          consentState: LoginConsentState.accepted,
+          otpPurpose: LoginOtpPurpose.bindPhone,
+          entryMode: LoginEntryMode.social,
+          provider: method,
+          bindingTicket: bindingTicket,
+          bindingDeadline: DateTime.now().add(
+            Duration(seconds: outcome.expiresInSeconds),
+          ),
+        ),
+        action: 'login_phone_binding',
+        result: 'required',
+      );
+      _trackLoginOperation(
+        operationId: 'login_social_$method',
+        result: 'binding_required',
+        provider: method,
+        durationMs: stopwatch.elapsedMilliseconds,
+      );
+    } catch (error) {
+      if (!_isCurrentLoginAttempt(attempt)) return;
+      final normalized = _normalizeSocialError(error);
       final feedback = _loginFeedback(
-        normalizedError,
+        normalized,
         origin: LoginFailureOrigin.social,
+      );
+      _trackLoginOperation(
+        operationId: 'login_social_$method',
+        result: feedback.isSilent ? 'cancelled' : 'failure',
+        provider: method,
+        durationMs: stopwatch.elapsedMilliseconds,
+        error: normalized,
+        feedback: feedback,
       );
       if (feedback.isSilent) {
-        _replacePresentation(entryBeforeSubmit);
-        _trackLoginEvent(
-          'login_social_cancelled',
-          targetKey: method,
-          payload: <String, dynamic>{
-            ...feedback.telemetry,
-            'durationMs': latency.elapsedMilliseconds,
-          },
-        );
-        return;
+        _restoreRoot();
+      } else {
+        _showSocialFailure(feedback: feedback, provider: method);
       }
-      _setSocialMethodFeedback(feedback.message);
-      _applyTopLevelLoginFailure(
-        entryBeforeSubmit,
-        normalizedError,
-        fallbackMessage: UserErrorCode.socialProviderUnavailable.defaultMessage,
-        preserveEntry: true,
-        origin: LoginFailureOrigin.social,
-        provider: method,
-        durationMs: latency.elapsedMilliseconds,
-      );
     } finally {
       _finishLoginAttempt(attempt);
     }
   }
 
-  Object _normalizeSocialError(Object error) {
-    if (error is PlatformException) {
-      final code = error.code.toLowerCase();
-      if (code.contains('cancel')) {
-        return CloudException(
-          type: CloudErrorType.unknown,
-          message: 'social authorization cancelled',
-          code: UserErrorCode.socialProviderCancelled.code,
-          runtimeFailure: RuntimeFailure(
-            code: UserErrorCode.socialProviderCancelled.code,
-            origin: RuntimeFailureOrigin.user,
-            kind: RuntimeFailureKind.cancelled,
-            nature: RuntimeFailureNature.permanent,
-            location: const RuntimeFailureLocation(
-              businessObject: 'user.auth',
-              functionModule: 'social_authorization',
+  void _showSocialFailure({LoginFeedback? feedback, String? provider}) {
+    final method = provider ?? _flow.provider;
+    _transitionFlow(
+      _flow.copyWith(
+        step: LoginStep.socialFailed,
+        operation: LoginOperation.idle,
+        provider: method,
+        bindingTicket: '',
+        bindingDeadline: null,
+        feedback:
+            feedback ??
+            const LoginFeedback(
+              message: FoundationText.loginSocialAuthorizationFailed,
+              copyKey: 'loginSocialAuthorizationFailed',
+              surface: LoginFeedbackSurface.social,
+              recoveryAction: 'retryAuthorization',
             ),
-            context: const RuntimeFailureContext(),
+      ),
+      action: 'login_state_changed',
+      result: 'failure',
+    );
+  }
+
+  Future<void> _retrySocialAuthorization() async {
+    final method = _flow.provider;
+    if (method.isEmpty) {
+      _restoreRoot();
+      return;
+    }
+    await _handleSocialLogin(method, consentChecked: true);
+  }
+
+  void _cancelSocialAuthorization() {
+    _cancelActiveAttempt();
+    _trackLoginFunnel(
+      'login_social_authorization',
+      result: 'cancelled',
+      provider: _flow.provider,
+    );
+    _restoreRoot();
+  }
+
+  void _cancelSocialBindingAndRestoreRoot() {
+    _cancelActiveAttempt();
+    _otpCountdownTicker?.cancel();
+    _phoneController.clear();
+    _otpController.clear();
+    _trackLoginFunnel(
+      'login_phone_binding',
+      result: 'cancelled',
+      provider: _flow.provider,
+      otpPurpose: LoginOtpPurpose.bindPhone,
+    );
+    _restoreRoot();
+  }
+
+  Object _normalizeSocialError(Object error) {
+    if (error is PlatformException &&
+        error.code.toLowerCase().contains('cancel')) {
+      return CloudException(
+        type: CloudErrorType.unknown,
+        message: 'social authorization cancelled',
+        code: UserErrorCode.socialProviderCancelled.code,
+        runtimeFailure: RuntimeFailure(
+          code: UserErrorCode.socialProviderCancelled.code,
+          origin: RuntimeFailureOrigin.user,
+          kind: RuntimeFailureKind.cancelled,
+          nature: RuntimeFailureNature.permanent,
+          location: const RuntimeFailureLocation(
+            businessObject: 'user.auth',
+            functionModule: 'social_authorization',
           ),
-        );
-      }
+          context: const RuntimeFailureContext(),
+        ),
+      );
     }
     return error;
   }
 
-  void _trackLoginEvent(
+  void _trackLoginFunnel(
     String action, {
-    String targetKey = '',
-    Map<String, dynamic> payload = const <String, dynamic>{},
+    required String result,
+    LoginStep? fromStep,
+    LoginStep? toStep,
+    String provider = '',
+    LoginOtpPurpose? otpPurpose,
+    String? countdownBucket,
+    int? durationMs,
   }) {
-    final platform = ref.read(platformTelemetryNameProvider);
+    final state = _flow;
     unawaited(
-      _journeyTracker.trackAction(
-        journey: _LoginFrameHostState._loginJourney,
+      _journeyTracker.trackLoginFunnel(
         action: action,
+        flowId: state.flowId,
+        step: (toStep ?? state.step).name,
+        result: result,
+        entryMode: state.entryMode.name,
+        fromStep: fromStep?.name,
+        toStep: toStep?.name,
+        provider: provider.isEmpty ? state.provider : provider,
+        otpPurpose: (otpPurpose ?? state.otpPurpose).name,
+        consentState: state.consentState.name,
+        durationMs: durationMs,
+        attemptIndex: state.attemptIndex,
+        countdownBucket: countdownBucket,
+        motionReduced: mounted
+            ? MediaQuery.maybeOf(context)?.disableAnimations ?? false
+            : false,
+        dismissPolicy: widget.dismissPolicy.name,
         pageName: _LoginFrameHostState._loginPageName,
-        targetType: 'login',
-        targetKey: targetKey,
-        payload: buildLoginTelemetryPayload(
-          environment: CloudRuntimeConfig.appRuntimeEnv,
-          platform: platform,
-          action: action,
-          provider: targetKey,
-          raw: payload,
-        ),
+      ),
+    );
+  }
+
+  void _trackLoginOperation({
+    required String operationId,
+    required String result,
+    String provider = '',
+    LoginOtpPurpose? otpPurpose,
+    int? durationMs,
+    Object? error,
+    LoginFeedback? feedback,
+  }) {
+    final state = _flow;
+    unawaited(
+      _journeyTracker.trackLoginOperation(
+        operationId: operationId,
+        surfaceId: 'login',
+        result: result,
+        flowId: state.flowId,
+        step: state.step.name,
+        provider: provider.isEmpty ? state.provider : provider,
+        otpPurpose: (otpPurpose ?? state.otpPurpose).name,
+        durationMs: durationMs,
+        attemptIndex: state.attemptIndex,
+        failReasonCode: feedback?.sourceCode,
+        failureKind: feedback?.failureKind,
+        recoveryAction: feedback?.recoveryAction,
+        copyKey: feedback?.copyKey,
+        feedbackSurface: feedback?.surface.name,
+        requestId: feedback?.requestId,
+        traceId: feedback?.traceId,
+        error: error,
+        pageName: _LoginFrameHostState._loginPageName,
       ),
     );
   }

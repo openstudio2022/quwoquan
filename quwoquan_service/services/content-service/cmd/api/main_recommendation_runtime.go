@@ -19,10 +19,14 @@ func buildRecommendationSignalRuntime(
 	router *rtredis.Router,
 	subjectClosureGuard rtrec.SubjectClosureGuard,
 	logger *slog.Logger,
+	feedConfig feedRuntimeConfig,
 ) (*rtrec.SessionCache, *rtrec.BufferedHotPath) {
 	hotPath := rtrec.NewHotPath(
 		rtredis.NewRecAdapter(router.Scene("rec")),
 		rtrec.WithSubjectClosureGuard(subjectClosureGuard),
+		rtrec.WithRankedFeedWindowQuotaPolicy(
+			feedConfig.rankedWindowQuotaPolicy(),
+		),
 	)
 	return rtrec.NewSessionCache(hotPath, 2*time.Second, 10000),
 		rtrec.NewBufferedHotPath(hotPath, rtrec.WithBufferLogger(logger))

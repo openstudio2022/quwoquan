@@ -2,6 +2,7 @@
   "label": "间隔年",
   "labelEn": "Gap Year",
   "description": "短暂休息探索期",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

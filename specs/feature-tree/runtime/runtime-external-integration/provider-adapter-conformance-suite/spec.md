@@ -117,10 +117,10 @@
 <a id="open-002"></a>
 ### OPEN-002 三环境三层测试九格均有真实执行结果
 
-- 类型：`capability_gap`
+- 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前只有 B10 三个真实 Adapter 的 Remote UAT source，尚不能为 14 个 Capability 的全部 selected Binding 生成九格真实证据或 Prod Remote receipt，因此 `gate-release` 必须阻断。
+- 影响或价值：仓库已发现 87 个自描述 executable source，`sourceCoverageIssues=[]`，覆盖 14 个 Capability 的 selected Binding × 三层。Prod `user_acceptance` 均有真实 harness，push/message/RTC 另含 B10 native readback。当前真正缺口是尚未执行出任何可接受 evidence：四环境 `evidenceCount=0`，14/14 `capabilityReady=false`、`adapterReady=false`，且没有 Prod Remote receipt，因此 `gate-release` 必须阻断。source/harness 存在不得冒充执行通过。
 - 完成判定：`GWT-002` 对应行为满足；每个实际 Capability/Adapter/layer 都有自描述原生 harness，14 个 Capability 在同一候选版本完成 Alpha/Beta/Gamma 九格 evidence 与 Prod Remote receipt，并通过 `--require-ready gamma` 与 `--require-ready prod`。
 - 依赖：不可变候选镜像 digest、CI attestation key、Alpha/Beta/Gamma substitute 材料、Prod 生产厂商材料、受控测试数据与 cleanup/observability 回执，以及 Prod health/switch/rollback 回执。
 

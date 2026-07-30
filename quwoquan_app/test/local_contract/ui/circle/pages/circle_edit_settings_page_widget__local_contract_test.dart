@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -21,8 +22,8 @@ Widget _app({
     coverUrl: 'https://example.com/cover.jpg',
     ownerId: 'u1',
     tags: const ['摄影', '城市'],
-    visibility: 'public',
-    joinPolicy: 'approval',
+    visibility: CircleVisibility.public,
+    joinPolicy: CircleJoinPolicy.approval,
     autoSyncChat: true,
     sectionConfig: const [
       CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
@@ -43,7 +44,7 @@ Widget _app({
     if (lifecycleWriter != null)
       activePersonaContextProvider.overrideWith(
         (_) async => ActivePersonaContextViewData.fallback(
-          subAccountId: 'user_001',
+          personaId: 'user_001',
           ownerUserId: 'user_001',
           displayName: '圈子编辑测试用户',
           avatarUrl: '',
@@ -209,6 +210,8 @@ void main() {
 
       expect(find.text('可见范围'), findsOneWidget);
       expect(find.text('加入方式'), findsOneWidget);
+      expect(find.text(CommunityText.visibilityInviteOnly), findsOneWidget);
+      expect(find.text(CommunityText.circleJoinInviteOnly), findsOneWidget);
       expect(find.text('同步圈聊'), findsOneWidget);
     });
   });

@@ -71,7 +71,7 @@ type authorImpactSummaryItem struct {
 
 func authorImpactSummary(t *testing.T, authorID string) []authorImpactSummaryItem {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, "/content/sub-accounts/"+authorID+"/author-impact", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/personas/"+authorID+"/author-impact", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -112,7 +112,7 @@ func authorImpactCountFor(t *testing.T, authorID, impactID string) int64 {
 
 func getAuthorImpactEvidence(t *testing.T, authorID, impactID, cursor string, limit int) evidencePageResp {
 	t.Helper()
-	url := fmt.Sprintf("/content/sub-accounts/%s/author-impact/evidence?impactId=%s", authorID, impactID)
+	url := fmt.Sprintf("/content/personas/%s/author-impact/evidence?impactId=%s", authorID, impactID)
 	if cursor != "" {
 		url += "&cursor=" + cursor
 	}

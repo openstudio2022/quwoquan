@@ -20,7 +20,7 @@ tables:
       type: TEXT[]
       constraints:
       - NOT_NULL
-    - name: matched_sub_account_ids
+    - name: matched_persona_ids
       type: TEXT[]
     - name: status
       type: VARCHAR(16)

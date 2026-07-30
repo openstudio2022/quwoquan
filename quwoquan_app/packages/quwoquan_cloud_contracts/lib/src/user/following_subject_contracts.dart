@@ -1,4 +1,6 @@
 import '../operation_request_payload.dart';
+import '../generated/user_contract_enums.g.dart';
+part '../generated/requests/user/following_subject_contracts.requests.g.dart';
 
 abstract interface class FollowingSubjectQuery {
   Future<FollowingSubjectSlice> listFollowingSubjects(
@@ -10,33 +12,6 @@ abstract interface class FollowedSubjectVisitCommandWriter {
   Future<FollowedSubjectVisitResult> markFollowedSubjectVisited(
     MarkFollowedSubjectVisitedCommand command,
   );
-}
-
-final class ListFollowingSubjectsQuery {
-  const ListFollowingSubjectsQuery({
-    this.cursor,
-    this.limit = 20,
-    this.subjectType,
-  });
-
-  final String? cursor;
-  final int limit;
-  final String? subjectType;
-}
-
-final class MarkFollowedSubjectVisitedCommand {
-  MarkFollowedSubjectVisitedCommand({
-    required String subjectId,
-    required String subjectType,
-    required this.visitedAt,
-    this.clientRequestId,
-  }) : subjectId = _required(subjectId, 'subjectId'),
-       subjectType = _required(subjectType, 'subjectType');
-
-  final String subjectId;
-  final String subjectType;
-  final DateTime visitedAt;
-  final String? clientRequestId;
 }
 
 final class FollowingSubjectResult {
@@ -58,7 +33,7 @@ final class FollowingSubjectResult {
   });
 
   final String subjectId;
-  final String subjectType;
+  final FollowSubjectKind subjectType;
   final String displayName;
   final String avatarUrl;
   final String coverUrl;
@@ -89,41 +64,9 @@ final class FollowedSubjectVisitResult {
   });
 
   final String subjectId;
-  final String subjectType;
+  final FollowSubjectKind subjectType;
   final DateTime lastVisitedAt;
   final bool hasUnreadChanges;
-}
-
-CloudOperationRequestPayload encodeListFollowingSubjectsQuery(
-  ListFollowingSubjectsQuery query,
-) {
-  final cursor = query.cursor?.trim() ?? '';
-  final subjectType = query.subjectType?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (cursor.isNotEmpty) 'cursor': cursor,
-      'limit': '${query.limit.clamp(1, 100)}',
-      if (subjectType.isNotEmpty) 'subjectType': subjectType,
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeMarkFollowedSubjectVisitedCommand(
-  MarkFollowedSubjectVisitedCommand command,
-) {
-  final requestId = command.clientRequestId?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'subjectType': command.subjectType,
-      'subjectId': command.subjectId,
-    },
-    body: <String, Object?>{
-      'subjectId': command.subjectId,
-      'subjectType': command.subjectType,
-      'visitedAt': command.visitedAt.toUtc().toIso8601String(),
-      if (requestId.isNotEmpty) 'clientRequestId': requestId,
-    },
-  );
 }
 
 FollowingSubjectSlice decodeFollowingSubjectSlice(Object? response) {
@@ -140,7 +83,7 @@ FollowingSubjectSlice decodeFollowingSubjectSlice(Object? response) {
           final item = _object(raw, 'FollowingSubjectResult');
           return FollowingSubjectResult(
             subjectId: _requiredField(item, 'subjectId'),
-            subjectType: _requiredField(item, 'subjectType'),
+            subjectType: FollowSubjectKind.fromWire(item['subjectType']),
             displayName: _requiredField(item, 'displayName'),
             avatarUrl: _optionalString(item['avatarUrl']) ?? '',
             coverUrl: _optionalString(item['coverUrl']) ?? '',
@@ -166,7 +109,7 @@ FollowedSubjectVisitResult decodeFollowedSubjectVisitResult(Object? response) {
   final root = _object(response, 'FollowedSubjectVisitResult');
   return FollowedSubjectVisitResult(
     subjectId: _requiredField(root, 'subjectId'),
-    subjectType: _requiredField(root, 'subjectType'),
+    subjectType: FollowSubjectKind.fromWire(root['subjectType']),
     lastVisitedAt: _requiredTimestamp(root, 'lastVisitedAt'),
     hasUnreadChanges: root['hasUnreadChanges'] == true,
   );
@@ -202,12 +145,4 @@ DateTime _requiredTimestamp(Map<Object?, Object?> root, String key) {
 DateTime? _optionalTimestamp(Object? value) {
   final text = _optionalString(value);
   return text == null ? null : DateTime.parse(text).toUtc();
-}
-
-String _required(String value, String name) {
-  final text = value.trim();
-  if (text.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return text;
 }

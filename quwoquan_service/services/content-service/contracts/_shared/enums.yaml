@@ -1,0 +1,3 @@
+enums:
+  ContentActorDimension:
+    values: [persona, device]

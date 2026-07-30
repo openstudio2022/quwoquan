@@ -2,6 +2,7 @@
   "label": "国产动漫",
   "labelEn": "Chinese Anime",
   "description": "国产动画与漫画",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

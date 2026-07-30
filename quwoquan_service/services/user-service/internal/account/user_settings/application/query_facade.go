@@ -130,7 +130,7 @@ func (facade *UserSettingsQueryFacade) GetAppearanceSettings(
 		Source:                     settingsmodel.AppearanceSourceOwnerDefault,
 		OwnerDefaultThemeMode:      snapshot.Appearance.DefaultThemeMode,
 		OwnerDefaultFontSizePreset: snapshot.Appearance.DefaultFontSizePreset,
-		HasSubAccountOverride:      false,
+		HasPersonaOverride:         false,
 		Version:                    snapshot.Appearance.Version,
 		UpdatedAt:                  snapshot.Appearance.UpdatedAt,
 	}, nil

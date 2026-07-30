@@ -326,7 +326,7 @@ void main() {
         accessToken: '',
         refreshToken: '',
         ownerId: '',
-        activeSubAccountId: '',
+        activePersonaId: '',
         accountState: '',
         identityOrigin: '',
         installId: 'install-id',
@@ -402,7 +402,7 @@ void main() {
         accessToken: 'stale-access',
         refreshToken: 'stale-refresh',
         ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
+        activePersonaId: 'sub-1',
         accountState: 'active',
         identityOrigin: 'phone',
         installId: 'install-id',
@@ -452,7 +452,7 @@ void main() {
         accessToken: 'stale-access',
         refreshToken: 'expired-refresh',
         ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
+        activePersonaId: 'sub-1',
         accountState: 'active',
         identityOrigin: 'phone',
         installId: 'install-id',
@@ -543,7 +543,7 @@ final class _BlockingAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
@@ -585,7 +585,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -602,12 +602,12 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {
+  Future<void> updateActivePersona(String personaId) async {
     stored = StoredAuthSession(
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: subAccountId,
+      activePersonaId: personaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -624,7 +624,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       accessToken: '',
       refreshToken: '',
       ownerId: '',
-      activeSubAccountId: '',
+      activePersonaId: '',
       accountState: '',
       identityOrigin: '',
       installId: stored.installId,
@@ -641,7 +641,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       accessToken: '',
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -658,7 +658,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,
@@ -675,7 +675,7 @@ final class _ImmediateAuthSessionStore implements AuthSessionStore {
       accessToken: stored.accessToken,
       refreshToken: stored.refreshToken,
       ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
+      activePersonaId: stored.activePersonaId,
       accountState: stored.accountState,
       identityOrigin: stored.identityOrigin,
       installId: stored.installId,

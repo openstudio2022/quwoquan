@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/content/profile_interaction_contracts.requests.g.dart';
 
 enum ContentProfileInteractionDirection {
   received('received'),
@@ -25,23 +26,7 @@ enum ContentProfileInteractionReadState {
   final String wireValue;
 }
 
-final class ContentProfileInteractionPageQuery {
-  ContentProfileInteractionPageQuery({
-    required String subAccountId,
-    required this.type,
-    this.cursor,
-    this.limit = 20,
-  }) : subAccountId = _requiredText(subAccountId, 'subAccountId') {
-    if (limit <= 0 || limit > 50) {
-      throw ArgumentError.value(limit, 'limit', 'must be between 1 and 50');
-    }
-  }
 
-  final String subAccountId;
-  final ContentProfileInteractionType type;
-  final String? cursor;
-  final int limit;
-}
 
 final class ContentProfileInteractionActivity {
   ContentProfileInteractionActivity({
@@ -52,21 +37,21 @@ final class ContentProfileInteractionActivity {
     this.commentId = '',
     this.parentCommentId = '',
     this.viewerReaction = 'none',
-    required this.actorSubAccountId,
+    required this.actorPersonaId,
     required this.actorDisplayName,
     this.actorAvatarUrl = '',
     this.actorAvatarVersion = 0,
-    this.counterpartSubAccountId = '',
+    this.counterpartPersonaId = '',
     this.counterpartDisplayName = '',
     this.counterpartAvatarUrl = '',
-    required this.targetSubAccountId,
+    required this.targetPersonaId,
     required this.targetContentId,
     required this.targetContentType,
     this.targetContentSummary = '',
     this.targetKind = 'record',
     this.targetAvailability = 'active',
     this.targetReplyCount = 0,
-    required this.displaySubAccountId,
+    required this.displayPersonaId,
     required this.displayName,
     this.displayAvatarUrl = '',
     this.displayAvatarVersion = 0,
@@ -97,21 +82,21 @@ final class ContentProfileInteractionActivity {
   final String commentId;
   final String parentCommentId;
   final String viewerReaction;
-  final String actorSubAccountId;
+  final String actorPersonaId;
   final String actorDisplayName;
   final String actorAvatarUrl;
   final int actorAvatarVersion;
-  final String counterpartSubAccountId;
+  final String counterpartPersonaId;
   final String counterpartDisplayName;
   final String counterpartAvatarUrl;
-  final String targetSubAccountId;
+  final String targetPersonaId;
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
   final String targetKind;
   final String targetAvailability;
   final int targetReplyCount;
-  final String displaySubAccountId;
+  final String displayPersonaId;
   final String displayName;
   final String displayAvatarUrl;
   final int displayAvatarVersion;
@@ -147,18 +132,7 @@ final class ContentProfileInteractionPage {
   final bool hasMore;
 }
 
-final class AppendContentProfileInteractionReadFactCommand {
-  AppendContentProfileInteractionReadFactCommand({
-    required String subAccountId,
-    required String activityId,
-    required this.state,
-  }) : subAccountId = _requiredText(subAccountId, 'subAccountId'),
-       activityId = _requiredText(activityId, 'activityId');
 
-  final String subAccountId;
-  final String activityId;
-  final ContentProfileInteractionReadState state;
-}
 
 final class ContentProfileInteractionReadFactAck {
   const ContentProfileInteractionReadFactAck({
@@ -189,33 +163,19 @@ abstract interface class ContentProfileInteractionReadFactAppendFacet {
   );
 }
 
-CloudOperationRequestPayload encodeContentProfileInteractionPageQuery(
-  ContentProfileInteractionPageQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'subAccountId': query.subAccountId},
-  queryParameters: <String, String>{
-    'type': query.type.wireValue,
-    if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
-    'limit': '${query.limit}',
-  },
-);
 
-CloudOperationRequestPayload encodeAppendContentProfileInteractionReadFactCommand(
-  AppendContentProfileInteractionReadFactCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'subAccountId': command.subAccountId,
-    'interactionId': command.activityId,
-  },
-  body: <String, Object?>{'state': command.state.wireValue},
-);
 
-ContentProfileInteractionPage decodeContentProfileInteractionPage(Object? value) {
+
+
+ContentProfileInteractionPage decodeContentProfileInteractionPage(
+  Object? value,
+) {
   final root = _object(value, 'ContentProfileInteractionPage');
   return ContentProfileInteractionPage(
-    items: _list(root['items'], 'ContentProfileInteractionPage.items').map(
-      decodeContentProfileInteractionActivity,
-    ),
+    items: _list(
+      root['items'],
+      'ContentProfileInteractionPage.items',
+    ).map(decodeContentProfileInteractionActivity),
     nextCursor: _optionalText(root['nextCursor']),
     hasMore: _optionalBool(root['hasMore']) ?? false,
   );
@@ -246,25 +206,17 @@ ContentProfileInteractionActivity decodeContentProfileInteractionActivity(
     commentId: _optionalText(row['commentId']) ?? '',
     parentCommentId: _optionalText(row['parentCommentId']) ?? '',
     viewerReaction: _optionalText(row['viewerReaction']) ?? 'none',
-    actorSubAccountId: _requiredText(
-      row['actorSubAccountId'],
-      'actorSubAccountId',
-    ),
+    actorPersonaId: _requiredText(row['actorPersonaId'], 'actorPersonaId'),
     actorDisplayName: _requiredText(
       row['actorDisplayName'],
       'actorDisplayName',
     ),
     actorAvatarUrl: _optionalText(row['actorAvatarUrl']) ?? '',
     actorAvatarVersion: _optionalInt(row['actorAvatarVersion']) ?? 0,
-    counterpartSubAccountId:
-        _optionalText(row['counterpartSubAccountId']) ?? '',
-    counterpartDisplayName:
-        _optionalText(row['counterpartDisplayName']) ?? '',
+    counterpartPersonaId: _optionalText(row['counterpartPersonaId']) ?? '',
+    counterpartDisplayName: _optionalText(row['counterpartDisplayName']) ?? '',
     counterpartAvatarUrl: _optionalText(row['counterpartAvatarUrl']) ?? '',
-    targetSubAccountId: _requiredText(
-      row['targetSubAccountId'],
-      'targetSubAccountId',
-    ),
+    targetPersonaId: _requiredText(row['targetPersonaId'], 'targetPersonaId'),
     targetContentId: _requiredText(row['targetContentId'], 'targetContentId'),
     targetContentType: _requiredText(
       row['targetContentType'],
@@ -272,12 +224,11 @@ ContentProfileInteractionActivity decodeContentProfileInteractionActivity(
     ),
     targetContentSummary: _optionalText(row['targetContentSummary']) ?? '',
     targetKind: _optionalText(row['targetKind']) ?? 'record',
-    targetAvailability:
-        _optionalText(row['targetAvailability']) ?? 'active',
+    targetAvailability: _optionalText(row['targetAvailability']) ?? 'active',
     targetReplyCount: _optionalInt(row['targetReplyCount']) ?? 0,
-    displaySubAccountId: _requiredText(
-      row['displaySubAccountId'],
-      'displaySubAccountId',
+    displayPersonaId: _requiredText(
+      row['displayPersonaId'],
+      'displayPersonaId',
     ),
     displayName: _requiredText(row['displayName'], 'displayName'),
     displayAvatarUrl: _optionalText(row['displayAvatarUrl']) ?? '',

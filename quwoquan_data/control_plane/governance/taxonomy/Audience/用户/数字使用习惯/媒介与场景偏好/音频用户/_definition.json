@@ -2,6 +2,7 @@
   "label": "音频用户",
   "labelEn": "Audio-heavy User",
   "description": "偏好播客与音频内容",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

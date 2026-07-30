@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
-HOST="${PROD_SSH_HOST:-118.31.239.122}"
+HOST="${PROD_SSH_HOST:-}"
 ACCOUNT="prod-service-svc"
 DEST_ROOT="/home/${ACCOUNT}/bootstrap/prod-build-workspace"
 SERVICES="recommendation-service,content-service,chat-service,user-service,assistant-service,product-ops-service,tag-service"
@@ -27,6 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ -n "$HOST" ]] || { echo "FAIL: --host or PROD_SSH_HOST is required" >&2; exit 2; }
 KEY_FILE="${KEY_DIR%/}/${ACCOUNT}"
 [[ -f "$KEY_FILE" ]] || { echo "FAIL: missing key file: $KEY_FILE" >&2; exit 2; }
 

@@ -14,9 +14,19 @@ class ContentCanaryStageWireDto {
   final int rolloutPercent;
 
   factory ContentCanaryStageWireDto.fromMap(Map<String, dynamic> map) {
+    final stage = map['stage'];
+    final rolloutPercent = map['rolloutPercent'];
+    if (stage is! String || stage.isEmpty || stage != stage.trim()) {
+      throw const FormatException('invalid gray_release stage');
+    }
+    if (rolloutPercent is! int ||
+        rolloutPercent < 0 ||
+        rolloutPercent > 100) {
+      throw const FormatException('invalid gray_release rolloutPercent');
+    }
     return ContentCanaryStageWireDto(
-      stage: (map['stage'] ?? '').toString().trim(),
-      rolloutPercent: (map['rolloutPercent'] as num?)?.toInt() ?? 0,
+      stage: stage,
+      rolloutPercent: rolloutPercent,
     );
   }
 }
@@ -34,16 +44,21 @@ class ContentGrayReleaseClientDto {
   final List<ContentCanaryStageWireDto> canaryMatrix;
 
   factory ContentGrayReleaseClientDto.fromMap(Map<String, dynamic> m) {
-    final rawList = (m['canary_matrix'] as List?) ?? const [];
-    final stages = rawList
-        .whereType<Map>()
-        .map((e) => ContentCanaryStageWireDto.fromMap(Map<String, dynamic>.from(e)))
-        .where((s) => s.stage.isNotEmpty)
-        .toList(growable: false);
+    final rawList = m['canary_matrix'];
+    if (rawList != null && rawList is! List) {
+      throw const FormatException('invalid gray_release canary_matrix');
+    }
+    final stages = <ContentCanaryStageWireDto>[];
+    for (final row in (rawList as List?) ?? const <Object?>[]) {
+      stages.add(
+        ContentCanaryStageWireDto.fromMap(
+          _exactStringKeyMap(row, 'gray_release canary row'),
+        ),
+      );
+    }
     return ContentGrayReleaseClientDto(
-      experimentBucket:
-          (m['experiment_bucket'] ?? '').toString().trim(),
-      currentStage: (m['current_stage'] ?? '').toString().trim(),
+      experimentBucket: _optionalExactString(m, 'experiment_bucket'),
+      currentStage: _optionalExactString(m, 'current_stage'),
       canaryMatrix: stages,
     );
   }
@@ -63,25 +78,49 @@ class ContentAppConfigClientParsed {
   final Map<String, dynamic> clientStateSyncMap;
 
   factory ContentAppConfigClientParsed.fromRootMap(Map<String, dynamic> root) {
-    final content = (root['content'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final rawFlags = (content['feature_flags'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final content = _optionalExactMap(root, 'content');
+    final rawFlags = _optionalExactMap(content, 'feature_flags');
     final overrides = <String, bool>{};
     for (final e in rawFlags.entries) {
-      if (e.value is bool) {
-        overrides[e.key] = e.value as bool;
+      if (e.value is! bool) {
+        throw const FormatException('invalid feature_flags value');
       }
+      overrides[e.key] = e.value as bool;
     }
-    final grayRaw = (content['gray_release'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final grayRaw = _optionalExactMap(content, 'gray_release');
     final gray = ContentGrayReleaseClientDto.fromMap(grayRaw);
-    final syncRaw = (content['client_state_sync'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final syncRaw = _optionalExactMap(content, 'client_state_sync');
     return ContentAppConfigClientParsed._(
       featureFlagOverrides: overrides,
       grayRelease: gray,
       clientStateSyncMap: syncRaw,
     );
   }
+}
+
+Map<String, dynamic> _optionalExactMap(
+  Map<String, dynamic> parent,
+  String key,
+) {
+  final value = parent[key];
+  if (value == null) return const <String, dynamic>{};
+  return _exactStringKeyMap(value, key);
+}
+
+Map<String, dynamic> _exactStringKeyMap(Object? value, String label) {
+  if (value is! Map || value.keys.any((key) => key is! String)) {
+    throw FormatException('invalid $label');
+  }
+  return <String, dynamic>{
+    for (final entry in value.entries) entry.key as String: entry.value,
+  };
+}
+
+String _optionalExactString(Map<String, dynamic> parent, String key) {
+  final value = parent[key];
+  if (value == null) return '';
+  if (value is! String || value != value.trim()) {
+    throw FormatException('invalid $key');
+  }
+  return value;
 }

@@ -15,6 +15,18 @@ errors:
 - code: USER.USER.not_found
   kind: USER
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - CloseAccount
+    - GetMeProfile
+    - GetUserProfile
+    - ReadAccountSecurity
+    - RestoreAccount
+    - SuspendAccount
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.ResolveIncomingCallPushDestinations
+    - user.user_settings.ResolveAssistantDeliveryPolicy
   http_status: 404
   recovery_action: surface
   dart_const: userNotFound
@@ -25,6 +37,74 @@ errors:
 - code: USER.USER.unauthorized
   kind: USER
   reason: unauthorized
+  emitted_by:
+  - surface: http
+    operations:
+    - CheckAccountSecurityAuthority
+    - CloseAccount
+    - GetActivePersonaContext
+    - GetMeProfile
+    - GetPersonaLifecycleGuard
+    - GetPersonaManagementSummary
+    - GetProfileEditSnapshot
+    - GetProfileQrCard
+    - GetUserInterestProfile
+    - ListPersonas
+    - ReadAccountSecurity
+    - RestoreAccount
+    - SearchSocialRelations
+    - SuspendAccount
+    - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.account_session.Logout
+    - user.contact_discovery_record.DismissContactDiscovery
+    - user.contact_discovery_record.GetLatestContactDiscovery
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.ListCredentials
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.InvalidateDevicePushEndpoint
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.ResolveIncomingCallPushDestinations
+    - user.device_registration.ResolvePushEndpointSecret
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.AcceptInvitation
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListBlockedUsers
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_settings.GetAppearanceSettings
+    - user.user_settings.GetCallSettings
+    - user.user_settings.GetNotificationSettings
+    - user.user_settings.GetPrivacySettings
+    - user.user_settings.ResolveAssistantDeliveryPolicy
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 401
   recovery_action: surface
   dart_const: unauthorized
@@ -35,6 +115,23 @@ errors:
 - code: USER.USER.forbidden
   kind: USER
   reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - CheckAccountSecurityAuthority
+    - GetUserProfile
+    - ReadAccountSecurity
+    - RestoreAccount
+    - SuspendAccount
+    - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.device_registration.InvalidateDevicePushEndpoint
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.ResolveIncomingCallPushDestinations
+    - user.device_registration.ResolvePushEndpointSecret
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.user_settings.ResolveAssistantDeliveryPolicy
   http_status: 403
   recovery_action: surface
   dart_const: forbidden
@@ -42,19 +139,63 @@ errors:
   user_message:
     zh: 无权访问该资源
     en: Access denied
-- code: USER.USER.nickname_taken
-  kind: USER
-  reason: conflict
-  http_status: 409
-  recovery_action: surface
-  dart_const: nicknameTaken
-  go_const: ErrNicknameTaken
-  user_message:
-    zh: 该昵称已被使用，请换一个
-    en: Nickname already taken, please choose another
 - code: USER.USER.invalid_argument
   kind: USER
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - PullUserSync
+    - SearchSocialRelations
+    - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.account_appeal_intake.IssueAccountAppealCredential
+    - user.account_appeal_intake.SubmitAccountAppealIntake
+    - user.account_session.LoginAnonymous
+    - user.account_session.LoginOneTap
+    - user.account_session.LoginWithAlipay
+    - user.account_session.LoginWithPhone
+    - user.account_session.LoginWithQq
+    - user.account_session.LoginWithWechat
+    - user.account_session.Logout
+    - user.account_session.RefreshToken
+    - user.authentication_challenge.CreateAlipayAuthorizationRequest
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.authentication_challenge.SendOtp
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
+    - user.credential_binding.UnbindCredential
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 400
   recovery_action: surface
   dart_const: invalidArgument
@@ -65,6 +206,11 @@ errors:
 - code: USER.ACCOUNT.enforcement_decision_invalid
   kind: ACCOUNT
   reason: enforcement_decision_invalid
+  emitted_by:
+  - surface: http
+    operations:
+    - RestoreAccount
+    - SuspendAccount
   http_status: 400
   recovery_action: surface
   dart_const: accountEnforcementDecisionInvalid
@@ -75,6 +221,11 @@ errors:
 - code: USER.ACCOUNT.state_conflict
   kind: ACCOUNT
   reason: state_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - RestoreAccount
+    - SuspendAccount
   http_status: 409
   recovery_action: surface
   dart_const: accountStateConflict
@@ -82,20 +233,103 @@ errors:
   user_message:
     zh: 账号当前状态无法执行该操作
     en: The account is not in a state that permits this action
-- code: USER.USER.rate_limited
-  kind: USER
-  reason: rate_limited
-  http_status: 429
-  recovery_action: retry
-  recovery_after_seconds: 60
-  dart_const: rateLimited
-  go_const: ErrRateLimited
-  user_message:
-    zh: 操作太频繁，请稍后重试
-    en: Too many requests, please retry later
 - code: USER.SYSTEM.internal_error
   kind: SYSTEM
   reason: internal_error
+  emitted_by:
+  - surface: http
+    operations:
+    - CheckAccountSecurityAuthority
+    - CloseAccount
+    - GetActivePersonaContext
+    - GetMeProfile
+    - GetPersonaLifecycleGuard
+    - GetPersonaManagementSummary
+    - GetProfileEditSnapshot
+    - GetProfileQrCard
+    - GetPersonaProfile
+    - GetUserHomepageBundle
+    - GetUserInterestProfile
+    - GetUserProfile
+    - ListPersonas
+    - PullUserSync
+    - ReadAccountSecurity
+    - ResolveProfileQrToken
+    - RestoreAccount
+    - SearchSocialRelations
+    - SuspendAccount
+    - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.account_appeal_intake.IssueAccountAppealCredential
+    - user.account_appeal_intake.SubmitAccountAppealIntake
+    - user.account_session.LoginAnonymous
+    - user.account_session.LoginOneTap
+    - user.account_session.LoginWithAlipay
+    - user.account_session.LoginWithPhone
+    - user.account_session.LoginWithQq
+    - user.account_session.LoginWithWechat
+    - user.account_session.Logout
+    - user.account_session.RefreshToken
+    - user.authentication_challenge.CreateAlipayAuthorizationRequest
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.authentication_challenge.SendOtp
+    - user.contact_discovery_record.DismissContactDiscovery
+    - user.contact_discovery_record.GetLatestContactDiscovery
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
+    - user.credential_binding.ListCredentials
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.InvalidateDevicePushEndpoint
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.ResolveIncomingCallPushDestinations
+    - user.device_registration.ResolvePushEndpointSecret
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.AcceptInvitation
+    - user.invitation.GenerateInvitation
+    - user.invitation.GetInvitationByCode
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListBlockedUsers
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.profile_update_proposal.ApplyProposal
+    - user.profile_update_proposal.ConfirmProposal
+    - user.profile_update_proposal.CreateProfileUpdateProposal
+    - user.profile_update_proposal.GetProfileUpdateProposal
+    - user.profile_update_proposal.ListProfileUpdateProposals
+    - user.profile_update_proposal.RejectProposal
+    - user.profile_update_proposal.RollbackProposal
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_settings.GetAppearanceSettings
+    - user.user_settings.GetCallSettings
+    - user.user_settings.GetNotificationSettings
+    - user.user_settings.GetPrivacySettings
+    - user.user_settings.ResolveAssistantDeliveryPolicy
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 500
   recovery_action: surface
   dart_const: internalError
@@ -106,6 +340,10 @@ errors:
 - code: USER.PROFILE.invalid_region
   kind: PROFILE
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - user.persona.UpdateUserProfile
   http_status: 400
   recovery_action: surface
   dart_const: profileInvalidRegion
@@ -116,6 +354,10 @@ errors:
 - code: USER.PROFILE.invalid_tag_ref
   kind: PROFILE
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - user.persona.UpdateUserProfile
   http_status: 400
   recovery_action: surface
   dart_const: profileInvalidTagRef
@@ -126,6 +368,10 @@ errors:
 - code: USER.PROFILE.taxonomy_release_conflict
   kind: PROFILE
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - user.persona.UpdateUserProfile
   http_status: 409
   recovery_action: reload
   dart_const: profileTaxonomyReleaseConflict
@@ -136,6 +382,10 @@ errors:
 - code: USER.PROFILE.version_conflict
   kind: PROFILE
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - user.persona.UpdateUserProfile
   http_status: 409
   recovery_action: reload
   dart_const: profileVersionConflict
@@ -146,6 +396,10 @@ errors:
 - code: USER.PROFILE.idempotency_conflict
   kind: PROFILE
   reason: idempotency_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - user.persona.UpdateUserProfile
   http_status: 409
   recovery_action: surface
   dart_const: profileIdempotencyConflict
@@ -156,6 +410,10 @@ errors:
 - code: USER.PROFILE.invalid_media_asset
   kind: PROFILE
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - user.persona.UpdateUserProfile
   http_status: 400
   recovery_action: surface
   dart_const: profileInvalidMediaAsset
@@ -166,6 +424,10 @@ errors:
 - code: USER.PROFILE.qr_token_invalid
   kind: PROFILE
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - ResolveProfileQrToken
   http_status: 404
   recovery_action: surface
   dart_const: profileQrTokenInvalid
@@ -176,6 +438,10 @@ errors:
 - code: USER.PROFILE.qr_token_expired
   kind: PROFILE
   reason: expired
+  emitted_by:
+  - surface: http
+    operations:
+    - ResolveProfileQrToken
   http_status: 410
   recovery_action: surface
   dart_const: profileQrTokenExpired

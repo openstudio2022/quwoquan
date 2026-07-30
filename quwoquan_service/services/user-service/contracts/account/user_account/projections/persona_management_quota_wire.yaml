@@ -11,13 +11,13 @@ client_projection:
   base_class: ''
   output_path: cloud/runtime/generated/user/persona/persona_management_quota_wire_dto.g.dart
   fields:
-  - name: maxSubAccounts
+  - name: maxPersonas
     dart_type: int
     nullable: false
-    source: maxSubAccounts
+    source: maxPersonas
     default: '5'
-  - name: usedSubAccounts
+  - name: usedPersonas
     dart_type: int
     nullable: false
-    source: usedSubAccounts
+    source: usedPersonas
     default: '0'

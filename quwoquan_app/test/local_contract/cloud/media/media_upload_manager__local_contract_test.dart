@@ -74,7 +74,7 @@ void main() {
       expect(init.mediaType, ContentMediaType.video);
       expect(init.contentType, 'video/mp4');
       expect(init.fileSize, bytes.length);
-      expect(init.expectedSha256, 'sha256:${sha256.convert(bytes)}');
+      expect(init.expectedSha256, '${sha256.convert(bytes)}');
       expect(media.completedSessions, <String>['session_1']);
       expect(media.abortedSessions, isEmpty);
       expect(uploadedUri, Uri.parse('https://upload.quwoquan.test/session_1'));

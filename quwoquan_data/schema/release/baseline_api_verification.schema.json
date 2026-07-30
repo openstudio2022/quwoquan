@@ -26,8 +26,7 @@
       "type": "string",
       "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/.+/homepage-import\\.json$"
     },
-    "apiBaseUrl": {"type": "string", "pattern": "^https?://"},
-    "apiResolveHost": {"type": "string", "minLength": 1},
+    "apiBaseUrl": {"type": "string", "pattern": "^https://"},
     "verifiedAt": {"type": "string", "minLength": 1},
     "passed": {"const": true},
     "offlined": {

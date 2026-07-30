@@ -322,9 +322,13 @@ abstract final class ChatText {
   static const String startGroupChatCirclePickerTitle = '选择圈子';
   static const String startGroupChatGroupPickerEmpty = '暂无可选的群聊';
   static const String startGroupChatCirclePickerEmpty = '暂无已绑定群聊的可选圈子';
-  static const String startGroupChatCompanionContextTitle = '正在发起交集结伴';
+  static const String startGroupChatCompanionContextTitle = '正在拉群约伴';
   static const String startGroupChatCompanionContextSubtitle =
-      '已带入共同想去对象与交集来源，提交前仍会经过登录、实名、青少年模式和频控等安全门。';
+      '已带入共同想去对象与交集来源，新群会按该对象命名；提交前仍会经过登录、实名、青少年模式和频控等安全门。';
+
+  /// 交集约伴群的默认群名：约伴群是关于某个共同对象的，不是成员名拼接的普通群。
+  static String startGroupChatCompanionGroupTitle(String objectName) =>
+      '$objectName · 约伴';
   static String startGroupChatRemovedMember(String name) => '已移除 $name';
   static String startGroupChatFriendsCount(int count) => '$count 个朋友';
   static String startGroupChatGroupMemberTitle(String name, int count) =>

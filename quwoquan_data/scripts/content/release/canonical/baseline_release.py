@@ -17,7 +17,7 @@ from content.release.canonical.object_transaction_contract import (
     assert_environment_neutral,
 )
 from content.release.canonical.release_attestation import ReleaseAttestation
-from content.release.model import ReleaseKind
+from content.release.model import DataSourceOwner, ReleaseKind
 from core.release_layout import (
     attestation_root,
     object_closure_digest,
@@ -54,10 +54,12 @@ def build_empty_baseline_release(
         if (
             header.get("releaseId") == release_id
             and header.get("releaseKind") == ReleaseKind.EMPTY_BASELINE
+            and header.get("sourceOwner") == DataSourceOwner.QWQ_DATA
             and header.get("canonicalMerkle") == object_closure_digest(final_root)
             and header.get("executionIds") == []
             and header.get("sourceDigests") == [source_digest.to_document()]
             and aggregate.get("sourceDigests") == [source_digest.to_document()]
+            and aggregate.get("sourceOwner") == DataSourceOwner.QWQ_DATA
             and desired.get("desiredRefs") == _EMPTY_DESIRED_REFS
             and aggregate.get("payloadSha256") == payload_digest(final_root)
         ):
@@ -78,6 +80,7 @@ def build_empty_baseline_release(
         release_header = {
             "schema": RELEASE_SCHEMA,
             "releaseId": release_id,
+            "sourceOwner": DataSourceOwner.QWQ_DATA,
             "releaseKind": ReleaseKind.EMPTY_BASELINE,
             "canonicalMerkle": canonical_merkle,
             "executionIds": [],
@@ -128,6 +131,7 @@ def build_empty_baseline_release(
         )
         release_attestation = ReleaseAttestation(
             release_id=release_id,
+            source_owner=DataSourceOwner.QWQ_DATA,
             release_kind=ReleaseKind.EMPTY_BASELINE,
             execution_ids=(),
             entity_count=0,

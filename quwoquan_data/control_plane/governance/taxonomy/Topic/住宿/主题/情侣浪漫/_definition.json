@@ -2,6 +2,7 @@
   "label": "情侣浪漫",
   "labelEn": "Romantic",
   "description": "适合情侣蜜月的住宿",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

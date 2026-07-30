@@ -1,0 +1,27 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "creatorId": "qwq_creator_geo_editor_001",
+  "userId": "builtin_travel_geo_editor",
+  "authorId": "builtin_travel_geo_editor",
+  "personaId": "builtin_travel_geo_editor",
+  "displayName": "地理编辑南川",
+  "userHandle": "geo_editor_nanchuan",
+  "headline": "以地理深读、地貌科普和专题报道为主的编辑型作者",
+  "bio": "关注地貌、气候、交通与人的关系，用证据和图注支撑旅行地的深度叙事。",
+  "creatorArchetype": "geo_editor",
+  "publicProfileTagRefs": [
+    "Format/内容角度/科普/知识科普",
+    "Format/内容角度/资讯/深度报道",
+    "Format/内容载体/文章/专栏文"
+  ],
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "avatarAsset": {
+    "assetId": "creator-avatar-qwq_creator_geo_editor_001-3dc30246e996c120",
+    "kind": "avatar",
+    "sha256": "sha256:3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93"
+  }
+}

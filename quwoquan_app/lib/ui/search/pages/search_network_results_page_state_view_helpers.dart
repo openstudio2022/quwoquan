@@ -222,7 +222,7 @@ extension _SearchNetworkResultsPageStateViewHelpers
             target: 'users',
             objectType: SearchObjectType.userProfile,
           );
-          context.push(AppRoutePaths.userProfile(username: id));
+          context.push(AppRoutePaths.userProfile(userHandle: id));
         }
     }
   }

@@ -79,7 +79,7 @@ final class RemoteProfileInteractionAdapter
         deadlineAt: base.deadlineAt,
         cancellation: base.cancellation,
         idempotencyKey:
-            'profile-read:${command.subAccountId}:${command.activityId}:${command.state.wireValue}',
+            'profile-read:${command.personaId}:${command.activityId}:${command.state.wireValue}',
       ),
     );
     // dart format on

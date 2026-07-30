@@ -33,7 +33,7 @@ POST_MANIFEST_FORBIDDEN_KEYS = {
     "sourcePaths",
     "articleAssetManifest",
     "assetManifestSha256",
-    "documentVersionSha256",
+    "documentBundleSha256",
     "articleMarkdownDigest",
 }
 
@@ -46,7 +46,7 @@ POST_MANIFEST_CREATOR_KEYS = {
     "authorId",
     "creatorProfileId",
     "creatorArchetype",
-    "creatorProfileVersion",
+    "creatorProfileDigest",
     "creatorDisclosure",
     "experienceClaimMode",
     "authorQualitySignals",

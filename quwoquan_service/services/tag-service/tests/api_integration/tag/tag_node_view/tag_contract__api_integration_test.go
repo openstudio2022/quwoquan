@@ -779,7 +779,7 @@ func TestUserProfileTagProjectionConvergesOnHighestSourceVersion(t *testing.T) {
 	applied, err := objStore.ApplyUserProfileTagProjection(
 		ctx,
 		ports.UserProfileTagProjection{
-			EventID:           "profile-tags-v2",
+			EventID:           "profile-tags-newer",
 			UserID:            "projection-user",
 			TagRefs:           []string{"Audience/用户/兴趣偏好/科技/AI"},
 			TaxonomyReleaseID: "taxonomy-release-2",
@@ -793,7 +793,7 @@ func TestUserProfileTagProjectionConvergesOnHighestSourceVersion(t *testing.T) {
 	applied, err = objStore.ApplyUserProfileTagProjection(
 		ctx,
 		ports.UserProfileTagProjection{
-			EventID:           "profile-tags-v1",
+			EventID:           "profile-tags-stale",
 			UserID:            "projection-user",
 			TagRefs:           []string{"Audience/用户/兴趣偏好/生活/咖啡"},
 			TaxonomyReleaseID: "taxonomy-release-1",

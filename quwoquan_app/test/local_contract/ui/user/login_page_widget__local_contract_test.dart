@@ -1,18 +1,16 @@
-import 'dart:async';
-
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons, Theme, ThemeData;
 import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
+import 'package:quwoquan_app/core/auth/account_restriction_support.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/di/login_dependencies.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/one_tap_login_native_bridge.dart';
@@ -22,19 +20,15 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
         accountSessionLifecycleCommandWriterProvider,
         accountSessionLoginCommandWriterProvider,
+        appCredentialBindingCommandWriterProvider,
         authenticationChallengeCommandWriterProvider;
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
-import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:simple_icons/simple_icons.dart';
-import '../../../support/runtime_failure_fixtures.dart';
-import '../../../support/recording_app_telemetry_recorder.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-const String _defaultNicknameSample = '新同学_260622_6698692';
+import '../../../support/recording_app_telemetry_recorder.dart';
+import '../../../support/runtime_failure_fixtures.dart';
 
 void main() {
   setUpAll(() async {
@@ -48,7 +42,6 @@ void main() {
         'packages/simple_icons/SimpleIcons',
         'packages/simple_icons/fonts/SimpleIcons.ttf',
       ),
-      ('MaterialIcons', 'fonts/MaterialIcons-Regular.otf'),
     ];
     await Future.wait(
       fonts.map((font) {
@@ -58,2087 +51,746 @@ void main() {
     );
   });
 
-  test('登录事件 payload 仅保留环境、平台、provider、阶段、结果、错误码和耗时', () {
-    final payload = buildLoginTelemetryPayload(
-      environment: 'prod',
-      platform: 'ios',
-      action: 'login_phone_login_failed',
-      provider: 'phone',
-      raw: const <String, dynamic>{
-        'code': 'USER.AUTH.otp_mismatch',
-        'durationMs': 321,
-        'phone': '18013813909',
-        'otpCode': '123456',
-        'token': 'secret-token',
-        'requestId': 'request-123',
-        'traceId': 'trace-456',
-        'message': 'provider raw error',
-      },
-    );
+  group('状态与错误合同', () {
+    test('terminal latch 只允许一个完成方取得终态', () {
+      final controller = LoginFlowController(flowId: 'flow-1');
+      addTearDown(controller.dispose);
 
-    expect(payload.keys.toSet(), <String>{
-      'environment',
-      'platform',
-      'provider',
-      'stage',
-      'result',
-      'errorCode',
-      'durationMs',
-    });
-    expect(payload['provider'], 'phone');
-    expect(payload['result'], 'failure');
-    expect(payload['errorCode'], 'USER.AUTH.otp_mismatch');
-    expect(payload['durationMs'], 321);
-    expect(payload.values, isNot(contains('18013813909')));
-    expect(payload.values, isNot(contains('123456')));
-    expect(payload.values, isNot(contains('secret-token')));
-  });
-
-  test('nicknameCustomized 只接受真实布尔 true，缺失或异常类型均按 false', () {
-    expect(
-      LoginAccountHint.fromMap(const <String, dynamic>{
-        'nicknameCustomized': true,
-      }).nicknameCustomized,
-      isTrue,
-    );
-    for (final value in <dynamic>[null, false, 'true', 1]) {
-      expect(
-        LoginAccountHint.fromMap(<String, dynamic>{
-          'nicknameCustomized': value,
-        }).nicknameCustomized,
-        isFalse,
+      expect(controller.tryClaimTerminal(), isTrue);
+      expect(controller.tryClaimTerminal(), isFalse);
+      final before = controller.state;
+      controller.replace(
+        LoginFlowState(step: LoginStep.phoneEntry, flowId: 'flow-1'),
       );
-    }
-  });
+      expect(controller.state, same(before));
+    });
 
-  test('返回账号必须同时具备具体账号线索，系统昵称或单独头像不构成入口', () {
-    expect(
-      const LoginAccountHint(
-        displayName: '欢迎回来',
-        maskedPhone: '',
-        avatarUrl: 'https://cdn.example/avatar.png',
-      ).hasConcreteIdentifier,
-      isFalse,
-    );
-    expect(
-      const LoginAccountHint(
-        displayName: '真实昵称',
-        maskedPhone: '',
-        nicknameCustomized: true,
-      ).hasConcreteIdentifier,
-      isTrue,
-    );
-    expect(
-      const LoginAccountHint(
-        displayName: '',
-        maskedPhone: '180****9016',
-      ).hasConcreteIdentifier,
-      isTrue,
-    );
-  });
-
-  test('运营商入口必须有完整正向能力和可提交 token', () {
-    expect(
-      const OneTapLoginProbe(
-        availability: OneTapAvailability.available,
-        vendor: 'aliyun',
-      ).canOfferLogin,
-      isFalse,
-    );
-    expect(
-      const OneTapLoginProbe(
-        availability: OneTapAvailability.available,
-        vendor: 'aliyun',
-        carrierToken: 'short-lived-token',
-      ).canOfferLogin,
-      isTrue,
-    );
-  });
-
-  test('短信验证码入口与过期提示使用统一完整文案', () {
-    expect(FoundationText.loginReturningSmsPrimary, '短信验证码登录');
-    expect(FoundationText.loginPhoneSubmit, '验证并登录');
-    expect(FoundationText.loginSessionExpiredHint, '登录信息已过期，请用短信验证码重新登录');
-  });
-
-  test('登录原因主副标题覆盖全部 reason 且不重复', () {
-    for (final reason in AuthGateReason.values) {
-      final copy = loginReasonCopyForName(reason.name);
-      expect(copy.title.trim(), isNotEmpty, reason: reason.name);
-      expect(copy.subtitle.trim(), isNotEmpty, reason: reason.name);
-      expect(copy.title, isNot(copy.subtitle), reason: reason.name);
-      expect(copy.source, LoginReasonCopySource.localApp);
-    }
-    for (final reason in AuthPromptReason.values) {
-      final copy = loginReasonCopyForName(reason.name);
-      expect(copy.title.trim(), isNotEmpty, reason: reason.name);
-      expect(copy.subtitle.trim(), isNotEmpty, reason: reason.name);
-      expect(copy.title, isNot(copy.subtitle), reason: reason.name);
-    }
-  });
-
-  testWidgets('关闭登录页会清理待续接动作并回到宿主安全态', (tester) async {
-    var dismissed = false;
-    final authFacets = _RecordingAuthFacets();
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          authSessionStoreProvider.overrideWithValue(_GuestLoginStore()),
-          accountSessionLoginCommandWriterProvider.overrideWithValue(
-            authFacets,
-          ),
-          accountSessionLifecycleCommandWriterProvider.overrideWithValue(
-            authFacets,
-          ),
-          authenticationChallengeCommandWriterProvider.overrideWithValue(
-            authFacets,
-          ),
-          oneTapLoginClientProvider.overrideWithValue(
-            const _UnavailableOneTapLoginClient(),
-          ),
-          loginJourneyEventTrackerProvider.overrideWithValue(
-            JourneyEventTracker(
-              telemetryReporter: RecordingAppTelemetryRecorder(),
-            ),
-          ),
-        ],
-        child: CupertinoApp(
-          home: LoginFrameHost(
-            onDismiss: () => dismissed = true,
-            dismissPolicy: LoginDismissPolicy.safeFallback,
-          ),
+    test('用户错误文案、恢复动作和可观测字段同源', () {
+      final mismatch = loginFeedbackForError(
+        _cloudError(
+          UserErrorCode.otpMismatch,
+          requestId: 'request-1',
+          traceId: 'trace-1',
         ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(LoginFrameHost)),
-    );
-    container
-        .read(authContinuationProvider.notifier)
-        .set(
-          const StartDirectCallContinuation(
-            targetUserId: 'target-persona',
-            callType: 'video',
-          ),
-          ownerToken: 'profile-call-entry',
+        origin: LoginFailureOrigin.otpVerify,
+        locale: 'zh',
+      );
+      expect(mismatch.message, '验证码不正确');
+      expect(mismatch.copyKey, 'loginOtpMismatch');
+      expect(mismatch.recoveryAction, 'reenterOtp');
+      expect(mismatch.clearOtp, isTrue);
+      expect(mismatch.shakeOtp, isTrue);
+      expect(mismatch.sourceCode, UserErrorCode.otpMismatch.code);
+      expect(mismatch.requestId, 'request-1');
+      expect(mismatch.traceId, 'trace-1');
+
+      final cases = <UserErrorCode, (String, String)>{
+        UserErrorCode.otpExpired: ('验证码已失效', 'resendOtp'),
+        UserErrorCode.challengeConsumed: ('验证码已失效', 'resendOtp'),
+        UserErrorCode.otpAttemptsExceeded: ('尝试次数较多', 'waitThenResendOtp'),
+        UserErrorCode.otpProviderFailed: ('验证码发送失败', 'resendOtp'),
+        UserErrorCode.wechatAuthFailed: ('授权未完成', 'retryAuthorization'),
+        UserErrorCode.credentialConflict: ('这个手机号已绑定其他账号', 'changePhone'),
+      };
+      for (final entry in cases.entries) {
+        final origin = entry.key == UserErrorCode.otpProviderFailed
+            ? LoginFailureOrigin.otpSend
+            : entry.key == UserErrorCode.wechatAuthFailed
+            ? LoginFailureOrigin.social
+            : LoginFailureOrigin.otpVerify;
+        final feedback = loginFeedbackForError(
+          _cloudError(entry.key),
+          origin: origin,
+          locale: 'zh',
         );
-    expect(container.read(authContinuationProvider), isNotNull);
+        expect(feedback.message, entry.value.$1, reason: entry.key.code);
+        expect(feedback.recoveryAction, entry.value.$2, reason: entry.key.code);
+      }
+    });
 
-    await tester.tap(find.byIcon(CupertinoIcons.xmark));
-    await tester.pump();
-
-    expect(dismissed, isTrue);
-    expect(container.read(authContinuationProvider), isNull);
-  });
-
-  test('登录错误仅由位置决定，不维护红/琥珀/灰语气分支', () {
-    expect(
-      loginErrorSurfaceForCode(
-        UserErrorCode.otpRateLimited,
-        origin: LoginFailureOrigin.otpSend,
-      ),
-      LoginErrorSurface.otpField,
-    );
-    expect(
-      loginErrorSurfaceForCode(
-        UserErrorCode.socialProviderUnavailable,
-        origin: LoginFailureOrigin.social,
-      ),
-      LoginErrorSurface.socialMethod,
-    );
-    expect(
-      loginErrorSurfaceForCode(
-        UserErrorCode.accountSuspended,
-        origin: LoginFailureOrigin.oneTap,
-      ),
-      LoginErrorSurface.accountBlocked,
-    );
-  });
-
-  testWidgets('登录页 hero 使用真实趣我圈花瓣品牌标识与品牌库第三方图标', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _TestNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.byIcon(CupertinoIcons.circle_grid_hex_fill), findsNothing);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is CustomPaint && widget.painter is WelcomeAppIconPainter,
-      ),
-      findsOneWidget,
-    );
-    expect(find.byIcon(SimpleIcons.wechat), findsOneWidget);
-    expect(find.byIcon(SimpleIcons.qq), findsOneWidget);
-    expect(find.byIcon(SimpleIcons.alipay), findsOneWidget);
-    expect(find.byIcon(Icons.phone_iphone), findsNothing);
-  });
-
-  testWidgets('返回账号无头像时完全隐藏头像且其他方式名称不重复登录', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _SoftLoggedOutStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _TestNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.byType(AppAvatarImage), findsNothing);
-    expect(find.byIcon(CupertinoIcons.person_fill), findsNothing);
-    expect(
-      find.bySemanticsLabel(FoundationText.loginAccountAvatarSemanticLabel),
-      findsNothing,
-    );
-    expect(find.text('欢'), findsNothing);
-    expect(find.text(FoundationText.loginMethodWechat), findsOneWidget);
-    expect(find.text(FoundationText.loginMethodQq), findsOneWidget);
-    expect(find.text(FoundationText.loginMethodPhone), findsOneWidget);
-    expect(find.text('微信登录'), findsNothing);
-    expect(find.text('QQ登录'), findsNothing);
-    expect(find.text('其他手机号登录'), findsNothing);
-  });
-
-  testWidgets('系统默认昵称加空标识不会生成幽灵返回账号页', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GhostSummaryStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text(FoundationText.loginReturningDefaultName), findsNothing);
-    expect(
-      find.text(FoundationText.loginReturningDefaultAccount),
-      findsNothing,
-    );
-    expect(find.text(FoundationText.loginContinue), findsNothing);
-    expect(find.text(FoundationText.loginOneTap), findsNothing);
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-  });
-
-  testWidgets('探测已初始化但没有预登录 token 时静默隐藏运营商入口', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _IncompleteProbeOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text(FoundationText.loginOneTapPrimary), findsNothing);
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.byType(AppFormErrorCard), findsNothing);
-  });
-
-  for (final scenario in <({String name, Size size, Brightness brightness})>[
-    (
-      name: 'light_phone',
-      size: const Size(390, 844),
-      brightness: Brightness.light,
-    ),
-    (
-      name: 'dark_phone',
-      size: const Size(390, 844),
-      brightness: Brightness.dark,
-    ),
-    (name: 'narrow', size: const Size(320, 568), brightness: Brightness.light),
-    (name: 'wide', size: const Size(1024, 768), brightness: Brightness.light),
-  ]) {
-    testWidgets('返回登录视觉基线 ${scenario.name}', (tester) async {
-      await tester.binding.setSurfaceSize(scenario.size);
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      await _pumpLogin(
-        tester,
-        authStore: _SoftLoggedOutStore(),
-        authRepository: _RecordingAuthFacets(),
-        oneTapClient: const _UnavailableOneTapLoginClient(),
-        nativeAuthBridge: const _TestNativeAuthBridge(),
-        capabilities: CapabilityProfile.mobile,
-        brightness: scenario.brightness,
-        fontFamily: 'Noto Sans SC',
+    test('网络校验失败保留验证码且不伪造服务端错误码', () {
+      final feedback = loginFeedbackForError(
+        _cloudErrorWithoutCode(kind: RuntimeFailureKind.network),
+        origin: LoginFailureOrigin.otpVerify,
+        locale: 'zh',
       );
-      await tester.pump(const Duration(milliseconds: 50));
+      expect(feedback.message, '暂时无法验证验证码');
+      expect(feedback.preserveOtp, isTrue);
+      expect(feedback.sourceCode, isNull);
+      expect(feedback.failureKind, RuntimeFailureKind.network.name);
+      expect(feedback.recoveryAction, 'retryVerifyOtp');
+    });
 
-      await expectLater(
-        find.byKey(const ValueKey<String>('login-page-test-boundary')),
-        matchesGoldenFile('goldens/login_returning_${scenario.name}.png'),
+    test('account_suspended 固定使用 generated 安全文案且与注销、临时锁定分轨', () {
+      final suspended = loginFeedbackForError(
+        CloudException(
+          type: CloudErrorType.forbidden,
+          message: 'raw exception detail',
+          code: UserErrorCode.accountSuspended.code,
+          userMessage:
+              'reason=secret evidence=secret case=case-123 raw_exception=secret',
+          runtimeFailure: testRuntimeFailure(
+            code: UserErrorCode.accountSuspended.code,
+            kind: RuntimeFailureKind.auth,
+          ),
+        ),
+        origin: LoginFailureOrigin.otpVerify,
+        locale: 'zh',
+      );
+      final deleted = loginFeedbackForError(
+        _cloudError(UserErrorCode.accountDeleted),
+        origin: LoginFailureOrigin.otpVerify,
+        locale: 'zh',
+      );
+      final locked = loginFeedbackForError(
+        _cloudError(UserErrorCode.loginLocked),
+        origin: LoginFailureOrigin.otpVerify,
+        locale: 'zh',
+      );
+
+      expect(suspended.message, UserErrorCode.accountSuspended.defaultMessage);
+      expect(suspended.message, isNot(contains('secret')));
+      expect(suspended.copyKey, 'loginAccountSuspended');
+      expect(suspended.recoveryAction, 'openSupport');
+      expect(deleted.copyKey, 'loginAccountDeleted');
+      expect(deleted.recoveryAction, 'changeMethod');
+      expect(locked.copyKey, 'loginAccountTemporarilyLocked');
+      expect(locked.recoveryAction, 'waitThenChangeMethod');
+    });
+
+    test('产品漏斗与运维失败事件分轨且不记录敏感输入', () async {
+      final recorder = RecordingAppTelemetryRecorder();
+      final tracker = JourneyEventTracker(telemetryReporter: recorder);
+      await tracker.trackLoginFunnel(
+        action: 'login_otp_verify',
+        flowId: 'flow-safe',
+        step: 'otp',
+        result: 'failure',
+        provider: 'phone',
+        otpPurpose: 'login',
+        pageName: 'LoginPage',
+      );
+      await tracker.trackLoginOperation(
+        operationId: 'verify_login_otp',
+        surfaceId: 'login',
+        result: 'failure',
+        flowId: 'flow-safe',
+        step: 'otp',
+        failReasonCode: UserErrorCode.otpMismatch.code,
+        failureKind: 'invalidInput',
+        recoveryAction: 'reenterOtp',
+        copyKey: 'loginOtpMismatch',
+        feedbackSurface: 'otp',
+        requestId: 'request-safe',
+        traceId: 'trace-safe',
+        pageName: 'LoginPage',
+      );
+
+      expect(recorder.recorded, hasLength(2));
+      final funnel = recorder.recorded.first;
+      final operation = recorder.recorded.last;
+      expect(funnel.eventType, 'login_funnel');
+      expect(funnel.extensions, isNot(contains('requestId')));
+      expect(funnel.extensions, isNot(contains('traceId')));
+      expect(operation.eventType, 'login_operation');
+      expect(operation.extensions['requestId'], 'request-safe');
+      expect(operation.extensions['traceId'], 'trace-safe');
+      expect(operation.extensions['copyKey'], 'loginOtpMismatch');
+      expect(operation.extensions['feedbackSurface'], 'otp');
+      for (final payload in recorder.recorded.map(
+        (event) => event.extensions,
+      )) {
+        expect(payload.values, isNot(contains('18013813909')));
+        expect(payload.values, isNot(contains('123456')));
+        expect(payload.keys, isNot(contains('otpCode')));
+        expect(payload.keys, isNot(contains('bindingTicket')));
+        expect(payload.keys, isNot(contains('token')));
+      }
+    });
+
+    testWidgets('登录步骤停留九十秒会产生一次可告警的 stalled 事实', (tester) async {
+      final recorder = RecordingAppTelemetryRecorder();
+      await _pumpHost(tester, auth: _RecordingAuthFacets(), recorder: recorder);
+
+      await tester.pump(const Duration(seconds: 90));
+
+      final stalled = recorder.recorded.where(
+        (event) =>
+            event.eventType == 'login_funnel' &&
+            event.extensions['action'] == 'login_state_changed' &&
+            event.extensions['result'] == 'stalled',
+      );
+      expect(stalled, hasLength(1));
+      expect(
+        stalled.single.extensions['durationMs'],
+        greaterThanOrEqualTo(90000),
+      );
+      expect(stalled.single.extensions, isNot(contains('requestId')));
+      expect(stalled.single.extensions, isNot(contains('traceId')));
+    });
+  });
+
+  group('统一布局与高保基线', () {
+    testWidgets('一键登录层级、居中文案与三入口 footer 固定', (tester) async {
+      final state = LoginFlowState(
+        step: LoginStep.oneTap,
+        flowId: 'layout',
+        entryMode: LoginEntryMode.carrier,
+        maskedPhone: '180****9016',
+      );
+      await _pumpFrame(tester, state: state);
+
+      final primary = find.byKey(const ValueKey<String>('loginOneTapPrimary'));
+      final secondary = find.byKey(
+        const ValueKey<String>('loginOtherPhoneButton'),
+      );
+      final agreement = find.byType(LoginAgreementRow);
+      final footer = find.byKey(const ValueKey<String>('loginMethodFooter'));
+      expect(primary, findsOneWidget);
+      expect(secondary, findsOneWidget);
+      expect(agreement, findsOneWidget);
+      expect(footer, findsOneWidget);
+      expect(
+        tester.getTopLeft(primary).dy,
+        lessThan(tester.getTopLeft(secondary).dy),
+      );
+      expect(
+        tester.getTopLeft(secondary).dy,
+        lessThan(tester.getTopLeft(agreement).dy),
+      );
+      expect(
+        tester.getTopLeft(agreement).dy,
+        lessThan(tester.getTopLeft(footer).dy),
+      );
+
+      final footerDescendants = find.descendant(
+        of: footer,
+        matching: find.byType(Text),
+      );
+      final footerLabels = footerDescendants
+          .evaluate()
+          .map((element) => element.widget)
+          .whereType<Text>()
+          .map((widget) => widget.data)
+          .whereType<String>()
+          .toList();
+      expect(footerLabels, containsAll(<String>['其他登录方式', '微信', 'QQ', '支付宝']));
+      expect(footerLabels, isNot(contains('其他手机号登录')));
+
+      for (final text in <String>['欢迎回来', '本机号码 180****9016', '其他登录方式']) {
+        expect(
+          tester.widget<Text>(find.text(text)).textAlign,
+          TextAlign.center,
+        );
+      }
+    });
+
+    testWidgets('footer 在手机号、验证码和异常状态保持同一底部基线', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final states = <LoginFlowState>[
+        LoginFlowState(step: LoginStep.phoneEntry, flowId: 'phone'),
+        LoginFlowState(
+          step: LoginStep.otp,
+          flowId: 'otp',
+          phone: '18013819016',
+          maskedPhone: '180****9016',
+          challengeId: 'challenge',
+          otpChallengeState: OtpChallengeState.active,
+          resendDeadline: DateTime.now().add(const Duration(seconds: 60)),
+        ),
+        LoginFlowState(
+          step: LoginStep.socialFailed,
+          flowId: 'social-failed',
+          provider: 'wechat',
+          feedback: _feedback('授权未完成', 'loginSocialAuthorizationFailed'),
+        ),
+      ];
+      final footerTops = <double>[];
+      for (final state in states) {
+        await _pumpFrame(tester, state: state, setSurfaceSize: false);
+        footerTops.add(
+          tester
+              .getTopLeft(
+                find.byKey(const ValueKey<String>('loginMethodFooter')),
+              )
+              .dy,
+        );
+        final scroll = find.byKey(const ValueKey<String>('loginMainScroll'));
+        final footer = find.byKey(const ValueKey<String>('loginMethodFooter'));
+        expect(find.descendant(of: scroll, matching: footer), findsNothing);
+      }
+      expect(footerTops.toSet(), hasLength(1));
+    });
+
+    testWidgets('不支持的平台仍保留三个槽位并提供具象无障碍说明', (tester) async {
+      await _pumpFrame(
+        tester,
+        state: LoginFlowState(
+          step: LoginStep.phoneEntry,
+          flowId: 'unavailable',
+        ),
+        availability: _unavailableSocialCapabilities,
+      );
+      expect(find.text('微信'), findsOneWidget);
+      expect(find.text('QQ'), findsOneWidget);
+      expect(find.text('支付宝'), findsOneWidget);
+      expect(find.bySemanticsLabel('当前设备暂不支持微信登录'), findsOneWidget);
+      expect(find.bySemanticsLabel('当前设备暂不支持QQ登录'), findsOneWidget);
+      expect(find.bySemanticsLabel('当前设备暂不支持支付宝登录'), findsOneWidget);
+    });
+
+    testWidgets('320px、200% 字体、键盘与 reduced motion 均保留操作出口', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpFrame(
+        tester,
+        setSurfaceSize: false,
+        textScaler: const TextScaler.linear(2),
+        viewInsets: const EdgeInsets.only(bottom: 220),
+        disableAnimations: true,
+        state: LoginFlowState(
+          step: LoginStep.otp,
+          flowId: 'a11y',
+          phone: '18013819016',
+          maskedPhone: '180****9016',
+          challengeId: 'challenge',
+          code: '',
+          otpChallengeState: OtpChallengeState.resendAvailable,
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey<String>('loginOtpResendSlot')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('loginMethodFooter')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('loginMainScroll')),
+        findsOneWidget,
       );
     });
-  }
 
-  testWidgets('登录页输入框、验证码格和其他方式图标使用同一高保 token', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _TestNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.pump();
-    expect(
-      tester.getSize(find.byType(PhoneNumberField)),
-      const Size(374, AppSpacing.loginPhoneFieldHeight),
-    );
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(find.byType(PhoneNumberField), findsNothing);
-    expect(
-      find.byKey(const ValueKey<String>('loginOtpDestinationSummary')),
-      findsOneWidget,
-    );
-
-    final otpContainers = tester
-        .widgetList<Container>(
-          find.descendant(
-            of: find.byType(OtpCodeBoxes),
-            matching: find.byType(Container),
-          ),
-        )
-        .where((container) {
-          final decoration = container.decoration;
-          final constraints = container.constraints;
-          return decoration is BoxDecoration &&
-              constraints?.minWidth == AppSpacing.loginOtpBoxSize &&
-              constraints?.minHeight == AppSpacing.loginOtpBoxSize &&
-              decoration.borderRadius != null;
-        })
-        .toList();
-    expect(otpContainers, hasLength(6));
-    final otpDecoration = otpContainers.first.decoration! as BoxDecoration;
-    final otpSurface = otpDecoration.color!;
-    expect(otpSurface, isA<CupertinoDynamicColor>());
-    expect(
-      (otpSurface as CupertinoDynamicColor).color,
-      AppColors.loginInputSurfaceLight,
-    );
-    expect(otpDecoration.border, isA<Border>());
-
-    final wechatIcon = tester.widget<Icon>(find.byIcon(SimpleIcons.wechat));
-    final qqIcon = tester.widget<Icon>(find.byIcon(SimpleIcons.qq));
-    // 手机号验证码态只保留社交方式，品牌图标统一尺寸与白色字形。
-    expect(wechatIcon.size, AppSpacing.loginOtherMethodIconSize);
-    expect(qqIcon.size, AppSpacing.loginOtherMethodIconSize);
-    expect(wechatIcon.color, AppColors.white);
-    expect(qqIcon.color, AppColors.white);
-    expect(find.byIcon(Icons.phone_iphone), findsNothing);
+    testWidgets('五组新高保共 20 个明暗状态冻结为开发基线', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 852));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final scenario in _goldenScenarios()) {
+        await _pumpFrame(
+          tester,
+          state: scenario.state(),
+          brightness: scenario.brightness,
+          setSurfaceSize: false,
+          boundaryKey: ValueKey<String>('golden-${scenario.name}'),
+        );
+        await expectLater(
+          find.byKey(ValueKey<String>('golden-${scenario.name}')),
+          matchesGoldenFile('goldens/login_${scenario.name}.png'),
+        );
+      }
+    });
   });
 
-  testWidgets('手机号输入框可输入，按钮只随手机号合法性启用', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _TestNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
+  group('手机号、协议与验证码交互', () {
+    testWidgets('协议未勾选时弹 sheet，取消不执行，确认只恢复一次发码', (tester) async {
+      final auth = _RecordingAuthFacets();
+      await _pumpHost(tester, auth: auth);
+      await _enterPhone(tester, '18013819016');
 
-    final primaryButton = find.widgetWithText(
-      CupertinoButton,
-      FoundationText.loginSendOtp,
-    );
-    expect(tester.widget<CupertinoButton>(primaryButton).onPressed, isNull);
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pumpAndSettle();
+      expect(find.text('请先阅读并同意相关协议'), findsOneWidget);
+      expect(find.text('同意后即可继续登录'), findsOneWidget);
+      expect(find.text('同意并继续'), findsOneWidget);
+      expect(find.text('暂不'), findsOneWidget);
+      expect(auth.sendOtpCalls, 0);
 
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.pump();
-    expect(find.text('18013813909'), findsOneWidget);
-    expect(tester.widget<CupertinoButton>(primaryButton).onPressed, isNotNull);
-  });
-
-  test('登录错误码经 LoginFeedback 唯一输出状态、展示面与文案', () {
-    const cases =
-        <
-          ({
-            UserErrorCode code,
-            LoginFailureOrigin origin,
-            LoginErrorSurface surface,
-          })
-        >[
-          (
-            code: UserErrorCode.otpMismatch,
-            origin: LoginFailureOrigin.otpLogin,
-            surface: LoginErrorSurface.otpField,
-          ),
-          (
-            code: UserErrorCode.otpExpired,
-            origin: LoginFailureOrigin.otpLogin,
-            surface: LoginErrorSurface.otpField,
-          ),
-          (
-            code: UserErrorCode.otpAttemptsExceeded,
-            origin: LoginFailureOrigin.otpLogin,
-            surface: LoginErrorSurface.otpField,
-          ),
-          (
-            code: UserErrorCode.otpRateLimited,
-            origin: LoginFailureOrigin.otpSend,
-            surface: LoginErrorSurface.otpField,
-          ),
-          (
-            code: UserErrorCode.otpProviderFailed,
-            origin: LoginFailureOrigin.otpSend,
-            surface: LoginErrorSurface.otpField,
-          ),
-          (
-            code: UserErrorCode.loginLocked,
-            origin: LoginFailureOrigin.otpLogin,
-            surface: LoginErrorSurface.accountBlocked,
-          ),
-          (
-            code: UserErrorCode.accountSuspended,
-            origin: LoginFailureOrigin.oneTap,
-            surface: LoginErrorSurface.accountBlocked,
-          ),
-          (
-            code: UserErrorCode.accountDeleted,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.accountBlocked,
-          ),
-          (
-            code: UserErrorCode.carrierUnavailable,
-            origin: LoginFailureOrigin.oneTap,
-            surface: LoginErrorSurface.topLevel,
-          ),
-          (
-            code: UserErrorCode.carrierTokenInvalid,
-            origin: LoginFailureOrigin.oneTap,
-            surface: LoginErrorSurface.topLevel,
-          ),
-          (
-            code: UserErrorCode.carrierProviderTimeout,
-            origin: LoginFailureOrigin.oneTap,
-            surface: LoginErrorSurface.topLevel,
-          ),
-          (
-            code: UserErrorCode.carrierPhoneMismatch,
-            origin: LoginFailureOrigin.oneTap,
-            surface: LoginErrorSurface.topLevel,
-          ),
-          (
-            code: UserErrorCode.consentRequired,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.agreement,
-          ),
-          (
-            code: UserErrorCode.wechatAuthFailed,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.socialMethod,
-          ),
-          (
-            code: UserErrorCode.alipayAuthFailed,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.socialMethod,
-          ),
-          (
-            code: UserErrorCode.qqAuthFailed,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.socialMethod,
-          ),
-          (
-            code: UserErrorCode.socialProviderUnavailable,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.socialMethod,
-          ),
-          (
-            code: UserErrorCode.socialProviderCancelled,
-            origin: LoginFailureOrigin.social,
-            surface: LoginErrorSurface.silent,
-          ),
-        ];
-    for (final testCase in cases) {
-      final feedback = loginFeedbackForError(
-        CloudException(
-          type: CloudErrorType.server,
-          message: 'debug',
-          code: testCase.code.code,
-          runtimeFailure: testRuntimeFailure(code: testCase.code.code),
-        ),
-        origin: testCase.origin,
-        locale: 'zh',
-        entryId: 'contract-test',
-        surfaceId: 'LoginPage',
+      await tester.tap(
+        find.byKey(const ValueKey<String>('loginConsentCancel')),
       );
-      final presentation = feedback.presentation;
+      await tester.pumpAndSettle();
+      expect(auth.sendOtpCalls, 0);
+      expect(find.byType(LoginAgreementRow), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('loginConsentConfirm')),
+      );
+      await tester.pumpAndSettle();
+      expect(auth.sendOtpCalls, 1);
+      expect(find.text('输入验证码'), findsOneWidget);
+      expect(find.text('60秒后可重新获取'), findsOneWidget);
+      expect(find.text('重新获取验证码'), findsNothing);
+    });
+
+    testWidgets('输入第六位后自动验证，不出现多余登录按钮', (tester) async {
+      final auth = _RecordingAuthFacets();
+      var loggedIn = 0;
+      await _pumpHost(tester, auth: auth, onLoggedIn: () => loggedIn += 1);
+      await _reachOtp(tester);
+      expect(find.text(FoundationText.loginPhoneSubmit), findsNothing);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '286419',
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(auth.phoneLoginCalls, 1);
+      expect(auth.lastPhoneLogin?.otpCode, '286419');
+      expect(loggedIn, 1);
+    });
+
+    testWidgets('验证码不正确时抖动一次、清空、首格聚焦且倒计时继续', (tester) async {
+      final auth = _RecordingAuthFacets(
+        phoneLoginError: _cloudError(UserErrorCode.otpMismatch),
+      );
+      await _pumpHost(tester, auth: auth, disableAnimations: false);
+      await _reachOtp(tester);
+      final countdownBefore = _resendCountdownText(tester);
+
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '111111',
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('验证码不正确'), findsOneWidget);
       expect(
-        presentation.phase,
-        isNot(LoginPhoneOtpPhase.success),
-        reason: testCase.code.code,
+        tester
+            .widget<CupertinoTextField>(
+              find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+            )
+            .controller
+            ?.text,
+        isEmpty,
       );
-      expect(feedback.surface, testCase.surface, reason: testCase.code.code);
-      expect(feedback.message.trim(), isNotEmpty, reason: testCase.code.code);
-      expect(
-        feedback.isSilent,
-        testCase.surface == LoginErrorSurface.silent,
-        reason: testCase.code.code,
+      expect(_resendCountdownText(tester), countdownBefore);
+      expect(find.text('重新获取验证码'), findsNothing);
+      final context = tester.element(
+        find.byKey(const ValueKey<String>('loginOtpBox0')),
       );
+      for (var index = 0; index < 6; index += 1) {
+        final container = tester.widget<Container>(
+          find.byKey(ValueKey<String>('loginOtpBox$index')),
+        );
+        final decoration = container.decoration! as BoxDecoration;
+        final border = decoration.border! as Border;
+        expect(border.top.color, isNot(AppColors.errorForeground(context)));
+      }
+      final first = tester.widget<Container>(
+        find.byKey(const ValueKey<String>('loginOtpBox0')),
+      );
+      final firstBorder =
+          (first.decoration! as BoxDecoration).border! as Border;
+      expect(firstBorder.top.color, AppColors.loginInputFocusedBorder(context));
+    });
 
-      // 云端下发 userMessage 时优先采用（可经 control-plane 热配置 override）。
-      final online = loginFeedbackForError(
-        CloudException(
-          type: CloudErrorType.server,
-          message: 'debug',
-          code: testCase.code.code,
-          userMessage: '运营态_${testCase.code.name}',
-          runtimeFailure: testRuntimeFailure(code: testCase.code.code),
+    testWidgets('网络校验失败保留数字并给出明确重新验证动作', (tester) async {
+      final auth = _RecordingAuthFacets(
+        phoneLoginError: _cloudErrorWithoutCode(
+          kind: RuntimeFailureKind.network,
         ),
-        origin: testCase.origin,
-        locale: 'zh',
-        entryId: 'contract-test',
-        surfaceId: 'LoginPage',
       );
+      await _pumpHost(tester, auth: auth);
+      await _reachOtp(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '123456',
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('暂时无法验证验证码'), findsOneWidget);
+      expect(find.text('重新验证'), findsOneWidget);
       expect(
-        online.message,
-        '运营态_${testCase.code.name}',
-        reason: testCase.code.code,
+        tester
+            .widget<CupertinoTextField>(
+              find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+            )
+            .controller
+            ?.text,
+        '123456',
       );
-    }
-  });
+      await tester.tap(
+        find.byKey(const ValueKey<String>('loginOtpRetryVerify')),
+      );
+      await tester.pump();
+      expect(auth.phoneLoginCalls, 2);
+    });
 
-  test('登录失败埋点只记录结构化恢复字段，不记录用户可见文案', () {
-    const visibleMessage = '验证码错误，请重新输入';
-    final feedback = loginFeedbackForError(
-      CloudException(
-        type: CloudErrorType.server,
-        message: 'provider raw error',
-        code: UserErrorCode.otpMismatch.code,
-        userMessage: visibleMessage,
-        requestId: 'request-123',
-        traceId: 'trace-456',
-        runtimeFailure: testRuntimeFailure(
-          code: UserErrorCode.otpMismatch.code,
+    testWidgets('验证码失效后同一位置直接切为重新获取', (tester) async {
+      final auth = _RecordingAuthFacets(
+        phoneLoginError: _cloudError(UserErrorCode.otpExpired),
+      );
+      await _pumpHost(tester, auth: auth);
+      await _reachOtp(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '654321',
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('验证码已失效'), findsOneWidget);
+      expect(find.text('重新获取验证码'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('loginOtpResendSlot')),
+          matching: find.text('重新获取验证码'),
         ),
-      ),
-      origin: LoginFailureOrigin.otpLogin,
-      locale: 'zh',
-      entryId: 'contract-test',
-      surfaceId: 'LoginPage',
-    );
-
-    expect(feedback.telemetry['code'], UserErrorCode.otpMismatch.code);
-    expect(feedback.telemetry['recovery'], isNotEmpty);
-    expect(feedback.telemetry['surface'], LoginErrorSurface.otpField.name);
-    expect(feedback.telemetry['operation'], LoginFailureOrigin.otpLogin.name);
-    expect(feedback.telemetry['requestId'], 'request-123');
-    expect(feedback.telemetry['traceId'], 'trace-456');
-    expect(feedback.telemetry.containsKey('message'), isFalse);
-    expect(feedback.telemetry.values, isNot(contains(visibleMessage)));
-    expect(feedback.telemetry.values, isNot(contains('provider raw error')));
+        findsOneWidget,
+      );
+    });
   });
 
-  test('非 CloudException 失败记录异常类型但不泄露原始消息', () {
-    final feedback = loginFeedbackForError(
-      StateError('missing local fixture with sensitive path'),
-      origin: LoginFailureOrigin.otpLogin,
-      locale: 'zh',
-      entryId: 'contract-test',
-      surfaceId: 'LoginPage',
-    );
+  group('第三方授权、绑定与退出', () {
+    testWidgets('用户取消授权静默回到原入口且不进入失败死路', (tester) async {
+      final auth = _RecordingAuthFacets();
+      final bridge = _TestNativeAuthBridge(
+        signInError: PlatformException(code: 'authorization_cancelled'),
+      );
+      await _pumpHost(tester, auth: auth, nativeAuthBridge: bridge);
+      await _startSocial(tester, '微信');
 
-    expect(feedback.telemetry['code'], feedback.cloudError.runtimeFailure.code);
-    expect(feedback.telemetry['failureKind'], 'contract');
-    expect(feedback.telemetry['errorType'], 'StateError');
-    expect(feedback.telemetry.containsKey('message'), isFalse);
-    expect(
-      feedback.telemetry.values,
-      isNot(contains('missing local fixture with sensitive path')),
-    );
-  });
+      expect(find.text('手机号登录'), findsOneWidget);
+      expect(find.text('授权未完成'), findsNothing);
+      expect(find.text('重新授权'), findsNothing);
+      expect(auth.socialLoginCalls, 0);
+    });
 
-  testWidgets('最近账号摘要存在时展示 returningAccount，同构主按钮不本地直进', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _RememberedLoginStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
+    testWidgets('授权失败显示具象错误与重新授权出口', (tester) async {
+      final auth = _RecordingAuthFacets(
+        socialError: _cloudError(UserErrorCode.wechatAuthFailed),
+      );
+      await _pumpHost(tester, auth: auth);
+      await _startSocial(tester, '微信');
 
-    await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('授权未完成'), findsOneWidget);
+      expect(find.text('重新授权'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('loginMethodFooter')),
+        findsOneWidget,
+      );
+      expect(find.bySemanticsLabel('当前正在使用微信登录'), findsOneWidget);
+    });
 
-    expect(
-      find.text(FoundationText.loginReturningDefaultName),
-      findsOneWidget,
-    );
-    expect(find.text(_defaultNicknameSample), findsNothing);
-    expect(find.text('138****3909'), findsOneWidget);
-    expect(find.text(FoundationText.loginReturningHeroTitle), findsOneWidget);
-    expect(
-      find.text(FoundationText.loginReturningHeroSubtitle),
-      findsOneWidget,
-    );
-    expect(find.text(FoundationText.loginContinue), findsOneWidget);
-    expect(find.text(FoundationText.loginOneTap), findsNothing);
-
-    await tester.ensureVisible(find.text(FoundationText.loginContinue));
-    await tester.tap(find.text(FoundationText.loginContinue));
-    await tester.pump();
-    expect(repo.loginOneTapCalls, 0, reason: '未勾选协议不得请求服务端');
-    expect(find.text(FoundationText.loginAgreementRequired), findsWidgets);
-    await tester.pump(const Duration(seconds: 3));
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginContinue));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(repo.refreshTokenCalls, 1, reason: '最近账号态必须通过服务端 refresh 二次登录');
-    expect(repo.loginOneTapCalls, 0);
-  });
-
-  testWidgets('软退出后凭证有效期内：returning 主按钮为继续登录、refresh 成功无红字', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _SoftLoggedOutStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    // 软退出保留熟悉感与继续登录入口（凭证仍在有效期内）。
-    expect(find.text('趣友A'), findsOneWidget);
-    expect(find.text(FoundationText.loginContinue), findsOneWidget);
-    expect(find.text(FoundationText.loginOneTap), findsNothing);
-    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginContinue));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(repo.refreshTokenCalls, 1, reason: '有效期内一键登录应走 refresh 直接恢复');
-    expect(find.text(FoundationText.loginFailed), findsNothing);
-  });
-
-  testWidgets('过期摘要无可执行恢复动作：不展示返回账号，直接回退手机号', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _ExpiredQuickLoginStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('趣友B'), findsNothing);
-    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
-    expect(find.text(FoundationText.loginOneTap), findsNothing);
-    expect(
-      find.text(FoundationText.loginReturningDefaultAccount),
-      findsNothing,
-    );
-    expect(repo.refreshTokenCalls, 0);
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.text(FoundationText.loginFailed), findsNothing);
-  });
-
-  testWidgets('彻底退出后无凭证和摘要：直接进入手机号验证码登录', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _HardLoggedOutStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
-    expect(find.text(FoundationText.loginOneTap), findsNothing);
-    expect(find.text('趣友C'), findsNothing);
-    expect(repo.refreshTokenCalls, 0);
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-  });
-
-  testWidgets('过期 returning 记住手机号 + 已勾协议：只预填，用户显式点击后发码', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _ExpiredPhoneOtpStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    // 先勾选协议；进入短信流程仍只能预填，不能未经确认自动发送短信。
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-
-    await tester.tap(find.text(FoundationText.loginReturningSmsPrimary));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    // 先只预填完整手机号，等待用户显式点击「获取验证码」。
-    expect(repo.refreshTokenCalls, 0);
-    expect(repo.sendOtpCalls, 0);
-    expect(find.byType(OtpCodeBoxes), findsNothing);
-    final phoneField = tester.widget<CupertinoTextField>(
-      find.byType(CupertinoTextField).first,
-    );
-    expect(phoneField.controller?.text, '18013813909');
-    expect(find.text(FoundationText.loginFailed), findsNothing);
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(repo.sendOtpCalls, 1);
-    expect(find.byType(OtpCodeBoxes), findsOneWidget);
-    final otpFieldFinder = find.byType(CupertinoTextField).last;
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
-      isTrue,
-      reason: '发码进入验证码态后应自动聚焦到验证码输入框',
-    );
-  });
-
-  testWidgets('过期 returning 记住手机号 + 未勾协议：点主按钮预填但不自动发码并提示勾选', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _ExpiredPhoneOtpStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.tap(find.text(FoundationText.loginReturningSmsPrimary));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    // 未勾协议不得自动发码，但仍预填手机号并停在可发码态，给出明确下一步。
-    expect(repo.sendOtpCalls, 0);
-    expect(find.byType(OtpCodeBoxes), findsNothing);
-    final phoneField = tester.widget<CupertinoTextField>(
-      find.byType(CupertinoTextField).first,
-    );
-    expect(phoneField.controller?.text, '18013813909');
-  });
-
-  testWidgets('其他手机号入口仍为空号手动输入：不预填、不自动发码', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(430, 932));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _ExpiredPhoneOtpStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    // 主动选择「其他手机号」走空号手动输入流程（与记住号自动续登区分）。
-    final phoneEntry = find.text(FoundationText.loginMethodPhone);
-    await tester.ensureVisible(phoneEntry);
-    await tester.tap(phoneEntry);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(repo.sendOtpCalls, 0);
-    expect(find.byType(OtpCodeBoxes), findsNothing);
-    final phoneField = tester.widget<CupertinoTextField>(
-      find.byType(CupertinoTextField).first,
-    );
-    expect(phoneField.controller?.text, isEmpty);
-  });
-
-  testWidgets('手机号验证码输入包裹 AutofillGroup，支持系统自动填充', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(find.byType(AutofillGroup), findsOneWidget);
-  });
-
-  testWidgets('无最近账号摘要但 carrier hint 为新号码时展示 carrierPhone 状态', (tester) async {
-    final ops = RecordingAppTelemetryRecorder();
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(
-        hint: decodeOneTapLoginHint(<String, dynamic>{
-          'state': 'new_phone',
-          'maskedPhone': '180****3901',
-          'registered': false,
-          'expiresInSeconds': 60,
-        }),
-      ),
-      oneTapClient: const _ProbeOneTapLoginClient(),
-      telemetryRecorder: ops,
-    );
-
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('180****3901'), findsOneWidget);
-    expect(find.text(FoundationText.loginCarrierHeroTitle), findsOneWidget);
-    expect(find.text(FoundationText.loginCarrierHeroSubtitle), findsOneWidget);
-    expect(find.textContaining('将创建趣我圈账号'), findsOneWidget);
-    expect(find.text(FoundationText.loginOneTapPrimary), findsOneWidget);
-    expect(
-      ops.recorded.map((event) => event.action),
-      containsAll(<String>['login_page_exposed', 'login_state_resolved']),
-    );
-  });
-
-  testWidgets('carrier hint 命中已注册账号仍保持运营商主动作，不混用返回会话', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(
-        hint: decodeOneTapLoginHint(<String, dynamic>{
-          'state': 'registered',
-          'maskedPhone': '180****3902',
-          'registered': true,
-          'accountHint': <String, dynamic>{
-            'displayName': '老用户',
-            'nicknameCustomized': true,
-            'maskedPhone': '180****3902',
-            'identityOrigin': 'phone',
-          },
-          'expiresInSeconds': 60,
-        }),
-      ),
-      oneTapClient: const _ProbeOneTapLoginClient(
-        token: 'carrier_token_registered',
-      ),
-    );
-
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.text('老用户'), findsNothing);
-    expect(find.text('180****3902'), findsOneWidget);
-    expect(find.text(FoundationText.loginOneTapPrimary), findsOneWidget);
-    expect(find.text(FoundationText.loginContinue), findsNothing);
-  });
-
-  testWidgets('one-tap 不可用时 1.2s 内降级到手机号输入，不长时间 loading', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _HangingOneTapLoginClient(),
-    );
-
-    await tester.pump();
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-
-    await tester.pump(const Duration(milliseconds: 1300));
-    expect(
-      find.text(FoundationText.loginPhoneNumberPlaceholder),
-      findsOneWidget,
-    );
-    expect(find.text(FoundationText.loginSendOtp), findsOneWidget);
-  });
-
-  testWidgets('运营商 hint 返回受限账号时进入阻断面，不降级为手机号创建', (tester) async {
-    final repo = _SuspendedHintAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: repo,
-      oneTapClient: const _ProbeOneTapLoginClient(),
-    );
-
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(
-      find.byKey(const ValueKey<String>('loginAccountBlocked')),
-      findsOneWidget,
-    );
-    expect(find.byType(PhoneNumberField), findsNothing);
-    expect(repo.loginOneTapCalls, 0);
-    final blocking = tester.widget<AppFormErrorCard>(
-      find.byKey(const ValueKey<String>('loginAccountBlocked')),
-    );
-    expect(
-      blocking.semantic.message,
-      UserErrorCode.accountSuspended.messageForLocale('en'),
-    );
-  });
-
-  testWidgets('用户已切换手机号后迟到的运营商探测不得覆盖当前步骤', (tester) async {
-    final client = _ControlledOneTapLoginClient();
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(
-        hint: decodeOneTapLoginHint(<String, dynamic>{
-          'state': 'new_phone',
-          'maskedPhone': '180****3901',
-          'registered': false,
-          'expiresInSeconds': 60,
-        }),
-      ),
-      oneTapClient: client,
-    );
-
-    await tester.ensureVisible(find.byIcon(Icons.phone_iphone));
-    await tester.tap(find.byIcon(Icons.phone_iphone));
-    await tester.pump();
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-
-    client.completeProbe();
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.text(FoundationText.loginOneTapPrimary), findsNothing);
-  });
-
-  testWidgets('两状态布局同构：主按钮、协议、其他登录方式纵向位置一致', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(430, 932));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await _pumpLogin(
-      tester,
-      authStore: _RememberedLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-    final returningPrimaryDy = tester
-        .getTopLeft(find.text(FoundationText.loginContinue))
-        .dy;
-    final returningAgreementDy = tester
-        .getTopLeft(find.textContaining(FoundationText.userAgreement))
-        .dy;
-    final returningOtherDy = tester
-        .getTopLeft(find.text(FoundationText.loginOtherMethods))
-        .dy;
-
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(
-        hint: decodeOneTapLoginHint(<String, dynamic>{
-          'state': 'new_phone',
-          'maskedPhone': '180****3901',
-          'registered': false,
-          'expiresInSeconds': 60,
-        }),
-      ),
-      oneTapClient: const _ProbeOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(
-      tester.getTopLeft(find.text(FoundationText.loginOneTapPrimary)).dy,
-      returningPrimaryDy,
-    );
-    expect(
-      tester.getTopLeft(find.textContaining(FoundationText.userAgreement)).dy,
-      returningAgreementDy,
-    );
-    expect(
-      tester.getTopLeft(find.text(FoundationText.loginOtherMethods)).dy,
-      returningOtherDy,
-    );
-  });
-
-  testWidgets('iPhone17 / iPad / Web 响应式 frame 居中且宽度受限', (tester) async {
-    for (final size in const <Size>[
-      Size(430, 932),
-      Size(834, 1194),
-      Size(1280, 800),
-    ]) {
-      await tester.binding.setSurfaceSize(size);
-      await _pumpLogin(
+    testWidgets('首次社交登录必须完成手机号绑定后才签发并应用 session', (tester) async {
+      final auth = _RecordingAuthFacets(
+        socialOutcome: const FederatedLoginOutcome.phoneBindingRequired(
+          bindingTicket: 'binding-ticket-1',
+          provider: 'wechat',
+          expiresInSeconds: 180,
+        ),
+      );
+      final credential = _RecordingCredentialWriter();
+      final store = _MutableAuthStore();
+      var loggedIn = 0;
+      await _pumpHost(
         tester,
-        authStore: _GuestLoginStore(),
-        authRepository: _RecordingAuthFacets(
-          hint: decodeOneTapLoginHint(<String, dynamic>{
-            'state': 'new_phone',
-            'maskedPhone': '180****3901',
-            'registered': false,
-            'expiresInSeconds': 60,
-          }),
-        ),
-        oneTapClient: const _ProbeOneTapLoginClient(),
+        auth: auth,
+        credentialWriter: credential,
+        store: store,
+        onLoggedIn: () => loggedIn += 1,
       );
-      await tester.pump(const Duration(milliseconds: 50));
+      await _startSocial(tester, '微信');
 
-      final buttonRect = tester.getRect(
-        find.text(FoundationText.loginOneTapPrimary),
-      );
-      final accountRect = tester.getRect(find.text('180****3901'));
-      expect(buttonRect.width, lessThanOrEqualTo(430));
-      expect(buttonRect.center.dx, closeTo(size.width / 2, 1.0));
-      expect(accountRect.center.dx, closeTo(size.width / 2, 1.0));
-    }
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-  });
+      expect(find.text('绑定手机号'), findsOneWidget);
+      expect(find.text('验证手机号后即可完成登录'), findsOneWidget);
+      expect(find.byType(LoginAgreementRow), findsNothing);
+      expect(store.saveLoginGrantCalls, 0);
+      expect(loggedIn, 0);
+      expect(find.bySemanticsLabel('当前正在使用微信登录'), findsOneWidget);
 
-  testWidgets('手机号初始态社交登录方式在 iPhone17 首屏完整可见且不重复手机号', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(430, 932));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _enterPhone(tester, '18013819016');
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pump();
+      await tester.pump();
+      expect(auth.lastSendOtp?.sourceOperation, 'bind_phone');
+      expect(auth.lastSendOtp?.bindingTicket, 'binding-ticket-1');
 
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _TestNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    final alipayRect = tester.getRect(find.byIcon(SimpleIcons.alipay));
-    final wechatRect = tester.getRect(find.byIcon(SimpleIcons.wechat));
-    final otherTitleRect = tester.getRect(
-      find.text(FoundationText.loginOtherMethods),
-    );
-    expect(otherTitleRect.top, greaterThan(700));
-    expect(alipayRect.bottom, lessThan(900));
-    expect(wechatRect.height, closeTo(alipayRect.height, 0.5));
-    expect(find.byIcon(Icons.phone_iphone), findsNothing);
-    expect(find.text(FoundationText.loginMethodPhone), findsNothing);
-    expect(find.text(FoundationText.loginOtherMethods), findsOneWidget);
-  });
-
-  testWidgets('勾选协议后提交 one-tap，保存 remembered summary', (tester) async {
-    final store = _MutableAuthStore();
-    final repo = _RecordingAuthFacets(
-      hint: decodeOneTapLoginHint(<String, dynamic>{
-        'state': 'new_phone',
-        'maskedPhone': '180****3901',
-        'registered': false,
-        'expiresInSeconds': 60,
-      }),
-    );
-    final ops = RecordingAppTelemetryRecorder();
-    await _pumpLogin(
-      tester,
-      authStore: store,
-      authRepository: repo,
-      oneTapClient: const _ProbeOneTapLoginClient(),
-      telemetryRecorder: ops,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginOneTapPrimary));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(repo.loginOneTapCalls, 1);
-    expect(store.lastRememberedMethod, AuthRememberedLoginMethod.oneTap);
-    expect(store.lastRememberedMaskedIdentifier, '180****3901');
-    expect(
-      ops.recorded.map((event) => event.action),
-      containsAll(<String>['login_primary_clicked', 'login_success']),
-    );
-  });
-
-  testWidgets('手机号 OTP 支持发码、粘贴六位验证码后显式登录', (tester) async {
-    final store = _MutableAuthStore();
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: store,
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump();
-    expect(repo.sendOtpCalls, 0, reason: '未勾选协议不得发码');
-    expect(find.text(FoundationText.loginAgreementRequired), findsWidgets);
-    await tester.pump(const Duration(seconds: 3));
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(repo.sendOtpCalls, 1);
-    expect(find.textContaining('180****3909'), findsWidgets);
-    expect(find.byType(OtpCodeBoxes), findsOneWidget);
-
-    final otpFieldFinder = find.byType(CupertinoTextField).last;
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
-      isTrue,
-      reason: '点击获取验证码后应自动聚焦到验证码输入框',
-    );
-
-    await tester.enterText(find.byType(CupertinoTextField).last, '12 34 56');
-    await tester.pump();
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('6'), findsOneWidget);
-    await tester.pump(const Duration(milliseconds: 350));
-    expect(repo.phoneLoginCalls, 0, reason: '六位验证码只完成输入，不得自动提交');
-    await tester.tap(find.text(FoundationText.loginPhoneSubmit));
-    await tester.pump(const Duration(milliseconds: 350));
-    expect(repo.phoneLoginCalls, 1);
-    expect(store.lastRememberedMethod, AuthRememberedLoginMethod.phoneOtp);
-    expect(store.lastRememberedMaskedIdentifier, '180****3909');
-  });
-
-  testWidgets('发码后折叠手机号输入，点击更换手机号本地清空 challenge 展示', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _MutableAuthStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(find.byType(PhoneNumberField), findsNothing);
-    expect(find.byType(OtpCodeBoxes), findsOneWidget);
-    expect(find.text(FoundationText.loginPhoneChange), findsOneWidget);
-
-    await tester.tap(find.text(FoundationText.loginPhoneChange));
-    await tester.pump();
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.byType(OtpCodeBoxes), findsNothing);
-    expect(find.text('180****3909'), findsNothing);
-  });
-
-  testWidgets('手机号输入期间不抢先显示格式错误', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _MutableAuthStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    final phoneField = find.byType(CupertinoTextField).first;
-    await tester.showKeyboard(phoneField);
-    await tester.pump();
-    await tester.enterText(phoneField, '12345678901');
-    await tester.pump();
-
-    expect(find.text(FoundationText.loginPhoneInvalid), findsNothing);
-
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-    expect(find.text(FoundationText.loginPhoneInvalid), findsOneWidget);
-  });
-
-  testWidgets('验证码已送达后重发失败仍保留验证码步骤与用户输入', (tester) async {
-    final repo = _FailSecondOtpSendFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _MutableAuthStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-    await tester.enterText(find.byType(CupertinoTextField).last, '123');
-    await tester.pump(const Duration(seconds: 2));
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('loginOtpResendAction')),
-    );
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(repo.sendOtpCalls, 2);
-    expect(find.byType(OtpCodeBoxes), findsOneWidget);
-    expect(
-      tester
-          .widget<CupertinoTextField>(find.byType(CupertinoTextField).last)
-          .controller
-          ?.text,
-      '123',
-    );
-    expect(find.text(FoundationText.loginOtpSendFailed), findsOneWidget);
-  });
-
-  testWidgets('手机号 OTP 输入首位后保持焦点，可连续输入而不需重新点按', (tester) async {
-    final repo = _RecordingAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _MutableAuthStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.pump();
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-
-    final otpFieldFinder = find.byType(CupertinoTextField).last;
-    await tester.showKeyboard(otpFieldFinder);
-    await tester.pump();
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
-      isTrue,
-    );
-
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '1',
-        selection: TextSelection.collapsed(offset: 1),
-      ),
-    );
-    await tester.pump();
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).controller?.text,
-      '1',
-    );
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
-      isTrue,
-      reason: '首位输入后不应因 phase 切换重建而丢焦点',
-    );
-
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '12',
-        selection: TextSelection.collapsed(offset: 2),
-      ),
-    );
-    await tester.pump();
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).controller?.text,
-      '12',
-    );
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
-      isTrue,
-      reason: '第二位输入前不应要求用户重新点击验证码框',
-    );
-
-    tester.testTextInput.updateEditingValue(
-      const TextEditingValue(
-        text: '123456',
-        selection: TextSelection.collapsed(offset: 6),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 350));
-
-    expect(repo.phoneLoginCalls, 0, reason: '完成六位输入后仍等待用户点击确认');
-    expect(
-      tester.widget<CupertinoTextField>(otpFieldFinder).focusNode?.hasFocus,
-      isTrue,
-      reason: '完成输入后不应因自动提交而抢走焦点',
-    );
-  });
-
-  testWidgets('验证码格在 337px 可用宽度下自适应不溢出', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(393, 852));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await _pumpLogin(
-      tester,
-      authStore: _MutableAuthStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-    await tester.enterText(
-      find.byType(CupertinoTextField).first,
-      '18013813909',
-    );
-    await tester.pump();
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
-    await tester.pump(const Duration(milliseconds: 250));
-
-    final otpRect = tester.getRect(find.byType(OtpCodeBoxes));
-    final boxFinder = find.descendant(
-      of: find.byType(OtpCodeBoxes),
-      matching: find.byWidgetPredicate(
-        (widget) =>
-            widget is Container &&
-            widget.decoration is BoxDecoration &&
-            (widget.decoration! as BoxDecoration).borderRadius != null &&
-            widget.constraints != null,
-      ),
-    );
-    expect(boxFinder, findsNWidgets(6));
-    final rightMost = tester.getRect(boxFinder.at(5));
-    expect(rightMost.right, lessThanOrEqualTo(otpRect.right));
-  });
-
-  testWidgets('验证码格在 306.3px 可用宽度下会压缩间距且不溢出', (tester) async {
-    final controller = TextEditingController(text: '123456');
-    addTearDown(controller.dispose);
-
-    await tester.pumpWidget(
-      CupertinoApp(
-        home: Center(
-          child: SizedBox(
-            width: 306.3,
-            child: OtpCodeBoxes(
-              controller: controller,
-              enabled: true,
-              hasError: false,
-              onChanged: (_) {},
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(tester.takeException(), isNull);
-
-    final otpRect = tester.getRect(find.byType(OtpCodeBoxes));
-    final boxFinder = find.descendant(
-      of: find.byType(OtpCodeBoxes),
-      matching: find.byWidgetPredicate(
-        (widget) =>
-            widget is Container &&
-            widget.decoration is BoxDecoration &&
-            (widget.decoration! as BoxDecoration).borderRadius != null &&
-            widget.constraints != null,
-      ),
-    );
-    expect(boxFinder, findsNWidgets(6));
-
-    final firstRect = tester.getRect(boxFinder.at(0));
-    final secondRect = tester.getRect(boxFinder.at(1));
-    final rightMost = tester.getRect(boxFinder.at(5));
-
-    expect(firstRect.left, greaterThanOrEqualTo(otpRect.left));
-    expect(rightMost.right, lessThanOrEqualTo(otpRect.right));
-    expect(
-      secondRect.left - firstRect.right,
-      lessThan(AppSpacing.loginOtpBoxGap),
-      reason: '窄宽度下应先压缩格间距，避免 44x44 最小输入格被撑出溢出',
-    );
-  });
-
-  testWidgets('手机号 OTP 12 状态都有就近 UI 表达', (tester) async {
-    final cases = <({LoginPhoneOtpState state, String expected})>[
-      (
-        state: const LoginPhoneOtpState.idle(),
-        expected: FoundationText.loginPhoneNumberPlaceholder,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.editing,
-          phone: '180',
-        ),
-        expected: FoundationText.loginPhoneNumberPlaceholder,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.invalid,
-          phone: '12345678901',
-          message: FoundationText.loginPhoneInvalid,
-        ),
-        expected: FoundationText.loginPhoneInvalid,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.valid,
-          phone: '18013813909',
-        ),
-        expected: FoundationText.loginPhoneNumberPlaceholder,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.sendingCode,
-          phone: '18013813909',
-        ),
-        expected: FoundationText.loginSendOtpSubmitting,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.codeSent,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          resendSeconds: 60,
-          otpWasDelivered: true,
-        ),
-        expected: '重新获取(60s)',
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.codeEditing,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123',
-          otpWasDelivered: true,
-        ),
-        expected: '3',
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.codeComplete,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123456',
-          otpWasDelivered: true,
-        ),
-        expected: '6',
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.loggingIn,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123456',
-          otpWasDelivered: true,
-        ),
-        expected: FoundationText.loginOtpSentTo.replaceFirst(
-          '%s',
-          '180****3909',
-        ),
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.codeError,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123456',
-          message: FoundationText.loginOtpMismatch,
-          otpWasDelivered: true,
-        ),
-        expected: FoundationText.loginOtpMismatch,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.codeExpired,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          message: FoundationText.loginOtpExpired,
-        ),
-        expected: FoundationText.loginOtpExpired,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.rateLimited,
-          phone: '18013813909',
-          message: '发送过于频繁，请 60 秒后再试',
-          resendSeconds: 60,
-        ),
-        expected: '发送过于频繁，请 60 秒后再试',
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.sendFailed,
-          phone: '18013813909',
-          message: FoundationText.loginOtpSendFailed,
-        ),
-        expected: FoundationText.loginOtpSendFailed,
-      ),
-      (
-        state: LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.loginLocked,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123456',
-          message: UserErrorCode.loginLocked.defaultMessage,
-        ),
-        expected: UserErrorCode.loginLocked.defaultMessage,
-      ),
-      (
-        state: LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.accountSuspended,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123456',
-          message: UserErrorCode.accountSuspended.defaultMessage,
-        ),
-        expected: UserErrorCode.accountSuspended.defaultMessage,
-      ),
-      (
-        state: LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.accountDeleted,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          code: '123456',
-          message: UserErrorCode.accountDeleted.defaultMessage,
-        ),
-        expected: UserErrorCode.accountDeleted.defaultMessage,
-      ),
-      (
-        state: const LoginPhoneOtpState(
-          phase: LoginPhoneOtpPhase.success,
-          phone: '18013813909',
-          maskedPhone: '180****3909',
-          message: FoundationText.loginRedirecting,
-        ),
-        expected: FoundationText.loginRedirecting,
-      ),
-    ];
-
-    for (final item in cases) {
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: SizedBox(
-            width: 430,
-            height: 260,
-            child: PhoneOtpPanel(
-              state: item.state,
-              phoneController: TextEditingController(text: item.state.phone),
-              otpController: TextEditingController(text: item.state.code),
-              onPhoneChanged: (_) {},
-              onOtpChanged: (_) {},
-              onResend: () {},
-              onChangePhone: () {},
-            ),
-          ),
-        ),
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        '286419',
       );
       await tester.pump();
+      await tester.pump();
+      expect(credential.completeCalls, 1);
+      expect(credential.lastComplete?.bindingTicket, 'binding-ticket-1');
+      expect(credential.lastComplete?.challengeId, 'challenge-1');
+      expect(store.saveLoginGrantCalls, 1);
+      expect(loggedIn, 1);
+    });
+
+    testWidgets('绑定流程返回会取消 ticket 并回入口，绝不触发登录完成', (tester) async {
+      final auth = _RecordingAuthFacets(
+        socialOutcome: const FederatedLoginOutcome.phoneBindingRequired(
+          bindingTicket: 'binding-ticket-return',
+          provider: 'wechat',
+          expiresInSeconds: 180,
+        ),
+      );
+      var loggedIn = 0;
+      await _pumpHost(tester, auth: auth, onLoggedIn: () => loggedIn += 1);
+      await _startSocial(tester, '微信');
+      expect(find.text('绑定手机号'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('返回上一页'));
+      await tester.pump();
+      expect(find.text('手机号登录'), findsOneWidget);
+      expect(find.text('绑定手机号'), findsNothing);
+      expect(loggedIn, 0);
+    });
+
+    testWidgets('根步骤系统返回只调用一次宿主关闭，内部 OTP 返回不关闭', (tester) async {
+      var dismissed = 0;
+      await _pumpHost(
+        tester,
+        auth: _RecordingAuthFacets(),
+        onDismiss: () => dismissed += 1,
+      );
+      await _reachOtp(tester);
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(find.text('手机号登录'), findsOneWidget);
+      expect(dismissed, 0);
+
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(dismissed, 1);
+    });
+
+    testWidgets('受限说明不探测旧凭证，提供真实官网支持并可安全关闭', (tester) async {
+      final auth = _RecordingAuthFacets();
+      final oneTap = _RecordingOneTapLoginClient();
+      final support = _RecordingSupportLauncher();
+      var dismissed = 0;
+
+      await _pumpHost(
+        tester,
+        auth: auth,
+        oneTapClient: oneTap,
+        supportLauncher: support,
+        reason: AuthPromptReason.accountSuspended.name,
+        onDismiss: () => dismissed += 1,
+      );
+
       expect(
-        find.text(item.expected),
-        findsWidgets,
-        reason: item.state.phase.name,
+        find.text(FoundationText.loginAccountSuspensionTitle),
+        findsOneWidget,
       );
-    }
-  });
-
-  test('每个 OTP 子态主按钮语义都给出明确、非死路的下一步动作', () {
-    String labelFor(LoginPhoneOtpPhase phase, {String code = '123456'}) {
-      return LoginPhoneOtpState(
-        phase: phase,
-        phone: '18013813909',
-        maskedPhone: '180****3909',
-        code: code,
-      ).primaryLabel;
-    }
-
-    // 阻断态：不诱导无效重试，统一给"换个手机号"出口。
-    for (final phase in const <LoginPhoneOtpPhase>[
-      LoginPhoneOtpPhase.loginLocked,
-      LoginPhoneOtpPhase.accountSuspended,
-      LoginPhoneOtpPhase.accountDeleted,
-    ]) {
+      final restrictionFeedback = find.byKey(
+        const ValueKey<String>('loginFeedback-loginAccountSuspended'),
+      );
+      expect(restrictionFeedback, findsOneWidget);
+      expect(<String>{
+        UserErrorCode.accountSuspended.defaultMessageZh,
+        UserErrorCode.accountSuspended.defaultMessageEn,
+      }, contains(tester.widget<Text>(restrictionFeedback).data));
       expect(
-        labelFor(phase),
-        FoundationText.loginSwitchPhone,
-        reason: phase.name,
+        find.byKey(const ValueKey<String>('loginAccountSuspensionSupport')),
+        findsOneWidget,
       );
-      final state = LoginPhoneOtpState(
-        phase: phase,
-        phone: '18013813909',
-        code: '123456',
-      );
-      expect(state.isBlocked, isTrue, reason: phase.name);
-      expect(state.canLogin, isFalse, reason: phase.name);
-      expect(state.canSendCode, isFalse, reason: phase.name);
-    }
-
-    // 验证码已过期：主按钮语义=重新获取验证码（文案与行为一致）。
-    expect(
-      labelFor(LoginPhoneOtpPhase.codeExpired, code: ''),
-      FoundationText.loginOtpResend,
-    );
-    expect(
-      const LoginPhoneOtpState(
-        phase: LoginPhoneOtpPhase.codeExpired,
-        phone: '18013813909',
-      ).canSendCode,
-      isTrue,
-    );
-
-    // 已收到验证码且 6 位：主按钮可提交登录。
-    final complete = LoginPhoneOtpState(
-      phase: LoginPhoneOtpPhase.codeComplete,
-      phone: '18013813909',
-      code: '123456',
-      otpWasDelivered: true,
-    );
-    expect(complete.primaryLabel, FoundationText.loginPhoneSubmit);
-    expect(complete.canLogin, isTrue);
-  });
-
-  testWidgets('OTP 输入错误与发送失败分别锚定字段提示和表单错误卡', (tester) async {
-    Future<void> pumpPanel(LoginPhoneOtpState state) async {
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: PhoneOtpPanel(
-            state: state,
-            phoneController: TextEditingController(text: state.phone),
-            otpController: TextEditingController(text: state.code),
-            onPhoneChanged: (_) {},
-            onOtpChanged: (_) {},
-            onResend: () {},
-            onChangePhone: () {},
-          ),
+      expect(
+        find.byKey(
+          const ValueKey<String>('loginAccountSuspensionOtherAccount'),
         ),
+        findsOneWidget,
+      );
+      expect(oneTap.probeCalls, 0);
+      expect(auth.refreshTokenCalls, 0);
+      expect(find.textContaining('reason='), findsNothing);
+      expect(find.textContaining('evidence='), findsNothing);
+      expect(find.textContaining('case='), findsNothing);
+      expect(find.textContaining('raw_exception'), findsNothing);
+      expect(find.textContaining('申诉已提交'), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('loginAccountSuspensionSupport')),
       );
       await tester.pump();
-    }
+      expect(support.calls, 1);
+      expect(find.textContaining('申诉已提交'), findsNothing);
 
-    await pumpPanel(
-      const LoginPhoneOtpState(
-        phase: LoginPhoneOtpPhase.invalid,
-        phone: '123',
-        message: FoundationText.loginPhoneInvalid,
-      ),
-    );
-    expect(find.byType(AppInlineFieldError), findsOneWidget);
-    expect(find.byType(AppFormErrorCard), findsNothing);
-
-    await pumpPanel(
-      const LoginPhoneOtpState(
-        phase: LoginPhoneOtpPhase.sendFailed,
-        phone: '18013813909',
-        message: FoundationText.loginOtpSendFailed,
-      ),
-    );
-    expect(find.byType(AppInlineFieldError), findsNothing);
-    expect(find.byType(AppFormErrorCard), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('login-phone-form-error')),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('倒计时结束后"重新获取"可点触发重发，倒计时中禁用', (tester) async {
-    var resendCalls = 0;
-    Future<void> pumpPanel(LoginPhoneOtpState state) async {
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: SizedBox(
-            width: 430,
-            height: 260,
-            child: PhoneOtpPanel(
-              state: state,
-              phoneController: TextEditingController(text: state.phone),
-              otpController: TextEditingController(text: state.code),
-              onPhoneChanged: (_) {},
-              onOtpChanged: (_) {},
-              onResend: () => resendCalls += 1,
-              onChangePhone: () {},
-            ),
-          ),
-        ),
-      );
+      await tester.binding.handlePopRoute();
       await tester.pump();
-    }
-
-    await pumpPanel(
-      const LoginPhoneOtpState(
-        phase: LoginPhoneOtpPhase.codeSent,
-        phone: '18013813909',
-        maskedPhone: '180****3909',
-        resendSeconds: 60,
-        otpWasDelivered: true,
-      ),
-    );
-    final countingAction = tester.widget<GestureDetector>(
-      find.ancestor(
-        of: find.byKey(const ValueKey<String>('loginOtpResendAction')),
-        matching: find.byType(GestureDetector),
-      ),
-    );
-    expect(countingAction.onTap, isNull, reason: '倒计时中不可点');
-
-    await pumpPanel(
-      const LoginPhoneOtpState(
-        phase: LoginPhoneOtpPhase.codeError,
-        phone: '18013813909',
-        maskedPhone: '180****3909',
-        code: '123456',
-        otpWasDelivered: true,
-      ),
-    );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('loginOtpResendAction')),
-    );
-    await tester.pump();
-    expect(resendCalls, 1, reason: '倒计时结束后可重发');
-  });
-
-  testWidgets('继续登录 refresh 失败不进死路：无红字降级短信、保留可操作出口', (tester) async {
-    final repo = _FailingRefreshAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _RememberedLoginStore(),
-      authRepository: repo,
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginContinue));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    // refresh 失败后不停在空面板、也不回到注定失败的一键登录：统一降级到短信验证码流程，
-    // 保留可操作短信出口；若宿主平台没有真实可发现方式，不渲染空分隔区。
-    expect(find.byType(PhoneNumberField), findsOneWidget);
-    expect(find.text(FoundationText.loginOtherMethods), findsNothing);
-    expect(find.text(FoundationText.loginFailed), findsNothing);
-    await tester.pump(const Duration(seconds: 3));
-  });
-
-  testWidgets('运营商一键登录失败降级到手机号输入并解释原因', (tester) async {
-    final repo = _CarrierMismatchAuthFacets();
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: repo,
-      oneTapClient: const _ProbeOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginOneTapPrimary));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    // 降级到手机号输入，给出可继续的短信路径。
-    expect(
-      find.text(FoundationText.loginPhoneNumberPlaceholder),
-      findsOneWidget,
-    );
-    expect(find.text(FoundationText.loginSendOtp), findsOneWidget);
-    final feedbackCard = tester.widget<AppFormErrorCard>(
-      find.byKey(const ValueKey<String>('login-process-feedback')),
-    );
-    expect(feedbackCard.density, AppFormErrorCardDensity.compact);
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('login-process-feedback')),
-        matching: find.byType(CupertinoButton),
-      ),
-      findsNothing,
-    );
-    expect(find.text(FoundationText.loginReturningSmsPrimary), findsNothing);
-    await tester.pump(const Duration(seconds: 3));
-  });
-
-  testWidgets('运营商 token 失效时在同一次显式提交内刷新一次并完成登录', (tester) async {
-    final store = _MutableAuthStore();
-    final repo = _ExpiredThenFreshOneTapFacets();
-    final client = _RefreshingOneTapLoginClient();
-    await _pumpLogin(
-      tester,
-      authStore: store,
-      authRepository: repo,
-      oneTapClient: client,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.tap(find.text(FoundationText.loginOneTapPrimary));
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(repo.loginOneTapCalls, 2);
-    expect(client.requestLoginTokenCalls, 1, reason: '失效 token 只允许刷新一次');
-    expect(store.lastRememberedMethod, AuthRememberedLoginMethod.oneTap);
-  });
-
-  testWidgets('社交授权取消静默恢复原登录态且只记录取消事件', (tester) async {
-    final ops = RecordingAppTelemetryRecorder();
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _CancellingWechatNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-      telemetryRecorder: ops,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.ensureVisible(find.byIcon(SimpleIcons.wechat));
-    await tester.tap(find.byIcon(SimpleIcons.wechat));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(
-      find.byKey(const ValueKey<String>('login-process-feedback')),
-      findsNothing,
-    );
-    expect(find.byType(PhoneOtpPanel), findsOneWidget);
-    expect(
-      ops.recorded.map((event) => event.action),
-      contains('login_social_cancelled'),
-    );
-  });
-
-  testWidgets('社交登录失败只在唯一流程反馈槽展示，不污染 OTP 小字', (tester) async {
-    const message = '微信授权暂时失败，请重试或选择其他方式';
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _SocialFailingAuthFacets(message),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _TestNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
-    await tester.pump();
-    await tester.ensureVisible(find.byIcon(SimpleIcons.wechat));
-    await tester.tap(find.byIcon(SimpleIcons.wechat));
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(
-      find.byKey(const ValueKey<String>('login-social-method-feedback')),
-      findsOneWidget,
-    );
-    expect(find.text(message), findsOneWidget);
-    final liveRegions = tester.widgetList<Semantics>(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('login-social-method-feedback')),
-        matching: find.byType(Semantics),
-      ),
-    );
-    expect(
-      liveRegions.any((node) => node.properties.liveRegion == true),
-      isTrue,
-    );
-    expect(
-      tester
-          .getRect(
-            find.byKey(const ValueKey<String>('login-social-method-feedback')),
-          )
-          .bottom,
-      lessThan(tester.getRect(find.byType(OtherLoginMethodGrid)).top),
-    );
-    expect(find.byType(PhoneOtpPanel), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(PhoneOtpPanel),
-        matching: find.text(message),
-      ),
-      findsNothing,
-    );
-  });
-
-  testWidgets('支持平台社交方式不可用时仍可发现，点击后就近说明并提供短信恢复', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      nativeAuthBridge: const _WechatOnlyNativeAuthBridge(),
-      capabilities: CapabilityProfile.mobile,
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.byIcon(SimpleIcons.wechat), findsOneWidget);
-    expect(find.byIcon(SimpleIcons.qq), findsOneWidget);
-    expect(find.byIcon(SimpleIcons.alipay), findsOneWidget);
-    expect(find.byIcon(Icons.phone_iphone), findsNothing);
-
-    await tester.ensureVisible(find.byIcon(SimpleIcons.qq));
-    await tester.tap(find.byIcon(SimpleIcons.qq));
-    await tester.pump();
-    expect(
-      find.byKey(const ValueKey<String>('login-social-method-feedback')),
-      findsOneWidget,
-    );
-    expect(
-      find.text(FoundationText.loginSocialClientNotInstalled),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('顶部为全局返回按钮（统一语义组件）且不含帮助问号图标', (tester) async {
-    await _pumpLogin(
-      tester,
-      authStore: _GuestLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.question_circle), findsNothing);
-    // 返回按钮使用统一导航语义组件（尺寸/配色来自全局 token）。
-    expect(
-      find.ancestor(
-        of: find.byIcon(CupertinoIcons.back),
-        matching: find.byType(AppNavigationBarIconButton),
-      ),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('常见 iPhone 尺寸下登录页一屏完整展示、无回弹、不可滚动', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(393, 852));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await _pumpLogin(
-      tester,
-      authStore: _RememberedLoginStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    // 去掉 iOS 回弹/阻尼。
-    final scrollView = tester.widget<SingleChildScrollView>(
-      find.byType(SingleChildScrollView),
-    );
-    expect(scrollView.physics, isA<ClampingScrollPhysics>());
-
-    // 内容已收紧到一屏：底部"其他登录方式"完整可见，且无可滚动余量。
-    final otherRect = tester.getRect(
-      find.text(FoundationText.loginOtherMethods),
-    );
-    expect(otherRect.bottom, lessThanOrEqualTo(852));
-    final position = Scrollable.of(
-      tester.element(find.text(FoundationText.loginContinue)),
-    ).position;
-    expect(position.maxScrollExtent, 0.0, reason: '一屏可容纳则不可滚动');
-  });
-
-  testWidgets('320px、200% 动态字体与键盘占位下仍可滚动到恢复出口', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(320, 568));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    await _pumpLogin(
-      tester,
-      authStore: _MutableAuthStore(),
-      authRepository: _RecordingAuthFacets(),
-      oneTapClient: const _UnavailableOneTapLoginClient(),
-      textScaler: const TextScaler.linear(2),
-      viewInsets: const EdgeInsets.only(bottom: 260),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(tester.takeException(), isNull);
-    expect(find.byType(SingleChildScrollView), findsOneWidget);
-    await tester.ensureVisible(find.text(FoundationText.loginSendOtp));
-    await tester.pump();
-    expect(find.text(FoundationText.loginSendOtp), findsOneWidget);
+      expect(dismissed, 1);
+    });
   });
 }
 
-Future<void> _pumpLogin(
+Future<void> _pumpFrame(
   WidgetTester tester, {
-  required AuthSessionStore authStore,
-  required _LoginAuthTestFacets authRepository,
-  required OneTapLoginClient oneTapClient,
-  RecordingAppTelemetryRecorder? telemetryRecorder,
-  PlatformCapabilities? capabilities,
-  NativeAuthBridge? nativeAuthBridge,
-  TextScaler? textScaler,
-  EdgeInsets? viewInsets,
-  Brightness? brightness,
-  String? fontFamily,
+  required LoginFlowState state,
+  Map<String, NativeAuthCapability> availability = _availableSocialCapabilities,
+  Brightness brightness = Brightness.light,
+  TextScaler textScaler = TextScaler.noScaling,
+  EdgeInsets viewInsets = EdgeInsets.zero,
+  bool disableAnimations = false,
+  bool setSurfaceSize = true,
+  EdgeInsets safePadding = const EdgeInsets.only(top: 47, bottom: 34),
+  Key boundaryKey = const ValueKey<String>('login-frame-boundary'),
 }) async {
-  final ops = telemetryRecorder ?? RecordingAppTelemetryRecorder();
+  if (setSurfaceSize) {
+    await tester.binding.setSurfaceSize(const Size(393, 852));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+  }
+  final phoneController = TextEditingController(text: state.phone);
+  final otpController = TextEditingController(text: state.code);
+  addTearDown(phoneController.dispose);
+  addTearDown(otpController.dispose);
   await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        authSessionStoreProvider.overrideWithValue(authStore),
-        accountSessionLoginCommandWriterProvider.overrideWithValue(
-          authRepository,
-        ),
-        accountSessionLifecycleCommandWriterProvider.overrideWithValue(
-          authRepository,
-        ),
-        authenticationChallengeCommandWriterProvider.overrideWithValue(
-          authRepository,
-        ),
-        oneTapLoginClientProvider.overrideWithValue(oneTapClient),
-        loginJourneyEventTrackerProvider.overrideWithValue(
-          JourneyEventTracker(telemetryReporter: ops),
-        ),
-        if (capabilities != null)
-          platformCapabilitiesProvider.overrideWithValue(capabilities),
-        if (nativeAuthBridge != null)
-          nativeAuthBridgeProvider.overrideWithValue(nativeAuthBridge),
-      ],
-      child: CupertinoApp(
-        theme: CupertinoThemeData(
-          brightness: brightness,
-          textTheme: fontFamily == null
-              ? null
-              : _goldenCupertinoTextTheme(fontFamily),
-        ),
-        builder: (context, child) {
-          final media = MediaQuery.of(context);
-          final mediaChild = MediaQuery(
-            data: media.copyWith(
-              textScaler: textScaler,
-              viewInsets: viewInsets,
-            ),
-            child: child!,
-          );
-          if (fontFamily == null) {
-            return mediaChild;
-          }
-          return Theme(
-            data: ThemeData(
-              brightness: brightness ?? Brightness.light,
-              fontFamily: fontFamily,
-            ),
-            child: mediaChild,
-          );
-        },
-        home: RepaintBoundary(
-          key: const ValueKey<String>('login-page-test-boundary'),
-          child: LoginPage(key: UniqueKey()),
+    CupertinoApp(
+      theme: CupertinoThemeData(
+        brightness: brightness,
+        textTheme: _goldenCupertinoTextTheme('Noto Sans SC'),
+      ),
+      builder: (context, child) {
+        final media = MediaQuery.of(context);
+        return MediaQuery(
+          data: media.copyWith(
+            textScaler: textScaler,
+            viewInsets: viewInsets,
+            padding: safePadding,
+            viewPadding: safePadding,
+            disableAnimations: disableAnimations,
+          ),
+          child: child!,
+        );
+      },
+      home: RepaintBoundary(
+        key: boundaryKey,
+        child: LoginFrame(
+          state: state,
+          phoneEntryHasParent: false,
+          socialMethodAvailability: availability,
+          phoneController: phoneController,
+          otpController: otpController,
+          onAgreementToggle: _noop,
+          onNavigate: _noop,
+          onOneTap: _noop,
+          onOtherPhone: _noop,
+          onPhonePrimary: _noop,
+          onAgreementTap: _noop,
+          onPrivacyTap: _noop,
+          onSocialMethod: (_) {},
+          onPhoneChanged: (_) {},
+          onPhoneEditingComplete: _noop,
+          onOtpChanged: (_) {},
+          onResendOtp: _noop,
+          onRetryOtpVerify: _noop,
+          onChangePhone: _noop,
+          onRetrySocial: _noop,
+          onCancelSocial: _noop,
+          onAccountRestrictionSupport: _noop,
+          accountRestrictionSupportBusy: false,
         ),
       ),
     ),
@@ -2165,53 +817,412 @@ CupertinoTextThemeData _goldenCupertinoTextTheme(String fontFamily) {
   );
 }
 
-class _ProbeOneTapLoginClient implements OneTapLoginClient {
-  const _ProbeOneTapLoginClient({this.token = 'carrier_token_new'});
-
-  final String token;
-
-  @override
-  Future<bool> isAvailable() async => true;
-
-  @override
-  Future<OneTapLoginProbe> probe() async => OneTapLoginProbe(
-    availability: OneTapAvailability.available,
-    vendor: 'test',
-    carrierToken: token,
-    maskedPhone: '180****3901',
+Future<void> _pumpHost(
+  WidgetTester tester, {
+  required _RecordingAuthFacets auth,
+  _RecordingCredentialWriter? credentialWriter,
+  _MutableAuthStore? store,
+  OneTapLoginClient oneTapClient = const _UnavailableOneTapLoginClient(),
+  NativeAuthBridge nativeAuthBridge = const _TestNativeAuthBridge(),
+  AccountRestrictionSupportLauncher? supportLauncher,
+  RecordingAppTelemetryRecorder? recorder,
+  VoidCallback? onLoggedIn,
+  VoidCallback? onDismiss,
+  String? reason,
+  bool disableAnimations = false,
+}) async {
+  final authStore = store ?? _MutableAuthStore();
+  final credential = credentialWriter ?? _RecordingCredentialWriter();
+  final telemetry = recorder ?? RecordingAppTelemetryRecorder();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        authSessionStoreProvider.overrideWithValue(authStore),
+        accountSessionLoginCommandWriterProvider.overrideWithValue(auth),
+        accountSessionLifecycleCommandWriterProvider.overrideWithValue(auth),
+        authenticationChallengeCommandWriterProvider.overrideWithValue(auth),
+        appCredentialBindingCommandWriterProvider.overrideWithValue(credential),
+        oneTapLoginClientProvider.overrideWithValue(oneTapClient),
+        accountRestrictionSupportLauncherProvider.overrideWithValue(
+          supportLauncher ?? _RecordingSupportLauncher(),
+        ),
+        nativeAuthBridgeProvider.overrideWithValue(nativeAuthBridge),
+        platformCapabilitiesProvider.overrideWithValue(
+          CapabilityProfile.mobile,
+        ),
+        loginJourneyEventTrackerProvider.overrideWithValue(
+          JourneyEventTracker(telemetryReporter: telemetry),
+        ),
+      ],
+      child: CupertinoApp(
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(disableAnimations: disableAnimations),
+            child: child!,
+          );
+        },
+        home: LoginFrameHost(
+          reason: reason,
+          dismissPolicy: LoginDismissPolicy.hostControlledClose,
+          onLoggedIn: onLoggedIn ?? _noop,
+          onDismiss: onDismiss ?? _noop,
+        ),
+      ),
+    ),
   );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 20));
+}
 
-  @override
-  Future<OneTapLoginResult> requestLoginToken() async => OneTapLoginResult(
-    vendor: 'test',
-    carrierToken: token,
-    maskedPhone: '180****3901',
+Future<void> _enterPhone(WidgetTester tester, String phone) async {
+  await tester.enterText(
+    find.byKey(const ValueKey<String>('loginPhoneField')),
+    phone,
+  );
+  await tester.pump();
+}
+
+Future<void> _reachOtp(WidgetTester tester) async {
+  await _enterPhone(tester, '18013819016');
+  await tester.tap(find.byIcon(CupertinoIcons.circle));
+  await tester.pump();
+  await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+  await tester.pump();
+  await tester.pump();
+  expect(find.text('输入验证码'), findsOneWidget);
+}
+
+Future<void> _startSocial(WidgetTester tester, String label) async {
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+  expect(find.text('请先阅读并同意相关协议'), findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey<String>('loginConsentConfirm')));
+  await tester.pumpAndSettle();
+}
+
+String _resendCountdownText(WidgetTester tester) {
+  final regexp = RegExp(r'^\d+秒后可重新获取$');
+  final finder = find.byWidgetPredicate(
+    (widget) => widget is Text && regexp.hasMatch(widget.data ?? ''),
+  );
+  expect(finder, findsOneWidget);
+  return tester.widget<Text>(finder).data!;
+}
+
+void _noop() {}
+
+const Map<String, NativeAuthCapability> _availableSocialCapabilities =
+    <String, NativeAuthCapability>{
+      'wechat': NativeAuthCapability(
+        provider: NativeAuthProvider.wechat,
+        availability: NativeAuthAvailability.available,
+      ),
+      'qq': NativeAuthCapability(
+        provider: NativeAuthProvider.qq,
+        availability: NativeAuthAvailability.available,
+      ),
+      'alipay': NativeAuthCapability(
+        provider: NativeAuthProvider.alipay,
+        availability: NativeAuthAvailability.available,
+      ),
+    };
+
+const Map<String, NativeAuthCapability> _unavailableSocialCapabilities =
+    <String, NativeAuthCapability>{
+      'wechat': NativeAuthCapability(
+        provider: NativeAuthProvider.wechat,
+        availability: NativeAuthAvailability.clientNotInstalled,
+      ),
+      'qq': NativeAuthCapability(
+        provider: NativeAuthProvider.qq,
+        availability: NativeAuthAvailability.clientNotInstalled,
+      ),
+      'alipay': NativeAuthCapability(
+        provider: NativeAuthProvider.alipay,
+        availability: NativeAuthAvailability.clientNotInstalled,
+      ),
+    };
+
+LoginFeedback _feedback(String message, String copyKey) => LoginFeedback(
+  message: message,
+  copyKey: copyKey,
+  surface: LoginFeedbackSurface.page,
+  recoveryAction: 'retry',
+);
+
+CloudException _cloudError(
+  UserErrorCode code, {
+  String? requestId,
+  String? traceId,
+  RuntimeFailureKind kind = RuntimeFailureKind.validation,
+}) {
+  return CloudException(
+    type: CloudErrorType.server,
+    message: code.code,
+    code: code.code,
+    requestId: requestId,
+    traceId: traceId,
+    runtimeFailure: testRuntimeFailure(code: code.code, kind: kind),
   );
 }
 
-class _RefreshingOneTapLoginClient implements OneTapLoginClient {
-  int requestLoginTokenCalls = 0;
+CloudException _cloudErrorWithoutCode({required RuntimeFailureKind kind}) {
+  return CloudException(
+    type: CloudErrorType.network,
+    message: 'network unavailable',
+    runtimeFailure: testRuntimeFailure(kind: kind),
+  );
+}
+
+AuthSessionGrant _grant({String origin = 'phone'}) =>
+    decodeAuthSessionGrant(<String, dynamic>{
+      'accessToken': 'access-$origin',
+      'refreshToken': 'refresh-$origin',
+      'ownerId': 'owner-$origin',
+      'activePersona': <String, dynamic>{'personaId': 'sub-$origin'},
+      'accountState': 'active',
+      'identityOrigin': origin,
+      'logicalShard': 0,
+      'anonymousRetentionPolicy': '',
+      'personaCount': 1,
+      'sessionRememberTtlSeconds': 2592000,
+      'accountHint': <String, dynamic>{
+        'displayName': '趣友',
+        'maskedPhone': '180****9016',
+      },
+    });
+
+class _RecordingAuthFacets
+    implements
+        AccountSessionCommandWriter,
+        AuthenticationChallengeCommandWriter {
+  _RecordingAuthFacets({
+    this.phoneLoginError,
+    this.socialError,
+    FederatedLoginOutcome? socialOutcome,
+    OtpChallengeIssueResult? otpResult,
+  }) : socialOutcome =
+           socialOutcome ??
+           FederatedLoginOutcome.authenticated(_grant(origin: 'wechat')),
+       otpResult =
+           otpResult ??
+           const OtpChallengeIssueResult(
+             maskedPhone: '180****9016',
+             expiresInSeconds: 300,
+             deliveryStatus: 'queued',
+             retryAfterSeconds: 60,
+             requestId: 'request-1',
+             challengeId: 'challenge-1',
+           );
+
+  final Object? phoneLoginError;
+  final Object? socialError;
+  final FederatedLoginOutcome socialOutcome;
+  final OtpChallengeIssueResult otpResult;
+  int sendOtpCalls = 0;
+  int phoneLoginCalls = 0;
+  int socialLoginCalls = 0;
+  int refreshTokenCalls = 0;
+  SendOtpCommand? lastSendOtp;
+  LoginWithPhoneCommand? lastPhoneLogin;
 
   @override
-  Future<bool> isAvailable() async => true;
+  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
+    sendOtpCalls += 1;
+    lastSendOtp = command;
+    return otpResult;
+  }
 
   @override
-  Future<OneTapLoginProbe> probe() async => const OneTapLoginProbe(
-    availability: OneTapAvailability.available,
-    vendor: 'test',
-    carrierToken: 'expired_token',
-    maskedPhone: '180****3901',
+  Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command) async {
+    phoneLoginCalls += 1;
+    lastPhoneLogin = command;
+    final error = phoneLoginError;
+    if (error != null) throw error;
+    return _grant();
+  }
+
+  Future<FederatedLoginOutcome> _social() async {
+    socialLoginCalls += 1;
+    final error = socialError;
+    if (error != null) throw error;
+    return socialOutcome;
+  }
+
+  @override
+  Future<FederatedLoginOutcome> loginWithWechat(
+    LoginWithWechatCommand command,
+  ) => _social();
+
+  @override
+  Future<FederatedLoginOutcome> loginWithQq(LoginWithQqCommand command) =>
+      _social();
+
+  @override
+  Future<FederatedLoginOutcome> loginWithAlipay(
+    LoginWithAlipayCommand command,
+  ) => _social();
+
+  @override
+  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async =>
+      _grant(origin: 'one_tap');
+
+  @override
+  Future<AuthSessionGrant> loginAnonymous(
+    LoginAnonymousCommand command,
+  ) async => _grant(origin: 'anonymous');
+
+  @override
+  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) async {
+    refreshTokenCalls += 1;
+    return const TokenRefreshGrant(
+      accessToken: 'access-refreshed',
+      refreshToken: 'refresh-refreshed',
+      sessionRememberTtlSeconds: 2592000,
+    );
+  }
+
+  @override
+  Future<LogoutAck> logout(LogoutCommand command) async =>
+      const LogoutAck(revoked: true);
+
+  @override
+  Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(
+    CreateAlipayAuthorizationRequestCommand command,
+  ) async => const AlipayAuthorizationGrant(
+    authorizationPayload: 'alipay-payload',
+    expiresAt: '2099-01-01T00:00:00Z',
   );
 
   @override
-  Future<OneTapLoginResult> requestLoginToken() async {
-    requestLoginTokenCalls += 1;
-    return const OneTapLoginResult(
-      vendor: 'test',
-      carrierToken: 'fresh_token',
-      maskedPhone: '180****3901',
+  Future<OneTapLoginHint> resolveOneTapLoginHint(
+    ResolveOneTapLoginHintCommand command,
+  ) async => const OneTapLoginHint(
+    state: 'new_phone',
+    maskedPhone: '180****9016',
+    registered: false,
+    expiresInSeconds: 60,
+  );
+}
+
+class _RecordingCredentialWriter implements AppCredentialBindingCommandWriter {
+  int completeCalls = 0;
+  CompleteFederatedPhoneBindingCommand? lastComplete;
+
+  @override
+  Future<AuthSessionGrant> completeFederatedPhoneBinding(
+    CompleteFederatedPhoneBindingCommand command,
+  ) async {
+    completeCalls += 1;
+    lastComplete = command;
+    return _grant(origin: 'wechat');
+  }
+
+  @override
+  Future<CredentialBindingCommandResult> bindPhoneCredential(
+    BindPhoneCredentialCommand command,
+  ) async => const CredentialBindingCommandResult(
+    credentialType: 'phone',
+    isActive: true,
+    version: 1,
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CredentialBindingCommandResult> bindCarrierPhoneCredential(
+    BindCarrierPhoneCredentialCommand command,
+  ) async => const CredentialBindingCommandResult(
+    credentialType: 'phone',
+    isActive: true,
+    version: 1,
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CredentialBindingCommandResult> unbindCredential(
+    UnbindCredentialCommand command,
+  ) async => CredentialBindingCommandResult(
+    credentialType: command.credentialType,
+    isActive: false,
+    version: 2,
+    idempotentReplay: false,
+  );
+}
+
+class _MutableAuthStore implements AuthSessionStore {
+  _MutableAuthStore()
+    : _stored = const StoredAuthSession(
+        accessToken: '',
+        refreshToken: '',
+        ownerId: '',
+        activePersonaId: '',
+        accountState: '',
+        identityOrigin: '',
+        installId: 'install-test',
+        manualLoggedOut: false,
+        launchPromptDismissed: false,
+      );
+
+  StoredAuthSession _stored;
+  int saveLoginGrantCalls = 0;
+
+  @override
+  Future<StoredAuthSession> read() async => _stored;
+
+  @override
+  Future<void> saveLoginGrant(
+    AuthSessionGrant result, {
+    AuthRememberedLoginMethod rememberedLoginMethod =
+        AuthRememberedLoginMethod.unknown,
+    String? rememberedLoginMaskedIdentifier,
+    String? rememberedLoginIdentifier,
+  }) async {
+    saveLoginGrantCalls += 1;
+    _stored = StoredAuthSession(
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      ownerId: result.ownerId,
+      activePersonaId: result.activePersona?.personaId ?? '',
+      accountState: result.accountState,
+      identityOrigin: result.identityOrigin,
+      installId: _stored.installId,
+      rememberedLoginMethod: rememberedLoginMethod,
+      rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier ?? '',
+      rememberedLoginIdentifier: rememberedLoginIdentifier ?? '',
+      rememberedDisplayName: result.accountHint?.displayName ?? '',
+      rememberedAvatarUrl: result.accountHint?.avatarUrl ?? '',
+      rememberedNicknameCustomized: true,
+      rememberedRefreshToken: result.refreshToken,
+      quickLoginExpiresAtEpochMs:
+          DateTime.now().millisecondsSinceEpoch + 2592000 * 1000,
+      manualLoggedOut: false,
+      launchPromptDismissed: false,
     );
   }
+
+  @override
+  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    AccountHintSnapshot? accountHint,
+  ) async {}
+
+  @override
+  Future<void> updateActivePersona(String personaId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> softLogout() async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+
+  @override
+  Future<void> markForegroundAuthCheckNow() async {}
 }
 
 class _UnavailableOneTapLoginClient implements OneTapLoginClient {
@@ -2226,105 +1237,67 @@ class _UnavailableOneTapLoginClient implements OneTapLoginClient {
   );
 
   @override
-  Future<OneTapLoginResult> requestLoginToken() {
-    throw UnimplementedError();
-  }
-}
-
-class _IncompleteProbeOneTapLoginClient implements OneTapLoginClient {
-  const _IncompleteProbeOneTapLoginClient();
-
-  @override
-  Future<bool> isAvailable() async => false;
-
-  @override
-  Future<OneTapLoginProbe> probe() async => const OneTapLoginProbe(
-    availability: OneTapAvailability.available,
-    vendor: 'aliyun',
-    reason: 'prelogin_token_not_resolved',
-  );
-
-  @override
-  Future<OneTapLoginResult> requestLoginToken() {
-    throw StateError('incomplete probe must not expose a login entry');
-  }
-}
-
-class _HangingOneTapLoginClient implements OneTapLoginClient {
-  const _HangingOneTapLoginClient();
-
-  @override
-  Future<bool> isAvailable() => Completer<bool>().future;
-
-  @override
-  Future<OneTapLoginProbe> probe() => Completer<OneTapLoginProbe>().future;
-
-  @override
   Future<OneTapLoginResult> requestLoginToken() =>
-      Completer<OneTapLoginResult>().future;
+      throw StateError('one tap is unavailable');
 }
 
-class _ControlledOneTapLoginClient implements OneTapLoginClient {
-  final Completer<OneTapLoginProbe> _probeCompleter =
-      Completer<OneTapLoginProbe>();
-
-  void completeProbe() {
-    _probeCompleter.complete(
-      const OneTapLoginProbe(
-        availability: OneTapAvailability.available,
-        vendor: 'test',
-        carrierToken: 'late_carrier_token',
-        maskedPhone: '180****3901',
-      ),
-    );
-  }
+final class _RecordingOneTapLoginClient implements OneTapLoginClient {
+  int probeCalls = 0;
 
   @override
   Future<bool> isAvailable() async => true;
 
   @override
-  Future<OneTapLoginProbe> probe() => _probeCompleter.future;
+  Future<OneTapLoginProbe> probe() async {
+    probeCalls += 1;
+    return const OneTapLoginProbe(
+      availability: OneTapAvailability.available,
+      vendor: 'carrier',
+      carrierToken: 'must-not-be-read',
+      maskedPhone: '180****0000',
+    );
+  }
 
   @override
-  Future<OneTapLoginResult> requestLoginToken() {
-    throw UnimplementedError();
+  Future<OneTapLoginResult> requestLoginToken() =>
+      throw StateError('not expected');
+}
+
+final class _RecordingSupportLauncher
+    implements AccountRestrictionSupportLauncher {
+  int calls = 0;
+
+  @override
+  Future<bool> openOfficialSupport() async {
+    calls += 1;
+    return true;
   }
 }
 
 class _TestNativeAuthBridge implements NativeAuthBridge {
-  const _TestNativeAuthBridge();
+  const _TestNativeAuthBridge({this.signInError});
 
-  static const _providers = <NativeAuthProvider>{
-    NativeAuthProvider.wechat,
-    NativeAuthProvider.alipay,
-    NativeAuthProvider.qq,
-  };
+  final Object? signInError;
 
   @override
   Future<NativeAuthCapability> getCapability(
     NativeAuthProvider provider,
-  ) async {
-    final available = _providers.contains(provider);
-    return NativeAuthCapability(
-      provider: provider,
-      availability: available
-          ? NativeAuthAvailability.available
-          : NativeAuthAvailability.clientNotInstalled,
-      reason: available ? 'test_fixture' : 'unsupported_in_test',
-    );
-  }
+  ) async => NativeAuthCapability(
+    provider: provider,
+    availability: NativeAuthAvailability.available,
+  );
 
   @override
   Future<NativeAuthResult> signIn(
     NativeAuthProvider provider, {
     String authorizationPayload = '',
   }) async {
-    if (!_providers.contains(provider)) {
-      throw StateError('${provider.name} test auth is unavailable');
-    }
+    final error = signInError;
+    if (error != null) throw error;
     return NativeAuthResult(
       provider: provider,
-      ticket: 'test-${provider.name}-ticket',
+      ticket: '${provider.name}-ticket',
+      maskedAccount: '已授权账号',
     );
   }
 
@@ -2332,513 +1305,226 @@ class _TestNativeAuthBridge implements NativeAuthBridge {
   Future<NativeAuthResult> signInWithPasskey({
     String? relyingPartyId,
     String? challenge,
-  }) async {
-    throw StateError('passkey test auth is unavailable');
-  }
+  }) => throw StateError('passkey is outside login footer scope');
 }
 
-class _WechatOnlyNativeAuthBridge implements NativeAuthBridge {
-  const _WechatOnlyNativeAuthBridge();
+class _GoldenScenario {
+  const _GoldenScenario(
+    this.name,
+    this.state, {
+    this.brightness = Brightness.light,
+  });
 
-  @override
-  Future<NativeAuthCapability> getCapability(
-    NativeAuthProvider provider,
-  ) async {
-    final available = provider == NativeAuthProvider.wechat;
-    return NativeAuthCapability(
-      provider: provider,
-      availability: available
-          ? NativeAuthAvailability.available
-          : NativeAuthAvailability.clientNotInstalled,
-      reason: available ? 'available' : 'not_installed',
-    );
-  }
-
-  @override
-  Future<NativeAuthResult> signIn(
-    NativeAuthProvider provider, {
-    String authorizationPayload = '',
-  }) async {
-    return NativeAuthResult(provider: provider, ticket: 'wechat-code');
-  }
-
-  @override
-  Future<NativeAuthResult> signInWithPasskey({
-    String? relyingPartyId,
-    String? challenge,
-  }) {
-    throw UnimplementedError();
-  }
+  final String name;
+  final LoginFlowState Function() state;
+  final Brightness brightness;
 }
 
-class _CancellingWechatNativeAuthBridge extends _WechatOnlyNativeAuthBridge {
-  const _CancellingWechatNativeAuthBridge();
+List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
+  _GoldenScenario(
+    '01_one_tap_unchecked',
+    () => LoginFlowState(
+      step: LoginStep.oneTap,
+      flowId: 'g01',
+      entryMode: LoginEntryMode.carrier,
+      maskedPhone: '180****9016',
+    ),
+  ),
+  _GoldenScenario(
+    '02_one_tap_checked',
+    () => LoginFlowState(
+      step: LoginStep.oneTap,
+      flowId: 'g02',
+      entryMode: LoginEntryMode.carrier,
+      maskedPhone: '180****9016',
+      consentState: LoginConsentState.accepted,
+    ),
+  ),
+  _GoldenScenario(
+    '03_phone_empty',
+    () => LoginFlowState(step: LoginStep.phoneEntry, flowId: 'g03'),
+  ),
+  _GoldenScenario(
+    '04_phone_ready',
+    () => LoginFlowState(
+      step: LoginStep.phoneEntry,
+      flowId: 'g04',
+      phone: '18013819016',
+      maskedPhone: '180****9016',
+      consentState: LoginConsentState.accepted,
+    ),
+  ),
+  _GoldenScenario('05_otp_waiting', () => _otpGoldenState(flowId: 'g05')),
+  _GoldenScenario(
+    '06_otp_verifying',
+    () => _otpGoldenState(
+      flowId: 'g06',
+      code: '286419',
+      operation: LoginOperation.verifyingOtp,
+    ),
+  ),
+  _GoldenScenario(
+    '07_otp_mismatch',
+    () => _otpGoldenState(
+      flowId: 'g07',
+      feedback: _feedback('验证码不正确', 'loginOtpMismatch'),
+    ),
+  ),
+  _GoldenScenario(
+    '08_otp_resend',
+    () => _otpGoldenState(
+      flowId: 'g08',
+      challengeState: OtpChallengeState.resendAvailable,
+      deadline: DateTime.now(),
+    ),
+  ),
+  _GoldenScenario(
+    '09_otp_expired',
+    () => _otpGoldenState(
+      flowId: 'g09',
+      challengeState: OtpChallengeState.expired,
+      deadline: DateTime.now(),
+      feedback: _feedback('验证码已失效', 'loginOtpExpired'),
+    ),
+  ),
+  _GoldenScenario(
+    '10_send_failed',
+    () => LoginFlowState(
+      step: LoginStep.phoneEntry,
+      flowId: 'g10',
+      phone: '18013819016',
+      maskedPhone: '180****9016',
+      consentState: LoginConsentState.accepted,
+      feedback: _feedback('验证码发送失败', 'loginOtpSendFailed'),
+    ),
+  ),
+  _GoldenScenario(
+    '11_rate_limited',
+    () => _otpGoldenState(
+      flowId: 'g11',
+      challengeState: OtpChallengeState.rateLimited,
+      feedback: _feedback('尝试次数较多', 'loginOtpRateLimited'),
+    ),
+  ),
+  _GoldenScenario(
+    '12_blocked',
+    () => LoginFlowState(
+      step: LoginStep.blocked,
+      flowId: 'g12',
+      feedback: _feedback('登录服务暂不可用，请使用其他方式登录', 'loginUnavailable'),
+    ),
+  ),
+  _GoldenScenario(
+    '13_social_authorizing',
+    () => LoginFlowState(
+      step: LoginStep.socialAuthorizing,
+      flowId: 'g13',
+      provider: 'wechat',
+      operation: LoginOperation.openingProvider,
+      consentState: LoginConsentState.accepted,
+    ),
+  ),
+  _GoldenScenario(
+    '14_social_failed',
+    () => LoginFlowState(
+      step: LoginStep.socialFailed,
+      flowId: 'g14',
+      provider: 'wechat',
+      feedback: _feedback('授权未完成', 'loginSocialAuthorizationFailed'),
+    ),
+  ),
+  _GoldenScenario(
+    '15_social_phone',
+    () => LoginFlowState(
+      step: LoginStep.socialPhoneEntry,
+      flowId: 'g15',
+      provider: 'wechat',
+      bindingTicket: 'binding-ticket',
+      bindingDeadline: DateTime.now().add(const Duration(minutes: 3)),
+      consentState: LoginConsentState.accepted,
+    ),
+  ),
+  _GoldenScenario(
+    '16_social_otp',
+    () => _otpGoldenState(
+      flowId: 'g16',
+      step: LoginStep.socialPhoneOtp,
+      provider: 'wechat',
+      purpose: LoginOtpPurpose.bindPhone,
+      bindingTicket: 'binding-ticket',
+    ),
+  ),
+  _GoldenScenario(
+    '17_dark_one_tap',
+    () => LoginFlowState(
+      step: LoginStep.oneTap,
+      flowId: 'g17',
+      entryMode: LoginEntryMode.carrier,
+      maskedPhone: '180****9016',
+    ),
+    brightness: Brightness.dark,
+  ),
+  _GoldenScenario(
+    '18_dark_phone',
+    () => LoginFlowState(
+      step: LoginStep.phoneEntry,
+      flowId: 'g18',
+      phone: '18013819016',
+      maskedPhone: '180****9016',
+      consentState: LoginConsentState.accepted,
+    ),
+    brightness: Brightness.dark,
+  ),
+  _GoldenScenario(
+    '19_dark_otp_mismatch',
+    () => _otpGoldenState(
+      flowId: 'g19',
+      feedback: _feedback('验证码不正确', 'loginOtpMismatch'),
+    ),
+    brightness: Brightness.dark,
+  ),
+  _GoldenScenario(
+    '20_dark_social_phone',
+    () => LoginFlowState(
+      step: LoginStep.socialPhoneEntry,
+      flowId: 'g20',
+      provider: 'wechat',
+      bindingTicket: 'binding-ticket',
+      bindingDeadline: DateTime.now().add(const Duration(minutes: 3)),
+      consentState: LoginConsentState.accepted,
+    ),
+    brightness: Brightness.dark,
+  ),
+];
 
-  @override
-  Future<NativeAuthResult> signIn(
-    NativeAuthProvider provider, {
-    String authorizationPayload = '',
-  }) {
-    throw PlatformException(code: 'authorization_cancelled');
-  }
-}
-
-abstract interface class _LoginAuthTestFacets
-    implements
-        AccountSessionCommandWriter,
-        AuthenticationChallengeCommandWriter {}
-
-class _RecordingAuthFacets implements _LoginAuthTestFacets {
-  _RecordingAuthFacets({OneTapLoginHint? hint})
-    : hint =
-          hint ??
-          const OneTapLoginHint(
-            state: 'unavailable',
-            maskedPhone: '',
-            registered: false,
-            expiresInSeconds: 0,
-          );
-
-  final OneTapLoginHint hint;
-  int loginOneTapCalls = 0;
-  int refreshTokenCalls = 0;
-  int sendOtpCalls = 0;
-  int phoneLoginCalls = 0;
-
-  @override
-  Future<OneTapLoginHint> resolveOneTapLoginHint(
-    ResolveOneTapLoginHintCommand command,
-  ) async => hint;
-
-  @override
-  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async {
-    loginOneTapCalls += 1;
-    return decodeAuthSessionGrant(<String, dynamic>{
-      'accessToken': 'access',
-      'refreshToken': 'refresh',
-      'ownerId': 'owner',
-      'activeSub': <String, dynamic>{'subAccountId': 'sub'},
-      'accountState': 'active',
-      'identityOrigin': 'phone',
-      'subAccountCount': 1,
-      'accountHint': <String, dynamic>{
-        'displayName': '趣友3901',
-        'maskedPhone': '180****3901',
-      },
-    });
-  }
-
-  @override
-  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
-    sendOtpCalls += 1;
-    return const OtpChallengeIssueResult(
-      maskedPhone: '180****3909',
-      expiresInSeconds: 300,
-      deliveryStatus: 'queued',
-      retryAfterSeconds: 0,
-      requestId: 'request-1',
-      challengeId: 'challenge-1',
-    );
-  }
-
-  @override
-  Future<AuthSessionGrant> loginWithPhone(LoginWithPhoneCommand command) async {
-    phoneLoginCalls += 1;
-    return decodeAuthSessionGrant(<String, dynamic>{
-      'accessToken': 'phone_access',
-      'refreshToken': 'phone_refresh',
-      'ownerId': 'phone_owner',
-      'activeSub': <String, dynamic>{'subAccountId': 'phone_sub'},
-      'accountState': 'active',
-      'identityOrigin': 'phone',
-      'subAccountCount': 1,
-      'accountHint': <String, dynamic>{
-        'displayName': _defaultNicknameSample,
-        'maskedPhone': '180****3909',
-      },
-    });
-  }
-
-  @override
-  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command) =>
-      throw UnimplementedError();
-
-  @override
-  Future<AuthSessionGrant> loginWithAlipay(LoginWithAlipayCommand command) =>
-      throw UnimplementedError();
-
-  @override
-  Future<AuthSessionGrant> loginWithQq(LoginWithQqCommand command) =>
-      throw UnimplementedError();
-
-  @override
-  Future<AuthSessionGrant> loginAnonymous(LoginAnonymousCommand command) =>
-      throw UnimplementedError();
-
-  @override
-  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) async {
-    refreshTokenCalls += 1;
-    return const TokenRefreshGrant(
-      accessToken: 'refreshed_access',
-      refreshToken: 'refreshed_refresh',
-      sessionRememberTtlSeconds: 0,
-    );
-  }
-
-  @override
-  Future<LogoutAck> logout(LogoutCommand command) async =>
-      const LogoutAck(revoked: true);
-
-  @override
-  Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(
-    CreateAlipayAuthorizationRequestCommand command,
-  ) async {
-    return const AlipayAuthorizationGrant(
-      authorizationPayload: 'test-alipay-authorization',
-      expiresAt: '2099-01-01T00:00:00Z',
-    );
-  }
-}
-
-class _SuspendedHintAuthFacets extends _RecordingAuthFacets {
-  @override
-  Future<OneTapLoginHint> resolveOneTapLoginHint(
-    ResolveOneTapLoginHintCommand command,
-  ) {
-    throw CloudException(
-      type: CloudErrorType.forbidden,
-      message: 'account is suspended',
-      code: UserErrorCode.accountSuspended.code,
-      runtimeFailure: testRuntimeFailure(
-        code: UserErrorCode.accountSuspended.code,
-      ),
-    );
-  }
-}
-
-class _SocialFailingAuthFacets extends _RecordingAuthFacets {
-  _SocialFailingAuthFacets(this.userMessage);
-
-  final String userMessage;
-
-  @override
-  Future<AuthSessionGrant> loginWithWechat(LoginWithWechatCommand command) {
-    throw CloudException(
-      type: CloudErrorType.server,
-      message: 'provider rejected authorization',
-      code: UserErrorCode.wechatAuthFailed.code,
-      userMessage: userMessage,
-      runtimeFailure: testRuntimeFailure(
-        code: UserErrorCode.wechatAuthFailed.code,
-      ),
-    );
-  }
-}
-
-class _ExpiredThenFreshOneTapFacets extends _RecordingAuthFacets {
-  _ExpiredThenFreshOneTapFacets()
-    : super(
-        hint: decodeOneTapLoginHint(<String, dynamic>{
-          'state': 'new_phone',
-          'maskedPhone': '180****3901',
-          'registered': false,
-          'expiresInSeconds': 60,
-        }),
-      );
-
-  @override
-  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) {
-    if (command.carrierToken == 'expired_token') {
-      loginOneTapCalls += 1;
-      throw CloudException(
-        type: CloudErrorType.server,
-        message: 'carrier token expired',
-        code: UserErrorCode.carrierTokenInvalid.code,
-        runtimeFailure: testRuntimeFailure(
-          code: UserErrorCode.carrierTokenInvalid.code,
-        ),
-      );
-    }
-    return super.loginOneTap(command);
-  }
-}
-
-class _FailSecondOtpSendFacets extends _RecordingAuthFacets {
-  @override
-  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
-    if (sendOtpCalls == 0) {
-      sendOtpCalls += 1;
-      return const OtpChallengeIssueResult(
-        maskedPhone: '180****3909',
-        expiresInSeconds: 300,
-        retryAfterSeconds: 1,
-        deliveryStatus: 'queued',
-        requestId: 'request-1',
-        challengeId: 'challenge-1',
-      );
-    }
-    sendOtpCalls += 1;
-    throw CloudException(
-      type: CloudErrorType.server,
-      message: 'sms provider unavailable',
-      code: UserErrorCode.otpProviderFailed.code,
-      userMessage: FoundationText.loginOtpSendFailed,
-      runtimeFailure: testRuntimeFailure(
-        code: UserErrorCode.otpProviderFailed.code,
-      ),
-    );
-  }
-}
-
-/// 最近账号二次登录（服务端 refresh）失败：用于验证不进死路。
-class _FailingRefreshAuthFacets extends _RecordingAuthFacets {
-  @override
-  Future<TokenRefreshGrant> refreshToken(RefreshTokenCommand command) async {
-    throw CloudException(
-      type: CloudErrorType.server,
-      message: 'refresh failed',
-      userMessage: '会话已过期，请重新登录或换其它方式',
-      runtimeFailure: testRuntimeFailure(code: 'USER.AUTH.refresh_failed'),
-    );
-  }
-}
-
-/// 运营商一键登录返回号码不一致（surface），用于验证降级到手机号输入。
-class _CarrierMismatchAuthFacets extends _RecordingAuthFacets {
-  _CarrierMismatchAuthFacets()
-    : super(
-        hint: decodeOneTapLoginHint(<String, dynamic>{
-          'state': 'new_phone',
-          'maskedPhone': '180****3901',
-          'registered': false,
-          'expiresInSeconds': 60,
-        }),
-      );
-
-  @override
-  Future<AuthSessionGrant> loginOneTap(LoginOneTapCommand command) async {
-    throw CloudException(
-      type: CloudErrorType.server,
-      message: 'carrier phone mismatch',
-      code: UserErrorCode.carrierPhoneMismatch.code,
-      userMessage: '运营商号码校验未通过，请改用短信验证码登录',
-      runtimeFailure: testRuntimeFailure(
-        code: UserErrorCode.carrierPhoneMismatch.code,
-      ),
-    );
-  }
-}
-
-class _GuestLoginStore extends _MutableAuthStore {
-  _GuestLoginStore();
-}
-
-class _GhostSummaryStore extends _MutableAuthStore {
-  _GhostSummaryStore();
-
-  @override
-  Future<StoredAuthSession> read() async => const StoredAuthSession(
-    accessToken: '',
-    refreshToken: 'still-valid-but-unidentifiable',
-    ownerId: '',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: 'phone',
-    installId: 'install-id',
-    rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
-    rememberedLoginMaskedIdentifier: '',
-    rememberedDisplayName: '欢迎回来',
-    rememberedAvatarUrl: 'https://cdn.example/avatar.png',
-    rememberedNicknameCustomized: false,
-    manualLoggedOut: true,
-    launchPromptDismissed: false,
+LoginFlowState _otpGoldenState({
+  required String flowId,
+  LoginStep step = LoginStep.otp,
+  LoginOperation operation = LoginOperation.idle,
+  OtpChallengeState challengeState = OtpChallengeState.active,
+  LoginOtpPurpose purpose = LoginOtpPurpose.login,
+  String code = '',
+  String provider = '',
+  String bindingTicket = '',
+  DateTime? deadline,
+  LoginFeedback? feedback,
+}) {
+  return LoginFlowState(
+    step: step,
+    flowId: flowId,
+    operation: operation,
+    phone: '18013819016',
+    maskedPhone: '180****9016',
+    code: code,
+    challengeId: 'challenge-1',
+    provider: provider,
+    bindingTicket: bindingTicket,
+    bindingDeadline: bindingTicket.isEmpty
+        ? null
+        : DateTime.now().add(const Duration(minutes: 3)),
+    otpPurpose: purpose,
+    otpChallengeState: challengeState,
+    resendDeadline: deadline ?? DateTime.now().add(const Duration(seconds: 60)),
+    feedback: feedback,
   );
-}
-
-class _RememberedLoginStore extends _MutableAuthStore {
-  _RememberedLoginStore();
-
-  @override
-  Future<StoredAuthSession> read() async => const StoredAuthSession(
-    accessToken: '',
-    refreshToken: 'remembered_refresh',
-    ownerId: '',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: 'phone',
-    installId: 'install-id',
-    lastRefreshAtEpochMs: 0,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
-    rememberedLoginMaskedIdentifier: '138****3909',
-    rememberedDisplayName: _defaultNicknameSample,
-    rememberedAvatarUrl: '',
-    manualLoggedOut: false,
-    launchPromptDismissed: false,
-  );
-}
-
-/// 软退出后：保留 refreshToken 与账号摘要，快速登录凭证仍在有效期内。
-class _SoftLoggedOutStore extends _MutableAuthStore {
-  _SoftLoggedOutStore();
-
-  @override
-  Future<StoredAuthSession> read() async => StoredAuthSession(
-    accessToken: '',
-    refreshToken: 'soft_refresh',
-    ownerId: 'owner-soft',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: 'phone',
-    installId: 'install-id',
-    lastRefreshAtEpochMs: DateTime.now().millisecondsSinceEpoch,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
-    rememberedLoginMaskedIdentifier: '138****0001',
-    rememberedDisplayName: '趣友A',
-    rememberedAvatarUrl: '',
-    rememberedNicknameCustomized: true,
-    quickLoginExpiresAtEpochMs:
-        DateTime.now().millisecondsSinceEpoch + 7 * 86400 * 1000,
-    manualLoggedOut: true,
-    launchPromptDismissed: false,
-  );
-}
-
-/// 软退出后凭证已过期：保留摘要，但快速登录凭证不可用。
-class _ExpiredQuickLoginStore extends _MutableAuthStore {
-  _ExpiredQuickLoginStore();
-
-  @override
-  Future<StoredAuthSession> read() async => StoredAuthSession(
-    accessToken: '',
-    refreshToken: 'expired_refresh',
-    ownerId: 'owner-exp',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: 'phone',
-    installId: 'install-id',
-    lastRefreshAtEpochMs:
-        DateTime.now().millisecondsSinceEpoch - 40 * 86400 * 1000,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    rememberedLoginMethod: AuthRememberedLoginMethod.oneTap,
-    rememberedLoginMaskedIdentifier: '138****0002',
-    rememberedDisplayName: '趣友B',
-    rememberedAvatarUrl: '',
-    rememberedNicknameCustomized: true,
-    quickLoginExpiresAtEpochMs: DateTime.now().millisecondsSinceEpoch - 1000,
-    manualLoggedOut: true,
-    launchPromptDismissed: false,
-  );
-}
-
-/// 软退出后凭证已过期，但本机以手机号方式登录并记住完整手机号：
-/// 用于验证过期 returning 点主按钮可自动预填手机号 + 自动发码。
-class _ExpiredPhoneOtpStore extends _MutableAuthStore {
-  _ExpiredPhoneOtpStore();
-
-  @override
-  Future<StoredAuthSession> read() async => StoredAuthSession(
-    accessToken: '',
-    refreshToken: 'expired_refresh',
-    ownerId: 'owner-exp-phone',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: 'phone',
-    installId: 'install-id',
-    lastRefreshAtEpochMs:
-        DateTime.now().millisecondsSinceEpoch - 40 * 86400 * 1000,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
-    rememberedLoginMaskedIdentifier: '180****3909',
-    rememberedLoginIdentifier: '18013813909',
-    rememberedDisplayName: '欢迎回来',
-    rememberedAvatarUrl: '',
-    quickLoginExpiresAtEpochMs: DateTime.now().millisecondsSinceEpoch - 1000,
-    manualLoggedOut: true,
-    launchPromptDismissed: false,
-  );
-}
-
-/// 彻底退出后：凭证与展示摘要均已清除。
-class _HardLoggedOutStore extends _MutableAuthStore {
-  _HardLoggedOutStore();
-
-  @override
-  Future<StoredAuthSession> read() async => const StoredAuthSession(
-    accessToken: '',
-    refreshToken: '',
-    ownerId: '',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: '',
-    installId: 'install-id',
-    lastRefreshAtEpochMs: 0,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    manualLoggedOut: true,
-    launchPromptDismissed: false,
-  );
-}
-
-class _MutableAuthStore implements AuthSessionStore {
-  _MutableAuthStore();
-
-  AuthRememberedLoginMethod? _lastRememberedMethod;
-  String? _lastRememberedMaskedIdentifier;
-  String? _lastRememberedIdentifier;
-
-  AuthRememberedLoginMethod? get lastRememberedMethod => _lastRememberedMethod;
-  String? get lastRememberedMaskedIdentifier => _lastRememberedMaskedIdentifier;
-  String? get lastRememberedIdentifier => _lastRememberedIdentifier;
-
-  @override
-  Future<StoredAuthSession> read() async => const StoredAuthSession(
-    accessToken: '',
-    refreshToken: '',
-    ownerId: '',
-    activeSubAccountId: '',
-    accountState: '',
-    identityOrigin: '',
-    installId: 'install-id',
-    lastRefreshAtEpochMs: 0,
-    lastForegroundAuthCheckAtEpochMs: 0,
-    manualLoggedOut: false,
-    launchPromptDismissed: false,
-  );
-
-  @override
-  Future<void> saveLoginGrant(
-    AuthSessionGrant result, {
-    AuthRememberedLoginMethod rememberedLoginMethod =
-        AuthRememberedLoginMethod.unknown,
-    String? rememberedLoginMaskedIdentifier,
-    String? rememberedLoginIdentifier,
-  }) async {
-    _lastRememberedMethod = rememberedLoginMethod;
-    _lastRememberedMaskedIdentifier = rememberedLoginMaskedIdentifier;
-    _lastRememberedIdentifier = rememberedLoginIdentifier;
-  }
-
-  @override
-  Future<void> saveRefreshGrant(TokenRefreshGrant result) async {}
-
-  @override
-  Future<void> saveRefreshedAccountHint(
-    AccountHintSnapshot? accountHint,
-  ) async {}
-
-  @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
-
-  @override
-  Future<void> clearSession({required bool manualLogout}) async {}
-
-  @override
-  Future<void> softLogout() async {}
-
-  @override
-  Future<void> markLaunchPromptDismissed() async {}
-
-  @override
-  Future<void> markForegroundAuthCheckNow() async {}
 }

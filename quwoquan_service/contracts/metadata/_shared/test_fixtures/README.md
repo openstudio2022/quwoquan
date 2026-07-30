@@ -18,7 +18,8 @@ contracts/metadata/_shared/test_fixtures/scenario_fixture.schema.json
 
 - `local_contract`：测试树内对象级 typed double 可读取 fixture seed；Alpha 与其他环境 App 不得消费本目录。
 - `beta`：端侧通过 RemoteRepository 访问本地云服务；云服务测试前 reset + seed。
-- `gamma`：通过 `app_gamma_seed_manifest.json` 指向云侧 curated fixture 子集；当前 gamma 为远端精简媒体收口，alpha/beta 继续使用全量共享池。
+- `gamma`：`app_gamma_seed_manifest.json` 是 curated 场景选择的唯一真相源；其中以 `*.gamma-curated.json` 结尾的条目必须声明 `curation`，并由 `make verify-gamma-curated-scenarios` 校验派生结果。更新选择后只执行 `make generate-gamma-curated-scenarios`，禁止手改派生 JSON。
+- Gamma runtime 业务数据与媒体只由 canonical immutable release activation 交付；测试场景投影器不写 manifest、不生成媒体 bundle，也不承担环境 seed。
 - `prod`：不读取测试 fixture。
 
 ## 字段约定

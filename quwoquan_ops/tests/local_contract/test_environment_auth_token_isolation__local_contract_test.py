@@ -10,6 +10,7 @@ from unittest import mock
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib import local_environment_auth
+from quwoquan_ops.cli.lib import release_video_delivery
 from quwoquan_ops.cli.probes import run_environment_integration_probe as probe
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -54,6 +55,34 @@ def test_environment_specific_token_still_takes_precedence() -> None:
         assert stackctl._resolve_test_auth_token("gamma") == "gamma-secret"
 
 
+def test_health_probe_records_unreadable_local_auth_as_gate_block(
+    tmp_path: Path,
+) -> None:
+    with (
+        mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        mock.patch.object(
+            stackctl,
+            "resolve_running_local_deployment_work_root",
+            return_value=None,
+        ),
+        mock.patch.object(
+            stackctl,
+            "open_local_acceptance_session",
+            side_effect=PermissionError("auth directory is not readable"),
+        ),
+    ):
+        status, output, findings = stackctl._run_environment_integration_probe(
+            stackctl.load_environment_topology(),
+            "beta-local",
+            tmp_path,
+        )
+
+    assert status["ok"] is False
+    assert status["statusCode"] == 1
+    assert "integration auth failed" in output
+    assert findings == [output]
+
+
 def test_local_report_account_backfill_uses_only_canonical_acceptance_identity(
     tmp_path: Path,
 ) -> None:
@@ -61,7 +90,7 @@ def test_local_report_account_backfill_uses_only_canonical_acceptance_identity(
 
     with mock.patch.object(
         local_environment_auth,
-        "_load_acceptance_principal",
+            "_local_acceptance_principal",
         return_value=("fixture-account", "fixture-persona"),
     ):
         payload = local_environment_auth.write_local_report_account_backfill(
@@ -116,28 +145,55 @@ def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None
             local_environment_auth,
             "open_local_acceptance_session",
             return_value=session,
+        ) as open_session,
+        mock.patch.object(
+            release_video_delivery,
+            "resolve_readiness_path",
+            return_value=Path("/tmp/release-readiness.json"),
+        ),
+        mock.patch.object(
+            release_video_delivery,
+            "load_release_content_identity",
+            return_value={
+                "releaseId": "release-a",
+                "importRunId": "import-gamma-a",
+                "receipt": {
+                    "feedQueries": [
+                        {
+                            "name": "discovery_work",
+                            "matchedPostIds": ["post-a"],
+                        },
+                    ],
+                },
+                "postBindings": [
+                    {
+                        "postId": "post-a",
+                        "authorId": "release-author-a",
+                    },
+                ],
+            },
         ),
         mock.patch.object(module["subprocess"], "run", return_value=completed) as run,
-        mock.patch.object(sys, "argv", ["run_intersection_remote_smoke.py"]),
+        mock.patch.object(
+            sys,
+            "argv",
+            [
+                "run_intersection_remote_smoke.py",
+                "--base-url",
+                "http://127.0.0.1:19220",
+                "--release-readiness",
+                "env/gamma/runs/data-release/release-a/verify-a/release-readiness.json",
+            ],
+        ),
     ):
         assert module["main"]() == 0
 
-    expected_seeds = module["REQUIRED_SEEDS"]
-    assert len(run.call_args_list) == len(expected_seeds) + 1
-    seed_calls = run.call_args_list[:-1]
-    smoke_call = run.call_args_list[-1]
+    assert len(run.call_args_list) == 1
+    smoke_call = run.call_args_list[0]
     smoke_command = smoke_call.args[0]
     child_environment = smoke_call.kwargs["env"]
 
-    for seed_call, (_, seed_script, requires_viewer) in zip(
-        seed_calls,
-        expected_seeds,
-        strict=True,
-    ):
-        seed_command = seed_call.args[0]
-        assert str(seed_script) in seed_command
-        assert "--report" in seed_command
-        assert ("--viewer-id" in seed_command) is requires_viewer
+    assert open_session.call_args.kwargs["subject"] == "release-author-a"
     assert all(
         "secret-acceptance-token" not in argument
         for call in run.call_args_list

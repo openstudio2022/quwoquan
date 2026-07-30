@@ -65,11 +65,6 @@ if [[ -z "$DEVICE_ID" ]]; then
   exit 2
 fi
 
-python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" up \
-  --target alpha-local \
-  --skip-app \
-  --workload content-release
-
 ANDROID_LOCAL_GATEWAY_BASE_URL=""
 ANDROID_LOCAL_LEGAL_BASE_URL=""
 ANDROID_LOCAL_MEDIA_AVATAR_BASE_URL=""
@@ -198,11 +193,12 @@ PY
 
 fi
 
-echo "[run] verifying alpha gateway and media entry before Flutter launch..."
-python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" health \
-  --target alpha-local --scope edge --request-timeout-seconds 3
-python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" health \
-  --target alpha-local --scope media --request-timeout-seconds 3
+echo "[run] reading Alpha readiness (diagnostic only)..."
+if ! python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" status \
+  --target alpha-local; then
+  echo "[run] WARN: Alpha is not ready or readiness could not be read. The App will still launch and surface runtime errors; release/UAT readiness remains blocked." >&2
+fi
+echo "[run] Alpha readiness above is diagnostic only; environment lifecycle remains owned by stackctl workflows."
 
 HANDOFF_CMD=(
   python3 "$APP_DIR/scripts/device/build_launcher_handoff.py"
@@ -249,6 +245,7 @@ import sys
 
 handoff = json.loads(sys.argv[1])
 print("ENTRYPOINT=" + shlex.quote(handoff["entrypoint"]))
+print("LAUNCH_MODE=" + shlex.quote(handoff["launchMode"]))
 print("DART_DEFINES_DIGEST=" + shlex.quote(handoff["dartDefinesDigest"]))
 print("RUNTIME_CONFIG_DIGEST=" + shlex.quote(handoff["runtimeConfigDigest"]))
 print("EFFECTIVE_LAUNCH_MANIFEST_DIGEST=" + shlex.quote(
@@ -261,6 +258,7 @@ print("EFFECTIVE_LAUNCH_MANIFEST_JSON=" + shlex.quote(json.dumps(
 )))
 print("RECOVERY_BASE_URL=" + shlex.quote(handoff["recoveryBaseUrl"]))
 print("PUBLIC_WEB_BASE_URL=" + shlex.quote(handoff["publicWebBaseUrl"]))
+print("APP_DOWNLOAD_BASE_URL=" + shlex.quote(handoff["appDownloadBaseUrl"]))
 print("DEFINES_JSON=" + shlex.quote(json.dumps(
     handoff["dartDefines"],
     ensure_ascii=False,
@@ -272,11 +270,13 @@ PY
   exit 2
 }
 eval "$HANDOFF_EXPORTS"
+export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"
 export QWQ_DART_DEFINES_DIGEST="$DART_DEFINES_DIGEST"
 export QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST="$RUNTIME_CONFIG_DIGEST"
 export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
 export QWQ_APP_RECOVERY_BASE_URL="$RECOVERY_BASE_URL"
 export QWQ_APP_PUBLIC_WEB_URL="$PUBLIC_WEB_BASE_URL"
+export QWQ_APP_DOWNLOAD_BASE_URL="$APP_DOWNLOAD_BASE_URL"
 VERIFY_HANDOFF_CMD=(
   python3 "$APP_DIR/scripts/device/verify_flutter_run_defines.py"
   --env alpha

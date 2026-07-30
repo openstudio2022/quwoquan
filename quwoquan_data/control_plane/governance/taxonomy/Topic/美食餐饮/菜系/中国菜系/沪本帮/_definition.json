@@ -2,6 +2,7 @@
   "label": "沪本帮",
   "labelEn": "Shanghainese",
   "description": "上海本帮菜系",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00",
   "aliases": [

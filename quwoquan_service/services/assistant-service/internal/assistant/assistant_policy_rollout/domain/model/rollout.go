@@ -23,8 +23,8 @@ type BucketDefinition struct {
 }
 
 type CohortAssignment struct {
-	Cohort         string `json:"cohort" bson:"cohort"`
-	ReleaseVersion string `json:"releaseVersion" bson:"releaseVersion"`
+	Cohort        string `json:"cohort" bson:"cohort"`
+	ReleaseDigest string `json:"releaseDigest" bson:"releaseDigest"`
 }
 
 type Rollout struct {
@@ -144,8 +144,8 @@ func normalizeMapping(
 	for index := range normalizedAssignments {
 		assignment := &normalizedAssignments[index]
 		assignment.Cohort = strings.TrimSpace(assignment.Cohort)
-		assignment.ReleaseVersion = strings.TrimSpace(assignment.ReleaseVersion)
-		if assignment.Cohort == "" || assignment.ReleaseVersion == "" {
+		assignment.ReleaseDigest = strings.TrimSpace(assignment.ReleaseDigest)
+		if assignment.Cohort == "" || assignment.ReleaseDigest == "" {
 			return nil, nil, ErrInvalidArgument
 		}
 		if _, ok := bucketNames[assignment.Cohort]; !ok {

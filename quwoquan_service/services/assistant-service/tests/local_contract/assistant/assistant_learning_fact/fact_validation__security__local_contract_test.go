@@ -13,7 +13,6 @@ func TestBuildRejectsMixedFactTypePayloads(t *testing.T) {
 	t.Parallel()
 	base := learningmodel.AppendCommand{
 		EventID:          "fact-1",
-		EventVersion:     1,
 		FactType:         learningmodel.FactTypeUserFeedback,
 		AssistantTurnID:  "turn-1",
 		ReferralSource:   "assistant_conversation",
@@ -60,7 +59,6 @@ func TestRedactedPayloadKeepsTrustedContextWithoutRawText(t *testing.T) {
 	fact, err := learningmodel.Build(
 		learningmodel.AppendCommand{
 			EventID:          "fact-context",
-			EventVersion:     1,
 			FactType:         learningmodel.FactTypeUserFeedback,
 			AssistantTurnID:  "turn-1",
 			ReferralSource:   "assistant_conversation",

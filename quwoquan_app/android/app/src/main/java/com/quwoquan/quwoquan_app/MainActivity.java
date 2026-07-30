@@ -73,6 +73,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private volatile boolean appInForeground;
   private volatile boolean nativeFirstFrameDeadlineReached;
   private volatile boolean dartStartupAttemptStarted;
+  private volatile boolean currentDartAttemptIsHotRestart;
   private volatile String currentDartAttemptId = "";
   private volatile String currentLaunchMode = "unknown";
   private long firstFrameForegroundRemainingMs = FLUTTER_FIRST_FRAME_DEADLINE_MS;
@@ -200,14 +201,19 @@ public class MainActivity extends FlutterFragmentActivity {
                   context.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
                   context.put("recoveryBaseUrl", BuildConfig.QWQ_RECOVERY_BASE_URL);
                   context.put("publicWebUrl", BuildConfig.QWQ_PUBLIC_WEB_URL);
+                  context.put(
+                      "appDownloadBaseUrl",
+                      BuildConfig.QWQ_APP_DOWNLOAD_BASE_URL);
                   result.success(context);
                   break;
                 case "openTrustedExternalUrl":
                   result.success(openTrustedRecoveryUrl(stringArgument(call, "url")));
                   break;
                 case "recordFatalStartup":
-                  markCurrentBuildFatal();
-                  result.success(null);
+                  result.success(
+                      recordCurrentDartAttemptFatal(
+                          stringArgument(call, "attemptId"),
+                          stringArgument(call, "failureCode")));
                   break;
                 case "readPendingNativeStartupFatal":
                   result.success(readPendingNativeStartupFatal());
@@ -331,8 +337,33 @@ public class MainActivity extends FlutterFragmentActivity {
     return recoveryFailureEncryptedStore;
   }
 
-  private void markCurrentBuildFatal() {
-    StartupHealthStore.markCurrentArtifactFatal(this);
+  private boolean markCurrentBuildFatal() {
+    return StartupHealthStore.markCurrentArtifactFatal(this);
+  }
+
+  private boolean recordCurrentDartAttemptFatal(String attemptId, String failureCode) {
+    String normalizedAttemptId = safeStartupIdentifier(attemptId);
+    String normalizedFailureCode = safeStartupFailureCode(failureCode);
+    if ("unknown".equals(normalizedAttemptId)
+        || normalizedFailureCode.isEmpty()
+        || !normalizedAttemptId.equals(currentDartAttemptId)) {
+      Log.i(STARTUP_TAG, "startup_fatal_marker_ignored reason=attempt_mismatch");
+      return false;
+    }
+    if (currentDartAttemptIsHotRestart) {
+      Log.i(STARTUP_TAG, "startup_fatal_marker_ignored reason=hot_restart");
+      return false;
+    }
+    if (startupSafeTerminalConfirmed) {
+      Log.i(STARTUP_TAG, "startup_fatal_marker_ignored reason=safe_shell_reached");
+      return false;
+    }
+    if (!markCurrentBuildFatal()) {
+      Log.i(STARTUP_TAG, "startup_fatal_marker_ignored reason=artifact_mismatch");
+      return false;
+    }
+    Log.i(STARTUP_TAG, "startup_fatal_marker_recorded");
+    return true;
   }
 
   private void markCurrentBuildSafeShell() {
@@ -550,6 +581,7 @@ public class MainActivity extends FlutterFragmentActivity {
         currentLaunchMode = safeStartupIdentifier(payload.optString("launchMode", ""));
         boolean hotRestart = dartStartupAttemptStarted;
         dartStartupAttemptStarted = true;
+        currentDartAttemptIsHotRestart = hotRestart;
         String configurationState =
             safeStartupIdentifier(payload.optString("configurationState", "unknown"));
         String missingDefineKeys =
@@ -704,6 +736,22 @@ public class MainActivity extends FlutterFragmentActivity {
       char character = value.charAt(index);
       if (!(Character.isLetterOrDigit(character) || character == '_' || character == '-')) {
         return "unknown";
+      }
+    }
+    return value;
+  }
+
+  private String safeStartupFailureCode(String value) {
+    if (value == null || value.isEmpty() || value.length() > 128) {
+      return "";
+    }
+    for (int index = 0; index < value.length(); index++) {
+      char character = value.charAt(index);
+      if (!(Character.isLetterOrDigit(character)
+          || character == '.'
+          || character == '_'
+          || character == '-')) {
+        return "";
       }
     }
     return value;

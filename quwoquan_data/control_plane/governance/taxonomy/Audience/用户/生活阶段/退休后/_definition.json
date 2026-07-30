@@ -2,6 +2,7 @@
   "label": "退休后",
   "labelEn": "Post-retirement",
   "description": "已退休生活",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

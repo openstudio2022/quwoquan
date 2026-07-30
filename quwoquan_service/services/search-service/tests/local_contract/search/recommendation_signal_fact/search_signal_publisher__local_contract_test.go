@@ -19,7 +19,6 @@ func TestSearchSignalStreamValuesSeparateQueryFromRealClick(t *testing.T) {
 		UserID:           "user-1",
 		NormalizedQuery:  "成都 火锅",
 		RelatedTerms:     []string{"火锅", "", "川菜"},
-		RankingVersion:   "search-v1",
 		ExperimentBucket: "term_heat",
 		ResultCount:      12,
 		CreatedAt:        createdAt,

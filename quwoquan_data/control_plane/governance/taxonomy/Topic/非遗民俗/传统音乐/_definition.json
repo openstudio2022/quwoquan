@@ -2,6 +2,7 @@
   "label": "传统音乐",
   "labelEn": "Traditional Music",
   "description": "民乐古琴等传统音乐",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

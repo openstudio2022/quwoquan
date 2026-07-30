@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
-/// 槽④ 交集生命周期弱标（架构基线 v2 §21.3 · A–E 横切复用）。
+/// 槽④ 交集生命周期弱标（canonical 交集设计 · A–E 横切复用）。
 ///
 /// 真相源是云侧 `lifecycleState` 枚举（`new/strengthened/stable/weakened/reactivated`）。
 /// 端只负责把状态弱化为「红点 / 增强 / 重新活跃」标识：

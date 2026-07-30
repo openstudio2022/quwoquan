@@ -95,6 +95,100 @@ api_routes:
 	}
 }
 
+func TestRuntimeSessionOwnsOneNonHTTPMiddlewareEntrypoint(t *testing.T) {
+	metadataDir := t.TempDir()
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"gateway/edge_security/rate_limit_bucket",
+		`
+kind: runtime_session
+description: shared admission state
+identity: {fields: [id], version_source: session}
+access: {commands: session_facade, queries: named_reader, cross_context: public_contract_only}
+relationships: []
+`,
+		`
+api_routes: []
+runtime_entrypoints:
+  - name: SharedAdmission
+    kind: middleware
+    phase: post_authorization_pre_owner_proxy
+    application:
+      kind: session
+      facet: RateLimitAdmissionFacade
+      method: admit
+      session_owner: RateLimitBucket
+		`,
+	)
+	writeFile(
+		t,
+		filepath.Join(
+			metadataDir,
+			"gateway/edge_security/rate_limit_bucket/storage.yaml",
+		),
+		"backend: redis\nrole: runtime\n",
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Operations) != 0 ||
+		len(contractGraph.RuntimeEntrypoints) != 1 {
+		t.Fatalf(
+			"operations=%d runtimeEntrypoints=%+v",
+			len(contractGraph.Operations),
+			contractGraph.RuntimeEntrypoints,
+		)
+	}
+	entrypoint := contractGraph.RuntimeEntrypoints[0]
+	if entrypoint.ID != "gateway.rate_limit_bucket.SharedAdmission" ||
+		entrypoint.Facet != "RateLimitAdmissionFacade" ||
+		entrypoint.FacadeMethod != "admit" {
+		t.Fatalf("runtime entrypoint=%+v", entrypoint)
+	}
+	if issues := validate.Run(contractGraph, validate.ProfileCommercial); len(issues) != 0 {
+		t.Fatalf("valid runtime entrypoint rejected: %+v", issues)
+	}
+	var readiness *graph.ObjectReadiness
+	for index := range contractGraph.ObjectReadiness {
+		if contractGraph.ObjectReadiness[index].ObjectID == "gateway.rate_limit_bucket" {
+			readiness = &contractGraph.ObjectReadiness[index]
+			break
+		}
+	}
+	if readiness == nil || !readiness.ContractReady ||
+		readiness.Stage != "contract-ready" {
+		t.Fatalf("readiness=%+v", readiness)
+	}
+}
+
+func TestRuntimeEntrypointCannotCreateAnHTTPDualTrack(t *testing.T) {
+	contractGraph := &graph.ContractGraph{
+		Objects: []ast.Object{{
+			ID: "gateway.rate_limit_bucket", Domain: "gateway", Name: "RateLimitBucket",
+			Kind: ast.ObjectKindRuntimeSession, KindExplicit: true,
+		}},
+		Operations: []ast.Operation{{
+			ID:       "gateway.rate_limit_bucket.FakeAdmission",
+			ObjectID: "gateway.rate_limit_bucket",
+		}},
+		RuntimeEntrypoints: []ast.RuntimeEntrypoint{{
+			ID:      "gateway.rate_limit_bucket.SharedAdmission",
+			LocalID: "SharedAdmission", ObjectID: "gateway.rate_limit_bucket",
+			RuntimeKind: "middleware", Phase: "post_authorization_pre_owner_proxy",
+			ApplicationKind: ast.OperationKindSession,
+			Facet:           "RateLimitAdmissionFacade", FacadeMethod: "admit",
+			SessionOwner: "RateLimitBucket",
+		}},
+	}
+	issues := validate.Run(contractGraph, validate.ProfileCommercial)
+	if !hasIssueCode(issues, "CONTRACT.RUNTIME_ENTRYPOINT.HTTP_DUAL_TRACK") {
+		t.Fatalf("HTTP/runtime dual track accepted: %+v", issues)
+	}
+}
+
 func TestAggregateCannotOwnSessionOperation(t *testing.T) {
 	metadataDir := t.TempDir()
 	operation := strings.Replace(

@@ -13,8 +13,8 @@ String _normalizeRelationshipState(Map<String, dynamic> map) {
 
 RelationshipViewWireDto _relationshipViewFromRaw(Map<String, dynamic> raw) {
   return RelationshipViewWireDto(
-    viewerSubAccountId: raw['viewerSubAccountId']?.toString() ?? '',
-    targetSubAccountId: raw['targetSubAccountId']?.toString() ?? '',
+    viewerPersonaId: raw['viewerPersonaId']?.toString() ?? '',
+    targetPersonaId: raw['targetPersonaId']?.toString() ?? '',
     relationState: _normalizeRelationshipState(raw),
     isBlocked: raw['isBlocked'] == true,
     isBlockedBy: raw['isBlockedBy'] == true,

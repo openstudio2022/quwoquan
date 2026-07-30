@@ -105,7 +105,7 @@ class CallStageBanner extends ConsumerWidget {
       isReconnecting: session.isReconnecting,
       isWeakNetwork:
           quality == NetworkQuality.weak || quality == NetworkQuality.poor,
-      endReason: EndReason.fromString(session.session?.endReason),
+      endReason: session.session?.endReason,
     );
 
     if (!shouldShow(stage)) {

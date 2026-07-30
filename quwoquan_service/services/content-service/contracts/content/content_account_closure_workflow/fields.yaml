@@ -1,0 +1,429 @@
+description: Content 账户关闭事件的耐久消费、外部清理工作与永久防复活栅栏；Post 仅作为被清理对象，不拥有该工作流。
+fields:
+- name: _id
+  type: string
+  constraints: [PK, NOT_NULL]
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: eventDigest
+  type: string
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: hash
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: accountVersion
+  type: int64
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: state
+  source: state
+  type: enum
+  enum_ref: ContentAccountClosureState
+  constraints: [NOT_NULL]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: mongoAppliedAt
+  type: timestamp
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+- name: completedAt
+  type: timestamp
+  constraints: [NULLABLE]
+  classification: INTERNAL
+  log_policy: allow
+  api_exposure: none
+  ops_exposure: read
+  role: authoritative_state
+types:
+  ContentAccountClosureDeadLetterRecoveryRequest:
+    description: operator 释放 Content 注销清理 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
+    fields:
+    - name: sourceStreamId
+      source: sourceStreamId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: write
+      ops_exposure: write
+  ContentAccountClosureDeadLetterRecoveryAccepted:
+    description: Content 注销清理 source PEL 已受理重新消费。
+    fields:
+    - name: sourceStreamId
+      source: sourceStreamId
+      type: string
+      constraints:
+      - PK
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+    - name: recoveryAccepted
+      source: recoveryAccepted
+      type: bool
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: read
+      ops_exposure: read
+  UserAccountClosedProjectionFailure:
+    description: Content 账户关闭投影的有限重试状态，仅保存不可逆事件与错误摘要。普通重试由 TTL
+      回收；terminal DLQ marker 保留至显式释放 source PEL。
+    fields:
+    - name: _id
+      source: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventDigest
+      source: eventDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: errorDigest
+      source: errorDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: attempts
+      source: attempts
+      type: int64
+      constraints:
+      - NOT_NULL
+      - DEFAULT_0
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: createdAt
+      source: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: lastFailedAt
+      source: lastFailedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: expireAt
+      source: expireAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: deadLetteredAt
+      source: deadLetteredAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  UserAccountClosedSearchWork:
+    description: Content 账户关闭后的外部搜索文档删除工作项；成功后才标记完成并进入 TTL 回收。
+    fields:
+    - name: _id
+      source: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventId
+      source: eventId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: canonicalId
+      source: canonicalId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: objectType
+      source: objectType
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: objectId
+      source: objectId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: createdAt
+      source: createdAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: doneAt
+      source: doneAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: expireAt
+      source: expireAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  UserAccountClosedMediaArtifactWork:
+    description: Content 账户关闭后媒体对象物理撤销工作；public slice 与私有 object key
+      仅保存在受控 worker 中，完成前阻止 inbox 收敛。
+    fields:
+    - name: _id
+      source: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventId
+      source: eventId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: publicSliceKeys
+      source: publicSliceKeys
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: publicPrefixes
+      source: publicPrefixes
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: privateObjectKeys
+      source: privateObjectKeys
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: privatePrefixes
+      source: privatePrefixes
+      type: '[]string'
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: doneAt
+      source: doneAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: expireAt
+      source: expireAt
+      type: timestamp
+      constraints:
+      - NULLABLE
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  ClosedAccountAudit:
+    description: 不含账号原始标识的账户关闭审计摘要，不作为防复活查询源。
+    fields:
+    - name: _id
+      source: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventDigest
+      source: eventDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: accountVersion
+      source: accountVersion
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: subjectCount
+      source: subjectCount
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: closedAt
+      source: closedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: recordedAt
+      source: recordedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+  ClosedAccountSubjectTombstone:
+    description: HMAC-SHA256(subjectId) 永久防复活栅栏，不保存账号或 persona 原值且不设 TTL。
+    fields:
+    - name: _id
+      source: _id
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: eventDigest
+      source: eventDigest
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: accountVersion
+      source: accountVersion
+      type: int64
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: closedAt
+      source: closedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: recordedAt
+      source: recordedAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+enums:
+  ContentAccountClosureState:
+  - received
+  - external_cleanup_pending
+  - completed

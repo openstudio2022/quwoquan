@@ -3,7 +3,6 @@ import 'dart:developer' as developer;
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 
 @pragma('vm:entry-point')
 class CreateDraftScopedSnapshot {
@@ -18,14 +17,11 @@ class CreateDraftScopedSnapshot {
 
 /// 创作草稿本地清单。
 ///
-/// V1 使用单个 `create_drafts_list` JSON 字符串保存全部草稿；本轮升级到
-/// `create_drafts_v2:<scope>:*` 命名空间后，仍保留旧 key 常量用于迁移和测试基线。
+/// 每个 actor scope 只有一份 canonical 索引、当前草稿指针和独立草稿载荷。
 class CreateDraftLocalStorage {
   CreateDraftLocalStorage._();
 
-  static const String draftsKey = 'create_drafts_list';
-  static const String currentDraftIdKey = 'create_current_draft_id';
-  static const String _v2Prefix = 'create_drafts_v2';
+  static const String _storagePrefix = 'create_drafts';
 
   /// 损坏 payload 的侧位保留前缀：解码失败不静默清零，原始字节移入
   /// `create_drafts_corrupt:<原 key>` 供诊断与人工恢复。
@@ -61,40 +57,23 @@ class CreateDraftLocalStorage {
     return 'user:$trimmed';
   }
 
-  static String scopedIndexKey(String scopeKey) => '$_v2Prefix:$scopeKey:index';
+  static String scopedIndexKey(String scopeKey) =>
+      '$_storagePrefix:$scopeKey:index';
 
   static String scopedCurrentDraftIdKey(String scopeKey) =>
-      '$_v2Prefix:$scopeKey:current_draft_id';
+      '$_storagePrefix:$scopeKey:current_draft_id';
 
   static String scopedDraftPayloadKey(String scopeKey, String draftId) =>
-      '$_v2Prefix:$scopeKey:draft:$draftId';
-
-  static Future<({List<CreateDraft> drafts, String? currentId})>
-  loadDraftsWithCurrentId() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(draftsKey);
-    var drafts = const <CreateDraft>[];
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(raw);
-        drafts = decodeCreateDraftsList(decoded);
-      } catch (error) {
-        await _sidelineCorruptPayload(prefs, draftsKey, raw, error);
-        drafts = const <CreateDraft>[];
-      }
-    }
-    return (drafts: drafts, currentId: prefs.getString(currentDraftIdKey));
-  }
+      '$_storagePrefix:$scopeKey:draft:$draftId';
 
   static Future<CreateDraftScopedSnapshot> loadScopedDraftsWithCurrentId(
     String scopeKey,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    await migrateStoredDraftsIfNeeded(scopeKey);
     final indexedIds = _decodeIdList(prefs.getString(scopedIndexKey(scopeKey)));
     final ids = <String>[...indexedIds];
     final knownIds = indexedIds.toSet();
-    final payloadPrefix = '$_v2Prefix:$scopeKey:draft:';
+    final payloadPrefix = '$_storagePrefix:$scopeKey:draft:';
     final recoverableKeys =
         prefs.getKeys().where((key) => key.startsWith(payloadPrefix)).toList()
           ..sort();
@@ -128,31 +107,6 @@ class CreateDraftLocalStorage {
       drafts: drafts,
       currentId: currentId?.trim().isEmpty ?? true ? null : currentId,
     );
-  }
-
-  static Future<void> persistDrafts(
-    List<CreateDraft> drafts,
-    String? currentId,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    await _requirePersisted(
-      prefs.setString(
-        draftsKey,
-        jsonEncode(drafts.map((d) => d.toStorageMap()).toList(growable: false)),
-      ),
-      draftsKey,
-    );
-    if (currentId == null || currentId.isEmpty) {
-      await _requirePersisted(
-        prefs.remove(currentDraftIdKey),
-        currentDraftIdKey,
-      );
-    } else {
-      await _requirePersisted(
-        prefs.setString(currentDraftIdKey, currentId),
-        currentDraftIdKey,
-      );
-    }
   }
 
   static Future<void> persistScopedDrafts(
@@ -213,7 +167,6 @@ class CreateDraftLocalStorage {
     String draftId,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    await migrateStoredDraftsIfNeeded(scopeKey);
     return _decodeDraftPayload(
       prefs.getString(scopedDraftPayloadKey(scopeKey, draftId.trim())),
     );
@@ -228,7 +181,6 @@ class CreateDraftLocalStorage {
       return;
     }
     final prefs = await SharedPreferences.getInstance();
-    await migrateStoredDraftsIfNeeded(scopeKey);
     final indexKey = scopedIndexKey(scopeKey);
     final ids = _decodeIdList(prefs.getString(indexKey)).toList(growable: true)
       ..removeWhere((id) => id == normalizedId);
@@ -244,57 +196,17 @@ class CreateDraftLocalStorage {
     }
   }
 
-  static Future<void> removeDraftById(String draftId) async {
-    final loaded = await loadDraftsWithCurrentId();
-    final next = loaded.drafts
-        .where((d) => d.id != draftId)
-        .toList(growable: false);
-    final nextCurrent = loaded.currentId == draftId ? null : loaded.currentId;
-    await persistDrafts(next, nextCurrent);
-  }
-
-  static Future<void> migrateStoredDraftsIfNeeded(String scopeKey) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.containsKey(scopedIndexKey(scopeKey))) {
-      return;
-    }
-    final raw = prefs.getString(draftsKey);
-    if (raw == null || raw.isEmpty) {
-      return;
-    }
-    var drafts = const <CreateDraft>[];
-    try {
-      drafts = decodeCreateDraftsList(jsonDecode(raw));
-    } catch (error) {
-      // 迁移路径的损坏 payload 必须侧位保留后才允许删除旧 key，
-      // 否则解码 bug 会造成用户草稿不可逆丢失。
-      await _sidelineCorruptPayload(prefs, draftsKey, raw, error);
-      drafts = const <CreateDraft>[];
-    }
-    await persistScopedDrafts(
-      scopeKey,
-      drafts,
-      currentId: prefs.getString(currentDraftIdKey),
-    );
-    await _requirePersisted(prefs.remove(draftsKey), draftsKey);
-    await _requirePersisted(prefs.remove(currentDraftIdKey), currentDraftIdKey);
-  }
-
   static Future<void> clearForTerminalAccountClosure(
     String currentActorId,
   ) async {
     final preferences = await SharedPreferences.getInstance();
     final scopeKey = scopeKeyForUser(currentActorId);
-    final scopedPrefix = '$_v2Prefix:$scopeKey:';
+    final scopedPrefix = '$_storagePrefix:$scopeKey:';
     final corruptScopedPrefix = '$corruptSidelinePrefix:$scopedPrefix';
     final keys = preferences
         .getKeys()
         .where(
           (key) =>
-              key == draftsKey ||
-              key == currentDraftIdKey ||
-              key == corruptSidelineKey(draftsKey) ||
-              key == corruptSidelineKey(currentDraftIdKey) ||
               key.startsWith(scopedPrefix) ||
               key.startsWith(corruptScopedPrefix),
         )
@@ -304,12 +216,7 @@ class CreateDraftLocalStorage {
     }
     if (preferences.getKeys().any(
       (key) =>
-          key == draftsKey ||
-          key == currentDraftIdKey ||
-          key == corruptSidelineKey(draftsKey) ||
-          key == corruptSidelineKey(currentDraftIdKey) ||
-          key.startsWith(scopedPrefix) ||
-          key.startsWith(corruptScopedPrefix),
+          key.startsWith(scopedPrefix) || key.startsWith(corruptScopedPrefix),
     )) {
       throw StateError('create draft cleanup verification failed');
     }

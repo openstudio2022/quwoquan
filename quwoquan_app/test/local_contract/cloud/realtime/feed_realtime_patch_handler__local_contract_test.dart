@@ -108,7 +108,7 @@ PostBaseDto _post(String id) {
     'contentType': 'micro',
     'type': 'micro',
     'authorId': 'author-default',
-    'subAccountId': 'author-default',
+    'personaId': 'author-default',
     'displayName': 'fixture',
     'body': 'fixture body $id',
     'likeCount': 0,
@@ -122,8 +122,9 @@ class _AuthedSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'test-token',
+    refreshToken: 'test-refresh-token',
     ownerId: 'handler-owner',
-    activeSubAccountId: _authedUserId,
+    activePersonaId: _authedUserId,
     accountState: 'active',
     installId: 'test-install',
   );

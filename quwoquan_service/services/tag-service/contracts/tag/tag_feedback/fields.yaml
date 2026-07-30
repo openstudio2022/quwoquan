@@ -1,128 +1,154 @@
 description: Persona 或 Device 对单个 tagRef 推荐的不可变反馈事实
 fields:
-- name: id
-  type: string
-  constraints:
-  - PK
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: append_only_fact
-- name: actorId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PRIVATE
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: actorKind
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: append_only_fact
-  reference: true
-- name: tagRef
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  tag_ref: true
-  role: append_only_fact
-- name: action
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: context
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PRIVATE
-  log_policy: mask
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: idempotencyKey
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: append_only_fact
-- name: recordedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: eventPublishedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: none
-  ops_exposure: read
-  description: TagFeedbackRecorded 已成功追加到 durable stream 的确认时间；为空表示待投递
-  role: append_only_fact
+  - name: id
+    type: string
+    constraints:
+      - PK
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: append_only_fact
+  - name: actorId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PRIVATE
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: actorKind
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: append_only_fact
+    reference: true
+  - name: tagRef
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    tag_ref: true
+    role: append_only_fact
+  - name: action
+    type: enum
+    enum_ref: TagFeedbackAction
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: append_only_fact
+  - name: context
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PRIVATE
+    log_policy: mask
+    api_exposure: read_write
+    ops_exposure: read
+    role: append_only_fact
+  - name: idempotencyKey
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: append_only_fact
+  - name: recordedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: eventPublishedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+    description: TagFeedbackRecorded 已成功追加到 durable stream 的确认时间；为空表示待投递
+    role: append_only_fact
 types:
   TagFeedbackRequest:
     description: 标签推荐反馈命令 payload
     fields:
-    - name: tagRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-      tag_ref: true
-    - name: action
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read_write
-      ops_exposure: read
-    - name: context
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PRIVATE
-      log_policy: mask
-      api_exposure: read_write
-      ops_exposure: read
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        tag_ref: true
+      - name: action
+        type: enum
+        enum_ref: TagFeedbackAction
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: context
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PRIVATE
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
   TagFeedbackResultView:
     description: 反馈追加结果
     fields:
-    - name: accepted
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: accepted
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  ReportTagFeedbackCommand:
+    fields:
+      - name: tagRef
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: action
+        type: enum
+        enum_ref: TagFeedbackAction
+        constraints:
+          - NOT_NULL
+        client_dart_type: TagFeedbackAction
+        client_wire: canonicalEnum
+      - name: context
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+enums:
+  TagFeedbackAction:
+    values: [click, ignore, correct, dislike]

@@ -20,7 +20,6 @@ import 'package:quwoquan_app/core/platform/temporary_file_cleanup.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/auth/terminal_account_cleanup_receipt_store.dart';
-import 'package:quwoquan_app/core/services/assistant_chat_store.dart';
 import 'package:quwoquan_app/core/telemetry/app_telemetry_outbox.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_app/infrastructure/local/onboarding/secure_interest_onboarding_draft_store.dart';
@@ -134,7 +133,6 @@ AccountClosureLocalDataPurger _createAccountClosureLocalDataPurger(
     clearDraftsAndAccountPreferences: () async {
       try {
         await Future.wait<void>(<Future<void>>[
-          Future<void>.sync(AssistantChatStore.clearForTerminalAccountClosure),
           Future<void>.sync(
             () => ref
                 .read(clientStateSyncOutboxProvider.notifier)
@@ -270,7 +268,7 @@ final class AccountClosureLocalActorContext {
     }
     return AccountClosureLocalActorContext(
       accountId: accountId,
-      personaId: session.activeSubAccountId.trim(),
+      personaId: session.activePersonaId.trim(),
       installId: session.installId.trim(),
     );
   }

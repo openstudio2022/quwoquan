@@ -159,7 +159,7 @@ Map<String, Object?> _manifestJson({int assetVersion = 2}) {
       <String, Object?>{
         'spriteId': 'sprite-000',
         'publicSliceKey':
-            'media/video/s/media-canary-seek-125s/v2/preview/sprite-000.webp',
+            'media/video/s/media-canary-seek-125s/v$assetVersion/preview/sprite-000.webp',
         'sha256': digest,
         'width': 720,
         'height': 426,

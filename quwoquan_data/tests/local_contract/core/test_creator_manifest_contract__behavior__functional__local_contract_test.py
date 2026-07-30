@@ -11,6 +11,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 from core.evidence_contract import post_manifest_contract_issues  # noqa: E402
+from governance.creators.assignment import creator_profile_digest  # noqa: E402
 
 
 def _base_manifest() -> dict:
@@ -32,7 +33,7 @@ def test_system_author_manifest_requires_visible_disclosure():
         "authorId": "agent_author_travel_000000001",
         "creatorProfileId": "agent_creator_travel_000000001",
         "creatorArchetype": "travel_blogger",
-        "creatorProfileVersion": "1.0.0",
+        "creatorProfileDigest": "sha256:" + ("1" * 64),
         "experienceClaimMode": "editorial_synthesis",
         "authorQualitySignals": {"qualityScore": 0.86, "fatigueScore": 0.2, "riskTier": "low"},
     }
@@ -47,7 +48,7 @@ def test_system_author_manifest_accepts_complete_projection():
         "authorId": "agent_author_travel_000000001",
         "creatorProfileId": "agent_creator_travel_000000001",
         "creatorArchetype": "travel_blogger",
-        "creatorProfileVersion": "1.0.0",
+        "creatorProfileDigest": "sha256:" + ("1" * 64),
         "creatorDisclosure": {
             "type": "platform_virtual_creator",
             "displayText": "平台虚拟创作者",
@@ -58,6 +59,19 @@ def test_system_author_manifest_accepts_complete_projection():
     }
 
     assert post_manifest_contract_issues(manifest) == []
+
+
+def test_creator_profile_identity_is_content_digest_not_mutable_version_label():
+    profile = {
+        "creatorProfileId": "agent_creator_travel_000000001",
+        "displayName": "旅行资料编辑",
+        "voiceStyle": {"tone": "plain"},
+    }
+    digest = creator_profile_digest(profile)
+    changed = creator_profile_digest({**profile, "displayName": "旅行事实编辑"})
+
+    assert digest.startswith("sha256:") and len(digest) == 71
+    assert changed != digest
 
 
 if __name__ == "__main__":

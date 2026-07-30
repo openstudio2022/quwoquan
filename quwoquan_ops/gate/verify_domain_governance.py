@@ -19,11 +19,15 @@ from quwoquan_ops.cli.lib.common import load_json_yaml
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     ENVIRONMENT_CANONICAL_TARGET,
-    ROLE_PATH_BASES,
+    URL_GOVERNANCE_FIELDS,
     URL_FIELDS,
     get_target,
     load_environment_topology,
     validate_environment_topology,
+)
+from quwoquan_ops.cli.lib.media_delivery_manifest import (
+    build_media_delivery_url,
+    load_media_delivery_manifest,
 )
 
 
@@ -39,6 +43,11 @@ PRIVATE_TRUST_TOKENS = (
     "materialize-app-trust-bundle",
     "badCertificateCallback",
     "SecurityContext.defaultContext.setTrustedCertificatesBytes",
+    "OBJECT_STORAGE_CA_FILE",
+    "object-storage-ca.crt",
+    "QWQ_LOCAL_UPLOAD_LOCAL_HOST",
+    "ssl._create_unverified_context",
+    "socket.getaddrinfo =",
 )
 PRIVATE_TRUST_SCAN_ROOTS = (
     ROOT / "quwoquan_app" / "lib",
@@ -46,6 +55,11 @@ PRIVATE_TRUST_SCAN_ROOTS = (
     ROOT / "quwoquan_app" / "ios",
     ROOT / "quwoquan_app" / "scripts",
     ROOT / "quwoquan_ops" / "cli",
+    ROOT / "quwoquan_ops" / "tests" / "acceptance" / "user_acceptance" / "service_ops",
+    ROOT / "quwoquan_ops" / "tests" / "support",
+    ROOT / "quwoquan_ops" / "environments" / "compose",
+    ROOT / "quwoquan_data" / "scripts",
+    ROOT / "quwoquan_service" / "services",
 )
 TEXT_SUFFIXES = {
     ".dart",
@@ -104,6 +118,8 @@ def _tracked_files() -> list[Path]:
 def main() -> int:
     issues: list[str] = []
     topology = load_environment_topology()
+    media_assets = load_media_delivery_manifest()
+    tracked_files = _tracked_files()
     issues.extend(validate_environment_topology(topology))
     policy = load_json_yaml(
         ROOT / "quwoquan_ops" / "environments" / "domain_governance.yaml"
@@ -114,6 +130,22 @@ def main() -> int:
         issues.append("non-production public DNS must project canonical hosts to 127.0.0.1")
     if policy.get("nonProdIpv6Address") != "::1":
         issues.append("non-production public DNS must project canonical hosts to ::1")
+    dns_provider = policy.get("dnsProvider") or {}
+    challenge_authority = policy.get("acmeChallengeAuthority") or {}
+    provisioning_token_env = str(dns_provider.get("apiTokenEnv") or "")
+    challenge_token_env = str(challenge_authority.get("apiTokenEnv") or "")
+    if provisioning_token_env != "QWQ_DNS_PROVISIONING_API_TOKEN":
+        issues.append("DNS record provisioning must use its dedicated protected token")
+    if challenge_token_env != "QWQ_ACME_DNS_API_TOKEN":
+        issues.append("ACME DNS-01 must use its dedicated challenge-only token")
+    if not challenge_token_env or challenge_token_env == provisioning_token_env:
+        issues.append("DNS provisioning and ACME challenge tokens must be isolated")
+    if challenge_authority.get("mode") != "scoped-dns-api-token":
+        issues.append("ACME challenge authority must use a scoped DNS API token")
+    if challenge_authority.get("requiredNamePrefix") != "_acme-challenge":
+        issues.append("ACME token scope must be limited to _acme-challenge")
+    if challenge_authority.get("forbidProductionZoneMutation") is not True:
+        issues.append("ACME challenge authority must forbid production zone mutation")
     endpoint_registry = policy.get("endpointRegistry")
     if not isinstance(endpoint_registry, list):
         issues.append("domain governance endpointRegistry must be a list")
@@ -126,14 +158,13 @@ def main() -> int:
             continue
         registry_roles.append(str(endpoint.get("role") or ""))
         registry_names.append(str(endpoint.get("name") or ""))
-        for field in (
-            "name",
-            "role",
-            "classification",
-            "source",
-            "owner",
-            "exposure",
-        ):
+        actual_fields = set(endpoint)
+        if actual_fields != URL_GOVERNANCE_FIELDS:
+            issues.append(
+                f"endpointRegistry[{index}] must contain only governance fields; "
+                f"got {sorted(actual_fields)}"
+            )
+        for field in ("name", "role", "classification", "owner", "exposure"):
             if not str(endpoint.get(field) or "").strip():
                 issues.append(f"endpointRegistry[{index}].{field} is required")
         consumers = endpoint.get("consumers")
@@ -168,6 +199,30 @@ def main() -> int:
             if not item.get(field):
                 issues.append(f"urlClassRegistry[{index}].{field} is required")
 
+    derived_link_ownership = policy.get("derivedLinkOwnership")
+    if not isinstance(derived_link_ownership, dict):
+        issues.append("derivedLinkOwnership must be a mapping")
+    else:
+        expected_link_ownership = {
+            "originRole": "publicWeb",
+            "pathSource": (
+                "quwoquan_service/contracts/metadata/_shared/link_templates.yaml"
+            ),
+            "serviceProjection": (
+                "quwoquan_service/generated/linktemplates/link_templates.g.go"
+            ),
+        }
+        for field, expected in expected_link_ownership.items():
+            if derived_link_ownership.get(field) != expected:
+                issues.append(f"derivedLinkOwnership.{field} must be {expected}")
+        consumers = derived_link_ownership.get("consumers")
+        if not isinstance(consumers, list) or not consumers:
+            issues.append("derivedLinkOwnership.consumers must be non-empty")
+        for field in ("pathSource", "serviceProjection"):
+            relative = derived_link_ownership.get(field)
+            if isinstance(relative, str) and not (ROOT / relative).is_file():
+                issues.append(f"derivedLinkOwnership.{field} does not exist: {relative}")
+
     for env_name in ENVIRONMENTS:
         target_name = ENVIRONMENT_CANONICAL_TARGET[env_name]
         public_bases = get_target(topology, target_name).get("publicBases") or {}
@@ -187,23 +242,45 @@ def main() -> int:
             issues.append(f"{target_name}: media upload must keep a separate upload host")
         if parsed["publicWeb"].hostname and parsed["publicWeb"].hostname.startswith("www."):
             issues.append(f"{target_name}: canonical public web must use apex, not www")
-        expected_paths = {
-            role: ROLE_PATH_BASES[role]
-            for role in (
-                "mediaAvatar",
-                "mediaImage",
-                "mediaVideo",
-                "appDownload",
-                "legal",
-            )
-        }
-        for role, expected_path in expected_paths.items():
-            if parsed[role].path != expected_path:
+        for asset in media_assets:
+            try:
+                delivery_url = build_media_delivery_url(public_bases, asset)
+            except (KeyError, TypeError, ValueError) as exc:
                 issues.append(
-                    f"{target_name}: {role} path must be {expected_path}, got {parsed[role].path}"
+                    f"{target_name}: media delivery contract rejected "
+                    f"{asset.get('logicalAssetId', '<unknown>')}: {exc}"
                 )
-
-    dns_records = desired_dns_records(require_addresses=False)
+                continue
+            if re.search(r"/media/([^/]+)/media/\1(?:/|$)", delivery_url):
+                issues.append(
+                    f"{target_name}: media delivery URL repeats its role path: "
+                    f"{delivery_url}"
+                )
+        try:
+            attachment_url = build_media_delivery_url(
+                public_bases,
+                {
+                    "mediaType": "attachment",
+                    "publicSliceKey": (
+                        "media/attachment/s/asset/domain-governance/v1/source.pdf"
+                    ),
+                    "version": 1,
+                },
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            issues.append(
+                f"{target_name}: attachment delivery contract rejected: {exc}"
+            )
+            continue
+        expected_attachment_prefix = (
+            f"{parsed['mediaImage'].scheme}://{parsed['mediaImage'].netloc}"
+            "/media/attachment/"
+        )
+        if not attachment_url.startswith(expected_attachment_prefix):
+            issues.append(
+                f"{target_name}: attachment delivery must use the canonical CDN origin"
+            )
+    dns_records = desired_dns_records()
     dns_names = {
         str(record["name"])
         for record in dns_records
@@ -233,7 +310,7 @@ def main() -> int:
         if not covered:
             issues.append(f"DNS plan does not cover topology host {host}")
 
-    for path in _tracked_files():
+    for path in tracked_files:
         if (
             path.resolve() == Path(__file__).resolve()
             or not path.is_file()
@@ -272,6 +349,87 @@ def main() -> int:
                     f"{generic_media.group(0)}"
                 )
 
+    profile_service_path = (
+        ROOT
+        / "quwoquan_service/services/user-service/internal/account/user_account/"
+        "application/account_orchestration/profile_service.go"
+    )
+    profile_service_source = profile_service_path.read_text(encoding="utf-8")
+    if '"/u/"' in profile_service_source:
+        issues.append(
+            "user profile links must not duplicate the metadata-owned /u/{username} path"
+        )
+    if "linktemplates.UserWebPath(handle)" not in profile_service_source:
+        issues.append(
+            "user profile links must consume the generated link template builder"
+        )
+
+    topology_projection_consumers = (
+        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh",
+        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_search_api_uat.sh",
+        ROOT
+        / "quwoquan_app/scripts/gamma/"
+        "run_local_gamma_profile_proposal_api_uat.sh",
+        ROOT
+        / "quwoquan_app/scripts/gamma/"
+        "run_local_gamma_assistant_learning_api_uat.sh",
+        ROOT
+        / "quwoquan_data/scripts/content/release/canonical/"
+        "build_lookup_indexes.py",
+    )
+    for path in topology_projection_consumers:
+        source = path.read_text(encoding="utf-8")
+        if '"publicBases"' not in source:
+            continue
+        if (
+            "load_environment_topology" not in source
+            and "resolve_environment_release_target" not in source
+        ):
+            issues.append(
+                f"{path.relative_to(ROOT)} reads source runtime publicBases "
+                "instead of the canonical topology projection"
+            )
+
+    device_matrix_workflow = (
+        ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
+    ).read_text(encoding="utf-8")
+    for retired in (
+        "gamma_base_url:",
+        "media_base_url:",
+        "http://127.0.0.1",
+        "10.0.2.2",
+    ):
+        if retired in device_matrix_workflow:
+            issues.append(
+                "App device matrix must not expose manual/private endpoint "
+                f"override {retired}"
+            )
+    assistant_matrix = (
+        ROOT
+        / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+        "assistant-service/ci/run_assistant_device_matrix_ci.py"
+    ).read_text(encoding="utf-8")
+    if "canonical_gateway_base_url(env_name)" not in assistant_matrix:
+        issues.append("Assistant device matrix must resolve its gateway from topology")
+    chat_avatar_probe = (
+        ROOT
+        / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+        "chat-service/smoke/run_chat_avatar_e2e_probe.py"
+    ).read_text(encoding="utf-8")
+    if "validate_topology_endpoints(args)" not in chat_avatar_probe:
+        issues.append("Chat avatar probe endpoints must be canonical-equality checked")
+    for retired in (
+        "CHAT_AVATAR_MEDIA_BASE_URL",
+        "PROD_MEDIA_BASE_URL",
+    ):
+        if retired in chat_avatar_probe:
+            issues.append(f"Chat avatar probe contains retired endpoint fallback {retired}")
+    gamma_t4 = (
+        ROOT / "quwoquan_app/scripts/gamma/run_local_gamma_t4.sh"
+    ).read_text(encoding="utf-8")
+    if "require_canonical_endpoint gateway" not in gamma_t4:
+        issues.append("Gamma T4 endpoint overrides must be canonical-equality checked")
+
     tls_profiles = policy.get("tlsProfiles") or {}
     profile_targets = {
         str(profile.get("target") or "")
@@ -308,16 +466,19 @@ def main() -> int:
     ):
         issues.append("prod-hosted roles must use externally managed public-ca-prod")
 
-    for scan_root in PRIVATE_TRUST_SCAN_ROOTS:
-        for path in scan_root.rglob("*"):
-            if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
-                continue
-            source = path.read_text(encoding="utf-8", errors="ignore")
-            for token in PRIVATE_TRUST_TOKENS:
-                if token in source:
-                    issues.append(
-                        f"{path.relative_to(ROOT)} contains private trust token {token}"
-                    )
+    for path in tracked_files:
+        if (
+            not path.is_file()
+            or path.suffix.lower() not in TEXT_SUFFIXES
+            or not any(scan_root in path.parents for scan_root in PRIVATE_TRUST_SCAN_ROOTS)
+        ):
+            continue
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        for token in PRIVATE_TRUST_TOKENS:
+            if token in source:
+                issues.append(
+                    f"{path.relative_to(ROOT)} contains private trust token {token}"
+                )
 
     if issues:
         print("[verify-domain-governance] FAIL")

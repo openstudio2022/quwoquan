@@ -2,6 +2,7 @@
   "label": "食堂生活",
   "labelEn": "Cafeteria Life",
   "description": "校园食堂与美食",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

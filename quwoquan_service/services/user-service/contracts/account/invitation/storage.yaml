@@ -5,7 +5,7 @@ tables:
     entity: Invitation
     columns:
     - {name: id, type: VARCHAR(64), constraints: [PK, NOT_NULL]}
-    - {name: inviter_sub_account_id, type: VARCHAR(96), constraints: [NOT_NULL]}
+    - {name: inviter_persona_id, type: VARCHAR(96), constraints: [NOT_NULL]}
     - {name: inviter_owner_account_id, type: VARCHAR(96), constraints: [NOT_NULL]}
     - {name: channel, type: VARCHAR(16), constraints: [NOT_NULL]}
     - {name: link_code, type: VARCHAR(32), constraints: [NOT_NULL, UNIQUE]}
@@ -18,11 +18,11 @@ tables:
     - {name: accepted_at, type: TIMESTAMPTZ, constraints: [NULLABLE]}
     - {name: converted_at, type: TIMESTAMPTZ, constraints: [NULLABLE]}
     indexes:
-    - {name: idx_invite_records_inviter_sub, columns: [inviter_sub_account_id]}
+    - {name: idx_invite_records_inviter_persona, columns: [inviter_persona_id]}
     - {name: idx_invite_records_link_code, columns: [link_code], unique: true}
     - {name: idx_invite_records_status, columns: [status]}
     - {name: idx_invite_records_expire_at, columns: [expire_at]}
     - name: uq_invite_idempotent
-      columns: [inviter_sub_account_id, channel, invitee_phone_hash]
+      columns: [inviter_persona_id, channel, invitee_phone_hash]
       condition: status = 'generated' AND invitee_phone_hash IS NOT NULL
       unique: true

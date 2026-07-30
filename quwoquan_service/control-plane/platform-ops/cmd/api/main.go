@@ -23,7 +23,6 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
-	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
@@ -201,19 +200,17 @@ func main() {
 		strings.TrimSpace(configRoot),
 	)
 
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
 		Addr: addr,
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier:  accessVerifier,
 			OperatorOIDCVerifier: operatorOIDCVerifier,
-		})(rateLimited),
+		})(corsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("platform-ops-service listening on %s (rate_limit=1000/s)", addr)
+	log.Printf("platform-ops-service listening on %s", addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("platform-ops-service: %v", err)
 	}

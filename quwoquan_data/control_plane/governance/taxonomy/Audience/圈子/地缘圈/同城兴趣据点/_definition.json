@@ -2,6 +2,7 @@
   "label": "同城兴趣据点",
   "labelEn": "Local Meetup Hub",
   "description": "同城线下活动与据点半径社群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

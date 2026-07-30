@@ -2,6 +2,7 @@
   "label": "个人故事",
   "labelEn": "Personal Story",
   "description": "个人真实经历叙述",
+  "axisRole": "contentAngle",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

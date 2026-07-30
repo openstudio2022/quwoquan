@@ -42,10 +42,14 @@ func (r *CommentAttachmentReader) ValidateCommentAttachments(ctx context.Context
 		}
 		asset, found := assets[mediaID]
 		if !found {
-			return contentgenerated.AppErrorFromInvalidArgument(fmt.Sprintf("Comment attachment %s is unavailable", mediaID))
+			return commenterrors.AppErrorFromCommentAttachmentNotReady(
+				fmt.Sprintf("Comment attachment %s is unavailable", mediaID),
+			)
 		}
 		if asset.ProcessingStatus != mediamodel.ProcessingStatusReady {
-			return contentgenerated.AppErrorFromInvalidArgument(fmt.Sprintf("Comment attachment %s is not ready", mediaID))
+			return commenterrors.AppErrorFromCommentAttachmentNotReady(
+				fmt.Sprintf("Comment attachment %s is not ready", mediaID),
+			)
 		}
 		if strings.TrimSpace(asset.OwnerID) != actorID {
 			return commenterrors.AppErrorFromCommentForbiddenDelete(fmt.Sprintf("Comment attachment %s is not owned by actor", mediaID))
@@ -75,7 +79,7 @@ func (r *CommentAttachmentReader) ReadCommentAttachments(ctx context.Context, me
 			return nil, fmt.Errorf("sign Comment attachment %s: %w", mediaID, err)
 		}
 		projections[mediaID] = commentmodel.AttachmentProjection{
-			MediaID: mediaID, MediaType: asset.ContentType, URL: deliveryURL, Available: deliveryURL != "",
+			MediaID: mediaID, MediaType: asset.MimeType, URL: deliveryURL, Available: deliveryURL != "",
 		}
 	}
 	return projections, nil

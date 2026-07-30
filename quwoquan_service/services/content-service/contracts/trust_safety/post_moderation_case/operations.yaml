@@ -30,6 +30,7 @@ api_routes:
     max_attempts: 2
     idempotency: required
   error_codes:
+  - CONTENT.USER.unauthorized
   - CONTENT.USER.invalid_argument
   - CONTENT.USER.idempotency_conflict
   - CONTENT.SYSTEM.storage_write_failed
@@ -49,6 +50,11 @@ api_routes:
     auth_mode: required
     token_transport: bearer
     visibility: internal
+  request_entity: OpenPostModerationCaseRequest
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: postId, field: postId, required: true}
   description: 为给定 postVersion + contentDigest 打开独立审核 Case；同一 revision 只能有一个 Case。
 - method: POST
   path: /internal/content/posts/{postId}:review-moderation
@@ -79,6 +85,7 @@ api_routes:
   error_codes:
   - CONTENT.USER.unauthorized
   - CONTENT.USER.invalid_argument
+  - CONTENT.USER.moderation_case_not_found
   - CONTENT.USER.idempotency_conflict
   - CONTENT.USER.version_conflict
   - CONTENT.SYSTEM.storage_write_failed
@@ -98,6 +105,11 @@ api_routes:
     auth_mode: required
     token_transport: bearer
     visibility: internal
+  request_entity: ReviewPostModerationCaseRequest
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: postId, field: postId, required: true}
   description: 有审核权限的 operator 将 Case 从 pending 迁移至 reviewed，并写入 reviewer 审计。
 - method: POST
   path: /internal/content/posts/{postId}:moderate
@@ -128,6 +140,7 @@ api_routes:
   error_codes:
   - CONTENT.USER.unauthorized
   - CONTENT.USER.invalid_argument
+  - CONTENT.USER.moderation_case_not_found
   - CONTENT.USER.idempotency_conflict
   - CONTENT.USER.version_conflict
   - CONTENT.SYSTEM.storage_write_failed
@@ -148,6 +161,11 @@ api_routes:
     auth_mode: required
     token_transport: bearer
     visibility: internal
+  request_entity: DecidePostModerationCaseRequest
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: postId, field: postId, required: true}
   description: 对指定 postVersion + contentDigest 的 reviewed Case 作出 approved 或 rejected 决定；先前 revision 的决定不得批准当前发布。
 - method: POST
   path: /internal/content/posts/{postId}:supersede-moderation
@@ -174,6 +192,8 @@ api_routes:
     max_attempts: 2
     idempotency: required
   error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.moderation_case_not_found
   - CONTENT.USER.idempotency_conflict
   - CONTENT.USER.version_conflict
   - CONTENT.SYSTEM.storage_write_failed
@@ -193,6 +213,11 @@ api_routes:
     auth_mode: required
     token_transport: bearer
     visibility: internal
+  request_entity: SupersedePostModerationCaseRequest
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: postId, field: postId, required: true}
   description: Post revision 变更后由 lifecycle 调用，使旧 Case 不再具备发布资格。
 - method: GET
   path: /internal/content/posts/{postId}/moderation-case
@@ -240,6 +265,9 @@ api_routes:
   response_entity: PostModerationCaseOpsSlice
   response_body: PostModerationCaseOpsSlice
   response_body_kind: object
+  request_bindings:
+    path:
+    - {name: postId, field: postId, required: true}
   security:
     auth_mode: required
     principal: operator
@@ -271,6 +299,7 @@ api_routes:
     max_attempts: 2
     idempotency: none
   error_codes:
+  - CONTENT.USER.unauthorized
   - CONTENT.SYSTEM.storage_read_failed
   privacy:
     request_classification: INTERNAL
@@ -288,6 +317,12 @@ api_routes:
     auth_mode: required
     token_transport: bearer
     visibility: internal
+  request_bindings:
+    path:
+    - {name: postId, field: postId, required: true}
+    query:
+    - {name: postVersion, field: postVersion, required: true}
+    - {name: contentDigest, field: contentDigest, required: true}
   description: 供 Post lifecycle 接线使用的只读资格判断；仅当前 postVersion + contentDigest 的 approved Case 可返回 eligible=true。
 consumers:
 - name: moderation-service

@@ -86,34 +86,44 @@ events:
   consumers:
   - projection-workers
   channel: event_store
-  payload_entity: NotificationDeliveryJob
+  payload_entity: IncomingCallProviderResultRecordedEvent
   payload_fields:
-  - id
+  - jobId
   - callId
   - deviceId
   - deliveryKey
-  - externalInteractionId
+  - action
+  - attemptId
+  - requestId
+  - operation
   - provider
   - providerRequestDigest
-  - providerResultStatus
-  - providerResultAt
+  - resultStatus
+  - recoveryAction
+  - occurredAt
+  - jobStatus
 - name: IncomingCallProviderResultRecorded
   description: ring provider 的失败或可重试 receipt 已按 attemptId 幂等记录；不表示设备展示。
   producer: notification-service
   consumers:
   - projection-workers
   channel: event_store
-  payload_entity: NotificationDeliveryJob
+  payload_entity: IncomingCallProviderResultRecordedEvent
   payload_fields:
-  - id
+  - jobId
   - callId
   - deviceId
   - deliveryKey
-  - externalInteractionId
+  - action
+  - attemptId
+  - requestId
+  - operation
   - provider
   - providerRequestDigest
-  - providerResultStatus
-  - providerResultAt
+  - resultStatus
+  - recoveryAction
+  - occurredAt
+  - jobStatus
 - name: IncomingCallDeliveryCancelled
   producer: notification-service
   consumers:
@@ -157,17 +167,22 @@ events:
   consumers:
   - projection-workers
   channel: event_store
-  payload_entity: NotificationDeliveryJob
+  payload_entity: IncomingCallProviderResultRecordedEvent
   payload_fields:
-  - id
+  - jobId
   - callId
   - deviceId
   - deliveryKey
-  - cancellationExternalInteractionId
-  - cancellationProvider
-  - cancellationProviderRequestDigest
-  - cancellationProviderResultStatus
-  - cancellationProviderResultAt
+  - action
+  - attemptId
+  - requestId
+  - operation
+  - provider
+  - providerRequestDigest
+  - resultStatus
+  - recoveryAction
+  - occurredAt
+  - jobStatus
 - name: IncomingCallCancellationRealtimeDispatched
   producer: notification-service
   consumers:

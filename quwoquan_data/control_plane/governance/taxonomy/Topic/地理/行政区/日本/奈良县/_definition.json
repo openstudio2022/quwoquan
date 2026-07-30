@@ -1,0 +1,12 @@
+{
+  "label": "奈良县",
+  "labelEn": "Nara Prefecture",
+  "description": "飞鸟与奈良时代古都",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

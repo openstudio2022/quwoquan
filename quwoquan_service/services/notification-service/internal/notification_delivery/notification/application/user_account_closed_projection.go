@@ -6,8 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"quwoquan_service/runtime/accountrestriction"
 )
 
 const UserAccountClosedEventName = "UserAccountClosed"
@@ -16,22 +19,30 @@ var ErrUserAccountClosedEventIDConflict = errors.New(
 	"UserAccountClosed eventId was reused with different data",
 )
 
+var ErrUserAccountRestrictionProjectionConflict = errors.New(
+	"notification user account restriction projection conflict",
+)
+
 // UserAccountClosedEvent 只承载 notification-service 清理所需的事件标识和
 // metadata 已声明 payload；本服务不得为该投影反向读取 User 数据库。
 type UserAccountClosedEvent struct {
-	EventID      string
-	UserID       string
-	PersonaIDs   []string
-	AccountState string
-	UpdatedAt    time.Time
+	EventID        string
+	AccountVersion int64
+	UserID         string
+	PersonaIDs     []string
+	AccountState   string
+	UpdatedAt      time.Time
+	OccurredAt     time.Time
 }
 
 func (event UserAccountClosedEvent) Validate() error {
 	if strings.TrimSpace(event.EventID) == "" ||
+		event.AccountVersion <= 0 ||
 		strings.TrimSpace(event.UserID) == "" ||
 		event.PersonaIDs == nil ||
 		strings.TrimSpace(event.AccountState) != "closed" ||
-		event.UpdatedAt.IsZero() {
+		event.UpdatedAt.IsZero() ||
+		event.OccurredAt.IsZero() {
 		return errors.New("UserAccountClosed event is incomplete")
 	}
 	return nil
@@ -63,15 +74,24 @@ func (event UserAccountClosedEvent) SubjectIDs() []string {
 func (event UserAccountClosedEvent) Digest() string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		strings.TrimSpace(event.UserID),
+		strconv.FormatInt(event.AccountVersion, 10),
 		strings.Join(event.SubjectIDs(), "\x1f"),
 		strings.TrimSpace(event.AccountState),
 		event.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		event.OccurredAt.UTC().Format(time.RFC3339Nano),
 	}, "\x00")))
 	return hex.EncodeToString(sum[:])
 }
 
 type UserAccountClosedProjectionResult struct {
 	Replayed bool
+}
+
+type UserAccountRestrictionProjectionResult struct {
+	Replayed bool
+	Stale    bool
+	Terminal bool
+	Affected int64
 }
 
 // UserAccountClosedProjection 必须把 event inbox 与通知数据清理放在同一
@@ -81,4 +101,11 @@ type UserAccountClosedProjection interface {
 		ctx context.Context,
 		event UserAccountClosedEvent,
 	) (UserAccountClosedProjectionResult, error)
+}
+
+type UserAccountRestrictionProjection interface {
+	Apply(
+		ctx context.Context,
+		event accountrestriction.Event,
+	) (UserAccountRestrictionProjectionResult, error)
 }

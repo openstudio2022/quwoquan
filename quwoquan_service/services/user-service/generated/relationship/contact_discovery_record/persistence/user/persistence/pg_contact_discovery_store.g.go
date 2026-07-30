@@ -27,11 +27,11 @@ func NewPGContactDiscoveryStoreBase(pool *pgxpool.Pool) *PGContactDiscoveryStore
 	return &PGContactDiscoveryStoreBase{pool: pool}
 }
 
-const ContactDiscoveryRecordCols = `id, owner_account_id, hashed_phones, matched_sub_account_ids, status, match_count, expire_at, created_at, completed_at`
+const ContactDiscoveryRecordCols = `id, owner_account_id, hashed_phones, matched_persona_ids, status, match_count, expire_at, created_at, completed_at`
 
 func ScanContactDiscoveryRecord(row pgx.Row) (*model.ContactDiscoveryRecord, error) {
 	e := &model.ContactDiscoveryRecord{}
-	err := row.Scan(&e.ID, &e.OwnerAccountID, &e.HashedPhones, &e.MatchedSubAccountIds, &e.Status, &e.MatchCount, &e.ExpireAt, &e.CreatedAt, &e.CompletedAt)
+	err := row.Scan(&e.ID, &e.OwnerAccountID, &e.HashedPhones, &e.MatchedPersonaIds, &e.Status, &e.MatchCount, &e.ExpireAt, &e.CreatedAt, &e.CompletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -52,16 +52,16 @@ func (s *PGContactDiscoveryStoreBase) Create(ctx context.Context, e *model.Conta
 	now := time.Now().UTC()
 	e.CreatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO contact_discovery_records (id, owner_account_id, hashed_phones, matched_sub_account_ids, status, match_count, expire_at, created_at, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		e.ID, e.OwnerAccountID, e.HashedPhones, e.MatchedSubAccountIds, e.Status, e.MatchCount, e.ExpireAt, e.CreatedAt, e.CompletedAt)
+		`INSERT INTO contact_discovery_records (id, owner_account_id, hashed_phones, matched_persona_ids, status, match_count, expire_at, created_at, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		e.ID, e.OwnerAccountID, e.HashedPhones, e.MatchedPersonaIds, e.Status, e.MatchCount, e.ExpireAt, e.CreatedAt, e.CompletedAt)
 	return err
 }
 
 // Update modifies an existing ContactDiscoveryRecord record (all non-PK columns).
 func (s *PGContactDiscoveryStoreBase) Update(ctx context.Context, e *model.ContactDiscoveryRecord) error {
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE contact_discovery_records SET owner_account_id=$2, hashed_phones=$3, matched_sub_account_ids=$4, status=$5, match_count=$6, expire_at=$7, created_at=$8, completed_at=$9 WHERE id = $1`,
-		e.ID, e.OwnerAccountID, e.HashedPhones, e.MatchedSubAccountIds, e.Status, e.MatchCount, e.ExpireAt, e.CreatedAt, e.CompletedAt)
+		`UPDATE contact_discovery_records SET owner_account_id=$2, hashed_phones=$3, matched_persona_ids=$4, status=$5, match_count=$6, expire_at=$7, created_at=$8, completed_at=$9 WHERE id = $1`,
+		e.ID, e.OwnerAccountID, e.HashedPhones, e.MatchedPersonaIds, e.Status, e.MatchCount, e.ExpireAt, e.CreatedAt, e.CompletedAt)
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func (s *PGContactDiscoveryStoreBase) ListByOwnerAccountID(ctx context.Context, 
 	var result []model.ContactDiscoveryRecord
 	for rows.Next() {
 		var e model.ContactDiscoveryRecord
-		if err := rows.Scan(&e.ID, &e.OwnerAccountID, &e.HashedPhones, &e.MatchedSubAccountIds, &e.Status, &e.MatchCount, &e.ExpireAt, &e.CreatedAt, &e.CompletedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.OwnerAccountID, &e.HashedPhones, &e.MatchedPersonaIds, &e.Status, &e.MatchCount, &e.ExpireAt, &e.CreatedAt, &e.CompletedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

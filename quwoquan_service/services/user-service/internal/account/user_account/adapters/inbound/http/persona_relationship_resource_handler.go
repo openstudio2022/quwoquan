@@ -12,12 +12,12 @@ import (
 )
 
 func (h *UserHandler) handleGetRelationship(w http.ResponseWriter, r *http.Request) {
-	targetID := strings.TrimSpace(r.PathValue("subAccountId"))
+	targetID := strings.TrimSpace(r.PathValue("personaId"))
 	if targetID == "" {
-		writeInvalidArg(w, r, "subAccountId required")
+		writeInvalidArg(w, r, "personaId required")
 		return
 	}
-	userID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	userID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -31,12 +31,12 @@ func (h *UserHandler) handleGetRelationship(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *http.Request) {
-	targetID := strings.TrimSpace(r.PathValue("subAccountId"))
+	targetID := strings.TrimSpace(r.PathValue("personaId"))
 	if targetID == "" {
-		writeInvalidArg(w, r, "subAccountId required")
+		writeInvalidArg(w, r, "personaId required")
 		return
 	}
-	viewerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	viewerID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -59,16 +59,16 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.buildRelationshipCapabilityView(r.Context(), viewerID, targetID, rel, isBlocked, isBlockedBy))
+	writeJSON(w, http.StatusOK, h.relationshipCapabilityView(r.Context(), viewerID, targetID, rel, isBlocked, isBlockedBy))
 }
 
 func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
-	blockedID := strings.TrimSpace(r.PathValue("targetSubAccountId"))
+	blockedID := strings.TrimSpace(r.PathValue("targetPersonaId"))
 	if blockedID == "" {
-		writeInvalidArg(w, r, "targetSubAccountId required")
+		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
-	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	blockerID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -79,20 +79,20 @@ func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"targetSubAccountId": blockedID,
-		"blocked":            true,
-		"idempotentReplay":   result.IdempotentReplay || !result.Changed,
-		"updatedAt":          relationshipUpdatedAt(result),
+		"targetPersonaId":  blockedID,
+		"blocked":          true,
+		"idempotentReplay": result.IdempotentReplay || !result.Changed,
+		"updatedAt":        relationshipUpdatedAt(result),
 	})
 }
 
 func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
-	blockedID := strings.TrimSpace(r.PathValue("targetSubAccountId"))
+	blockedID := strings.TrimSpace(r.PathValue("targetPersonaId"))
 	if blockedID == "" {
-		writeInvalidArg(w, r, "targetSubAccountId required")
+		writeInvalidArg(w, r, "targetPersonaId required")
 		return
 	}
-	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	blockerID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -103,15 +103,15 @@ func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"targetSubAccountId": blockedID,
-		"blocked":            false,
-		"idempotentReplay":   result.IdempotentReplay || !result.Changed,
-		"updatedAt":          relationshipUpdatedAt(result),
+		"targetPersonaId":  blockedID,
+		"blocked":          false,
+		"idempotentReplay": result.IdempotentReplay || !result.Changed,
+		"updatedAt":        relationshipUpdatedAt(result),
 	})
 }
 
 func (h *UserHandler) handleListBlocked(w http.ResponseWriter, r *http.Request) {
-	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	blockerID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -128,7 +128,7 @@ func (h *UserHandler) handleListBlocked(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
 }
 
-func (h *UserHandler) resolveActorSubAccountID(
+func (h *UserHandler) resolveActorPersonaID(
 	ctx context.Context,
 	r *http.Request,
 	explicitActorID string,
@@ -137,10 +137,10 @@ func (h *UserHandler) resolveActorSubAccountID(
 	if userID == "" {
 		return "", generated.AppErrorFromInvalidArgument("X-Client-User-Id header required")
 	}
-	trustedPersonaID := subAccountIDFromHeader(r)
+	trustedPersonaID := personaIDFromHeader(r)
 	actorID := strings.TrimSpace(explicitActorID)
 	if actorID != "" && actorID != trustedPersonaID {
-		// metadata ownership_policy: actor_self —— body 里的 actorSubAccountId
+		// metadata ownership_policy: actor_self —— body 里的 actorPersonaId
 		// 是纯客户端输入，与 token principal 不一致时必须证明归属当前认证
 		// 账号且未退役，防止用合法凭证伪造他人 persona 执行关系/招呼命令。
 		return h.verifyActorPersonaOwnership(ctx, userID, actorID)
@@ -151,11 +151,11 @@ func (h *UserHandler) resolveActorSubAccountID(
 	if actorID != "" {
 		return actorID, nil
 	}
-	activeContext, err := h.subAccount.GetActivePersonaContextView(ctx, userID)
+	activeContext, err := h.persona.GetActivePersonaContextView(ctx, userID)
 	if err != nil {
 		return "", err
 	}
-	actorID = strings.TrimSpace(anyString(activeContext["subAccountId"]))
+	actorID = strings.TrimSpace(anyString(activeContext["personaId"]))
 	if actorID == "" {
 		return "", generated.AppErrorFromInvalidArgument("active persona context is required")
 	}
@@ -166,10 +166,10 @@ func (h *UserHandler) verifyActorPersonaOwnership(
 	ctx context.Context,
 	accountID, actorID string,
 ) (string, error) {
-	if h.subAccount == nil {
-		return "", generated.AppErrorFromInternalError("sub-account service is unavailable")
+	if h.persona == nil {
+		return "", generated.AppErrorFromInternalError("persona service is unavailable")
 	}
-	persona, err := h.subAccount.GetSubAccountProfile(ctx, actorID)
+	persona, err := h.persona.GetPersonaProfile(ctx, actorID)
 	if err != nil {
 		return "", err
 	}
@@ -183,7 +183,7 @@ func (h *UserHandler) verifyActorPersonaOwnership(
 			"retired persona cannot act",
 		)
 	}
-	return persona.SubAccountID, nil
+	return persona.PersonaID, nil
 }
 
 func readOptionalBody(r *http.Request) map[string]any {

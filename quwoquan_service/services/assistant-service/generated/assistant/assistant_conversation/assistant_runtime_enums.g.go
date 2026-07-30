@@ -115,7 +115,6 @@ func (value AssistantStreamEventType) WireName() string { return string(value) }
 type SkillSubscriptionStatus string
 
 const (
-	SkillSubscriptionStatusUnknown SkillSubscriptionStatus = ""
 	SkillSubscriptionStatusActive SkillSubscriptionStatus = "active"
 	SkillSubscriptionStatusPaused SkillSubscriptionStatus = "paused"
 	SkillSubscriptionStatusArchived SkillSubscriptionStatus = "archived"
@@ -123,8 +122,6 @@ const (
 
 func ParseSkillSubscriptionStatus(raw string) (SkillSubscriptionStatus, error) {
 	switch strings.TrimSpace(raw) {
-	case "":
-		return SkillSubscriptionStatusUnknown, nil
 	case "active":
 		return SkillSubscriptionStatusActive, nil
 	case "paused":
@@ -360,64 +357,6 @@ func ParseQueryIntent(raw string) (QueryIntent, error) {
 
 func (value QueryIntent) WireName() string { return string(value) }
 
-type AnswerShape string
-
-const (
-	AnswerShapeUnspecified AnswerShape = ""
-	AnswerShapeDirectAnswer AnswerShape = "direct_answer"
-	AnswerShapeComparison AnswerShape = "comparison"
-	AnswerShapeOptions AnswerShape = "options"
-	AnswerShapeDecisionReady AnswerShape = "decision_ready"
-	AnswerShapeActionPlan AnswerShape = "action_plan"
-)
-
-func ParseAnswerShape(raw string) (AnswerShape, error) {
-	switch strings.TrimSpace(raw) {
-	case "":
-		return AnswerShapeUnspecified, nil
-	case "direct_answer":
-		return AnswerShapeDirectAnswer, nil
-	case "comparison":
-		return AnswerShapeComparison, nil
-	case "options":
-		return AnswerShapeOptions, nil
-	case "decision_ready":
-		return AnswerShapeDecisionReady, nil
-	case "action_plan":
-		return AnswerShapeActionPlan, nil
-	default:
-		return "", fmt.Errorf("unknown AnswerShape wire value %q", raw)
-	}
-}
-
-func (value AnswerShape) WireName() string { return string(value) }
-
-type FreshnessNeed string
-
-const (
-	FreshnessNeedUnspecified FreshnessNeed = ""
-	FreshnessNeedStable FreshnessNeed = "stable"
-	FreshnessNeedRecent FreshnessNeed = "recent"
-	FreshnessNeedRealtime FreshnessNeed = "realtime"
-)
-
-func ParseFreshnessNeed(raw string) (FreshnessNeed, error) {
-	switch strings.TrimSpace(raw) {
-	case "":
-		return FreshnessNeedUnspecified, nil
-	case "stable":
-		return FreshnessNeedStable, nil
-	case "recent":
-		return FreshnessNeedRecent, nil
-	case "realtime":
-		return FreshnessNeedRealtime, nil
-	default:
-		return "", fmt.Errorf("unknown FreshnessNeed wire value %q", raw)
-	}
-}
-
-func (value FreshnessNeed) WireName() string { return string(value) }
-
 type SkillMode string
 
 const (
@@ -512,32 +451,6 @@ func ParseStopPolicy(raw string) (StopPolicy, error) {
 }
 
 func (value StopPolicy) WireName() string { return string(value) }
-
-type SearchIterationConvergenceStatus string
-
-const (
-	SearchIterationConvergenceStatusUnknown SearchIterationConvergenceStatus = ""
-	SearchIterationConvergenceStatusImproving SearchIterationConvergenceStatus = "improving"
-	SearchIterationConvergenceStatusFlat SearchIterationConvergenceStatus = "flat"
-	SearchIterationConvergenceStatusSaturated SearchIterationConvergenceStatus = "saturated"
-)
-
-func ParseSearchIterationConvergenceStatus(raw string) (SearchIterationConvergenceStatus, error) {
-	switch strings.TrimSpace(raw) {
-	case "":
-		return SearchIterationConvergenceStatusUnknown, nil
-	case "improving":
-		return SearchIterationConvergenceStatusImproving, nil
-	case "flat":
-		return SearchIterationConvergenceStatusFlat, nil
-	case "saturated":
-		return SearchIterationConvergenceStatusSaturated, nil
-	default:
-		return "", fmt.Errorf("unknown SearchIterationConvergenceStatus wire value %q", raw)
-	}
-}
-
-func (value SearchIterationConvergenceStatus) WireName() string { return string(value) }
 
 type FinalAnswerMode string
 
@@ -645,35 +558,6 @@ func ParseEvidenceSourceTier(raw string) (EvidenceSourceTier, error) {
 }
 
 func (value EvidenceSourceTier) WireName() string { return string(value) }
-
-type SkillExecutionTarget string
-
-const (
-	SkillExecutionTargetToolChain SkillExecutionTarget = "tool_chain"
-	SkillExecutionTargetNativeApi SkillExecutionTarget = "native_api"
-	SkillExecutionTargetIosIntent SkillExecutionTarget = "ios_intent"
-	SkillExecutionTargetAndroidIntent SkillExecutionTarget = "android_intent"
-	SkillExecutionTargetUnknown SkillExecutionTarget = ""
-)
-
-func ParseSkillExecutionTarget(raw string) (SkillExecutionTarget, error) {
-	switch strings.TrimSpace(raw) {
-	case "tool_chain":
-		return SkillExecutionTargetToolChain, nil
-	case "native_api":
-		return SkillExecutionTargetNativeApi, nil
-	case "ios_intent":
-		return SkillExecutionTargetIosIntent, nil
-	case "android_intent":
-		return SkillExecutionTargetAndroidIntent, nil
-	case "":
-		return SkillExecutionTargetUnknown, nil
-	default:
-		return "", fmt.Errorf("unknown SkillExecutionTarget wire value %q", raw)
-	}
-}
-
-func (value SkillExecutionTarget) WireName() string { return string(value) }
 
 type AssistantNextAction string
 
@@ -945,6 +829,59 @@ func ParseProcessDisplayBlockKind(raw string) (ProcessDisplayBlockKind, error) {
 
 func (value ProcessDisplayBlockKind) WireName() string { return string(value) }
 
+type SearchPlanDimension string
+
+const (
+	SearchPlanDimensionUnknown SearchPlanDimension = ""
+	SearchPlanDimensionCurrentState SearchPlanDimension = "current_state"
+	SearchPlanDimensionDecisionImpact SearchPlanDimension = "decision_impact"
+	SearchPlanDimensionCandidateSpace SearchPlanDimension = "candidate_space"
+	SearchPlanDimensionTradeoffs SearchPlanDimension = "tradeoffs"
+	SearchPlanDimensionFitConstraints SearchPlanDimension = "fit_constraints"
+	SearchPlanDimensionFitScenarios SearchPlanDimension = "fit_scenarios"
+	SearchPlanDimensionRiskBoundaries SearchPlanDimension = "risk_boundaries"
+	SearchPlanDimensionKeyFacts SearchPlanDimension = "key_facts"
+	SearchPlanDimensionDecisionThreshold SearchPlanDimension = "decision_threshold"
+	SearchPlanDimensionCoreObject SearchPlanDimension = "core_object"
+	SearchPlanDimensionSupportingEvidence SearchPlanDimension = "supporting_evidence"
+	SearchPlanDimensionLatestSignal SearchPlanDimension = "latest_signal"
+)
+
+func ParseSearchPlanDimension(raw string) (SearchPlanDimension, error) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return SearchPlanDimensionUnknown, nil
+	case "current_state":
+		return SearchPlanDimensionCurrentState, nil
+	case "decision_impact":
+		return SearchPlanDimensionDecisionImpact, nil
+	case "candidate_space":
+		return SearchPlanDimensionCandidateSpace, nil
+	case "tradeoffs":
+		return SearchPlanDimensionTradeoffs, nil
+	case "fit_constraints":
+		return SearchPlanDimensionFitConstraints, nil
+	case "fit_scenarios":
+		return SearchPlanDimensionFitScenarios, nil
+	case "risk_boundaries":
+		return SearchPlanDimensionRiskBoundaries, nil
+	case "key_facts":
+		return SearchPlanDimensionKeyFacts, nil
+	case "decision_threshold":
+		return SearchPlanDimensionDecisionThreshold, nil
+	case "core_object":
+		return SearchPlanDimensionCoreObject, nil
+	case "supporting_evidence":
+		return SearchPlanDimensionSupportingEvidence, nil
+	case "latest_signal":
+		return SearchPlanDimensionLatestSignal, nil
+	default:
+		return "", fmt.Errorf("unknown SearchPlanDimension wire value %q", raw)
+	}
+}
+
+func (value SearchPlanDimension) WireName() string { return string(value) }
+
 type TraceVisibility string
 
 const (
@@ -967,6 +904,58 @@ func ParseTraceVisibility(raw string) (TraceVisibility, error) {
 }
 
 func (value TraceVisibility) WireName() string { return string(value) }
+
+type ToolRecoveryAction string
+
+const (
+	ToolRecoveryActionUnknown ToolRecoveryAction = ""
+	ToolRecoveryActionFailTurn ToolRecoveryAction = "fail_turn"
+	ToolRecoveryActionSkipTool ToolRecoveryAction = "skip_tool"
+	ToolRecoveryActionDegradeAnswer ToolRecoveryAction = "degrade_answer"
+)
+
+func ParseToolRecoveryAction(raw string) (ToolRecoveryAction, error) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return ToolRecoveryActionUnknown, nil
+	case "fail_turn":
+		return ToolRecoveryActionFailTurn, nil
+	case "skip_tool":
+		return ToolRecoveryActionSkipTool, nil
+	case "degrade_answer":
+		return ToolRecoveryActionDegradeAnswer, nil
+	default:
+		return "", fmt.Errorf("unknown ToolRecoveryAction wire value %q", raw)
+	}
+}
+
+func (value ToolRecoveryAction) WireName() string { return string(value) }
+
+type ToolDisruptionLevel string
+
+const (
+	ToolDisruptionLevelUnknown ToolDisruptionLevel = ""
+	ToolDisruptionLevelNone ToolDisruptionLevel = "none"
+	ToolDisruptionLevelPartial ToolDisruptionLevel = "partial"
+	ToolDisruptionLevelFull ToolDisruptionLevel = "full"
+)
+
+func ParseToolDisruptionLevel(raw string) (ToolDisruptionLevel, error) {
+	switch strings.TrimSpace(raw) {
+	case "":
+		return ToolDisruptionLevelUnknown, nil
+	case "none":
+		return ToolDisruptionLevelNone, nil
+	case "partial":
+		return ToolDisruptionLevelPartial, nil
+	case "full":
+		return ToolDisruptionLevelFull, nil
+	default:
+		return "", fmt.Errorf("unknown ToolDisruptionLevel wire value %q", raw)
+	}
+}
+
+func (value ToolDisruptionLevel) WireName() string { return string(value) }
 
 type SlotValueStatus string
 
@@ -1315,67 +1304,6 @@ func ParseAssessmentType(raw string) (AssessmentType, error) {
 
 func (value AssessmentType) WireName() string { return string(value) }
 
-type QueryNormalizationIssue string
-
-const (
-	QueryNormalizationIssuePinyinInput QueryNormalizationIssue = "pinyin_input"
-	QueryNormalizationIssueNoTimeSpecified QueryNormalizationIssue = "no_time_specified"
-	QueryNormalizationIssueNoLocation QueryNormalizationIssue = "no_location"
-	QueryNormalizationIssueAmbiguousIntent QueryNormalizationIssue = "ambiguous_intent"
-	QueryNormalizationIssueNonStandardLanguage QueryNormalizationIssue = "non_standard_language"
-	QueryNormalizationIssueUnknown QueryNormalizationIssue = ""
-)
-
-func ParseQueryNormalizationIssue(raw string) (QueryNormalizationIssue, error) {
-	switch strings.TrimSpace(raw) {
-	case "pinyin_input":
-		return QueryNormalizationIssuePinyinInput, nil
-	case "no_time_specified":
-		return QueryNormalizationIssueNoTimeSpecified, nil
-	case "no_location":
-		return QueryNormalizationIssueNoLocation, nil
-	case "ambiguous_intent":
-		return QueryNormalizationIssueAmbiguousIntent, nil
-	case "non_standard_language":
-		return QueryNormalizationIssueNonStandardLanguage, nil
-	case "":
-		return QueryNormalizationIssueUnknown, nil
-	default:
-		return "", fmt.Errorf("unknown QueryNormalizationIssue wire value %q", raw)
-	}
-}
-
-func (value QueryNormalizationIssue) WireName() string { return string(value) }
-
-type EvidenceStatus string
-
-const (
-	EvidenceStatusFull EvidenceStatus = "full"
-	EvidenceStatusBounded EvidenceStatus = "bounded"
-	EvidenceStatusNotRequired EvidenceStatus = "not_required"
-	EvidenceStatusRetry EvidenceStatus = "retry"
-	EvidenceStatusUnknown EvidenceStatus = ""
-)
-
-func ParseEvidenceStatus(raw string) (EvidenceStatus, error) {
-	switch strings.TrimSpace(raw) {
-	case "full":
-		return EvidenceStatusFull, nil
-	case "bounded":
-		return EvidenceStatusBounded, nil
-	case "not_required":
-		return EvidenceStatusNotRequired, nil
-	case "retry":
-		return EvidenceStatusRetry, nil
-	case "":
-		return EvidenceStatusUnknown, nil
-	default:
-		return "", fmt.Errorf("unknown EvidenceStatus wire value %q", raw)
-	}
-}
-
-func (value EvidenceStatus) WireName() string { return string(value) }
-
 type ContextFillType string
 
 const (
@@ -1533,6 +1461,10 @@ const (
 	AssistantPreferenceKindReplyLength AssistantPreferenceKind = "reply_length"
 	AssistantPreferenceKindTone AssistantPreferenceKind = "tone"
 	AssistantPreferenceKindLanguage AssistantPreferenceKind = "language"
+	AssistantPreferenceKindFrequentLocations AssistantPreferenceKind = "frequent_locations"
+	AssistantPreferenceKindFamilyTerms AssistantPreferenceKind = "family_terms"
+	AssistantPreferenceKindDietaryRestrictions AssistantPreferenceKind = "dietary_restrictions"
+	AssistantPreferenceKindTravelPreferences AssistantPreferenceKind = "travel_preferences"
 	AssistantPreferenceKindUnknown AssistantPreferenceKind = ""
 )
 
@@ -1546,6 +1478,14 @@ func ParseAssistantPreferenceKind(raw string) (AssistantPreferenceKind, error) {
 		return AssistantPreferenceKindTone, nil
 	case "language":
 		return AssistantPreferenceKindLanguage, nil
+	case "frequent_locations":
+		return AssistantPreferenceKindFrequentLocations, nil
+	case "family_terms":
+		return AssistantPreferenceKindFamilyTerms, nil
+	case "dietary_restrictions":
+		return AssistantPreferenceKindDietaryRestrictions, nil
+	case "travel_preferences":
+		return AssistantPreferenceKindTravelPreferences, nil
 	case "":
 		return AssistantPreferenceKindUnknown, nil
 	default:
@@ -1560,6 +1500,7 @@ type AssistantPreferenceSourceType string
 const (
 	AssistantPreferenceSourceTypeExplicitRewrite AssistantPreferenceSourceType = "explicit_rewrite"
 	AssistantPreferenceSourceTypeManagement AssistantPreferenceSourceType = "management"
+	AssistantPreferenceSourceTypeConversationConfirmed AssistantPreferenceSourceType = "conversation_confirmed"
 	AssistantPreferenceSourceTypeUnknown AssistantPreferenceSourceType = ""
 )
 
@@ -1569,6 +1510,8 @@ func ParseAssistantPreferenceSourceType(raw string) (AssistantPreferenceSourceTy
 		return AssistantPreferenceSourceTypeExplicitRewrite, nil
 	case "management":
 		return AssistantPreferenceSourceTypeManagement, nil
+	case "conversation_confirmed":
+		return AssistantPreferenceSourceTypeConversationConfirmed, nil
 	case "":
 		return AssistantPreferenceSourceTypeUnknown, nil
 	default:
@@ -1583,7 +1526,6 @@ type AssistantPreferenceStatus string
 const (
 	AssistantPreferenceStatusActive AssistantPreferenceStatus = "active"
 	AssistantPreferenceStatusRevoked AssistantPreferenceStatus = "revoked"
-	AssistantPreferenceStatusUnknown AssistantPreferenceStatus = ""
 )
 
 func ParseAssistantPreferenceStatus(raw string) (AssistantPreferenceStatus, error) {
@@ -1592,12 +1534,39 @@ func ParseAssistantPreferenceStatus(raw string) (AssistantPreferenceStatus, erro
 		return AssistantPreferenceStatusActive, nil
 	case "revoked":
 		return AssistantPreferenceStatusRevoked, nil
-	case "":
-		return AssistantPreferenceStatusUnknown, nil
 	default:
 		return "", fmt.Errorf("unknown AssistantPreferenceStatus wire value %q", raw)
 	}
 }
 
 func (value AssistantPreferenceStatus) WireName() string { return string(value) }
+
+type AssistantResponseType string
+
+const (
+	AssistantResponseTypeText AssistantResponseType = "text"
+	AssistantResponseTypeStructured AssistantResponseType = "structured"
+	AssistantResponseTypeActionCard AssistantResponseType = "action_card"
+	AssistantResponseTypeStream AssistantResponseType = "stream"
+	AssistantResponseTypeUnknown AssistantResponseType = ""
+)
+
+func ParseAssistantResponseType(raw string) (AssistantResponseType, error) {
+	switch strings.TrimSpace(raw) {
+	case "text":
+		return AssistantResponseTypeText, nil
+	case "structured":
+		return AssistantResponseTypeStructured, nil
+	case "action_card":
+		return AssistantResponseTypeActionCard, nil
+	case "stream":
+		return AssistantResponseTypeStream, nil
+	case "":
+		return AssistantResponseTypeUnknown, nil
+	default:
+		return "", fmt.Errorf("unknown AssistantResponseType wire value %q", raw)
+	}
+}
+
+func (value AssistantResponseType) WireName() string { return string(value) }
 

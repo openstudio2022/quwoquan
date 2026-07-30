@@ -61,8 +61,7 @@ class _FixtureHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0") or "0")
         _ = self.rfile.read(length) if length else b""
         if path == "/search":
-            # rankingVersion 字段值为 search-v1（非 HTTP path），保持与生产信封一致。
-            self._write(200, b'{"hits":[],"rankingVersion":"search-v1"}')
+            self._write(200, b'{"hits":[]}')
             return
         if path.startswith(_LEGACY_PREFIX):
             self._write(404, b'{"error":"not_found"}')

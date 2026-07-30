@@ -225,7 +225,7 @@ def test_env_imports_use_latest_non_dry_run_and_expand_homepage_id():
     assert gamma["releaseId"] == "rel_apply"
     # v2 映射产物展开真实 homepageId；base 来自 environment_topology_manifest。
     assert gamma["introductionUrl"].endswith("/homepages/homepage_9/introduction")
-    assert gamma["introductionUrl"].startswith("https://gamma-api.")
+    assert gamma["introductionUrl"].startswith("https://api.gamma.")
     assert jzg["envImports"]["prod"] == {"imported": False}
 
 

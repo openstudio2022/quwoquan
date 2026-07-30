@@ -31,12 +31,17 @@ from governance.taxonomy.bootstrap_tags_topic_verticals_part2 import (
     configure_writers as _configure_topic_verticals_part2,
     gen_topic_verticals_part2,
 )
+from governance.taxonomy.bootstrap_tags_topic_photography import (
+    configure_writers as _configure_topic_photography,
+    gen_photography,
+)
 
 
 def configure_writers(**writers):
     _WRITERS.update(writers)
     _configure_topic_verticals_part1(**writers)
     _configure_topic_verticals_part2(**writers)
+    _configure_topic_photography(**writers)
 
 def gen_topic():
     group("Topic", "内容主题", "Topic",
@@ -66,6 +71,7 @@ def gen_topic():
 def _gen_topic_verticals():
     gen_topic_verticals_part1()
     gen_topic_verticals_part2()
+    gen_photography()
 
 
 def _gen_topic_场景():
@@ -196,32 +202,9 @@ def _gen_topic_时间():
         ("建党节", "CPC Founding Day", "7月1日建党节"),
     ])
 
-    tag("Topic/时间/商业节日", "商业节日", "Commercial Holidays", "商家推出的节日与促销节点")
-    tags_list("Topic/时间/商业节日", [
-        ("双十一", "Double 11", "11月11日购物节", ["双11"]),
-        ("618", "618 Festival", "6月18日年中购物节"),
-        ("黑色星期五", "Black Friday", "年末打折促销"),
-        ("女神节", "Women's Day Shopping", "3月8日女神节促销"),
-        ("儿童节购物", "Children's Day Shopping", "6月1日儿童节"),
-        ("情人节促销", "Valentine's Shopping", "2月14日情人节"),
-        ("母亲节促销", "Mother's Day Shopping", "5月母亲节"),
-    ])
-
-    tag("Topic/时间/生肖年", "生肖年", "Chinese Zodiac Year", "农历生肖年份")
-    tags_list("Topic/时间/生肖年", [
-        ("鼠年", "Year of Rat", "农历鼠年"),
-        ("牛年", "Year of Ox", "农历牛年"),
-        ("虎年", "Year of Tiger", "农历虎年"),
-        ("兔年", "Year of Rabbit", "农历兔年"),
-        ("龙年", "Year of Dragon", "农历龙年"),
-        ("蛇年", "Year of Snake", "农历蛇年"),
-        ("马年", "Year of Horse", "农历马年"),
-        ("羊年", "Year of Goat", "农历羊年"),
-        ("猴年", "Year of Monkey", "农历猴年"),
-        ("鸡年", "Year of Rooster", "农历鸡年"),
-        ("狗年", "Year of Dog", "农历狗年"),
-        ("猪年", "Year of Pig", "农历猪年"),
-    ])
+    # 刻意不再生成 Topic/时间/商业节日 与 Topic/时间/生肖年（共 19 个标签）：
+    # 两者都没有采集通道，也没有任何消费方——促销节点由运营活动位表达，生肖年可由
+    # capturedAt 直接推算，无需固化成标签。它们只会稀释时间轴的召回权重。
 
 
 def _gen_topic_地理_骨架():

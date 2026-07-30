@@ -49,6 +49,7 @@ business_rules:
 - reviewer 不能是 requester，且必须具备 claim review 权限
 - approved 或 rejected 后不可再次裁决
 lifecycle:
+  state_field: status
   states:
   - pending_review
   - approved

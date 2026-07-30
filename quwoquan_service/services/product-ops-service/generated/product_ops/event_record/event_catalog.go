@@ -32,6 +32,7 @@ type EventRecordInput struct {
 	AppVersion              string   `json:"appVersion"`
 	NetworkClass            string   `json:"networkClass"`
 	Action                  *string  `json:"action,omitempty"`
+	AttemptIndex            *int     `json:"attemptIndex,omitempty"`
 	AudioUnderrunCount      *int     `json:"audioUnderrunCount,omitempty"`
 	BackgroundRetryTerminal *string  `json:"backgroundRetryTerminal,omitempty"`
 	CacheAgeBucket          *string  `json:"cacheAgeBucket,omitempty"`
@@ -42,8 +43,11 @@ type EventRecordInput struct {
 	ChatOutcome             *string  `json:"chatOutcome,omitempty"`
 	ChatSource              *string  `json:"chatSource,omitempty"`
 	ConnectTimeMS           *int     `json:"connectTimeMs,omitempty"`
+	ConsentState            *string  `json:"consentState,omitempty"`
 	ContentType             *string  `json:"contentType,omitempty"`
+	CopyKey                 *string  `json:"copyKey,omitempty"`
 	CorrelationHash         *string  `json:"correlationHash,omitempty"`
+	CountdownBucket         *string  `json:"countdownBucket,omitempty"`
 	DeclaredDurationMS      *int     `json:"declaredDurationMs,omitempty"`
 	DecoderFallbackEnabled  *bool    `json:"decoderFallbackEnabled,omitempty"`
 	DecoderQueueMode        *string  `json:"decoderQueueMode,omitempty"`
@@ -51,13 +55,19 @@ type EventRecordInput struct {
 	DevicePlatform          string   `json:"devicePlatform"`
 	DigestMatch             *bool    `json:"digestMatch,omitempty"`
 	DisconnectReason        *string  `json:"disconnectReason,omitempty"`
+	DismissPolicy           *string  `json:"dismissPolicy,omitempty"`
 	DroppedFrames           *int     `json:"droppedFrames,omitempty"`
 	DurationMismatch        *bool    `json:"durationMismatch,omitempty"`
 	DurationMS              *int     `json:"durationMs,omitempty"`
 	EffectivePlaybackMS     *int     `json:"effectivePlaybackMs,omitempty"`
+	EntryMode               *string  `json:"entryMode,omitempty"`
 	Environment             *string  `json:"environment,omitempty"`
 	ErrorCode               *string  `json:"errorCode,omitempty"`
 	FailReasonCode          *string  `json:"failReasonCode,omitempty"`
+	FailureKind             *string  `json:"failureKind,omitempty"`
+	FeedbackSurface         *string  `json:"feedbackSurface,omitempty"`
+	FlowID                  *string  `json:"flowId,omitempty"`
+	FromStep                *string  `json:"fromStep,omitempty"`
 	GovernanceAction        *string  `json:"governanceAction,omitempty"`
 	HasCache                *bool    `json:"hasCache,omitempty"`
 	HasError                *bool    `json:"hasError,omitempty"`
@@ -68,15 +78,18 @@ type EventRecordInput struct {
 	MediaConnected          *bool    `json:"mediaConnected,omitempty"`
 	MemberCountBucket       *string  `json:"memberCountBucket,omitempty"`
 	MentionScope            *string  `json:"mentionScope,omitempty"`
+	MotionReduced           *bool    `json:"motionReduced,omitempty"`
 	NetworkQuality          *string  `json:"networkQuality,omitempty"`
 	ObjectID                *string  `json:"objectId,omitempty"`
 	ObjectState             *string  `json:"objectState,omitempty"`
 	ObjectType              *string  `json:"objectType,omitempty"`
 	ObservedDurationMS      *int     `json:"observedDurationMs,omitempty"`
 	OperationID             *string  `json:"operationId,omitempty"`
+	OtpPurpose              *string  `json:"otpPurpose,omitempty"`
 	ParticipantCount        *int     `json:"participantCount,omitempty"`
 	PlaybackMode            *string  `json:"playbackMode,omitempty"`
 	ProcessedVideoFrames    *int     `json:"processedVideoFrames,omitempty"`
+	Provider                *string  `json:"provider,omitempty"`
 	PublicationStage        *string  `json:"publicationStage,omitempty"`
 	RankPosition            *int     `json:"rankPosition,omitempty"`
 	ReadyMS                 *int     `json:"readyMs,omitempty"`
@@ -96,6 +109,7 @@ type EventRecordInput struct {
 	SeekEvidenceSource      *string  `json:"seekEvidenceSource,omitempty"`
 	SeekFailureCount        *int     `json:"seekFailureCount,omitempty"`
 	SeekSettleMaxMS         *int     `json:"seekSettleMaxMs,omitempty"`
+	Step                    *string  `json:"step,omitempty"`
 	SurfaceID               *string  `json:"surfaceId,omitempty"`
 	TClickToContentMS       *int     `json:"tClickToContentMs,omitempty"`
 	TClickToFirstFrameMS    *int     `json:"tClickToFirstFrameMs,omitempty"`
@@ -104,6 +118,7 @@ type EventRecordInput struct {
 	TargetID                *string  `json:"targetId,omitempty"`
 	TargetType              *string  `json:"targetType,omitempty"`
 	TerminalState           *string  `json:"terminalState,omitempty"`
+	ToStep                  *string  `json:"toStep,omitempty"`
 	TraceID                 *string  `json:"traceId,omitempty"`
 	Transport               *string  `json:"transport,omitempty"`
 	TTFFMS                  *int     `json:"ttffMs,omitempty"`
@@ -117,6 +132,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	out := map[string]any{}
 	if input.Action != nil {
 		out["action"] = *input.Action
+	}
+	if input.AttemptIndex != nil {
+		out["attemptIndex"] = *input.AttemptIndex
 	}
 	if input.AudioUnderrunCount != nil {
 		out["audioUnderrunCount"] = *input.AudioUnderrunCount
@@ -148,11 +166,20 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.ConnectTimeMS != nil {
 		out["connectTimeMs"] = *input.ConnectTimeMS
 	}
+	if input.ConsentState != nil {
+		out["consentState"] = *input.ConsentState
+	}
 	if input.ContentType != nil {
 		out["contentType"] = *input.ContentType
 	}
+	if input.CopyKey != nil {
+		out["copyKey"] = *input.CopyKey
+	}
 	if input.CorrelationHash != nil {
 		out["correlationHash"] = *input.CorrelationHash
+	}
+	if input.CountdownBucket != nil {
+		out["countdownBucket"] = *input.CountdownBucket
 	}
 	if input.DeclaredDurationMS != nil {
 		out["declaredDurationMs"] = *input.DeclaredDurationMS
@@ -175,6 +202,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.DisconnectReason != nil {
 		out["disconnectReason"] = *input.DisconnectReason
 	}
+	if input.DismissPolicy != nil {
+		out["dismissPolicy"] = *input.DismissPolicy
+	}
 	if input.DroppedFrames != nil {
 		out["droppedFrames"] = *input.DroppedFrames
 	}
@@ -187,6 +217,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.EffectivePlaybackMS != nil {
 		out["effectivePlaybackMs"] = *input.EffectivePlaybackMS
 	}
+	if input.EntryMode != nil {
+		out["entryMode"] = *input.EntryMode
+	}
 	if input.Environment != nil {
 		out["environment"] = *input.Environment
 	}
@@ -195,6 +228,18 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.FailReasonCode != nil {
 		out["failReasonCode"] = *input.FailReasonCode
+	}
+	if input.FailureKind != nil {
+		out["failureKind"] = *input.FailureKind
+	}
+	if input.FeedbackSurface != nil {
+		out["feedbackSurface"] = *input.FeedbackSurface
+	}
+	if input.FlowID != nil {
+		out["flowId"] = *input.FlowID
+	}
+	if input.FromStep != nil {
+		out["fromStep"] = *input.FromStep
 	}
 	if input.GovernanceAction != nil {
 		out["governanceAction"] = *input.GovernanceAction
@@ -226,6 +271,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.MentionScope != nil {
 		out["mentionScope"] = *input.MentionScope
 	}
+	if input.MotionReduced != nil {
+		out["motionReduced"] = *input.MotionReduced
+	}
 	if input.NetworkQuality != nil {
 		out["networkQuality"] = *input.NetworkQuality
 	}
@@ -244,6 +292,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.OperationID != nil {
 		out["operationId"] = *input.OperationID
 	}
+	if input.OtpPurpose != nil {
+		out["otpPurpose"] = *input.OtpPurpose
+	}
 	if input.ParticipantCount != nil {
 		out["participantCount"] = *input.ParticipantCount
 	}
@@ -252,6 +303,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.ProcessedVideoFrames != nil {
 		out["processedVideoFrames"] = *input.ProcessedVideoFrames
+	}
+	if input.Provider != nil {
+		out["provider"] = *input.Provider
 	}
 	if input.PublicationStage != nil {
 		out["publicationStage"] = *input.PublicationStage
@@ -310,6 +364,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	if input.SeekSettleMaxMS != nil {
 		out["seekSettleMaxMs"] = *input.SeekSettleMaxMS
 	}
+	if input.Step != nil {
+		out["step"] = *input.Step
+	}
 	if input.SurfaceID != nil {
 		out["surfaceId"] = *input.SurfaceID
 	}
@@ -333,6 +390,9 @@ func (input EventRecordInput) ExtensionValues() map[string]any {
 	}
 	if input.TerminalState != nil {
 		out["terminalState"] = *input.TerminalState
+	}
+	if input.ToStep != nil {
+		out["toStep"] = *input.ToStep
 	}
 	if input.TraceID != nil {
 		out["traceId"] = *input.TraceID
@@ -363,6 +423,7 @@ var EventContextExtensions = map[string]struct{}{"devicePlatform": {}}
 var EventNetworkClasses = map[string]struct{}{"wifi": {}, "ethernet": {}, "5g": {}, "4g": {}, "mobile": {}, "other": {}, "none": {}}
 var EventExtensionFields = map[string]EventExtensionDefinition{
 	"action":                  {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"attemptIndex":            {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"audioUnderrunCount":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"backgroundRetryTerminal": {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"not_applicable": {}, "retry_scheduled": {}, "retry_exhausted": {}, "published": {}, "pending_review": {}, "rejected": {}, "cancelled": {}}},
 	"cacheAgeBucket":          {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"not_applicable": {}, "under_1h": {}, "one_to_24h": {}, "over_24h": {}}},
@@ -373,8 +434,11 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"chatOutcome":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"succeeded": {}, "failed": {}, "rejected": {}, "cancelled": {}, "unchanged": {}}},
 	"chatSource":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"contacts": {}, "group": {}, "circle": {}, "roster": {}, "composer": {}, "conversation": {}, "settings": {}}},
 	"connectTimeMs":           {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"consentState":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"contentType":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"micro": {}, "article": {}, "image": {}, "video": {}, "unknown": {}}},
+	"copyKey":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"correlationHash":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"countdownBucket":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"declaredDurationMs":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"decoderFallbackEnabled":  {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"decoderQueueMode":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"synchronous": {}}},
@@ -382,32 +446,41 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"devicePlatform":          {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"android": {}, "ios": {}, "ohos": {}, "web": {}, "desktop": {}}},
 	"digestMatch":             {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"disconnectReason":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"dismissPolicy":           {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"droppedFrames":           {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"durationMismatch":        {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"durationMs":              {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"effectivePlaybackMs":     {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"entryMode":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"environment":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"alpha": {}, "beta": {}, "gamma": {}, "prod": {}}},
 	"errorCode":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"failReasonCode":          {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"failureKind":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"feedbackSurface":         {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"flowId":                  {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 96, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"fromStep":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"governanceAction":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"none": {}, "announcement_update": {}, "admin_assign": {}, "admin_revoke": {}, "ownership_transfer": {}, "member_remove": {}, "member_leave": {}}},
 	"hasCache":                {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"hasError":                {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"httpStatus":              {Type: "int", Minimum: func(v int) *int { return &v }(100), Maximum: func(v int) *int { return &v }(599), MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"jankThresholdMs":         {Type: "int", Minimum: func(v int) *int { return &v }(1), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
-	"jankyFrames":             {Type: "int", Minimum: func(v int) *int { return &v }(1), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"jankyFrames":             {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"journey":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"mediaConnected":          {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"memberCountBucket":       {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"zero": {}, "one": {}, "two_to_five": {}, "six_to_fifty": {}, "fifty_one_to_five_hundred": {}, "five_hundred_one_to_one_thousand": {}}},
 	"mentionScope":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"none": {}, "member": {}, "all": {}, "assistant": {}}},
+	"motionReduced":           {Type: "bool", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"networkQuality":          {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"excellent": {}, "good": {}, "poor": {}, "unknown": {}}},
 	"objectId":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 256, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"objectState":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"draft": {}, "submitting": {}, "retry_wait": {}, "pending_review": {}, "blocked": {}, "published": {}, "cancelled": {}}},
 	"objectType":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"observedDurationMs":      {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"operationId":             {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"otpPurpose":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"participantCount":        {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"playbackMode":            {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"processedVideoFrames":    {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"provider":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 32, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"publicationStage":        {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"editor_ready": {}, "draft_saved": {}, "draft_restored": {}, "submit_started": {}, "queued": {}, "retry_scheduled": {}, "retry_exhausted": {}, "pending_review": {}, "cancelled": {}, "blocked": {}, "published": {}}},
 	"rankPosition":            {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"readyMs":                 {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -424,9 +497,10 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"sampledFrames":           {Type: "int", Minimum: func(v int) *int { return &v }(1), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"seekCommandMaxMs":        {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"seekCount":               {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
-	"seekEvidenceSource":      {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"controller_command_completion": {}, "native_settled": {}}},
+	"seekEvidenceSource":      {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"controller_command_completion": {}, "native_settled": {}, "source_switch_native_settled": {}, "source_switch_position_readback_native_unsupported": {}, "source_switch_native_settle_timeout": {}, "source_switch_settle_unsupported": {}, "source_switch_command_failed": {}, "source_switch_superseded": {}}},
 	"seekFailureCount":        {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"seekSettleMaxMs":         {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
+	"step":                    {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"surfaceId":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 128, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"tClickToContentMs":       {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"tClickToFirstFrameMs":    {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -435,6 +509,7 @@ var EventExtensionFields = map[string]EventExtensionDefinition{
 	"targetId":                {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 256, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"targetType":              {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"terminalState":           {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"content": {}, "empty": {}, "error": {}}},
+	"toStep":                  {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 64, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"traceId":                 {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 256, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
 	"transport":               {Type: "string", Minimum: nil, Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{"websocket": {}, "long_poll": {}}},
 	"ttffMs":                  {Type: "int", Minimum: func(v int) *int { return &v }(0), Maximum: nil, MaxLength: 0, MaxItems: 0, ItemMaxLength: 0, Sensitive: false, AllowedValues: map[string]struct{}{}},
@@ -453,6 +528,8 @@ var EventCatalog = map[string]EventCatalogDefinition{
 	"app_startup":              {EventType: "app_startup", LogType: "event", RequiredExtensions: map[string]struct{}{"tClickToFirstFrameMs": {}, "tFirstFrameToShellMs": {}, "tShellToContentMs": {}, "tClickToContentMs": {}, "hasError": {}}, OptionalExtensions: map[string]struct{}{}, NormalSampleRate: 1, SlowThresholdMS: 3000, InternalPriority: "critical"},
 	"runtime_exception":        {EventType: "runtime_exception", LogType: "error", RequiredExtensions: map[string]struct{}{"errorCode": {}}, OptionalExtensions: map[string]struct{}{"operationId": {}, "httpStatus": {}, "callStack": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "error"},
 	"product_action":           {EventType: "product_action", LogType: "event", RequiredExtensions: map[string]struct{}{"journey": {}, "action": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "objectType": {}, "objectId": {}, "reasonId": {}, "targetType": {}, "targetId": {}, "environment": {}, "durationMs": {}, "result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"login_funnel":             {EventType: "login_funnel", LogType: "event", RequiredExtensions: map[string]struct{}{"action": {}, "flowId": {}, "step": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"entryMode": {}, "fromStep": {}, "toStep": {}, "provider": {}, "otpPurpose": {}, "consentState": {}, "durationMs": {}, "attemptIndex": {}, "countdownBucket": {}, "motionReduced": {}, "dismissPolicy": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
+	"login_operation":          {EventType: "login_operation", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "surfaceId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"flowId": {}, "step": {}, "provider": {}, "otpPurpose": {}, "failReasonCode": {}, "failureKind": {}, "recoveryAction": {}, "copyKey": {}, "feedbackSurface": {}, "durationMs": {}, "attemptIndex": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
 	"chat_interaction_outcome": {EventType: "chat_interaction_outcome", LogType: "event", RequiredExtensions: map[string]struct{}{"chatAction": {}, "chatOutcome": {}}, OptionalExtensions: map[string]struct{}{"chatSource": {}, "mentionScope": {}, "governanceAction": {}, "watermarkResult": {}, "memberCountBucket": {}, "unreadCountBucket": {}, "surfaceId": {}, "durationMs": {}, "failReasonCode": {}, "recoveryAction": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},
 	"performance_sample":       {EventType: "performance_sample", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "durationMs": {}}, OptionalExtensions: map[string]struct{}{"result": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 0.1, SlowThresholdMS: 0, InternalPriority: "normal"},
 	"operation_result":         {EventType: "operation_result", LogType: "event", RequiredExtensions: map[string]struct{}{"operationId": {}, "result": {}}, OptionalExtensions: map[string]struct{}{"surfaceId": {}, "hasCache": {}, "durationMs": {}, "failReasonCode": {}, "recoveryAction": {}, "requestId": {}, "traceId": {}}, NormalSampleRate: 1, SlowThresholdMS: 0, InternalPriority: "critical"},

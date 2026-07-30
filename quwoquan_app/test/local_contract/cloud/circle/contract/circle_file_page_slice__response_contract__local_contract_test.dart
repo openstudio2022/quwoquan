@@ -33,7 +33,7 @@ void main() {
     });
 
     test('uses only circle id as a path parameter for list queries', () {
-      final payload = encodeCircleFileListQuery(
+      final payload = encodeCircleCircleFileListCircleFilesGeneratedRequest(
         CircleFileListQuery(
           circleId: 'circle-1',
           groupId: 'group-1',
@@ -52,15 +52,18 @@ void main() {
       });
     });
 
-    test('rejects unknown response fields instead of silently accepting drift', () {
-      expect(
-        () => decodeCircleFilePageSlice(<String, Object?>{
-          'items': const <Object?>[],
-          'cursor': null,
-          'unexpectedField': 'must-not-be-accepted',
-        }),
-        throwsFormatException,
-      );
-    });
+    test(
+      'rejects unknown response fields instead of silently accepting drift',
+      () {
+        expect(
+          () => decodeCircleFilePageSlice(<String, Object?>{
+            'items': const <Object?>[],
+            'cursor': null,
+            'unexpectedField': 'must-not-be-accepted',
+          }),
+          throwsFormatException,
+        );
+      },
+    );
   });
 }

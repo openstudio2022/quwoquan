@@ -54,8 +54,7 @@ def certificate_paths(target: str, *, require_ready: bool = True) -> tuple[Path,
     if require_ready and (not cert.is_file() or not key.is_file()):
         raise PublicDomainTlsError(
             "GATE_BLOCK: public DNS-01 certificate is missing for "
-            f"{target}; run `python3 {Path(__file__).relative_to(ROOT)} issue "
-            f"--target {target}`"
+            f"{target}; run `stackctl tls --target {target} --action prevalidate`"
         )
     return cert, key
 
@@ -133,7 +132,8 @@ def issue_certificate(target: str) -> dict[str, Any]:
     provider = str(acme.get("dnsProvider") or "")
     email_env = str(acme.get("accountEmailEnv") or "")
     email = os.environ.get(email_env, "").strip()
-    token_env = str((policy.get("dnsProvider") or {}).get("apiTokenEnv") or "")
+    challenge_authority = policy.get("acmeChallengeAuthority") or {}
+    token_env = str(challenge_authority.get("apiTokenEnv") or "")
     token = os.environ.get(token_env, "").strip()
     if not email or not token:
         raise PublicDomainTlsError(

@@ -313,7 +313,7 @@ extension _SearchNetworkResultsPageStateDataNavigation
       target: 'users',
       objectType: SearchObjectType.userProfile,
     );
-    context.push(AppRoutePaths.userProfile(username: userID));
+    context.push(AppRoutePaths.userProfile(userHandle: userID));
   }
 
   Future<void> _openPost(String postId) async {

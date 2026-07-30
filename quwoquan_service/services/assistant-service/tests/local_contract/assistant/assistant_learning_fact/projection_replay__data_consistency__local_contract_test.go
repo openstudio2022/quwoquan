@@ -1,12 +1,71 @@
 package local_contract
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	learningmodel "quwoquan_service/services/assistant-service/internal/assistant/assistant_learning_fact/domain/model"
 )
+
+const testLearningProjectionGenerationID = "rebuild:0123456789abcdef0123456789abcdef"
+
+func TestLearningProjectionDefinitionDigestMatchesCanonicalContract(t *testing.T) {
+	t.Parallel()
+	digest := learningmodel.LearningProjectionDefinitionDigest
+	decoded, err := hex.DecodeString(digest)
+	if err != nil || len(decoded) != sha256.Size || digest != strings.ToLower(digest) {
+		t.Fatalf("projection definition digest must be lowercase SHA-256: %q", digest)
+	}
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve projection contract test path")
+	}
+	contractPath := filepath.Join(
+		filepath.Dir(filename),
+		"..", "..", "..", "..",
+		"contracts", "assistant", "assistant_learning_fact", "projections",
+		"learning_projection.yaml",
+	)
+	contract, err := os.ReadFile(contractPath)
+	if err != nil {
+		t.Fatalf("read canonical learning projection contract: %v", err)
+	}
+	want := fmt.Sprintf("%x", sha256.Sum256(contract))
+	if digest != want {
+		t.Fatalf(
+			"projection definition digest drifted: model=%s contract=%s",
+			digest,
+			want,
+		)
+	}
+}
+
+func TestLearningProjectionGenerationIdentityIsNotDefinitionIdentity(t *testing.T) {
+	t.Parallel()
+	first, err := learningmodel.NewLearningProjectionGenerationID()
+	if err != nil {
+		t.Fatalf("create first rebuild generation: %v", err)
+	}
+	second, err := learningmodel.NewLearningProjectionGenerationID()
+	if err != nil {
+		t.Fatalf("create second rebuild generation: %v", err)
+	}
+	if first == second ||
+		!learningmodel.IsLearningProjectionGenerationID(first) ||
+		!learningmodel.IsLearningProjectionGenerationID(second) ||
+		first == learningmodel.LearningProjectionDefinitionDigest ||
+		second == learningmodel.LearningProjectionDefinitionDigest {
+		t.Fatalf("generation identities must be unique rebuild runs: %q %q", first, second)
+	}
+}
 
 func TestApplyLearningFactDeterministicReplay(t *testing.T) {
 	t.Parallel()
@@ -14,7 +73,6 @@ func TestApplyLearningFactDeterministicReplay(t *testing.T) {
 		{
 			StorageID:       "feedback:1",
 			EventID:         "feedback",
-			EventVersion:    1,
 			AppendSequence:  1,
 			FactType:        learningmodel.FactTypeUserFeedback,
 			UserID:          "account-1",
@@ -28,7 +86,6 @@ func TestApplyLearningFactDeterministicReplay(t *testing.T) {
 		{
 			StorageID:       "score:1",
 			EventID:         "score",
-			EventVersion:    1,
 			AppendSequence:  2,
 			FactType:        learningmodel.FactTypeServiceScorecard,
 			UserID:          "account-1",
@@ -43,7 +100,11 @@ func TestApplyLearningFactDeterministicReplay(t *testing.T) {
 	replay := func() learningmodel.LearningProjection {
 		var projection learningmodel.LearningProjection
 		for _, fact := range facts {
-			projection = learningmodel.ApplyLearningFact(projection, fact)
+			projection = learningmodel.ApplyLearningFact(
+				projection,
+				fact,
+				testLearningProjectionGenerationID,
+			)
 		}
 		return projection
 	}
@@ -70,7 +131,6 @@ func TestLearningProjectionContainsOnlyRedactedAggregates(t *testing.T) {
 	fact := learningmodel.Fact{
 		StorageID:       "feedback:1",
 		EventID:         "feedback",
-		EventVersion:    1,
 		AppendSequence:  1,
 		FactType:        learningmodel.FactTypeUserFeedback,
 		UserID:          "account-1",
@@ -84,7 +144,11 @@ func TestLearningProjectionContainsOnlyRedactedAggregates(t *testing.T) {
 		CorrectionText:  "raw correction must not be projected",
 		OccurredAt:      time.Date(2026, 7, 26, 1, 2, 3, 0, time.UTC),
 	}
-	projection := learningmodel.ApplyLearningFact(learningmodel.LearningProjection{}, fact)
+	projection := learningmodel.ApplyLearningFact(
+		learningmodel.LearningProjection{},
+		fact,
+		testLearningProjectionGenerationID,
+	)
 	value := reflect.ValueOf(projection)
 	typ := value.Type()
 	for index := 0; index < value.NumField(); index++ {
@@ -102,7 +166,7 @@ func TestLearningProjectionContainsOnlyRedactedAggregates(t *testing.T) {
 func TestMergeLearningProjectionBuildsAccountOpsSummary(t *testing.T) {
 	t.Parallel()
 	aggregate := learningmodel.NewLearningProjectionAggregate(
-		learningmodel.LearningProjectionDefinitionVersion,
+		testLearningProjectionGenerationID,
 		"account-1",
 	)
 	first := learningmodel.LearningProjection{

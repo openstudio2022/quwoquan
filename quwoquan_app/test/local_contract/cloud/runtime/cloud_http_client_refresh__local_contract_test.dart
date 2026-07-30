@@ -1,9 +1,13 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
 void main() {
@@ -94,6 +98,133 @@ void main() {
     );
     expect(requestCount, 1);
     expect(refreshCount, 1);
+  });
+
+  test('generated operation 的 canonical 403 立即通知实际 bearer 且不重试', () async {
+    var requestCount = 0;
+    var refreshCount = 0;
+    CloudException? observedFailure;
+    String? observedToken;
+    final client = CloudHttpClient(
+      client: MockClient((request) async {
+        requestCount += 1;
+        expect(request.headers['Authorization'], 'Bearer old-access-token');
+        return http.Response(
+          jsonEncode(<String, String>{
+            'code': UserErrorCode.accountSuspended.code,
+          }),
+          403,
+        );
+      }),
+      authTokenProvider: const _StaticTokenProvider('old-access-token'),
+      onUnauthorizedRefresh: (_) async {
+        refreshCount += 1;
+        return false;
+      },
+      onAuthoritativeSessionFailure: (failure, presentedAccessToken) async {
+        observedFailure = failure;
+        observedToken = presentedAccessToken;
+      },
+    );
+
+    await expectLater(
+      () => client.sendOperationJson(
+        method: 'GET',
+        uri: Uri.parse('https://gateway.example.com/protected'),
+        gatewayOrigin: Uri.parse('https://gateway.example.com'),
+        headers: const <String, String>{},
+        requireAuth: true,
+        abortTrigger: Completer<void>().future,
+      ),
+      throwsA(
+        isA<CloudException>().having(
+          (error) => error.code,
+          'code',
+          UserErrorCode.accountSuspended.code,
+        ),
+      ),
+    );
+
+    expect(requestCount, 1);
+    expect(refreshCount, 0);
+    expect(observedFailure?.code, UserErrorCode.accountSuspended.code);
+    expect(observedToken, 'old-access-token');
+  });
+
+  test('旧 bearer cleanup 挂起时新 bearer 的 canonical 403 仍独立处理', () async {
+    var currentAccessToken = 'old-access-token';
+    final oldCleanupStarted = Completer<void>();
+    final oldCleanupGate = Completer<void>();
+    final observedTokens = <String>[];
+    final client = CloudHttpClient(
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, String>{
+            'code': UserErrorCode.accountSuspended.code,
+          }),
+          403,
+        ),
+      ),
+      authTokenProvider: _MemoryTokenProvider(() => currentAccessToken),
+      timeout: const Duration(milliseconds: 20),
+      onAuthoritativeSessionFailure: (_, presentedAccessToken) {
+        observedTokens.add(presentedAccessToken);
+        if (presentedAccessToken == 'old-access-token') {
+          if (!oldCleanupStarted.isCompleted) oldCleanupStarted.complete();
+          return oldCleanupGate.future;
+        }
+        return Future<void>.value();
+      },
+    );
+    final oldAbort = Completer<void>();
+    final oldRequest = client.sendOperationJson(
+      method: 'GET',
+      uri: Uri.parse('https://gateway.example.com/protected'),
+      gatewayOrigin: Uri.parse('https://gateway.example.com'),
+      headers: const <String, String>{},
+      requireAuth: true,
+      abortTrigger: oldAbort.future,
+    );
+    final oldFailure = expectLater(
+      oldRequest,
+      throwsA(
+        isA<CloudException>().having(
+          (error) => error.code,
+          'code',
+          UserErrorCode.accountSuspended.code,
+        ),
+      ),
+    );
+
+    await oldCleanupStarted.future;
+    currentAccessToken = 'new-access-token';
+    final stopwatch = Stopwatch()..start();
+    await expectLater(
+      client.sendOperationJson(
+        method: 'GET',
+        uri: Uri.parse('https://gateway.example.com/protected'),
+        gatewayOrigin: Uri.parse('https://gateway.example.com'),
+        headers: const <String, String>{},
+        requireAuth: true,
+        abortTrigger: Completer<void>().future,
+      ),
+      throwsA(
+        isA<CloudException>().having(
+          (error) => error.code,
+          'code',
+          UserErrorCode.accountSuspended.code,
+        ),
+      ),
+    );
+    stopwatch.stop();
+    expect(stopwatch.elapsed, lessThan(const Duration(milliseconds: 250)));
+    expect(observedTokens, <String>['old-access-token', 'new-access-token']);
+
+    oldAbort.complete();
+    await oldFailure;
+    oldCleanupGate.complete();
+    await Future<void>.delayed(Duration.zero);
+    client.close();
   });
 
   test('仅 canonical account_deleted 410 触发一次 refresh 以清除本地会话', () async {

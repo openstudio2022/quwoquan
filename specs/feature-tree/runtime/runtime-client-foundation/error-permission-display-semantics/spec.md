@@ -62,7 +62,7 @@
 - **门禁**：页面不得直接消费裸 `RuntimeFailureKind` 或手写 “加载失败/请先登录/操作失败” 作为最终页态语义。
 - 沉浸式或跨页面入口的首屏错误必须保留来源 `sourceAppearanceMode`，错误页不继承错误的深色沉浸上下文。
 - 聊天语音发送失败仅 status bar（`chatVoicePendingRetry`），禁止 actionDialog 叠加。
-- 表单发送/提交/依赖失败在操作点附近使用 `AppFormErrorCard`，字段校验使用 `AppInlineFieldError`；二者必须复用同一透明圆形感叹号错误行，同一失败不得再叠加 Toast、dialog 或第二段弱提示。
+- 表单发送/提交/依赖失败在操作点附近使用 `AppFormErrorCard`，字段校验使用 `AppInlineFieldError`；二者必须复用同一无图标错误行，同一失败不得再叠加 Toast、dialog 或第二段弱提示。
 - 错误标题只说明状态；页面名称和业务对象不得覆盖恢复组标题、说明或动作。
 
 <a id="req-006"></a>
@@ -103,10 +103,10 @@
 - 页面必须先根据 canonical error code 归入唯一用户恢复组，再由恢复组选择标题、说明与恢复动作；未知临时失败进入 `reloadLater`，不得推断为设备离线。
 - 只有系统已确认设备离线或无路由时才允许展示“网络未连接”；DNS、连接拒绝、TLS、客户端超时、5xx、可恢复响应异常和未知临时失败统一进入 `reloadLater`，同时在脱敏日志与遥测中保留原 canonical error code。
 - 取消或被新请求取代的操作静默吸收，不展示错误。
-- 成功空结果使用空态，不伪装成失败。
+- 成功空结果只有在 Remote envelope 明确携带 canonical empty outcome/reason 时使用空态，不伪装成失败；首页推荐、垂类与视频书内容区只显示次级灰色小字“内容加载完毕”，不得显示图标、错误标题或重试按钮。Following 保留独立“还没有关注动态”业务空态。
 - 已有缓存时保留内容，并使用非阻断“内容未更新”提示。
 - 整页错误只允许一个真实可执行的主操作；没有 handler 的动作不得显示。
-- 整页错误不得显示图标、插画、诊断折叠区或技术卡片；所有 build mode 的用户 widget 与 semantics tree 均不得出现 operation、canonical error code、route、requestId、traceId、端口、内部域名、证书路径或堆栈。
+- 整页错误不得显示图标、插画、诊断折叠区或技术卡片；表单局部错误行同样不得显示错误图标，该限制仅不覆盖 `REQ-011` 的权限/登录门禁图标。所有 build mode 的用户 widget 与 semantics tree 均不得出现 operation、canonical error code、route、requestId、traceId、端口、内部域名、证书路径或堆栈。
 - operation、canonical error code、route、surface、requestId 与 traceId 只进入脱敏日志与遥测，不得以 debug build 作为向用户界面暴露技术字段的授权边界。
 
 <a id="req-013"></a>
@@ -187,7 +187,7 @@
 - GIVEN 首页、主页、搜索、聊天或视频书收到不同 canonical failure。
 - WHEN 这些失败映射到同一 `AppUserRecoveryGroup`。
 - THEN 标题、说明、动作与 copyKey 完全相同，页面不得按业务对象改写。
-- AND 任意 build mode 的用户 widget 与 semantics tree 均不包含错误图标、插画或 operation/errorCode/route/requestId/traceId。
+- AND 任意 build mode 的整页错误 widget、表单局部错误行与 semantics tree 均不包含错误图标、插画或 operation/errorCode/route/requestId/traceId；只有权限/登录门禁允许使用 `REQ-011` 明确声明的图标语义。
 - AND 不透明 404 不显示“已删除”，普通连接失败不显示“网络未连接”。
 
 <a id="gwt-014"></a>

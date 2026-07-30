@@ -11,7 +11,7 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 )
 
 type AssistantMentionHandler interface {
-	HandleAssistantMentioned(ctx context.Context, evt application.AssistantMentionedEvent) error
+	HandleAssistantMentioned(ctx context.Context, evt orchestration.AssistantMentionedEvent) error
 }
 
 type AssistantMentionedConsumer struct {
@@ -154,7 +154,7 @@ func (c *AssistantMentionedConsumer) ProcessOnce(ctx context.Context) (int, erro
 			); ackErr != nil {
 				return processed, fmt.Errorf("ack dead-lettered assistant mention: %w", ackErr)
 			}
-			application.RecordAssistantMentionedConsumerDLQ()
+			orchestration.RecordAssistantMentionedConsumerDLQ()
 			processed++
 			continue
 		}
@@ -202,7 +202,7 @@ func (c *AssistantMentionedConsumer) processMessage(
 	ctx context.Context,
 	msg runtimemessaging.StreamDelivery,
 ) error {
-	return c.handler.HandleAssistantMentioned(ctx, application.AssistantMentionedEvent{
+	return c.handler.HandleAssistantMentioned(ctx, orchestration.AssistantMentionedEvent{
 		ConversationID:    durableFieldValue(msg.Fields, "conversationId"),
 		MessageID:         durableFieldValue(msg.Fields, "messageId"),
 		Seq:               int64Value(durableFieldValue(msg.Fields, "seq")),

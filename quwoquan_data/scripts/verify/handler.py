@@ -107,8 +107,31 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "release-lifecycle":
         from verify.verify_release_lifecycle import main as release_lifecycle_main
 
+        argv = ["--release", str(args.lifecycle_release)]
+        for option, value in (
+            ("--environment", args.environment),
+            ("--import-run", args.import_run),
+            ("--verify-run", args.verify_run),
+            ("--rollback-from-release", args.rollback_from_release),
+        ):
+            if value:
+                argv.extend((option, str(value)))
+        argv.extend(("--prod-mode", str(args.prod_mode)))
+        raise SystemExit(release_lifecycle_main(argv))
+    if cmd == "release-lifecycle-exit":
+        from verify.release_lifecycle_exit import main as release_lifecycle_exit_main
+
         raise SystemExit(
-            release_lifecycle_main(["--release", str(args.lifecycle_release)])
+            release_lifecycle_exit_main(
+                [
+                    "--environment",
+                    str(args.environment),
+                    "--original-release",
+                    str(args.original_release),
+                    "--exit-run",
+                    str(args.exit_run),
+                ]
+            )
         )
     if cmd == "cursor-credential-contract":
         from verify.verify_cursor_credential_contract import main as credential_contract_main
@@ -451,6 +474,26 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
     release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)
+    release_lifecycle.add_argument("--environment", choices=("alpha", "beta", "gamma", "prod"))
+    release_lifecycle.add_argument("--import-run")
+    release_lifecycle.add_argument("--verify-run")
+    release_lifecycle.add_argument("--rollback-from-release")
+    release_lifecycle.add_argument(
+        "--prod-mode",
+        choices=("activated", "dry-run", "prepared"),
+        default="activated",
+    )
+    lifecycle_exit = sub.add_parser(
+        "release-lifecycle-exit",
+        help="重算验证 original→rollback→same-digest replay Exit receipt",
+    )
+    lifecycle_exit.add_argument(
+        "--environment",
+        required=True,
+        choices=("alpha", "beta", "gamma", "prod"),
+    )
+    lifecycle_exit.add_argument("--original-release", required=True)
+    lifecycle_exit.add_argument("--exit-run", required=True)
     sub.add_parser("cursor-credential-contract", help="校验只使用仓外受限 key file 且无旧 alias/secret")
     phm = sub.add_parser("homepage-media-completeness", help="校验实体主页图片枚举、下载与角色闭环")
     phm.add_argument("--execution", required=True)

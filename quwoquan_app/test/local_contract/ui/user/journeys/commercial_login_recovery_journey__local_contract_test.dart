@@ -19,7 +19,7 @@ import '../../../../support/fakes/test_auth_facets.dart';
 import '../../../../support/recording_app_telemetry_recorder.dart';
 
 void main() {
-  testWidgets('游客手机号登录：发码、六位输入与显式提交后回到目标表面', (tester) async {
+  testWidgets('游客手机号登录：发码、六位输入自动验证后回到目标表面', (tester) async {
     final facets = _JourneyAuthFacets();
     var targetResumed = false;
 
@@ -64,18 +64,15 @@ void main() {
 
     expect(facets.sendOtpCalls, 1);
     expect(find.byType(OtpCodeBoxes), findsOneWidget);
+    expect(find.text(FoundationText.loginPhoneSubmit), findsNothing);
     await tester.enterText(find.byType(CupertinoTextField).last, '000000');
-    await tester.pump();
-    expect(facets.loginCalls, 0, reason: '六位验证码完成后不得自动提交');
-
-    await tester.tap(find.text(FoundationText.loginPhoneSubmit));
     await tester.pump(const Duration(milliseconds: 350));
 
     expect(facets.loginCalls, 1);
     expect(targetResumed, isTrue);
   });
 
-  testWidgets('登录两状态在手机、平板和宽屏均提供完整可达入口', (tester) async {
+  testWidgets('一键入口与手机号降级在手机、平板和宽屏均完整可达', (tester) async {
     for (final size in const <Size>[
       Size(430, 932),
       Size(834, 1194),
@@ -90,11 +87,25 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 50));
       final returningPrimary = tester.getRect(
-        find.text(FoundationText.loginContinue),
+        find.byKey(const ValueKey<String>('loginOneTapPrimary')),
       );
 
       expect(returningPrimary.left, greaterThanOrEqualTo(0));
       expect(returningPrimary.right, lessThanOrEqualTo(size.width));
+      expect(find.text(FoundationText.loginOtherMethods), findsOneWidget);
+
+      await _pumpJourneyLogin(
+        tester,
+        authStore: _JourneyAuthStore(),
+        oneTapClient: const _JourneyUnavailableOneTapClient(),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      final phonePrimary = tester.getRect(
+        find.text(FoundationText.loginSendOtp),
+      );
+      expect(phonePrimary.left, greaterThanOrEqualTo(0));
+      expect(phonePrimary.right, lessThanOrEqualTo(size.width));
+      expect(find.byType(CupertinoTextField), findsOneWidget);
       expect(find.text(FoundationText.loginOtherMethods), findsOneWidget);
     }
     await tester.binding.setSurfaceSize(null);
@@ -119,8 +130,11 @@ Future<void> _pumpJourneyLogin(
           RecordingAppTelemetryRecorder(),
         ),
       ],
-      child: const CupertinoApp(
-        home: LoginFrameHost(dismissPolicy: LoginDismissPolicy.safeFallback),
+      child: CupertinoApp(
+        home: LoginFrameHost(
+          key: ValueKey<int>(identityHashCode(authStore)),
+          dismissPolicy: LoginDismissPolicy.safeFallback,
+        ),
       ),
     ),
   );
@@ -150,7 +164,7 @@ class _JourneyAuthStore extends AuthSessionStore {
     accessToken: '',
     refreshToken: '',
     ownerId: '',
-    activeSubAccountId: '',
+    activePersonaId: '',
     accountState: '',
     identityOrigin: '',
     installId: 'uat-install',
@@ -172,14 +186,16 @@ class _JourneyReturningAuthStore extends _JourneyAuthStore {
   @override
   Future<StoredAuthSession> read() async => const StoredAuthSession(
     accessToken: '',
-    refreshToken: 'remembered-refresh',
+    refreshToken: '',
     ownerId: 'remembered-owner',
-    activeSubAccountId: 'remembered-persona',
+    activePersonaId: 'remembered-persona',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'uat-install',
     rememberedLoginMaskedIdentifier: '180****3909',
+    rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
     rememberedDisplayName: '登录验收用户',
+    rememberedRefreshToken: 'remembered-refresh',
     quickLoginExpiresAtEpochMs: 4102444800000,
     manualLoggedOut: true,
     launchPromptDismissed: true,

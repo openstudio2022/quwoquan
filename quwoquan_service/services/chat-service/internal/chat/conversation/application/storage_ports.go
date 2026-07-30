@@ -225,9 +225,9 @@ type UserStateStore interface {
 	) error
 }
 
-type ReceiptStore interface {
-	CreateReceipt(ctx context.Context, receipt *messagemodel.MessageReceipt) error
-	ListReceiptsByMessage(ctx context.Context, messageID string) ([]messagemodel.MessageReceipt, error)
+type ReceiptFactStore interface {
+	AppendReceiptFact(ctx context.Context, fact *messagemodel.MessageReceiptFact) error
+	ListReceiptFactsByMessage(ctx context.Context, messageID string) ([]messagemodel.MessageReceiptFact, error)
 }
 
 // ConversationCache 只承载可丢弃的 Conversation 查询缓存；消息序号和幂等
@@ -245,7 +245,7 @@ type ChatStoragePorts struct {
 	MessageProjection        ConversationMessageProjector
 	Members                  MemberStore
 	UserStates               UserStateStore
-	Receipts                 ReceiptStore
+	ReceiptFacts             ReceiptFactStore
 	// 三个非 Message 聚合各自的命令回执 + 事务 outbox 端口；state 写入与
 	// CommitAggregateCommand 必须在同一事务闭包内完成。
 	ConversationCommands              AggregateCommandStore

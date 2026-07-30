@@ -11,38 +11,6 @@ import (
 	"time"
 )
 
-func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[string]any, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	if strings.TrimSpace(post.ContentType) != "article" {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"仅支持文章类型的辅助阅读",
-			"helper-read only for articles",
-		)
-	}
-	summary := post.Summary
-	if summary == "" {
-		body := strings.TrimSpace(post.Body)
-		if len(body) > 200 {
-			body = body[:200]
-		}
-		summary = body
-	}
-	return map[string]any{
-		"postId":      post.ID,
-		"contentType": post.ContentType,
-		"title":       post.Title,
-		"summary":     summary,
-	}, nil
-}
-
 func (s *PostService) ApplySemanticMentionGovernanceEvent(
 	ctx context.Context,
 	event postsemantic.GovernanceEvent,

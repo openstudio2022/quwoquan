@@ -21,6 +21,9 @@ homepage_wishlist_types:
 - park
 - hot_spring
 - theme_park
+- city
+- route
+- photo_spot
 homepage_tabs:
 - id: content
   label_key: homepage_tab_record

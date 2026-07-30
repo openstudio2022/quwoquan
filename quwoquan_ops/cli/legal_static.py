@@ -24,9 +24,8 @@ from quwoquan_ops.cli.lib.environment_topology import (
 )
 from quwoquan_ops.cli.lib.output_paths import (
     deployment_target_for_env,
-    deployment_target_path,
+    legal_static_deployment_package_dir,
     remove_deployment_tree,
-    resolve_deployment_target_path,
 )
 
 DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "static" / "legal" / "manifest.yaml"
@@ -68,11 +67,16 @@ def _resolve_package_root(
     target: str = "",
 ) -> Path:
     target_name = deployment_target_for_env(env_name, target=target)
-    return resolve_deployment_target_path(
-        output_root,
+    expected = legal_static_deployment_package_dir(
+        env_name,
         target=target_name,
-        segments=("packages", "legal-static"),
     )
+    if output_root is not None and output_root.expanduser().resolve() != expected:
+        raise ValueError(
+            "legal-static output must resolve to the target-scoped active package candidate: "
+            f"expected {expected}, got {output_root.expanduser().resolve()}"
+        )
+    return expected
 
 
 @contextmanager
@@ -300,12 +304,7 @@ def build_package(
         target=target,
     )
     with _package_lock(package_root, exclusive=True):
-        package_dir = deployment_target_path(
-            target_name,
-            "packages",
-            "legal-static",
-            version,
-        )
+        package_dir = package_root / version
         if package_dir.exists():
             remove_deployment_tree(
                 target_name,
@@ -422,12 +421,7 @@ def verify_package(
     )
     target_name = deployment_target_for_env(env_name, target=target)
     with _package_lock(resolved_package_root, exclusive=False):
-        expected_package_dir = deployment_target_path(
-            target_name,
-            "packages",
-            "legal-static",
-            version,
-        )
+        expected_package_dir = resolved_package_root / version
         if package_root is not None and package_root.expanduser().resolve() != expected_package_dir:
             raise ValueError(
                 "legal-static package root must resolve to its target-scoped "

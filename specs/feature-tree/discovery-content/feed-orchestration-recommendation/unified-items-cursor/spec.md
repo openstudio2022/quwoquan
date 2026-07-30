@@ -27,13 +27,13 @@
 <a id="req-001"></a>
 ### REQ-001 统一条目游标
 
-- feed 查询快照必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `QuerySnapshot` 为准。
+- feed 查询快照必须遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，并只从 content-service canonical Post/cursor contract 派生，不维护对象策略台账。
 
 <a id="req-002"></a>
 ### REQ-002 服务本地契约引用边界
 
 - 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
-- feed 查询快照必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `QuerySnapshot` 为准。
+- feed 查询快照必须遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，并只从 content-service canonical Post/cursor contract 派生，不维护对象策略台账。
 - feed item 对应的 post/user/media 数据必须进入对象缓存，query snapshot 不复制对象本体。
 - 用户清理离线内容或浏览记录时可删除 query snapshot，但不得删除仍被收藏、关注、最近会话引用的对象本体。
 
@@ -53,7 +53,7 @@
 
 - GIVEN 内容创作者或浏览者具备有效身份，且父能力声明的输入与上游事实成立。
 - WHEN 参与者执行“统一条目游标”对应的公开行为。
-- THEN feed 查询快照必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `QuerySnapshot` 为准。
+- THEN feed 查询快照遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，只恢复从首屏 cursor 连续可达的完整页且不维护对象策略台账。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖

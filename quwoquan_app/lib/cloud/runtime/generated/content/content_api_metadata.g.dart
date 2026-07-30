@@ -19,10 +19,10 @@ class ContentApiMetadata {
     '/content/helper-read',
     '/content/intersections',
     '/content/media',
+    '/content/personas',
     '/content/posts',
     '/content/posts:publish',
     '/content/reports',
-    '/content/sub-accounts',
     '/content/users',
     '/internal/content',
   ];
@@ -44,7 +44,7 @@ class ContentApiMetadata {
     'GenerateArticleSummary': '/content/articles/summary:generate',
     'GetActiveFilterCatalog': '/content/filter-catalog',
     'GetAppConfig': '/config/app',
-    'GetAuthorImpact': '/content/sub-accounts/{subAccountId}/author-impact',
+    'GetAuthorImpact': '/content/personas/{personaId}/author-impact',
     'GetContentReactionState': '/content/posts/{postId}/reactions',
     'GetCounters': '/content/posts/{postId}/counters',
     'GetCurrentPostModerationCase': '/internal/content/posts/{postId}/moderation-case',
@@ -66,17 +66,17 @@ class ContentApiMetadata {
     'HideComment': '/internal/content/comments/{commentId}:hide',
     'InitMediaUpload': '/content/media/uploads:init',
     'LikePost': '/content/posts/{postId}/like',
-    'ListAuthorImpactEvidence': '/content/sub-accounts/{subAccountId}/author-impact/evidence',
+    'ListAuthorImpactEvidence': '/content/personas/{personaId}/author-impact/evidence',
     'ListCommentReplies': '/content/posts/{postId}/comments/{commentId}/replies',
     'ListComments': '/content/posts/{postId}/comments',
     'ListCommentsByAuthor': '/content/users/me/comments',
     'ListCommentsForPostAuthor': '/content/users/me/received-comments',
     'ListMyIntersections': '/content/intersections',
     'ListMyReports': '/content/users/me/reports',
-    'ListProfileInteractionActivitiesReceived': '/content/sub-accounts/{subAccountId}/interactions/received',
-    'ListProfileInteractionActivitiesSent': '/content/sub-accounts/{subAccountId}/interactions/sent',
+    'ListProfileInteractionActivitiesReceived': '/content/personas/{personaId}/interactions/received',
+    'ListProfileInteractionActivitiesSent': '/content/personas/{personaId}/interactions/sent',
     'ListReports': '/content/reports',
-    'ListUserPosts': '/content/sub-accounts/{subAccountId}/posts',
+    'ListUserPosts': '/content/personas/{personaId}/posts',
     'MarkIntersectionsVisited': '/content/intersections/visit',
     'OpenPostModerationCase': '/internal/content/posts/{postId}:open-moderation-case',
     'PauseMediaImageReprocessRun': '/internal/content/media-image-reprocess-runs/{runId}:pause',
@@ -103,7 +103,7 @@ class ContentApiMetadata {
     'UnpinComment': '/content/posts/{postId}/comments/{commentId}/pin',
     'UpdateMediaAssetAccessPolicy': '/internal/content/media/{mediaId}:access-policy',
     'UpdatePostSettings': '/content/posts/{postId}/settings',
-    'UpdateProfileInteractionState': '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts',
+    'UpdateProfileInteractionState': '/content/personas/{personaId}/interactions/{interactionId}/read-facts',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
@@ -267,9 +267,11 @@ class ContentApiMetadata {
 
   /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
+    'GenerateArticleSummary': 'ContentArticleSummaryGenerateResponseDto',
     'GetActiveFilterCatalog': 'FilterCatalogSnapshot',
     'GetAuthorImpact': 'AuthorImpactSummary',
     'GetEntityWishlistState': 'EntityWishlistState',
+    'GetHelperRead': 'HelperReadSliceDto',
     'GetMyFootprint': 'ContentFootprintEntry',
     'GetMyIntersectionSummary': 'IntersectionInboxSummary',
     'GetObjectIntersections': 'IntersectionReason',
@@ -282,16 +284,20 @@ class ContentApiMetadata {
     'ListMyIntersections': 'IntersectionReason',
     'ListMyReports': 'ContentMyReportItem',
     'ListUserPosts': 'ContentPostProjection',
+    'PromotePostToWork': 'ContentPostProjection',
+    'UpdatePostSettings': 'ContentPostProjection',
   };
 
   /// 响应体形态：object 单对象 | page 分页列表（items） | ack 仅状态确认（无读模型）。
   static const Map<String, String> operationToResponseKind = <String, String>{
     'BeginReportReview': 'object',
     'DismissReport': 'object',
+    'GenerateArticleSummary': 'object',
     'GetActiveFilterCatalog': 'object',
     'GetAuthorImpact': 'object',
     'GetCurrentPostModerationCase': 'object',
     'GetEntityWishlistState': 'object',
+    'GetHelperRead': 'object',
     'GetMediaImageReprocessRun': 'object',
     'GetMyFootprint': 'page',
     'GetMyIntersectionSummary': 'object',
@@ -310,7 +316,9 @@ class ContentApiMetadata {
     'ListReports': 'page',
     'ListUserPosts': 'page',
     'MarkIntersectionsVisited': 'ack',
+    'PromotePostToWork': 'object',
     'ResolveReport': 'object',
+    'UpdatePostSettings': 'object',
     'UpdateProfileInteractionState': 'object',
   };
 
@@ -468,10 +476,10 @@ class ContentApiMetadata {
   static const String generateArticleSummaryPath = '/content/articles/summary:generate';
   static const String getActiveFilterCatalogPath = '/content/filter-catalog';
   static const String getAppConfigPath = '/config/app';
-  static const String getAuthorImpactPathTemplate = '/content/sub-accounts/{subAccountId}/author-impact';
-  static String getAuthorImpactPath({required String subAccountId}) {
+  static const String getAuthorImpactPathTemplate = '/content/personas/{personaId}/author-impact';
+  static String getAuthorImpactPath({required String personaId}) {
     return _fillPath(getAuthorImpactPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
     });
   }
   static const String getContentReactionStatePathTemplate = '/content/posts/{postId}/reactions';
@@ -570,10 +578,10 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String listAuthorImpactEvidencePathTemplate = '/content/sub-accounts/{subAccountId}/author-impact/evidence';
-  static String listAuthorImpactEvidencePath({required String subAccountId}) {
+  static const String listAuthorImpactEvidencePathTemplate = '/content/personas/{personaId}/author-impact/evidence';
+  static String listAuthorImpactEvidencePath({required String personaId}) {
     return _fillPath(listAuthorImpactEvidencePathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
     });
   }
   static const String listCommentRepliesPathTemplate = '/content/posts/{postId}/comments/{commentId}/replies';
@@ -593,23 +601,23 @@ class ContentApiMetadata {
   static const String listCommentsForPostAuthorPath = '/content/users/me/received-comments';
   static const String listMyIntersectionsPath = '/content/intersections';
   static const String listMyReportsPath = '/content/users/me/reports';
-  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/content/sub-accounts/{subAccountId}/interactions/received';
-  static String listProfileInteractionActivitiesReceivedPath({required String subAccountId}) {
+  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/content/personas/{personaId}/interactions/received';
+  static String listProfileInteractionActivitiesReceivedPath({required String personaId}) {
     return _fillPath(listProfileInteractionActivitiesReceivedPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
     });
   }
-  static const String listProfileInteractionActivitiesSentPathTemplate = '/content/sub-accounts/{subAccountId}/interactions/sent';
-  static String listProfileInteractionActivitiesSentPath({required String subAccountId}) {
+  static const String listProfileInteractionActivitiesSentPathTemplate = '/content/personas/{personaId}/interactions/sent';
+  static String listProfileInteractionActivitiesSentPath({required String personaId}) {
     return _fillPath(listProfileInteractionActivitiesSentPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
     });
   }
   static const String listReportsPath = '/content/reports';
-  static const String listUserPostsPathTemplate = '/content/sub-accounts/{subAccountId}/posts';
-  static String listUserPostsPath({required String subAccountId}) {
+  static const String listUserPostsPathTemplate = '/content/personas/{personaId}/posts';
+  static String listUserPostsPath({required String personaId}) {
     return _fillPath(listUserPostsPathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
     });
   }
   static const String markIntersectionsVisitedPath = '/content/intersections/visit';
@@ -740,10 +748,10 @@ class ContentApiMetadata {
       'postId': postId,
     });
   }
-  static const String updateProfileInteractionStatePathTemplate = '/content/sub-accounts/{subAccountId}/interactions/{interactionId}/read-facts';
-  static String updateProfileInteractionStatePath({required String subAccountId, required String interactionId}) {
+  static const String updateProfileInteractionStatePathTemplate = '/content/personas/{personaId}/interactions/{interactionId}/read-facts';
+  static String updateProfileInteractionStatePath({required String personaId, required String interactionId}) {
     return _fillPath(updateProfileInteractionStatePathTemplate, <String, String>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'interactionId': interactionId,
     });
   }

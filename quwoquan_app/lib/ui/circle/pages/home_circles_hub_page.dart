@@ -45,11 +45,6 @@ class CirclesHubPage extends ConsumerStatefulWidget {
   ConsumerState<CirclesHubPage> createState() => _CirclesHubPageState();
 }
 
-@Deprecated('Use CirclesHubPage instead.')
-class HomeCirclesHubPage extends CirclesHubPage {
-  const HomeCirclesHubPage({super.key, super.onPrimaryOverflowSwipe});
-}
-
 const double _homeCircleCoverAspectRatio = 4 / 3;
 const int _maxHomeCircleRailItems = 10;
 
@@ -217,7 +212,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       // Mine 在入口层经 AuthGate 限制；只在已登录的实际切换后发送第二个 scope。
       if (scope == CircleDiscoveryFeedScope.mine) {
         final persona = await ref.read(activePersonaContextProvider.future);
-        if (persona.subAccountId.trim().isEmpty) {
+        if (persona.personaId.trim().isEmpty) {
           return;
         }
       }

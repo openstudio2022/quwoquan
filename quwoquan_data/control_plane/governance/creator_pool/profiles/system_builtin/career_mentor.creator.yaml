@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_career_mentor_001
-subAccountId: builtin_career_mentor
+personaId: builtin_career_mentor
 authorId: builtin_career_mentor
 isSystemBuiltin: true
 displayName: 校招辅导员一禾
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.84
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/教育成长/实习求职/校园招聘
   - Format/内容角度/经验分享/校招经验

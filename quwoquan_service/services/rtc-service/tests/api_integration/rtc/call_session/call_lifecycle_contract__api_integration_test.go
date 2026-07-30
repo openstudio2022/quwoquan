@@ -34,12 +34,57 @@ func TestContract_InitiateCall_VideoType(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	resp := doPost(t, "/rtc/calls",
-		`{"callType":"video","inviteeIds":["user_b"]}`,
+		`{"callType":"video","inviteeIds":["user_b"],"maxParticipants":2}`,
 		"user_a", http.StatusCreated)
 	session := extractSession(t, resp)
 
 	if session["callType"] != "video" {
 		t.Errorf("expected callType=video, got %v", session["callType"])
+	}
+}
+
+func TestContract_InitiateCall_HonorsDeclaredGroupCapacity(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	resp := doPost(
+		t,
+		"/rtc/calls",
+		`{"callType":"video","conversationId":"conversation_capacity","inviteeIds":["capacity_a","capacity_b"],"maxParticipants":8}`,
+		"capacity_initiator",
+		http.StatusCreated,
+	)
+	session := extractSession(t, resp)
+	if session["maxParticipants"] != float64(8) {
+		t.Fatalf(
+			"server ignored canonical maxParticipants: got %v want 8",
+			session["maxParticipants"],
+		)
+	}
+}
+
+func TestContract_InitiateCall_RejectsIncompleteOrUnknownBody(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	code, body := doPostAny(
+		t,
+		"/rtc/calls",
+		`{"callType":"audio","inviteeIds":["missing_capacity"]}`,
+		"invalid_initiator",
+	)
+	if code != http.StatusBadRequest ||
+		body["code"] != "RTC.USER.invalid_argument" {
+		t.Fatalf("missing maxParticipants = %d/%v", code, body)
+	}
+
+	code, body = doPostAny(
+		t,
+		"/rtc/calls",
+		`{"callType":"audio","inviteeIds":["unknown_field"],"maxParticipants":2,"legacyLimit":2}`,
+		"invalid_initiator",
+	)
+	if code != http.StatusBadRequest ||
+		body["code"] != "RTC.USER.invalid_argument" {
+		t.Fatalf("unknown request field = %d/%v", code, body)
 	}
 }
 
@@ -49,7 +94,7 @@ func TestContract_InitiateCall_ConflictWhenActive(t *testing.T) {
 	createTestCall(t, "user_conflict_001")
 
 	code, _ := doPostAny(t, "/rtc/calls",
-		`{"callType":"audio","inviteeIds":["user_another"]}`,
+		`{"callType":"audio","inviteeIds":["user_another"],"maxParticipants":2}`,
 		"user_conflict_001")
 	if code != http.StatusConflict {
 		t.Fatalf("expected 409 for active call conflict, got %d", code)
@@ -239,7 +284,7 @@ func TestContract_ToggleCamera(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	resp := doPost(t, "/rtc/calls",
-		`{"callType":"video","inviteeIds":["user_cam_invitee"]}`,
+		`{"callType":"video","inviteeIds":["user_cam_invitee"],"maxParticipants":2}`,
 		"user_cam_001", http.StatusCreated)
 	callID := extractSessionID(t, resp)
 
@@ -283,6 +328,23 @@ func TestContract_ServerOwnedCASAndNoopReceipt(t *testing.T) {
 	replayCode, replay := doPostWithKey(t, "/rtc/calls/"+callID+"/mute", `{"muted":true}`, "user_cas_001", "mute-key-1")
 	if replayCode != http.StatusOK || replay["version"] != firstVersion {
 		t.Fatalf("replay must return first result: code=%d version=%v want %v", replayCode, replay["version"], firstVersion)
+	}
+
+	// 同一 key 改变命令载荷必须结构化冲突，不能重放首次结果或误判为 CAS。
+	conflictCode, conflict := doPostWithKey(
+		t,
+		"/rtc/calls/"+callID+"/mute",
+		`{"muted":false}`,
+		"user_cas_001",
+		"mute-key-1",
+	)
+	if conflictCode != http.StatusConflict ||
+		conflict["code"] != "RTC.USER.idempotency_conflict" {
+		t.Fatalf(
+			"idempotency payload conflict = %d/%v",
+			conflictCode,
+			conflict,
+		)
 	}
 
 	// 新 key、目标状态已满足（已静音）：no-op receipt，版本不递增。

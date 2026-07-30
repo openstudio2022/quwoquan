@@ -2,6 +2,7 @@
   "label": "艺术品",
   "labelEn": "Artwork",
   "description": "绘画雕塑等艺术创作",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

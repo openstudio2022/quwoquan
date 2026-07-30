@@ -55,6 +55,7 @@ business_rules:
 - 同一 identity 的重复命令按 idempotency receipt 返回，不重复产生副作用
 - reaction 变化只发布事件，目标聚合不保存关系或计数真相
 lifecycle:
+  state_field: reaction
   states:
   - none
   - like

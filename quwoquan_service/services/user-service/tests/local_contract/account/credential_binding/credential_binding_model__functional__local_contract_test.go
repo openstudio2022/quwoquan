@@ -79,4 +79,9 @@ func TestCredentialBindingRecoverableCredentialTypes(t *testing.T) {
 	if bindingmodel.CredentialTypeAnonymousDevice.Recoverable() {
 		t.Fatal("anonymous_device 不能作为账号恢复凭证")
 	}
+	for _, retired := range []bindingmodel.CredentialType{"wechat", "alipay", "qq"} {
+		if retired.Valid() {
+			t.Fatalf("退役 provider 名称 %q 不得作为 credentialType 写入", retired)
+		}
+	}
 }

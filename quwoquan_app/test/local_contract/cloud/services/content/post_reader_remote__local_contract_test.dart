@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
@@ -15,6 +16,31 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('RemoteContentPostReaderAdapter local contract', () {
+    test(
+      'GetPost 将调用方 cancellation 传到 generated operation 且不触达 transport',
+      () async {
+        var transportCalls = 0;
+        final adapter = RemoteContentPostReaderAdapter(
+          client: _client((_) {
+            transportCalls += 1;
+            return <String, Object?>{
+              'postId': 'post-cancelled',
+              'contentType': 'article',
+              'status': 'published',
+            };
+          }),
+          invocationContext: _contextFor(AppUiSurfaces.workBrowser),
+        );
+        final cancellation = CloudOperationCancellationSignal()..cancel();
+
+        await expectLater(
+          adapter.getPost(postId: 'post-cancelled', cancellation: cancellation),
+          throwsA(isA<CloudException>()),
+        );
+        expect(transportCalls, 0);
+      },
+    );
+
     test('GetPost 经 generated client 使用 workBrowser surface', () async {
       late http.Request captured;
       final adapter = RemoteContentPostReaderAdapter(
@@ -72,7 +98,7 @@ void main() {
             'thumbnailUrl':
                 'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
             'videoUrl':
-                'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+                'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
             'width': 1280,
             'height': 720,
             'durationMs': 45000,
@@ -81,7 +107,12 @@ void main() {
               <String, Object?>{
                 'kind': 'video',
                 'url':
-                    'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+                    'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+                'mediaAssetId': 'video-primary-0001',
+                'mediaAssetVersion': 6,
+                'hlsCmafMasterManifestUrl':
+                    'media/video/s/asset/video-primary-0001/v6/hls/master.m3u8',
+                'hlsCmafDescriptorVersion': 1,
                 'coverUrl':
                     'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
                 'durationMs': 45000,
@@ -108,7 +139,12 @@ void main() {
         <String, dynamic>{
           'kind': 'video',
           'url':
-              'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+              'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
+          'mediaAssetId': 'video-primary-0001',
+          'mediaAssetVersion': 6,
+          'hlsCmafMasterManifestUrl':
+              'media/video/s/asset/video-primary-0001/v6/hls/master.m3u8',
+          'hlsCmafDescriptorVersion': 1,
           'coverUrl':
               'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
           'durationMs': 45000,
@@ -189,7 +225,7 @@ void main() {
       );
 
       expect(captured.method, 'GET');
-      expect(captured.url.path, '/content/sub-accounts/author-1/posts');
+      expect(captured.url.path, '/content/personas/author-1/posts');
       expect(captured.url.queryParameters, <String, String>{
         'identity': 'work',
         'type': 'image',

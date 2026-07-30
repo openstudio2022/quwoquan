@@ -43,7 +43,7 @@ func rtcIdentityDartName(fields []fieldDef) string {
 }
 
 func rtcFieldNullable(f fieldDef) bool {
-	if f.Type == "embedded_list" {
+	if _, ok := rtcOwnedListItem(f); ok {
 		return false
 	}
 	for _, c := range f.Constraints {
@@ -52,6 +52,22 @@ func rtcFieldNullable(f fieldDef) bool {
 		}
 	}
 	return false
+}
+
+// RTC object fields use the repository-wide canonical `[]OwnedEntity` type
+// syntax. The DTO generator must consume that contract directly; inventing a
+// generator-only `embedded_list`/`item_entity` dialect creates a second truth
+// source and can silently degrade the field to String.
+func rtcOwnedListItem(f fieldDef) (string, bool) {
+	raw := strings.TrimSpace(f.Type)
+	if !strings.HasPrefix(raw, "[]") {
+		return "", false
+	}
+	item := strings.TrimSpace(strings.TrimPrefix(raw, "[]"))
+	if item == "" {
+		panic("rtc: list field " + f.Name + " requires an item type")
+	}
+	return item, true
 }
 
 func rtcHasNotNull(f fieldDef) bool {
@@ -65,11 +81,19 @@ func rtcHasNotNull(f fieldDef) bool {
 
 func rtcDartScalarType(f fieldDef) string {
 	switch f.Type {
-	case "string", "enum", "ObjectId":
+	case "string", "ObjectId":
 		if rtcFieldNullable(f) {
 			return "String?"
 		}
 		return "String"
+	case "enum":
+		if strings.TrimSpace(f.EnumRef) == "" {
+			panic("rtc: enum field " + f.Name + " requires enum_ref")
+		}
+		if rtcFieldNullable(f) {
+			return f.EnumRef + "?"
+		}
+		return f.EnumRef
 	case "int", "long":
 		if rtcFieldNullable(f) {
 			return "int?"
@@ -95,11 +119,15 @@ func rtcItemDtoClass(entity string) string {
 }
 
 func rtcEmbeddedListDartType(f fieldDef) string {
-	return "List<" + rtcItemDtoClass(strings.TrimSpace(f.ItemEntity)) + ">"
+	item, ok := rtcOwnedListItem(f)
+	if !ok {
+		panic("rtc: field " + f.Name + " is not an owned list")
+	}
+	return "List<" + rtcItemDtoClass(item) + ">"
 }
 
 func rtcDartFieldType(f fieldDef) string {
-	if f.Type == "embedded_list" {
+	if _, ok := rtcOwnedListItem(f); ok {
 		return rtcEmbeddedListDartType(f)
 	}
 	return rtcDartScalarType(f)
@@ -128,11 +156,16 @@ func rtcDartDefaultLiteral(f fieldDef) (string, bool) {
 		if d == "true" || d == "false" {
 			return d, true
 		}
-	case "string", "enum", "ObjectId":
+	case "string", "ObjectId":
 		if d == "" {
 			return "''", true
 		}
 		return fmt.Sprintf("'%s'", strings.ReplaceAll(d, "'", "\\'")), true
+	case "enum":
+		if strings.TrimSpace(f.EnumRef) == "" {
+			panic("rtc: enum field " + f.Name + " requires enum_ref")
+		}
+		return f.EnumRef + "." + toDartValueName(d), true
 	}
 	if d == "true" || d == "false" {
 		return d, true
@@ -152,76 +185,185 @@ func rtcFromMapReadKey(f fieldDef) string {
 func rtcFromMapExpr(f fieldDef) string {
 	dart := rtcDartPublicFieldName(f)
 	read := rtcFromMapReadKey(f)
-	if f.Type == "embedded_list" {
+	if _, ok := rtcOwnedListItem(f); ok {
 		return "" // block generated separately
 	}
 	defLit, hasDef := rtcDartDefaultLiteral(f)
 
 	switch f.Type {
-	case "string", "enum", "ObjectId":
+	case "string", "ObjectId":
 		if rtcFieldNullable(f) {
-			return fmt.Sprintf("      %s: %s as String?,\n", dart, read)
+			return fmt.Sprintf("      %s: _rtcOptionalString(map, '%s'),\n", dart, rtcToJsonKey(f))
 		}
-		fallback := "''"
 		if hasDef {
-			fallback = defLit
+			return fmt.Sprintf(
+				"      %s: %s == null ? %s : _rtcRequiredString(map, '%s'),\n",
+				dart,
+				read,
+				defLit,
+				rtcToJsonKey(f),
+			)
 		}
-		return fmt.Sprintf("      %s: %s as String? ?? %s,\n", dart, read, fallback)
+		return fmt.Sprintf("      %s: _rtcRequiredString(map, '%s'),\n", dart, rtcToJsonKey(f))
+	case "enum":
+		if rtcFieldNullable(f) {
+			return fmt.Sprintf(
+				"      %s: %s == null ? null : %s.fromString(_rtcRequiredString(map, '%s')),\n",
+				dart,
+				read,
+				f.EnumRef,
+				rtcToJsonKey(f),
+			)
+		}
+		if !hasDef {
+			return fmt.Sprintf(
+				"      %s: %s.fromString(_rtcRequiredString(map, '%s')),\n",
+				dart,
+				f.EnumRef,
+				rtcToJsonKey(f),
+			)
+		}
+		return fmt.Sprintf(
+			"      %s: %s == null ? %s : %s.fromString(_rtcRequiredString(map, '%s')),\n",
+			dart,
+			read,
+			defLit,
+			f.EnumRef,
+			rtcToJsonKey(f),
+		)
 	case "int", "long":
 		if rtcFieldNullable(f) {
-			return fmt.Sprintf("      %s: (%s as num?)?.toInt(),\n", dart, read)
+			return fmt.Sprintf("      %s: _rtcOptionalInt(map, '%s'),\n", dart, rtcToJsonKey(f))
 		}
-		fb := "0"
 		if hasDef {
-			fb = strings.Trim(defLit, "'")
+			return fmt.Sprintf(
+				"      %s: %s == null ? %s : _rtcRequiredInt(map, '%s'),\n",
+				dart,
+				read,
+				strings.Trim(defLit, "'"),
+				rtcToJsonKey(f),
+			)
 		}
-		return fmt.Sprintf("      %s: (%s as num?)?.toInt() ?? %s,\n", dart, read, fb)
+		return fmt.Sprintf("      %s: _rtcRequiredInt(map, '%s'),\n", dart, rtcToJsonKey(f))
 	case "bool":
 		if rtcFieldNullable(f) {
-			return fmt.Sprintf("      %s: %s as bool?,\n", dart, read)
+			return fmt.Sprintf("      %s: _rtcOptionalBool(map, '%s'),\n", dart, rtcToJsonKey(f))
 		}
-		fb := "false"
 		if hasDef {
-			fb = defLit
+			return fmt.Sprintf(
+				"      %s: %s == null ? %s : _rtcRequiredBool(map, '%s'),\n",
+				dart,
+				read,
+				defLit,
+				rtcToJsonKey(f),
+			)
 		}
-		return fmt.Sprintf("      %s: %s as bool? ?? %s,\n", dart, read, fb)
+		return fmt.Sprintf("      %s: _rtcRequiredBool(map, '%s'),\n", dart, rtcToJsonKey(f))
 	case "datetime":
 		if rtcFieldNullable(f) {
-			return fmt.Sprintf("      %s: %s != null\n          ? DateTime.tryParse(%s as String)\n          : null,\n",
-				dart, read, read)
+			return fmt.Sprintf("      %s: _rtcOptionalDateTime(map, '%s'),\n", dart, rtcToJsonKey(f))
 		}
-		if f.Name == "createdAt" || f.Name == "updatedAt" {
-			return fmt.Sprintf("      %s: DateTime.tryParse((%s as String?) ?? '') ??\n          DateTime.now(),\n", dart, read)
-		}
-		return fmt.Sprintf("      %s: %s != null\n          ? DateTime.tryParse(%s as String)\n          : DateTime.now(),\n",
-			dart, read, read)
+		return fmt.Sprintf("      %s: _rtcRequiredDateTime(map, '%s'),\n", dart, rtcToJsonKey(f))
 	default:
-		return fmt.Sprintf("      %s: %s as String? ?? '',\n", dart, read)
+		return fmt.Sprintf("      %s: _rtcRequiredString(map, '%s'),\n", dart, rtcToJsonKey(f))
 	}
+}
+
+func rtcHasNullableBool(entities ...entityDef) bool {
+	for _, entity := range entities {
+		for _, field := range entity.Fields {
+			if field.Type == "bool" && rtcFieldNullable(field) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func rtcEmitWireDecodeHelpers(entities ...entityDef) string {
+	var b strings.Builder
+	b.WriteString(`String _rtcRequiredString(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('RTC field "$key" must be a non-empty string');
+  }
+  return value;
+}
+
+String? _rtcOptionalString(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('RTC field "$key" must be a string');
+  }
+  return value;
+}
+
+int _rtcRequiredInt(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value is! num) {
+    throw FormatException('RTC field "$key" must be a number');
+  }
+  return value.toInt();
+}
+
+int? _rtcOptionalInt(Map<Object?, Object?> map, String key) {
+  if (map[key] == null) return null;
+  return _rtcRequiredInt(map, key);
+}
+
+bool _rtcRequiredBool(Map<Object?, Object?> map, String key) {
+  final value = map[key];
+  if (value is! bool) {
+    throw FormatException('RTC field "$key" must be a bool');
+  }
+  return value;
+}
+`)
+	if rtcHasNullableBool(entities...) {
+		b.WriteString(`
+bool? _rtcOptionalBool(Map<Object?, Object?> map, String key) {
+  if (map[key] == null) return null;
+  return _rtcRequiredBool(map, key);
+}
+`)
+	}
+	b.WriteString(`
+DateTime _rtcRequiredDateTime(Map<Object?, Object?> map, String key) {
+  final raw = _rtcRequiredString(map, key);
+  final value = DateTime.tryParse(raw);
+  if (value == null) {
+    throw FormatException('RTC field "$key" must be an ISO-8601 timestamp');
+  }
+  return value.toUtc();
+}
+
+DateTime? _rtcOptionalDateTime(Map<Object?, Object?> map, String key) {
+  if (map[key] == null) return null;
+  return _rtcRequiredDateTime(map, key);
+}
+`)
+	return b.String()
 }
 
 func rtcParticipantsFromMapBlock(itemEntity string) string {
 	cls := rtcItemDtoClass(itemEntity)
 	return fmt.Sprintf(`    final rawParticipants = map['participants'];
     final participants = <%s>[];
-    if (rawParticipants is List) {
+    if (rawParticipants is List<Object?>) {
       for (final p in rawParticipants) {
-        if (p is Map<String, dynamic>) {
+        if (p is Map<Object?, Object?>) {
           participants.add(%s.fromMap(p));
-        } else if (p is Map) {
-          participants.add(
-            %s.fromMap(Map<String, dynamic>.from(p)),
-          );
         }
       }
     }
-`, cls, cls, cls)
+`, cls, cls)
 }
 
 func rtcToMapEntry(f fieldDef) string {
 	key := rtcToJsonKey(f)
 	dart := rtcDartPublicFieldName(f)
-	if f.Type == "embedded_list" {
+	if _, ok := rtcOwnedListItem(f); ok {
 		return fmt.Sprintf("      '%s': %s.map((p) => p.toMap()).toList(),\n", key, dart)
 	}
 	if f.Type == "datetime" && rtcFieldNullable(f) {
@@ -229,8 +371,10 @@ func rtcToMapEntry(f fieldDef) string {
 	}
 	if rtcFieldNullable(f) && f.Type != "datetime" {
 		switch f.Type {
-		case "string", "enum", "ObjectId":
+		case "string", "ObjectId":
 			return fmt.Sprintf("      if (%s != null) '%s': %s,\n", dart, key, dart)
+		case "enum":
+			return fmt.Sprintf("      if (%s != null) '%s': %s!.toApiString(),\n", dart, key, dart)
 		case "int", "long":
 			return fmt.Sprintf("      if (%s != null) '%s': %s,\n", dart, key, dart)
 		case "bool":
@@ -239,6 +383,9 @@ func rtcToMapEntry(f fieldDef) string {
 	}
 	if f.Type == "datetime" && !rtcFieldNullable(f) {
 		return fmt.Sprintf("      '%s': %s.toIso8601String(),\n", key, dart)
+	}
+	if f.Type == "enum" {
+		return fmt.Sprintf("      '%s': %s.toApiString(),\n", key, dart)
 	}
 	return fmt.Sprintf("      '%s': %s,\n", key, dart)
 }
@@ -256,7 +403,7 @@ func rtcEmitDtoClass(
 	b.WriteString(fmt.Sprintf("  const %s({\n", dtoName))
 
 	for _, f := range fields {
-		if f.Type == "embedded_list" {
+		if _, ok := rtcOwnedListItem(f); ok {
 			b.WriteString(fmt.Sprintf("    this.%s = const [],\n", rtcDartPublicFieldName(f)))
 			continue
 		}
@@ -279,17 +426,17 @@ func rtcEmitDtoClass(
 	}
 	b.WriteString("\n")
 
-	b.WriteString(fmt.Sprintf("  factory %s.fromMap(Map<String, dynamic> map) {\n", dtoName))
+	b.WriteString(fmt.Sprintf("  factory %s.fromMap(Map<Object?, Object?> map) {\n", dtoName))
 	// participants block first if present
 	for _, f := range fields {
-		if f.Type == "embedded_list" {
-			b.WriteString(rtcParticipantsFromMapBlock(f.ItemEntity))
+		if item, ok := rtcOwnedListItem(f); ok {
+			b.WriteString(rtcParticipantsFromMapBlock(item))
 			break
 		}
 	}
 	b.WriteString("    return " + dtoName + "(\n")
 	for _, f := range fields {
-		if f.Type == "embedded_list" {
+		if _, ok := rtcOwnedListItem(f); ok {
 			b.WriteString("      participants: participants,\n")
 			continue
 		}
@@ -378,7 +525,58 @@ func rtcEmitDtoClass(
 	return b.String()
 }
 
-func renderRtcCallSessionDtosDartFromFields(sourcePath string, ff *fieldsFile) string {
+func rtcUsedEnumRefs(entities ...entityDef) []string {
+	seen := map[string]bool{}
+	refs := make([]string, 0)
+	for _, entity := range entities {
+		for _, field := range entity.Fields {
+			ref := strings.TrimSpace(field.EnumRef)
+			if field.Type != "enum" || ref == "" || seen[ref] {
+				continue
+			}
+			seen[ref] = true
+			refs = append(refs, ref)
+		}
+	}
+	return refs
+}
+
+func rtcEmitEnum(enumName string, values []string) string {
+	if len(values) == 0 {
+		panic("rtc: shared enum " + enumName + " has no values")
+	}
+	var b strings.Builder
+	b.WriteString("enum " + enumName + " {\n")
+	for index, value := range values {
+		terminator := ","
+		if index == len(values)-1 {
+			terminator = ";"
+		}
+		b.WriteString(fmt.Sprintf("  %s('%s')%s\n", toDartValueName(value), value, terminator))
+	}
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf("  const %s(this.wireValue);\n\n", enumName))
+	b.WriteString("  final String wireValue;\n\n")
+	b.WriteString(fmt.Sprintf("  static %s fromString(String raw) {\n", enumName))
+	b.WriteString("    return switch (raw.trim()) {\n")
+	for _, value := range values {
+		b.WriteString(fmt.Sprintf("      '%s' => %s.%s,\n", value, enumName, toDartValueName(value)))
+	}
+	b.WriteString(fmt.Sprintf(
+		"      _ => throw FormatException('Unknown %s wire value: $raw'),\n",
+		enumName,
+	))
+	b.WriteString("    };\n  }\n\n")
+	b.WriteString("  String toApiString() => wireValue;\n")
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func renderRtcCallSessionDtosDartFromFields(
+	sourcePath string,
+	ff *fieldsFile,
+	sharedEnums map[string][]string,
+) string {
 	cp, okP := ff.Entities["CallParticipant"]
 	cs, okS := ff.Entities["CallSession"]
 	if !okP || !okS {
@@ -390,8 +588,19 @@ func renderRtcCallSessionDtosDartFromFields(sourcePath string, ff *fieldsFile) s
 	b.WriteString(filepath.ToSlash(sourcePath))
 	b.WriteString("\n// ignore_for_file: prefer_const_constructors\n\n")
 
+	for _, enumRef := range rtcUsedEnumRefs(cp, cs) {
+		values, ok := sharedEnums[enumRef]
+		if !ok {
+			panic("rtc: enum_ref " + enumRef + " is absent from _shared/types.yaml")
+		}
+		b.WriteString(rtcEmitEnum(enumRef, values))
+		b.WriteString("\n")
+	}
+	b.WriteString(rtcEmitWireDecodeHelpers(cp, cs))
+	b.WriteString("\n")
+
 	b.WriteString(rtcEmitDtoClass("CallParticipant", cp.Fields, "Dto",
-		"通话参与者（与 metadata `CallParticipant` 对齐，JSON 枚举值为 string）。"))
+		"通话参与者（与 metadata `CallParticipant` 和 shared enum 对齐）。"))
 	b.WriteString("\n")
 	identity := rtcIdentityDartName(cs.Fields)
 	b.WriteString(rtcEmitDtoClass("CallSession", cs.Fields, "Dto",

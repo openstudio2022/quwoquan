@@ -23,9 +23,13 @@ fields:
 - replyNextCursor
 - likeCount
 - dislikeCount
-- viewerReaction
+- name: viewerReaction
+  type: enum
+  enum_ref: CommentReactionType
 - authorLiked
-- viewerRelation
+- name: viewerRelation
+  type: enum
+  enum_ref: CommentViewerRelation
 - isAuthor
 - canDelete
 - canReply

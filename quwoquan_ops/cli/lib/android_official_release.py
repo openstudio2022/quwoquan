@@ -94,7 +94,7 @@ def package_android_official_release(
     artifact_name = f"quwoquan-{build_number}.apk"
     apk_url = urljoin(
         download_origin.rstrip("/") + "/",
-        f"downloads/android/{version_name}/{build_number}/{artifact_name}",
+        f"download/android/{version_name}/{build_number}/{artifact_name}",
     )
     apk_sha256 = _sha256(apk_path)
     apk_size = apk_path.stat().st_size
@@ -112,7 +112,7 @@ def package_android_official_release(
     packaged_apk = release_dir / artifact_name
     shutil.copy2(apk_path, packaged_apk)
     manifest: dict[str, object] = {
-        "schema": "qwq.android.official-release.v1",
+        "schema": "qwq.android.official-release",
         "platform": "android",
         "versionName": version_name,
         "buildNumber": build_number,

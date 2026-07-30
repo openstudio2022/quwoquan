@@ -6,7 +6,6 @@ import os
 import shlex
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -14,7 +13,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.observability import write_run_manifest
-from quwoquan_ops.cli.lib.output_paths import output_root, safe_segment
+from quwoquan_ops.cli.lib.output_paths import (
+    output_root,
+    run_evidence_dir,
+    safe_segment,
+)
 
 
 @dataclass(frozen=True)
@@ -44,8 +47,7 @@ def resolve_local_run(
     if explicit_observability is not None:
         run_id = safe_segment(explicit_observability.name, fallback="local-run")
     elif action == "up":
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        run_id = f"{stamp}-up-{safe_segment(target, fallback='local')}"
+        run_id = run_evidence_dir(base, "up", target).name
     else:
         run_id = safe_segment(str(saved.get("runId") or ""), fallback=f"local-{target}")
     run_root = explicit_run or base / "env" / env / "runs" / run_id

@@ -2,6 +2,10 @@
   "label": "徒步",
   "labelEn": "Hiking",
   "description": "喜欢徒步、山野与户外路线",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/旅行/玩法/徒步"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

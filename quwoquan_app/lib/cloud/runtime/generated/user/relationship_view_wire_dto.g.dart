@@ -2,15 +2,15 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class RelationshipViewWireDto {
-  final String viewerSubAccountId;
-  final String targetSubAccountId;
+  final String viewerPersonaId;
+  final String targetPersonaId;
   final String relationState;
   final bool isBlocked;
   final bool isBlockedBy;
 
   RelationshipViewWireDto({
-    this.viewerSubAccountId = '',
-    this.targetSubAccountId = '',
+    this.viewerPersonaId = '',
+    this.targetPersonaId = '',
     this.relationState = 'not_following',
     this.isBlocked = false,
     this.isBlockedBy = false,
@@ -18,8 +18,8 @@ class RelationshipViewWireDto {
 
   factory RelationshipViewWireDto.fromMap(Map<String, dynamic> m) {
     return RelationshipViewWireDto(
-      viewerSubAccountId: m['viewerSubAccountId']?.toString() ?? '',
-      targetSubAccountId: m['targetSubAccountId']?.toString() ?? '',
+      viewerPersonaId: m['viewerPersonaId']?.toString() ?? '',
+      targetPersonaId: m['targetPersonaId']?.toString() ?? '',
       relationState: m['relationState']?.toString() ?? 'not_following',
       isBlocked: m['isBlocked'] as bool? ?? false,
       isBlockedBy: m['isBlockedBy'] as bool? ?? false,
@@ -28,8 +28,8 @@ class RelationshipViewWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'viewerSubAccountId': viewerSubAccountId,
-      'targetSubAccountId': targetSubAccountId,
+      'viewerPersonaId': viewerPersonaId,
+      'targetPersonaId': targetPersonaId,
       'relationState': relationState,
       'isBlocked': isBlocked,
       'isBlockedBy': isBlockedBy,
@@ -37,15 +37,15 @@ class RelationshipViewWireDto {
   }
 
   RelationshipViewWireDto copyWith({
-    String? viewerSubAccountId,
-    String? targetSubAccountId,
+    String? viewerPersonaId,
+    String? targetPersonaId,
     String? relationState,
     bool? isBlocked,
     bool? isBlockedBy,
   }) {
     return RelationshipViewWireDto(
-      viewerSubAccountId: viewerSubAccountId ?? this.viewerSubAccountId,
-      targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
+      viewerPersonaId: viewerPersonaId ?? this.viewerPersonaId,
+      targetPersonaId: targetPersonaId ?? this.targetPersonaId,
       relationState: relationState ?? this.relationState,
       isBlocked: isBlocked ?? this.isBlocked,
       isBlockedBy: isBlockedBy ?? this.isBlockedBy,

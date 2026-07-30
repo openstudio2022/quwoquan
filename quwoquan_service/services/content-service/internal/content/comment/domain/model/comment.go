@@ -10,6 +10,7 @@ import (
 
 var (
 	ErrInvalidComment          = errors.New("invalid comment")
+	ErrCommentTooLong          = errors.New("comment content exceeds maximum length")
 	ErrInvalidReplyTarget      = errors.New("invalid comment reply target")
 	ErrCommentDeleted          = errors.New("comment is deleted")
 	ErrDeleteForbidden         = errors.New("comment delete forbidden")
@@ -368,13 +369,20 @@ func (c *Comment) validate() error {
 			MaxAttachmentMediaIDs,
 		)
 	}
+	if c != nil && len([]rune(c.content)) > MaxContentRunes {
+		return fmt.Errorf(
+			"%w: received %d runes, maximum is %d",
+			ErrCommentTooLong,
+			len([]rune(c.content)),
+			MaxContentRunes,
+		)
+	}
 	if c == nil ||
 		c.id == "" ||
 		c.version < 1 ||
 		c.postID == "" ||
 		c.authorID == "" ||
 		c.content == "" ||
-		len([]rune(c.content)) > MaxContentRunes ||
 		!isKnownStatus(c.status) ||
 		c.createdAt.IsZero() ||
 		c.updatedAt.IsZero() ||

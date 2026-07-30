@@ -1,0 +1,19 @@
+overrides:
+  sys.api-edge.redis.admission.mode: cluster
+  sys.api-edge.redis.admission.addrs: [redis-admission-0:6379, redis-admission-1:6379, redis-admission-2:6379]
+  sys.api-edge.redis.admission.tls: true
+  sys.api-edge.rate_limit.command.limit: 300
+  sys.api-edge.rate_limit.command.window_seconds: 60
+  sys.api-edge.rate_limit.command.state_failure: fail_closed
+  sys.api-edge.rate_limit.query.limit: 1200
+  sys.api-edge.rate_limit.query.window_seconds: 60
+  sys.api-edge.rate_limit.query.state_failure: fail_closed
+  sys.api-edge.rate_limit.session.limit: 120
+  sys.api-edge.rate_limit.session.window_seconds: 60
+  sys.api-edge.rate_limit.session.state_failure: fail_closed
+  sys.api-edge.rate_limit.operation.content_post_get_feed.limit: 400
+  sys.api-edge.rate_limit.operation.content_post_get_feed.window_seconds: 1
+  sys.api-edge.rate_limit.operation.content_post_get_feed.state_failure: fail_closed
+secretRefs:
+  sys.api-edge.redis.admission.password: API_EDGE_REDIS_PASSWORD
+externalBindings: {}

@@ -1,4 +1,8 @@
 import '../operation_request_payload.dart';
+import 'entity_wishlist_state.dart';
+
+export 'entity_wishlist_state.dart';
+part '../generated/requests/content/post_queries.requests.g.dart';
 
 /// Content Post 查询契约，来源于 `content/content/post/operations.yaml`。
 ///
@@ -90,14 +94,7 @@ final class ContentPostSearchResultSlice {
   final String? nextCursor;
 }
 
-/// 我的足迹查询参数。`type` 的业务含义由服务端统一定义。
-final class ContentFootprintQuery {
-  const ContentFootprintQuery({this.type, this.cursor, this.limit = 20});
 
-  final String? type;
-  final String? cursor;
-  final int limit;
-}
 
 /// 足迹项所携带的最小内容预览，避免把 app DTO 带入纯 Dart 合同包。
 final class ContentFootprintPostPreview {
@@ -158,30 +155,6 @@ final class ContentFootprintPage {
   final String? nextCursor;
 }
 
-/// 当前登录用户对 canonical object 的显式「想去」状态查询。
-final class EntityWishlistStateQuery {
-  const EntityWishlistStateQuery({
-    required this.objectId,
-    required this.objectKind,
-  });
-
-  final String objectId;
-  final String objectKind;
-}
-
-/// 当前登录用户对 canonical object 的显式「想去」状态。
-final class EntityWishlistState {
-  const EntityWishlistState({
-    required this.objectId,
-    required this.objectKind,
-    required this.wishlisted,
-  });
-
-  final String objectId;
-  final String objectKind;
-  final bool wishlisted;
-}
-
 CloudOperationRequestPayload encodeContentPostSearchQuery(
   ContentPostSearchQuery query,
 ) {
@@ -203,29 +176,9 @@ CloudOperationRequestPayload encodeContentPostSearchQuery(
   );
 }
 
-CloudOperationRequestPayload encodeContentFootprintQuery(
-  ContentFootprintQuery query,
-) {
-  _validatePageLimit(query.limit);
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (_optionalText(query.type) case final type?) 'type': type,
-      if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
-      'limit': '${query.limit}',
-    },
-  );
-}
 
-CloudOperationRequestPayload encodeEntityWishlistStateQuery(
-  EntityWishlistStateQuery query,
-) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'objectId': _requiredText(query.objectId, 'objectId'),
-      'objectKind': _requiredText(query.objectKind, 'objectKind'),
-    },
-  );
-}
+
+
 
 ContentPostSearchResultSlice decodeContentPostSearchResultSlice(
   Object? response,

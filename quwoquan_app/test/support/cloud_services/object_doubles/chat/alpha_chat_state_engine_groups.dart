@@ -8,7 +8,15 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
     String? query,
     String? sort,
   }) {
-    var rows = _ensureMembers(conversationId).map(_copy).toList(growable: true);
+    var rows = _ensureMembers(conversationId)
+        .map((member) {
+          final row = _copy(member);
+          row['userHandle'] = _memberType(member) == 'user'
+              ? userHandleFor(_text(member['userId']))
+              : '';
+          return row;
+        })
+        .toList(growable: true);
     _sortMembers(rows, sort);
     final normalizedRole = role?.trim() ?? '';
     if (normalizedRole.isNotEmpty) {
@@ -44,6 +52,7 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
       changed = true;
       members.add(<String, Object?>{
         'userId': userId,
+        'userHandle': userHandleFor(userId),
         'displayName': displayNameFor(userId),
         'avatarUrl': avatarFor(userId),
         'role': 'member',
@@ -150,6 +159,7 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
     }
     members.add(<String, Object?>{
       'userId': 'fixture_assistant_primary',
+      'userHandle': '',
       'displayName': '契约助手',
       'avatarUrl': avatarFor('fixture_assistant_primary'),
       'role': 'member',
@@ -195,6 +205,7 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
           'kind': 'user',
           'objectId': userId,
           'userId': userId,
+          'userHandle': _text(contact['userHandle']),
           'conversationId': _matchDirectConversationId(userId),
           'circleId': '',
           'circleGroupId': '',
@@ -224,6 +235,7 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
           'kind': 'circle',
           'objectId': id,
           'userId': '',
+          'userHandle': '',
           'conversationId': '',
           'circleId': id,
           'circleGroupId': '',
@@ -254,6 +266,7 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
           'kind': 'group',
           'objectId': id,
           'userId': '',
+          'userHandle': '',
           'conversationId': id,
           'circleId': _text(conversation['circleId']),
           'circleGroupId': _text(conversation['circleGroupId']),
@@ -396,6 +409,10 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
       }
       rows.add(<String, Object?>{
         'userId': userId,
+        'userHandle': _firstText(<Object?>[
+          contact?['userHandle'],
+          member['userHandle'],
+        ]),
         'displayName': displayName,
         'avatarUrl': _firstText(<Object?>[
           contact?['avatarUrl'],
@@ -458,8 +475,6 @@ extension AlphaChatGroupState on AlphaChatStateEngine {
       'announcement': _text(_groupSettings[conversationId]?['announcement']),
       'capabilities': const <String>['album', 'file', 'event', 'member'],
       'originType': _text(conversation['originType']),
-      'bindingType': _text(conversation['bindingType']),
-      'lifecyclePolicy': _text(conversation['lifecyclePolicy']),
       'canManageMembers': role == 'owner' || role == 'admin',
       'canDissolve': role == 'owner' && circleId.isEmpty,
     };

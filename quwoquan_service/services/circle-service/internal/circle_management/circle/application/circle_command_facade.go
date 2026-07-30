@@ -11,15 +11,15 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/operation"
+	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
 	circlemodel "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 	circleports "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/ports"
-	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
 )
 
 const circleReceiptRetention = 24 * time.Hour
 
-// CreateCircleCommand 是 CreateCircle 的 typed 输入（writable_fields 对齐
-// services/circle-service/contracts/circle_management/circle/operations.yaml）。
+// CreateCircleCommand 是 CreateCircle 的 typed 输入，与 fields.yaml 中同名
+// request entity 及 operations.yaml canonical bindings 对齐。
 type CreateCircleCommand struct {
 	Name                string                                `json:"name"`
 	Description         *string                               `json:"description"`

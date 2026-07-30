@@ -1,16 +1,22 @@
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/core/links/trusted_endpoint_policy.dart';
 import 'package:quwoquan_app/core/platform/content_addressed_upload_headers.dart';
 
 /// Object-storage data-plane adapter. Authentication headers are intentionally
 /// absent because authorization is carried only by the server-issued URL.
 final class RemoteContentMediaObjectUploader {
-  RemoteContentMediaObjectUploader({http.Client? client})
-    : _client = client ?? http.Client(),
-      _ownsClient = client == null;
+  RemoteContentMediaObjectUploader({
+    http.Client? client,
+    String uploadBaseUrl = CloudRuntimeConfig.mediaUploadBaseUrl,
+  }) : _uploadBaseUri = Uri.tryParse(uploadBaseUrl),
+       _client = client ?? http.Client(),
+       _ownsClient = client == null;
 
   final http.Client _client;
   final bool _ownsClient;
+  final Uri? _uploadBaseUri;
 
   ContentMediaStreamObjectUpload get uploadStream => stream;
 
@@ -22,6 +28,13 @@ final class RemoteContentMediaObjectUploader {
     required String expectedSha256,
     Future<void>? abortTrigger,
   }) async {
+    if (_uploadBaseUri == null ||
+        !isUriWithinTrustedHttpsBase(uploadUri, _uploadBaseUri)) {
+      throw ContentMediaObjectUploadException(
+        retryable: false,
+        cause: FormatException('upload URL is outside MEDIA_UPLOAD_BASE_URL'),
+      );
+    }
     final uploadHeaders = ContentAddressedUploadHeaders(
       contentType: contentType,
       expectedSha256: expectedSha256,

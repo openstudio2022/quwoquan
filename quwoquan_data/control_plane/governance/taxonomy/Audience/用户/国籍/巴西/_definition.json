@@ -2,6 +2,7 @@
   "label": "巴西",
   "labelEn": "Brazilian",
   "description": "巴西籍用户",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

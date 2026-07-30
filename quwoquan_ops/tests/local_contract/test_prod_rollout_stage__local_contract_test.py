@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import time
 from unittest.mock import patch
 
 from quwoquan_ops.cli.stackctl import (
@@ -35,13 +36,17 @@ class ProdRolloutStageContractTest(unittest.TestCase):
             _resolve_prod_rollout_stage("0")
 
     def test_slo_gate_reads_prometheus_and_policy_window(self) -> None:
-        def query(_base_url: str, expression: str) -> float:
+        def query(_base_url: str, expression: str, **_kwargs: object) -> float:
             if "increase(http_server_requests_total" in expression:
                 return 1000
             return 0.005
 
         with patch("quwoquan_ops.cli.stackctl._prometheus_query_value", side_effect=query):
-            result = _read_prometheus_slo("http://prometheus:9090", "content-service")
+            result = _read_prometheus_slo(
+                "http://prometheus:9090",
+                "content-service",
+                deadline_epoch=int(time.time()) + 60,
+            )
 
         self.assertEqual(result["source"], "prometheus")
         self.assertEqual(result["window"], "5m")
@@ -49,14 +54,18 @@ class ProdRolloutStageContractTest(unittest.TestCase):
         self.assertIn("[5m]", result["queries"]["p95Ms"])
 
     def test_slo_readback_rejects_insufficient_samples(self) -> None:
-        def query(_base_url: str, expression: str) -> float:
+        def query(_base_url: str, expression: str, **_kwargs: object) -> float:
             if "increase(http_server_requests_total" in expression:
                 return 1
             return 0
 
         with patch("quwoquan_ops.cli.stackctl._prometheus_query_value", side_effect=query):
             with self.assertRaisesRegex(RuntimeError, "insufficient samples"):
-                _read_prometheus_slo("http://prometheus:9090", "content-service")
+                _read_prometheus_slo(
+                    "http://prometheus:9090",
+                    "content-service",
+                    deadline_epoch=int(time.time()) + 60,
+                )
 
     def test_gray_initial_and_carry_on_canaries_match_stage_dimensions(self) -> None:
         canary = _prod_gray_canary_contract("gray-initial")

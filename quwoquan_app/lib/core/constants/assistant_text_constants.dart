@@ -178,22 +178,22 @@ abstract final class AssistantText {
       '当前未配置可用模型，请先在模型配置中接入远程模型或桥接服务。';
   static const String assistantRunningHint = '小趣正在规划与执行中...';
 
-  /// v3 用户视角阶段：先帮用户理清问题
+  /// 用户视角阶段：先帮用户理清问题
   static const String assistantPhaseUnderstanding = '理解问题';
 
-  /// v3 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
+  /// 用户视角阶段：替用户核对资料（工具执行，由元数据覆盖）
   static const String assistantPhaseSearching = '检索设计';
 
-  /// v3 用户视角阶段：替用户整理判断
+  /// 用户视角阶段：替用户整理判断
   static const String assistantPhaseAnalyzing = '检索处理';
 
-  /// v3 用户视角阶段：替用户组织最终回答
+  /// 用户视角阶段：替用户组织最终回答
   static const String assistantPhaseAnswering = '生成答案';
 
-  /// v3 用户视角阶段：确认当前信息是否已经够答
+  /// 用户视角阶段：确认当前信息是否已经够答
   static const String assistantPhaseAssessing = '我在确认现在的信息够不够回答';
 
-  /// v3 用户视角阶段：完成
+  /// 用户视角阶段：完成
   static const String assistantPhaseCompleted = '已为你整理好';
   static const String assistantFeedbackHelpful = '有帮助';
   static const String assistantFeedbackUnhelpful = '没帮助';

@@ -18,7 +18,6 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
-	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	robs "quwoquan_service/runtime/observability"
@@ -27,10 +26,16 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
+	appealhttp "quwoquan_service/services/user-service/internal/account/account_appeal_intake/adapters/inbound/http"
+	appealapp "quwoquan_service/services/user-service/internal/account/account_appeal_intake/application"
+	appealidentity "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/identity"
+	appealobservability "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/observability"
+	appealpersistence "quwoquan_service/services/user-service/internal/account/account_appeal_intake/infrastructure/persistence"
 	accountsessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	accountsessionpersistence "quwoquan_service/services/user-service/internal/account/account_session/infrastructure/persistence"
 	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
 	challengepersistence "quwoquan_service/services/user-service/internal/account/authentication_challenge/infrastructure/persistence"
+	credentialhttp "quwoquan_service/services/user-service/internal/account/credential_binding/adapters/inbound/http"
 	credentialapp "quwoquan_service/services/user-service/internal/account/credential_binding/application"
 	credentialpersistence "quwoquan_service/services/user-service/internal/account/credential_binding/infrastructure/persistence"
 	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
@@ -90,8 +95,8 @@ func main() {
 		log.Fatalf("user-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("user-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
+		log.Fatalf("user-service config identity failed: %v", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
@@ -304,9 +309,24 @@ func main() {
 	if publicWebBaseURL == "" {
 		log.Fatal("PUBLIC_WEB_BASE_URL must be injected from environment topology")
 	}
-	profileService := application.NewProfileService(
+	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("Persona command store init failed: %v", err)
+	}
+	personaProfileProjector, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	if err != nil {
+		log.Fatalf("Persona profile projector init failed: %v", err)
+	}
+	go func() {
+		if err := personaProfileProjector.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+			log.Printf("ERROR: Persona profile projector stopped: %v", err)
+		}
+	}()
+	profileService, err := application.NewProfileService(
 		profileStore,
 		personaStore,
+		personaCommandStore,
+		personaProfileProjector,
 		profileCache,
 		userEventPublisher,
 		userSyncService,
@@ -315,6 +335,9 @@ func main() {
 		application.WithProfileTagValidator(profileTagValidator),
 		application.WithProfilePublicBaseURL(publicWebBaseURL),
 	)
+	if err != nil {
+		log.Fatalf("Profile service init failed: %v", err)
+	}
 	searchService := application.NewSearchService(profileStore, personaStore)
 	// R-OBJ-001：对象级关系指标经 Prometheus sink 导出到 /metrics。
 	reltelemetry.Collector().SetSink(relobservability.PrometheusSink{})
@@ -407,10 +430,10 @@ func main() {
 	if mongoDB != nil {
 		creatorRuntimeStore = persistence.NewCreatorRuntimeProfileReader(mongoDB)
 	}
-	subAccountOptions := make([]application.SubAccountServiceOption, 0, 1)
+	personaOptions := make([]application.PersonaServiceOption, 0, 1)
 	if creatorRuntimeStore != nil {
-		subAccountOptions = append(
-			subAccountOptions,
+		personaOptions = append(
+			personaOptions,
 			application.WithCreatorRuntimeProfiles(creatorRuntimeStore),
 		)
 	}
@@ -488,6 +511,30 @@ func main() {
 			authenticationChallengeStore,
 			challengeapp.OTPCredentialVerifier{},
 		)
+	accountAppealStore, err := appealpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		log.Fatalf("AccountAppealIntake store init failed: %v", err)
+	}
+	accountAppealFacade := appealapp.NewCommandFacade(
+		accountAppealStore,
+		appealidentity.NewChallengeVerifier(
+			authenticationChallenges,
+			credentialStore,
+		),
+		appealobservability.Recorder{},
+	)
+	accountAppealHandler, err := appealhttp.NewHandler(accountAppealFacade)
+	if err != nil {
+		log.Fatalf("AccountAppealIntake HTTP composition failed: %v", err)
+	}
+	go func() {
+		if purgeErr := accountAppealFacade.RunRetentionPurge(
+			ctx,
+			time.Hour,
+		); purgeErr != nil && !errors.Is(purgeErr, context.Canceled) {
+			log.Printf("ERROR: AccountAppealIntake retention purge stopped: %v", purgeErr)
+		}
+	}()
 	carrierPhoneResolver, err := newCarrierPhoneResolver()
 	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
 		log.Fatalf("carrier identity adapter init failed: %v", err)
@@ -523,8 +570,15 @@ func main() {
 		shardDirectory,
 		application.WithAccountSessionCommands(accountSessionCommands),
 		application.WithCredentialCommands(credentialCommands),
+		application.WithPersonaCommandPipeline(
+			personaCommandStore,
+			personaProfileProjector,
+		),
 		application.WithDeviceRegistration(deviceRegistrationCommands),
 		application.WithConsentRecordStore(consentRecordStore),
+		application.WithFederatedPhoneBindingTickets(
+			credentialStore,
+		),
 		application.WithOtpCodeStore(otpCodeCache),
 		application.WithAuthenticationChallenges(authenticationChallenges),
 		application.WithOTPCodeSealer(otpCodeSealer),
@@ -539,16 +593,13 @@ func main() {
 	if err != nil && !errors.Is(err, ErrAuthRuntimeCapabilityBlocked) {
 		log.Fatalf("federated identity adapter init failed: %v", err)
 	}
-	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
-	if err != nil {
-		log.Fatalf("Persona command store init failed: %v", err)
-	}
-	subAccountService := application.NewSubAccountService(
+	personaService := application.NewPersonaService(
 		personaStore,
 		personaCommandStore,
+		personaProfileProjector,
 		profileStore,
 		profileCache,
-		subAccountOptions...,
+		personaOptions...,
 	)
 	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
 	go contactDiscoveryService.RunExpiredCleanup(ctx, time.Hour)
@@ -675,7 +726,7 @@ func main() {
 		userSettingsCommands, userSettingsQueries,
 		authService, credentialQueries,
 		deviceRegistrationCommands, deviceRegistrationQueries,
-		subAccountService,
+		personaService,
 		interestProfileService,
 		subjectFollowService,
 		followedSubjectVisitService,
@@ -708,8 +759,15 @@ func main() {
 		federatedLogins.alipay,
 		federatedLogins.qq,
 	)
+	federatedPhoneBindingHandler, err :=
+		credentialhttp.NewFederatedPhoneBindingHandler(authService)
+	if err != nil {
+		log.Fatalf("FederatedPhoneBinding HTTP composition failed: %v", err)
+	}
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
+	accountAppealHandler.RegisterRoutes(serviceMux)
+	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)
 	profileProposalHandler.RegisterRoutes(serviceMux)
 	invitationHandler.RegisterRoutes(serviceMux)
 	greetingHandler.RegisterRoutes(serviceMux)
@@ -765,14 +823,12 @@ func main() {
 	}
 
 	// 9. Start
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 	server := &http.Server{
 		Addr: addr,
 		// Authentication must run before observability builds ActorContext.
 		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
 			AccessTokenVerifier: accessVerifier,
-		})(rateLimited),
+		})(corsHandler),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,

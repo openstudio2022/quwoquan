@@ -17,12 +17,12 @@ class ShareInteractionList extends ConsumerStatefulWidget {
   const ShareInteractionList({
     super.key,
     required this.direction,
-    required this.subAccountId,
+    required this.personaId,
     this.inlineScroll = false,
   });
 
   final ShareInteractionDirection direction;
-  final String subAccountId;
+  final String personaId;
   final bool inlineScroll;
 
   @override
@@ -32,7 +32,7 @@ class ShareInteractionList extends ConsumerStatefulWidget {
 
 class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
   ShareInteractionBucketKey get _bucketKey => ShareInteractionBucketKey(
-    subAccountId: widget.subAccountId,
+    personaId: widget.personaId,
     direction: widget.direction,
   );
 
@@ -50,7 +50,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
           .read(shareInteractionObservabilityProvider)
           .track(
             eventName: ShareInteractionEventNames.directionChange,
-            subAccountId: widget.subAccountId,
+            personaId: widget.personaId,
             direction: widget.direction,
           );
       WidgetsBinding.instance.addPostFrameCallback((_) => _trackView());
@@ -64,7 +64,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.view,
-          subAccountId: widget.subAccountId,
+          personaId: widget.personaId,
           direction: widget.direction,
           cacheHit: state.hasCachedItems,
           itemCount: state.items.length,
@@ -123,7 +123,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
                 .read(shareInteractionObservabilityProvider)
                 .track(
                   eventName: ShareInteractionEventNames.loadMore,
-                  subAccountId: widget.subAccountId,
+                  personaId: widget.personaId,
                   direction: widget.direction,
                   itemCount: current.items.length,
                 );
@@ -202,7 +202,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.refresh,
-          subAccountId: widget.subAccountId,
+          personaId: widget.personaId,
           direction: widget.direction,
         );
     await ref.read(shareInteractionProvider(_bucketKey).notifier).refresh();
@@ -213,7 +213,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.impression,
-          subAccountId: widget.subAccountId,
+          personaId: widget.personaId,
           direction: widget.direction,
           item: item,
         );
@@ -225,20 +225,20 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
   }
 
   void _openUser(ShareInteractionItem item) {
-    final userId = item.displaySubAccountId.trim();
+    final userId = item.displayPersonaId.trim();
     if (userId.isEmpty) return;
     ref
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.actorOpen,
-          subAccountId: widget.subAccountId,
+          personaId: widget.personaId,
           direction: widget.direction,
           item: item,
         );
     context.push(
-      AppRoutePaths.userProfile(username: userId),
+      AppRoutePaths.userProfile(userHandle: userId),
       extra: UserProfileRouteExtra(
-        subAccountId: userId,
+        personaId: userId,
         avatar: item.displayAvatarUrl.isEmpty ? null : item.displayAvatarUrl,
         displayName: item.displayName.isEmpty ? null : item.displayName,
       ),
@@ -255,7 +255,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.open,
-          subAccountId: widget.subAccountId,
+          personaId: widget.personaId,
           direction: widget.direction,
           item: item,
         );
@@ -279,7 +279,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
         .read(shareInteractionObservabilityProvider)
         .track(
           eventName: ShareInteractionEventNames.impactOpen,
-          subAccountId: widget.subAccountId,
+          personaId: widget.personaId,
           direction: widget.direction,
           item: item,
           result: 'opened',

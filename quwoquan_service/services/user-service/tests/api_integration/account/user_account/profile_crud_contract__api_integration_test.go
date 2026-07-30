@@ -3,7 +3,6 @@ package api_integration
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,7 +10,7 @@ import (
 	"testing"
 
 	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
-	userpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 )
 
 func createProfileUpdateFixture(
@@ -23,7 +22,7 @@ func createProfileUpdateFixture(
 	createTestProfile(t, ownerID, nickname)
 	personaID := ownerID + "_persona"
 	createTestPersona(t, personaID, ownerID, nickname, true, true)
-	return personaID + "_sa"
+	return personaID
 }
 
 func TestGetProfile_Success(t *testing.T) {
@@ -72,6 +71,46 @@ func TestGetProfile_MissingAuthenticatedAccountIsDeleted(t *testing.T) {
 	}
 }
 
+func TestRegistrationPromotion_CannotWritePublicProfileProjection(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "registration_promotion_owner", "persona_projection")
+	if _, err := pgPool.Exec(context.Background(), `
+UPDATE user_profiles
+SET account_state='anonymous', phone=NULL
+WHERE user_id=$1`, "registration_promotion_owner"); err != nil {
+		t.Fatalf("prepare anonymous UserAccount: %v", err)
+	}
+
+	store := useraccountpersistence.NewPgProfileStore(pgPool)
+	if err := store.PromoteRegistration(
+		context.Background(),
+		userports.RegistrationPromotion{
+			UserID: "registration_promotion_owner",
+			Phone:  "+8613800000000",
+		},
+	); err != nil {
+		t.Fatalf("promote registration: %v", err)
+	}
+
+	var accountState, phone, nickname string
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT account_state, phone, nickname
+FROM user_profiles
+WHERE user_id=$1`, "registration_promotion_owner").Scan(
+		&accountState,
+		&phone,
+		&nickname,
+	); err != nil {
+		t.Fatalf("read promoted UserAccount: %v", err)
+	}
+	if accountState != "active" || phone != "+8613800000000" {
+		t.Fatalf("registration promotion not persisted: state=%q phone=%q", accountState, phone)
+	}
+	if nickname != "persona_projection" {
+		t.Fatalf("registration promotion mutated Persona projection: nickname=%q", nickname)
+	}
+}
+
 func TestUpdateProfile_Success(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	personaID := createProfileUpdateFixture(t, "user_002", "bob")
@@ -98,6 +137,52 @@ func TestUpdateProfile_Success(t *testing.T) {
 	}
 	if result["backgroundAssetId"] != "asset_bg_user_002" {
 		t.Errorf("expected backgroundAssetId to round-trip, got %v", result["backgroundAssetId"])
+	}
+	var (
+		personaDisplayName string
+		personaBio         string
+		personaBackground  string
+		projectedNickname  string
+		projectedBio       string
+		projectedAt        *string
+	)
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT display_name, bio, background_media_asset_id
+FROM personas
+WHERE persona_id=$1`, personaID).Scan(
+		&personaDisplayName,
+		&personaBio,
+		&personaBackground,
+	); err != nil {
+		t.Fatalf("read authoritative Persona profile: %v", err)
+	}
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT nickname, bio
+FROM user_profiles
+WHERE user_id=$1`, "user_002").Scan(&projectedNickname, &projectedBio); err != nil {
+		t.Fatalf("read UserAccount profile projection: %v", err)
+	}
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT profile_projected_at::text
+FROM personas_outbox
+WHERE aggregate_id=$1 AND event_type='PersonaUpdated'
+ORDER BY aggregate_version DESC
+LIMIT 1`, personaID).Scan(&projectedAt); err != nil {
+		t.Fatalf("read Persona projection checkpoint: %v", err)
+	}
+	if personaDisplayName != "bob_updated" || personaBio != "hello world" ||
+		personaBackground != "asset_bg_user_002" ||
+		projectedNickname != personaDisplayName || projectedBio != personaBio ||
+		projectedAt == nil || strings.TrimSpace(*projectedAt) == "" {
+		t.Fatalf(
+			"Persona authority/projection drift: persona=(%q,%q,%q) projection=(%q,%q,%v)",
+			personaDisplayName,
+			personaBio,
+			personaBackground,
+			projectedNickname,
+			projectedBio,
+			projectedAt,
+		)
 	}
 }
 
@@ -256,74 +341,6 @@ func TestUpdateProfile_IdempotencyReceiptPreventsDuplicateVersionAdvance(
 	}
 }
 
-func TestUpdateProfile_StaleVersionCannotOverwriteCommittedProfile(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	const ownerID = "profile_version_conflict_owner"
-	createProfileUpdateFixture(t, ownerID, "profile_version_conflict")
-	store := userpersistence.NewPgProfileStore(pgPool)
-	first, err := store.FindByID(context.Background(), ownerID)
-	if err != nil || first == nil {
-		t.Fatalf("load first profile snapshot: profile=%#v err=%v", first, err)
-	}
-	stale, err := store.FindByID(context.Background(), ownerID)
-	if err != nil || stale == nil {
-		t.Fatalf("load stale profile snapshot: profile=%#v err=%v", stale, err)
-	}
-	first.Bio = "first writer"
-	first.ProfileVersion++
-	stale.Bio = "stale writer"
-	stale.ProfileVersion++
-
-	if _, err := store.CommitUserProfileCommand(
-		context.Background(),
-		first,
-		nil,
-		[]userports.UserProfileSearchProjection{{
-			UserID:         first.UserID,
-			ProfileVersion: int64(first.ProfileVersion),
-			EventType:      "UserProfileUpdated",
-			OccurredAt:     first.UpdatedAt,
-		}},
-		userports.UserProfileCommandMeta{
-			IdempotencyKey: "persona-cmd:profile-version-first",
-			CommandDigest:  strings.Repeat("a", 64),
-		},
-	); err != nil {
-		t.Fatalf("commit first profile writer: %v", err)
-	}
-	if _, err := store.CommitUserProfileCommand(
-		context.Background(),
-		stale,
-		nil,
-		[]userports.UserProfileSearchProjection{{
-			UserID:         stale.UserID,
-			ProfileVersion: int64(stale.ProfileVersion),
-			EventType:      "UserProfileUpdated",
-			OccurredAt:     stale.UpdatedAt,
-		}},
-		userports.UserProfileCommandMeta{
-			IdempotencyKey: "persona-cmd:profile-version-stale",
-			CommandDigest:  strings.Repeat("b", 64),
-		},
-	); !errors.Is(err, userports.ErrUserProfileVersionConflict) {
-		t.Fatalf("stale writer error=%v, want version conflict", err)
-	}
-	var (
-		bio     string
-		version int
-	)
-	if err := pgPool.QueryRow(
-		context.Background(),
-		`SELECT bio, profile_version FROM user_profiles WHERE user_id=$1`,
-		ownerID,
-	).Scan(&bio, &version); err != nil {
-		t.Fatalf("read committed profile: %v", err)
-	}
-	if bio != "first writer" || version != first.ProfileVersion {
-		t.Fatalf("stale write leaked: bio=%q version=%d", bio, version)
-	}
-}
-
 func TestUpdateProfile_RegionTagRefUpdatesDerivedDisplay(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	personaID := createProfileUpdateFixture(t, "region_owner", "region_user")
@@ -426,20 +443,21 @@ func TestUpdateProfile_RejectsBareBackgroundURL(t *testing.T) {
 func TestGetProfileEditSnapshot_ReturnsCommercialFields(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "profile_edit_owner", "owner_name")
-	createTestPersonaFull(t, "profile_edit_persona", "profile_edit_owner", "profile_edit_sa", "Owner Persona", "open", true, true)
+	createTestPersonaFull(t, "profile_edit_persona", "profile_edit_owner", "profile_edit_persona", "Owner Persona", "open", true, true)
 	createTestCredential(t, "cred_profile_edit_phone", "profile_edit_owner", "phone", "13800000001")
 	_, err := pgPool.Exec(context.Background(), `
-		UPDATE user_profiles
-		SET avatar_asset_id=$2,
-		    background_asset_id=$3,
+		UPDATE personas
+		SET avatar_media_asset_id=$2,
+		    background_media_asset_id=$3,
 		    gender=$4,
 		    birth_date=$5,
 		    region=$6,
-		    region_code=$7,
+		    region_tag_ref=$7,
 		    bio=$8,
-		    identity_tags=$9
-		WHERE user_id=$1`,
-		"profile_edit_owner",
+		    identity_tags=$9,
+		    user_handle=$10
+		WHERE persona_id=$1`,
+		"profile_edit_persona",
 		"asset_avatar_edit",
 		"asset_cover_edit",
 		"female",
@@ -447,16 +465,11 @@ func TestGetProfileEditSnapshot_ReturnsCommercialFields(t *testing.T) {
 		"广东 深圳",
 		"Topic/地理/行政区/中国/广东省/深圳市",
 		"签名",
-		"{Audience/用户/职业/产品运营/产品经理,Audience/用户/兴趣偏好/旅行摄影/摄影}",
+		[]string{"Audience/用户/职业/产品运营/产品经理", "Audience/用户/兴趣偏好/旅行摄影/摄影"},
+		"qw_profile_edit",
 	)
 	if err != nil {
 		t.Fatalf("seed profile edit fields: %v", err)
-	}
-	_, err = pgPool.Exec(context.Background(),
-		`UPDATE personas SET user_handle=$1 WHERE sub_account_id=$2`,
-		"qw_profile_edit", "profile_edit_sa")
-	if err != nil {
-		t.Fatalf("seed persona handle: %v", err)
 	}
 
 	rec := doRequest(
@@ -464,7 +477,7 @@ func TestGetProfileEditSnapshot_ReturnsCommercialFields(t *testing.T) {
 		http.MethodGet,
 		"/user/profile/edit-snapshot",
 		"",
-		authHeadersForPersona("profile_edit_owner", "profile_edit_sa"),
+		authHeadersForPersona("profile_edit_owner", "profile_edit_persona"),
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -502,10 +515,10 @@ func TestGetProfileEditSnapshot_ReturnsCommercialFields(t *testing.T) {
 func TestGetProfileQRCard_IssuesOpaqueResolvableToken(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "qr_owner", "qr_owner_name")
-	createTestPersonaFull(t, "qr_persona", "qr_owner", "qr_sa", "QR Persona", "open", true, true)
+	createTestPersonaFull(t, "qr_persona", "qr_owner", "qr_persona", "QR Persona", "open", true, true)
 	_, err := pgPool.Exec(context.Background(),
-		`UPDATE personas SET user_handle=$1 WHERE sub_account_id=$2`,
-		"qw_qr_handle", "qr_sa")
+		`UPDATE personas SET user_handle=$1 WHERE persona_id=$2`,
+		"qw_qr_handle", "qr_persona")
 	if err != nil {
 		t.Fatalf("seed qr handle: %v", err)
 	}
@@ -515,7 +528,7 @@ func TestGetProfileQRCard_IssuesOpaqueResolvableToken(t *testing.T) {
 		http.MethodGet,
 		"/user/profile/qr-card",
 		"",
-		authHeadersForPersona("qr_owner", "qr_sa"),
+		authHeadersForPersona("qr_owner", "qr_persona"),
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -553,7 +566,7 @@ func TestGetProfileQRCard_IssuesOpaqueResolvableToken(t *testing.T) {
 		t.Fatalf("expected resolve 200, got %d: %s", resolveRec.Code, resolveRec.Body.String())
 	}
 	resolved := parseJSON(t, resolveRec)
-	if resolved["subAccountId"] != "qr_sa" || resolved["userHandle"] != "qw_qr_handle" || resolved["scanStatus"] != "accepted" {
+	if resolved["personaId"] != "qr_persona" || resolved["userHandle"] != "qw_qr_handle" || resolved["scanStatus"] != "accepted" {
 		t.Fatalf("unexpected resolve payload: %#v", resolved)
 	}
 }

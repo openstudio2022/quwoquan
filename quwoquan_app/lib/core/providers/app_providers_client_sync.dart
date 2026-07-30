@@ -26,16 +26,24 @@ class ClientStateSyncOutboxNotifier
     if (raw == null) {
       return;
     }
-    state = state.copyWith(
-      entries: _dropResolvedEntries(
-        ClientStateSyncOutboxState.fromMap(raw).entries,
-      ),
-    );
+    try {
+      state = state.copyWith(
+        entries: _dropResolvedEntries(
+          ClientStateSyncOutboxState.fromMap(raw).entries,
+        ),
+      );
+    } on FormatException {
+      state = const ClientStateSyncOutboxState();
+      await _writePersistedInteractionMap(
+        _clientStateSyncOutboxStorageKey,
+        state.toMap(),
+      );
+    }
     _scheduleNextFlush();
   }
 
   void enqueueFollow({
-    required String subAccountId,
+    required String personaId,
     required bool currentFollowing,
     required bool shouldFollow,
     required String sourceSurfaceId,
@@ -43,7 +51,7 @@ class ClientStateSyncOutboxNotifier
   }) {
     _upsertEntry(
       objectType: 'profile',
-      objectId: subAccountId,
+      objectId: personaId,
       intentType: 'follow',
       currentBoolValue: currentFollowing,
       desiredBoolValue: shouldFollow,
@@ -334,6 +342,9 @@ final _assistantRemoteProvider = Provider<RemoteAssistantRepository>((ref) {
   final consentActorScope = '$accountId/$personaId';
   return RemoteAssistantRepository(
     httpClient: ref.watch(cloudHttpClientProvider),
+    operationClient: ref.watch(generatedCloudOperationClientProvider),
+    conversationInvocationContext: (clientPageId) =>
+        _assistantOperationInvocationContext(ref, clientPageId: clientPageId),
     consentActorScope: consentActorScope,
   );
 });
@@ -429,7 +440,7 @@ final class AssistantLearningFactOutboxNotifier extends Notifier<int> {
     return 0;
   }
 
-  Future<bool> enqueue(AppendAssistantLearningFactRequest fact) async {
+  Future<bool> enqueue(AssistantLearningFactAppendCommand fact) async {
     final persisted = await _outbox.enqueue(fact);
     if (!ref.mounted) {
       return persisted;
@@ -554,7 +565,7 @@ CloudOperationInvocationContext _notificationInvocationContext(
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
-  final personaId = persona?.subAccountId.trim() ?? '';
+  final personaId = persona?.personaId.trim() ?? '';
   // AppMessage inbox 的宿主面是消息页通知维度（chatList surface）；
   // metadata ui_surfaces.yaml 已绑定对应 operation。
   return CloudOperationInvocationContext(
@@ -647,7 +658,7 @@ final homepageQueryActorContextProvider = Provider<CloudOperationActorContext>((
 ) {
   final session = ref.watch(authSessionControllerProvider);
   final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
-  final personaId = session.activeSubAccountId.trim();
+  final personaId = session.activePersonaId.trim();
   return CloudOperationActorContext(
     accountId: accountId.isEmpty ? null : accountId,
     personaId: personaId.isEmpty ? null : personaId,

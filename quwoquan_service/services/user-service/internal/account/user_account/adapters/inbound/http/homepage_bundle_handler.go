@@ -12,13 +12,13 @@ import (
 // 消除首屏串行阻塞。交集与影响力 evidence 仍由 content 域接口端侧并发拉取，user 域不聚合
 // content / intersection 事实，避免成为内容事实第二真相源。auth=optional，游客可读公开档案。
 func (h *UserHandler) handleGetUserHomepageBundle(w http.ResponseWriter, r *http.Request) {
-	targetID := strings.TrimSpace(r.PathValue("subAccountId"))
+	targetID := strings.TrimSpace(r.PathValue("personaId"))
 	if targetID == "" {
-		writeInvalidArg(w, r, "subAccountId required")
+		writeInvalidArg(w, r, "personaId required")
 		return
 	}
 
-	profile, err := h.subAccount.GetSubAccountProfileView(r.Context(), targetID)
+	profile, err := h.persona.GetPersonaProfileView(r.Context(), targetID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -28,21 +28,21 @@ func (h *UserHandler) handleGetUserHomepageBundle(w http.ResponseWriter, r *http
 		return
 	}
 
-	// target 归一身份：persona 优先 subAccountId，owner 态回落 userId。
-	targetSubAccountID := strings.TrimSpace(anyString(profile["subAccountId"]))
-	if targetSubAccountID == "" {
-		targetSubAccountID = strings.TrimSpace(anyString(profile["userId"]))
+	// target 归一身份：persona 优先 personaId，owner 态回落 userId。
+	targetPersonaID := strings.TrimSpace(anyString(profile["personaId"]))
+	if targetPersonaID == "" {
+		targetPersonaID = strings.TrimSpace(anyString(profile["userId"]))
 	}
 
 	// viewer 解析（游客容忍）：无鉴权头 = 游客态，不报错，跳过关系能力。
 	viewerID := ""
 	if strings.TrimSpace(userIDFromHeader(r)) != "" {
-		if resolved, resolveErr := h.resolveActorSubAccountID(r.Context(), r, ""); resolveErr == nil {
+		if resolved, resolveErr := h.resolveActorPersonaID(r.Context(), r, ""); resolveErr == nil {
 			viewerID = strings.TrimSpace(resolved)
 		}
 	}
 	isGuest := viewerID == ""
-	isOwner := !isGuest && viewerID == targetSubAccountID
+	isOwner := !isGuest && viewerID == targetPersonaID
 
 	// stats：仅身份域可直接计数的真相（与 UserProfileStatsWire 对齐）。
 	stats := map[string]any{
@@ -62,33 +62,33 @@ func (h *UserHandler) handleGetUserHomepageBundle(w http.ResponseWriter, r *http
 	}
 
 	// relationshipCapability：viewer→target 关系能力。游客态不下发（端按 nil 走未登录引导）。
-	var relationshipCapability map[string]any
+	var relationshipCapability any
 	relationToTarget := "not_following"
 	if isOwner {
 		relationToTarget = "self"
 	}
 	if !isGuest {
-		rel, relErr := h.relationship.GetRelationship(r.Context(), viewerID, targetSubAccountID)
+		rel, relErr := h.relationship.GetRelationship(r.Context(), viewerID, targetPersonaID)
 		if relErr != nil {
 			writeHTTPError(w, r, relErr)
 			return
 		}
-		isBlocked, blockErr := h.relationship.CheckBlocked(r.Context(), viewerID, targetSubAccountID)
+		isBlocked, blockErr := h.relationship.CheckBlocked(r.Context(), viewerID, targetPersonaID)
 		if blockErr != nil {
 			writeHTTPError(w, r, blockErr)
 			return
 		}
-		isBlockedBy, blockedByErr := h.relationship.CheckBlocked(r.Context(), targetSubAccountID, viewerID)
+		isBlockedBy, blockedByErr := h.relationship.CheckBlocked(r.Context(), targetPersonaID, viewerID)
 		if blockedByErr != nil {
 			writeHTTPError(w, r, blockedByErr)
 			return
 		}
-		relationshipCapability = h.buildRelationshipCapabilityView(r.Context(), viewerID, targetSubAccountID, rel, isBlocked, isBlockedBy)
-		relationToTarget = relationshipState(rel, viewerID, targetSubAccountID)
+		relationshipCapability = h.relationshipCapabilityView(r.Context(), viewerID, targetPersonaID, rel, isBlocked, isBlockedBy)
+		relationToTarget = relationshipState(rel, viewerID, targetPersonaID)
 	}
 
 	viewerContext := map[string]any{
-		"viewerSubAccountId": viewerID,
+		"viewerPersonaId":    viewerID,
 		"isOwner":            isOwner,
 		"isGuest":            isGuest,
 		"relationToTarget":   relationToTarget,
@@ -96,7 +96,7 @@ func (h *UserHandler) handleGetUserHomepageBundle(w http.ResponseWriter, r *http
 	}
 
 	cacheVersion := homepageBundleCacheVersion(
-		targetSubAccountID,
+		targetPersonaID,
 		anyString(profile["updatedAt"]),
 		viewerID,
 		relationToTarget,

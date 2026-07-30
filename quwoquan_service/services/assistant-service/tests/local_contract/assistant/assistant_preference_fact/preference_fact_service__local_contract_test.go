@@ -37,6 +37,8 @@ func (s *migratedPreferenceFactServiceMemoryPreferenceStore) Upsert(
 			current.Kind == input.Kind {
 			current.Value = input.Value
 			current.SourceType = input.SourceType
+			current.SourceConversationID = input.SourceConversationID
+			current.ConfirmedAt = input.ConfirmedAt
 			current.Status = preferencemodel.StatusActive
 			current.RevokedAt = nil
 			current.RevocationDeadline = nil
@@ -47,17 +49,19 @@ func (s *migratedPreferenceFactServiceMemoryPreferenceStore) Upsert(
 		}
 	}
 	fact := preferencemodel.Fact{
-		PreferenceID:   input.PreferenceID,
-		UserID:         input.UserID,
-		Scope:          input.Scope,
-		ConversationID: input.ConversationID,
-		Kind:           input.Kind,
-		Value:          input.Value,
-		SourceType:     input.SourceType,
-		Status:         preferencemodel.StatusActive,
-		CreatedAt:      input.Now,
-		UpdatedAt:      input.Now,
-		Version:        1,
+		PreferenceID:         input.PreferenceID,
+		UserID:               input.UserID,
+		Scope:                input.Scope,
+		ConversationID:       input.ConversationID,
+		Kind:                 input.Kind,
+		Value:                input.Value,
+		SourceType:           input.SourceType,
+		SourceConversationID: input.SourceConversationID,
+		ConfirmedAt:          input.ConfirmedAt,
+		Status:               preferencemodel.StatusActive,
+		CreatedAt:            input.Now,
+		UpdatedAt:            input.Now,
+		Version:              1,
 	}
 	s.facts[fact.PreferenceID] = fact
 	return fact, nil
@@ -326,6 +330,85 @@ func TestPreferenceFactSessionLifecycleAndOwnerIsolation(t *testing.T) {
 				t.Fatalf("missing preference error = %v", err)
 			}
 		}
+	}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001
+func TestFactualLongTermMemoryRequiresConfirmationAndReusesRevokeRestore(t *testing.T) {
+	store := migratedPreferenceFactServiceNewMemoryPreferenceStore()
+	commands := NewCommandFacade(
+		store,
+		migratedPreferenceFactServiceOwnedConversationReader{
+			userID:         "persona-memory",
+			conversationID: "acv-memory-source",
+		},
+	)
+	queries := NewQueryFacade(store)
+	command := SetPreferenceCommand{
+		UserID:               "persona-memory",
+		Scope:                "long_term",
+		Kind:                 "dietary_restrictions",
+		Value:                "对花生过敏，不吃含花生的食物",
+		SourceType:           "conversation_confirmed",
+		SourceConversationID: "acv-memory-source",
+	}
+	if _, err := commands.SetPreference(t.Context(), command); err == nil {
+		t.Fatal("unconfirmed factual memory must be rejected")
+	}
+	command.Confirmed = true
+	fact, err := commands.SetPreference(t.Context(), command)
+	if err != nil {
+		t.Fatalf("SetPreference(factual memory): %v", err)
+	}
+	if fact.Kind != preferencemodel.KindDietaryRestrictions ||
+		fact.SourceConversationID != "acv-memory-source" ||
+		fact.ConfirmedAt == nil {
+		t.Fatalf("factual memory attribution=%#v", fact)
+	}
+	if _, err := commands.RevokePreference(
+		t.Context(),
+		"another-persona",
+		fact.PreferenceID,
+	); err == nil {
+		t.Fatal("non-owner must not revoke factual memory")
+	}
+	if _, err := commands.RevokePreference(
+		t.Context(),
+		"persona-memory",
+		fact.PreferenceID,
+	); err != nil {
+		t.Fatalf("RevokePreference(): %v", err)
+	}
+	_, longTerm, err := queries.ResolveActiveSnapshots(
+		t.Context(),
+		"persona-memory",
+		"acv-new-session",
+	)
+	if err != nil {
+		t.Fatalf("ResolveActiveSnapshots(revoked): %v", err)
+	}
+	if len(longTerm) != 0 {
+		t.Fatalf("revoked factual memory remained active: %#v", longTerm)
+	}
+	if _, err := commands.RestorePreference(
+		t.Context(),
+		"persona-memory",
+		fact.PreferenceID,
+	); err != nil {
+		t.Fatalf("RestorePreference(): %v", err)
+	}
+	_, longTerm, err = queries.ResolveActiveSnapshots(
+		t.Context(),
+		"persona-memory",
+		"acv-new-session",
+	)
+	if err != nil {
+		t.Fatalf("ResolveActiveSnapshots(restored): %v", err)
+	}
+	if len(longTerm) != 1 ||
+		longTerm[0].Kind != preferencemodel.KindDietaryRestrictions ||
+		longTerm[0].SourceConversationID != "acv-memory-source" {
+		t.Fatalf("restored factual memory snapshots=%#v", longTerm)
 	}
 }
 

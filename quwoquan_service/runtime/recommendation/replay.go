@@ -46,14 +46,12 @@ type ReplayItem struct {
 
 // ReplayRequest is one replayed feed response (one feedRequestId), items ranked.
 type ReplayRequest struct {
-	FeedRequestID  string
-	UserID         string
-	ChannelID      string
-	Vertical       string
-	RankingVersion string
-	ReasonVersion  string
-	ScorerVariant  string
-	Items          []ReplayItem
+	FeedRequestID string
+	UserID        string
+	ChannelID     string
+	Vertical      string
+	ScorerVariant string
+	Items         []ReplayItem
 }
 
 // ReplayDataset is a captured collection of feed requests plus the catalog size
@@ -63,9 +61,7 @@ type ReplayDataset struct {
 	EligibleContentCount                 int
 	DataWindowStart                      time.Time
 	DataWindowEnd                        time.Time
-	PolicyVersion                        string
-	RankingVersion                       string
-	ReasonVersion                        string
+	PolicyDigest                         string
 	ScorerVariant                        string
 	TimeDecayFeatureFreshness            float64
 	BaselineNonCollaborativePositiveRate float64
@@ -93,9 +89,7 @@ type ReplayPromotionThresholds struct {
 type ReplayReportOptions struct {
 	DataWindowStart time.Time
 	DataWindowEnd   time.Time
-	PolicyVersion   string
-	RankingVersion  string
-	ReasonVersion   string
+	PolicyDigest    string
 	ScorerVariant   string
 	Thresholds      ReplayPromotionThresholds
 }
@@ -107,9 +101,7 @@ type ReplayReport struct {
 	ItemsEvaluated            int                `json:"itemsEvaluated"`
 	DataWindowStart           time.Time          `json:"dataWindowStart,omitempty"`
 	DataWindowEnd             time.Time          `json:"dataWindowEnd,omitempty"`
-	PolicyVersion             string             `json:"policyVersion,omitempty"`
-	RankingVersion            string             `json:"rankingVersion,omitempty"`
-	ReasonVersion             string             `json:"reasonVersion,omitempty"`
+	PolicyDigest              string             `json:"policyDigest,omitempty"`
 	ScorerVariant             string             `json:"scorerVariant,omitempty"`
 	Invalid                   bool               `json:"invalid"`
 	InvalidReasons            []string           `json:"invalidReasons,omitempty"`
@@ -147,9 +139,7 @@ func ComputeReplayReportWithOptions(ds ReplayDataset, k int, opts ReplayReportOp
 		K:                         k,
 		DataWindowStart:           opts.DataWindowStart,
 		DataWindowEnd:             opts.DataWindowEnd,
-		PolicyVersion:             opts.PolicyVersion,
-		RankingVersion:            opts.RankingVersion,
-		ReasonVersion:             opts.ReasonVersion,
+		PolicyDigest:              opts.PolicyDigest,
 		ScorerVariant:             opts.ScorerVariant,
 		PromotionAllowed:          true,
 		TimeDecayFeatureFreshness: ds.TimeDecayFeatureFreshness,
@@ -402,14 +392,8 @@ func normalizeReplayOptions(ds ReplayDataset, opts ReplayReportOptions) ReplayRe
 	if opts.DataWindowEnd.IsZero() {
 		opts.DataWindowEnd = ds.DataWindowEnd
 	}
-	if opts.PolicyVersion == "" {
-		opts.PolicyVersion = ds.PolicyVersion
-	}
-	if opts.RankingVersion == "" {
-		opts.RankingVersion = ds.RankingVersion
-	}
-	if opts.ReasonVersion == "" {
-		opts.ReasonVersion = ds.ReasonVersion
+	if opts.PolicyDigest == "" {
+		opts.PolicyDigest = ds.PolicyDigest
 	}
 	if opts.ScorerVariant == "" {
 		opts.ScorerVariant = ds.ScorerVariant

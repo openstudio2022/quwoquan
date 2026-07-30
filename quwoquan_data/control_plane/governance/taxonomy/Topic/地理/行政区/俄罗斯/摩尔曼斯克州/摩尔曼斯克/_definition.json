@@ -1,0 +1,12 @@
+{
+  "label": "摩尔曼斯克",
+  "labelEn": "Murmansk",
+  "description": "北极圈最大城市与极光门户",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

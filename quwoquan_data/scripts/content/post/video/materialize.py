@@ -161,7 +161,7 @@ def materialize_video_post(
     creator_payload = pack.creator.to_dict()
     for field in (
         "creatorArchetype",
-        "creatorProfileVersion",
+        "creatorProfileDigest",
         "creatorDisclosure",
         "experienceClaimMode",
         "authorQualitySignals",

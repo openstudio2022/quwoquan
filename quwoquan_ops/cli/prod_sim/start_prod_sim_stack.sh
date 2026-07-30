@@ -12,12 +12,6 @@ PY
 )"
 QWQ_DEPLOY_WORK_ROOT="$(dirname "$DEPLOY_TARGET_ROOT")"
 export QWQ_DEPLOY_WORK_ROOT
-eval "$(
-  PYTHONDONTWRITEBYTECODE=1 python3 \
-    "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" paths \
-    --target prod-sim \
-    --format shell
-)"
 ACTION="${1:-up}"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
   --env prod --target prod-sim --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
@@ -31,7 +25,19 @@ CACHE_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/cache"
 STATE_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/process"
 LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
 REPORT="${QWQ_RUN_ROOT}/prod-sim-report.json"
-MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+READINESS_RECEIPT="${DATA_RELEASE_READINESS_RECEIPT:-}"
+MEDIA_DIR=""
+PROD_SIM_RELEASE_ID=""
+PROD_SIM_RELEASE_DIGEST=""
+PROD_SIM_MEDIA_MANIFEST_DIGEST=""
+PROD_SIM_IMPORT_RUN_ID=""
+PROD_SIM_VERIFY_RUN_ID=""
+PROD_SIM_READINESS_RECEIPT_REF=""
+VIDEO_CANARY_WORK_ID=""
+VIDEO_CANARY_ASSET_ID=""
+VIDEO_CANARY_ASSET_VERSION=""
+VIDEO_CANARY_PUBLIC_SLICE_KEY=""
+VIDEO_CANARY_SHA256=""
 PROD_SIM_LEGAL_STATIC_ROOT="$(PYTHONPATH="$ROOT_DIR" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 from quwoquan_ops.cli.lib.output_paths import legal_static_deployment_package_dir
 
@@ -236,12 +242,26 @@ prepare_tls_caddyfile() {
 		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
 		Access-Control-Allow-Headers "*"
 		Cross-Origin-Resource-Policy "cross-origin"
+		Cache-Control "no-store"
+	}
+	@immutable_public_media {
+		path_regexp immutable_public_media ^/media/(?:avatar|image|video|background|attachment)/s/(?:[^/]+/)+v[1-9][0-9]*/(?:[^/]+/)*[^/]+$
+		vars_regexp canonical_media_query {http.request.uri.query} ^$
+	}
+	header @immutable_public_media {
+		Cache-Control "public, max-age=31536000, immutable"
+		X-QWQ-Media-Cache-Key "{http.request.uri.path}"
 	}
 }
 
 https://${PUBLIC_API_HOST}:${API_EDGE_PORT},
 https://${PUBLIC_WEB_HOST}:${API_EDGE_PORT} {
 	import public_tls
+	@web_api {
+		host ${PUBLIC_WEB_HOST}
+		path /api/*
+	}
+	uri @web_api strip_prefix /api
 	handle /legal/manifest.json {
 		header {
 			Cache-Control "public, max-age=300"
@@ -284,6 +304,14 @@ stop_tls_proxy() {
 }
 
 start_tls_proxy() {
+  local tls_exports
+  tls_exports="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" paths \
+      --target prod-sim \
+      --format shell
+  )" || return $?
+  eval "$tls_exports"
   resolve_container_runtime
   prepare_tls_caddyfile
   stop_tls_proxy
@@ -365,8 +393,85 @@ wait_https_range_ok() {
   done
 }
 
+require_release_bound_media() {
+  local exports
+  if ! exports="$(PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    PYTHONDONTWRITEBYTECODE=1 python3 - \
+    "$ROOT_DIR" \
+    "$READINESS_RECEIPT" <<'PY'
+import hashlib
+import shlex
+import sys
+from pathlib import Path
+
+repo_root = Path(sys.argv[1]).resolve()
+readiness_value = sys.argv[2]
+sys.path.insert(0, str(repo_root))
+
+from quwoquan_ops.cli.lib.release_video_delivery import (  # noqa: E402
+    ReleaseVideoDeliveryError,
+    load_release_content_identity,
+    load_release_video_binding,
+    resolve_readiness_path,
+)
+
+try:
+    readiness_path = resolve_readiness_path(readiness_value)
+    identity = load_release_content_identity(
+        readiness_path,
+        expected_environment="prod",
+    )
+    binding = load_release_video_binding(
+        readiness_path,
+        expected_environment="prod",
+    )
+except (ReleaseVideoDeliveryError, ValueError) as exc:
+    raise SystemExit(f"GATE_BLOCK: {exc}") from exc
+
+media_root = Path(identity["mediaManifestPath"]).parent.resolve()
+if not media_root.is_dir() or media_root.is_symlink():
+    raise SystemExit("GATE_BLOCK: canonical release payload media root is not materialized")
+public_slice_key = str(binding["publicSliceKey"])
+media_file = media_root / public_slice_key
+if not media_file.is_file() or media_file.is_symlink():
+    raise SystemExit(
+        f"GATE_BLOCK: release-bound prod-sim canary bytes are missing: {public_slice_key}"
+    )
+digest = "sha256:" + hashlib.sha256(media_file.read_bytes()).hexdigest()
+if digest != binding["expectedHash"]:
+    raise SystemExit("GATE_BLOCK: prod-sim media bytes drift from canonical release sha256")
+if media_file.stat().st_size != binding["expectedBytes"]:
+    raise SystemExit("GATE_BLOCK: prod-sim media bytes drift from canonical release length")
+print(f"MEDIA_DIR={shlex.quote(str(media_root.resolve()))}")
+print(f"PROD_SIM_RELEASE_ID={shlex.quote(str(identity['releaseId']))}")
+print(f"PROD_SIM_RELEASE_DIGEST={shlex.quote(str(identity['manifestDigest']))}")
+print(
+    "PROD_SIM_MEDIA_MANIFEST_DIGEST="
+    + shlex.quote(str(identity["mediaManifestDigest"]))
+)
+print(f"PROD_SIM_IMPORT_RUN_ID={shlex.quote(str(identity['importRunId']))}")
+print(f"PROD_SIM_VERIFY_RUN_ID={shlex.quote(str(identity['verifyRunId']))}")
+print(
+    "PROD_SIM_READINESS_RECEIPT_REF="
+    + shlex.quote(str(identity["readinessReceiptRef"]))
+)
+print(f"VIDEO_CANARY_WORK_ID={shlex.quote(str(binding['workId']))}")
+print(f"VIDEO_CANARY_ASSET_ID={shlex.quote(str(binding['assetId']))}")
+print(f"VIDEO_CANARY_ASSET_VERSION={int(binding['assetVersion'])}")
+print(
+    "VIDEO_CANARY_PUBLIC_SLICE_KEY="
+    + shlex.quote(str(binding["publicSliceKey"]))
+)
+print(f"VIDEO_CANARY_SHA256={shlex.quote(digest)}")
+PY
+  )"; then
+    return 2
+  fi
+  eval "$exports"
+}
+
 write_report() {
-  python3 - "$REPORT" "$API_BASE_URL" "$PUBLIC_WEB_BASE_URL" "$LEGAL_BASE_URL" "$APP_DOWNLOAD_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_AVATAR_BASE_URL" "$MEDIA_IMAGE_BASE_URL" "$MEDIA_VIDEO_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
+  python3 - "$REPORT" "$API_BASE_URL" "$PUBLIC_WEB_BASE_URL" "$LEGAL_BASE_URL" "$APP_DOWNLOAD_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_AVATAR_BASE_URL" "$MEDIA_IMAGE_BASE_URL" "$MEDIA_VIDEO_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$MEDIA_ORIGIN_BASE_URL" "$PROD_SIM_RELEASE_ID" "$PROD_SIM_RELEASE_DIGEST" "$PROD_SIM_MEDIA_MANIFEST_DIGEST" "$PROD_SIM_IMPORT_RUN_ID" "$PROD_SIM_VERIFY_RUN_ID" "$PROD_SIM_READINESS_RECEIPT_REF" "$VIDEO_CANARY_WORK_ID" "$VIDEO_CANARY_ASSET_ID" "$VIDEO_CANARY_ASSET_VERSION" "$VIDEO_CANARY_PUBLIC_SLICE_KEY" "$VIDEO_CANARY_SHA256" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -383,10 +488,22 @@ from pathlib import Path
     media_video_base,
     media_upload_base,
     media_origin,
-) = sys.argv[1:12]
+    release_id,
+    release_digest,
+    media_manifest_digest,
+    import_run_id,
+    verify_run_id,
+    readiness_receipt_ref,
+    canary_work_id,
+    canary_asset_id,
+    canary_asset_version,
+    canary_public_slice_key,
+    canary_sha256,
+) = sys.argv[1:23]
 payload = {
-    "status": "passed",
+    "status": "infrastructure_ready",
     "target": "prod-sim",
+    "businessDataReady": False,
     "gatewayBaseUrl": api_base,
     "publicWebBaseUrl": public_web_base,
     "legalBaseUrl": legal_base,
@@ -397,6 +514,19 @@ payload = {
     "mediaVideoBaseUrl": media_video_base,
     "mediaUploadBaseUrl": media_upload_base,
     "mediaOriginBaseUrl": media_origin,
+    "releaseCanary": {
+        "releaseId": release_id,
+        "manifestDigest": release_digest,
+        "mediaManifestDigest": media_manifest_digest,
+        "importRunId": import_run_id,
+        "verifyRunId": verify_run_id,
+        "readinessReceiptRef": readiness_receipt_ref,
+        "workId": canary_work_id,
+        "assetId": canary_asset_id,
+        "assetVersion": int(canary_asset_version),
+        "publicSliceKey": canary_public_slice_key,
+        "sha256": canary_sha256,
+    },
 }
 Path(report_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
@@ -421,7 +551,7 @@ status_one() {
 
 case "$ACTION" in
   up)
-    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" package --env prod --kind legal-static
+    require_release_bound_media
     if [[ ! -f "$PROD_SIM_LEGAL_STATIC_ROOT/legal/user-agreement" ]]; then
       echo "[prod-sim] FAIL: legal-static package missing user-agreement at $PROD_SIM_LEGAL_STATIC_ROOT" >&2
       exit 2
@@ -436,26 +566,22 @@ case "$ACTION" in
         --listen-host 127.0.0.1 \
         --listen-port "$MEDIA_ORIGIN_PORT" \
         --root-dir "$MEDIA_DIR" \
-        --server-label prod-sim-media-origin \
-        --enable-conversation-avatar-alias
+        --server-label prod-sim-release-media-origin
     wait_http_ok "$MEDIA_ORIGIN_BASE_URL/healthz" 30
-    wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
+    wait_http_range_ok "$MEDIA_ORIGIN_BASE_URL/$VIDEO_CANARY_PUBLIC_SLICE_KEY" 30
     start_bg media-edge \
       python3 "$ROOT_DIR/quwoquan_ops/cli/lib/http_reverse_proxy.py" \
         --listen-host 127.0.0.1 \
         --listen-port "$MEDIA_PROCESSOR_PORT" \
         --target-base-url "$MEDIA_ORIGIN_BASE_URL"
     wait_http_ok "$INTERNAL_MEDIA_BASE_URL/healthz" 30
-    wait_http_ok "$INTERNAL_MEDIA_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
+    wait_http_range_ok "$INTERNAL_MEDIA_BASE_URL/$VIDEO_CANARY_PUBLIC_SLICE_KEY" 30
     start_bg api-edge \
-      python3 "$ROOT_DIR/quwoquan_ops/cli/lib/mock_public_plane.py" \
+      python3 "$ROOT_DIR/quwoquan_ops/cli/lib/infrastructure_probe_plane.py" \
         --listen-host 127.0.0.1 \
         --listen-port "$CONTENT_PORT" \
         --mode api \
         --runtime-env prod \
-        --legal-static-root "$PROD_SIM_LEGAL_STATIC_ROOT" \
         --gateway-base-url "$API_BASE_URL" \
         --legal-base-url "$LEGAL_BASE_URL" \
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
@@ -466,7 +592,7 @@ case "$ACTION" in
     wait_http_ok "$INTERNAL_API_BASE_URL/healthz" 30
     wait_http_ok "$INTERNAL_API_BASE_URL/config/app" 30
     start_bg product-ops \
-      python3 "$ROOT_DIR/quwoquan_ops/cli/lib/mock_public_plane.py" \
+      python3 "$ROOT_DIR/quwoquan_ops/cli/lib/infrastructure_probe_plane.py" \
         --listen-host 127.0.0.1 \
         --listen-port "$PRODUCT_OPS_SERVICE_PORT" \
         --mode product-ops \
@@ -486,10 +612,9 @@ case "$ACTION" in
     verify_https_legal_document "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" "趣我圈用户协议"
     verify_https_legal_document "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/privacy-policy" "趣我圈隐私政策"
     wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
-    wait_https_ok "$PUBLIC_CDN_HOST" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
-    wait_https_range_ok "$PUBLIC_CDN_HOST" "$MEDIA_EDGE_PORT" "/media/video/s/video-primary-0001/post/video-content-0001/source.mp4" 30
+    wait_https_range_ok "$PUBLIC_CDN_HOST" "$MEDIA_EDGE_PORT" "/$VIDEO_CANARY_PUBLIC_SLICE_KEY" 30
     write_report
-    echo "[prod-sim] public plane ready: $API_BASE_URL, $MEDIA_IMAGE_BASE_URL"
+    echo "[prod-sim] infrastructure plane ready; business queries remain GATE_BLOCK: $API_BASE_URL"
     ;;
   down)
     stop_bg api-edge
@@ -503,11 +628,11 @@ case "$ACTION" in
   status)
     status_one api-edge "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz"
     status_one product-ops "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz"
-    status_one media-edge "$PUBLIC_CDN_HOST" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+    status_one media-edge "$PUBLIC_CDN_HOST" "$MEDIA_EDGE_PORT" "/healthz"
     if command -v curl >/dev/null 2>&1; then
-      wait_http_ok "$MEDIA_ORIGIN_BASE_URL/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 3 >/dev/null 2>&1 &&
-        echo "[prod-sim] media-origin: health ok ${MEDIA_ORIGIN_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" ||
-        echo "[prod-sim] media-origin: health pending ${MEDIA_ORIGIN_BASE_URL}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+      wait_http_ok "$MEDIA_ORIGIN_BASE_URL/healthz" 3 >/dev/null 2>&1 &&
+        echo "[prod-sim] media-origin: health ok ${MEDIA_ORIGIN_BASE_URL}/healthz" ||
+        echo "[prod-sim] media-origin: health pending ${MEDIA_ORIGIN_BASE_URL}/healthz"
     fi
     ;;
   *)

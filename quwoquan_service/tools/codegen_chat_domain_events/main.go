@@ -32,6 +32,7 @@ func main() {
 		generator := contractcodegen.NewDomainGenerator(
 			source,
 			filepath.Join(filepath.Clean(outputDir), contractcodegen.CamelToSnake(aggregate)),
+			contractcodegen.WithSliceEntityRefs(),
 			contractcodegen.WithObjectFirstRoot(),
 		)
 		if err := generator.GenerateDomainEvents(aggregate); err != nil {

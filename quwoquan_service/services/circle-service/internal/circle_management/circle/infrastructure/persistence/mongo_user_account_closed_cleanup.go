@@ -389,7 +389,7 @@ func (projection *MongoUserAccountClosedProjection) reconcileAccountClosureCircl
 		activeCount, err := projection.countWeeklyCircleActors(
 			ctx,
 			circleID,
-			projection.now().UTC().Add(-7*24*time.Hour),
+			event.UpdatedAt.UTC().Add(-7*24*time.Hour),
 		)
 		if err != nil {
 			return err

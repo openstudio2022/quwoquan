@@ -167,6 +167,7 @@ def write_source_unit(
     extractor: str = "",
     policy_revision: str = "",
     source_use_mode: str = "",
+    rights_mode: str = "",
     publish_media_mode: str = "",
     source_role: str = "",
     image_evidence_mode: str = "",
@@ -454,7 +455,7 @@ def write_source_unit(
             resolved_policy_revision
             or (HOMEPAGE_SOURCE_POLICY_REVISION if research_lane == "homepage" else "")
         ),
-        "rightsMode": source_use_mode or "blocked",
+        "rightsMode": str(rights_mode or source_use_mode or "blocked").strip(),
         "snapshotHash": snapshot_hash,
         "title": title,
         "relevance": {
@@ -550,7 +551,13 @@ def write_source_unit(
         manifest["entityFocusVerdict"] = focus_verdict
     if asset_funnel:
         manifest["assetFunnel"] = dict(asset_funnel)
-    if research_lane == "homepage":
+    if research_lane == "video":
+        from content.source.video_source_unit_contract import (
+            assert_video_source_unit_invariants,
+        )
+
+        assert_video_source_unit_invariants(manifest)
+    if research_lane in {"homepage", "video"}:
         from core.schema import assert_valid
 
         assert_valid(

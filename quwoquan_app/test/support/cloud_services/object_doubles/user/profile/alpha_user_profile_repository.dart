@@ -17,8 +17,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/profile_qr_resolve_wir
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_view_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -39,5 +39,5 @@ typedef _ProfileEditSnapshotOverrideMap =
 String get kMockCurrentOwnerId =>
     AlphaFixtureUserResolver.currentUserVariantUserId;
 
-String get kMockCurrentSubAccountId =>
-    AlphaFixtureUserResolver.currentUserVariantSubAccountId;
+String get kMockCurrentPersonaId =>
+    AlphaFixtureUserResolver.currentUserVariantPersonaId;

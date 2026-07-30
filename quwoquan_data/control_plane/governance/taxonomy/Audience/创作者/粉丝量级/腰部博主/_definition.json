@@ -2,6 +2,7 @@
   "label": "腰部博主",
   "labelEn": "Mid-tier Influencer",
   "description": "粉丝1万-10万",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

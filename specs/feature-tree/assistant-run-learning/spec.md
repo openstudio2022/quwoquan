@@ -4,13 +4,13 @@
 
 ## 1. 目标与用户价值
 
-让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以版本化策略、学习事件、反馈聚合和用户确认的画像提案持续改进助手行为。
+让用户获得可恢复、可解释且上下文一致的小趣回答；让平台以 releaseDigest 内容寻址的不可变策略发布、学习事件、反馈聚合和用户确认的画像提案持续改进助手行为。
 
 ## 2. 领域边界
 
 ### 本领域拥有
 
-- 拥有 `AssistantConversation`、`AssistantRun`、流式事件、助手策略版本与助手学习事实的生命周期和写入决定权。
+- 拥有 `AssistantConversation`、`AssistantRun`、流式事件、助手策略发布与助手学习事实的生命周期和写入决定权。
 - 只能通过本领域公开 command 修改其拥有事实。
 
 ### 本领域不拥有
@@ -105,5 +105,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺获批 Prod release 与全局外部 Provider conformance 回执；对象契约、可信主体、策略冻结、学习事实、反馈投影、画像提案与 durable relay 已有 local/API/Gamma Remote 直连证据，Alpha/Beta/Prod 环境包也可重建，但包验证不能替代商用准出。
+- 影响或价值：仍缺获批 Prod release 与全局外部 Provider conformance 回执；对象契约、可信主体、策略冻结、学习事实、反馈投影、画像提案与 durable relay 已有 local/API 证据，Alpha/Beta/Prod 环境包也可重建，但 `stackctl health gamma-local` 当前为 0/28，既有 Gamma 记录与包验证均不能替代当前商用准出。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效

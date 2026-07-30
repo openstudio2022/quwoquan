@@ -52,7 +52,7 @@ func TestTagOperationSecuritySeparatesPublicUserAndServiceRoutes(
 		"/tag/feedback",
 		nil,
 	)
-	feedbackRequest.Header.Set("X-Client-Sub-Account-Id", "forged-persona")
+	feedbackRequest.Header.Set("X-Client-Persona-Id", "forged-persona")
 	feedbackRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(feedbackRecorder, feedbackRequest)
 	if feedbackRecorder.Code != http.StatusUnauthorized {

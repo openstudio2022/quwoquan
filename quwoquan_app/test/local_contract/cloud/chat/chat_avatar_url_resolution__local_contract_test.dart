@@ -1,14 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 
 import '../../../support/fixtures/chat/chat_inbox_fixture_builder.dart';
 
 void main() {
+  final mediaEndpointConfig = MediaEndpointConfig(
+    avatarBaseUrl: 'https://media.example.com',
+    imageBaseUrl: 'https://media.example.com',
+    videoBaseUrl: 'https://video.example.com',
+    attachmentBaseUrl: 'https://media.example.com',
+  );
+
   group('chat avatar URL resolution', () {
     test('conversation list items expose loadable avatar URLs', () {
       final item = ChatListItemViewModel.fromDto(
@@ -17,16 +24,16 @@ void main() {
           type: 'group',
           title: '契约群',
           avatarUrl:
-              '/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
+              '/media/avatar/s/archived-avatar/conversation/conv_1/v1/hash.png',
         ),
+        mediaEndpointConfig: mediaEndpointConfig,
       );
 
       expect(
         item.avatarUrl,
         resolveAvatarImageUrlCandidates(
-          '/media/avatar/s/archived-avatar/conversation/conv_1/v2/hash.png?v=2',
-          gatewayBaseUrl: CloudRuntimeConfig.gatewayBaseUrl,
-          avatarCdnBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+          '/media/avatar/s/archived-avatar/conversation/conv_1/v1/hash.png',
+          endpointConfig: mediaEndpointConfig,
         ).first,
       );
     });
@@ -40,39 +47,42 @@ void main() {
               'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
           relationState: 'mutual',
         ),
+        mediaEndpointConfig: mediaEndpointConfig,
       );
 
       expect(
         row.avatarUrl,
         resolveAvatarImageUrlCandidates(
           'media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
-          gatewayBaseUrl: CloudRuntimeConfig.gatewayBaseUrl,
-          avatarCdnBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+          endpointConfig: mediaEndpointConfig,
         ).first,
       );
     });
 
     test('message display maps expose loadable sender avatars', () {
-      final item = ChatMessageDto(
-        id: 'msg_1',
-        conversationId: 'conv_1',
-        seq: 1,
-        clientMsgId: 'client_msg_1',
-        senderId: 'user_2',
-        senderName: '契约联系人',
-        senderAvatar:
-            '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
-        type: 'text',
-        content: '你好',
-        status: 'sent',
-      ).toDisplayItem(currentUserId: 'user_me');
+      final item =
+          ChatMessageDto(
+            id: 'msg_1',
+            conversationId: 'conv_1',
+            seq: 1,
+            clientMsgId: 'client_msg_1',
+            senderId: 'user_2',
+            senderName: '契约联系人',
+            senderAvatar:
+                '/media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
+            type: 'text',
+            content: '你好',
+            status: 'sent',
+          ).toDisplayItem(
+            currentUserId: 'user_me',
+            mediaEndpointConfig: mediaEndpointConfig,
+          );
 
       expect(
         item.senderAvatar,
         resolveAvatarImageUrlCandidates(
-          '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
-          gatewayBaseUrl: CloudRuntimeConfig.gatewayBaseUrl,
-          avatarCdnBaseUrl: CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+          '/media/avatar/s/archived-avatar/user/user_2/v1/profile.png',
+          endpointConfig: mediaEndpointConfig,
         ).first,
       );
     });

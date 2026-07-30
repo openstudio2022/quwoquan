@@ -2,6 +2,7 @@
   "label": "小博主",
   "labelEn": "Micro Influencer",
   "description": "粉丝1000-1万",
+  "axisRole": "creatorIdentity",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

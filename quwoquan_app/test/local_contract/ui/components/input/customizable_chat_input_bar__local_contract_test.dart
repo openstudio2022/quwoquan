@@ -570,7 +570,7 @@ void main() {
       final singleLineHeight = tester.getSize(fieldFinder).height;
       expect(
         singleLineHeight,
-        lessThanOrEqualTo(AppSpacing.commentInputHeight + 1),
+        lessThanOrEqualTo(AppSpacing.chatInputToolbarMinHeight + 1),
       );
 
       await tester.enterText(fieldFinder, '第一行\n第二行\n第三行');

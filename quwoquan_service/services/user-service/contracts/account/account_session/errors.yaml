@@ -11,6 +11,10 @@ errors:
 - code: USER.AUTH.login_locked
   kind: AUTH
   reason: locked
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginWithPhone
   http_status: 423
   recovery:
     action: retry
@@ -25,6 +29,10 @@ errors:
 - code: USER.AUTH.token_expired
   kind: AUTH
   reason: token_expired
+  emitted_by:
+  - surface: http
+    operations:
+    - RefreshToken
   http_status: 401
   recovery:
     action: surface
@@ -38,6 +46,10 @@ errors:
 - code: USER.AUTH.wechat_auth_failed
   kind: AUTH
   reason: third_party_failure
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginWithWechat
   http_status: 502
   recovery:
     action: fallback
@@ -51,6 +63,11 @@ errors:
 - code: USER.AUTH.alipay_auth_failed
   kind: AUTH
   reason: third_party_failure
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginWithAlipay
+    - user.authentication_challenge.CreateAlipayAuthorizationRequest
   http_status: 502
   recovery:
     action: fallback
@@ -64,6 +81,10 @@ errors:
 - code: USER.AUTH.qq_auth_failed
   kind: AUTH
   reason: third_party_failure
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginWithQq
   http_status: 502
   recovery:
     action: fallback
@@ -77,6 +98,12 @@ errors:
 - code: USER.AUTH.social_provider_cancelled
   kind: AUTH
   reason: cancelled
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginWithAlipay
+    - LoginWithQq
+    - LoginWithWechat
   http_status: 400
   recovery:
     action: absorb
@@ -90,6 +117,13 @@ errors:
 - code: USER.AUTH.social_provider_unavailable
   kind: AUTH
   reason: third_party_unavailable
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginWithAlipay
+    - LoginWithQq
+    - LoginWithWechat
+    - user.authentication_challenge.CreateAlipayAuthorizationRequest
   http_status: 503
   recovery:
     action: fallback
@@ -100,35 +134,15 @@ errors:
   user_message:
     zh: 授权未完成
     en: Authorization was not completed
-- code: USER.AUTH.apple_auth_failed
-  kind: AUTH
-  reason: third_party_failure
-  http_status: 502
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthAppleFailed
-  dart_const: appleAuthFailed
-  go_const: ErrAppleAuthFailed
-  user_message:
-    zh: Apple 登录失败，请重试
-    en: Apple sign-in failed, please try again
-- code: USER.AUTH.passkey_auth_failed
-  kind: AUTH
-  reason: third_party_failure
-  http_status: 502
-  recovery:
-    action: fallback
-    disruptionLevel: inlineCard
-  l10n_key: userAuthPasskeyFailed
-  dart_const: passkeyAuthFailed
-  go_const: ErrPasskeyAuthFailed
-  user_message:
-    zh: Passkey 登录失败，请重试或改用其他方式
-    en: Passkey sign-in failed, please retry or use another method
 - code: USER.AUTH.carrier_unavailable
   kind: AUTH
   reason: third_party_unavailable
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.credential_binding.BindCarrierPhoneCredential
   http_status: 503
   recovery:
     action: fallback
@@ -142,6 +156,12 @@ errors:
 - code: USER.AUTH.carrier_token_invalid
   kind: AUTH
   reason: invalid_token
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.credential_binding.BindCarrierPhoneCredential
   http_status: 400
   recovery:
     action: fallback
@@ -155,6 +175,12 @@ errors:
 - code: USER.AUTH.carrier_provider_timeout
   kind: AUTH
   reason: upstream_timeout
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.credential_binding.BindCarrierPhoneCredential
   http_status: 504
   recovery:
     action: retry
@@ -168,6 +194,10 @@ errors:
 - code: USER.AUTH.carrier_phone_mismatch
   kind: AUTH
   reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
   http_status: 409
   recovery:
     action: fallback
@@ -181,6 +211,15 @@ errors:
 - code: USER.AUTH.consent_required
   kind: AUTH
   reason: consent_required
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
+    - LoginWithAlipay
+    - LoginWithPhone
+    - LoginWithQq
+    - LoginWithWechat
+    - user.credential_binding.CompleteFederatedPhoneBinding
   http_status: 400
   recovery:
     action: surface
@@ -194,6 +233,85 @@ errors:
 - code: USER.AUTH.account_suspended
   kind: AUTH
   reason: suspended
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
+    - LoginWithAlipay
+    - LoginWithPhone
+    - LoginWithQq
+    - LoginWithWechat
+    - Logout
+    - RefreshToken
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.contact_discovery_record.DismissContactDiscovery
+    - user.contact_discovery_record.GetLatestContactDiscovery
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
+    - user.credential_binding.ListCredentials
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.AcceptInvitation
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListBlockedUsers
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.profile_update_proposal.ApplyProposal
+    - user.profile_update_proposal.ConfirmProposal
+    - user.profile_update_proposal.CreateProfileUpdateProposal
+    - user.profile_update_proposal.GetProfileUpdateProposal
+    - user.profile_update_proposal.ListProfileUpdateProposals
+    - user.profile_update_proposal.RejectProposal
+    - user.profile_update_proposal.RollbackProposal
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_account.CloseAccount
+    - user.user_account.GetActivePersonaContext
+    - user.user_account.GetMeProfile
+    - user.user_account.GetPersonaLifecycleGuard
+    - user.user_account.GetPersonaManagementSummary
+    - user.user_account.GetProfileEditSnapshot
+    - user.user_account.GetProfileQrCard
+    - user.user_account.GetPersonaProfile
+    - user.user_account.GetUserHomepageBundle
+    - user.user_account.GetUserInterestProfile
+    - user.user_account.GetUserProfile
+    - user.user_account.ListPersonas
+    - user.user_account.PullUserSync
+    - user.user_account.ResolveProfileQrToken
+    - user.user_account.SearchSocialRelations
+    - user.user_settings.GetAppearanceSettings
+    - user.user_settings.GetCallSettings
+    - user.user_settings.GetNotificationSettings
+    - user.user_settings.GetPrivacySettings
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 403
   recovery:
     action: escalate
@@ -207,6 +325,84 @@ errors:
 - code: USER.AUTH.account_deleted
   kind: AUTH
   reason: deleted
+  emitted_by:
+  - surface: http
+    operations:
+    - LoginOneTap
+    - LoginWithAlipay
+    - LoginWithPhone
+    - LoginWithQq
+    - LoginWithWechat
+    - Logout
+    - user.authentication_challenge.ResolveOneTapLoginHint
+    - user.contact_discovery_record.DismissContactDiscovery
+    - user.contact_discovery_record.GetLatestContactDiscovery
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.CompleteFederatedPhoneBinding
+    - user.credential_binding.ListCredentials
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.AcceptInvitation
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListBlockedUsers
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.profile_update_proposal.ApplyProposal
+    - user.profile_update_proposal.ConfirmProposal
+    - user.profile_update_proposal.CreateProfileUpdateProposal
+    - user.profile_update_proposal.GetProfileUpdateProposal
+    - user.profile_update_proposal.ListProfileUpdateProposals
+    - user.profile_update_proposal.RejectProposal
+    - user.profile_update_proposal.RollbackProposal
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_account.CloseAccount
+    - user.user_account.GetActivePersonaContext
+    - user.user_account.GetMeProfile
+    - user.user_account.GetPersonaLifecycleGuard
+    - user.user_account.GetPersonaManagementSummary
+    - user.user_account.GetProfileEditSnapshot
+    - user.user_account.GetProfileQrCard
+    - user.user_account.GetPersonaProfile
+    - user.user_account.GetUserHomepageBundle
+    - user.user_account.GetUserInterestProfile
+    - user.user_account.GetUserProfile
+    - user.user_account.ListPersonas
+    - user.user_account.PullUserSync
+    - user.user_account.ResolveProfileQrToken
+    - user.user_account.SearchSocialRelations
+    - user.user_settings.GetAppearanceSettings
+    - user.user_settings.GetCallSettings
+    - user.user_settings.GetNotificationSettings
+    - user.user_settings.GetPrivacySettings
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 410
   recovery:
     action: escalate
@@ -220,6 +416,77 @@ errors:
 - code: USER.AUTH.token_stale
   kind: AUTH
   reason: token_stale
+  emitted_by:
+  - surface: http
+    operations:
+    - Logout
+    - user.contact_discovery_record.DismissContactDiscovery
+    - user.contact_discovery_record.GetLatestContactDiscovery
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.ListCredentials
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.AcceptInvitation
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListBlockedUsers
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.profile_update_proposal.ApplyProposal
+    - user.profile_update_proposal.ConfirmProposal
+    - user.profile_update_proposal.CreateProfileUpdateProposal
+    - user.profile_update_proposal.GetProfileUpdateProposal
+    - user.profile_update_proposal.ListProfileUpdateProposals
+    - user.profile_update_proposal.RejectProposal
+    - user.profile_update_proposal.RollbackProposal
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_account.CloseAccount
+    - user.user_account.GetActivePersonaContext
+    - user.user_account.GetMeProfile
+    - user.user_account.GetPersonaLifecycleGuard
+    - user.user_account.GetPersonaManagementSummary
+    - user.user_account.GetProfileEditSnapshot
+    - user.user_account.GetProfileQrCard
+    - user.user_account.GetPersonaProfile
+    - user.user_account.GetUserHomepageBundle
+    - user.user_account.GetUserInterestProfile
+    - user.user_account.GetUserProfile
+    - user.user_account.ListPersonas
+    - user.user_account.PullUserSync
+    - user.user_account.ResolveProfileQrToken
+    - user.user_account.SearchSocialRelations
+    - user.user_settings.GetAppearanceSettings
+    - user.user_settings.GetCallSettings
+    - user.user_settings.GetNotificationSettings
+    - user.user_settings.GetPrivacySettings
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 401
   recovery:
     action: surface
@@ -233,6 +500,77 @@ errors:
 - code: USER.AUTH.account_security_unavailable
   kind: AUTH
   reason: account_security_unavailable
+  emitted_by:
+  - surface: http
+    operations:
+    - Logout
+    - user.contact_discovery_record.DismissContactDiscovery
+    - user.contact_discovery_record.GetLatestContactDiscovery
+    - user.contact_discovery_record.InitiateContactDiscovery
+    - user.credential_binding.BindCarrierPhoneCredential
+    - user.credential_binding.BindPhoneCredential
+    - user.credential_binding.ListCredentials
+    - user.credential_binding.UnbindCredential
+    - user.device_registration.RemoveDevicePushEndpoint
+    - user.device_registration.UpsertDevicePushEndpoint
+    - user.followed_subject_visit_state.MarkFollowedSubjectVisited
+    - user.following_subject.ListFollowingSubjects
+    - user.greeting_request.CancelGreetingRequest
+    - user.greeting_request.IgnoreGreetingRequest
+    - user.greeting_request.ListGreetingInbox
+    - user.greeting_request.ListGreetingOutbox
+    - user.greeting_request.ReplyGreetingRequest
+    - user.greeting_request.SendGreetingRequest
+    - user.invitation.AcceptInvitation
+    - user.invitation.GenerateInvitation
+    - user.invitation.ListInvitations
+    - user.persona.ActivatePersona
+    - user.persona.ApplyPersonaProfileSync
+    - user.persona.CreatePersona
+    - user.persona.RetirePersona
+    - user.persona.UpdatePersona
+    - user.persona.UpdateUserProfile
+    - user.persona_relationship.BlockUser
+    - user.persona_relationship.FollowUser
+    - user.persona_relationship.GetRelationship
+    - user.persona_relationship.GetRelationshipCapability
+    - user.persona_relationship.ListBlockedUsers
+    - user.persona_relationship.ListFollowers
+    - user.persona_relationship.ListFollowing
+    - user.persona_relationship.UnblockUser
+    - user.persona_relationship.UnfollowUser
+    - user.profile_update_proposal.ApplyProposal
+    - user.profile_update_proposal.ConfirmProposal
+    - user.profile_update_proposal.CreateProfileUpdateProposal
+    - user.profile_update_proposal.GetProfileUpdateProposal
+    - user.profile_update_proposal.ListProfileUpdateProposals
+    - user.profile_update_proposal.RejectProposal
+    - user.profile_update_proposal.RollbackProposal
+    - user.subject_follow.FollowSubject
+    - user.subject_follow.UnfollowSubject
+    - user.user_account.CloseAccount
+    - user.user_account.GetActivePersonaContext
+    - user.user_account.GetMeProfile
+    - user.user_account.GetPersonaLifecycleGuard
+    - user.user_account.GetPersonaManagementSummary
+    - user.user_account.GetProfileEditSnapshot
+    - user.user_account.GetProfileQrCard
+    - user.user_account.GetPersonaProfile
+    - user.user_account.GetUserHomepageBundle
+    - user.user_account.GetUserInterestProfile
+    - user.user_account.GetUserProfile
+    - user.user_account.ListPersonas
+    - user.user_account.PullUserSync
+    - user.user_account.ResolveProfileQrToken
+    - user.user_account.SearchSocialRelations
+    - user.user_settings.GetAppearanceSettings
+    - user.user_settings.GetCallSettings
+    - user.user_settings.GetNotificationSettings
+    - user.user_settings.GetPrivacySettings
+    - user.user_settings.UpdateAppearanceSettings
+    - user.user_settings.UpdateCallSettings
+    - user.user_settings.UpdateNotificationSettings
+    - user.user_settings.UpdatePrivacySettings
   http_status: 503
   recovery:
     action: retry

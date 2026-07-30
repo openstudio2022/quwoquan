@@ -2,6 +2,7 @@
   "label": "米其林二星",
   "labelEn": "Michelin 2 Stars",
   "description": "米其林二星餐厅",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

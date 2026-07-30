@@ -3,6 +3,7 @@ package ports
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	homepagemodel "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/model"
@@ -71,6 +72,35 @@ type SearchQuery struct {
 type Page struct {
 	Items      []homepagemodel.Snapshot
 	NextCursor string
+}
+
+// DetailProjection 是 Homepage 主档之外的可重建详情读投影。评分、内容预览、
+// 关联圈子与关系边均来自其他对象事实，不得进入 Homepage 写聚合或其 Snapshot。
+type DetailProjection struct {
+	HomepageID       string
+	AverageRating    *float64
+	RatingCount      int
+	ReviewSummary    *homepagemodel.ReviewSummary
+	ContentPreview   []homepagemodel.ContentPreview
+	QuestionPreview  []homepagemodel.QuestionPreview
+	RelatedGroups    []homepagemodel.RelatedGroup
+	RelationEdges    []json.RawMessage
+	AssistantContext json.RawMessage
+	UpdatedAt        time.Time
+}
+
+// DetailProjectionStore 是 HomepageDetailView 的独立读写端口。写端只暴露
+// 已有事实消费者需要的窄更新，不允许通过详情投影反向修改 Homepage 主档。
+type DetailProjectionStore interface {
+	LoadDetailProjection(ctx context.Context, homepageID string) (DetailProjection, bool, error)
+	UpsertReviewSummary(
+		ctx context.Context,
+		homepageID string,
+		averageRating *float64,
+		ratingCount int,
+		highlightTags []string,
+		updatedAt time.Time,
+	) error
 }
 
 // Reader 是 Homepage 的具名读端口：精确解析、搜索、来源对账与 backfill cursor。

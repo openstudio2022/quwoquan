@@ -34,6 +34,7 @@ business_rules:
 - login 每次合法创建新 session，不接收调用方幂等键；logout 对已吊销 session 为幂等 no-op
 - session 状态事件与 aggregate 变更在同一事务经 outbox 提交
 lifecycle:
+  state_field: status
   states:
   - active
   - rotated

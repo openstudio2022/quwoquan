@@ -2,6 +2,7 @@
   "label": "演艺场馆",
   "labelEn": "Performance Venue",
   "description": "演出与表演场所类型骨架",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

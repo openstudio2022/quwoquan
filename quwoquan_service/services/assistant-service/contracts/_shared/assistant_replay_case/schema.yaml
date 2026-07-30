@@ -16,6 +16,7 @@ fields:
   - { name: fakeDeviceContext, type: map, default: {} }
   - { name: expectedStreamEvents, type: list<object>, ref: AssistantStreamEventWire, default: [] }
   - { name: expectedTraceEvents, type: list<object>, ref: AssistantTraceEventWire, default: [] }
+  - { name: expectations, type: object, ref: expectations, default: {} }
   - { name: expectedRunResponse, type: object, ref: AssistantRunResponseWire, default: {} }
 subcontracts:
   request:
@@ -41,3 +42,12 @@ subcontracts:
       - { name: input, type: map, default: {} }
       - { name: result, type: map, default: {} }
       - { name: failure, type: map, default: {} }
+  expectations:
+    class_name: AssistantReplayExpectationsWire
+    fields:
+      - { name: selectedSkillId, type: string, required: true }
+      - { name: selectedDomainId, type: string, required: true }
+      - { name: expectedToolNames, type: list<string>, default: [] }
+      - { name: expectedClarificationSlotIds, type: list<string>, default: [] }
+      - { name: expectedReferenceUrls, type: list<string>, default: [] }
+      - { name: finalAnswerMode, type: enum, enum_ref: FinalAnswerMode, required: true }

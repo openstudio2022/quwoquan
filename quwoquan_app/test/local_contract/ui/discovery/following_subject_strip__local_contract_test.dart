@@ -21,11 +21,12 @@ final class _FakeFollowingSubjectFacet
   Future<FollowingSubjectSlice> listFollowingSubjects(
     ListFollowingSubjectsQuery query,
   ) async {
-    final subjectType = query.subjectType?.trim() ?? '';
     return FollowingSubjectSlice(
       items: items
           .where(
-            (item) => subjectType.isEmpty || item.subjectType == subjectType,
+            (item) =>
+                query.subjectType == null ||
+                item.subjectType == query.subjectType,
           )
           .take(query.limit)
           .toList(growable: false),
@@ -65,19 +66,19 @@ final class _FailingFollowingSubjectFacet
 
 FollowingSubjectResult _subject({
   required String id,
-  required String type,
+  required FollowSubjectKind type,
   required bool unread,
 }) {
   return FollowingSubjectResult(
     subjectId: id,
     subjectType: type,
     displayName: switch (type) {
-      'user' => '旅行摄影师',
-      'circle' => '四川旅行圈',
-      'homepage' => '九寨沟',
-      _ => '未知主体',
+      FollowSubjectKind.persona => '旅行摄影师',
+      FollowSubjectKind.circle => '四川旅行圈',
+      FollowSubjectKind.homepage => '九寨沟',
+      FollowSubjectKind.location => '川西',
     },
-    targetRouteId: type,
+    targetRouteId: type.wireValue,
     targetObjectId: id,
     followedAt: DateTime.utc(2026, 5, 20, 8),
     unreadChangeCount: unread ? 1 : 0,
@@ -95,9 +96,9 @@ List<Override> _overrides(_FakeFollowingSubjectFacet facet) {
 void main() {
   testWidgets('FollowingSubjectStrip shows unread red dots', (tester) async {
     final facet = _FakeFollowingSubjectFacet(<FollowingSubjectResult>[
-      _subject(id: 'user_a', type: 'user', unread: true),
-      _subject(id: 'circle_a', type: 'circle', unread: false),
-      _subject(id: 'home_a', type: 'homepage', unread: true),
+      _subject(id: 'user_a', type: FollowSubjectKind.persona, unread: true),
+      _subject(id: 'circle_a', type: FollowSubjectKind.circle, unread: false),
+      _subject(id: 'home_a', type: FollowSubjectKind.homepage, unread: true),
     ]);
 
     await tester.pumpWidget(
@@ -108,16 +109,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(DiscoveryText.followingSubjectStripTitle),
-      findsOneWidget,
-    );
+    expect(find.text(DiscoveryText.followingSubjectStripTitle), findsOneWidget);
     expect(find.text('旅行摄影师'), findsOneWidget);
     expect(find.text('四川旅行圈'), findsOneWidget);
     expect(find.text('九寨沟'), findsOneWidget);
     expect(find.byType(FollowingSubjectUnreadDot), findsNWidgets(2));
     expect(
-      find.byKey(const ValueKey<String>('following-subject-type-user-user_a')),
+      find.byKey(
+        const ValueKey<String>('following-subject-type-persona-user_a'),
+      ),
       findsOneWidget,
     );
     expect(
@@ -138,7 +138,7 @@ void main() {
     tester,
   ) async {
     final facet = _FakeFollowingSubjectFacet(<FollowingSubjectResult>[
-      _subject(id: 'user_a', type: 'user', unread: true),
+      _subject(id: 'user_a', type: FollowSubjectKind.persona, unread: true),
     ]);
     FollowingSubjectResult? opened;
 
@@ -174,10 +174,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text(DiscoveryText.followingSubjectEmptyTitle),
-      findsOneWidget,
-    );
+    expect(find.text(DiscoveryText.followingSubjectEmptyTitle), findsOneWidget);
     expect(
       find.text(DiscoveryText.followingSubjectEmptySubtitle),
       findsOneWidget,

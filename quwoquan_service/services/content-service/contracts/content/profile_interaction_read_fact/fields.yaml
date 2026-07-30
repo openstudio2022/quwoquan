@@ -1,104 +1,129 @@
 description: Immutable seen/read fact for one received profile activity.
 fields:
-- name: factId
-  source: factId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: append_only_fact
-- name: ownerPersonaId
-  source: ownerPersonaId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PRIVATE
-  log_policy: hash
-  api_exposure: read_write
-  ops_exposure: redacted
-  role: append_only_fact
-  reference: true
-- name: activityId
-  source: activityId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: append_only_fact
-- name: state
-  source: state
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  description: seen | read
-  role: append_only_fact
-- name: occurredAt
-  source: occurredAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PRIVATE
-  log_policy: redact
-  api_exposure: read
-  ops_exposure: redacted
-  role: append_only_fact
+  - name: factId
+    source: factId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: append_only_fact
+  - name: ownerPersonaId
+    source: ownerPersonaId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PRIVATE
+    log_policy: hash
+    api_exposure: read_write
+    ops_exposure: redacted
+    role: append_only_fact
+    reference: true
+  - name: activityId
+    source: activityId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: append_only_fact
+  - name: state
+    source: state
+    type: enum
+    enum_ref: ProfileInteractionReadState
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: seen | read
+    role: append_only_fact
+  - name: occurredAt
+    source: occurredAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PRIVATE
+    log_policy: redact
+    api_exposure: read
+    ops_exposure: redacted
+    role: append_only_fact
 types:
   ProfileInteractionReadFactAck:
     description: Append acceptance result; replayed=true means the semantic fact already existed.
     fields:
-    - name: factId
-      source: factId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-    - name: activityId
-      source: activityId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: state
-      source: state
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: occurredAt
-      source: occurredAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: redact
-      api_exposure: read
-      ops_exposure: redacted
-    - name: replayed
-      source: replayed
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: factId
+        source: factId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: activityId
+        source: activityId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: state
+        source: state
+        type: enum
+        enum_ref: ProfileInteractionReadState
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: occurredAt
+        source: occurredAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: redact
+        api_exposure: read
+        ops_exposure: redacted
+      - name: replayed
+        source: replayed
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+  AppendContentProfileInteractionReadFactCommand:
+    fields:
+      - name: personaId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: interactionId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_name: activityId
+        client_dart_type: String
+        client_normalization: trim
+      - name: state
+        type: string
+        enum_ref: ProfileInteractionReadState
+        client_dart_type: ContentProfileInteractionReadState
+        client_wire: canonicalEnum
+enums:
+  ProfileInteractionReadState:
+    values: [seen, read]

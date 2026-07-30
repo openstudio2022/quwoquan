@@ -21,8 +21,8 @@ class _CircleEditSettingsPageState
   late final TextEditingController _tagsController;
   late final CircleDto _seedCircle;
   late CircleEditSettingsTab _activeTab;
-  late String _visibility;
-  late String _joinPolicy;
+  late CircleVisibility _visibility;
+  late CircleJoinPolicy _joinPolicy;
   String? _categoryId;
   String? _coverSourceOverride;
   String? _avatarSourceOverride;
@@ -145,8 +145,8 @@ class _CircleEditSettingsPageState
       description: '',
       ownerId: '',
       category: _categoryIds.first,
-      visibility: 'public',
-      joinPolicy: 'open',
+      visibility: CircleVisibility.public,
+      joinPolicy: CircleJoinPolicy.open,
       autoSyncChat: true,
       sectionConfig: const [
         CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
@@ -224,17 +224,20 @@ class _CircleEditSettingsPageState
     return circleSectionLabel(type);
   }
 
-  String _visibilityDescription(String value) {
-    return value == 'private'
-        ? CommunityText.circleVisibilityMembersDescription
-        : CommunityText.circleVisibilityPublicDescription;
-  }
+  String _visibilityDescription(CircleVisibility value) => switch (value) {
+    CircleVisibility.public => CommunityText.circleVisibilityPublicDescription,
+    CircleVisibility.private =>
+      CommunityText.circleVisibilityMembersDescription,
+    CircleVisibility.inviteOnly =>
+      CommunityText.circleVisibilityInviteOnlyDescription,
+  };
 
-  String _joinPolicyDescription(String value) {
-    return value == 'approval'
-        ? CommunityText.circleJoinApprovalDescription
-        : CommunityText.circleJoinOpenDescription;
-  }
+  String _joinPolicyDescription(CircleJoinPolicy value) => switch (value) {
+    CircleJoinPolicy.open => CommunityText.circleJoinOpenDescription,
+    CircleJoinPolicy.approval => CommunityText.circleJoinApprovalDescription,
+    CircleJoinPolicy.inviteOnly =>
+      CommunityText.circleJoinInviteOnlyDescription,
+  };
 
   String _mediaLabel(_CircleMediaSlot slot) {
     return slot == _CircleMediaSlot.cover
@@ -551,21 +554,27 @@ class _CircleEditSettingsPageState
                         fgSecondary,
                       ),
                       SizedBox(height: AppSpacing.xs),
-                      _buildSegmentedControl<String>(
+                      _buildSegmentedControl<CircleVisibility>(
                         groupValue: _visibility,
                         cardBg: fill,
                         children: {
-                          'public': Padding(
+                          CircleVisibility.public: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
                             child: Text(CreationText.visibilityPublic),
                           ),
-                          'private': Padding(
+                          CircleVisibility.private: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
                             child: Text(CommunityText.visibilityMembers),
+                          ),
+                          CircleVisibility.inviteOnly: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                            ),
+                            child: Text(CommunityText.visibilityInviteOnly),
                           ),
                         },
                         onValueChanged: (value) {
@@ -588,21 +597,27 @@ class _CircleEditSettingsPageState
                         fgSecondary,
                       ),
                       SizedBox(height: AppSpacing.xs),
-                      _buildSegmentedControl<String>(
+                      _buildSegmentedControl<CircleJoinPolicy>(
                         groupValue: _joinPolicy,
                         cardBg: fill,
                         children: {
-                          'open': Padding(
+                          CircleJoinPolicy.open: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
                             child: Text(CommunityText.joinCircle),
                           ),
-                          'approval': Padding(
+                          CircleJoinPolicy.approval: Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: AppSpacing.sm,
                             ),
                             child: Text(CommunityText.circleJoinApproval),
+                          ),
+                          CircleJoinPolicy.inviteOnly: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                            ),
+                            child: Text(CommunityText.circleJoinInviteOnly),
                           ),
                         },
                         onValueChanged: (value) {

@@ -13,7 +13,6 @@ func TestUserSearchProjectionCarriesSelfContainedPublicPayload(t *testing.T) {
 	profile := model.UserProfile{
 		UserID:        "user-search-payload",
 		AccountState:  "active",
-		Status:        "active",
 		Nickname:      "林摄影",
 		Bio:           "旅行摄影",
 		AvatarURL:     "https://cdn.example/avatar.webp",

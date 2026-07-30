@@ -2,6 +2,7 @@
   "label": "澳大利亚",
   "labelEn": "Australian",
   "description": "澳大利亚籍用户",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

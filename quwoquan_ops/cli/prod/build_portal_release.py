@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """构建运维运营 Portal 的不可变生产静态包。
 
-产物落 `QWQ_DEPLOY_WORK_ROOT/prod-hosted/packages/ops-portal/<version>/dist`，并把
-`current` 符号链接指向该版本；`render_prod_plane_stack.py` 渲染 service plane
+产物落 `QWQ_DEPLOY_WORK_ROOT/prod-hosted/packages/ops-portal/<digest>/dist`，并把
+`current` 符号链接指向该包的内容摘要；`render_prod_plane_stack.py` 渲染 service plane
 时会将 `current/dist` 复制进 `runtime/portal` 随发布同步到远端。
 
 生产 VITE 变量为同源部署口径（Portal 与控制面 API 同在 ops 域名下），
@@ -12,12 +12,13 @@ OIDC issuer/client 必须显式传入，禁止把 dev 值悄悄带上生产。
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -40,7 +41,6 @@ from lib.environment_topology import (  # noqa: E402
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", required=True, help="release 版本号（与 service release 对齐，例如 1.20260719.123）")
     parser.add_argument("--ops-base-url", default="", help="必须等于 topology 的 productOps role")
     parser.add_argument("--content-base-url", default="", help="必须等于 topology 的 api role")
     parser.add_argument("--entity-base-url", default="", help="必须等于 topology 的 api role")
@@ -52,9 +52,6 @@ def main() -> int:
     parser.add_argument("--target", default="", help="prod deployment target（默认 prod-hosted）")
     args = parser.parse_args()
 
-    version = args.version.strip()
-    if not version:
-        raise SystemExit("FAIL: --version is required")
     issuer = args.oidc_issuer.strip().rstrip("/")
     parsed_issuer = urlparse(issuer)
     if parsed_issuer.scheme != "https" or not parsed_issuer.netloc:
@@ -114,21 +111,37 @@ def main() -> int:
     if not build_dist.is_dir():
         raise SystemExit(f"FAIL: vite build output missing: {build_dist}")
 
+    package_digest = _sha256_tree(build_dist)
+    package_directory = package_digest.removeprefix("sha256:")
+    source_git_sha = _git_output("rev-parse", "HEAD")
+    if re.fullmatch(r"[0-9a-f]{40}", source_git_sha) is None:
+        raise SystemExit("FAIL: source Git SHA is not canonical")
+    source_tree = _git_output("rev-parse", "HEAD^{tree}")
+    if re.fullmatch(r"[0-9a-f]{40}", source_tree) is None:
+        raise SystemExit("FAIL: source tree digest is not canonical")
+
     release_root = portal_deployment_package_dir("prod", target=target_name)
-    version_dir = deployment_target_path(
+    package_dir = deployment_target_path(
         target_name,
         "packages",
         "ops-portal",
-        version,
+        package_directory,
     )
-    if version_dir.exists():
-        raise SystemExit(f"FAIL: release version already exists (immutable): {version_dir}")
-    version_dir.mkdir(parents=True)
-    shutil.copytree(build_dist, version_dir / "dist")
+    if package_dir.exists():
+        existing_dist = package_dir / "dist"
+        if not existing_dist.is_dir() or _sha256_tree(existing_dist) != package_digest:
+            raise SystemExit(
+                f"FAIL: immutable package digest collision: {package_dir}"
+            )
+    else:
+        package_dir.mkdir(parents=True)
+        shutil.copytree(build_dist, package_dir / "dist")
 
     manifest = {
-        "version": version,
-        "builtAt": datetime.now(timezone.utc).isoformat(),
+        "schema": "qwq.ops_portal_application",
+        "packageDigest": package_digest,
+        "sourceGitSha": source_git_sha,
+        "sourceTreeDigest": "sha1:" + source_tree,
         "opsBaseUrl": args.ops_base_url,
         "contentBaseUrl": args.content_base_url,
         "entityBaseUrl": args.entity_base_url,
@@ -136,9 +149,16 @@ def main() -> int:
         # client id 非机密（公开 SPA client），记录用于发布追溯。
         "oidcClientId": args.oidc_client_id,
     }
-    (version_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    manifest_path = package_dir / "manifest.json"
+    encoded_manifest = json.dumps(
+        manifest, ensure_ascii=False, indent=2, sort_keys=True
+    ) + "\n"
+    if (
+        manifest_path.exists()
+        and manifest_path.read_text(encoding="utf-8") != encoded_manifest
+    ):
+        raise SystemExit(f"FAIL: immutable package manifest differs: {manifest_path}")
+    manifest_path.write_text(encoded_manifest, encoding="utf-8")
 
     current = release_root / "current"
     if current.is_symlink() or current.exists():
@@ -151,10 +171,51 @@ def main() -> int:
             )
         else:
             current.unlink()
-    current.symlink_to(version_dir.name)
+    current.symlink_to(package_dir.name)
 
-    print(json.dumps({"releaseDir": str(version_dir), "current": str(current)}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "releaseDir": str(package_dir),
+                "current": str(current),
+                "packageDigest": package_digest,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
+
+
+def _sha256_file(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _sha256_tree(directory: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(directory.rglob("*")):
+        if not path.is_file():
+            continue
+        digest.update(path.relative_to(directory).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(_sha256_file(path).encode("ascii"))
+        digest.update(b"\0")
+    return "sha256:" + digest.hexdigest()
+
+
+def _git_output(*args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            "FAIL: cannot resolve immutable source identity: "
+            + (result.stderr.strip() or result.stdout.strip())
+        )
+    return result.stdout.strip()
 
 
 if __name__ == "__main__":

@@ -29,15 +29,6 @@ relationships:
   cardinality: N:1
   consistency: eventual
   kind: reference
-  name: conversation
-  on_delete: detach
-  reference_fields:
-  - conversationId
-  target_object: chat.Conversation
-- access: named_reader
-  cardinality: N:1
-  consistency: eventual
-  kind: reference
   name: defaultPublicGroup
   on_delete: detach
   reference_fields:
@@ -76,14 +67,16 @@ business_rules:
 - rulesText 最多 2000 字符，welcomeMessage 最多 500 字符；均由圈主或管理员经 Circle 更新命令维护
 - archived 为终态，不接受成员、群组、文件或 placement 新命令
 - Circle 只维护主档和治理策略，不保存成员、群组、文件或 Post 集合
-- defaultPublicGroupId 只引用 CircleGroup，不直接维护 Chat Conversation
+- defaultPublicGroupId 只引用 CircleGroup；Chat Conversation 绑定只由 CircleGroup.conversationId 持有
 - Update/Archive/UpdateSections 为命名状态迁移；服务端加载当前 version 内部 CAS，公开请求不接收调用方版本字段
 - Update/UpdateSections 仅圈主或管理员，Archive 仅圈主；命令与 receipt、outbox 事实同一 Mongo 事务原子提交
 - 目标状态已满足的命名意图持久化 no-op receipt，不递增 version、不产生伪 outbox 事件
 lifecycle:
+  state_field: status
   states:
   - active
   - archived
+  - deleted
   optimistic_concurrency: version
   idempotency: command_receipt
 members:

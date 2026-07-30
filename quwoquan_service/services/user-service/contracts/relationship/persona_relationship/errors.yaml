@@ -4,6 +4,10 @@ errors:
 - code: USER.RELATIONSHIP.follow_blocked
   kind: RELATIONSHIP
   reason: follow_blocked
+  emitted_by:
+  - surface: http
+    operations:
+    - FollowUser
   http_status: 403
   recovery_action: surface
   go_const: ErrRelationshipFollowBlocked
@@ -16,6 +20,13 @@ errors:
 - code: USER.RELATIONSHIP.invalid_pair
   kind: RELATIONSHIP
   reason: invalid_pair
+  emitted_by:
+  - surface: http
+    operations:
+    - BlockUser
+    - FollowUser
+    - UnblockUser
+    - UnfollowUser
   http_status: 400
   recovery_action: surface
   go_const: ErrRelationshipInvalidPair
@@ -28,6 +39,11 @@ errors:
 - code: USER.RELATIONSHIP.target_not_found
   kind: RELATIONSHIP
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - BlockUser
+    - FollowUser
   http_status: 404
   recovery_action: surface
   go_const: ErrRelationshipTargetNotFound
@@ -40,6 +56,13 @@ errors:
 - code: USER.RELATIONSHIP.actor_forbidden
   kind: RELATIONSHIP
   reason: actor_forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - BlockUser
+    - FollowUser
+    - UnblockUser
+    - UnfollowUser
   http_status: 403
   recovery_action: surface
   go_const: ErrRelationshipActorForbidden
@@ -48,4 +71,4 @@ errors:
   user_message:
     zh: 当前身份无法执行该操作
     en: This identity cannot perform the action
-  debug_hint: explicit actorSubAccountId does not belong to the authenticated account or is retired
+  debug_hint: explicit actorPersonaId does not belong to the authenticated account or is retired

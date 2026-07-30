@@ -265,6 +265,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                           _currentPage = index;
                           _awaitingPrefetchedReveal = nextIsSentinel;
                           _invalidateVideoViewport(resetDurationWindow: true);
+                          _retainPostLocalStateAround(posts, index);
                         });
                         _feedPerformanceObservability
                             .recordActiveVideoControllerCount(
@@ -272,6 +273,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                               activeCount: 0,
                             );
                         if (nextIsSentinel) {
+                          _articleHydrationAdmission.retainOnly(null);
                           _pageEnterTime = null;
                           _schedulePrefetch(
                             visibleIndex: index,
@@ -525,7 +527,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                         isLiked: effectivePostLiked(ref, currentPost.id),
                         isFollowing: effectiveProfileFollowing(
                           ref,
-                          currentPost.subAccountId,
+                          currentPost.personaId,
                         ),
                         onUserTap: () {
                           // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
@@ -534,11 +536,11 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                                 intersectionHighlightIntentProvider.notifier,
                               )
                               .primeFromReasons(
-                                currentPost.subAccountId,
+                                currentPost.personaId,
                                 currentPost.intersectionReasons,
                               );
                           widget.onUserTap(
-                            currentPost.subAccountId,
+                            currentPost.personaId,
                             avatarUrl: currentPost.avatarUrl,
                             displayName: currentPost.displayName,
                             backgroundUrl: currentPost.authorBackgroundUrl,
@@ -656,8 +658,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         imageUrls: _imageUrlsForPost(post),
         initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
         gestureIntentController: _gestureIntentController,
-        onImageChanged: (index) =>
-            _setMountedState(() => _photoInnerIndex[post.id] = index),
+        onImageChanged: (index) => _setMountedState(() {
+          _rememberPostLocalState(post.id);
+          _photoInnerIndex[post.id] = index;
+        }),
         onPageflipMotion: (event) => _trackImagePageflipMotion(post, event),
         onMediaLoad: (event) {
           ref
@@ -776,7 +780,10 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
     final current = (_articleInnerIndex[post.id] ?? 0).clamp(0, total - 1);
     final next = (current + delta).clamp(0, total - 1).toInt();
     if (next == current) return;
-    _setMountedState(() => _articleInnerIndex[post.id] = next);
+    _setMountedState(() {
+      _rememberPostLocalState(post.id);
+      _articleInnerIndex[post.id] = next;
+    });
   }
 
   void _handleArticleInnerPageChanged(PostBaseDto post, int index) {
@@ -792,6 +799,9 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         ),
       );
     }
-    _setMountedState(() => _articleInnerIndex[post.id] = index);
+    _setMountedState(() {
+      _rememberPostLocalState(post.id);
+      _articleInnerIndex[post.id] = index;
+    });
   }
 }

@@ -1,7 +1,7 @@
 part of "profile_homepage_models.dart";
 
-/// 清单用户档案展示面别名：端侧统一 [SubAccountProfileViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
-typedef UserProfileViewData = SubAccountProfileViewData;
+/// 清单用户档案展示面别名：端侧统一 [PersonaProfileViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
+typedef UserProfileViewData = PersonaProfileViewData;
 
 /// 清单 PersonaDto：端侧管理行统一 [PersonaManagementItemViewData]。
 typedef PersonaDtoSurface = PersonaManagementItemViewData;
@@ -16,21 +16,21 @@ class ProfileInteractionActivityViewData {
     required this.commentId,
     required this.parentCommentId,
     this.viewerReaction = 'none',
-    required this.actorSubAccountId,
+    required this.actorPersonaId,
     required this.actorDisplayName,
     required this.actorAvatarUrl,
     this.actorAvatarVersion = 0,
-    this.counterpartSubAccountId = '',
+    this.counterpartPersonaId = '',
     this.counterpartDisplayName = '',
     this.counterpartAvatarUrl = '',
-    required this.targetSubAccountId,
+    required this.targetPersonaId,
     required this.targetContentId,
     required this.targetContentType,
     required this.targetContentSummary,
     this.targetKind = 'record',
     this.targetAvailability = 'active',
     this.targetReplyCount = 0,
-    required this.displaySubAccountId,
+    required this.displayPersonaId,
     required this.displayName,
     required this.displayAvatarUrl,
     this.displayAvatarVersion = 0,
@@ -64,21 +64,21 @@ class ProfileInteractionActivityViewData {
   /// 浏览者（当前登录用户）对该条评论/回复的反应：none/like/dislike。
   /// 用于「我的主页·互动」内联赞↔已赞态展示。
   final String viewerReaction;
-  final String actorSubAccountId;
+  final String actorPersonaId;
   final String actorDisplayName;
   final String actorAvatarUrl;
   final int actorAvatarVersion;
-  final String counterpartSubAccountId;
+  final String counterpartPersonaId;
   final String counterpartDisplayName;
   final String counterpartAvatarUrl;
-  final String targetSubAccountId;
+  final String targetPersonaId;
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
   final String targetKind;
   final String targetAvailability;
   final int targetReplyCount;
-  final String displaySubAccountId;
+  final String displayPersonaId;
   final String displayName;
   final String displayAvatarUrl;
   final int displayAvatarVersion;
@@ -108,15 +108,13 @@ class ProfileInteractionActivityViewData {
   ) {
     final actorDisplayName = w.actorDisplayName.isNotEmpty
         ? w.actorDisplayName
-        : w.actorSubAccountId;
-    final displaySubAccountId = w.displaySubAccountId.isNotEmpty
-        ? w.displaySubAccountId
-        : w.actorSubAccountId;
+        : w.actorPersonaId;
+    final displayPersonaId = w.displayPersonaId.isNotEmpty
+        ? w.displayPersonaId
+        : w.actorPersonaId;
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
-        : (actorDisplayName.isNotEmpty
-              ? actorDisplayName
-              : displaySubAccountId);
+        : (actorDisplayName.isNotEmpty ? actorDisplayName : displayPersonaId);
     final displayAvatarUrl = w.displayAvatarUrl.isNotEmpty
         ? w.displayAvatarUrl
         : w.actorAvatarUrl;
@@ -152,21 +150,21 @@ class ProfileInteractionActivityViewData {
       commentId: w.commentId,
       parentCommentId: w.parentCommentId,
       viewerReaction: w.viewerReaction,
-      actorSubAccountId: w.actorSubAccountId,
+      actorPersonaId: w.actorPersonaId,
       actorDisplayName: actorDisplayName,
       actorAvatarUrl: actorAvatarUrl,
       actorAvatarVersion: actorAvatarVersion,
-      counterpartSubAccountId: w.counterpartSubAccountId,
+      counterpartPersonaId: w.counterpartPersonaId,
       counterpartDisplayName: w.counterpartDisplayName,
       counterpartAvatarUrl: resolveAvatarImageUrl(w.counterpartAvatarUrl),
-      targetSubAccountId: w.targetSubAccountId,
+      targetPersonaId: w.targetPersonaId,
       targetContentId: w.targetContentId,
       targetContentType: w.targetContentType,
       targetContentSummary: w.targetContentSummary,
       targetKind: w.targetKind,
       targetAvailability: w.targetAvailability,
       targetReplyCount: w.targetReplyCount,
-      displaySubAccountId: displaySubAccountId,
+      displayPersonaId: displayPersonaId,
       displayName: displayName,
       displayAvatarUrl: resolvedDisplayAvatarUrl,
       displayAvatarVersion: displayAvatarVersion,
@@ -195,7 +193,7 @@ class ProfileInteractionActivityViewData {
 @immutable
 class ActivePersonaContextViewData {
   const ActivePersonaContextViewData({
-    required this.subAccountId,
+    required this.personaId,
     required this.ownerUserId,
     required this.subjectType,
     required this.displayName,
@@ -207,7 +205,7 @@ class ActivePersonaContextViewData {
     this.isFallback = false,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String ownerUserId;
   final String subjectType;
   final String displayName;
@@ -218,14 +216,14 @@ class ActivePersonaContextViewData {
   final bool isPrimary;
   final bool isFallback;
 
-  bool get hasSubAccount => subAccountId.isNotEmpty;
+  bool get hasPersona => personaId.isNotEmpty;
 
   Map<String, Object?> toTypedEnvelope({
     String sourceSurfaceId = '',
     bool explicitOverride = false,
   }) {
     return <String, Object?>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       if (contextVersion > 0) 'contextVersion': contextVersion,
       'personaSnapshotVersion': personaSnapshotVersion,
       if (sourceSurfaceId.trim().isNotEmpty)
@@ -237,15 +235,15 @@ class ActivePersonaContextViewData {
   factory ActivePersonaContextViewData.fromActivePersonaContextWire(
     ActivePersonaContextWireDto w,
   ) {
-    final subAccountId = w.subAccountId;
+    final personaId = w.personaId;
     var ownerUserId = w.ownerUserId;
     if (ownerUserId.isEmpty) {
-      ownerUserId = subAccountId;
+      ownerUserId = personaId;
     }
-    final displayName = w.displayName.isNotEmpty ? w.displayName : subAccountId;
-    final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'subAccount';
+    final displayName = w.displayName.isNotEmpty ? w.displayName : personaId;
+    final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'persona';
     return ActivePersonaContextViewData(
-      subAccountId: subAccountId,
+      personaId: personaId,
       ownerUserId: ownerUserId,
       subjectType: subjectType,
       displayName: displayName,
@@ -263,18 +261,18 @@ class ActivePersonaContextViewData {
   factory ActivePersonaContextViewData.fromActivePersonaContextProjection(
     ActivePersonaContextProjection projection,
   ) {
-    final subAccountId = projection.subAccountId;
+    final personaId = projection.personaId;
     final ownerUserId = projection.ownerUserId.isEmpty
-        ? subAccountId
+        ? personaId
         : projection.ownerUserId;
     return ActivePersonaContextViewData(
-      subAccountId: subAccountId,
+      personaId: personaId,
       ownerUserId: ownerUserId,
       subjectType: projection.subjectType.isEmpty
           ? 'persona'
           : projection.subjectType,
       displayName: projection.displayName.isEmpty
-          ? subAccountId
+          ? personaId
           : projection.displayName,
       avatarUrl: resolveAvatarImageUrl(
         projection.avatarUrl,
@@ -288,17 +286,17 @@ class ActivePersonaContextViewData {
   }
 
   factory ActivePersonaContextViewData.fallback({
-    required String subAccountId,
+    required String personaId,
     required String ownerUserId,
     required String displayName,
     required String avatarUrl,
     int avatarVersion = 0,
-    String subjectType = 'subAccount',
+    String subjectType = 'persona',
     int contextVersion = 1,
     int personaSnapshotVersion = 1,
   }) {
     return ActivePersonaContextViewData(
-      subAccountId: subAccountId,
+      personaId: personaId,
       ownerUserId: ownerUserId,
       subjectType: subjectType,
       displayName: displayName,
@@ -314,11 +312,9 @@ class ActivePersonaContextViewData {
 @immutable
 class PersonaManagementItemViewData {
   const PersonaManagementItemViewData({
-    required this.subAccountId,
+    required this.personaId,
     required this.displayName,
     required this.userHandle,
-    required this.phone,
-    required this.email,
     required this.avatarUrl,
     this.avatarVersion = 0,
     required this.isolationLevel,
@@ -336,11 +332,9 @@ class PersonaManagementItemViewData {
     required this.subjectType,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String displayName;
   final String userHandle;
-  final String phone;
-  final String email;
   final String avatarUrl;
   final int avatarVersion;
   final String isolationLevel;
@@ -357,27 +351,22 @@ class PersonaManagementItemViewData {
   final DateTime? lastActivatedAt;
   final String subjectType;
 
-  bool get hasContactInfo => phone.isNotEmpty || email.isNotEmpty;
   bool get isRetired => status == 'retired';
 
-  /// 纠正 wire 默认 `subjectType: persona`：无 `subAccountId` 时视为 user 主行。
+  /// 纠正 wire 默认 `subjectType: persona`：无 `personaId` 时视为 account 主行。
   factory PersonaManagementItemViewData.fromPersonaManagementItemWire(
     PersonaManagementItemWireDto w,
   ) {
-    final displayName = w.displayName.isNotEmpty
-        ? w.displayName
-        : w.subAccountId;
-    final subjectType = w.subAccountId.isEmpty
+    final displayName = w.displayName.isNotEmpty ? w.displayName : w.personaId;
+    final subjectType = w.personaId.isEmpty
         ? (w.subjectType.isEmpty || w.subjectType == 'persona'
-              ? 'user'
+              ? 'account'
               : w.subjectType)
         : (w.subjectType.isNotEmpty ? w.subjectType : 'persona');
     return PersonaManagementItemViewData(
-      subAccountId: w.subAccountId,
+      personaId: w.personaId,
       displayName: displayName,
       userHandle: w.userHandle,
-      phone: w.phone,
-      email: w.email,
       avatarUrl: resolveAvatarImageUrl(
         w.avatarUrl,
         avatarVersion: w.avatarVersion,
@@ -403,14 +392,12 @@ class PersonaManagementItemViewData {
     PersonaManagementItemProjection projection,
   ) {
     final displayName = projection.displayName.isEmpty
-        ? projection.subAccountId
+        ? projection.personaId
         : projection.displayName;
     return PersonaManagementItemViewData(
-      subAccountId: projection.subAccountId,
+      personaId: projection.personaId,
       displayName: displayName,
       userHandle: projection.userHandle,
-      phone: projection.phone ?? '',
-      email: projection.email ?? '',
       avatarUrl: resolveAvatarImageUrl(
         projection.avatarUrl ?? '',
         avatarVersion: projection.avatarVersion,
@@ -455,28 +442,28 @@ class PersonaSyncSuggestionViewData {
 @immutable
 class PersonaManagementQuotaViewData {
   const PersonaManagementQuotaViewData({
-    required this.maxSubAccounts,
-    required this.usedSubAccounts,
+    required this.maxPersonas,
+    required this.usedPersonas,
   });
 
-  final int maxSubAccounts;
-  final int usedSubAccounts;
+  final int maxPersonas;
+  final int usedPersonas;
 
   int get remainingSlots {
-    final remaining = maxSubAccounts - usedSubAccounts;
+    final remaining = maxPersonas - usedPersonas;
     return remaining < 0 ? 0 : remaining;
   }
 
-  bool get quotaReached => usedSubAccounts >= maxSubAccounts;
+  bool get quotaReached => usedPersonas >= maxPersonas;
 
   factory PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
     PersonaManagementQuotaWireDto w,
   ) {
-    var max = w.maxSubAccounts;
+    var max = w.maxPersonas;
     if (max <= 0) max = 5;
     return PersonaManagementQuotaViewData(
-      maxSubAccounts: max,
-      usedSubAccounts: w.usedSubAccounts,
+      maxPersonas: max,
+      usedPersonas: w.usedPersonas,
     );
   }
 
@@ -485,8 +472,8 @@ class PersonaManagementQuotaViewData {
   ) {
     final max = projection.quotaLimit <= 0 ? 5 : projection.quotaLimit;
     return PersonaManagementQuotaViewData(
-      maxSubAccounts: max,
-      usedSubAccounts: projection.totalCount,
+      maxPersonas: max,
+      usedPersonas: projection.totalCount,
     );
   }
 }
@@ -494,14 +481,14 @@ class PersonaManagementQuotaViewData {
 @immutable
 class PersonaLifecycleGuardViewData {
   const PersonaLifecycleGuardViewData({
-    required this.subAccountId,
+    required this.personaId,
     required this.requestedAction,
     required this.allowed,
     required this.reason,
     required this.requiresSuccessor,
   });
 
-  final String subAccountId;
+  final String personaId;
   final String requestedAction;
   final bool allowed;
   final String reason;
@@ -511,7 +498,7 @@ class PersonaLifecycleGuardViewData {
     PersonaLifecycleGuardWireDto w,
   ) {
     return PersonaLifecycleGuardViewData(
-      subAccountId: w.subAccountId,
+      personaId: w.personaId,
       requestedAction: w.requestedAction,
       allowed: w.allowed,
       reason: w.reason,
@@ -523,7 +510,7 @@ class PersonaLifecycleGuardViewData {
     PersonaLifecycleGuardProjection projection,
   ) {
     return PersonaLifecycleGuardViewData(
-      subAccountId: projection.subAccountId,
+      personaId: projection.personaId,
       requestedAction: projection.requestedAction,
       allowed: projection.allowed,
       reason: projection.reason,
@@ -556,7 +543,7 @@ class PersonaManagementSummaryViewData {
         .toList(growable: false);
     final quotaMap =
         w.quota ??
-        <String, dynamic>{'usedSubAccounts': items.length, 'maxSubAccounts': 5};
+        <String, dynamic>{'usedPersonas': items.length, 'maxPersonas': 5};
     final activeMap = w.activeContext;
     return PersonaManagementSummaryViewData(
       items: items,

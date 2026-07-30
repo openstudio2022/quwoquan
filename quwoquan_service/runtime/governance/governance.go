@@ -15,7 +15,6 @@ type ResiliencePolicy struct {
 	RetryMaxAttempts      int
 	RetryBackoffMs        int
 	CircuitBreakerEnabled bool
-	RateLimitPerSecond    int
 	DegradeEnabled        bool
 }
 
@@ -124,76 +123,12 @@ func (cb *CircuitBreaker) RecordFailure() {
 	}
 }
 
-// RateLimiter implements a simple token-bucket rate limiter.
-type RateLimiter struct {
-	mu       sync.Mutex
-	tokens   int
-	capacity int
-	rate     int
-	lastFill time.Time
-}
-
-func NewRateLimiter(ratePerSecond int) *RateLimiter {
-	return &RateLimiter{
-		tokens:   ratePerSecond,
-		capacity: ratePerSecond,
-		rate:     ratePerSecond,
-		lastFill: time.Now(),
-	}
-}
-
-// Allow returns true if the request is within rate limit.
-func (rl *RateLimiter) Allow() bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-
-	rl.refill()
-	if rl.tokens > 0 {
-		rl.tokens--
-		return true
-	}
-	return false
-}
-
-func (rl *RateLimiter) refill() {
-	now := time.Now()
-	elapsed := now.Sub(rl.lastFill)
-	newTokens := int(elapsed.Seconds()) * rl.rate
-	if newTokens > 0 {
-		rl.tokens += newTokens
-		if rl.tokens > rl.capacity {
-			rl.tokens = rl.capacity
-		}
-		rl.lastFill = now
-	}
-}
-
-func (rl *RateLimiter) SetRate(ratePerSecond int) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	if ratePerSecond <= 0 {
-		return
-	}
-	rl.rate = ratePerSecond
-	rl.capacity = ratePerSecond
-	if rl.tokens > rl.capacity {
-		rl.tokens = rl.capacity
-	}
-}
-
-func (rl *RateLimiter) Rate() int {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	return rl.rate
-}
-
 // InflightLimiter bounds the number of concurrently in-flight operations. It is
-// the backpressure primitive distinct from RateLimiter: RateLimiter caps arrival
-// RPS, but under a slow downstream (e.g. ES) arrival RPS can stay low while
-// in-flight requests pile up and exhaust goroutines / connection pools / search
-// thread pools. A concurrency cap is what actually prevents that collapse. It is
-// non-blocking by design (Acquire returns false immediately when full) so the
-// caller sheds load (429/503) instead of queueing unboundedly.
+// an owner resource backpressure primitive, not a business arrival quota. Under
+// a slow downstream (e.g. ES), in-flight requests can pile up and exhaust
+// goroutines / connection pools / search thread pools even when api-edge arrival
+// quota is healthy. It is non-blocking by design so the owner sheds load instead
+// of queueing unboundedly.
 type InflightLimiter struct {
 	sem chan struct{}
 	max int

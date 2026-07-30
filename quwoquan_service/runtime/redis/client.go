@@ -10,6 +10,8 @@ package redis
 import (
 	"context"
 	"time"
+
+	"quwoquan_service/runtime/boundedrecord"
 )
 
 // Client is the unified superset interface covering K/V, Hash, Set, Sorted-Set,
@@ -70,6 +72,19 @@ type Client interface {
 	Close() error
 	Ping(ctx context.Context) error
 }
+
+// boundedImmutableRecordAtomicCreator is intentionally optional rather than
+// part of Client's generic surface. Callers may only issue cursors for immutable
+// records when the concrete Redis adapter can maintain the value and its
+// subject-scoped quota index atomically in one hash slot.
+type boundedImmutableRecordAtomicCreator interface {
+	CreateBoundedImmutableRecordAtomic(
+		ctx context.Context,
+		request boundedrecord.Request,
+	) (boundedrecord.Result, error)
+}
+
+var errBoundedImmutableRecordAtomicUnavailable = boundedrecord.ErrAtomicUnavailable
 
 // Subscription represents a Pub/Sub subscription.
 type Subscription interface {

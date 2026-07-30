@@ -41,7 +41,7 @@ def _request() -> ModelScoreRequest:
                 ageHours=1,
             )
         ],
-        context={"modelVersion": "champion"},
+        modelChannel="champion",
     )
 
 
@@ -79,7 +79,7 @@ def test_microbatcher_coalesces_duplicate_concurrent_requests() -> None:
         return batcher.run(
             key="same-request",
             scenario="content_feed",
-            model_version="rule",
+            scorer_kind="rule",
             compute=compute,
         )
 

@@ -58,8 +58,7 @@ extension on _ProfileStatsTab {
 
   String get searchHint => switch (this) {
     _ProfileStatsTab.fans => CommunityText.searchFansHint,
-    _ProfileStatsTab.following =>
-      ProfileText.profileStatsSearchFollowingHint,
+    _ProfileStatsTab.following => ProfileText.profileStatsSearchFollowingHint,
     _ProfileStatsTab.circles => ContactText.searchCircleHint,
   };
 
@@ -546,7 +545,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         );
       case _ProfileStatsTab.following:
         final page = await relationshipQuery.listFollowing(
-          subAccountId: _userId,
+          personaId: _userId,
           query: query,
           cursor: cursor,
           limit: _pageSize,
@@ -558,7 +557,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         );
       case _ProfileStatsTab.fans:
         final page = await relationshipQuery.listFollowers(
-          subAccountId: _userId,
+          personaId: _userId,
           query: query,
           cursor: cursor,
           limit: _pageSize,
@@ -592,7 +591,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     return switch (tab) {
       _ProfileStatsTab.circles => (item as CircleDto).id,
       _ProfileStatsTab.fans || _ProfileStatsTab.following =>
-        (item as ProfileSocialRelationRowViewData).subAccountId,
+        (item as ProfileSocialRelationRowViewData).personaId,
     };
   }
 
@@ -728,57 +727,22 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         );
   }
 
-  RelationshipCapabilityDto _resolvedCapability(
+  RelationshipCapabilityDto? _resolvedCapability(
     ProfileSocialRelationRowViewData row,
-  ) {
-    final base = row.effectiveRelationshipCapability;
-    final relationshipState = ref.read(userRelationshipStateProvider);
-    final targetId = row.subAccountId;
-    if (base == null) {
-      final sharedFollowing =
-          relationshipState.hasRelationshipStateFor(targetId)
-          ? relationshipState.isFollowing(targetId)
-          : false;
-      return RelationshipCapabilityDto.fromFollowFlags(
-        viewerId: '',
-        targetId: targetId,
-        isFollowing: sharedFollowing,
-        isFollowedBy:
-            row.relationState == 'followed_by' || row.relationState == 'mutual',
-        isSelf: row.relationState == 'self',
-      );
-    }
-    if (!relationshipState.hasRelationshipStateFor(targetId)) {
-      return base;
-    }
-    final sharedFollowing = relationshipState.isFollowing(targetId);
-    if (sharedFollowing == base.viewerFollowsTarget) {
-      return base;
-    }
-    return RelationshipCapabilityDto.fromFollowFlags(
-      viewerId: base.viewerSubAccountId,
-      targetId: base.targetSubAccountId.isNotEmpty
-          ? base.targetSubAccountId
-          : targetId,
-      isFollowing: sharedFollowing,
-      isFollowedBy: base.targetFollowsViewer,
-      isSelf: base.isSelf,
-      isBlocked: base.isBlocked,
-      isBlockedBy: base.isBlockedBy,
-      hasFormalConversation: base.hasFormalConversation,
-      hasPendingGreeting: base.hasPendingGreeting,
-    );
-  }
+  ) => row.relationshipCapability;
 
   Future<void> _handleFollowAction(ProfileSocialRelationRowViewData row) async {
     final capability = _resolvedCapability(row);
+    if (capability == null) {
+      return;
+    }
     if (capability.isSelf || capability.isBlocked || capability.isBlockedBy) {
       return;
     }
     _trackAction(
       'follow_click',
       targetType: 'profile',
-      targetKey: row.subAccountId,
+      targetKey: row.personaId,
       payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
@@ -792,7 +756,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     await ref
         .read(userRelationshipStateProvider.notifier)
         .setFollowingWithSync(
-          row.subAccountId,
+          row.personaId,
           currentFollowing: currentFollowing,
           shouldFollow: true,
           sourceSurface: AppUiSurfaces.profileStats,
@@ -804,6 +768,9 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     ProfileSocialRelationRowViewData row,
   ) async {
     final capability = _resolvedCapability(row);
+    if (capability == null) {
+      return;
+    }
     final canMessage =
         capability.canSendMessage ||
         capability.canOpenConversation ||
@@ -840,7 +807,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       _trackAction(
         'unfollow_confirm',
         targetType: 'profile',
-        targetKey: row.subAccountId,
+        targetKey: row.personaId,
         payload: <String, Object?>{
           'tab': _activeTab.routeValue,
           'surfaceId': 'profile_stats',
@@ -849,7 +816,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       await ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowingWithSync(
-            row.subAccountId,
+            row.personaId,
             currentFollowing: true,
             shouldFollow: false,
             sourceSurface: AppUiSurfaces.profileStats,
@@ -861,8 +828,8 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           _activeMemory.items = _activeMemory.items
               .where(
                 (item) =>
-                    (item as ProfileSocialRelationRowViewData).subAccountId !=
-                    row.subAccountId,
+                    (item as ProfileSocialRelationRowViewData).personaId !=
+                    row.personaId,
               )
               .toList(growable: false);
         });
@@ -883,7 +850,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           .read(chatConversationRepositoryProvider)
           .createConversation(
             type: 'direct',
-            initialMemberIds: <String>[row.subAccountId],
+            initialMemberIds: <String>[row.personaId],
           );
       if (!mounted || created.conversationId.trim().isEmpty) {
         return;
@@ -891,7 +858,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       _trackAction(
         'message_open',
         targetType: 'profile',
-        targetKey: row.subAccountId,
+        targetKey: row.personaId,
         payload: <String, Object?>{
           'tab': _activeTab.routeValue,
           'surfaceId': 'profile_stats',
@@ -916,16 +883,16 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     _trackAction(
       'row_click',
       targetType: 'profile',
-      targetKey: row.subAccountId,
+      targetKey: row.personaId,
       payload: <String, Object?>{
         'tab': _activeTab.routeValue,
         'surfaceId': 'profile_stats',
       },
     );
     context.push(
-      AppRoutePaths.userProfile(username: row.subAccountId),
+      AppRoutePaths.userProfile(userHandle: row.personaId),
       extra: UserProfileRouteExtra(
-        subAccountId: row.subAccountId,
+        personaId: row.personaId,
         avatar: row.avatarUrl.isNotEmpty ? row.avatarUrl : null,
         displayName: row.displayName.isNotEmpty ? row.displayName : null,
       ),

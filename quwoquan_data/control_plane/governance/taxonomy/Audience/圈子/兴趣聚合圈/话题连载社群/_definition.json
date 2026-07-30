@@ -2,6 +2,7 @@
   "label": "话题连载社群",
   "labelEn": "Topic Series Club",
   "description": "连载话题与栏目讨论群",
+  "axisRole": "audienceGroup",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

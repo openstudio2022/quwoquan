@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back/spec.md#gwt-001
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
 
 import 'dart:async';
 import 'dart:io';
@@ -10,6 +11,7 @@ import 'package:flutter/rendering.dart' show RenderObject, RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -25,6 +27,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/models/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -33,10 +36,12 @@ import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
     show ActivePersonaContextViewData;
 import '../../../../support/cloud_services/behavior_repository_double.dart';
 import '../../../../support/cloud_services/content/content_mock_data.dart';
+import '../../../../support/cloud_services/test_content_comment_facet.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
@@ -73,6 +78,24 @@ Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
 ) => raw.map(
   (id, row) => MapEntry(id, MediaViewerPostWireRow.fromDynamicMap(row)),
 );
+
+final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
+  avatarBaseUrl: 'https://example.com/media/avatar',
+  imageBaseUrl: 'https://example.com/media/image',
+  videoBaseUrl: 'https://example.com/media/video',
+  attachmentBaseUrl: 'https://example.com',
+);
+
+ProviderContainer _testProviderContainer({
+  List<Override> overrides = const <Override>[],
+}) {
+  return ProviderContainer(
+    overrides: <Override>[
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
+      ...overrides,
+    ],
+  );
+}
 
 IntersectionReason _displayableIntersectionReason({
   required String primaryText,
@@ -409,15 +432,25 @@ class _ConfigurableContentRepository extends MockContentRepository {
   @override
   Future<ContentAppConfigWire> getAppConfig() async {
     if (appConfig != null) {
-      return ContentAppConfigWire.fromResponseObject(
-        Map<String, dynamic>.from(appConfig!),
-      );
+      final root = <String, Object?>{
+        ...appConfig!,
+        'schema': AppRemoteConfigSnapshot.canonicalSchema,
+        'fetchedAt': DateTime.now().toUtc().toIso8601String(),
+        'maxAgeSec': 3600,
+        'activationPolicy': const <String, String>{'default': 'immediate'},
+      };
+      root['configHash'] = AppRemoteConfigSnapshot.calculateConfigHash(root);
+      return ContentAppConfigWire.fromWireRoot(root);
     }
     return super.getAppConfig();
   }
 
   @override
-  Future<ContentPostDetailPayload> getPost({required String postId}) async {
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
     getPostCallCount += 1;
     final detail = detailById[postId];
     if (detail != null) {
@@ -425,7 +458,61 @@ class _ConfigurableContentRepository extends MockContentRepository {
         Map<String, dynamic>.from(detail),
       );
     }
-    return super.getPost(postId: postId);
+    return super.getPost(
+      postId: postId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+  }
+}
+
+class _BlockingArticleHydrationRepository extends MockContentRepository {
+  _BlockingArticleHydrationRepository({this.lateSuccessDetail});
+
+  final Map<String, dynamic>? lateSuccessDetail;
+  final List<String> startedPostIds = <String>[];
+  final List<String> cancelledPostIds = <String>[];
+  int activeRequests = 0;
+  int maxActiveRequests = 0;
+
+  @override
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    if (cancellation == null) {
+      throw StateError('viewer hydration must provide cancellation');
+    }
+    startedPostIds.add(postId);
+    activeRequests += 1;
+    maxActiveRequests = maxActiveRequests < activeRequests
+        ? activeRequests
+        : maxActiveRequests;
+    final result = Completer<ContentPostDetailPayload>();
+    unawaited(
+      cancellation.whenCancelled.then((_) {
+        cancelledPostIds.add(postId);
+        if (!result.isCompleted) {
+          final detail = lateSuccessDetail;
+          if (detail == null) {
+            result.completeError(const CloudOperationCancelledException());
+          } else {
+            result.complete(
+              ContentPostDetailPayload.fromWire(<String, dynamic>{
+                ...detail,
+                'postId': postId,
+              }),
+            );
+          }
+        }
+      }),
+    );
+    try {
+      return await result.future;
+    } finally {
+      activeRequests -= 1;
+    }
   }
 }
 
@@ -516,8 +603,9 @@ class _AuthenticatedViewerSession extends AuthSessionController {
     return const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'viewer-test-token',
+      refreshToken: 'viewer-test-refresh-token',
       ownerId: 'viewer-test-owner',
-      activeSubAccountId: 'viewer-test-persona',
+      activePersonaId: 'viewer-test-persona',
     );
   }
 }
@@ -531,8 +619,9 @@ class _FlippableViewerSession extends AuthSessionController {
     state = const AuthSessionState(
       status: AuthSessionStatus.authenticated,
       accessToken: 'viewer-resume-token',
+      refreshToken: 'viewer-resume-refresh-token',
       ownerId: 'viewer-resume-owner',
-      activeSubAccountId: 'viewer-resume-persona',
+      activePersonaId: 'viewer-resume-persona',
     );
   }
 }
@@ -609,7 +698,7 @@ VideoPostDto _videoPost({
   int? height,
   String body = 'video body',
   String videoUrl =
-      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4',
+      'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4',
   String coverUrl =
       'media/image/s/archived-image/post/fixture_video_001/v1/cover.png',
   SourceAttributionDto? sourceAttribution,
@@ -807,6 +896,7 @@ Widget _wrap(
 }) {
   final allOverrides = [
     ...mockContentFacetOverrides(contentRepository ?? MockContentRepository()),
+    mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
     if (!useProductionRuntimeConfig)
       contentRuntimeConfigProvider.overrideWithValue(
         buildAlphaContentRuntimeConfigDefaults(),
@@ -897,9 +987,9 @@ Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
         builder: (context, state) => Scaffold(body: child),
       ),
       GoRoute(
-        path: '/user/:username',
+        path: '/user/:userHandle',
         builder: (context, state) => Text(
-          'user:${state.pathParameters['username']}',
+          'user:${state.pathParameters['userHandle']}',
           key: const ValueKey<String>('user-profile-probe'),
         ),
       ),
@@ -922,6 +1012,7 @@ Widget _wrapWithRouter(Widget child, {List overrides = const []}) {
   return ProviderScope(
     overrides: [
       ...mockContentFacetOverrides(MockContentRepository()),
+      mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       ...overrides,
     ].cast(),
     child: ScreenUtilInit(
@@ -1160,13 +1251,13 @@ void main() {
     );
     expect(
       viewerSource,
-      contains('allowImplicitScrolling: false'),
-      reason: '视频书滚动性能优先：不提前构建相邻视频页。',
+      contains('allowImplicitScrolling: true'),
+      reason: '视频书只通过真实相邻页承载唯一 N+1 预热，不额外创建隐藏播放器。',
     );
     expect(
       viewerSource,
-      contains('final keepAlive = widget.isVisible && isCurrent'),
-      reason: '视频书只保活当前可见帖子的当前视频页，切页后释放非活跃页。',
+      contains('final keepAlive = shouldInitialize'),
+      reason: '视频书只保活当前项与唯一 N+1，取消预热后立即释放非活跃页。',
     );
     expect(
       viewerSource,
@@ -1175,8 +1266,18 @@ void main() {
     );
     expect(
       viewerSource,
-      contains('initialize: widget.isVisible && isCurrent'),
-      reason: '只有当前可见帖子内的当前分集可以创建 VideoPlayerController。',
+      contains('initialize: shouldInitialize'),
+      reason: '只有当前可见帖子内的当前分集与唯一 N+1 可以占用全局 controller 槽位。',
+    );
+    expect(
+      viewerSource,
+      contains('index == _currentEpisodeIndex + 1'),
+      reason: '预热边界必须严格收口为当前项后的唯一 N+1。',
+    );
+    expect(
+      viewerSource,
+      contains('didHaveMemoryPressure()'),
+      reason: '内存压力必须取消并释放 N+1 预热槽位。',
     );
     expect(
       viewerSource,
@@ -1221,7 +1322,7 @@ void main() {
   testWidgets('视频书沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
     final repo = _PagedFeaturedContentRepository();
     final analytics = _FakeAnalyticsService();
-    final container = ProviderContainer(
+    final container = _testProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(repo),
         analyticsProvider.overrideWithValue(analytics),
@@ -1332,7 +1433,7 @@ void main() {
 
   testWidgets('视频书顶部仅保留返回与更多入口（V1.0 取消形态分段与一级 tab）', (tester) async {
     final repo = _PagedFeaturedContentRepository();
-    final container = ProviderContainer(
+    final container = _testProviderContainer(
       overrides: [...mockContentFacetOverrides(repo)],
     );
     addTearDown(container.dispose);
@@ -1383,7 +1484,7 @@ void main() {
     final post = _photoPost(
       imageUrls: const ['media/image/s/fixture/photo-regression.jpg'],
     );
-    final container = ProviderContainer();
+    final container = _testProviderContainer();
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -1415,8 +1516,8 @@ void main() {
                 }),
                 interactionSnapshot: MediaViewerInteractionSnapshot(
                   scopePostIds: <String>{post.id},
-                  scopeProfileIds: <String>{post.subAccountId},
-                  followingUsers: <String>{post.subAccountId},
+                  scopeProfileIds: <String>{post.personaId},
+                  followingUsers: <String>{post.personaId},
                   likedPosts: <String>{post.id},
                   postLikesCount: <String, int>{post.id: 7},
                   postCommentCount: <String, int>{post.id: 4},
@@ -1439,7 +1540,7 @@ void main() {
     expect(find.byType(WorksImmersiveViewer), findsOneWidget);
     final relationshipState = container.read(userRelationshipStateProvider);
     final postInteractionState = container.read(postInteractionStateProvider);
-    expect(relationshipState.isFollowing(post.subAccountId), isTrue);
+    expect(relationshipState.isFollowing(post.personaId), isTrue);
     expect(postInteractionState.isLiked(post.id), isTrue);
     expect(postInteractionState.commentCountFor(post.id), 4);
     expect(postInteractionState.shareCountFor(post.id), 3);
@@ -1451,7 +1552,11 @@ void main() {
 
   testWidgets('UnifiedMediaViewerPage 文章底部工具栏沿统一安全轨道收口', (tester) async {
     final post = _articlePost();
-    final container = ProviderContainer();
+    final container = _testProviderContainer(
+      overrides: <Override>[
+        ...mockContentFacetOverrides(MockContentRepository()),
+      ],
+    );
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
@@ -2273,9 +2378,189 @@ void main() {
     );
   });
 
-  testWidgets('切集为每个分集重新开启一次五秒窗口', (tester) async {
+  testWidgets('视频书只预热唯一 N+1 且方向变化与内存压力会释放', (tester) async {
+    final fakePlatform = _installImmersiveVideoTestPlatform();
+    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
+    final raw = _viewerRawByPostId({
+      post.id: <String, dynamic>{
+        ...post.toMap(),
+        'workId': post.id,
+        'workType': 'video',
+        'workIdentity': 'work',
+        'caption': post.body,
+        'mediaItems': <Map<String, dynamic>>[
+          for (var episode = 1; episode <= 3; episode += 1)
+            <String, dynamic>{
+              'kind': 'video',
+              'url':
+                  'media/video/s/video-series-001/post/video-1/'
+                  'v1/episode-$episode.mp4',
+              'durationMs': 125000,
+            },
+        ],
+      },
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: raw,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+        ],
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    for (
+      var attempt = 0;
+      attempt < 30 && VideoPlayerWidget.debugActiveControllerCount != 2;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    var players = tester
+        .widgetList<VideoPlayerWidget>(
+          find.byType(VideoPlayerWidget, skipOffstage: false),
+        )
+        .toList(growable: false);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 2);
+    expect(players.where((player) => player.initialize), hasLength(2));
+    expect(players.where((player) => player.autoPlay), hasLength(1));
+    expect(
+      players.where((player) => player.initialize && !player.autoPlay),
+      hasLength(1),
+      reason: 'N+1 只完成 controller/decoder 预热，不得自动播放。',
+    );
+    final initialCurrentPlayCount = fakePlatform.playCount;
+    expect(
+      initialCurrentPlayCount,
+      greaterThanOrEqualTo(1),
+      reason: '当前项应保持自动播放语义。',
+    );
+
+    final episodePageView = find.byWidgetPredicate(
+      (widget) =>
+          widget is PageView &&
+          widget.scrollDirection == Axis.horizontal &&
+          widget.allowImplicitScrolling,
+    );
+    expect(episodePageView, findsOneWidget);
+    final pageViewContext = tester.element(episodePageView);
+    final metrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 750,
+      pixels: 48,
+      viewportDimension: 375,
+      axisDirection: AxisDirection.right,
+      devicePixelRatio: 1,
+    );
+    ScrollStartNotification(
+      metrics: metrics,
+      context: pageViewContext,
+    ).dispatch(pageViewContext);
+    ScrollUpdateNotification(
+      metrics: metrics,
+      context: pageViewContext,
+      scrollDelta: 24,
+    ).dispatch(pageViewContext);
+    ScrollUpdateNotification(
+      metrics: metrics,
+      context: pageViewContext,
+      scrollDelta: -12,
+    ).dispatch(pageViewContext);
+    await tester.pump();
+    for (
+      var attempt = 0;
+      attempt < 20 && VideoPlayerWidget.debugActiveControllerCount > 1;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+    }
+    expect(
+      VideoPlayerWidget.debugActiveControllerCount,
+      1,
+      reason: '前向手势反向后必须立即取消旧 N+1 预热。',
+    );
+    expect(fakePlatform.playCount, initialCurrentPlayCount);
+
+    ScrollEndNotification(
+      metrics: metrics,
+      context: pageViewContext,
+    ).dispatch(pageViewContext);
+    await tester.pump(const Duration(milliseconds: 120));
+    for (
+      var attempt = 0;
+      attempt < 20 && VideoPlayerWidget.debugActiveControllerCount != 2;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+    }
+    expect(VideoPlayerWidget.debugActiveControllerCount, 2);
+    final resumedCurrentPlayCount = fakePlatform.playCount;
+    expect(resumedCurrentPlayCount, greaterThan(initialCurrentPlayCount));
+
+    WidgetsBinding.instance.handleMemoryPressure();
+    await tester.pump();
+    for (
+      var attempt = 0;
+      attempt < 20 && VideoPlayerWidget.debugActiveControllerCount > 1;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+    }
+    players = tester
+        .widgetList<VideoPlayerWidget>(
+          find.byType(VideoPlayerWidget, skipOffstage: false),
+        )
+        .toList(growable: false);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 1);
+    expect(players.where((player) => player.initialize), hasLength(1));
+    expect(players.where((player) => player.autoPlay), hasLength(1));
+    expect(fakePlatform.playCount, resumedCurrentPlayCount);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    for (
+      var attempt = 0;
+      attempt < 20 && VideoPlayerWidget.debugActiveControllerCount > 0;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump();
+    }
+    expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+  });
+
+  testWidgets('重复公开交付引用仍为每个分集分配唯一 stage 与 session', (tester) async {
     _installImmersiveVideoTestPlatform();
     final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
+    final duplicateUrl =
+        'media/video/s/video-series-duplicate/post/video-1/v1/shared.mp4';
     final raw = _viewerRawByPostId({
       post.id: <String, dynamic>{
         ...post.toMap(),
@@ -2286,12 +2571,12 @@ void main() {
         'mediaItems': <Map<String, dynamic>>[
           <String, dynamic>{
             'kind': 'video',
-            'url': 'media/video/s/video-series-001/post/video-1/episode-1.mp4',
+            'url': duplicateUrl,
             'durationMs': 125000,
           },
           <String, dynamic>{
             'kind': 'video',
-            'url': 'media/video/s/video-series-001/post/video-1/episode-2.mp4',
+            'url': duplicateUrl,
             'durationMs': 125000,
           },
         ],
@@ -2312,6 +2597,86 @@ void main() {
         overrides: [
           mediaDownloadCacheProvider.overrideWithValue(
             _NoopMediaDownloadCache(),
+          ),
+        ],
+      ),
+    );
+
+    await _waitForVideoTimelineMeasurementFrame(tester);
+    for (
+      var attempt = 0;
+      attempt < 30 &&
+          find
+                  .byType(VideoPlayerWidget, skipOffstage: false)
+                  .evaluate()
+                  .length <
+              2;
+      attempt += 1
+    ) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(Duration.zero);
+      });
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final players = tester
+        .widgetList<VideoPlayerWidget>(
+          find.byType(VideoPlayerWidget, skipOffstage: false),
+        )
+        .toList(growable: false);
+    expect(players, hasLength(2));
+    expect(players.map((player) => player.key).toSet(), hasLength(2));
+    expect(
+      players.map((player) => player.playbackSession).toSet(),
+      hasLength(2),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('切集为每个分集重新开启一次五秒窗口', (tester) async {
+    _installImmersiveVideoTestPlatform();
+    final post = _videoPost(width: 1920, height: 1080, coverUrl: '');
+    final raw = _viewerRawByPostId({
+      post.id: <String, dynamic>{
+        ...post.toMap(),
+        'workId': post.id,
+        'workType': 'video',
+        'workIdentity': 'work',
+        'caption': post.body,
+        'mediaItems': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'kind': 'video',
+            'url':
+                'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
+            'durationMs': 125000,
+          },
+          <String, dynamic>{
+            'kind': 'video',
+            'url':
+                'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
+            'durationMs': 125000,
+          },
+        ],
+      },
+    });
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: raw,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [
+          mediaDownloadCacheProvider.overrideWithValue(
+            _NoopMediaDownloadCache(),
+          ),
+          workBrowserContentCommentFacetProvider.overrideWithValue(
+            TestContentCommentFacet(),
           ),
         ],
       ),
@@ -2408,12 +2773,12 @@ void main() {
       final episodes = <Map<String, dynamic>>[
         <String, dynamic>{
           'kind': 'video',
-          'url': 'media/video/s/video-series-001/post/video-1/episode-1.mp4',
+          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-1.mp4',
           'durationMs': 125000,
         },
         <String, dynamic>{
           'kind': 'video',
-          'url': 'media/video/s/video-series-001/post/video-1/episode-2.mp4',
+          'url': 'media/video/s/video-series-001/post/video-1/v1/episode-2.mp4',
           'durationMs': 125000,
         },
       ];
@@ -2897,6 +3262,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          feedRequestId: 'feed-request-works-span',
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -2932,15 +3298,14 @@ void main() {
         .toList(growable: false);
     expect(clicks, hasLength(1));
     final click = clicks.single;
-    expect(click.feedRequestId, isNotNull);
-    expect(click.feedRequestId!.trim(), isNotEmpty);
+    expect(click.feedRequestId, 'feed-request-works-span');
     expect(click.referralSource, ReferralSource.organicFeed);
     expect(click.intersectionId, 'ix_works_span');
     expect(click.intersectionSourceRef, 'sharedFollowees');
     expect(click.intersectionEvidenceId, 'ev_works_span');
     expect(click.intersectionClass, 'fact');
     expect(
-      AppRoutePaths.userProfile(username: 'u_lin'),
+      AppRoutePaths.userProfile(userHandle: 'u_lin'),
       startsWith('/user/u_lin'),
     );
   });
@@ -3012,6 +3377,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          feedRequestId: 'feed-request-works-object',
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -3047,8 +3413,7 @@ void main() {
         .toList(growable: false);
     expect(clicks, hasLength(1));
     final click = clicks.single;
-    expect(click.feedRequestId, isNotNull);
-    expect(click.feedRequestId!.trim(), isNotEmpty);
+    expect(click.feedRequestId, 'feed-request-works-object');
     expect(click.intersectionSourceRef, 'coLikedEntity');
     expect(click.intersectionEvidenceId, 'ev_works_fallback');
     expect(click.intersectionDimension, 'place');
@@ -3113,6 +3478,7 @@ void main() {
           showTopNavigation: false,
           externalPosts: [post],
           externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          feedRequestId: 'feed-request-works-action',
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
@@ -3150,8 +3516,7 @@ void main() {
     final click = clicks.single;
     expect(click.contentId, 'hp_route_dianchi');
     expect(click.contentType, 'route');
-    expect(click.feedRequestId, isNotNull);
-    expect(click.feedRequestId!.trim(), isNotEmpty);
+    expect(click.feedRequestId, 'feed-request-works-action');
     expect(click.intersectionId, 'ix_works_action_target');
     expect(click.intersectionSourceRef, 'coWishlistedEntity');
     expect(click.intersectionEvidenceId, 'ev_works_action_target');
@@ -3304,7 +3669,7 @@ void main() {
     final engagementTracker = ContentEngagementTracker(reporter: reporter);
     addTearDown(behaviorTracker.dispose);
     addTearDown(engagementTracker.dispose);
-    final container = ProviderContainer(
+    final container = _testProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(MockContentRepository()),
         authSessionControllerProvider.overrideWith(_FlippableViewerSession.new),
@@ -3315,7 +3680,7 @@ void main() {
         contentEngagementTrackerProvider.overrideWithValue(engagementTracker),
         activePersonaContextProvider.overrideWith(
           (_) async => ActivePersonaContextViewData.fallback(
-            subAccountId: 'viewer-test-persona',
+            personaId: 'viewer-test-persona',
             ownerUserId: 'viewer-test-owner',
             displayName: 'Viewer',
             avatarUrl: '',
@@ -4512,7 +4877,7 @@ void main() {
       imageUrls: const ['media/image/s/fixture/photo-only.jpg'],
     );
     var dismissed = false;
-    final container = ProviderContainer(
+    final container = _testProviderContainer(
       overrides: [...mockContentFacetOverrides(MockContentRepository())],
     );
 
@@ -5428,6 +5793,89 @@ void main() {
           ),
     );
     expect(structureFallback.properties['reason'], contains('empty'));
+  });
+
+  testWidgets('文章水合在滑到非文章作品时取消且迟到请求不进入错误态', (tester) async {
+    final article = _articlePost();
+    final photo = _photoPost().copyWith(id: 'photo-after-article');
+    final analytics = _FakeAnalyticsService();
+    final repo = _BlockingArticleHydrationRepository(
+      lateSuccessDetail: <String, dynamic>{
+        'type': 'article',
+        'contentType': 'article',
+        'authorId': article.authorId,
+        'authorDisplayName': article.displayName,
+        'authorAvatarUrl': article.avatarUrl,
+        'title': '迟到的水合标题',
+        'articleMarkdown': '## 迟到章节\n\n迟到的水合正文。',
+        'markdownDialect': 'qwq-rich-md',
+      },
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [article, photo],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(article),
+            ContentSurfaceViewMapper.fromDto(photo),
+          ],
+          rawPostsById: _viewerRawByPostId({
+            article.id: <String, dynamic>{
+              'postId': article.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': article.authorId,
+              'authorDisplayName': article.displayName,
+              'authorAvatarUrl': article.avatarUrl,
+              'title': '分发标题',
+              'body': '分发摘要正文',
+              'coverUrl': article.coverUrl,
+            },
+            photo.id: photo.toMap(),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [analyticsProvider.overrideWithValue(analytics)],
+        contentRepository: repo,
+      ),
+    );
+    await tester.pump();
+    for (
+      var attempt = 0;
+      attempt < 20 && repo.startedPostIds.isEmpty;
+      attempt += 1
+    ) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(repo.startedPostIds, <String>[article.id]);
+
+    final outerViewer = find.byWidgetPredicate(
+      (widget) => widget is PageView && widget.scrollDirection == Axis.vertical,
+    );
+    expect(outerViewer, findsOneWidget);
+    await tester.fling(outerViewer, const Offset(0, -700), 1200);
+    await _pumpSettledFrames(tester);
+
+    expect(repo.cancelledPostIds, <String>[article.id]);
+    expect(repo.maxActiveRequests, 1);
+    expect(repo.activeRequests, 0);
+    expect(
+      find.byKey(ValueKey<String>('article-hydration-error-${article.id}')),
+      findsNothing,
+    );
+    expect(find.textContaining('迟到的水合正文'), findsNothing);
+    expect(
+      analytics.events.any(
+        (event) =>
+            event.eventName == 'article_reader_hydration_ms' &&
+            event.properties['result'] == 'superseded',
+      ),
+      isTrue,
+    );
   });
 
   testWidgets('文章详情水合失败后进入显式错误态且不在当前会话内重复拉取', (tester) async {

@@ -2,6 +2,7 @@
   "label": "复古棕",
   "labelEn": "Vintage Brown",
   "description": "复古胶片棕色调",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

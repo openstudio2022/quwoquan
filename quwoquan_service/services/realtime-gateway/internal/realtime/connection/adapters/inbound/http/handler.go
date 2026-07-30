@@ -267,6 +267,18 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	})
 }
 
+// WriteReadinessUnavailable keeps the infrastructure readiness probe on the
+// same typed error boundary as the object-owned HTTP routes.
+func WriteReadinessUnavailable(w http.ResponseWriter, r *http.Request) {
+	writeError(
+		w,
+		r,
+		generated.AppErrorFromReadinessUnavailable(
+			"realtime readiness dependency unavailable",
+		),
+	)
+}
+
 func writeTicketSecurityError(w http.ResponseWriter, r *http.Request, cause error) {
 	if errors.Is(cause, application.ErrAccountSecurityDenied) {
 		writeError(w, r, generated.AppErrorFromUnauthorized(

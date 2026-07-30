@@ -1,55 +1,5 @@
 import '../operation_request_payload.dart';
-
-final class PlaceCirclePostCommand {
-  PlaceCirclePostCommand({
-    required String circleId,
-    required String postId,
-    String? groupId,
-  }) : circleId = _required(circleId, 'circleId'),
-       postId = _required(postId, 'postId'),
-       groupId = _optional(groupId);
-
-  final String circleId;
-  final String postId;
-  final String? groupId;
-}
-
-final class RemoveCirclePostCommand {
-  RemoveCirclePostCommand({
-    required String circleId,
-    required String placementId,
-  }) : circleId = _required(circleId, 'circleId'),
-       placementId = _required(placementId, 'placementId');
-
-  final String circleId;
-  final String placementId;
-}
-
-final class PinCirclePostCommand {
-  PinCirclePostCommand({
-    required String circleId,
-    required String placementId,
-    required this.enabled,
-  }) : circleId = _required(circleId, 'circleId'),
-       placementId = _required(placementId, 'placementId');
-
-  final String circleId;
-  final String placementId;
-  final bool enabled;
-}
-
-final class FeatureCirclePostCommand {
-  FeatureCirclePostCommand({
-    required String circleId,
-    required String placementId,
-    required this.enabled,
-  }) : circleId = _required(circleId, 'circleId'),
-       placementId = _required(placementId, 'placementId');
-
-  final String circleId;
-  final String placementId;
-  final bool enabled;
-}
+part '../generated/requests/circle/post_placement_contracts.requests.g.dart';
 
 final class CirclePostPlacementCommandResult {
   const CirclePostPlacementCommandResult({
@@ -83,45 +33,6 @@ abstract interface class CirclePostPlacementCommandWriter {
   );
 }
 
-CloudOperationRequestPayload encodePlaceCirclePostCommand(
-  PlaceCirclePostCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': command.circleId},
-  body: <String, Object?>{
-    'postId': command.postId,
-    if (command.groupId != null) 'groupId': command.groupId,
-  },
-);
-
-CloudOperationRequestPayload encodeRemoveCirclePostCommand(
-  RemoveCirclePostCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'placementId': command.placementId,
-  },
-);
-
-CloudOperationRequestPayload encodePinCirclePostCommand(
-  PinCirclePostCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'placementId': command.placementId,
-  },
-  body: <String, Object?>{'enabled': command.enabled},
-);
-
-CloudOperationRequestPayload encodeFeatureCirclePostCommand(
-  FeatureCirclePostCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'placementId': command.placementId,
-  },
-  body: <String, Object?>{'enabled': command.enabled},
-);
-
 CirclePostPlacementCommandResult decodeCirclePostPlacementCommandResult(
   Object? value,
 ) {
@@ -153,15 +64,4 @@ String _string(Map<String, Object?> map, String key) {
     throw FormatException('$key must be a non-empty string');
   }
   return value.trim();
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
-}
-
-String? _optional(String? value) {
-  final normalized = value?.trim() ?? '';
-  return normalized.isEmpty ? null : normalized;
 }

@@ -104,7 +104,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         },
     }
     for name, payload_doc in {
-        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "releaseKind": "content", "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"]},
+        "release.json": {"schema": "quwoquan_data.release", "releaseId": "release-a", "sourceOwner": "qwq_data", "releaseKind": "content", "executionIds": ["20260715--travel-homepage-coverage--test-region-a--scale-001"]},
         "desired_state.json": desired,
         "sample_bundle.json": {"schema": "quwoquan_data.release_sample", "tags": ["Topic/旅行"]},
         "index/objects.json": {

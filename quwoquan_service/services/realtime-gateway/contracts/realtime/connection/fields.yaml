@@ -85,6 +85,36 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  IssueConnectionTicketRequest:
+    description: 签发连接票据的唯一请求实体；账号、Persona 与设备身份只从已验签安全上下文注入，不接受客户端输入。
+    fields:
+    - name: accountId
+      source: accountId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: drop
+    - name: personaId
+      source: personaId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: drop
+    - name: deviceId
+      source: deviceId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: SENSITIVE
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: drop
   RealtimeAccountClosureDeadLetterRecoveryRequest:
     description: operator 释放 Realtime 账号安全 terminal marker 的强类型命令；只接受 Redis source PEL 坐标。
     fields:

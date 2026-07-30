@@ -2,6 +2,7 @@
   "label": "感人催泪",
   "labelEn": "Emotional",
   "description": "感人泪点的内容",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

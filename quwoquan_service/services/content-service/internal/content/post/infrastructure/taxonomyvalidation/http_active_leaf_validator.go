@@ -13,10 +13,16 @@ import (
 
 	"quwoquan_service/generated/operationsecurity"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
 )
 
 const tagValidateOperationID = "tag.tag_node_view.ValidateTagRefs"
+
+// errRequiredDependencyUnavailable keeps the generated app-error constructor in
+// one place for every tag-service adapter in this package.
+func errRequiredDependencyUnavailable(message string) error {
+	return contentgenerated.AppErrorFromRequiredDependencyUnavailable(message)
+}
 
 // HTTPActiveTaxonomyLeafValidator is content-service's typed first-party
 // tag-service adapter for onboarding taxonomy verification. It consumes the

@@ -20,6 +20,7 @@ import org.json.JSONObject;
 
 /** Keystore-backed recovery queue storage available before Flutter plugin registration. */
 final class RecoveryFailureEncryptedStore {
+  // Existing Keystore alias and file name are frozen canonical bytes.
   private static final String KEY_ALIAS = "qwq_recovery_failure_queue_v1";
   private static final String CIPHER = "AES/GCM/NoPadding";
   private static final int MAX_ENCRYPTED_BYTES = 2 << 20;

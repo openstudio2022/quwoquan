@@ -21,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 	persistence "quwoquan_service/services/tag-service/internal/tag/tag_node_view/infrastructure/persistence"
 	"quwoquan_service/services/tag-service/internal/tag/tag_taxonomy_release/application/taxonomyrelease"
@@ -29,14 +30,18 @@ import (
 )
 
 type definition struct {
-	Label       string   `json:"label"`
-	DisplayName string   `json:"displayName"`
-	LabelEn     string   `json:"labelEn"`
-	Description string   `json:"description"`
-	Semantics   string   `json:"semantics"`
-	Aliases     []string `json:"aliases"`
-	MaxDepth    int      `json:"maxDepth"`
-	PathPolicy  string   `json:"pathPolicy"`
+	Label           string                       `json:"label"`
+	DisplayName     string                       `json:"displayName"`
+	LabelEn         string                       `json:"labelEn"`
+	Description     string                       `json:"description"`
+	Semantics       string                       `json:"semantics"`
+	Aliases         []string                     `json:"aliases"`
+	AxisRole        string                       `json:"axisRole"`
+	SameAsRefs      []string                     `json:"sameAsRefs"`
+	MaxDepth        int                          `json:"maxDepth"`
+	PathPolicy      string                       `json:"pathPolicy"`
+	LifecycleStatus string                       `json:"lifecycleStatus"`
+	HeatWindow      *lifecycle.WindowDeclaration `json:"heatWindow"`
 }
 
 type taxonomyRoot struct {
@@ -48,18 +53,22 @@ type taxonomyRoot struct {
 }
 
 type taxonomyNode struct {
-	tagRef       string
-	group        string
-	nodeKind     string
-	label        string
-	labelEn      string
-	description  string
-	aliases      []string
-	parentTagRef string
-	ancestors    []string
-	depth        int
-	maxDepth     int
-	pathPolicy   string
+	tagRef          string
+	group           string
+	nodeKind        string
+	label           string
+	labelEn         string
+	description     string
+	aliases         []string
+	axisRole        string
+	sameAsRefs      []string
+	parentTagRef    string
+	ancestors       []string
+	depth           int
+	maxDepth        int
+	pathPolicy      string
+	lifecycleStatus string
+	heatWindow      *lifecycle.Window
 }
 
 type taxonomyValidationNode struct {
@@ -329,19 +338,30 @@ func collectTaxonomyNodes(tagsDir string) ([]taxonomyNode, error) {
 				ancestors = append(ancestors, strings.Join(segs[:i], "/"))
 			}
 		}
+		lifecycleStatus, heatWindow, lifecycleErr := lifecycle.ResolveDeclaration(
+			def.LifecycleStatus,
+			def.HeatWindow,
+		)
+		if lifecycleErr != nil {
+			return fmt.Errorf("taxonomy tagRef %s: %w", tagRef, lifecycleErr)
+		}
 		nodes = append(nodes, taxonomyNode{
-			tagRef:       tagRef,
-			group:        group,
-			nodeKind:     nodeKind,
-			label:        firstNonEmpty(def.Label, def.DisplayName, segs[len(segs)-1]),
-			labelEn:      def.LabelEn,
-			description:  firstNonEmpty(def.Description, def.Semantics),
-			aliases:      normalizedStrings(def.Aliases),
-			parentTagRef: parentTagRef,
-			ancestors:    ancestors,
-			depth:        len(segs) - 1,
-			maxDepth:     def.MaxDepth,
-			pathPolicy:   strings.TrimSpace(def.PathPolicy),
+			tagRef:          tagRef,
+			group:           group,
+			nodeKind:        nodeKind,
+			label:           firstNonEmpty(def.Label, def.DisplayName, segs[len(segs)-1]),
+			labelEn:         def.LabelEn,
+			description:     firstNonEmpty(def.Description, def.Semantics),
+			aliases:         normalizedStrings(def.Aliases),
+			axisRole:        strings.TrimSpace(def.AxisRole),
+			sameAsRefs:      normalizedStrings(def.SameAsRefs),
+			parentTagRef:    parentTagRef,
+			ancestors:       ancestors,
+			depth:           len(segs) - 1,
+			maxDepth:        def.MaxDepth,
+			pathPolicy:      strings.TrimSpace(def.PathPolicy),
+			lifecycleStatus: string(lifecycleStatus),
+			heatWindow:      heatWindow,
 		})
 		return nil
 	})
@@ -498,12 +518,15 @@ func insertSnapshotNode(
 		Description:     node.description,
 		Aliases:         append([]string(nil), node.aliases...),
 		Ancestors:       append([]string(nil), node.ancestors...),
+		AxisRole:        node.axisRole,
+		SameAsRefs:      append([]string(nil), node.sameAsRefs...),
 		ParentTagRef:    node.parentTagRef,
 		Depth:           node.depth,
 		MaxDepth:        node.maxDepth,
 		PathPolicy:      node.pathPolicy,
 		ReleaseID:       releaseID,
-		LifecycleStatus: "active",
+		LifecycleStatus: node.lifecycleStatus,
+		HeatWindow:      node.heatWindow,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -542,8 +565,11 @@ func sameSnapshotNode(actual, expected model.TagNode) bool {
 		actual.PathPolicy == expected.PathPolicy &&
 		actual.ReleaseID == expected.ReleaseID &&
 		actual.LifecycleStatus == expected.LifecycleStatus &&
+		lifecycle.SameWindow(actual.HeatWindow, expected.HeatWindow) &&
+		actual.AxisRole == expected.AxisRole &&
 		sameStrings(actual.Aliases, expected.Aliases) &&
-		sameStrings(actual.Ancestors, expected.Ancestors)
+		sameStrings(actual.Ancestors, expected.Ancestors) &&
+		sameStrings(actual.SameAsRefs, expected.SameAsRefs)
 }
 
 func sameStrings(left, right []string) bool {
@@ -564,7 +590,7 @@ func canonicalDigest(nodes []taxonomyNode) string {
 	for _, node := range nodes {
 		fmt.Fprintf(
 			hasher,
-			"%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%d\x00%s\x00%s\n",
+			"%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\x00%d\x00%d\x00%s\x00%s\x00%s\x00%s\x00%s\x00%s\n",
 			node.tagRef,
 			node.group,
 			node.nodeKind,
@@ -576,6 +602,10 @@ func canonicalDigest(nodes []taxonomyNode) string {
 			node.maxDepth,
 			node.pathPolicy,
 			strings.Join(node.aliases, "\x1f"),
+			node.axisRole,
+			strings.Join(node.sameAsRefs, "\x1f"),
+			node.lifecycleStatus,
+			lifecycle.CanonicalWindow(node.heatWindow),
 		)
 	}
 	return hex.EncodeToString(hasher.Sum(nil))

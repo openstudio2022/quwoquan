@@ -109,6 +109,7 @@ def _write_report(
     status: str,
     phase: str,
     plan_digest: str | None,
+    git_branch: str | None,
     git_commit_sha: str | None,
     source_digest: str | None,
     entity_catalog_digest: str | None,
@@ -122,6 +123,7 @@ def _write_report(
         "status": status,
         "phase": phase,
         "planDigest": plan_digest,
+        "gitBranch": git_branch,
         "gitCommitSha": git_commit_sha,
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
@@ -166,6 +168,7 @@ def _wait_for_submissions(
             status="awaiting_submissions",
             phase="submission",
             plan_digest=None,
+            git_branch=None,
             git_commit_sha=None,
             source_digest=None,
             entity_catalog_digest=None,
@@ -191,6 +194,7 @@ def _freeze_plan(
     root_execution_id: str,
     submissions: dict[str, dict[str, Any]],
 ) -> tuple[dict[str, Any], str]:
+    branches = {str(row.get("gitBranch") or "") for row in submissions.values()}
     commits = {str(row.get("gitCommitSha") or "") for row in submissions.values()}
     source_digests = {
         str((row.get("sourceDigest") or {}).get("digest") or "")
@@ -200,9 +204,15 @@ def _freeze_plan(
         str(row.get("entityCatalogDigest") or "") for row in submissions.values()
     }
     regions = {str(row.get("regionRef") or "") for row in submissions.values()}
-    if len(commits) != 1 or len(source_digests) != 1 or len(catalog_digests) != 1:
+    if (
+        len(branches) != 1
+        or not next(iter(branches))
+        or len(commits) != 1
+        or len(source_digests) != 1
+        or len(catalog_digests) != 1
+    ):
         raise ValueError(
-            "campaign lanes must share one commit, sourceDigest, "
+            "campaign lanes must share one branch, commit, sourceDigest, "
             "and entityCatalogDigest"
         )
     if len(regions) != 1:
@@ -213,12 +223,14 @@ def _freeze_plan(
     frozen_source = next(iter(source_digests))
     assert_frozen_main_tree(
         runtime.repo_root,
+        git_branch=next(iter(branches)),
         commit_sha=frozen_commit,
         source_digest=frozen_source,
     )
     stable = {
         "schema": "quwoquan_data.content_campaign_plan",
         "rootExecutionId": root_execution_id,
+        "gitBranch": next(iter(branches)),
         "gitCommitSha": frozen_commit,
         "sourceDigest": frozen_source,
         "entityCatalogDigest": next(iter(catalog_digests)),
@@ -356,6 +368,7 @@ def run_campaign(
                 status="running",
                 phase="clone",
                 plan_digest=plan_digest,
+                git_branch=str(plan["gitBranch"]),
                 git_commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
                 entity_catalog_digest=str(plan["entityCatalogDigest"]),
@@ -386,6 +399,7 @@ def run_campaign(
                 )
             assert_frozen_main_tree(
                 runtime.repo_root,
+                git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
             )
@@ -421,6 +435,7 @@ def run_campaign(
             final_phase = "quota_barrier"
             assert_frozen_main_tree(
                 runtime.repo_root,
+                git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
             )
@@ -430,6 +445,7 @@ def run_campaign(
                 status="running",
                 phase="quota_barrier",
                 plan_digest=plan_digest,
+                git_branch=str(plan["gitBranch"]),
                 git_commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
                 entity_catalog_digest=str(plan["entityCatalogDigest"]),
@@ -468,6 +484,7 @@ def run_campaign(
             )
             assert_frozen_revision(
                 runtime.repo_root,
+                git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
             )
@@ -499,6 +516,9 @@ def run_campaign(
                 status=final_status,
                 phase=final_phase,
                 plan_digest=plan_digest,
+                git_branch=(
+                    str(plan["gitBranch"]) if plan is not None else None
+                ),
                 git_commit_sha=(
                     str(plan["gitCommitSha"]) if plan is not None else None
                 ),

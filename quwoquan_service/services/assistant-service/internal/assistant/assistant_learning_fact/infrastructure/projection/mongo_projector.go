@@ -24,31 +24,30 @@ var (
 const (
 	watermarkReady                     = "ready"
 	watermarkRebuilding                = "rebuilding"
-	activeDefinitionID                 = "active"
+	activeGenerationID                 = "active"
 	projectionReceiptSequenceIndexName = "uq_assistant_learning_projection_receipt_sequence"
 )
 
-type activeDefinitionDocument struct {
-	ID                string    `bson:"_id"`
-	DefinitionVersion string    `bson:"definitionVersion"`
-	GenerationID      string    `bson:"generationId"`
-	UpdatedAt         time.Time `bson:"updatedAt"`
+type activeGenerationDocument struct {
+	ID               string    `bson:"_id"`
+	DefinitionDigest string    `bson:"definitionDigest"`
+	GenerationID     string    `bson:"generationId"`
+	UpdatedAt        time.Time `bson:"updatedAt"`
 }
 
 type watermarkDocument struct {
-	ID                string    `bson:"_id"`
-	DefinitionVersion string    `bson:"definitionVersion"`
-	Sequence          int64     `bson:"sequence"`
-	Status            string    `bson:"status"`
-	UpdatedAt         time.Time `bson:"updatedAt"`
+	ID               string    `bson:"_id"`
+	DefinitionDigest string    `bson:"definitionDigest"`
+	Sequence         int64     `bson:"sequence"`
+	Status           string    `bson:"status"`
+	UpdatedAt        time.Time `bson:"updatedAt"`
 }
 
 type receiptDocument struct {
 	ID                 string    `bson:"_id"`
 	EventID            string    `bson:"eventId"`
-	EventVersion       int       `bson:"eventVersion"`
 	AppendSequence     int64     `bson:"appendSequence"`
-	DefinitionVersion  string    `bson:"definitionVersion"`
+	DefinitionDigest   string    `bson:"definitionDigest"`
 	GenerationID       string    `bson:"generationId"`
 	ProjectionUserID   string    `bson:"projectionUserId"`
 	ProjectionRevision int64     `bson:"projectionRevision"`
@@ -101,18 +100,6 @@ func (projector *MongoProjector) EnsureIndexes(ctx context.Context) error {
 	}
 	if err := projector.ensureProjectionReceiptSequenceIndex(ctx); err != nil {
 		return fmt.Errorf("ensure learning projection receipt indexes: %w", err)
-	}
-	if _, err := projector.watermarks.UpdateOne(
-		ctx,
-		bson.M{"_id": activeDefinitionID},
-		bson.M{"$setOnInsert": bson.M{
-			"definitionVersion": model.LearningProjectionDefinitionVersion,
-			"generationId":      model.LearningProjectionDefinitionVersion,
-			"updatedAt":         time.Now().UTC(),
-		}},
-		options.UpdateOne().SetUpsert(true),
-	); err != nil {
-		return fmt.Errorf("ensure active learning projection definition: %w", err)
 	}
 	return nil
 }
@@ -181,11 +168,11 @@ func (projector *MongoProjector) ProjectAvailable(
 	if limit <= 0 {
 		limit = 256
 	}
-	active, err := projector.loadActiveDefinition(ctx)
+	active, err := projector.loadActiveGeneration(ctx)
 	if err != nil {
 		return 0, err
 	}
-	if active.DefinitionVersion != model.LearningProjectionDefinitionVersion {
+	if active.DefinitionDigest != model.LearningProjectionDefinitionDigest {
 		return 0, ErrDefinitionMismatch
 	}
 	projected := 0
@@ -216,11 +203,11 @@ func (projector *MongoProjector) GetLearningProjection(
 	if userID == "" {
 		return nil, nil
 	}
-	active, err := projector.loadActiveDefinition(ctx)
+	active, err := projector.loadActiveGeneration(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read active learning projection definition: %w", err)
 	}
-	if active.DefinitionVersion != model.LearningProjectionDefinitionVersion {
+	if active.DefinitionDigest != model.LearningProjectionDefinitionDigest {
 		return nil, ErrDefinitionMismatch
 	}
 	cursor, err := projector.projections.Find(
@@ -246,8 +233,8 @@ func (projector *MongoProjector) GetLearningProjection(
 		if err := cursor.Decode(&projection); err != nil {
 			return nil, fmt.Errorf("decode assistant learning projection: %w", err)
 		}
-		if projection.DefinitionVersion !=
-			model.LearningProjectionDefinitionVersion {
+		if projection.DefinitionDigest !=
+			model.LearningProjectionDefinitionDigest {
 			return nil, ErrDefinitionMismatch
 		}
 		if aggregate == nil {
@@ -281,11 +268,11 @@ func (projector *MongoProjector) GetLearningProjectionForPersona(
 	if userID == "" || personaID == "" {
 		return nil, nil
 	}
-	active, err := projector.loadActiveDefinition(ctx)
+	active, err := projector.loadActiveGeneration(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read active learning projection definition: %w", err)
 	}
-	if active.DefinitionVersion != model.LearningProjectionDefinitionVersion {
+	if active.DefinitionDigest != model.LearningProjectionDefinitionDigest {
 		return nil, ErrDefinitionMismatch
 	}
 	var projection model.LearningProjection
@@ -305,7 +292,8 @@ func (projector *MongoProjector) GetLearningProjectionForPersona(
 	if err != nil {
 		return nil, fmt.Errorf("read assistant persona learning projection: %w", err)
 	}
-	if projection.DefinitionVersion != model.LearningProjectionDefinitionVersion ||
+	if projection.DefinitionDigest != model.LearningProjectionDefinitionDigest ||
+		projection.GenerationID != active.GenerationID ||
 		projection.UserID != userID ||
 		projection.PersonaID != personaID {
 		return nil, ErrDefinitionMismatch
@@ -320,11 +308,10 @@ func (projector *MongoProjector) Rebuild(ctx context.Context) (int, error) {
 	if !projector.ready() {
 		return 0, learningapplication.ErrStoreUnavailable
 	}
-	generationID := fmt.Sprintf(
-		"%s:rebuild:%d",
-		model.LearningProjectionDefinitionVersion,
-		time.Now().UTC().UnixNano(),
-	)
+	generationID, err := model.NewLearningProjectionGenerationID()
+	if err != nil {
+		return 0, fmt.Errorf("create learning projection rebuild generation: %w", err)
+	}
 	if err := projector.beginRebuild(ctx, generationID); err != nil {
 		return 0, err
 	}
@@ -396,10 +383,11 @@ func (projector *MongoProjector) projectNext(
 			return nil, projectionErr
 		}
 		if found &&
-			current.DefinitionVersion != model.LearningProjectionDefinitionVersion {
+			(current.DefinitionDigest != model.LearningProjectionDefinitionDigest ||
+				current.GenerationID != generationID) {
 			return nil, ErrDefinitionMismatch
 		}
-		next := model.ApplyLearningFact(current, fact)
+		next := model.ApplyLearningFact(current, fact, generationID)
 		next.StorageID = model.ProjectionStorageID(
 			generationID,
 			next.UserID,
@@ -416,9 +404,8 @@ func (projector *MongoProjector) projectNext(
 				ID: generationID + ":" +
 					fact.StorageID,
 				EventID:            fact.EventID,
-				EventVersion:       fact.EventVersion,
 				AppendSequence:     fact.AppendSequence,
-				DefinitionVersion:  model.LearningProjectionDefinitionVersion,
+				DefinitionDigest:   model.LearningProjectionDefinitionDigest,
 				GenerationID:       generationID,
 				ProjectionUserID:   next.UserID,
 				ProjectionRevision: next.Revision,
@@ -453,11 +440,14 @@ func (projector *MongoProjector) beginRebuild(
 	ctx context.Context,
 	generationID string,
 ) error {
+	if !model.IsLearningProjectionGenerationID(generationID) {
+		return ErrDefinitionMismatch
+	}
 	_, err := projector.watermarks.InsertOne(ctx, watermarkDocument{
-		ID:                generationID,
-		DefinitionVersion: model.LearningProjectionDefinitionVersion,
-		Status:            watermarkRebuilding,
-		UpdatedAt:         time.Now().UTC(),
+		ID:               generationID,
+		DefinitionDigest: model.LearningProjectionDefinitionDigest,
+		Status:           watermarkRebuilding,
+		UpdatedAt:        time.Now().UTC(),
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrRebuildInProgress
@@ -479,8 +469,9 @@ func (projector *MongoProjector) finishRebuild(
 		result, updateErr := projector.watermarks.UpdateOne(
 			txCtx,
 			bson.M{
-				"_id":    generationID,
-				"status": watermarkRebuilding,
+				"_id":              generationID,
+				"definitionDigest": model.LearningProjectionDefinitionDigest,
+				"status":           watermarkRebuilding,
 			},
 			bson.M{
 				"$set": bson.M{
@@ -495,17 +486,40 @@ func (projector *MongoProjector) finishRebuild(
 		if result.MatchedCount != 1 {
 			return nil, ErrProjectionConflict
 		}
-		_, updateErr = projector.watermarks.UpdateOne(
+		_, updateErr = projector.watermarks.ReplaceOne(
 			txCtx,
-			bson.M{"_id": activeDefinitionID},
-			bson.M{"$set": bson.M{
-				"definitionVersion": model.LearningProjectionDefinitionVersion,
-				"generationId":      generationID,
-				"updatedAt":         now,
-			}},
-			options.UpdateOne().SetUpsert(true),
+			bson.M{"_id": activeGenerationID},
+			activeGenerationDocument{
+				ID:               activeGenerationID,
+				DefinitionDigest: model.LearningProjectionDefinitionDigest,
+				GenerationID:     generationID,
+				UpdatedAt:        now,
+			},
+			options.Replace().SetUpsert(true),
 		)
-		return nil, updateErr
+		if updateErr != nil {
+			return nil, updateErr
+		}
+		if _, deleteErr := projector.projections.DeleteMany(
+			txCtx,
+			bson.M{"generationId": bson.M{"$ne": generationID}},
+		); deleteErr != nil {
+			return nil, deleteErr
+		}
+		if _, deleteErr := projector.receipts.DeleteMany(
+			txCtx,
+			bson.M{"generationId": bson.M{"$ne": generationID}},
+		); deleteErr != nil {
+			return nil, deleteErr
+		}
+		_, deleteErr := projector.watermarks.DeleteMany(
+			txCtx,
+			bson.M{"_id": bson.M{"$nin": bson.A{
+				activeGenerationID,
+				generationID,
+			}}},
+		)
+		return nil, deleteErr
 	})
 	return err
 }
@@ -520,40 +534,42 @@ func (projector *MongoProjector) loadWatermark(
 		bson.M{"_id": generationID},
 	).Decode(&document)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return watermarkDocument{
-			ID:                generationID,
-			DefinitionVersion: model.LearningProjectionDefinitionVersion,
-			Status:            watermarkReady,
-		}, nil
+		return watermarkDocument{}, ErrDefinitionMismatch
 	}
 	if err != nil {
 		return watermarkDocument{}, err
 	}
+	document.DefinitionDigest = strings.TrimSpace(document.DefinitionDigest)
+	document.Status = strings.TrimSpace(document.Status)
+	if document.ID != generationID ||
+		!model.IsLearningProjectionGenerationID(generationID) ||
+		document.DefinitionDigest != model.LearningProjectionDefinitionDigest ||
+		(document.Status != watermarkReady && document.Status != watermarkRebuilding) {
+		return watermarkDocument{}, ErrDefinitionMismatch
+	}
 	return document, nil
 }
 
-func (projector *MongoProjector) loadActiveDefinition(
+func (projector *MongoProjector) loadActiveGeneration(
 	ctx context.Context,
-) (activeDefinitionDocument, error) {
-	var active activeDefinitionDocument
+) (activeGenerationDocument, error) {
+	var active activeGenerationDocument
 	err := projector.watermarks.FindOne(
 		ctx,
-		bson.M{"_id": activeDefinitionID},
+		bson.M{"_id": activeGenerationID},
 	).Decode(&active)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return activeDefinitionDocument{
-			ID:                activeDefinitionID,
-			DefinitionVersion: model.LearningProjectionDefinitionVersion,
-			GenerationID:      model.LearningProjectionDefinitionVersion,
-		}, nil
+		return activeGenerationDocument{}, ErrDefinitionMismatch
 	}
 	if err != nil {
-		return activeDefinitionDocument{}, err
+		return activeGenerationDocument{}, err
 	}
-	active.DefinitionVersion = strings.TrimSpace(active.DefinitionVersion)
+	active.DefinitionDigest = strings.TrimSpace(active.DefinitionDigest)
 	active.GenerationID = strings.TrimSpace(active.GenerationID)
-	if active.DefinitionVersion == "" || active.GenerationID == "" {
-		return activeDefinitionDocument{}, ErrDefinitionMismatch
+	if active.ID != activeGenerationID ||
+		active.DefinitionDigest != model.LearningProjectionDefinitionDigest ||
+		!model.IsLearningProjectionGenerationID(active.GenerationID) {
+		return activeGenerationDocument{}, ErrDefinitionMismatch
 	}
 	return active, nil
 }
@@ -564,9 +580,10 @@ func (projector *MongoProjector) replaceWatermark(
 	next watermarkDocument,
 ) error {
 	filter := bson.M{
-		"_id":      current.ID,
-		"sequence": current.Sequence,
-		"status":   current.Status,
+		"_id":              current.ID,
+		"definitionDigest": current.DefinitionDigest,
+		"sequence":         current.Sequence,
+		"status":           current.Status,
 	}
 	result, err := projector.watermarks.ReplaceOne(
 		ctx,
@@ -618,9 +635,9 @@ func (projector *MongoProjector) replaceProjection(
 	result, err := projector.projections.ReplaceOne(
 		ctx,
 		bson.M{
-			"_id":               current.StorageID,
-			"revision":          current.Revision,
-			"definitionVersion": current.DefinitionVersion,
+			"_id":              current.StorageID,
+			"revision":         current.Revision,
+			"definitionDigest": current.DefinitionDigest,
 		},
 		next,
 	)

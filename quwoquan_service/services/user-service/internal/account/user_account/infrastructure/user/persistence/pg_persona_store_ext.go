@@ -15,23 +15,18 @@ import (
 
 // PgPersonaStore 在生成的对象级 PostgreSQL Store 上补充领域查询。
 type PgPersonaStore struct {
-	*generated.PGPersonaStoreBase
 	pool *pgxpool.Pool
 }
 
 var (
 	_ repository.PersonaReader             = (*PgPersonaStore)(nil)
 	_ repository.PersonaOwnerAccountReader = (*PgPersonaStore)(nil)
-	_ repository.PersonaWriter             = (*PgPersonaStore)(nil)
 )
 
-const personaNullableSafeCols = `sub_account_id, user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(bio, ''), COALESCE(avatar_media_asset_id, ''), COALESCE(avatar_url, ''), avatar_version, COALESCE(background_media_asset_id, ''), COALESCE(background_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(status, 'active'), retired_at, COALESCE(inherits_profile_from_owner, false), COALESCE(overridden_profile_fields, ARRAY[]::text[]), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, version, created_at, updated_at`
+const personaNullableSafeCols = `persona_id, user_id, display_name, COALESCE(nickname_customized, false), COALESCE(user_handle, ''), COALESCE(bio, ''), COALESCE(identity_tags, ARRAY[]::text[]), COALESCE(taxonomy_release_id, ''), COALESCE(gender, ''), birth_date::text, COALESCE(region, ''), COALESCE(region_tag_ref, ''), COALESCE(avatar_media_asset_id, ''), COALESCE(avatar_url, ''), avatar_version, COALESCE(background_media_asset_id, ''), COALESCE(background_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(status, 'active'), retired_at, COALESCE(inherits_profile_from_owner, false), COALESCE(overridden_profile_fields, ARRAY[]::text[]), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, version, created_at, updated_at`
 
 func NewPgPersonaStore(pool *pgxpool.Pool) *PgPersonaStore {
-	return &PgPersonaStore{
-		PGPersonaStoreBase: generated.NewPGPersonaStoreBase(pool),
-		pool:               pool,
-	}
+	return &PgPersonaStore{pool: pool}
 }
 
 func (s *PgPersonaStore) FindByID(
@@ -40,7 +35,7 @@ func (s *PgPersonaStore) FindByID(
 ) (*model.Persona, error) {
 	persona, err := generated.ScanPersona(s.pool.QueryRow(
 		ctx,
-		`SELECT `+personaNullableSafeCols+` FROM personas WHERE sub_account_id = $1`,
+		`SELECT `+personaNullableSafeCols+` FROM personas WHERE persona_id = $1`,
 		id,
 	))
 	return persona, mapPersonaPersistenceError(err)
@@ -71,20 +66,6 @@ func (s *PgPersonaStore) FindByUserID(
 	return result, mapPersonaPersistenceError(rows.Err())
 }
 
-func (s *PgPersonaStore) Create(
-	ctx context.Context,
-	persona *model.Persona,
-) error {
-	return mapPersonaPersistenceError(s.PGPersonaStoreBase.Create(ctx, persona))
-}
-
-func (s *PgPersonaStore) Update(
-	ctx context.Context,
-	persona *model.Persona,
-) error {
-	return mapPersonaPersistenceError(s.PGPersonaStoreBase.Update(ctx, persona))
-}
-
 func (s *PgPersonaStore) FindActiveByUserID(
 	ctx context.Context,
 	userID string,
@@ -112,14 +93,14 @@ func (s *PgPersonaStore) FindByUserHandle(
 	return persona, mapPersonaPersistenceError(err)
 }
 
-func (s *PgPersonaStore) FindBySubAccountID(
+func (s *PgPersonaStore) FindByPersonaID(
 	ctx context.Context,
-	subAccountID string,
+	personaID string,
 ) (*model.Persona, error) {
 	persona, err := generated.ScanPersona(s.pool.QueryRow(
 		ctx,
-		`SELECT `+personaNullableSafeCols+` FROM personas WHERE sub_account_id = $1`,
-		subAccountID,
+		`SELECT `+personaNullableSafeCols+` FROM personas WHERE persona_id = $1`,
+		personaID,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -129,16 +110,16 @@ func (s *PgPersonaStore) FindBySubAccountID(
 
 func (s *PgPersonaStore) ResolveOwnerAccountID(
 	ctx context.Context,
-	subAccountID string,
+	personaID string,
 ) (string, bool, error) {
 	var accountID string
 	err := s.pool.QueryRow(
 		ctx,
 		`SELECT user_id
 		 FROM personas
-		 WHERE sub_account_id = $1
+		 WHERE persona_id = $1
 		   AND COALESCE(status, 'active') <> 'retired'`,
-		subAccountID,
+		personaID,
 	).Scan(&accountID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", false, nil

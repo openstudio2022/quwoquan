@@ -67,7 +67,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -111,7 +111,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(ObjectHomepageText.homepageWishlistedAction), findsOneWidget);
+    expect(
+      find.text(ObjectHomepageText.homepageWishlistedAction),
+      findsOneWidget,
+    );
     expect(reporter.events, hasLength(1));
     expect(reporter.events.single.action, BehaviorAction.wishlistAdd);
     expect(reporter.events.single.objectId, _homepageId);
@@ -129,7 +132,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(ObjectHomepageText.homepageWishlistAction), findsOneWidget);
+    expect(
+      find.text(ObjectHomepageText.homepageWishlistAction),
+      findsOneWidget,
+    );
     expect(reporter.events, hasLength(2));
     expect(reporter.events.last.action, BehaviorAction.wishlistRemove);
   });
@@ -158,7 +164,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -180,7 +186,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(ObjectHomepageText.homepageWishlistedAction), findsOneWidget);
+    expect(
+      find.text(ObjectHomepageText.homepageWishlistedAction),
+      findsOneWidget,
+    );
   });
 
   testWidgets('非地点主页不读取想去状态并保留关注语义', (tester) async {
@@ -202,7 +211,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'homepage-viewer-persona',
+              personaId: 'homepage-viewer-persona',
               ownerUserId: 'homepage-viewer-owner',
               displayName: '主页测试用户',
               avatarUrl: '',
@@ -245,8 +254,9 @@ final class _AuthenticatedHomepageSession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'homepage-access-token',
+    refreshToken: 'homepage-refresh-token',
     ownerId: 'homepage-viewer-owner',
-    activeSubAccountId: 'homepage-viewer-persona',
+    activePersonaId: 'homepage-viewer-persona',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'homepage-install-id',

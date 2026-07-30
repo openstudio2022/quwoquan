@@ -2,6 +2,7 @@
   "label": "公办",
   "labelEn": "Public",
   "description": "政府主办的公立学校",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

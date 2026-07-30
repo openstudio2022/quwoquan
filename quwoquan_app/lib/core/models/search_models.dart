@@ -8,14 +8,11 @@ export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show
-        LocationPoiDto,
-        SocialRelationSearchItemProjection,
-        SocialRelationshipCapabilityProjection;
+    show LocationPoiDto, SocialRelationSearchItemProjection;
 part 'search_models_presentation.dart';
 part 'search_models_selection.dart';
 
@@ -232,54 +229,10 @@ class SearchConversationAnchorContext {
   final String? sourceQuery;
 }
 
-class SocialRelationshipCapabilityView {
-  const SocialRelationshipCapabilityView({
-    required this.relationState,
-    required this.canFollow,
-    required this.canUnfollow,
-    required this.canOpenConversation,
-    required this.canStartVoiceCall,
-    required this.canStartVideoCall,
-  });
-
-  final String relationState;
-  final bool canFollow;
-  final bool canUnfollow;
-  final bool canOpenConversation;
-  final bool canStartVoiceCall;
-  final bool canStartVideoCall;
-
-  factory SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
-    SocialRelationshipCapabilityWireDto w,
-  ) {
-    return SocialRelationshipCapabilityView(
-      relationState: w.relationState,
-      canFollow: w.canFollow,
-      canUnfollow: w.canUnfollow,
-      canOpenConversation: w.canOpenConversation,
-      canStartVoiceCall: w.canStartVoiceCall,
-      canStartVideoCall: w.canStartVideoCall,
-    );
-  }
-
-  factory SocialRelationshipCapabilityView.fromProjection(
-    SocialRelationshipCapabilityProjection projection,
-  ) {
-    return SocialRelationshipCapabilityView(
-      relationState: projection.relationState,
-      canFollow: projection.canFollow,
-      canUnfollow: projection.canUnfollow,
-      canOpenConversation: projection.canOpenConversation,
-      canStartVoiceCall: projection.canStartVoiceCall,
-      canStartVideoCall: projection.canStartVideoCall,
-    );
-  }
-}
-
 class SocialRelationSearchItemView {
   const SocialRelationSearchItemView({
-    required this.subAccountId,
-    required this.username,
+    required this.personaId,
+    required this.userHandle,
     required this.displayName,
     this.avatarUrl,
     this.avatarVersion = 0,
@@ -288,28 +241,26 @@ class SocialRelationSearchItemView {
     required this.relationshipCapability,
   });
 
-  final String subAccountId;
-  final String username;
+  final String personaId;
+  final String userHandle;
   final String displayName;
   final String? avatarUrl;
   final int avatarVersion;
   final String? headline;
   final bool chatAvailable;
-  final SocialRelationshipCapabilityView relationshipCapability;
+  final RelationshipCapabilityDto relationshipCapability;
 
   factory SocialRelationSearchItemView.fromSocialRelationSearchItemWire(
     SocialRelationSearchItemWireDto w,
   ) {
-    final subAccountId = w.subAccountId;
-    final displayName = w.displayName.isNotEmpty ? w.displayName : subAccountId;
-    final username = w.username.isNotEmpty ? w.username : subAccountId;
-    final capView =
-        SocialRelationshipCapabilityView.fromSocialRelationshipCapabilityWire(
-          w.relationshipCapability ?? SocialRelationshipCapabilityWireDto(),
-        );
+    final personaId = w.personaId;
+    final displayName = w.displayName.isNotEmpty ? w.displayName : personaId;
+    final capView = RelationshipCapabilityDto.fromRelationshipCapabilityWire(
+      w.relationshipCapability,
+    );
     return SocialRelationSearchItemView(
-      subAccountId: subAccountId,
-      username: username,
+      personaId: personaId,
+      userHandle: w.userHandle,
       displayName: displayName,
       avatarUrl: w.avatarUrl == null
           ? null
@@ -324,29 +275,16 @@ class SocialRelationSearchItemView {
   factory SocialRelationSearchItemView.fromProjection(
     SocialRelationSearchItemProjection projection,
   ) {
-    final subAccountId = projection.subAccountId;
+    final personaId = projection.personaId;
     final displayName = projection.displayName.isNotEmpty
         ? projection.displayName
-        : subAccountId;
-    final username = projection.username.isNotEmpty
-        ? projection.username
-        : (projection.userHandle.isNotEmpty
-              ? projection.userHandle
-              : subAccountId);
-    final capability = projection.relationshipCapability;
-    final capView = capability == null
-        ? const SocialRelationshipCapabilityView(
-            relationState: 'not_following',
-            canFollow: false,
-            canUnfollow: false,
-            canOpenConversation: false,
-            canStartVoiceCall: false,
-            canStartVideoCall: false,
-          )
-        : SocialRelationshipCapabilityView.fromProjection(capability);
+        : personaId;
+    final capView = RelationshipCapabilityDto.fromContract(
+      projection.relationshipCapability,
+    );
     return SocialRelationSearchItemView(
-      subAccountId: subAccountId,
-      username: username,
+      personaId: personaId,
+      userHandle: projection.userHandle,
       displayName: displayName,
       avatarUrl: projection.avatarUrl == null
           ? null
@@ -370,6 +308,7 @@ class SocialRelationSearchItemView {
 class ChatContactSearchItemDto {
   const ChatContactSearchItemDto({
     this.contactId = '',
+    this.userHandle = '',
     this.displayName = '',
     this.avatarUrl,
     this.conversationId,
@@ -381,6 +320,7 @@ class ChatContactSearchItemDto {
   });
 
   final String contactId;
+  final String userHandle;
   final String displayName;
   final String? avatarUrl;
   final String? conversationId;
@@ -392,6 +332,7 @@ class ChatContactSearchItemDto {
 
   ChatContactSearchItemDto copyWith({
     String? contactId,
+    String? userHandle,
     String? displayName,
     String? avatarUrl,
     String? conversationId,
@@ -403,6 +344,7 @@ class ChatContactSearchItemDto {
   }) {
     return ChatContactSearchItemDto(
       contactId: contactId ?? this.contactId,
+      userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       conversationId: conversationId ?? this.conversationId,
@@ -417,6 +359,7 @@ class ChatContactSearchItemDto {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       'contactId': contactId,
+      'userHandle': userHandle,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'conversationId': conversationId,

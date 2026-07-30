@@ -2,6 +2,7 @@
   "label": "奖学金申请",
   "labelEn": "Scholarship Application",
   "description": "各类奖学金申请攻略",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

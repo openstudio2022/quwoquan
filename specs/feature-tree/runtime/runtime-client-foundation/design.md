@@ -55,7 +55,10 @@
 - 决策：启动致命异常由不依赖业务 Router、登录和延迟插件的原生最小恢复层承接；Android exported launcher 作为 Flutter Engine 与插件装配前的唯一 gate，按平台强证据在原生恢复与 Flutter 主 Activity 之间单向分流。Flutter 运行时恢复由业务 ProviderScope 外的固定宿主持有，运行时主容器最多重建一次。单纯超时、进程未留下成功标记、用户强制结束或系统回收均不得推断为致命崩溃。
 - 理由：恢复能力必须在故障业务框架不可用时仍可操作，同时避免无限重启、误判崩溃和第二套 Crash 体系。
 - 被否决方案：先创建 Flutter Engine 再用覆盖层伪装原生恢复、恢复 Activity 与 Flutter Activity 各自推导失败状态、6 秒超时直接显示错误页、用户反复重启 Flutter Engine、以 pending 标记推断硬崩溃、新增远程 Crash SDK 或不安全 signal handler。
-- 约束与影响：原生 gate、崩溃标记与安全 Shell 清除必须消费同一制品身份，至少绑定平台 Build 与环境运行配置摘要。异常日志严格十字段并静默后台化。版本与跳转由原生能力接口完成，Android 官网 APK、公众 iOS PWA 与已登记设备受控 Ad Hoc 分流由服务端受信 release contract 决定；不得提供公众 IPA 或 App Store 假入口。
+- 约束与影响：原生 gate、崩溃标记与安全 Shell 清除必须消费同一制品身份，至少绑定平台 Build 与环境运行配置摘要。
+- 清单所有权：runtime 是 effective launch manifest 的组合语义 owner，跨 Android、iOS、App 与 Ops 的字段、target/environment 约束和摘要算法只来自 `quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml`。
+- 协作边界：Product Ops 只拥有版本与官方恢复路由输入，Ops 只装配和验证，平台端只消费生成结果，任何脚本不得维护第二套 schema。
+- 异常与发布：异常日志严格十字段并静默后台化。版本与跳转由原生能力接口完成，Android 官网 APK、公众 iOS PWA 与已登记设备受控 Ad Hoc 分流由服务端受信 release contract 决定。不得提供公众 IPA 或 App Store 假入口。
 - 关联要求：`REQ-001`
 - 影响 Story：[`cold-start-performance`](./cold-start-performance/spec.md)、[`unrecoverable-runtime-recovery`](./unrecoverable-runtime-recovery/spec.md)、[`public-content-web-entry`](./public-content-web-entry/spec.md)
 - 关联验收：`SIT-001`

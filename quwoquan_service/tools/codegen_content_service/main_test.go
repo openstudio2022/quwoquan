@@ -68,6 +68,176 @@ func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
 	}
 }
 
+func TestContentServiceRoutePacketUsesCanonicalGetFeedQueryBindings(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
+	routes, err := loadServiceRoutes(source, "content-service")
+	if err != nil {
+		t.Fatalf("loadServiceRoutes() error = %v", err)
+	}
+
+	for _, group := range routes {
+		for _, route := range group.Routes {
+			if route.Operation != "GetFeed" {
+				continue
+			}
+			for _, name := range []string{
+				"identity", "type", "sort", "channelId", "subCategory",
+				"cursor", "limit", "feedRequestId",
+			} {
+				if !containsRequestBinding(route.RequestBindings.Query, name) {
+					t.Fatalf(
+						"GetFeed canonical query bindings missing %q: %+v",
+						name,
+						route.RequestBindings.Query,
+					)
+				}
+			}
+			if route.Pagination.DefaultItems != 20 ||
+				route.Pagination.MaximumItems != 20 {
+				t.Fatalf(
+					"GetFeed pagination = %+v, want default=20 maximum=20",
+					route.Pagination,
+				)
+			}
+			return
+		}
+	}
+	t.Fatal("GetFeed route not found")
+}
+
+func TestRequestBodyFieldsDeriveFromRequestEntityAndExcludeCanonicalBindings(
+	t *testing.T,
+) {
+	t.Parallel()
+
+	route := serviceRouteYAML{
+		Operation:       "CanonicalCommand",
+		RequestEntity:   "CanonicalCommandRequest",
+		RequestBodyKind: "object",
+		RequestBindings: requestBindingsYAML{
+			Path:     []requestBindingYAML{{Name: "objectId", Field: "objectId"}},
+			Query:    []requestBindingYAML{{Name: "cursor", Field: "cursor"}},
+			Header:   []requestBindingYAML{{Name: "X-Trace", Field: "traceId"}},
+			Injected: []requestBindingYAML{{Name: "actor", Field: "actorId"}},
+		},
+	}
+	fields := serviceFieldsYAML{
+		Types: map[string]serviceRequestEntityYAML{
+			"CanonicalCommandRequest": {
+				Fields: []serviceRequestFieldYAML{
+					{Name: "objectId"},
+					{Name: "cursor"},
+					{Name: "traceId"},
+					{Name: "actorId"},
+					{Name: "title"},
+					{Name: "bodyValue", ClientWireName: "body"},
+				},
+			},
+		},
+	}
+
+	got, err := deriveRequestBodyFields(route, "post", fields)
+	if err != nil {
+		t.Fatalf("deriveRequestBodyFields() error = %v", err)
+	}
+	if strings.Join(got, ",") != "title,body" {
+		t.Fatalf("derived body fields = %v, want [title body]", got)
+	}
+}
+
+func TestContentServicePostBodiesUseCanonicalRequestEntities(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
+	routes, err := loadServiceRoutes(source, "content-service")
+	if err != nil {
+		t.Fatalf("loadServiceRoutes() error = %v", err)
+	}
+	wantByOperation := map[string][]string{
+		"SubmitPostPublication": {
+			"publishIntentId", "localDraftId", "contentType", "location",
+		},
+		"UpdatePostSettings": {
+			"visibility", "primaryHomepageId", "primaryHomepageType",
+			"primaryHomepageSnapshot", "assistantUsePolicy",
+		},
+		"PromotePostToWork": {
+			"contentType", "title", "summary", "semanticMentions", "coverUrl",
+			"articleMarkdown", "markdownDialect", "articleAssetManifest",
+			"articleRenderProfile", "primaryHomepageId", "primaryHomepageType",
+			"primaryHomepageSnapshot", "visibility", "assistantUsePolicy",
+		},
+		"GenerateArticleSummary": {"title", "body"},
+	}
+	found := map[string]bool{}
+	for _, group := range routes {
+		for _, route := range group.Routes {
+			want, tracked := wantByOperation[route.Operation]
+			if !tracked {
+				continue
+			}
+			found[route.Operation] = true
+			for _, field := range want {
+				if !containsString(route.RequestBodyFields, field) {
+					t.Errorf(
+						"%s canonical body is missing %s: %v",
+						route.Operation,
+						field,
+						route.RequestBodyFields,
+					)
+				}
+			}
+			if containsString(route.RequestBodyFields, "postId") {
+				t.Errorf(
+					"%s path-bound postId leaked into body: %v",
+					route.Operation,
+					route.RequestBodyFields,
+				)
+			}
+		}
+	}
+	for operation := range wantByOperation {
+		if !found[operation] {
+			t.Errorf("canonical request body route not found: %s", operation)
+		}
+	}
+}
+
+func TestContentServiceContractsDoNotRetainWritableFieldLists(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
+	for _, operationsPath := range source.Paths("content/", "operations.yaml") {
+		content, err := source.Content(operationsPath)
+		if err != nil {
+			t.Fatalf("read %s: %v", operationsPath, err)
+		}
+		if strings.Contains(string(content), "writable_fields:") {
+			t.Errorf("%s retains legacy writable_fields", operationsPath)
+		}
+	}
+}
+
+func containsRequestBinding(values []requestBindingYAML, target string) bool {
+	for _, value := range values {
+		if value.Name == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestContentServiceReadyOperationsDispatchDirectly(t *testing.T) {
 	t.Parallel()
 
@@ -191,6 +361,41 @@ func TestContentErrorGenerationPreservesStableIdentityAndHTTPMetadata(t *testing
 			t.Fatalf("generated errors missing %q", needle)
 		}
 	}
+	profileGenerated, err := os.ReadFile(filepath.Join(
+		outputDir,
+		"content",
+		"profile_interaction_activity_view",
+		"errors.go",
+	))
+	if err != nil {
+		t.Fatalf("read generated ProfileInteraction errors: %v", err)
+	}
+	for _, needle := range []string{
+		`rterr.ParseCode("CONTENT.USER.interaction_owner_forbidden")`,
+		`rterr.ParseCode("CONTENT.SYSTEM.interaction_read_model_unavailable")`,
+		`WithMetadata("interaction_read_model_unavailable", 503)`,
+	} {
+		if !strings.Contains(string(profileGenerated), needle) {
+			t.Fatalf("generated ProfileInteraction errors missing %q", needle)
+		}
+	}
+	readFactGenerated, err := os.ReadFile(filepath.Join(
+		outputDir,
+		"content",
+		"profile_interaction_read_fact",
+		"errors.go",
+	))
+	if err != nil {
+		t.Fatalf("read generated ProfileInteractionReadFact errors: %v", err)
+	}
+	for _, needle := range []string{
+		`rterr.ParseCode("CONTENT.USER.profile_interaction_read_fact_owner_forbidden")`,
+		`rterr.ParseCode("CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable")`,
+	} {
+		if !strings.Contains(string(readFactGenerated), needle) {
+			t.Fatalf("generated ProfileInteractionReadFact errors missing %q", needle)
+		}
+	}
 }
 
 func TestContentMediaUploadPolicyGenerationPreservesPerTypeLimits(t *testing.T) {
@@ -227,7 +432,7 @@ func TestContentMediaUploadPolicyGenerationPreservesPerTypeLimits(t *testing.T) 
 	}
 }
 
-func TestOnboardingInterestCatalogGenerationPreservesReleaseAndDimensionBounds(t *testing.T) {
+func TestOnboardingInterestCatalogGenerationPreservesDimensionBounds(t *testing.T) {
 	t.Parallel()
 
 	source := contentTestContractSource(t)
@@ -241,8 +446,6 @@ func TestOnboardingInterestCatalogGenerationPreservesReleaseAndDimensionBounds(t
 	}
 	sourceText := string(generated)
 	for _, needle := range []string{
-		"TaxonomyReleaseID",
-		`TaxonomyReleaseID: "tag-taxonomy-20260723-001"`,
 		"DimensionMinSelections",
 		"DimensionMaxSelections",
 		`"topic":    4`,
@@ -254,6 +457,14 @@ func TestOnboardingInterestCatalogGenerationPreservesReleaseAndDimensionBounds(t
 	}
 	if strings.Contains(sourceText, "MaxSelectionsPerDimension") {
 		t.Fatal("generated onboarding catalog policy must retain per-dimension bounds")
+	}
+	// 发布身份是 tag-service 的运行时事实：固化进 content-service 会让发一个
+	// 新 tag 发布对全体新用户直接报 invalid_argument。
+	if strings.Contains(sourceText, "TaxonomyReleaseID") {
+		t.Fatal("generated onboarding catalog policy must not pin a taxonomy release id")
+	}
+	if strings.Contains(sourceText, "Version") {
+		t.Fatal("generated onboarding catalog policy must not carry a version envelope")
 	}
 }
 

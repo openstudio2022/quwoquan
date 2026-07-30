@@ -18,7 +18,6 @@ import 'package:quwoquan_app/core/platform/incoming_call_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -125,7 +124,7 @@ class IncomingCallCoordinator {
           callId: ringing.callId ?? event.callId,
           deliveryKey: deliveryKey,
           targetPersonaId: targetPersonaId,
-          callType: ringing.callType,
+          callType: ringing.callType.toApiString(),
           callerName: callerName,
           sourceLabel: sourceLabel,
           trustRelation: trustRelation,
@@ -520,10 +519,8 @@ IncomingCallSyncDecision resolveIncomingCallSync({
   );
 }
 
-bool isIncomingPresentationActiveStatus(String status) {
-  final normalized = status.trim().toLowerCase();
-  return normalized == 'initiated' || normalized == 'ringing';
-}
+bool isIncomingPresentationActiveStatus(CallStatus status) =>
+    status == CallStatus.initiated || status == CallStatus.ringing;
 
 class IncomingCallSyncDecision {
   const IncomingCallSyncDecision({

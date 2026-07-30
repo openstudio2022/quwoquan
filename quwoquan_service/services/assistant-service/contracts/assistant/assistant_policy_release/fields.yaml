@@ -10,11 +10,12 @@ fields:
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
-- name: releaseVersion
+- name: releaseDigest
   type: string
   constraints:
   - PK
   - NOT_NULL
+  - UNIQUE
   classification: INTERNAL
   log_policy: allow
   api_exposure: drop
@@ -27,16 +28,6 @@ fields:
   - DEFAULT_1
   classification: INTERNAL
   log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: canonicalDigest
-  type: string
-  constraints:
-  - NOT_NULL
-  - UNIQUE
-  classification: INTERNAL
-  log_policy: metadata_only
   api_exposure: drop
   ops_exposure: read
   role: authoritative_state
@@ -135,7 +126,8 @@ members:
       ops_exposure: read
       role: authoritative_state
     - name: searchIntensity
-      type: string
+      type: enum
+      enum_ref: SearchIntensity
       constraints:
       - NOT_NULL
       classification: INTERNAL

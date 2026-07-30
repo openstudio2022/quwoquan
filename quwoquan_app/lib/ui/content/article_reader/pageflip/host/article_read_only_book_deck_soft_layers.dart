@@ -92,6 +92,7 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
     _PageLine? backwardFoldLine,
     _PageLine? backwardFreeEdgeLine,
     List<Offset> sheetLocalPolygon = const <Offset>[],
+    List<Offset> sheetContentLocalPolygon = const <Offset>[],
     List<Offset> sheetAreaPolygon = const <Offset>[],
     List<Offset> sheetMaterialLocalPolygon = const <Offset>[],
   }) {
@@ -103,9 +104,11 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
         backFacePageIndex: backFacePageIndex ?? pageIndex,
         pageSize: pageSize,
         backwardLeafFrame: backwardLeafFrame,
+        backwardFoldLine: backwardFoldLine,
+        backwardFreeEdgeLine: backwardFreeEdgeLine,
+        sheetContentLocalPolygon: sheetContentLocalPolygon,
         palette: palette,
         progress: progress,
-        sheetLocalPolygon: sheetLocalPolygon,
       );
     }
     final showBackside = _shouldShowSoftFlippingBackside(
@@ -160,83 +163,81 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
     required int backFacePageIndex,
     required Size pageSize,
     required ArticlePageBackwardLeafFrame backwardLeafFrame,
+    required _PageLine? backwardFoldLine,
+    required _PageLine? backwardFreeEdgeLine,
+    required List<Offset> sheetContentLocalPolygon,
     required ArticleTemplatePalette palette,
     required double progress,
-    required List<Offset> sheetLocalPolygon,
   }) {
-    final coveredWidth =
-        (backwardLeafFrame.coveredWidthNormalized * pageSize.width)
-            .clamp(0.0, pageSize.width)
-            .toDouble();
-    final rectoWidth =
-        (backwardLeafFrame.totalRectoVisibleWidthNormalized * pageSize.width)
-            .clamp(0.0, coveredWidth)
-            .toDouble();
-    final slices = resolveArticlePageBackwardSheetLocalSlices(
-      sheetLocalPolygon: sheetLocalPolygon,
-      coveredWidth: coveredWidth,
-      rectoWidth: rectoWidth,
+    final faces = resolveBackwardCanonicalSheetFaces(
+      BackwardCanonicalSheetInput(
+        pageSize: pageSize,
+        sheetLocalPolygon: sheetContentLocalPolygon,
+        sheetAreaPolygon: sheetContentLocalPolygon,
+        sheetLocalFoldLine: backwardFoldLine,
+        sheetLocalFreeEdgeLine: backwardFreeEdgeLine,
+        currentResidualPagePolygon: const <Offset>[],
+        rectoCoverageNormalized: backwardLeafFrame.sheetRectoCoverageNormalized,
+      ),
     );
+    final rectoPolygon = faces.previousFrontRectoLocalPolygon;
+    final versoPolygon = faces.previousBackVersoLocalPolygon;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
-        if (slices != null && slices.rectoWidth > 0.001)
-          _buildBackwardSheetFaceSlice(
+        if (polygonHasVisibleArea(rectoPolygon))
+          _buildBackwardSheetFacePolygon(
             key: const ValueKey<String>(
               'article_backward_flipping_recto_slice',
             ),
             context: context,
             pageIndex: pageIndex,
             pageSize: pageSize,
-            left: slices.rectoLeft,
-            width: slices.rectoWidth,
+            polygon: rectoPolygon,
             kind: ArticlePageSurfaceKind.front,
           ),
-        if (slices != null && slices.versoWidth > 0.001)
-          _buildBackwardSheetFaceSlice(
+        if (polygonHasVisibleArea(versoPolygon))
+          _buildBackwardSheetFacePolygon(
             key: const ValueKey<String>(
               'article_backward_flipping_verso_slice',
             ),
             context: context,
             pageIndex: backFacePageIndex,
             pageSize: pageSize,
-            left: slices.versoLeft,
-            width: slices.versoWidth,
+            polygon: versoPolygon,
             kind: ArticlePageSurfaceKind.back,
           ),
         _buildFlippingSurfaceOverlay(
           palette: palette,
           direction: StPageFlipDirection.back,
           progress: progress,
-          showBackside: slices != null && slices.versoWidth > 0.001,
+          showBackside: polygonHasVisibleArea(versoPolygon),
         ),
       ],
     );
   }
 
-  Widget _buildBackwardSheetFaceSlice({
+  Widget _buildBackwardSheetFacePolygon({
     required Key key,
     required BuildContext context,
     required int pageIndex,
     required Size pageSize,
-    required double left,
-    required double width,
+    required List<Offset> polygon,
     required ArticlePageSurfaceKind kind,
   }) {
     return Positioned.fill(
       key: key,
       child: ClipPath(
-        clipper: ArticlePolygonClipper(<Offset>[
-          Offset(left, 0),
-          Offset(left + width, 0),
-          Offset(left + width, pageSize.height),
-          Offset(left, pageSize.height),
-        ]),
-        clipBehavior: Clip.hardEdge,
-        child: Align(
+        clipper: ArticlePolygonClipper(polygon),
+        child: OverflowBox(
           alignment: Alignment.topLeft,
-          child: SizedBox.fromSize(
-            size: pageSize,
+          minWidth: pageSize.width,
+          maxWidth: pageSize.width,
+          minHeight: pageSize.height,
+          maxHeight: pageSize.height,
+          child: SizedBox(
+            width: pageSize.width,
+            height: pageSize.height,
             child: _buildCachedPageSurface(
               context,
               pageIndex,
@@ -549,7 +550,8 @@ extension _ArticleReadOnlyBookDeckSoftLayers on _ArticleReadOnlyBookDeckState {
                       backwardLeafFrame: backwardLeafFrame,
                       backwardFoldLine: localBackwardFoldLine,
                       backwardFreeEdgeLine: localBackwardFreeEdgeLine,
-                      sheetLocalPolygon: shiftedPolygon,
+                      sheetLocalPolygon: polygon,
+                      sheetContentLocalPolygon: polygon,
                       sheetAreaPolygon: useBackwardMaterialSheet
                           ? polygon
                           : area,

@@ -124,13 +124,12 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
 
   static const Map<AppPermissionKind, String> _primerPrefsKeys =
       <AppPermissionKind, String>{
-        AppPermissionKind.microphone: 'app_permission_primer_mic_v1',
-        AppPermissionKind.camera: 'app_permission_primer_camera_v1',
-        AppPermissionKind.photos: 'app_permission_primer_photos_v1',
-        AppPermissionKind.location: 'app_permission_primer_location_v1',
-        AppPermissionKind.contacts: 'app_permission_primer_contacts_v1',
-        AppPermissionKind.notifications:
-            'app_permission_primer_notifications_v1',
+        AppPermissionKind.microphone: 'app_permission_primer_mic',
+        AppPermissionKind.camera: 'app_permission_primer_camera',
+        AppPermissionKind.photos: 'app_permission_primer_photos',
+        AppPermissionKind.location: 'app_permission_primer_location',
+        AppPermissionKind.contacts: 'app_permission_primer_contacts',
+        AppPermissionKind.notifications: 'app_permission_primer_notifications',
       };
 
   void ensureLifecycleAttached() {

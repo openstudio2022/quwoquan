@@ -2,6 +2,7 @@
   "label": "住宿",
   "labelEn": "Accommodation",
   "description": "住宿全维度标签体系：业态×价位×主题×设施×房型×区位×认证×预订，八维正交",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -6,6 +6,7 @@ class OpsRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AssignExperimentVariant': 'ops.assign.experiment.variant',
+    'GetAccountEnforcementCase': 'ops.get.account.enforcement.case',
     'GetAppRecoveryVersion': 'ops.get.app.recovery.version',
     'GetConfigSnapshot': 'ops.get.config.snapshot',
     'GetEventDrilldown': 'ops.get.event.drilldown',
@@ -20,6 +21,8 @@ class OpsRequestPageIds {
     'ListConfigInstanceReports': 'ops.list.config.instance.reports',
     'ListExperiments': 'ops.list.experiments',
     'ListServiceConfigs': 'ops.list.service.configs',
+    'OpenAccountAppealCase': 'ops.open.account.appeal.case',
+    'OpenAccountModerationCase': 'ops.open.account.moderation.case',
     'RecordVisit': 'ops.record.visit',
     'ReportConfigInstance': 'ops.report.config.instance',
     'ReportEventBatch': 'ops.report.event.batch',
@@ -28,10 +31,13 @@ class OpsRequestPageIds {
     'ReportStartupEventBatch': 'ops.report.startup.event.batch',
     'ResolveEffectiveConfig': 'ops.resolve.effective.config',
     'ResolveEffectiveConfigForInstance': 'ops.resolve.effective.config.for.instance',
+    'RetryAccountEnforcementDelivery': 'ops.retry.account.enforcement.delivery',
+    'ReviewAccountEnforcementCase': 'ops.review.account.enforcement.case',
     'UpdateExperimentRollout': 'ops.update.experiment.rollout',
   };
 
   static const String assignExperimentVariant = 'ops.assign.experiment.variant';
+  static const String getAccountEnforcementCase = 'ops.get.account.enforcement.case';
   static const String getAppRecoveryVersion = 'ops.get.app.recovery.version';
   static const String getConfigSnapshot = 'ops.get.config.snapshot';
   static const String getEventDrilldown = 'ops.get.event.drilldown';
@@ -46,6 +52,8 @@ class OpsRequestPageIds {
   static const String listConfigInstanceReports = 'ops.list.config.instance.reports';
   static const String listExperiments = 'ops.list.experiments';
   static const String listServiceConfigs = 'ops.list.service.configs';
+  static const String openAccountAppealCase = 'ops.open.account.appeal.case';
+  static const String openAccountModerationCase = 'ops.open.account.moderation.case';
   static const String recordVisit = 'ops.record.visit';
   static const String reportConfigInstance = 'ops.report.config.instance';
   static const String reportEventBatch = 'ops.report.event.batch';
@@ -54,5 +62,7 @@ class OpsRequestPageIds {
   static const String reportStartupEventBatch = 'ops.report.startup.event.batch';
   static const String resolveEffectiveConfig = 'ops.resolve.effective.config';
   static const String resolveEffectiveConfigForInstance = 'ops.resolve.effective.config.for.instance';
+  static const String retryAccountEnforcementDelivery = 'ops.retry.account.enforcement.delivery';
+  static const String reviewAccountEnforcementCase = 'ops.review.account.enforcement.case';
   static const String updateExperimentRollout = 'ops.update.experiment.rollout';
 }

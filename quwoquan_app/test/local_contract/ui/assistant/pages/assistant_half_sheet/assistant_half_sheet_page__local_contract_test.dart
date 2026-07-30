@@ -254,7 +254,10 @@ void main() {
       ]),
     );
     // 页面上下文只保留服务端可验证的最小定位与当前页读取授权。
-    expect(facet.lastContextSnapshot?.pageType, 'discovery');
+    expect(
+      facet.lastContextSnapshot?.pageType,
+      AssistantPageContextType.discovery,
+    );
     expect(
       facet.lastContextSnapshot?.consentMatrix?.canReadCurrentPage,
       isTrue,

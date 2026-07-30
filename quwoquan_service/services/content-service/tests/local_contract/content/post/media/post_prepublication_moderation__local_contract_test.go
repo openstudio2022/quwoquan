@@ -98,7 +98,7 @@ func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing
 	if _, err := moderationService.ReviewPostModerationCase(
 		moderationContext("review-prepublication-case"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: caseSlice.ID, ReviewerID: reviewerID,
+			PostID: receipt.PostID, CaseID: caseSlice.ID, ReviewerID: reviewerID,
 		},
 	); err != nil {
 		t.Fatalf("review moderation case: %v", err)
@@ -106,6 +106,7 @@ func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing
 	if _, err := moderationService.DecidePostModerationCase(
 		moderationContext("approve-prepublication-case"),
 		moderationapp.DecidePostModerationCaseCommand{
+			PostID:         receipt.PostID,
 			CaseID:         caseSlice.ID,
 			ReviewerID:     reviewerID,
 			Decision:       moderationmodel.DecisionApprove,
@@ -198,7 +199,7 @@ func TestPendingPublicationRejectionNeverEntersPublicReadModel(t *testing.T) {
 	if _, err := moderationService.ReviewPostModerationCase(
 		moderationContext("review-prepublication-rejection"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: caseSlice.ID, ReviewerID: reviewerID,
+			PostID: receipt.PostID, CaseID: caseSlice.ID, ReviewerID: reviewerID,
 		},
 	); err != nil {
 		t.Fatalf("review rejection case: %v", err)
@@ -206,6 +207,7 @@ func TestPendingPublicationRejectionNeverEntersPublicReadModel(t *testing.T) {
 	if _, err := moderationService.DecidePostModerationCase(
 		moderationContext("reject-prepublication-case"),
 		moderationapp.DecidePostModerationCaseCommand{
+			PostID:         receipt.PostID,
 			CaseID:         caseSlice.ID,
 			ReviewerID:     reviewerID,
 			Decision:       moderationmodel.DecisionReject,

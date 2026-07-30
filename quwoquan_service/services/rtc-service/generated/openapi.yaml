@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan rtc API
-    version: v1
+    version: canonical
 paths:
     /internal/rtc/account-closure/dead-letters:recover:
         post:
@@ -55,6 +55,27 @@ paths:
                 method: listCalls
                 reader: CallHistoryReader
                 slice: CallHistoryPageSlice
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: missed
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -88,11 +109,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/InitiateCallRequest'
+                            $ref: '#/components/schemas/RtcInitiateCallCommand'
             responses:
                 "204":
                     description: No Content
@@ -160,12 +181,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/AnswerCallRequest'
             responses:
                 "204":
                     description: No Content
@@ -201,11 +216,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ToggleCameraRequest'
+                            $ref: '#/components/schemas/RtcToggleCameraCommand'
             responses:
                 "204":
                     description: No Content
@@ -240,12 +255,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/CancelCallRequest'
             responses:
                 "204":
                     description: No Content
@@ -280,12 +289,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ReportMediaConnectedRequest'
             responses:
                 "204":
                     description: No Content
@@ -320,12 +323,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/HangupCallRequest'
             responses:
                 "204":
                     description: No Content
@@ -361,11 +358,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/InviteToCallRequest'
+                            $ref: '#/components/schemas/RtcInviteToCallCommand'
             responses:
                 "204":
                     description: No Content
@@ -400,12 +397,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/JoinCallRequest'
             responses:
                 "204":
                     description: No Content
@@ -440,12 +431,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/LeaveCallRequest'
             responses:
                 "204":
                     description: No Content
@@ -481,11 +466,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/ToggleMuteRequest'
+                            $ref: '#/components/schemas/RtcToggleMuteCommand'
             responses:
                 "204":
                     description: No Content
@@ -520,12 +505,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/RejectCallRequest'
             responses:
                 "204":
                     description: No Content
@@ -560,12 +539,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/StartScreenShareRequest'
             responses:
                 "204":
                     description: No Content
@@ -600,12 +573,6 @@ paths:
                   description: Stable business replay identity; distinct from X-Request-Id.
                   schema:
                     type: string
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/StopScreenShareRequest'
             responses:
                 "204":
                     description: No Content
@@ -622,55 +589,10 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        AnswerCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AnswerCallRequest
-            x-contract-placeholder: true
         CallSession:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CallSession
-            x-contract-placeholder: true
-        CancelCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CancelCallRequest
-            x-contract-placeholder: true
-        HangupCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: HangupCallRequest
-            x-contract-placeholder: true
-        InitiateCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: InitiateCallRequest
-            x-contract-placeholder: true
-        InviteToCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: InviteToCallRequest
-            x-contract-placeholder: true
-        JoinCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: JoinCallRequest
-            x-contract-placeholder: true
-        LeaveCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: LeaveCallRequest
-            x-contract-placeholder: true
-        RejectCallRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: RejectCallRequest
-            x-contract-placeholder: true
-        ReportMediaConnectedRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ReportMediaConnectedRequest
             x-contract-placeholder: true
         RtcAccountClosureDeadLetterRecoveryAccepted:
             type: object
@@ -682,23 +604,23 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RtcAccountClosureDeadLetterRecoveryRequest
             x-contract-placeholder: true
-        StartScreenShareRequest:
+        RtcInitiateCallCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: StartScreenShareRequest
+            x-contract-entity: RtcInitiateCallCommand
             x-contract-placeholder: true
-        StopScreenShareRequest:
+        RtcInviteToCallCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: StopScreenShareRequest
+            x-contract-entity: RtcInviteToCallCommand
             x-contract-placeholder: true
-        ToggleCameraRequest:
+        RtcToggleCameraCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ToggleCameraRequest
+            x-contract-entity: RtcToggleCameraCommand
             x-contract-placeholder: true
-        ToggleMuteRequest:
+        RtcToggleMuteCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: ToggleMuteRequest
+            x-contract-entity: RtcToggleMuteCommand
             x-contract-placeholder: true

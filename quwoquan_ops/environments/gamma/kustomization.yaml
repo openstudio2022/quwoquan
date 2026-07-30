@@ -2,6 +2,7 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - namespace.yaml
+  - ../../../quwoquan_service/services/api-edge/environments/gamma/deploy
   - ../../../quwoquan_service/services/assistant-service/environments/gamma/deploy
   - ../../../quwoquan_service/services/chat-service/environments/gamma/deploy
   - ../../../quwoquan_service/services/circle-service/environments/gamma/deploy

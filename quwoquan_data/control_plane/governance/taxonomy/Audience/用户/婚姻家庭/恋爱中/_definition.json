@@ -2,6 +2,7 @@
   "label": "恋爱中",
   "labelEn": "In Relationship",
   "description": "有稳定伴侣",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

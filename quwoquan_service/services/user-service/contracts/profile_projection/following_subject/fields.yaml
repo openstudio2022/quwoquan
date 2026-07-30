@@ -1,156 +1,176 @@
 description: 首页关注频道顶部“关注动态”单项
 fields:
-- name: viewerSubAccountId
-  source: viewerSubAccountId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: projection
-- name: subjectId
-  source: subjectId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: subjectType
-  source: subjectType
-  type: enum
-  enum_ref: FollowingSubjectType
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: displayName
-  source: displayName
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: avatarUrl
-  source: avatarUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: coverUrl
-  source: coverUrl
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: subtitle
-  source: subtitle
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: targetRouteId
-  source: targetRouteId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  route_ref: true
-  role: projection
-- name: targetObjectId
-  source: targetObjectId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: followedAt
-  source: followedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: lastVisitedAt
-  source: lastVisitedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: latestChangedAt
-  source: latestChangedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: unreadChangeCount
-  source: unreadChangeCount
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_ZERO
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: hasUnreadChanges
-  source: hasUnreadChanges
-  type: bool
-  constraints:
-  - NOT_NULL
-  - DEFAULT_FALSE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
-- name: latestChangeReason
-  source: latestChangeReason
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: projection
+  - name: viewerPersonaId
+    source: viewerPersonaId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: projection
+  - name: subjectId
+    source: subjectId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: subjectType
+    source: subjectType
+    type: enum
+    enum_ref: FollowSubjectKind
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: displayName
+    source: displayName
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: avatarUrl
+    source: avatarUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: coverUrl
+    source: coverUrl
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: subtitle
+    source: subtitle
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: targetRouteId
+    source: targetRouteId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    route_ref: true
+    role: projection
+  - name: targetObjectId
+    source: targetObjectId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: followedAt
+    source: followedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: lastVisitedAt
+    source: lastVisitedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: latestChangedAt
+    source: latestChangedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: unreadChangeCount
+    source: unreadChangeCount
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_ZERO
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: hasUnreadChanges
+    source: hasUnreadChanges
+    type: bool
+    constraints:
+      - NOT_NULL
+      - DEFAULT_FALSE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+  - name: latestChangeReason
+    source: latestChangeReason
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: projection
+types:
+  ListFollowingSubjectsQuery:
+    fields:
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_omit_empty: true
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+      - name: subjectType
+        type: FollowSubjectKind
+        enum_ref: FollowSubjectKind
+        constraints:
+          - NULLABLE
+        client_dart_type: FollowSubjectKind?
+        client_wire: canonicalEnum

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/reliabletask"
-	generated "quwoquan_service/services/notification-service/generated/notification_delivery/notification"
+	jobgenerated "quwoquan_service/services/notification-service/generated/notification_delivery/notification_delivery_job"
 	notification "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/domain"
 )
 
@@ -96,16 +96,16 @@ func (f *NotificationDeliveryJobQueryFacade) GetIncomingCallTimeline(
 	callID = strings.TrimSpace(callID)
 	if callID == "" {
 		return notification.IncomingCallDeliveryTimeline{},
-			generated.AppErrorFromInvalidArgument("callId is required")
+			jobgenerated.AppErrorFromDeliveryJobInvalidArgument("callId is required")
 	}
 	if isNilDependency(f.timelineReader) {
 		return notification.IncomingCallDeliveryTimeline{},
-			generated.AppErrorFromStorageReadFailed("incoming call timeline reader is unavailable")
+			jobgenerated.AppErrorFromDeliveryJobStorageReadFailed("incoming call timeline reader is unavailable")
 	}
 	timeline, err := f.timelineReader.ReadIncomingCallDeliveryTimeline(ctx, callID)
 	if err != nil {
 		return notification.IncomingCallDeliveryTimeline{},
-			generated.AppErrorFromStorageReadFailed(err.Error())
+			jobgenerated.AppErrorFromDeliveryJobStorageReadFailed(err.Error())
 	}
 	return timeline, nil
 }
@@ -128,7 +128,7 @@ func (f *NotificationDeliveryJobQueryFacade) GetMetrics(
 	snapshot, err := f.metricsReader.ReadDeliveryJobMetrics(ctx)
 	if err != nil {
 		return notification.NotificationDeliveryJobMetricsSnapshot{},
-			generated.AppErrorFromStorageReadFailed(err.Error())
+			jobgenerated.AppErrorFromDeliveryJobStorageReadFailed(err.Error())
 	}
 	snapshot.JobsByStatus = cloneCounts(snapshot.JobsByStatus)
 	snapshot.UpdatedAt = snapshot.UpdatedAt.UTC()
@@ -142,7 +142,7 @@ func (f *NotificationDeliveryJobQueryFacade) ListDeadLetters(
 ) (notification.NotificationDeliveryJobDeadLetterSlice, error) {
 	if limit <= 0 || limit > maxNotificationDeadLetterPageSize {
 		return notification.NotificationDeliveryJobDeadLetterSlice{},
-			generated.AppErrorFromInvalidArgument("limit must be between 1 and 100")
+			jobgenerated.AppErrorFromDeliveryJobInvalidArgument("limit must be between 1 and 100")
 	}
 	normalizedEventTypes := normalizeNonEmptyStrings(eventTypes)
 	records, err := f.deadLetterReader.ListDeadDeliveryJobs(
@@ -152,7 +152,7 @@ func (f *NotificationDeliveryJobQueryFacade) ListDeadLetters(
 	)
 	if err != nil {
 		return notification.NotificationDeliveryJobDeadLetterSlice{},
-			generated.AppErrorFromStorageReadFailed(err.Error())
+			jobgenerated.AppErrorFromDeliveryJobStorageReadFailed(err.Error())
 	}
 	items := make([]notification.NotificationDeliveryJobDeadLetter, 0, len(records))
 	for _, record := range records {
@@ -183,24 +183,24 @@ func (f *NotificationDeliveryJobCommandFacade) RecoverDeliveryJob(
 	idempotencyKey = strings.TrimSpace(idempotencyKey)
 	if jobID == "" {
 		return notification.RecoverNotificationDeliveryJobResult{},
-			generated.AppErrorFromInvalidArgument("jobId is required")
+			jobgenerated.AppErrorFromDeliveryJobInvalidArgument("jobId is required")
 	}
 	if idempotencyKey == "" {
 		return notification.RecoverNotificationDeliveryJobResult{},
-			generated.AppErrorFromInvalidArgument("Idempotency-Key is required")
+			jobgenerated.AppErrorFromDeliveryJobInvalidArgument("Idempotency-Key is required")
 	}
 	result, err := f.recoveryStore.RecoverDeliveryJob(ctx, jobID, idempotencyKey, f.now().UTC())
 	if err != nil {
 		if errors.Is(err, notification.ErrDeliveryJobNotFound) {
 			return notification.RecoverNotificationDeliveryJobResult{},
-				generated.AppErrorFromDeliveryNotFound("notification delivery job was not found in dead-letter state")
+				jobgenerated.AppErrorFromDeliveryJobNotFound("notification delivery job was not found in dead-letter state")
 		}
 		if errors.Is(err, notification.ErrDeliveryJobIdempotencyConflict) {
 			return notification.RecoverNotificationDeliveryJobResult{},
-				generated.AppErrorFromIdempotencyConflict("idempotency key is already bound to another delivery job")
+				jobgenerated.AppErrorFromDeliveryJobIdempotencyConflict("idempotency key is already bound to another delivery job")
 		}
 		return notification.RecoverNotificationDeliveryJobResult{},
-			generated.AppErrorFromStorageWriteFailed(err.Error())
+			jobgenerated.AppErrorFromDeliveryJobStorageWriteFailed(err.Error())
 	}
 	return result, nil
 }

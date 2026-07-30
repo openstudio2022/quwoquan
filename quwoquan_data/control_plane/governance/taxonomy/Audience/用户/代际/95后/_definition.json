@@ -2,6 +2,7 @@
   "label": "95后",
   "labelEn": "Gen Z early",
   "description": "1995-1999年出生",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

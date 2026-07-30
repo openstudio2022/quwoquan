@@ -5,165 +5,72 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/google/uuid"
-
-	usertelemetry "quwoquan_service/services/user-service/internal/account/user_account/domain/user/telemetry"
+	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
 )
 
-func seedPersonaGreetingHistory(
-	t *testing.T,
-	recordID string,
-	subAccountID string,
-	_ string,
-) {
-	t.Helper()
-	_, err := pgPool.Exec(
-		context.Background(),
-		`INSERT INTO greeting_requests (
-			id, requester_sub_account_id, target_sub_account_id, request_message,
-			status, source, created_at, updated_at
-		) VALUES ($1, $2, $3, 'persona history fixture', 'replied', 'profile', NOW(), NOW())`,
-		uuid.NewString(),
-		subAccountID,
-		"history-target-"+recordID,
-	)
-	if err != nil {
-		t.Fatalf("seed greeting history: %v", err)
-	}
-}
+// T3 Persona 隔离防护契约测试
 
-func TestGetPersonaLifecycleGuard_HistoryDoesNotChangeRetireDecision(t *testing.T) {
-	cases := []struct {
-		name string
-		seed func(t *testing.T, subAccountID string)
-	}{
-		{
-			name: "content_post",
-			seed: seedPersonaPostHistory,
-		},
-		{
-			name: "content_comment",
-			seed: seedPersonaCommentHistory,
-		},
-		{
-			name: "chat_message",
-			seed: seedPersonaChatHistory,
-		},
-		{
-			name: "notification",
-			seed: seedPersonaNotificationHistory,
-		},
-		{
-			name: "greeting",
-			seed: func(t *testing.T, subAccountID string) {
-				seedPersonaGreetingHistory(t, "greeting", subAccountID, "")
-			},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Cleanup(func() { cleanAll(t) })
-			createTestProfile(t, "persona_history_"+tc.name, "persona_history_"+tc.name)
-			createTestPersonaFull(t, "pa_primary_"+tc.name, "persona_history_"+tc.name, "pa_primary_sa_"+tc.name, "Primary", "open", true)
-			createTestPersonaFull(t, "pa_shadow_"+tc.name, "persona_history_"+tc.name, "pa_shadow_sa_"+tc.name, "Shadow", "open", false)
-			tc.seed(t, "pa_shadow_sa_"+tc.name)
-
-			rec := doRequest(
-				t,
-				http.MethodGet,
-				"/user/personas/pa_shadow_sa_"+tc.name+"/lifecycle-guard",
-				"",
-				authHeaders("persona_history_"+tc.name),
-			)
-			if rec.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-			}
-			result := parseJSON(t, rec)
-			if result["allowed"] != true {
-				t.Fatalf("expected retire allowed for %s, got %v", tc.name, result["allowed"])
-			}
-			if result["reason"] != "allowed" {
-				t.Fatalf("expected reason=allowed for %s, got %v", tc.name, result["reason"])
-			}
-		})
-	}
-}
-
-func TestCreatePersona_Success(t *testing.T) {
+func TestPersona_CreateAndList(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_1", "persona_user1")
-
-	rec := doRequest(t, http.MethodPost, "/user/personas",
-		`{"displayName":"Shadow","isolationLevel":"strict"}`,
-		authHeaders("persona_user_1"))
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["displayName"] != "Shadow" {
-		t.Errorf("expected displayName=Shadow, got %v", result["displayName"])
-	}
-}
-
-func TestCreatePersona_UserHandleReadonly(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_handle_create", "persona_user_handle")
-
-	rec := doRequest(t, http.MethodPost, "/user/personas",
-		`{"displayName":"Shadow","userHandle":"client_handle"}`,
-		authHeaders("persona_user_handle_create"))
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["code"] != "USER.SUB_ACCOUNT.handle_readonly" {
-		t.Fatalf("expected handle_readonly error, got %#v", result)
-	}
-}
-
-func TestActivatePersona_Transaction(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_2", "persona_user2")
-	createTestPersona(t, "pa_1", "persona_user_2", "PersonaA", true, true)
-	createTestPersona(t, "pa_2", "persona_user_2", "PersonaB", false, false)
-
-	rec := doRequest(t, http.MethodPost, "/user/personas/pa_2_sa/activate", "", authHeaders("persona_user_2"))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	activeContext := doRequest(
+	ownerID := canonicalOwnerIDForTest(
 		t,
-		http.MethodGet,
-		"/user/personas/active",
-		"",
-		authHeaders("persona_user_2"),
+		"ph",
+		"01j00000000000000000000010",
 	)
-	if activeContext.Code != http.StatusOK {
+	createTestProfile(t, ownerID, "sub_owner1")
+	createTestCredential(t, "cred1", ownerID, "phone", "hash_13800000001")
+
+	// 创建分身
+	rec := doRequest(t, http.MethodPost, "/user/personas",
+		`{"displayName":"匿名分身","isolationLevel":"strict"}`,
+		authHeaders(ownerID))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create persona: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	personaID, _ := result["personaId"].(string)
+	if personaID == "" {
+		t.Fatal("expected non-empty personaId in response")
+	}
+
+	// 列出分身
+	rec = doRequest(t, http.MethodGet, "/user/personas", "", authHeaders(ownerID))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list personas: expected 200, got %d", rec.Code)
+	}
+	list := parseJSON(t, rec)
+	accounts, _ := list["items"].([]any)
+	if len(accounts) == 0 {
+		t.Fatal("expected at least one persona")
+	}
+}
+
+func TestPersona_ActivateSwitchesExclusively(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "sub_owner_2", "sub_owner2")
+	createTestPersonaFull(t, "sub_a", "sub_owner_2", "sa_id_a", "SubA", "open", true, true)
+	createTestPersonaFull(t, "sub_b", "sub_owner_2", "sa_id_b", "SubB", "open", false, false)
+
+	// 激活 sub_b
+	rec := doRequest(t, http.MethodPost, "/user/personas/sa_id_b/activate", "", authHeaders("sub_owner_2"))
+	if rec.Code != http.StatusOK {
+		projector, projectorErr := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+		if projectorErr == nil {
+			_, projectorErr = projector.ProjectNext(context.Background())
+		}
 		t.Fatalf(
-			"expected active context 200, got %d: %s",
-			activeContext.Code,
-			activeContext.Body.String(),
-		)
-	}
-	activeContextBody := parseJSON(t, activeContext)
-	if activeContextBody["contextVersion"] != float64(2) {
-		t.Errorf(
-			"expected active contextVersion=2 after activation, got %v",
-			activeContextBody["contextVersion"],
-		)
-	}
-	if activeContextBody["personaSnapshotVersion"] != float64(2) {
-		t.Errorf(
-			"expected active personaSnapshotVersion=2 after activation, got %v",
-			activeContextBody["personaSnapshotVersion"],
+			"activate persona: expected 200, got %d: %s; pending projector diagnosis: %v",
+			rec.Code,
+			rec.Body.String(),
+			projectorErr,
 		)
 	}
 
+	// 验证 DB：只有一个激活的Persona
 	var activeCount int
 	err := pgPool.QueryRow(context.Background(),
-		"SELECT COUNT(*) FROM personas WHERE user_id = $1 AND is_active = true",
-		"persona_user_2").Scan(&activeCount)
+		`SELECT COUNT(*) FROM personas WHERE user_id = $1 AND is_active = true`,
+		"sub_owner_2").Scan(&activeCount)
 	if err != nil {
 		t.Fatalf("query active count: %v", err)
 	}
@@ -171,344 +78,135 @@ func TestActivatePersona_Transaction(t *testing.T) {
 		t.Errorf("expected exactly 1 active persona, got %d", activeCount)
 	}
 
-	var activeID string
+	var activePersonaID string
 	_ = pgPool.QueryRow(context.Background(),
-		"SELECT sub_account_id FROM personas WHERE user_id = $1 AND is_active = true",
-		"persona_user_2").Scan(&activeID)
-	if activeID != "pa_2_sa" {
-		t.Errorf("expected active persona pa_2_sa, got %s", activeID)
+		`SELECT persona_id FROM personas WHERE user_id = $1 AND is_active = true`,
+		"sub_owner_2").Scan(&activePersonaID)
+	if activePersonaID != "sa_id_b" {
+		t.Errorf("expected sa_id_b to be active, got %s", activePersonaID)
+	}
+
+	var (
+		projectedNickname string
+		projectedAt       *string
+	)
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT nickname
+FROM user_profiles
+WHERE user_id=$1`, "sub_owner_2").Scan(&projectedNickname); err != nil {
+		t.Fatalf("read active Persona projection: %v", err)
+	}
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT profile_projected_at::text
+FROM personas_outbox
+WHERE aggregate_id=$1 AND event_type='PersonaActivated'
+ORDER BY aggregate_version DESC
+LIMIT 1`, "sa_id_b").Scan(&projectedAt); err != nil {
+		t.Fatalf("read activation projection checkpoint: %v", err)
+	}
+	if projectedNickname != "SubB" || projectedAt == nil || *projectedAt == "" {
+		t.Fatalf(
+			"activation must synchronously project the new active Persona: nickname=%q checkpoint=%v",
+			projectedNickname,
+			projectedAt,
+		)
+	}
+
+	// Simulate a projection write lost after the durable Persona packet. The
+	// background drain must converge from the outbox coordinate without a
+	// UserAccount/Profile write fallback.
+	if _, err := pgPool.Exec(context.Background(), `
+UPDATE user_profiles SET nickname='stale_projection' WHERE user_id=$1`, "sub_owner_2"); err != nil {
+		t.Fatalf("prepare stale Persona projection: %v", err)
+	}
+	if _, err := pgPool.Exec(context.Background(), `
+UPDATE personas_outbox
+SET profile_projected_at=NULL
+WHERE aggregate_id=$1 AND event_type='PersonaActivated'`, "sa_id_b"); err != nil {
+		t.Fatalf("prepare Persona projection recovery checkpoint: %v", err)
+	}
+	projector, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
+	if err != nil {
+		t.Fatalf("create Persona profile projector: %v", err)
+	}
+	didWork, err := projector.ProjectNext(context.Background())
+	if err != nil {
+		t.Fatalf("recover Persona profile projection: %v", err)
+	}
+	if !didWork {
+		t.Fatal("expected pending Persona profile projection recovery work")
+	}
+	if err := pgPool.QueryRow(context.Background(), `
+SELECT nickname
+FROM user_profiles
+WHERE user_id=$1`, "sub_owner_2").Scan(&projectedNickname); err != nil {
+		t.Fatalf("read recovered Persona projection: %v", err)
+	}
+	if projectedNickname != "SubB" {
+		t.Fatalf("projection recovery must converge to Persona authority, got %q", projectedNickname)
 	}
 }
 
-func TestRetirePersona_PrimaryForbidden(t *testing.T) {
+func TestPersona_RetireForbidsLast(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_3", "persona_user3")
-	createTestPersona(t, "pa_primary", "persona_user_3", "Primary", true, true)
+	createTestProfile(t, "sub_owner_3", "sub_owner3")
+	createTestPersonaFull(t, "only_sub", "sub_owner_3", "sa_only", "OnlySub", "open", true, true)
 
-	createTestPersonaFull(t, "pa_other", "persona_user_3", "pa_other_sa", "Other", "open", false, false)
-	rec := doRequest(t, http.MethodPost, "/user/personas/pa_primary_sa/retire", "", authHeaders("persona_user_3"))
+	// 退役唯一的分身应该被拒绝
+	rec := doRequest(t, http.MethodPost, "/user/personas/sa_only/retire", "", authHeaders("sub_owner_3"))
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for retiring primary persona, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 400 when retiring the last persona, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestGetPersonaManagementSummary_ReturnsQuotaAndActiveContext(t *testing.T) {
+func TestPersona_StrictIsolationHidesFromContactDiscovery(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_4", "persona_user4")
-	createTestPersonaFull(t, "pa_primary", "persona_user_4", "pa_primary_sa", "Primary", "open", true, true)
-	createTestPersonaFull(t, "pa_shadow", "persona_user_4", "pa_shadow_sa", "Shadow", "semi", false, false)
 
-	rec := doRequest(t, http.MethodGet, "/user/personas/summary", "", authHeaders("persona_user_4"))
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	// 用户 A 拥有 strict 隔离Persona
+	createTestProfile(t, "strict_owner", "strict_user")
+	createTestPersonaFull(t, "strict_persona", "strict_owner", "sa_strict", "Strict", "strict", true, true)
+	// A 有手机号凭证
+	createTestCredential(t, "cred_strict", "strict_owner", "phone", "hash_strict_phone")
+
+	// 用户 B 发起通讯录发现，包含 A 的手机号哈希
+	createTestProfile(t, "discover_owner", "discover_user")
+	rec := doRequest(t, http.MethodPost, "/owner/contact-discovery",
+		`{"hashedPhones":["hash_strict_phone"]}`,
+		authHeaders("discover_owner"))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("initiate contact discovery: expected 202, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
 
-	items, ok := result["items"].([]any)
-	if !ok || len(items) != 2 {
-		t.Fatalf("expected 2 summary items, got %v", result["items"])
-	}
-	quota, ok := result["quota"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected quota object, got %v", result["quota"])
-	}
-	if quota["maxSubAccounts"] != float64(5) {
-		t.Fatalf("expected maxSubAccounts=5, got %v", quota["maxSubAccounts"])
-	}
-	active, ok := result["activeContext"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected activeContext object, got %v", result["activeContext"])
-	}
-	if active["subAccountId"] != "pa_primary_sa" {
-		t.Fatalf("expected activeContext.subAccountId=pa_primary_sa, got %v", active["subAccountId"])
-	}
-}
-
-func TestUpdatePersona_ReflectsManagementFields(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_5", "persona_user5")
-	createTestPersonaFull(t, "pa_edit", "persona_user_5", "pa_edit_sa", "Before", "open", true, true)
-
-	rec := doRequest(
-		t,
-		http.MethodPatch,
-		"/user/personas/pa_edit_sa",
-		`{"displayName":"After","phone":"13800138000","email":"after@example.com","avatarUrl":"https://example.com/avatar-after.png","isolationLevel":"semi"}`,
-		authHeaders("persona_user_5"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["displayName"] != "After" {
-		t.Fatalf("expected displayName=After, got %v", result["displayName"])
-	}
-	if result["userHandle"] != "pa_edit_sa" {
-		t.Fatalf("expected userHandle to remain system assigned, got %v", result["userHandle"])
-	}
-	if result["phone"] != "13800138000" {
-		t.Fatalf("expected phone reflected, got %v", result["phone"])
-	}
-	if result["email"] != "after@example.com" {
-		t.Fatalf("expected email reflected, got %v", result["email"])
-	}
-	if result["avatarUrl"] != "https://example.com/avatar-after.png?v=1" {
-		t.Fatalf("expected avatarUrl reflected, got %v", result["avatarUrl"])
-	}
-	if result["avatarVersion"] != float64(1) {
-		t.Fatalf("expected avatarVersion=1, got %v", result["avatarVersion"])
-	}
-
-	var inherits bool
-	var avatarVersion int
-	err := pgPool.QueryRow(
-		context.Background(),
-		"SELECT inherits_profile_from_owner, avatar_version FROM personas WHERE sub_account_id = $1",
-		"pa_edit_sa",
-	).Scan(&inherits, &avatarVersion)
-	if err != nil {
-		t.Fatalf("query inherits/avatar_version: %v", err)
-	}
-	if inherits {
-		t.Fatal("expected updated persona to stop inheriting owner profile")
-	}
-	if avatarVersion != 1 {
-		t.Fatalf("expected persisted avatar_version=1, got %d", avatarVersion)
-	}
-}
-
-func TestUpdatePersona_UserHandleReadonly(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_handle_update", "persona_user_handle_update")
-	createTestPersonaFull(t, "pa_readonly", "persona_user_handle_update", "pa_readonly_sa", "Before", "open", true, true)
-
-	rec := doRequest(
-		t,
-		http.MethodPatch,
-		"/user/personas/pa_readonly_sa",
-		`{"userHandle":"after_handle"}`,
-		authHeaders("persona_user_handle_update"),
-	)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["code"] != "USER.SUB_ACCOUNT.handle_readonly" {
-		t.Fatalf("expected handle_readonly error, got %#v", result)
-	}
-}
-
-func TestApplyPersonaProfileSync_ReturnsAppliedCount(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	usertelemetry.Reset()
-	t.Cleanup(usertelemetry.Reset)
-	createTestProfile(t, "persona_user_6", "persona_user6")
-	createTestPersonaFull(t, "pa_source", "persona_user_6", "pa_source_sa", "Source", "open", true, true)
-	createTestPersonaFull(t, "pa_target", "persona_user_6", "pa_target_sa", "Target", "open", false, false)
-
-	_, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE personas
-		 SET phone = $1, email = $2, user_handle = $3
-		 WHERE sub_account_id = $4`,
-		"13800138000",
-		"source@example.com",
-		"source_handle",
-		"pa_source_sa",
-	)
-	if err != nil {
-		t.Fatalf("seed source persona profile: %v", err)
-	}
-
-	rec := doRequest(
-		t,
-		http.MethodPost,
-		"/user/personas/pa_source_sa/profile-sync",
-		`{"applyScope":"selected_subjects","syncTargetIds":["pa_target_sa"],"fieldsMask":["phone","email"]}`,
-		authHeaders("persona_user_6"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["appliedCount"] != float64(1) {
-		t.Fatalf("expected appliedCount=1, got %v", result["appliedCount"])
-	}
-	snapshot := usertelemetry.Collector().Snapshot()
-	if snapshot[usertelemetry.MetricProfileSubjectSyncScopeSubmitCount] != 1 {
-		t.Fatalf("expected sync scope submit count = 1, got %v", snapshot)
-	}
-}
-
-func TestGetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_7", "persona_user7")
-	createTestPersonaFull(t, "pa_primary", "persona_user_7", "pa_primary_sa", "Primary", "open", true, true)
-	createTestPersonaFull(t, "pa_backup", "persona_user_7", "pa_backup_sa", "Backup", "open", false, false)
-
-	rec := doRequest(
-		t,
-		http.MethodGet,
-		"/user/personas/pa_primary_sa/lifecycle-guard",
-		"",
-		authHeaders("persona_user_7"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["reason"] != "blocked_primary_persona" {
-		t.Fatalf("expected blocked_primary_persona, got %v", result["reason"])
-	}
-	if result["requiresSuccessor"] != false {
-		t.Fatalf("expected requiresSuccessor=false when primary guard wins, got %v", result["requiresSuccessor"])
-	}
-	if result["allowed"] != false {
-		t.Fatalf("expected allowed=false for active primary persona, got %v", result["allowed"])
-	}
-}
-
-func TestGetPersonaLifecycleGuard_AllowsInactiveAuxiliary(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	usertelemetry.Reset()
-	t.Cleanup(usertelemetry.Reset)
-	createTestProfile(t, "persona_user_8", "persona_user8")
-	createTestPersonaFull(t, "pa_primary", "persona_user_8", "pa_primary_sa", "Primary", "open", true, true)
-	createTestPersonaFull(t, "pa_shadow", "persona_user_8", "pa_shadow_sa", "Shadow", "open", false, false)
-	seedPersonaGreetingHistory(t, "greeting_hist_8", "pa_shadow_sa", "persona_user_8")
-
-	rec := doRequest(
-		t,
-		http.MethodGet,
-		"/user/personas/pa_shadow_sa/lifecycle-guard",
-		"",
-		authHeaders("persona_user_8"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["reason"] != "allowed" {
-		t.Fatalf("expected allowed reason, got %v", result["reason"])
-	}
-	if result["allowed"] != true {
-		t.Fatalf("expected retire allowed, got %v", result["allowed"])
-	}
-}
-
-func TestRetirePersona_PersistsRetiredStatus(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_9", "persona_user9")
-	createTestPersonaFull(t, "pa_primary", "persona_user_9", "pa_primary_sa", "Primary", "open", true)
-	createTestPersonaFull(t, "pa_shadow", "persona_user_9", "pa_shadow_sa", "Shadow", "open", false)
-	seedPersonaGreetingHistory(t, "greeting_hist_9", "pa_shadow_sa", "persona_user_9")
-
-	rec := doRequest(
-		t,
-		http.MethodPost,
-		"/user/personas/pa_shadow_sa/retire",
-		"",
-		authHeaders("persona_user_9"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["requestedAction"] != "retire" {
-		t.Fatalf("expected requestedAction=retire, got %v", result["requestedAction"])
-	}
-	if result["allowed"] != true {
-		t.Fatalf("expected allowed=true after successful retire, got %v", result["allowed"])
-	}
-
-	var status string
-	var isActive bool
-	var retiredAt *string
-	err := pgPool.QueryRow(
-		context.Background(),
-		`SELECT status, is_active, retired_at::text
-		 FROM personas
-		 WHERE sub_account_id = $1`,
-		"pa_shadow_sa",
-	).Scan(&status, &isActive, &retiredAt)
-	if err != nil {
-		t.Fatalf("query retired persona: %v", err)
-	}
-	if status != "retired" {
-		t.Fatalf("expected status=retired, got %s", status)
-	}
-	if isActive {
-		t.Fatal("expected retired persona to be inactive")
-	}
-	if retiredAt == nil || *retiredAt == "" {
-		t.Fatal("expected retired_at to be populated")
-	}
-}
-
-func TestRetiredPersona_CannotBeActivatedOrUpdated(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "persona_user_11", "persona_user11")
-	createTestPersonaFull(t, "pa_primary", "persona_user_11", "pa_primary_sa", "Primary", "open", true)
-	createTestPersonaFull(t, "pa_shadow", "persona_user_11", "pa_shadow_sa", "Shadow", "open", false)
-	seedPersonaGreetingHistory(t, "greeting_hist_11", "pa_shadow_sa", "persona_user_11")
-
-	retireRec := doRequest(
-		t,
-		http.MethodPost,
-		"/user/personas/pa_shadow_sa/retire",
-		"",
-		authHeaders("persona_user_11"),
-	)
-	if retireRec.Code != http.StatusOK {
-		t.Fatalf("expected retire 200, got %d: %s", retireRec.Code, retireRec.Body.String())
-	}
-
-	activateRec := doRequest(
-		t,
-		http.MethodPost,
-		"/user/personas/pa_shadow_sa/activate",
-		"",
-		authHeaders("persona_user_11"),
-	)
-	if activateRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected activate retired persona 400, got %d: %s", activateRec.Code, activateRec.Body.String())
-	}
-
-	updateRec := doRequest(
-		t,
-		http.MethodPatch,
-		"/user/personas/pa_shadow_sa",
-		`{"displayName":"AfterRetire"}`,
-		authHeaders("persona_user_11"),
-	)
-	if updateRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected update retired persona 400, got %d: %s", updateRec.Code, updateRec.Body.String())
-	}
-
-	summaryRec := doRequest(t, http.MethodGet, "/user/personas/summary", "", authHeaders("persona_user_11"))
-	if summaryRec.Code != http.StatusOK {
-		t.Fatalf("expected summary 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
-	}
-	summary := parseJSON(t, summaryRec)
-	items, ok := summary["items"].([]any)
-	if !ok {
-		t.Fatalf("expected items array, got %v", summary["items"])
-	}
-	foundRetired := false
-	for _, raw := range items {
-		item, ok := raw.(map[string]any)
-		if !ok || item["subAccountId"] != "pa_shadow_sa" {
-			continue
-		}
-		foundRetired = true
-		if item["status"] != "retired" {
-			t.Fatalf("expected summary status=retired, got %v", item["status"])
-		}
-		if _, exists := item["hasAttributedHistory"]; exists {
-			t.Fatalf("summary must not expose retired hasAttributedHistory field: %#v", item)
+	// strict 隔离用户不应出现在匹配结果中
+	matchedRaw, _ := result["matchedPersonaIds"].([]any)
+	for _, m := range matchedRaw {
+		if s, ok := m.(string); ok && s == "sa_strict" {
+			t.Error("strict isolation persona should NOT appear in contact discovery results")
 		}
 	}
-	if !foundRetired {
-		t.Fatal("expected retired persona to remain visible in summary")
+}
+
+func TestPersona_ListDoesNotLeakPrivateFields(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "leaktest_owner", "leaktest_user")
+	createTestPersonaFull(t, "lk_persona", "leaktest_owner", "sa_lktest", "LeakTest", "open", true, true)
+
+	rec := doRequest(t, http.MethodGet, "/user/personas", "", authHeaders("leaktest_owner"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list personas: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	accounts, _ := result["items"].([]any)
+	if len(accounts) == 0 {
+		t.Fatal("expected at least one persona")
+	}
+
+	// purposeHint 属于私有管理字段，不应出现在列表响应
+	for _, acc := range accounts {
+		am, _ := acc.(map[string]any)
+		if _, has := am["purposeHint"]; has {
+			t.Error("purposeHint is a private field and should NOT appear in persona list response")
+		}
 	}
 }

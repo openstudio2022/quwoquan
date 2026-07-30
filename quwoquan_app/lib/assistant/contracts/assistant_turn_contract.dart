@@ -18,120 +18,59 @@ AssistantMessageKind parseMessageKind(String value) =>
     parseAssistantMessageKind(value);
 
 AssistantTurnOutput? tryParseAssistantTurnOutput(Map<String, dynamic> json) {
-  final contractId = (json['contractId'] as String?)?.trim() ?? '';
+  final rawContractId = json['contractId'];
+  if (rawContractId is! String) return null;
+  final contractId = rawContractId.trim();
   if (contractId != kAssistantTurnCurrentContractId) return null;
-  if (json['decision'] is! Map) return null;
-  final normalized = _normalizeAssistantTurnJson(json);
-  final messageKind = (normalized['messageKind'] as String?)?.trim() ?? '';
+
+  final decision = json['decision'];
+  if (decision is! Map) return null;
+  final nextAction = decision['nextAction'];
+  if (nextAction is! String ||
+      parseNextAction(nextAction.trim()) == AssistantNextAction.unknown) {
+    return null;
+  }
+
+  final rawMessageKind = json['messageKind'];
+  if (rawMessageKind is! String) return null;
+  final messageKind = rawMessageKind.trim();
   if (messageKind.isEmpty ||
       parseMessageKind(messageKind) == AssistantMessageKind.unknown) {
     return null;
   }
+
+  if (!_isCanonicalAssistantTurnResult(json['result'])) return null;
+  if (!_isCanonicalAssistantTurnToolCalls(json['toolCalls'])) return null;
   try {
-    return AssistantTurnOutput.fromJson(normalized);
+    return AssistantTurnOutput.fromJson(json);
   } catch (_) {
     return null;
   }
 }
 
-Map<String, dynamic> _normalizeAssistantTurnJson(Map<String, dynamic> json) {
-  final normalized = Map<String, dynamic>.from(json);
-  final normalizedToolCalls = _normalizeAssistantTurnToolCalls(normalized);
-  if (normalizedToolCalls.isNotEmpty) {
-    normalized['toolCalls'] = normalizedToolCalls;
+bool _isCanonicalAssistantTurnResult(Object? value) {
+  if (value is! Map) return false;
+  for (final key in const <String>['text', 'summary', 'interpretation']) {
+    if (value.containsKey(key) && value[key] is! String) return false;
   }
-  final resultMap =
-      (normalized['result'] as Map?)?.cast<String, dynamic>() ??
-      const <String, dynamic>{};
-  final nextAction =
-      (((normalized['decision'] as Map?)?.cast<String, dynamic>() ??
-                  const <String, dynamic>{})['nextAction']
-              as String?)
-          ?.trim() ??
-      '';
-  final currentMessageKind =
-      (normalized['messageKind'] as String?)?.trim() ?? '';
-  if (currentMessageKind.isEmpty) {
-    normalized['messageKind'] = _inferAssistantTurnMessageKind(
-      nextAction: nextAction,
-      normalizedToolCalls: normalizedToolCalls,
-      userMarkdown: (normalized['userMarkdown'] as String?)?.trim() ?? '',
-      resultText: (resultMap['text'] as String?)?.trim() ?? '',
-    );
+  final actionHints = value['actionHints'];
+  if (actionHints != null &&
+      (actionHints is! List || actionHints.any((item) => item is! String))) {
+    return false;
   }
-  final userMarkdown = (normalized['userMarkdown'] as String?)?.trim() ?? '';
-  final resultText = (resultMap['text'] as String?)?.trim() ?? '';
-  if (userMarkdown.isEmpty &&
-      resultText.isNotEmpty &&
-      parseNextAction(nextAction) == AssistantNextAction.answer) {
-    normalized['userMarkdown'] = resultText;
-  }
-  return normalized;
+  return true;
 }
 
-List<Map<String, dynamic>> _normalizeAssistantTurnToolCalls(
-  Map<String, dynamic> json,
-) {
-  final primary = json['toolCalls'];
-  final rawCalls = primary is List ? primary : const <Object?>[];
-  final normalized = <Map<String, dynamic>>[];
-  for (final item in rawCalls.whereType<Map>()) {
-    final toolName =
-        (item['toolName'] as String?)?.trim() ??
-        (item['name'] as String?)?.trim() ??
-        '';
-    if (toolName.isEmpty) continue;
-    final rawArguments = item['arguments'];
-    final arguments = rawArguments is Map
-        ? rawArguments.cast<String, dynamic>()
-        : <String, dynamic>{
-            for (final entry in item.entries)
-              if (entry.key != 'toolName' &&
-                  entry.key != 'name' &&
-                  entry.key != 'toolCallId' &&
-                  entry.key != 'id')
-                '${entry.key}': entry.value,
-          };
-    normalized.add(<String, dynamic>{
-      'toolName': toolName,
-      'arguments': arguments,
-    });
+bool _isCanonicalAssistantTurnToolCalls(Object? value) {
+  if (value == null) return true;
+  if (value is! List) return false;
+  for (final item in value) {
+    if (item is! Map) return false;
+    final toolName = item['toolName'];
+    if (toolName is! String || toolName.trim().isEmpty) return false;
+    if (item['arguments'] is! Map) return false;
   }
-  return normalized;
-}
-
-String _inferAssistantTurnMessageKind({
-  required String nextAction,
-  required List<Map<String, dynamic>> normalizedToolCalls,
-  required String userMarkdown,
-  required String resultText,
-}) {
-  final actionType = parseNextAction(nextAction);
-  final hasRenderableAnswer =
-      userMarkdown.trim().isNotEmpty || resultText.trim().isNotEmpty;
-  switch (actionType) {
-    case AssistantNextAction.toolCall:
-      return AssistantMessageKind.progress.wireName;
-    case AssistantNextAction.askUser:
-      return AssistantMessageKind.askUser.wireName;
-    case AssistantNextAction.answer:
-      return hasRenderableAnswer
-          ? AssistantMessageKind.answer.wireName
-          : AssistantMessageKind.fallback.wireName;
-    case AssistantNextAction.retry:
-    case AssistantNextAction.replan:
-      return AssistantMessageKind.progress.wireName;
-    case AssistantNextAction.abort:
-      return AssistantMessageKind.fallback.wireName;
-    case AssistantNextAction.unknown:
-      if (normalizedToolCalls.isNotEmpty) {
-        return AssistantMessageKind.progress.wireName;
-      }
-      if (hasRenderableAnswer) {
-        return AssistantMessageKind.answer.wireName;
-      }
-      return AssistantMessageKind.progress.wireName;
-  }
+  return true;
 }
 
 extension AssistantTurnOutputAccessors on AssistantTurnOutput {

@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/chat/conversation_contracts.requests.g.dart';
 
 /// The wire representation emitted by Chat's Conversation query and command
 /// handlers. This pure contract intentionally owns the server response shape;
@@ -16,8 +17,6 @@ final class ChatConversation {
     required this.circleGroupId,
     required this.entityId,
     required this.originType,
-    required this.bindingType,
-    required this.lifecyclePolicy,
     required this.maxSeq,
     required this.memberCount,
     required this.membersRosterRevision,
@@ -47,8 +46,6 @@ final class ChatConversation {
   final String circleGroupId;
   final String entityId;
   final String originType;
-  final String bindingType;
-  final String lifecyclePolicy;
   final int maxSeq;
   final int memberCount;
   final int membersRosterRevision;
@@ -104,74 +101,29 @@ abstract interface class ChatConversationQuery {
 
 abstract interface class ChatConversationCommandWriter {
   Future<ChatConversation> createConversation(
-    ChatCreateConversationCommand command,
-  );
+    ChatCreateConversationCommand command, {
+    required String idempotencyKey,
+  });
 
   Future<ChatConversation> updateConversationTitle(
-    ChatUpdateConversationTitleCommand command,
-  );
+    ChatUpdateConversationTitleCommand command, {
+    required String idempotencyKey,
+  });
 
   Future<ChatCommandAck> dissolveConversation(
-    ChatDissolveConversationCommand command,
-  );
+    ChatDissolveConversationCommand command, {
+    required String idempotencyKey,
+  });
 
   Future<ChatConversation> updateAnnouncement(
-    ChatUpdateAnnouncementCommand command,
-  );
+    ChatUpdateAnnouncementCommand command, {
+    required String idempotencyKey,
+  });
 
   Future<ChatConversation> updateGroupGovernanceSettings(
-    ChatUpdateGroupGovernanceSettingsCommand command,
-  );
-}
-
-final class ChatBatchGetConversationsQuery {
-  ChatBatchGetConversationsQuery({required Iterable<String> conversationIds})
-    : conversationIds = List<String>.unmodifiable(
-        conversationIds.map(
-          (id) => _requiredNonBlankText(id, 'conversationId'),
-        ),
-      ) {
-    if (this.conversationIds.isEmpty || this.conversationIds.length > 100) {
-      throw ArgumentError.value(
-        conversationIds,
-        'conversationIds',
-        'must contain 1..100 identifiers',
-      );
-    }
-  }
-
-  final List<String> conversationIds;
-}
-
-CloudOperationRequestPayload encodeChatBatchGetConversationsQuery(
-  ChatBatchGetConversationsQuery query,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{'ids': query.conversationIds},
-  );
-}
-
-final class ChatListConversationsQuery {
-  ChatListConversationsQuery({this.cursor, this.limit = 20}) {
-    if (limit < 1 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be in 1..100');
-    }
-  }
-
-  final String? cursor;
-  final int limit;
-}
-
-CloudOperationRequestPayload encodeChatListConversationsQuery(
-  ChatListConversationsQuery query,
-) {
-  final cursor = query.cursor?.trim();
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      'limit': '${query.limit}',
-    },
-  );
+    ChatUpdateGroupGovernanceSettingsCommand command, {
+    required String idempotencyKey,
+  });
 }
 
 ChatConversationPageSlice decodeChatConversationPageSlice(Object? response) {
@@ -233,8 +185,6 @@ ChatConversation _decodeChatConversation(Object? response) {
     circleGroupId: _requiredText(root['circleGroupId'], 'circleGroupId'),
     entityId: _requiredText(root['entityId'], 'entityId'),
     originType: _requiredText(root['originType'], 'originType'),
-    bindingType: _requiredText(root['bindingType'], 'bindingType'),
-    lifecyclePolicy: _requiredText(root['lifecyclePolicy'], 'lifecyclePolicy'),
     maxSeq: _requiredInt(root['maxSeq'], 'maxSeq'),
     memberCount: _requiredInt(root['memberCount'], 'memberCount'),
     membersRosterRevision: _requiredInt(
@@ -286,169 +236,6 @@ ChatCommandAck decodeChatCommandAck(Object? response) {
   return ChatCommandAck(status: _requiredText(root['status'], 'status'));
 }
 
-final class ChatCreateConversationCommand {
-  ChatCreateConversationCommand({
-    required String type,
-    required String idempotencyKey,
-    String? title,
-    this.maxGroupSize,
-    Iterable<String> initialMemberIds = const <String>[],
-  }) : type = _requiredNonBlankText(type, 'type'),
-       idempotencyKey = _requiredNonBlankText(idempotencyKey, 'idempotencyKey'),
-       title = _optionalNonBlankText(title),
-       initialMemberIds = List<String>.unmodifiable(
-         initialMemberIds.map(
-           (memberId) => _requiredNonBlankText(memberId, 'initialMemberId'),
-         ),
-       ) {
-    if (maxGroupSize != null && (maxGroupSize! < 2 || maxGroupSize! > 1000)) {
-      throw ArgumentError.value(
-        maxGroupSize,
-        'maxGroupSize',
-        'must be in 2..1000 when present',
-      );
-    }
-  }
-
-  final String type;
-  final String idempotencyKey;
-  final String? title;
-  final int? maxGroupSize;
-  final List<String> initialMemberIds;
-}
-
-CloudOperationRequestPayload encodeChatCreateConversationCommand(
-  ChatCreateConversationCommand command,
-) {
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      'type': command.type,
-      if (command.title case final value?) 'title': value,
-      if (command.maxGroupSize case final value?) 'maxGroupSize': value,
-      if (command.initialMemberIds.isNotEmpty)
-        'initialMemberIds': command.initialMemberIds,
-    },
-  );
-}
-
-final class ChatGetConversationQuery {
-  ChatGetConversationQuery({required String conversationId})
-    : conversationId = _requiredNonBlankText(conversationId, 'conversationId');
-
-  final String conversationId;
-}
-
-CloudOperationRequestPayload encodeChatGetConversationQuery(
-  ChatGetConversationQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': query.conversationId},
-  );
-}
-
-final class ChatUpdateConversationTitleCommand {
-  ChatUpdateConversationTitleCommand({
-    required String conversationId,
-    required String idempotencyKey,
-    required String title,
-  }) : conversationId = _requiredNonBlankText(conversationId, 'conversationId'),
-       idempotencyKey = _requiredNonBlankText(idempotencyKey, 'idempotencyKey'),
-       title = _requiredNonBlankText(title, 'title');
-
-  final String conversationId;
-  final String idempotencyKey;
-  final String title;
-}
-
-CloudOperationRequestPayload encodeChatUpdateConversationTitleCommand(
-  ChatUpdateConversationTitleCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': command.conversationId},
-    body: <String, Object?>{'title': command.title},
-  );
-}
-
-final class ChatDissolveConversationCommand {
-  ChatDissolveConversationCommand({
-    required String conversationId,
-    required String idempotencyKey,
-  }) : conversationId = _requiredNonBlankText(conversationId, 'conversationId'),
-       idempotencyKey = _requiredNonBlankText(idempotencyKey, 'idempotencyKey');
-
-  final String conversationId;
-  final String idempotencyKey;
-}
-
-CloudOperationRequestPayload encodeChatDissolveConversationCommand(
-  ChatDissolveConversationCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': command.conversationId},
-  );
-}
-
-final class ChatUpdateAnnouncementCommand {
-  ChatUpdateAnnouncementCommand({
-    required String conversationId,
-    required String idempotencyKey,
-    required this.announcement,
-  }) : conversationId = _requiredNonBlankText(conversationId, 'conversationId'),
-       idempotencyKey = _requiredNonBlankText(idempotencyKey, 'idempotencyKey');
-
-  final String conversationId;
-  final String idempotencyKey;
-  final String announcement;
-}
-
-CloudOperationRequestPayload encodeChatUpdateAnnouncementCommand(
-  ChatUpdateAnnouncementCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': command.conversationId},
-    body: <String, Object?>{'announcement': command.announcement},
-  );
-}
-
-final class ChatUpdateGroupGovernanceSettingsCommand {
-  ChatUpdateGroupGovernanceSettingsCommand({
-    required String conversationId,
-    required String idempotencyKey,
-    required this.nameEditableByAdminOnly,
-  }) : conversationId = _requiredNonBlankText(conversationId, 'conversationId'),
-       idempotencyKey = _requiredNonBlankText(idempotencyKey, 'idempotencyKey');
-
-  final String conversationId;
-  final String idempotencyKey;
-  final bool nameEditableByAdminOnly;
-}
-
-CloudOperationRequestPayload encodeChatUpdateGroupGovernanceSettingsCommand(
-  ChatUpdateGroupGovernanceSettingsCommand command,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': command.conversationId},
-    body: <String, Object?>{
-      'nameEditableByAdminOnly': command.nameEditableByAdminOnly,
-    },
-  );
-}
-
-final class ChatGetGroupHomeQuery {
-  ChatGetGroupHomeQuery({required String conversationId})
-    : conversationId = _requiredNonBlankText(conversationId, 'conversationId');
-
-  final String conversationId;
-}
-
-CloudOperationRequestPayload encodeChatGetGroupHomeQuery(
-  ChatGetGroupHomeQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'conversationId': query.conversationId},
-  );
-}
-
 final class ChatGroupHome {
   const ChatGroupHome({
     required this.conversationId,
@@ -464,8 +251,6 @@ final class ChatGroupHome {
     required this.announcement,
     required this.capabilities,
     required this.originType,
-    required this.bindingType,
-    required this.lifecyclePolicy,
     required this.canManageMembers,
     required this.canDissolve,
   });
@@ -483,8 +268,6 @@ final class ChatGroupHome {
   final String announcement;
   final List<String> capabilities;
   final String originType;
-  final String bindingType;
-  final String lifecyclePolicy;
   final bool canManageMembers;
   final bool canDissolve;
 }
@@ -515,8 +298,6 @@ ChatGroupHome decodeChatGroupHome(Object? response) {
     announcement: _requiredText(root['announcement'], 'announcement'),
     capabilities: _requiredStringList(root['capabilities'], 'capabilities'),
     originType: _requiredText(root['originType'], 'originType'),
-    bindingType: _requiredText(root['bindingType'], 'bindingType'),
-    lifecyclePolicy: _requiredText(root['lifecyclePolicy'], 'lifecyclePolicy'),
     canManageMembers: _requiredBool(
       root['canManageMembers'],
       'canManageMembers',
@@ -551,16 +332,6 @@ final class ChatConversationTimestampPageSlice {
   const ChatConversationTimestampPageSlice({required this.items});
 
   final List<ChatConversationTimestamp> items;
-}
-
-final class ChatListConversationTimestampsQuery {
-  const ChatListConversationTimestampsQuery();
-}
-
-CloudOperationRequestPayload encodeChatListConversationTimestampsQuery(
-  ChatListConversationTimestampsQuery query,
-) {
-  return const CloudOperationRequestPayload();
 }
 
 ChatConversationTimestampPageSlice decodeChatConversationTimestampPageSlice(
@@ -612,28 +383,6 @@ ChatConversationTimestampPageSlice decodeChatConversationTimestampPageSlice(
         );
       }),
     ),
-  );
-}
-
-final class ChatGetMessageReceiptsQuery {
-  ChatGetMessageReceiptsQuery({
-    required String conversationId,
-    required String messageId,
-  }) : conversationId = _requiredNonBlankText(conversationId, 'conversationId'),
-       messageId = _requiredNonBlankText(messageId, 'messageId');
-
-  final String conversationId;
-  final String messageId;
-}
-
-CloudOperationRequestPayload encodeChatGetMessageReceiptsQuery(
-  ChatGetMessageReceiptsQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{
-      'conversationId': query.conversationId,
-      'messageId': query.messageId,
-    },
   );
 }
 
@@ -700,8 +449,6 @@ const Set<String> _conversationWireKeys = <String>{
   'circleGroupId',
   'entityId',
   'originType',
-  'bindingType',
-  'lifecyclePolicy',
   'maxSeq',
   'memberCount',
   'membersRosterRevision',
@@ -734,8 +481,6 @@ const Set<String> _groupHomeWireKeys = <String>{
   'announcement',
   'capabilities',
   'originType',
-  'bindingType',
-  'lifecyclePolicy',
   'canManageMembers',
   'canDissolve',
 };
@@ -786,19 +531,6 @@ String _requiredText(Object? value, String field) {
     throw FormatException('$field must be a string');
   }
   return value;
-}
-
-String _requiredNonBlankText(String value, String field) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    throw ArgumentError.value(value, field, 'must not be blank');
-  }
-  return normalized;
-}
-
-String? _optionalNonBlankText(String? value) {
-  final normalized = value?.trim();
-  return normalized == null || normalized.isEmpty ? null : normalized;
 }
 
 String? _optionalText(Object? value, String field) {

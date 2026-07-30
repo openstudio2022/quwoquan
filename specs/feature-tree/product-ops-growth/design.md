@@ -8,7 +8,7 @@
 
 ## 2. 领域模型与所有权
 
-- authoritative ownership：拥有产品行为事件、实验定义与分桶事实、运营反馈、策略建议和控制面审计事实的生命周期与写入决定权。
+- authoritative ownership：拥有产品行为事件、实验定义与分桶事实、运营反馈、策略建议、控制面审计事实，以及账号治理 case/review/decision/投递回执的生命周期与写入决定权。
 - write boundary：只能通过本领域公开 command 修改其拥有事实。
 - 非本域对象：不拥有其他 L1 的事实；跨域协作必须使用对方公开 command、query、projection 或 event。
 - 非本域对象：不复制 metadata 中的字段、path、错误码和 wire 语义。
@@ -40,6 +40,15 @@
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
 - 关联要求：`REQ-001`
 - 关联能力：[`event-ingestion-and-analytics`](./event-ingestion-and-analytics/spec.md)、[`experiment-bucketing-and-rollout`](./experiment-bucketing-and-rollout/spec.md)、[`feedback-optimization-loop`](./feedback-optimization-loop/spec.md)、[`outbound-share-distribution`](./outbound-share-distribution/spec.md)、[`product-control-plane-foundation`](./product-control-plane-foundation/spec.md)
+
+<a id="dec-002"></a>
+### DEC-002 Product Ops 决定生产与 UserAccount 执行使用单一 HTTP outbox 轨道
+- 决策：Product Ops 以唯一 `AccountEnforcementCase` 聚合拥有 moderation/appeal 双签与不可变 decision；decision 只通过持久化 HTTP outbox 和受限服务身份调用 UserAccount，application receipt、bounded retry、terminal DLQ 与同 decision recovery 均留在 Product Ops。
+- 理由：审批事实与账号状态属于不同一致性边界；明确 producer/executor 所有权可避免 Product Ops 直写 User、User 反向复制 workflow，以及消息/同步双发产生的双重处罚。
+- 被否决方案：包括 Product Ops 直写 UserAccount 数据库、User Service 持有审批、拆分两套 aggregate、MQ 与 HTTP 双发、DLQ 保存原始 payload，以及恢复时签发新 decision。
+- 约束与影响：UserAccount public internal command 以 decision id 幂等并校验稳定 digest。只有已交付的最新 Suspend 可开启 appeal，任一 unresolved delivery 阻止同账号的新 case。Gamma/Prod 缺少 OIDC、scope、服务身份或 DLQ/readiness 证据时 `GATE_BLOCK`。
+- 关联要求：`REQ-001`、`REQ-002`
+- 关联能力：[`product-control-plane-foundation`](./product-control-plane-foundation/spec.md)
 
 ## 6. 质量与运行约束
 

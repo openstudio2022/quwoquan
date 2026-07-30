@@ -29,7 +29,7 @@ func NewHandler(useCases *sessionapp.UseCases) *Handler {
 func (h *Handler) Init(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		MediaType      string `json:"mediaType"`
-		ContentType    string `json:"contentType"`
+		MimeType       string `json:"mimeType"`
 		FileSize       int64  `json:"fileSize"`
 		ExpectedSHA256 string `json:"expectedSha256"`
 	}
@@ -38,7 +38,7 @@ func (h *Handler) Init(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.useCases.Init(r.Context(), sessionapp.InitCommand{
-		OwnerID: actorID(r), MediaType: body.MediaType, ContentType: body.ContentType,
+		OwnerID: actorID(r), MediaType: body.MediaType, MimeType: body.MimeType,
 		FileSize: body.FileSize, ExpectedSHA256: body.ExpectedSHA256,
 	})
 	if err != nil {

@@ -2,6 +2,7 @@
   "label": "后端开发",
   "labelEn": "Backend Engineer",
   "description": "负责服务端、接口与业务系统开发",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

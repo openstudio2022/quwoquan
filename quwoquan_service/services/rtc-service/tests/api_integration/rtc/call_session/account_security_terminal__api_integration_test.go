@@ -23,7 +23,7 @@ func TestAPIAccountSecurityClosureRejectsPendingJoinAndPersistsTerminalState(
 	created := doPost(
 		t,
 		"/rtc/calls",
-		`{"callType":"audio","inviteeIds":["user-security-pending-target"]}`,
+		`{"callType":"audio","inviteeIds":["user-security-pending-target"],"maxParticipants":2}`,
 		initiatorID,
 		http.StatusCreated,
 	)

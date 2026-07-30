@@ -13,11 +13,10 @@ Map<String, dynamic> _defaultProfile(String userId) {
       contractProfile?['displayName']?.toString().trim() ??
       userId;
   return <String, dynamic>{
-    'subAccountId': userId,
+    'personaId': userId,
     'ownerUserId': userId,
-    'subjectType': 'user',
+    'subjectType': 'account',
     'userHandle': userId,
-    'username': userId,
     'displayName': displayName,
     'nickname': displayName,
     'avatarUrl': contractProfile?['avatarUrl']?.toString() ?? '',
@@ -39,9 +38,8 @@ Map<String, dynamic> _defaultProfile(String userId) {
 Map<String, dynamic> _mockSocialRelationWire({required bool isFollowing}) {
   final relationState = isFollowing ? 'following' : 'followed_by';
   return <String, dynamic>{
-    'subAccountId': 'u1',
+    'personaId': 'u1',
     'userId': 'u1',
-    'username': 'u1',
     'userHandle': 'u1',
     'displayName': '你的皮炎有点辣',
     'nickname': '你的皮炎有点辣',
@@ -52,8 +50,8 @@ Map<String, dynamic> _mockSocialRelationWire({required bool isFollowing}) {
     'relationState': relationState,
     'followedAt': '2025-12-21T08:00:00Z',
     'relationshipCapability': <String, dynamic>{
-      'viewerSubAccountId': kMockCurrentSubAccountId,
-      'targetSubAccountId': 'u1',
+      'viewerPersonaId': kMockCurrentPersonaId,
+      'targetPersonaId': 'u1',
       'relationState': relationState,
       'canFollow': !isFollowing,
       'canUnfollow': isFollowing,
@@ -109,11 +107,10 @@ Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
       const <String, dynamic>{};
   final userId = item['userId'].toString();
   return <String, dynamic>{
-    'subAccountId': userId,
+    'personaId': userId,
     'ownerUserId': userId,
-    'subjectType': 'user',
+    'subjectType': 'account',
     'userHandle': userId,
-    'username': userId,
     'displayName': item['displayName']?.toString() ?? userId,
     'nickname': item['displayName']?.toString() ?? userId,
     'avatarUrl': item['avatarUrl']?.toString() ?? '',
@@ -138,9 +135,9 @@ Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
   };
 }
 
-final Map<String, SubAccountProfileWireDto> _contractProfileWireByUserId = {
+final Map<String, PersonaProfileWireDto> _contractProfileWireByUserId = {
   for (final item in _contractProfileRows())
-    item['userId'].toString(): SubAccountProfileWireDto.fromMap(
+    item['userId'].toString(): PersonaProfileWireDto.fromMap(
       _contractProfileWire(item),
     ),
 };
@@ -164,7 +161,7 @@ Map<String, dynamic> _relationshipRowToSocialRelationWire(
 }) {
   final targetUserId = relationship['targetUserId']?.toString() ?? '';
   final sourceUserId = relationship['sourceUserId']?.toString() ?? '';
-  final subAccountId = targetUserId.isNotEmpty ? targetUserId : sourceUserId;
+  final personaId = targetUserId.isNotEmpty ? targetUserId : sourceUserId;
   final profileRow =
       _contractProfileRowByUserId(targetUserId) ??
       _contractProfileRowByUserId(sourceUserId);
@@ -172,15 +169,13 @@ Map<String, dynamic> _relationshipRowToSocialRelationWire(
       profileRow?['displayName']?.toString() ??
       (targetUserId.isNotEmpty ? targetUserId : sourceUserId);
   final avatarUrl = profileRow?['avatarUrl']?.toString() ?? '';
-  final userHandle = profileRow?['userHandle']?.toString() ?? subAccountId;
-  final username = profileRow?['username']?.toString() ?? subAccountId;
+  final userHandle = profileRow?['userHandle']?.toString() ?? personaId;
   final mutual = relationState == 'mutual';
   final following = relationState == 'following' || mutual;
   final followedBy = relationState == 'followed_by' || mutual;
   return <String, dynamic>{
-    'subAccountId': subAccountId,
-    'userId': subAccountId,
-    'username': username,
+    'personaId': personaId,
+    'userId': personaId,
     'userHandle': userHandle,
     'displayName': displayName,
     'nickname': displayName,
@@ -191,8 +186,8 @@ Map<String, dynamic> _relationshipRowToSocialRelationWire(
     'relationState': relationState,
     'followedAt': relationship['followedAt'] ?? '2025-12-21T08:00:00Z',
     'relationshipCapability': <String, dynamic>{
-      'viewerSubAccountId': kMockCurrentSubAccountId,
-      'targetSubAccountId': subAccountId,
+      'viewerPersonaId': kMockCurrentPersonaId,
+      'targetPersonaId': personaId,
       'relationState': relationState,
       'canFollow':
           relationState == 'not_following' || relationState == 'followed_by',
@@ -249,27 +244,25 @@ List<Map<String, dynamic>> _contractPersonaRows() {
   if (personas is! List) {
     return const <Map<String, dynamic>>[];
   }
-  final activeSubAccountId = seed?['activeSubAccountId']?.toString() ?? '';
+  final activePersonaId = seed?['activePersonaId']?.toString() ?? '';
   return personas
       .whereType<Map>()
       .map((item) => item.cast<String, dynamic>())
       .map((item) {
-        final subAccountId = item['subAccountId']?.toString() ?? '';
+        final personaId = item['personaId']?.toString() ?? '';
         return <String, dynamic>{
-          'subAccountId': subAccountId,
-          'displayName': item['displayName']?.toString() ?? subAccountId,
+          'personaId': personaId,
+          'displayName': item['displayName']?.toString() ?? personaId,
           'avatarUrl':
-              _contractProfileWireByUserId[subAccountId]
-                      ?.avatarUrl
-                      .isNotEmpty ==
+              _contractProfileWireByUserId[personaId]?.avatarUrl.isNotEmpty ==
                   true
-              ? _contractProfileWireByUserId[subAccountId]!.avatarUrl
+              ? _contractProfileWireByUserId[personaId]!.avatarUrl
               : null,
           'avatarVersion':
-              _contractProfileWireByUserId[subAccountId]?.avatarVersion ?? 0,
-          'isPrimary': subAccountId == activeSubAccountId,
+              _contractProfileWireByUserId[personaId]?.avatarVersion ?? 0,
+          'isPrimary': personaId == activePersonaId,
           'isPrivate': false,
-          'isActive': subAccountId == activeSubAccountId,
+          'isActive': personaId == activePersonaId,
           'createdAt': '',
           'updatedAt': '',
         };

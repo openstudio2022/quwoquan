@@ -2,6 +2,7 @@
   "label": "蒙太奇",
   "labelEn": "Montage",
   "description": "蒙太奇叙事手法",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

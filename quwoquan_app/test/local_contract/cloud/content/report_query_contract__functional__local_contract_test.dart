@@ -4,7 +4,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 void main() {
   group('我的举报 pure contract', () {
     test('查询编码携带稳定 cursor 与 limit', () {
-      final payload = encodeContentMyReportsQuery(
+      final payload = encodeContentReportListMyReportsGeneratedRequest(
         const ContentMyReportsQuery(cursor: 'cursor-1', limit: 10),
       );
 

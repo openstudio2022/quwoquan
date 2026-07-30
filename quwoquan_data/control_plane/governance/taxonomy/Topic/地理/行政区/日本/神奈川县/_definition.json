@@ -1,0 +1,12 @@
+{
+  "label": "神奈川县",
+  "labelEn": "Kanagawa Prefecture",
+  "description": "首都圈南翼，港城与温泉并存",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

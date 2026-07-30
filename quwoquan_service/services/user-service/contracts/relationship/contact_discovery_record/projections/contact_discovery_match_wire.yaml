@@ -1,7 +1,7 @@
 read_model: ContactDiscoveryMatchWire
 description: 'GetLatestContactDiscovery 响应中 matches[] 列表元素 wire。
 
-  在仅暴露 subAccountId 的隐私基线上，附带发起者自己上传的 hashedPhone（用于端侧把命中用户映射回本地通讯录显示名）、
+  在仅暴露 personaId 的隐私基线上，附带发起者自己上传的 hashedPhone（用于端侧把命中用户映射回本地通讯录显示名）、
 
   精简 profile 与关系能力位（驱动「添加 / 已添加」按钮）。不含 ownerAccountId、不回显其它用户的手机号。
 
@@ -16,17 +16,17 @@ client_projection:
   base_class: ''
   output_path: cloud/runtime/generated/user/relationship/contact_discovery_record_match_wire_dto.g.dart
   dart_imports:
-  - package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart
+  - package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart
   fields:
   - name: hashedPhone
     dart_type: String
     nullable: false
     source: hashedPhone
     default: ''''''
-  - name: subAccountId
+  - name: personaId
     dart_type: String
     nullable: false
-    source: subAccountId
+    source: personaId
     default: ''''''
   - name: userHandle
     dart_type: String
@@ -54,7 +54,7 @@ client_projection:
     source: region
     default: 'null'
   - name: relationshipCapability
-    dart_type: SocialRelationshipCapabilityWireDto
+    dart_type: RelationshipCapabilityWireDto
     nullable: true
     source: relationshipCapability
-    map_from_string_key_class: SocialRelationshipCapabilityWireDto
+    map_from_string_key_class: RelationshipCapabilityWireDto

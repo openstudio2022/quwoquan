@@ -6,8 +6,8 @@ import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 
 class ContextContinuityPolicy {
   const ContextContinuityPolicy({
-    this.queryIntent = "",
-    this.problemClass = "",
+    this.queryIntent = QueryIntent.unspecified,
+    this.problemClass = ProblemClass.general,
     this.continuityMode = ContextContinuityMode.unknown,
     this.explicitContinuation = false,
     this.topicOverlap = 0,
@@ -21,8 +21,8 @@ class ContextContinuityPolicy {
     this.mismatchSignal = "",
   });
 
-  final String queryIntent;
-  final String problemClass;
+  final QueryIntent queryIntent;
+  final ProblemClass problemClass;
   final ContextContinuityMode continuityMode;
   final bool explicitContinuation;
   final double topicOverlap;
@@ -36,8 +36,8 @@ class ContextContinuityPolicy {
   final String mismatchSignal;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'queryIntent': queryIntent,
-        'problemClass': problemClass,
+        'queryIntent': queryIntent.wireName,
+        'problemClass': problemClass.wireName,
         'continuityMode': continuityMode.wireName,
         'explicitContinuation': explicitContinuation,
         'topicOverlap': topicOverlap,
@@ -53,8 +53,8 @@ class ContextContinuityPolicy {
 
   factory ContextContinuityPolicy.fromJson(Map<String, dynamic> json) {
     return ContextContinuityPolicy(
-      queryIntent: (json['queryIntent'] as String?)?.trim() ?? "",
-      problemClass: (json['problemClass'] as String?)?.trim() ?? "",
+      queryIntent: parseQueryIntent((json['queryIntent'] as String?)?.trim() ?? ""),
+      problemClass: parseProblemClass((json['problemClass'] as String?)?.trim() ?? "general"),
       continuityMode: parseContextContinuityMode((json['continuityMode'] as String?)?.trim() ?? "unknown"),
       explicitContinuation: json['explicitContinuation'] == true,
       topicOverlap: (json['topicOverlap'] as num?)?.toDouble() ?? 0,

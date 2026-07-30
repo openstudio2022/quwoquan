@@ -18,7 +18,7 @@ type ProfileCacheInvalidator interface {
 }
 
 type GreetingBlockCascade interface {
-	MarkPendingBlockedBetween(ctx context.Context, subAccountA, subAccountB string) error
+	MarkPendingBlockedBetween(ctx context.Context, personaA, personaB string) error
 }
 
 // PersonaRelationshipService is the only application facade for persona-to-
@@ -157,7 +157,7 @@ func (s *PersonaRelationshipService) ensureTargetPersonaFollowable(
 	if s.personas == nil {
 		return nil
 	}
-	persona, err := s.personas.FindBySubAccountID(ctx, targetPersonaID)
+	persona, err := s.personas.FindByPersonaID(ctx, targetPersonaID)
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (s *PersonaRelationshipService) counterOwnerID(ctx context.Context, persona
 	if personaID == "" || s.personas == nil {
 		return personaID
 	}
-	persona, err := s.personas.FindBySubAccountID(ctx, personaID)
+	persona, err := s.personas.FindByPersonaID(ctx, personaID)
 	if err != nil || persona == nil {
 		return personaID
 	}

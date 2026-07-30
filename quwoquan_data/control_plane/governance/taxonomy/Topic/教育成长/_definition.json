@@ -2,6 +2,7 @@
   "label": "教育成长",
   "labelEn": "Education & Growth",
   "description": "教育学习与个人成长内容，覆盖基础教育到终身学习全链路",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

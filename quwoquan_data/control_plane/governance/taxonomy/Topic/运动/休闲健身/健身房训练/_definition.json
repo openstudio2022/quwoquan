@@ -2,6 +2,7 @@
   "label": "健身房训练",
   "labelEn": "Gym Workout",
   "description": "室内健身器械训练",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

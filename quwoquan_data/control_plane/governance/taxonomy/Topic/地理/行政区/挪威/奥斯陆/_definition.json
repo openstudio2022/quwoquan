@@ -1,7 +1,12 @@
 {
   "label": "奥斯陆",
   "labelEn": "Oslo",
-  "description": "首都与政治中心",
-  "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "description": "首都",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
 }

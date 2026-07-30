@@ -2,6 +2,7 @@
   "label": "黑白",
   "labelEn": "Black & White",
   "description": "纯黑白无彩色摄影风格",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

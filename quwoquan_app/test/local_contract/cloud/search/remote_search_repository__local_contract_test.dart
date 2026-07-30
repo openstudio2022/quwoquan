@@ -12,6 +12,7 @@ void main() {
     () async {
       final repository = RemoteSearchRepository(
         remoteQuery: _UserSearchQueryFacet(),
+        sessionIdProvider: () => 'search-session',
       );
 
       final response = await repository.search(
@@ -39,6 +40,7 @@ void main() {
     () async {
       final repository = RemoteSearchRepository(
         remoteQuery: _AllTargetsFacet(),
+        sessionIdProvider: () => 'search-session',
       );
 
       final response = await repository.search(
@@ -74,7 +76,6 @@ final class _UserSearchQueryFacet implements CanonicalSearchQueryFacet {
   }) async {
     return CanonicalSearchResult(
       requestId: 'search.req.user',
-      rankingVersion: 'search-v1',
       hits: <CanonicalSearchHit>[
         CanonicalSearchHit(
           target: 'user',
@@ -104,7 +105,6 @@ final class _AllTargetsFacet implements CanonicalSearchQueryFacet {
   }) async {
     return CanonicalSearchResult(
       requestId: 'search.req.all-targets',
-      rankingVersion: 'search-v1',
       hits: <CanonicalSearchHit>[
         CanonicalSearchHit(
           target: 'article',

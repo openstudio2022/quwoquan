@@ -2,6 +2,7 @@
   "label": "生活",
   "labelEn": "Lifestyle",
   "description": "日常生活、美食、阅读、空间与个人风格兴趣",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

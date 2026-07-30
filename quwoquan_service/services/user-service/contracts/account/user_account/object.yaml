@@ -43,8 +43,10 @@ capabilities:
 taggable: true
 vector_enabled: false
 business_rules:
+- 账号根身份在存储 userId 与 wire ownerId/accountId 中只使用 `uo_<origin>_<4hex>_<26 lowercase Crockford>`；4hex 必须等于 origin 与 entropy 的 canonical routing hash 槽位，禁止版本段、别名格式或宽松解析
 - accountState、identityOrigin 与 logicalShard 仅由账号生命周期命令或受信事件修改
-- UserAccount 不保存公开 Persona 资料、凭证 secret、Session token、设备 token 或设置值
+- UserAccount 不保存可写公开 Persona 资料、凭证 secret、Session token、设备 token 或设置值；公开资料字段只作为 active Persona outbox 的只读投影
+- followerCount、followingCount、postCount、circleCount、likeCount 只允许 canonical 领域 outbox projector 写入，修复任务只能重放同一权威事实
 - 一个 Account 可以引用多个 Persona，但不得跨聚合事务直接修改 Persona
 - close 为终态并通过 outbox 驱动 credential、session 与 device 吊销
 - CloseAccount 由账号本人 App 内自助发起（Apple 5.1.1(v)）；已 closed 重放为幂等成功
@@ -54,6 +56,7 @@ business_rules:
   并写 durable outbox
 - actor、accountId 与审计元数据只来自 trusted principal 和 invocation context
 lifecycle:
+  state_field: accountState
   states:
   - anonymous
   - active

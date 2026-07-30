@@ -1,7 +1,9 @@
 kind: aggregate_root
-description: '外部可靠交互请求聚合。统一承载短信、推送、一键登录与 webhook 的异步提交、
+description: '外部可靠交互请求聚合。统一承载短信与推送的异步受理和请求生命周期；
 
-  provider attempt ledger、回调结果和死信状态。
+  provider attempt ledger 与死信分别由 ExternalInteractionAttemptFact 和
+
+  ExternalInteractionDeadLetterFact 拥有，本聚合不内联第二份状态。
 
   '
 identity:
@@ -21,17 +23,20 @@ taggable: false
 vector_enabled: false
 business_rules:
 - interaction type、destination digest 与 payload digest 创建后不可变
-- provider attempt 只能通过 typed append sink 追加，不能更新或删除
+- provider attempt 只能由 ExternalInteractionAttemptFact typed append sink 追加，不能更新或删除
 - 同一 idempotency key 与 payload digest 只产生一个 interaction
 - provider callback 必须验证签名、时效和 interaction identity
 - 超过重试预算后只能进入 dead_letter，人工恢复产生新 attempt
+- 死信恢复必须把任务状态与 Idempotency-Key command receipt 在同一事务提交；同键异 taskId 返回冲突
 lifecycle:
+  state_field: status
   states:
   - accepted
-  - dispatching
+  - pending_dispatch
+  - processing
+  - sent_unconfirmed
   - delivered
   - failed
   - dead_letter
-  - cancelled
   optimistic_concurrency: version
   idempotency: command_receipt

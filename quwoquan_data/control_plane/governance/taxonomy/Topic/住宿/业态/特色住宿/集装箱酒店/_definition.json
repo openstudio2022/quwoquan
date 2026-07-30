@@ -2,6 +2,7 @@
   "label": "集装箱酒店",
   "labelEn": "Container Hotel",
   "description": "集装箱改造住宿",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

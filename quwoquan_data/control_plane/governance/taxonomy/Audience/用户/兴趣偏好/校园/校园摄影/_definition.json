@@ -2,6 +2,7 @@
   "label": "校园摄影",
   "labelEn": "Campus Photography",
   "description": "喜欢校园影像与校园记录",
+  "axisRole": "userInterest",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

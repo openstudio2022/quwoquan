@@ -341,7 +341,7 @@ WHERE aggregate_id=$1 AND event_type='ProfileUpdateProposalRolledBack'`,
 		personaReceipts    int
 		personaOutbox      int
 	)
-	if err := pgPool.QueryRow(ctx, `SELECT display_name, version FROM personas WHERE sub_account_id=$1`, personaID).Scan(&personaDisplayName, &personaVersion); err != nil {
+	if err := pgPool.QueryRow(ctx, `SELECT display_name, version FROM personas WHERE persona_id=$1`, personaID).Scan(&personaDisplayName, &personaVersion); err != nil {
 		t.Fatalf("read applied Persona: %v", err)
 	}
 	if err := pgPool.QueryRow(ctx, `SELECT COUNT(*) FROM personas_command_receipts WHERE aggregate_id=$1`, personaID).Scan(&personaReceipts); err != nil {
@@ -488,7 +488,7 @@ func TestProfileUpdateProposalRecoversApplyingCheckpointAfterResponseLoss(t *tes
 	)
 	if err := pgPool.QueryRow(
 		ctx,
-		`SELECT display_name, version FROM personas WHERE sub_account_id=$1`,
+		`SELECT display_name, version FROM personas WHERE persona_id=$1`,
 		personaID,
 	).Scan(&gotDisplayName, &personaVersion); err != nil {
 		t.Fatalf("load resumed Persona: %v", err)

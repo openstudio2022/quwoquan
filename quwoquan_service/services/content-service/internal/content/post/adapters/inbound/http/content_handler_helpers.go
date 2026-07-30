@@ -108,7 +108,7 @@ func ResolvePersonaID(r *http.Request) string {
 			return strings.TrimSpace(principal.Actor.PersonaID)
 		}
 	}
-	if v := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")); v != "" {
+	if v := strings.TrimSpace(r.Header.Get("X-Client-Persona-Id")); v != "" {
 		return v
 	}
 	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))

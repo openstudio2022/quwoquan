@@ -1,0 +1,12 @@
+{
+  "label": "剑桥",
+  "labelEn": "Cambridge",
+  "description": "康河与学院群",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -19,7 +19,7 @@ type readPresentationSurfacesFile struct {
 
 type articleDetailWireKeysFile struct {
 	Version     int    `yaml:"version"`
-	DartClass   string `yaml:"dart_class"`
+	DartClass   string `yaml:"wire_keys_class"`
 	Description string `yaml:"description"`
 	Keys        []struct {
 		ConstName string `yaml:"const_name"`

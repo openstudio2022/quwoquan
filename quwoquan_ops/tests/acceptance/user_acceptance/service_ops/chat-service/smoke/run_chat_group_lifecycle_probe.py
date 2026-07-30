@@ -56,12 +56,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--env", choices=("beta", "gamma", "prod"), required=True)
     parser.add_argument(
         "--base-url",
-        default=os.environ.get("CHAT_GROUP_GATEWAY_BASE_URL")
-        or os.environ.get("GAMMA_BASE_URL")
-        or os.environ.get("PROD_GATEWAY_BASE_URL")
-        or "http://127.0.0.1:18080",
+        required=True,
     )
-    parser.add_argument("--resolve-host", default="127.0.0.1")
     parser.add_argument("--auth-token-env", default="PROD_TEST_AUTH_TOKEN")
     parser.add_argument("--mutating", action="store_true")
     parser.add_argument("--require-nonempty-sources", action="store_true")
@@ -97,7 +93,6 @@ class ProbeClient:
                 args.base_url,
                 environment=args.env,
                 target_name=LOCAL_TARGETS[args.env],
-                resolve_host=args.resolve_host,
             )
         else:
             self.token = os.environ.get(args.auth_token_env, "").strip()
@@ -123,7 +118,6 @@ class ProbeClient:
                     self.args.base_url,
                     path=path,
                     session=self.session,
-                    resolve_host=self.args.resolve_host,
                     method=method,
                     body=body,
                     headers=headers,

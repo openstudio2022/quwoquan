@@ -2,6 +2,7 @@
   "label": "民俗活动",
   "labelEn": "Folk Activities",
   "description": "庙会祭祀等民俗活动",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -68,7 +68,6 @@ MESSAGE_TRANSPORT_METRIC_NAMES = (
 REQUIRED_FIELDS = frozenset(
     {
         "schema",
-        "version",
         "adapterId",
         "capabilityId",
         "bindingRoots",
@@ -113,11 +112,9 @@ RELEASE_READINESS_FIELDS = frozenset(
     }
 )
 EXECUTION_REPORT_SCHEMA = "provider-conformance-test-report"
-EXECUTION_REPORT_VERSION = 2
 EXECUTION_REPORT_REQUIRED_FIELDS = frozenset(
     {
         "schema",
-        "version",
         "adapterId",
         "capabilityId",
         "bindingRoots",
@@ -148,11 +145,9 @@ EXECUTION_REPORT_REQUIRED_FIELDS = frozenset(
     }
 )
 CASE_RESULT_SCHEMA = "provider-conformance-case-results"
-CASE_RESULT_VERSION = 1
 CASE_RESULT_REQUIRED_FIELDS = frozenset(
     {
         "schema",
-        "version",
         "status",
         "adapterId",
         "capabilityId",
@@ -486,7 +481,6 @@ def candidate_image_digest(
         json.dumps(
             {
                 "schema": "provider-conformance-candidate-image-set",
-                "version": 1,
                 "commit": current_commit,
                 "services": image_set,
             },
@@ -953,11 +947,8 @@ def load_case_results(
                 _issue(str(artifact_path), f"CaseResult contains unknown fields {sorted(unknown)}")
             )
         return None, issues
-    if (
-        result.get("schema") != CASE_RESULT_SCHEMA
-        or result.get("version") != CASE_RESULT_VERSION
-    ):
-        issues.append(_issue(str(artifact_path), "CaseResult has unsupported schema/version"))
+    if result.get("schema") != CASE_RESULT_SCHEMA:
+        issues.append(_issue(str(artifact_path), "CaseResult has unsupported schema"))
     expected = {
         "adapterId": source.get("adapterId"),
         "capabilityId": source.get("capabilityId"),
@@ -1118,23 +1109,30 @@ def _validate_execution_report(
         return [_issue(str(artifact_path), f"invalid execution report: {exc}")]
     if not isinstance(report, Mapping):
         return [_issue(str(artifact_path), "execution report root must be an object")]
-    missing = EXECUTION_REPORT_REQUIRED_FIELDS - set(report)
-    if missing:
-        issues.append(
-            _issue(
-                str(artifact_path),
-                f"execution report missing fields {sorted(missing)}",
+    fields = set(report)
+    missing = EXECUTION_REPORT_REQUIRED_FIELDS - fields
+    unknown = fields - EXECUTION_REPORT_REQUIRED_FIELDS
+    if missing or unknown:
+        if missing:
+            issues.append(
+                _issue(
+                    str(artifact_path),
+                    f"execution report missing fields {sorted(missing)}",
+                )
             )
-        )
+        if unknown:
+            issues.append(
+                _issue(
+                    str(artifact_path),
+                    f"execution report contains unknown fields {sorted(unknown)}",
+                )
+            )
         return issues
-    if (
-        report.get("schema") != EXECUTION_REPORT_SCHEMA
-        or report.get("version") != EXECUTION_REPORT_VERSION
-    ):
+    if report.get("schema") != EXECUTION_REPORT_SCHEMA:
         issues.append(
             _issue(
                 str(artifact_path),
-                "execution report has unsupported schema/version",
+                "execution report has unsupported schema",
             )
         )
     expected_digest = evidence.get("artifactDigest")
@@ -1308,8 +1306,8 @@ def validate_evidence(
         if unknown:
             issues.append(_issue(location, f"contains unknown fields {sorted(unknown)}"))
             continue
-        if item.get("schema") != "provider-conformance-evidence" or item.get("version") != 4:
-            issues.append(_issue(location, "has unsupported evidence schema/version"))
+        if item.get("schema") != "provider-conformance-evidence":
+            issues.append(_issue(location, "has unsupported evidence schema"))
         adapter_id = item.get("adapterId")
         capability_id = item.get("capabilityId")
         if not isinstance(adapter_id, str) or not ADAPTER_PATTERN.fullmatch(adapter_id):
@@ -1973,7 +1971,6 @@ def load_validate_and_derive(
     )
     report = {
         "schema": "provider-conformance-readiness",
-        "version": 1,
         "evidenceCount": len(evidence),
         "executableSourceCount": len(executable_sources),
         "sourceCoverageIssues": coverage_issues,

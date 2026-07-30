@@ -2,6 +2,7 @@
   "label": "数码配件",
   "labelEn": "Accessories",
   "description": "数码配件与周边装备",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

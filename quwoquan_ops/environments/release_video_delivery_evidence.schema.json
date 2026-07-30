@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_ops/environments/release_video_delivery_evidence.schema.json",
+  "title": "Release-bound public video delivery evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "capturedAt",
+    "environment",
+    "target",
+    "rolloutStage",
+    "release",
+    "video",
+    "delivery",
+    "playback",
+    "publicSliceKey",
+    "videoAuthority",
+    "rangeStatus",
+    "contentType"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_ops.release_video_delivery_evidence"},
+    "status": {"const": "passed"},
+    "capturedAt": {"type": "string", "minLength": 1},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "target": {"enum": ["alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"]},
+    "rolloutStage": {"enum": ["local", "gray-initial"]},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseId",
+        "sourceOwner",
+        "manifestDigest",
+        "mediaManifestDigest",
+        "importRunId",
+        "verifyRunId",
+        "readinessReceiptRef"
+      ],
+      "properties": {
+        "releaseId": {"type": "string", "minLength": 1},
+        "sourceOwner": {"const": "qwq_data"},
+        "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "mediaManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "importRunId": {"type": "string", "minLength": 1},
+        "verifyRunId": {"type": "string", "minLength": 1},
+        "readinessReceiptRef": {
+          "type": "string",
+          "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/[^/]+/[^/]+/release-readiness\\.json$"
+        }
+      }
+    },
+    "video": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workId",
+        "postId",
+        "postRef",
+        "assetId",
+        "assetVersion",
+        "publicSliceKey",
+        "publicUrl",
+        "expectedMimeType",
+        "expectedBytes",
+        "expectedHash"
+      ],
+      "properties": {
+        "workId": {"type": "string", "minLength": 1},
+        "postId": {"type": "string", "minLength": 1},
+        "postRef": {"type": "string", "minLength": 1},
+        "assetId": {"type": "string", "minLength": 1},
+        "assetVersion": {"type": "integer", "minimum": 1},
+        "publicSliceKey": {"type": "string", "pattern": "^media/video/s/"},
+        "publicUrl": {"type": "string", "pattern": "^https://"},
+        "expectedMimeType": {"type": "string", "pattern": "^video/"},
+        "expectedBytes": {"type": "integer", "minimum": 1},
+        "expectedHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tlsSystemTrust",
+        "requestPath",
+        "requestQuery",
+        "fullStatus",
+        "rangeStatus",
+        "mimeType",
+        "rangeMimeType",
+        "contentLength",
+        "observedBytes",
+        "contentRange",
+        "rangeBytes",
+        "etag",
+        "rangeEtag",
+        "observedHash",
+        "rangeSha256",
+        "cacheControl",
+        "rangeCacheControl",
+        "corsAllowOrigin",
+        "rangeCorsAllowOrigin",
+        "cacheKey",
+        "rangeCacheKey",
+        "signedQueryStatus",
+        "signedQueryCacheControl",
+        "signedQueryCacheKey"
+      ],
+      "properties": {
+        "tlsSystemTrust": {"const": true},
+        "requestPath": {"type": "string", "pattern": "^/media/video/s/"},
+        "requestQuery": {"const": ""},
+        "fullStatus": {"const": 200},
+        "rangeStatus": {"const": 206},
+        "mimeType": {"type": "string", "pattern": "^video/"},
+        "rangeMimeType": {"type": "string", "pattern": "^video/"},
+        "contentLength": {"type": "integer", "minimum": 1},
+        "observedBytes": {"type": "integer", "minimum": 1},
+        "contentRange": {"type": "string", "pattern": "^bytes 0-[0-9]+/[1-9][0-9]*$"},
+        "rangeBytes": {"type": "integer", "minimum": 1},
+        "etag": {"type": "string", "minLength": 1},
+        "rangeEtag": {"type": "string", "minLength": 1},
+        "observedHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "rangeSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "cacheControl": {"type": "string", "minLength": 1},
+        "rangeCacheControl": {"type": "string", "minLength": 1},
+        "corsAllowOrigin": {"const": "*"},
+        "rangeCorsAllowOrigin": {"const": "*"},
+        "cacheKey": {"type": "string", "pattern": "^/media/video/s/"},
+        "rangeCacheKey": {"type": "string", "pattern": "^/media/video/s/"},
+        "signedQueryStatus": {"type": "integer", "minimum": 200, "maximum": 499},
+        "signedQueryCacheControl": {"type": "string", "pattern": "(^|.*,\\s*)no-store(\\s*,.*|$)"},
+        "signedQueryCacheKey": {"const": ""}
+      }
+    },
+    "playback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["durationMs", "firstFrameDecoded"],
+      "properties": {
+        "durationMs": {"type": "integer", "minimum": 1},
+        "firstFrameDecoded": {"const": true}
+      }
+    },
+    "publicSliceKey": {"type": "string", "pattern": "^media/video/s/"},
+    "videoAuthority": {"type": "string", "pattern": "^https://"},
+    "rangeStatus": {"const": 206},
+    "contentType": {"type": "string", "pattern": "^video/"}
+  }
+}

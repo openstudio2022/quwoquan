@@ -12,9 +12,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	sharemodel "quwoquan_service/services/content-service/internal/content/outbound_share_fact/domain/model"
 	shareports "quwoquan_service/services/content-service/internal/content/outbound_share_fact/domain/ports"
-	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 )
 
 const (
@@ -26,16 +26,16 @@ const (
 )
 
 type factDocument struct {
-	EventID           string                    `bson:"_id"`
-	PostID            string                    `bson:"postId"`
-	ActorDimension    sharemodel.ActorDimension `bson:"actorDimension"`
-	ActorID           string                    `bson:"actorId"`
-	Channel           string                    `bson:"channel"`
-	DestinationKind   string                    `bson:"destinationKind"`
-	DestinationDigest string                    `bson:"destinationDigest,omitempty"`
-	ReferralID        string                    `bson:"referralId"`
-	IdempotencyKey    string                    `bson:"idempotencyKey"`
-	OccurredAt        bson.DateTime             `bson:"occurredAt"`
+	EventID           string                     `bson:"_id"`
+	PostID            string                     `bson:"postId"`
+	ActorDimension    sharemodel.ActorDimension  `bson:"actorDimension"`
+	ActorID           string                     `bson:"actorId"`
+	Channel           sharemodel.Channel         `bson:"channel"`
+	DestinationKind   sharemodel.DestinationKind `bson:"destinationKind"`
+	DestinationDigest string                     `bson:"destinationDigest,omitempty"`
+	ReferralID        string                     `bson:"referralId"`
+	IdempotencyKey    string                     `bson:"idempotencyKey"`
+	OccurredAt        bson.DateTime              `bson:"occurredAt"`
 }
 
 type receiptDocument struct {

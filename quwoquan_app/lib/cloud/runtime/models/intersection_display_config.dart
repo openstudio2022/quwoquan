@@ -22,32 +22,25 @@ class IntersectionDisplayConfig {
   static const IntersectionDisplayConfig fallback = IntersectionDisplayConfig();
 
   /// 从 `/config/app` 响应根（wireRoot）解析 `intersection` 子节点；
-  /// 仅消费 canonical camelCase wire key；缺失字段回落默认值。
+  /// 仅消费 metadata 声明的 canonical snake_case wire key；缺失字段回落默认值。
   factory IntersectionDisplayConfig.fromAppConfigRoot(
     Map<String, Object?> root,
   ) {
     final content = (root['content'] as Map?)?.cast<String, Object?>();
-    final raw =
-        (content?['intersection'] as Map?)?.cast<String, Object?>() ??
-        (root['intersection'] as Map?)?.cast<String, Object?>();
+    final raw = (content?['intersection'] as Map?)?.cast<String, Object?>();
     if (raw == null) return fallback;
     return IntersectionDisplayConfig(
       inlineExpandCount:
-          _asPositiveInt(raw['inlineExpandCount']) ?? defaultInlineExpandCount,
+          _asPositiveInt(raw['inline_expand_count']) ??
+          defaultInlineExpandCount,
       maxCandidateWindow:
-          _asPositiveInt(raw['maxCandidateWindow']) ??
+          _asPositiveInt(raw['max_candidate_window']) ??
           defaultMaxCandidateWindow,
     );
   }
 
   static int? _asPositiveInt(Object? value) {
-    final int? parsed = switch (value) {
-      final int v => v,
-      final num v => v.toInt(),
-      final String v => int.tryParse(v.trim()),
-      _ => null,
-    };
-    if (parsed == null || parsed <= 0) return null;
-    return parsed;
+    if (value is! int || value <= 0) return null;
+    return value;
   }
 }

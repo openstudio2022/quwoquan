@@ -19,11 +19,11 @@ import (
 
 type Handler struct {
 	service *learningapplication.Service
+	queries *learningapplication.OpsQueryService
 }
 
 type appendRequest struct {
 	EventID           string    `json:"eventId"`
-	EventVersion      *int      `json:"eventVersion"`
 	FactType          string    `json:"factType"`
 	AssistantTurnID   string    `json:"assistantTurnId"`
 	TriggerMessageID  string    `json:"triggerMessageId"`
@@ -47,8 +47,15 @@ type appendRequest struct {
 	OccurredAt        time.Time `json:"occurredAt"`
 }
 
-func NewHandler(service *learningapplication.Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(
+	service *learningapplication.Service,
+	queries ...*learningapplication.OpsQueryService,
+) *Handler {
+	var opsQueries *learningapplication.OpsQueryService
+	if len(queries) > 0 {
+		opsQueries = queries[0]
+	}
+	return &Handler{service: service, queries: opsQueries}
 }
 
 func (handler *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -63,6 +70,63 @@ func (handler *Handler) RegisterRoutes(mux *http.ServeMux) {
 		"POST /internal/assistant/learning/facts",
 		handler.handleAppendServiceFact,
 	)
+	mux.HandleFunc(
+		"GET /assistant/ops/learning-summary",
+		handler.handleGetLearningOpsSummary,
+	)
+}
+
+func (handler *Handler) handleGetLearningOpsSummary(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	principal, ok := rtauth.PrincipalFromContext(request.Context())
+	userID := ""
+	if ok {
+		userID = strings.TrimSpace(principal.Actor.AccountID)
+	}
+	if userID == "" {
+		writeError(
+			writer,
+			request,
+			learningerrors.AppErrorFromLearningFactUnauthorized(
+				"verified operator account is required",
+			),
+		)
+		return
+	}
+	if handler.queries == nil {
+		writeError(
+			writer,
+			request,
+			learningerrors.AppErrorFromLearningOpsUnavailable(
+				"learning ops query service is unavailable",
+			),
+		)
+		return
+	}
+	summary, err := handler.queries.GetLearningOpsSummary(
+		request.Context(),
+		userID,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, learningapplication.ErrUnauthorized):
+			writeError(
+				writer,
+				request,
+				learningerrors.AppErrorFromLearningFactUnauthorized(err.Error()),
+			)
+		default:
+			writeError(
+				writer,
+				request,
+				learningerrors.AppErrorFromLearningOpsUnavailable(err.Error()),
+			)
+		}
+		return
+	}
+	writeJSON(writer, http.StatusOK, summary)
 }
 
 func (handler *Handler) handleAppendUserFact(
@@ -170,9 +234,9 @@ func decodeCommand(request *http.Request) (model.AppendCommand, error) {
 		}
 		return model.AppendCommand{}, err
 	}
-	if body.EventVersion == nil || body.TrainingEligible == nil {
+	if body.TrainingEligible == nil {
 		return model.AppendCommand{},
-			errors.New("eventVersion and trainingEligible are required")
+			errors.New("trainingEligible is required")
 	}
 	factType, err := assistantgenerated.ParseAssistantLearningFactType(
 		body.FactType,
@@ -205,7 +269,6 @@ func decodeCommand(request *http.Request) (model.AppendCommand, error) {
 	}
 	return model.AppendCommand{
 		EventID:           body.EventID,
-		EventVersion:      *body.EventVersion,
 		FactType:          model.FactType(factType.WireName()),
 		AssistantTurnID:   body.AssistantTurnID,
 		TriggerMessageID:  body.TriggerMessageID,

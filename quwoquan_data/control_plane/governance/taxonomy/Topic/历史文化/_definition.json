@@ -2,6 +2,7 @@
   "label": "历史文化",
   "labelEn": "History & Culture",
   "description": "人类历史遗迹、传统文化与文明相关主题",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

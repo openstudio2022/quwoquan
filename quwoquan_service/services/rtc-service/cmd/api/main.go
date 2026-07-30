@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	configrelease "quwoquan_service/runtime/configrelease"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -57,9 +56,7 @@ type redisSceneCfg struct {
 
 type config struct {
 	Config struct {
-		Version         string `yaml:"version"`
-		MinImageVersion string `yaml:"min_image_version"`
-		MaxImageVersion string `yaml:"max_image_version"`
+		Version string `yaml:"version"`
 	} `yaml:"config"`
 
 	Service struct {
@@ -95,8 +92,8 @@ func main() {
 		log.Fatalf("rtc-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
-	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("rtc-service config compatibility failed: %v", err)
+	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
+		log.Fatalf("rtc-service config identity failed: %v", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
@@ -333,8 +330,6 @@ func main() {
 		Src:               "rtc-service",
 	}, ioLogger, processLogger, exceptionLogger)
 
-	rateLimiter := rtgov.NewRateLimiter(1000)
-	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
 		log.Fatalf("rtc-service device ticket config invalid: %v", err)
@@ -347,7 +342,7 @@ func main() {
 		AccessTokenVerifier:      accessVerifier,
 		DeviceTicketVerifier:     deviceVerifier,
 		AccountSecurityAuthority: accountSecurityAuthority,
-	})(rateLimited)
+	})(observedHandler)
 	server := &http.Server{
 		Addr:              addr,
 		Handler:           authenticated,
@@ -473,43 +468,11 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	return cfg, nil
 }
 
-func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
+func validateRuntimeConfigurationIdentity(cfg config, configVersion string) error {
 	if strings.TrimSpace(configVersion) != "" && strings.TrimSpace(cfg.Config.Version) != "" && cfg.Config.Version != configVersion {
 		return fmt.Errorf("CONFIG_VERSION mismatch: env=%s file=%s", configVersion, cfg.Config.Version)
 	}
-	if strings.TrimSpace(imageVersion) == "" {
-		return nil
-	}
-	if cfg.Config.MinImageVersion != "" && compareSemver(imageVersion, cfg.Config.MinImageVersion) < 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s below min_image_version=%s", imageVersion, cfg.Config.MinImageVersion)
-	}
-	if cfg.Config.MaxImageVersion != "" && compareSemver(imageVersion, cfg.Config.MaxImageVersion) > 0 {
-		return fmt.Errorf("IMAGE_VERSION=%s above max_image_version=%s", imageVersion, cfg.Config.MaxImageVersion)
-	}
 	return nil
-}
-
-func compareSemver(a, b string) int {
-	parse := func(v string) [3]int {
-		var out [3]int
-		parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(v), "v"), ".")
-		for i := 0; i < len(parts) && i < 3; i++ {
-			n, _ := strconv.Atoi(parts[i])
-			out[i] = n
-		}
-		return out
-	}
-	av := parse(a)
-	bv := parse(b)
-	for i := 0; i < 3; i++ {
-		if av[i] > bv[i] {
-			return 1
-		}
-		if av[i] < bv[i] {
-			return -1
-		}
-	}
-	return 0
 }
 
 func applyEnvOverrides(cfg *config) {

@@ -38,8 +38,8 @@ business_rules:
 - 更新由服务端读取当前 version 后执行内部 CAS，且不接受动态 Map patch
 - 同值重写为幂等 no-op，不接收调用方幂等键；设置变更审计事实与状态在同一事务经 outbox 提交
 lifecycle:
-  states:
-  - active
-  - deleted
+  state_model: row_presence
+  active_condition: settings row exists for the owner account
+  terminal_outcome: owner-account closure deletes the row
   optimistic_concurrency: version
   idempotency: version_cas_last_write_wins

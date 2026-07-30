@@ -2,6 +2,7 @@
   "label": "游艇",
   "labelEn": "Yacht",
   "description": "私人或租赁游艇出行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

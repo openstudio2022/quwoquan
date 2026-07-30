@@ -52,7 +52,11 @@ abstract interface class ContentReadRepository
     String sort = kFeedSortRecommend,
   });
 
-  Future<ContentPostDetailPayload> getPost({required String postId});
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  });
 
   Future<CursorPage<PostBaseDto>> listUserPosts({
     required String userId,
@@ -65,7 +69,11 @@ abstract interface class ContentReadRepository
 
 /// 单帖详情读取独立于发现流，避免详情页依赖通用读侧 Facet。
 abstract interface class ContentPostDetailReader {
-  Future<ContentPostDetailPayload> getPost({required String postId});
+  Future<ContentPostDetailPayload> getPost({
+    required String postId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  });
 }
 
 /// 当前用户对实体对象的「想去」状态读取，供实体主页独立注入。
@@ -92,16 +100,6 @@ abstract interface class ContentWriteRepository {
   Future<void> deletePost({
     required String postId,
     required String idempotencyKey,
-  });
-
-  Future<PostBaseDto> updatePostSettings({
-    required String postId,
-    required UpdatePostSettingsRequestWire body,
-  });
-
-  Future<PostBaseDto> promotePostToWork({
-    required String postId,
-    required PromotePostToWorkRequestWire body,
   });
 }
 

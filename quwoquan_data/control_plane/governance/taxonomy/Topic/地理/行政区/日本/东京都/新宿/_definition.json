@@ -1,0 +1,12 @@
+{
+  "label": "新宿",
+  "labelEn": "Shinjuku",
+  "description": "都厅所在地与最大交通与商业枢纽",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

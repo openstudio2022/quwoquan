@@ -1,6 +1,8 @@
 import 'public_profile_query_contracts.dart';
 import '../operation_request_payload.dart';
+import 'persona_relationship_contracts.dart';
 import 'user_contract_codec.dart';
+part '../generated/requests/user/user_homepage_query_contracts.requests.g.dart';
 
 abstract interface class UserHomepageQueryFacet {
   Future<UserHomepageBundleProjection> getUserHomepageBundle(
@@ -8,23 +10,9 @@ abstract interface class UserHomepageQueryFacet {
   );
 }
 
-final class GetUserHomepageBundleQuery {
-  const GetUserHomepageBundleQuery({required this.subAccountId});
 
-  final String subAccountId;
 
-  Map<String, Object?> toJson() => <String, Object?>{
-    'subAccountId': subAccountId,
-  };
-}
 
-CloudOperationRequestPayload encodeGetUserHomepageBundleQuery(
-  GetUserHomepageBundleQuery query,
-) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'subAccountId': query.subAccountId.trim()},
-  );
-}
 
 final class UserProfileStatsProjection {
   const UserProfileStatsProjection({
@@ -53,105 +41,6 @@ final class UserProfileStatsProjection {
       followerCount: UserContractCodec.integerOr(source, 'followerCount', 0),
       likeCount: UserContractCodec.integerOr(source, 'likeCount', 0),
       postCount: UserContractCodec.integerOr(source, 'postCount', 0),
-    );
-  }
-}
-
-final class HomepageRelationshipCapabilityProjection {
-  const HomepageRelationshipCapabilityProjection({
-    required this.viewerSubAccountId,
-    required this.targetSubAccountId,
-    required this.canCreateDirectConversation,
-    required this.canSendMessage,
-    required this.canGreet,
-    required this.hasPendingGreeting,
-    required this.hasFormalConversation,
-    required this.canStartVoiceCall,
-    required this.canStartVideoCall,
-    required this.isBlocked,
-    required this.isBlockedBy,
-    this.relationState,
-    this.canFollow,
-    this.canUnfollow,
-    this.canFollowBack,
-    this.canOpenConversation,
-  });
-
-  final String viewerSubAccountId;
-  final String targetSubAccountId;
-  final String? relationState;
-  final bool? canFollow;
-  final bool? canUnfollow;
-  final bool canCreateDirectConversation;
-  final bool canSendMessage;
-  final bool? canFollowBack;
-  final bool canGreet;
-  final bool? canOpenConversation;
-  final bool hasPendingGreeting;
-  final bool hasFormalConversation;
-  final bool canStartVoiceCall;
-  final bool canStartVideoCall;
-  final bool isBlocked;
-  final bool isBlockedBy;
-
-  static HomepageRelationshipCapabilityProjection? fromJson(Object? value) {
-    if (value == null) return null;
-    final source = UserContractCodec.object(
-      value,
-      'HomepageRelationshipCapabilityProjection',
-    );
-    return HomepageRelationshipCapabilityProjection(
-      viewerSubAccountId: UserContractCodec.textOr(
-        source,
-        'viewerSubAccountId',
-        '',
-      ),
-      targetSubAccountId: UserContractCodec.textOr(
-        source,
-        'targetSubAccountId',
-        '',
-      ),
-      relationState: UserContractCodec.optionalText(source['relationState']),
-      canFollow: UserContractCodec.optionalBoolean(source, 'canFollow'),
-      canUnfollow: UserContractCodec.optionalBoolean(source, 'canUnfollow'),
-      canCreateDirectConversation: UserContractCodec.booleanOr(
-        source,
-        'canCreateDirectConversation',
-        false,
-      ),
-      canSendMessage: UserContractCodec.booleanOr(
-        source,
-        'canSendMessage',
-        false,
-      ),
-      canFollowBack: UserContractCodec.optionalBoolean(source, 'canFollowBack'),
-      canGreet: UserContractCodec.booleanOr(source, 'canGreet', false),
-      canOpenConversation: UserContractCodec.optionalBoolean(
-        source,
-        'canOpenConversation',
-      ),
-      hasPendingGreeting: UserContractCodec.booleanOr(
-        source,
-        'hasPendingGreeting',
-        false,
-      ),
-      hasFormalConversation: UserContractCodec.booleanOr(
-        source,
-        'hasFormalConversation',
-        false,
-      ),
-      canStartVoiceCall: UserContractCodec.booleanOr(
-        source,
-        'canStartVoiceCall',
-        false,
-      ),
-      canStartVideoCall: UserContractCodec.booleanOr(
-        source,
-        'canStartVideoCall',
-        false,
-      ),
-      isBlocked: UserContractCodec.booleanOr(source, 'isBlocked', false),
-      isBlockedBy: UserContractCodec.booleanOr(source, 'isBlockedBy', false),
     );
   }
 }
@@ -190,14 +79,14 @@ final class UserHomepageTabCountsProjection {
 
 final class UserHomepageViewerContextProjection {
   const UserHomepageViewerContextProjection({
-    required this.viewerSubAccountId,
+    required this.viewerPersonaId,
     required this.isOwner,
     required this.isGuest,
     required this.relationToTarget,
     required this.canViewFullProfile,
   });
 
-  final String viewerSubAccountId;
+  final String viewerPersonaId;
   final bool isOwner;
   final bool isGuest;
   final String relationToTarget;
@@ -210,11 +99,7 @@ final class UserHomepageViewerContextProjection {
       'UserHomepageViewerContextProjection',
     );
     return UserHomepageViewerContextProjection(
-      viewerSubAccountId: UserContractCodec.textOr(
-        source,
-        'viewerSubAccountId',
-        '',
-      ),
+      viewerPersonaId: UserContractCodec.textOr(source, 'viewerPersonaId', ''),
       isOwner: UserContractCodec.booleanOr(source, 'isOwner', false),
       isGuest: UserContractCodec.booleanOr(source, 'isGuest', false),
       relationToTarget: UserContractCodec.textOr(
@@ -241,9 +126,9 @@ final class UserHomepageBundleProjection {
     this.viewerContext,
   });
 
-  final SubAccountProfileProjection? profile;
+  final PersonaProfileProjection? profile;
   final UserProfileStatsProjection? stats;
-  final HomepageRelationshipCapabilityProjection? relationshipCapability;
+  final RelationshipCapabilityResult? relationshipCapability;
   final UserHomepageTabCountsProjection? tabCounts;
   final UserHomepageViewerContextProjection? viewerContext;
   final String cacheVersion;
@@ -256,11 +141,13 @@ final class UserHomepageBundleProjection {
     return UserHomepageBundleProjection(
       profile: source['profile'] == null
           ? null
-          : SubAccountProfileProjection.fromJson(source['profile']),
+          : PersonaProfileProjection.fromJson(source['profile']),
       stats: UserProfileStatsProjection.fromJson(source['stats']),
-      relationshipCapability: HomepageRelationshipCapabilityProjection.fromJson(
-        source['relationshipCapability'],
-      ),
+      relationshipCapability: source['relationshipCapability'] == null
+          ? null
+          : decodeRelationshipCapabilityResult(
+              source['relationshipCapability'],
+            ),
       tabCounts: UserHomepageTabCountsProjection.fromJson(source['tabCounts']),
       viewerContext: UserHomepageViewerContextProjection.fromJson(
         source['viewerContext'],

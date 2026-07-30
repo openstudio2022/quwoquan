@@ -27,7 +27,10 @@
 - 决策：`MediaUploadSession` 拥有上传 ticket、pending/completed/aborted 生命周期与完成重放；`MediaAsset` 拥有资产不变量、处理状态、访问策略和公开 slice。Session 完成时通过 MediaAsset 的 `CreationAppender` 在同一 Mongo transaction 追加资产、两类 receipt 与 outbox，失败必须整体回滚。
 - 理由：四环境媒体交付、公开 slice key、播放器终态与防羊群验收。
 - 被否决方案：Post 聚合复制上传会话、Session persistence 自行拼装 MediaAsset、App/页面保存 object key 或 CDN URL 作为发布命令，或 complete 后跨事务补写资产。
-- 约束与影响：对象存储 key 只在服务端 domain/infrastructure 内流转；App 上传命令结果只暴露继续上传所需的 signed `uploadUrl` 与恢复所需的 `assetId`，发布命令只提交 `mediaAssetIds`。Post 原子绑定后由服务端投影 `publicSliceKey`，App 再经统一 delivery resolver 生成 URI。
+- 约束与影响：`MediaUploadSession/MediaAsset` 聚合只属于 content-service；runtime media 只提供对象存储端口、S3 适配与交付引用，不保留第二套 store/aggregate/mock。
+- 对象存储 key 只在服务端 domain/infrastructure 内流转。App 上传命令结果只暴露继续上传所需的 signed `uploadUrl` 与恢复所需的 `assetId`，发布命令只提交 `mediaAssetIds`。
+- Post 原子绑定后由服务端投影 path-versioned `publicSliceKey`，公开 URL query-free。私有 CAS/processed object 只走严格校验的短期签名 URL，两者不得共用 builder。
+- App 只经统一 delivery resolver 将公开引用解析为 URI。
 - 关联要求：`REQ-001`
 - 影响 Story：[`group-avatar-server-precompose-and-unified-sync-contract`](./group-avatar-server-precompose-and-unified-sync-contract/spec.md)、[`media-upload-and-storage`](./media-upload-and-storage/spec.md)
 - 关联验收：`SIT-001`

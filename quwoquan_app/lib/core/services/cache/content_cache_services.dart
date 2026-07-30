@@ -11,7 +11,14 @@ import 'package:quwoquan_app/cloud/runtime/models/discovery_feed_page.dart';
 import 'package:quwoquan_app/core/services/cache/cache_read_result.dart';
 import 'package:quwoquan_app/core/services/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/core/services/cache/object_cache_store.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        ContentDiscoveryFeedEmptyReason,
+        ContentDiscoveryFeedOutcome,
+        isCanonicalSha256Digest;
 import 'package:shared_preferences/shared_preferences.dart';
+
+part 'content_query_snapshot_persistence_codec.dart';
 
 class PostObjectCacheService {
   PostObjectCacheService({
@@ -96,50 +103,81 @@ class PostObjectCacheService {
 }
 
 class ContentQuerySnapshot {
-  const ContentQuerySnapshot({
+  ContentQuerySnapshot({
     required this.key,
     required this.items,
     required this.fetchedAt,
     this.nextCursor,
+    this.previousCursor,
+    this.paginationExpiresAt,
+    this.paginationSessionId,
     this.feedRequestId,
-    this.rankingVersion,
-    this.reasonVersion,
-  });
+    this.policyDigest,
+    this.outcome = ContentDiscoveryFeedOutcome.content,
+    this.emptyReason,
+  }) {
+    final digest = policyDigest;
+    if (digest != null && !isCanonicalSha256Digest(digest)) {
+      throw const FormatException(
+        'policyDigest must be a canonical SHA-256 digest',
+      );
+    }
+  }
 
   final String key;
   final List<PostBaseDto> items;
   final String? nextCursor;
+  final String? previousCursor;
+  final DateTime? paginationExpiresAt;
+  final String? paginationSessionId;
   final DateTime fetchedAt;
 
   /// 服务端权威下发的归因上下文（随 feed envelope 缓存，命中缓存时一并回放）。
   final String? feedRequestId;
-  final String? rankingVersion;
-  final String? reasonVersion;
+  final String? policyDigest;
+  final ContentDiscoveryFeedOutcome outcome;
+  final ContentDiscoveryFeedEmptyReason? emptyReason;
 
   CursorPage<PostBaseDto> toCursorPage() {
     return CursorPage<PostBaseDto>(items: items, nextCursor: nextCursor);
   }
 
-  DiscoveryFeedPage toDiscoveryFeedPage() {
+  DiscoveryFeedPage toDiscoveryFeedPage({
+    String? currentSessionId,
+    DateTime? now,
+  }) {
+    final normalizedCurrentSession = currentSessionId?.trim() ?? '';
+    final normalizedSnapshotSession = paginationSessionId?.trim() ?? '';
+    final paginationIsUsable =
+        normalizedCurrentSession.isNotEmpty &&
+        normalizedSnapshotSession == normalizedCurrentSession &&
+        paginationExpiresAt != null &&
+        paginationExpiresAt!.isAfter((now ?? DateTime.now()).toUtc());
     return DiscoveryFeedPage(
       items: items,
-      nextCursor: nextCursor,
+      outcome: outcome,
+      emptyReason: emptyReason,
+      nextCursor: paginationIsUsable ? nextCursor : null,
+      previousCursor: paginationIsUsable ? previousCursor : null,
+      paginationExpiresAt: paginationIsUsable ? paginationExpiresAt : null,
       feedRequestId: feedRequestId,
-      rankingVersion: rankingVersion,
-      reasonVersion: reasonVersion,
+      policyDigest: policyDigest,
     );
   }
 
-  Map<String, dynamic> toMap({int? maxItems}) {
-    final snapshotItems = maxItems == null ? items : items.take(maxItems);
+  Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'key': key,
-      'items': snapshotItems.map(_postSnapshotMap).toList(growable: false),
+      'items': items.map(_postSnapshotMap).toList(growable: false),
       'nextCursor': nextCursor,
+      'previousCursor': previousCursor,
+      'paginationExpiresAt': paginationExpiresAt?.toUtc().toIso8601String(),
+      'paginationSessionId': paginationSessionId,
       'fetchedAt': fetchedAt.toUtc().toIso8601String(),
       'feedRequestId': feedRequestId,
-      'rankingVersion': rankingVersion,
-      'reasonVersion': reasonVersion,
+      'policyDigest': policyDigest,
+      'outcome': outcome.name,
+      'emptyReason': _feedEmptyReasonToWire(emptyReason),
     };
   }
 
@@ -155,14 +193,35 @@ class ContentQuerySnapshot {
           .whereType<Map>()
           .map((item) => postBaseDtoFromMap(_normalizePostSnapshotMap(item)))
           .toList(growable: false);
+      final isDiscoveryFeed = _queryKeyParts(key)['surface'] == 'discoveryFeed';
+      final outcome = isDiscoveryFeed
+          ? _requiredSnapshotFeedOutcome(map['outcome'])
+          : _optionalSnapshotFeedOutcome(map['outcome']);
+      final emptyReason = _snapshotFeedEmptyReason(map['emptyReason']);
+      if (isDiscoveryFeed) {
+        final validEnvelope = items.isEmpty
+            ? outcome == ContentDiscoveryFeedOutcome.empty &&
+                  emptyReason != null
+            : outcome == ContentDiscoveryFeedOutcome.content &&
+                  emptyReason == null;
+        if (!validEnvelope) {
+          return null;
+        }
+      }
       return ContentQuerySnapshot(
         key: key,
         items: List<PostBaseDto>.unmodifiable(items),
         fetchedAt: DateTime.parse(rawFetchedAt).toLocal(),
         nextCursor: map['nextCursor']?.toString(),
+        previousCursor: map['previousCursor']?.toString(),
+        paginationExpiresAt: _optionalSnapshotDateTime(
+          map['paginationExpiresAt'],
+        ),
+        paginationSessionId: map['paginationSessionId']?.toString(),
         feedRequestId: map['feedRequestId']?.toString(),
-        rankingVersion: map['rankingVersion']?.toString(),
-        reasonVersion: map['reasonVersion']?.toString(),
+        policyDigest: _optionalSnapshotPolicyDigest(map['policyDigest']),
+        outcome: outcome,
+        emptyReason: emptyReason,
       );
     } catch (_) {
       return null;
@@ -170,26 +229,98 @@ class ContentQuerySnapshot {
   }
 }
 
+String? _optionalSnapshotPolicyDigest(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is! String || !isCanonicalSha256Digest(value)) {
+    throw const FormatException(
+      'policyDigest must be a canonical SHA-256 digest',
+    );
+  }
+  return value;
+}
+
+ContentDiscoveryFeedOutcome _requiredSnapshotFeedOutcome(Object? value) {
+  return switch (value) {
+    'content' => ContentDiscoveryFeedOutcome.content,
+    'empty' => ContentDiscoveryFeedOutcome.empty,
+    _ => throw const FormatException('feed snapshot outcome is invalid'),
+  };
+}
+
+ContentDiscoveryFeedOutcome _optionalSnapshotFeedOutcome(Object? value) =>
+    value == null
+    ? ContentDiscoveryFeedOutcome.content
+    : _requiredSnapshotFeedOutcome(value);
+
+ContentDiscoveryFeedEmptyReason? _snapshotFeedEmptyReason(Object? value) {
+  return switch (value) {
+    'no_active_release' => ContentDiscoveryFeedEmptyReason.noActiveRelease,
+    'no_eligible_content' => ContentDiscoveryFeedEmptyReason.noEligibleContent,
+    'following_empty' => ContentDiscoveryFeedEmptyReason.followingEmpty,
+    'continuation_end' => ContentDiscoveryFeedEmptyReason.continuationEnd,
+    null => null,
+    _ => throw const FormatException('feed snapshot emptyReason is invalid'),
+  };
+}
+
+String? _feedEmptyReasonToWire(ContentDiscoveryFeedEmptyReason? reason) {
+  return switch (reason) {
+    ContentDiscoveryFeedEmptyReason.noActiveRelease => 'no_active_release',
+    ContentDiscoveryFeedEmptyReason.noEligibleContent => 'no_eligible_content',
+    ContentDiscoveryFeedEmptyReason.followingEmpty => 'following_empty',
+    ContentDiscoveryFeedEmptyReason.continuationEnd => 'continuation_end',
+    null => null,
+  };
+}
+
+DateTime? _optionalSnapshotDateTime(Object? value) {
+  final raw = value?.toString().trim() ?? '';
+  return raw.isEmpty ? null : DateTime.parse(raw).toUtc();
+}
+
 class ContentQuerySnapshotPersistencePolicy {
   const ContentQuerySnapshotPersistencePolicy({
     this.maxItemsPerSnapshot = 30,
     this.maxUserPostSubjects = 20,
+    this.maxFeedPagesPerQuery = 4,
+    this.maxPersistedBytes = defaultMaxPersistedBytes,
   });
+
+  static const int defaultMaxPersistedBytes = 2 * 1024 * 1024;
 
   final int maxItemsPerSnapshot;
   final int maxUserPostSubjects;
+  final int maxFeedPagesPerQuery;
+  final int maxPersistedBytes;
 
   List<ContentQuerySnapshot> selectPersistableSnapshots(
     Iterable<ContentQuerySnapshot> snapshots,
   ) {
+    return selectPersistableSnapshotChains(
+      snapshots,
+    ).expand((chain) => chain).toList(growable: false);
+  }
+
+  List<List<ContentQuerySnapshot>> selectPersistableSnapshotChains(
+    Iterable<ContentQuerySnapshot> snapshots,
+  ) {
     final materialized = snapshots
-        .where((snapshot) => _isPersistableSurface(snapshot.key))
+        .where(
+          (snapshot) =>
+              _isPersistableSurface(snapshot.key) &&
+              snapshot.items.length <= maxItemsPerSnapshot,
+        )
         .toList(growable: false);
     final allowedUserSubjects = _latestUserPostSubjects(materialized);
     final firstByBase = <String, ContentQuerySnapshot>{};
     final latestByBase = <String, ContentQuerySnapshot>{};
     for (final snapshot in materialized) {
       if (!_isAllowedUserPostSubject(snapshot.key, allowedUserSubjects)) {
+        continue;
+      }
+      if (_queryKeyParts(snapshot.key)['surface'] == 'discoveryFeed') {
         continue;
       }
       final baseSignature = _baseSignatureForKey(snapshot.key);
@@ -202,14 +333,71 @@ class ContentQuerySnapshotPersistencePolicy {
       }
     }
 
-    final selected = <String, ContentQuerySnapshot>{};
+    final chains = <List<ContentQuerySnapshot>>[
+      ..._contiguousFeedWindowChains(materialized),
+    ];
+    final selectedOtherSurfaces = <String, ContentQuerySnapshot>{};
     for (final snapshot in firstByBase.values) {
-      selected[snapshot.key] = snapshot;
+      selectedOtherSurfaces[snapshot.key] = snapshot;
     }
     for (final snapshot in latestByBase.values) {
-      selected[snapshot.key] = snapshot;
+      selectedOtherSurfaces[snapshot.key] = snapshot;
     }
-    return selected.values.toList(growable: false);
+    for (final snapshot in selectedOtherSurfaces.values) {
+      chains.add(<ContentQuerySnapshot>[snapshot]);
+    }
+    return chains;
+  }
+
+  List<List<ContentQuerySnapshot>> _contiguousFeedWindowChains(
+    List<ContentQuerySnapshot> snapshots,
+  ) {
+    if (maxFeedPagesPerQuery <= 0) {
+      return const <List<ContentQuerySnapshot>>[];
+    }
+    final pagesByBase = <String, Map<String, ContentQuerySnapshot>>{};
+    for (final snapshot in snapshots) {
+      final parts = _queryKeyParts(snapshot.key);
+      if (parts['surface'] != 'discoveryFeed') {
+        continue;
+      }
+      final base = _baseSignatureForKey(snapshot.key);
+      final cursor = (parts['cursor'] ?? '').trim();
+      pagesByBase.putIfAbsent(
+        base,
+        () => <String, ContentQuerySnapshot>{},
+      )[cursor] = snapshot;
+    }
+    final chains = <List<ContentQuerySnapshot>>[];
+    for (final pagesByCursor in pagesByBase.values) {
+      var cursor = '';
+      final visitedCursors = <String>{};
+      final chain = <ContentQuerySnapshot>[];
+      for (
+        var pageIndex = 0;
+        pageIndex < maxFeedPagesPerQuery;
+        pageIndex += 1
+      ) {
+        if (!visitedCursors.add(cursor)) {
+          break;
+        }
+        final page = pagesByCursor[cursor];
+        if (page == null) {
+          break;
+        }
+        chain.add(page);
+        final nextCursor = page.nextCursor?.trim() ?? '';
+        if (nextCursor.isEmpty) {
+          break;
+        }
+        cursor = nextCursor;
+      }
+      if (chain.isNotEmpty) {
+        chains.add(chain);
+      }
+    }
+    chains.sort((a, b) => b.first.fetchedAt.compareTo(a.first.fetchedAt));
+    return chains;
   }
 
   bool _isAllowedUserPostSubject(String key, Set<String> allowedSubjects) {
@@ -262,38 +450,91 @@ class ContentQuerySnapshotPersistencePolicy {
   }
 }
 
+abstract interface class ContentQuerySnapshotPersistenceBackend {
+  Future<String?> read(String storageKey);
+
+  Future<void> write(String storageKey, String payload);
+
+  Future<void> remove(String storageKey);
+}
+
+class SharedPreferencesContentQuerySnapshotPersistenceBackend
+    implements ContentQuerySnapshotPersistenceBackend {
+  const SharedPreferencesContentQuerySnapshotPersistenceBackend();
+
+  @override
+  Future<String?> read(String storageKey) async {
+    final preferences = await SharedPreferences.getInstance();
+    return preferences.getString(storageKey);
+  }
+
+  @override
+  Future<void> write(String storageKey, String payload) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(storageKey, payload);
+  }
+
+  @override
+  Future<void> remove(String storageKey) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(storageKey);
+  }
+}
+
 class ContentQuerySnapshotStore {
   ContentQuerySnapshotStore({
     this.maxEntries = 80,
     this.freshFor = const Duration(minutes: 5),
+    this.maximumAge = const Duration(hours: 24),
     bool persistToPreferences = false,
     String storageKey = defaultStorageKey,
     ContentQuerySnapshotPersistencePolicy persistencePolicy =
         const ContentQuerySnapshotPersistencePolicy(),
+    ContentQuerySnapshotPersistenceBackend persistenceBackend =
+        const SharedPreferencesContentQuerySnapshotPersistenceBackend(),
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(),
+    DateTime Function()? now,
   }) : _persistToPreferences = persistToPreferences,
        _storageKey = storageKey,
        _persistencePolicy = persistencePolicy,
-       _telemetrySink = telemetrySink {
+       _persistenceBackend = persistenceBackend,
+       _telemetrySink = telemetrySink,
+       _now = now ?? DateTime.now {
+    if (maxEntries <= 0) {
+      throw ArgumentError.value(maxEntries, 'maxEntries', 'must be positive');
+    }
+    if (freshFor <= Duration.zero) {
+      throw ArgumentError.value(freshFor, 'freshFor', 'must be positive');
+    }
+    if (maximumAge < freshFor) {
+      throw ArgumentError.value(
+        maximumAge,
+        'maximumAge',
+        'must be greater than or equal to freshFor',
+      );
+    }
     _hydration = _persistToPreferences
         ? _hydrateFromPreferences()
         : Future<void>.value();
   }
 
-  static const String defaultStorageKey = 'qwq.content_query_snapshots.v2';
-  static const int _storageVersion = 2;
+  static const String defaultStorageKey = 'qwq.content_query_snapshots';
 
   final int maxEntries;
   final Duration freshFor;
+  final Duration maximumAge;
   final bool _persistToPreferences;
   final String _storageKey;
   final ContentQuerySnapshotPersistencePolicy _persistencePolicy;
+  final ContentQuerySnapshotPersistenceBackend _persistenceBackend;
   final CacheTelemetrySink _telemetrySink;
+  final DateTime Function() _now;
   final LinkedHashMap<String, ContentQuerySnapshot> _snapshots =
       LinkedHashMap<String, ContentQuerySnapshot>();
   final Set<String> _diskBackedKeys = <String>{};
   late final Future<void> _hydration;
-  Future<void>? _pendingPersist;
+  Future<void>? _persistenceDrain;
+  bool _persistenceDirty = false;
 
   Future<void> ensureHydrated() {
     return _hydration;
@@ -308,8 +549,18 @@ class ContentQuerySnapshotStore {
     if (snapshot == null) {
       return null;
     }
+    final age = _snapshotAge(snapshot);
+    if (age > maximumAge) {
+      _diskBackedKeys.remove(normalized);
+      _schedulePersist();
+      _telemetrySink.record('query_snapshot.expire', <String, Object?>{
+        'count': 1,
+        'source': 'read',
+      });
+      return null;
+    }
     _snapshots[normalized] = snapshot;
-    final freshness = DateTime.now().difference(snapshot.fetchedAt) <= freshFor
+    final freshness = age <= freshFor
         ? CacheFreshness.fresh
         : CacheFreshness.stale;
     final source = _diskBackedKeys.contains(normalized)
@@ -332,23 +583,42 @@ class ContentQuerySnapshotStore {
     required String key,
     required List<PostBaseDto> items,
     String? nextCursor,
+    String? previousCursor,
+    DateTime? paginationExpiresAt,
+    String? paginationSessionId,
     String? feedRequestId,
-    String? rankingVersion,
-    String? reasonVersion,
+    String? policyDigest,
+    ContentDiscoveryFeedOutcome outcome = ContentDiscoveryFeedOutcome.content,
+    ContentDiscoveryFeedEmptyReason? emptyReason,
   }) {
     final normalized = key.trim();
     if (normalized.isEmpty) {
       return;
+    }
+    if (_queryKeyParts(normalized)['surface'] == 'discoveryFeed') {
+      final validEnvelope = items.isEmpty
+          ? outcome == ContentDiscoveryFeedOutcome.empty && emptyReason != null
+          : outcome == ContentDiscoveryFeedOutcome.content &&
+                emptyReason == null;
+      if (!validEnvelope) {
+        throw const FormatException(
+          'feed snapshot requires a canonical outcome envelope',
+        );
+      }
     }
     _snapshots.remove(normalized);
     _snapshots[normalized] = ContentQuerySnapshot(
       key: normalized,
       items: List<PostBaseDto>.unmodifiable(items),
       nextCursor: nextCursor,
+      previousCursor: previousCursor,
+      paginationExpiresAt: paginationExpiresAt,
+      paginationSessionId: paginationSessionId,
       feedRequestId: feedRequestId,
-      rankingVersion: rankingVersion,
-      reasonVersion: reasonVersion,
-      fetchedAt: DateTime.now(),
+      policyDigest: policyDigest,
+      outcome: outcome,
+      emptyReason: emptyReason,
+      fetchedAt: _now(),
     );
     _diskBackedKeys.remove(normalized);
     while (_snapshots.length > maxEntries) {
@@ -391,31 +661,39 @@ class ContentQuerySnapshotStore {
   int get count => _snapshots.length;
 
   Future<void> flushPersistence() async {
-    final pending = _pendingPersist;
-    if (pending != null) {
-      await pending;
+    while (true) {
+      final drain = _persistenceDrain;
+      if (drain == null) {
+        return;
+      }
+      await drain;
     }
   }
 
   Future<void> _hydrateFromPreferences() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_storageKey);
+      final raw = await _persistenceBackend.read(_storageKey);
       if (raw == null || raw.isEmpty) {
+        return;
+      }
+      if (_utf8WireLength(
+            raw,
+            stopAfter: _persistencePolicy.maxPersistedBytes,
+          ) >
+          _persistencePolicy.maxPersistedBytes) {
+        await _persistenceBackend.remove(_storageKey);
         return;
       }
       final decoded = jsonDecode(raw);
       if (decoded is! Map<String, dynamic>) {
         return;
       }
-      if (decoded['version'] != _storageVersion) {
-        return;
-      }
       final rawSnapshots = decoded['snapshots'];
       if (rawSnapshots is! List) {
         return;
       }
-      var restoredCount = 0;
+      final decodedSnapshots = <ContentQuerySnapshot>[];
+      var expiredCount = 0;
       for (final rawSnapshot in rawSnapshots) {
         if (rawSnapshot is! Map) {
           continue;
@@ -426,6 +704,16 @@ class ContentQuerySnapshotStore {
         if (snapshot == null) {
           continue;
         }
+        if (_snapshotAge(snapshot) > maximumAge) {
+          expiredCount += 1;
+          continue;
+        }
+        decodedSnapshots.add(snapshot);
+      }
+      final persistableSnapshots = _persistencePolicy
+          .selectPersistableSnapshots(decodedSnapshots);
+      var restoredCount = 0;
+      for (final snapshot in persistableSnapshots) {
         _snapshots.remove(snapshot.key);
         _snapshots[snapshot.key] = snapshot;
         _diskBackedKeys.add(snapshot.key);
@@ -442,36 +730,61 @@ class ContentQuerySnapshotStore {
           'storageKey': _storageKey,
         });
       }
+      if (expiredCount > 0) {
+        _telemetrySink.record('query_snapshot.expire', <String, Object?>{
+          'count': expiredCount,
+          'source': 'restore',
+        });
+        _schedulePersist();
+      }
     } catch (_) {
       return;
     }
+  }
+
+  Duration _snapshotAge(ContentQuerySnapshot snapshot) {
+    final age = _now().difference(snapshot.fetchedAt);
+    return age.isNegative ? Duration.zero : age;
   }
 
   void _schedulePersist() {
     if (!_persistToPreferences) {
       return;
     }
-    _pendingPersist = _persistToPreferencesStore();
-    unawaited(_pendingPersist);
+    _persistenceDirty = true;
+    _persistenceDrain ??= _drainPersistence();
+    unawaited(_persistenceDrain);
+  }
+
+  Future<void> _drainPersistence() async {
+    try {
+      while (_persistenceDirty) {
+        _persistenceDirty = false;
+        await _persistToPreferencesStore();
+      }
+    } finally {
+      _persistenceDrain = null;
+    }
   }
 
   Future<void> _persistToPreferencesStore() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final snapshots = _persistencePolicy.selectPersistableSnapshots(
+      if (_snapshots.isEmpty) {
+        await _persistenceBackend.remove(_storageKey);
+        return;
+      }
+      final snapshotChains = _persistencePolicy.selectPersistableSnapshotChains(
         _snapshots.values,
       );
-      final payload = <String, dynamic>{
-        'version': _storageVersion,
-        'snapshots': snapshots
-            .map(
-              (snapshot) => snapshot.toMap(
-                maxItems: _persistencePolicy.maxItemsPerSnapshot,
-              ),
-            )
-            .toList(growable: false),
-      };
-      await prefs.setString(_storageKey, jsonEncode(payload));
+      final payload = _encodePersistableSnapshotPayload(
+        snapshotChains: snapshotChains,
+        maxPersistedBytes: _persistencePolicy.maxPersistedBytes,
+      );
+      if (payload == null) {
+        await _persistenceBackend.remove(_storageKey);
+        return;
+      }
+      await _persistenceBackend.write(_storageKey, payload);
     } catch (_) {
       return;
     }
@@ -545,12 +858,8 @@ String _resolvePostVersion(PostBaseDto post) {
   return version?.isNotEmpty == true ? version! : post.id;
 }
 
-Map<String, dynamic> _jsonSafeMap(Map<String, dynamic> map) {
-  return map.map((key, value) => MapEntry(key, _jsonSafeValue(value)));
-}
-
 Map<String, dynamic> _postSnapshotMap(PostBaseDto post) {
-  final map = _jsonSafeMap(post.toMap());
+  final map = Map<String, dynamic>.from(post.toMap());
   map['postId'] = post.id;
   map['contentType'] = post.type;
   map['contentIdentity'] = post.identity;
@@ -572,20 +881,4 @@ Map<String, dynamic> _normalizePostSnapshotMap(Map<dynamic, dynamic> raw) {
     map['contentIdentity'] = identity.toString();
   }
   return map;
-}
-
-Object? _jsonSafeValue(Object? value) {
-  if (value is DateTime) {
-    return value.toUtc().toIso8601String();
-  }
-  if (value is Map) {
-    return value.map(
-      (key, nestedValue) =>
-          MapEntry(key.toString(), _jsonSafeValue(nestedValue)),
-    );
-  }
-  if (value is Iterable) {
-    return value.map(_jsonSafeValue).toList(growable: false);
-  }
-  return value;
 }

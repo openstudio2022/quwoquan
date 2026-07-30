@@ -37,7 +37,8 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 		t.Fatalf("feed application must consume canonical contract fixtures: %v", err)
 	}
 
-	feedReq := httptest.NewRequest(http.MethodGet, "/content/feed?limit=100", nil)
+	feedReq := httptest.NewRequest(http.MethodGet, "/content/feed?limit=20", nil)
+	feedReq.Header.Set("X-Client-Session-Id", "fixture_contract_reader_session")
 	feedRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(feedRec, feedReq)
 	if feedRec.Code != http.StatusOK {

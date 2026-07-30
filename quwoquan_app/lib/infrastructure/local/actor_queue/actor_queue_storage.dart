@@ -224,7 +224,7 @@ final class ActorQueueStorage {
   }
 
   String _keyName(ActorQueuePartition partition, String queueName) =>
-      'qwq.actor_queue.v1.${partition.key}.'
+      'qwq.actor_queue.${partition.key}.'
       '${base64Url.encode(utf8.encode(queueName)).replaceAll('=', '')}';
 
   void _emit({

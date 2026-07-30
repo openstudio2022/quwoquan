@@ -1,4 +1,4 @@
-projection: CircleDetailViewerWire
+read_model: CircleDetailViewerWire
 description: GetCircle 等响应中 role / joinStatus / isFollowed / categoryId 等视角键
 fields:
 - name: role

@@ -2,9 +2,9 @@ package application
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"time"
+
+	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
 )
 
 type ExternalInteractionClient interface {
@@ -30,6 +30,5 @@ type ExternalInteractionAccepted struct {
 }
 
 func hashOTPPhone(phone string) string {
-	sum := sha256.Sum256([]byte(normalizePhoneCredentialKey(phone)))
-	return hex.EncodeToString(sum[:])
+	return challengeapp.SMSDestinationHash(normalizePhoneCredentialKey(phone))
 }

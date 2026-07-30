@@ -21,6 +21,8 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_conversation_query_remote.dart';
+import 'package:quwoquan_app/cloud/remote/assistant/assistant_skill_catalog_remote.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_runtime_enums.g.dart';
@@ -56,6 +58,9 @@ String _requireAssistantCommandRequestId(
   return normalized;
 }
 
+typedef AssistantConversationInvocationContextFactory =
+    CloudOperationInvocationContext Function(String clientPageId);
+
 /// 公开 Remote 类型维持为所有 assistant typed Facet 的唯一 production 装配点。
 ///
 /// 每个 Facet 的直接实现位于同 library 的职责 part 中；此类只组合这些实现与共享
@@ -75,9 +80,34 @@ class RemoteAssistantRepository extends _RemoteAssistantRepositoryBase
         AssistantPreferenceFactFacet,
         AssistantXiaoquSearchFacet,
         AssistantCreationSuggestFacet {
-  RemoteAssistantRepository({
+  factory RemoteAssistantRepository({
+    CloudHttpClient? httpClient,
+    AssistantConsentStore? store,
+    required GeneratedCloudOperationClient operationClient,
+    required AssistantConversationInvocationContextFactory
+    conversationInvocationContext,
+    required String consentActorScope,
+  }) {
+    return RemoteAssistantRepository._(
+      httpClient: httpClient,
+      store: store,
+      conversationQuery: RemoteAssistantConversationQueryAdapter(
+        client: operationClient,
+        invocationContext: conversationInvocationContext,
+      ),
+      skillCatalog: RemoteAssistantSkillCatalogAdapter(
+        client: operationClient,
+        invocationContext: conversationInvocationContext,
+      ),
+      consentActorScope: consentActorScope,
+    );
+  }
+
+  RemoteAssistantRepository._({
     super.httpClient,
     super.store,
+    required super.conversationQuery,
+    required super.skillCatalog,
     required super.consentActorScope,
   });
 }
@@ -89,12 +119,16 @@ abstract class _RemoteAssistantRepositoryBase {
   _RemoteAssistantRepositoryBase({
     CloudHttpClient? httpClient,
     AssistantConsentStore? store,
+    required this._conversationQuery,
+    required this._skillCatalog,
     required String consentActorScope,
   }) : _httpClient = httpClient ?? CloudHttpClient(),
        _store = store ?? AssistantConsentStore(actorScope: consentActorScope);
 
   final CloudHttpClient _httpClient;
   final AssistantConsentStore _store;
+  final RemoteAssistantConversationQueryAdapter _conversationQuery;
+  final RemoteAssistantSkillCatalogAdapter _skillCatalog;
 
   static final CloudOperationContract _assistantStreamOperation =
       appCloudOperationContracts[AppCloudOperationIds

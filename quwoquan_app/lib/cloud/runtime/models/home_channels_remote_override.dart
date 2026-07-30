@@ -10,33 +10,47 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 class HomeChannelsRemoteOverride {
   const HomeChannelsRemoteOverride._();
 
+  /// 与首页频道滚动锚点预算一致：默认 7 个频道，并保留 1 个运营扩展位。
+  static const int maximumChannelCount = 8;
+
   /// 从 `/config/app` 响应根（wireRoot）解析首页频道覆盖列表。
-  /// 仅接受 snake_case；按 order 升序排序。
+  /// 仅接受 snake_case；按 order 升序排序。超过 [maximumChannelCount]
+  /// 、重复 id 或任一条目/字段解析失败时整份覆盖无效，
+  /// 由调用方回退端默认；禁止部分接受。
   static List<HomeChannelConfig>? fromAppConfigRoot(Map<String, Object?> root) {
-    final content = (root['content'] as Map?)?.cast<String, Object?>();
-    final raw = content?['home_channels'] ?? root['home_channels'];
-    if (raw is! List || raw.isEmpty) return null;
+    final rawContent = root['content'];
+    if (rawContent != null && rawContent is! Map) return null;
+    final content = _asStringObjectMap(rawContent);
+    if (rawContent != null && content == null) return null;
+    final raw = content?['home_channels'];
+    if (raw is! List || raw.isEmpty || raw.length > maximumChannelCount) {
+      return null;
+    }
 
     final channels = <HomeChannelConfig>[];
+    final channelIds = <String>{};
     for (final entry in raw) {
-      if (entry is! Map) continue;
-      final m = entry.cast<String, Object?>();
-      final id = m['id']?.toString().trim() ?? '';
-      if (id.isEmpty) continue;
+      final m = _asStringObjectMap(entry);
+      if (m == null || !_hasCanonicalFieldTypes(m)) return null;
+      final id = (m['id'] as String).trim();
+      if (id.isEmpty) return null;
+      if (!channelIds.add(id)) return null;
+      final feedQuery = _parseFeedQuery(m['feed_query']);
+      if (feedQuery == null) return null;
       channels.add(
         HomeChannelConfig(
           id: id,
-          labelKey: (m['label_key'] ?? '').toString(),
-          template: (m['template'] ?? '').toString(),
-          layoutTemplate: (m['layout_template'] ?? '').toString(),
+          labelKey: (m['label_key'] as String?) ?? '',
+          template: (m['template'] as String?) ?? '',
+          layoutTemplate: (m['layout_template'] as String?) ?? '',
           phoneColumns: _asInt(m['phone_columns']),
           supportsFullSpanModules:
-              _asBool(m['supports_full_span_modules']) ?? false,
-          intersectionModulePolicy: (m['intersection_module_policy'] ?? '')
-              .toString(),
-          contentCardPolicy: (m['content_card_policy'] ?? '').toString(),
-          feedQuery: _parseFeedQuery(m['feed_query']),
-          moodCopyKey: (m['mood_copy_key'] ?? '').toString(),
+              (m['supports_full_span_modules'] as bool?) ?? false,
+          intersectionModulePolicy:
+              (m['intersection_module_policy'] as String?) ?? '',
+          contentCardPolicy: (m['content_card_policy'] as String?) ?? '',
+          feedQuery: feedQuery,
+          moodCopyKey: (m['mood_copy_key'] as String?) ?? '',
           order: _asInt(m['order']),
         ),
       );
@@ -46,30 +60,51 @@ class HomeChannelsRemoteOverride {
     return channels;
   }
 
-  static Map<String, String> _parseFeedQuery(Object? raw) {
+  static Map<String, Object?>? _asStringObjectMap(Object? raw) {
+    if (raw is! Map) return null;
+    final result = <String, Object?>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) return null;
+      result[entry.key as String] = entry.value;
+    }
+    return result;
+  }
+
+  static bool _hasCanonicalFieldTypes(Map<String, Object?> value) {
+    if (value['id'] is! String) return false;
+    for (final key in <String>[
+      'label_key',
+      'template',
+      'layout_template',
+      'intersection_module_policy',
+      'content_card_policy',
+      'mood_copy_key',
+    ]) {
+      final field = value[key];
+      if (field != null && field is! String) return false;
+    }
+    for (final key in <String>['phone_columns', 'order']) {
+      final field = value[key];
+      if (field != null && field is! int) return false;
+    }
+    final fullSpan = value['supports_full_span_modules'];
+    return fullSpan == null || fullSpan is bool;
+  }
+
+  static Map<String, String>? _parseFeedQuery(Object? raw) {
+    if (raw == null) return <String, String>{};
+    final map = _asStringObjectMap(raw);
+    if (map == null) return null;
     final result = <String, String>{};
-    if (raw is Map) {
-      raw.forEach((key, value) {
-        if (value != null) result[key.toString()] = value.toString();
-      });
+    for (final entry in map.entries) {
+      if (entry.value is! String) return null;
+      result[entry.key] = entry.value! as String;
     }
     return result;
   }
 
   static int _asInt(Object? value) {
     if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
     return 0;
-  }
-
-  static bool? _asBool(Object? value) {
-    if (value is bool) return value;
-    if (value is String) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized == 'true') return true;
-      if (normalized == 'false') return false;
-    }
-    return null;
   }
 }

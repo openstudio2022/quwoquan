@@ -563,7 +563,7 @@ func (s *ReliableGroupAvatarTaskScheduler) handleNotification(ctx context.Contex
 	}
 	if s.storage.Conversations != nil {
 		conv, err := s.storage.Conversations.FindConversationByID(ctx, notification.AggregateID)
-		if err == nil && conv != nil && strings.TrimSpace(conv.Status) != "active" {
+		if err == nil && conv != nil && strings.TrimSpace(string(conv.Status)) != "active" {
 			return s.store.CompleteNotification(ctx, notification.NotificationID, notification.LeaseToken)
 		}
 	}

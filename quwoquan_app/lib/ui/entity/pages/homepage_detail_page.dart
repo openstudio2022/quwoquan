@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/content/models/create_entry_arguments.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_action_observability.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
@@ -27,7 +28,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         CloudOperationCancellationSignal,
         FollowSubjectCommand,
-        SubjectFollowSubjectType,
+        FollowSubjectKind,
         UnfollowSubjectCommand;
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
@@ -335,7 +336,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           .read(homepageDetailEntityWishlistStateReaderProvider)
           .getEntityWishlistState(
             objectId: widget.homepageId,
-            objectKind: SubjectFollowSubjectType.homepage.wire,
+            objectKind: FollowSubjectKind.homepage.wireValue,
           );
       return state.wishlisted;
     } catch (error, stackTrace) {
@@ -474,7 +475,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (wishlisted) {
       tracker.trackWishlistAdd(
         widget.homepageId,
-        objectKind: SubjectFollowSubjectType.homepage.wire,
+        objectKind: FollowSubjectKind.homepage.wireValue,
         displayName: detail.title,
         sourceSurface: AppUiSurfaces.homepageDetail.id,
         feedRequestId: widget.feedRequestId,
@@ -483,7 +484,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     } else {
       tracker.trackWishlistRemove(
         widget.homepageId,
-        objectKind: SubjectFollowSubjectType.homepage.wire,
+        objectKind: FollowSubjectKind.homepage.wireValue,
         sourceSurface: AppUiSurfaces.homepageDetail.id,
         feedRequestId: widget.feedRequestId,
         referralSource: widget.referralSource,
@@ -518,13 +519,13 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       final result = following
           ? await writer.unfollow(
               UnfollowSubjectCommand(
-                subjectType: SubjectFollowSubjectType.homepage,
+                subjectType: FollowSubjectKind.homepage,
                 subjectId: widget.homepageId,
               ),
             )
           : await writer.follow(
               FollowSubjectCommand(
-                subjectType: SubjectFollowSubjectType.homepage,
+                subjectType: FollowSubjectKind.homepage,
                 subjectId: widget.homepageId,
                 source: widget.referralSource.value,
               ),
@@ -577,12 +578,12 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   }
 
   Future<void> _openOwnerMessage() async {
-    final ownerSubAccountId =
-        (_detail?.ownerSubAccountId?.trim().isNotEmpty == true
-                ? _detail!.ownerSubAccountId
+    final ownerPersonaId =
+        (_detail?.ownerPersonaId?.trim().isNotEmpty == true
+                ? _detail!.ownerPersonaId
                 : _detail?.ownerUserId)
             ?.trim();
-    if (ownerSubAccountId == null || ownerSubAccountId.isEmpty) {
+    if (ownerPersonaId == null || ownerPersonaId.isEmpty) {
       return;
     }
     if (!ref.read(authSessionControllerProvider).isAuthenticated) {
@@ -591,7 +592,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           .set(
             OpenHomepageOwnerConversationContinuation(
               homepageId: widget.homepageId,
-              ownerSubAccountId: ownerSubAccountId,
+              ownerPersonaId: ownerPersonaId,
             ),
           );
       await requireLogin(
@@ -609,7 +610,7 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
           .read(chatConversationRepositoryProvider)
           .createConversation(
             type: 'direct',
-            initialMemberIds: <String>[ownerSubAccountId],
+            initialMemberIds: <String>[ownerPersonaId],
           );
       if (!mounted || created.conversationId.isEmpty) {
         return;
@@ -709,7 +710,10 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   }
 
   void _openCreateContent(HomepageCanonicalReference reference) {
-    context.push(AppRoutePaths.create(), extra: reference);
+    context.push(
+      AppRoutePaths.create(),
+      extra: CreateEntryArguments(homepage: reference),
+    );
   }
 
   void _openIntroduction() {

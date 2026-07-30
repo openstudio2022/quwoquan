@@ -1,7 +1,7 @@
 # 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
 services:
   notification-service:
-    image: "${QWQ_COMPOSE_NOTIFICATION_SERVICE_IMAGE:-localhost/quwoquan_service_notification-service:latest}"
+    image: "${QWQ_COMPOSE_NOTIFICATION_SERVICE_IMAGE:?fixed notification-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/notification-service/build/Dockerfile
@@ -14,7 +14,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_NOTIFICATION_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_NOTIFICATION_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       NOTIFICATION_SERVICE_ADDR: ":18087"
       NOTIFICATION_MONGO_URI: "mongodb://mongodb:27017/?replicaSet=rs0"
       NOTIFICATION_MONGO_DATABASE: quwoquan_notification

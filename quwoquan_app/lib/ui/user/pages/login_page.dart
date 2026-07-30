@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_errors.g.dart';
@@ -18,8 +16,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/di/login_dependencies.dart';
-import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/one_tap_login_native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_providers.dart';
@@ -27,14 +25,10 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
         accountSessionLifecycleCommandWriterProvider,
         accountSessionLoginCommandWriterProvider,
+        appCredentialBindingCommandWriterProvider,
         authenticationChallengeCommandWriterProvider;
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
-import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/core/widgets/app_request_feedback.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
-import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:simple_icons/simple_icons.dart';
@@ -69,82 +63,126 @@ class LoginFrameHost extends ConsumerStatefulWidget {
   ConsumerState<LoginFrameHost> createState() => _LoginFrameHostState();
 }
 
-class _LoginFrameHostState extends ConsumerState<LoginFrameHost> {
+class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
+    with WidgetsBindingObserver {
   static const Duration _probeTimeout = Duration(milliseconds: 1200);
-  static const String _loginJourney = 'two_state_login',
-      _loginPageName = 'LoginPage';
-  bool _agreementAccepted = false;
-  bool _showAgreementError = false;
-  LoginEntryPresentation _presentation =
-      const LoginEntryPresentation.resolving();
+  static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _providerTimeout = Duration(seconds: 60);
+  static const Duration _stateDwellThreshold = Duration(seconds: 90);
+  static const String _loginPageName = 'LoginPage';
+  late final LoginFlowController _flowController;
   OneTapLoginProbe? _probe;
   int _attemptSerial = 0;
   int? _activeAttempt;
   int _entryResolutionGeneration = 0;
+  String _quickLoginRefreshToken = '';
+  String _rememberedPhone = '';
+  LoginStep _rootStep = LoginStep.phoneEntry;
+  LoginEntryMode _rootEntryMode = LoginEntryMode.phone;
+  String _rootMaskedPhone = '';
+  LoginPendingIntent? _pendingConsentIntent;
+  bool _consentSheetVisible = false;
+  bool _openingAccountRestrictionSupport = false;
+  String _lastAutoVerifiedCode = '';
   Map<String, NativeAuthCapability> _socialMethodAvailability =
       const <String, NativeAuthCapability>{};
-  String _socialMethodFeedback = '';
   late final JourneyEventTracker _journeyTracker;
   late final TextEditingController _phoneController, _otpController;
-  Timer? _otpCountdownTimer;
+  Timer? _otpCountdownTicker;
+  Timer? _stateDwellWatchdog;
+  final Stopwatch _stateDwellStopwatch = Stopwatch()..start();
+
+  LoginFlowState get _flow => _flowController.state;
+
+  bool get _isAccountSuspensionEntry =>
+      authPromptReasonForName(widget.reason) ==
+      AuthPromptReason.accountSuspended;
+
+  bool get _isAccountSuspensionSurface =>
+      _isAccountSuspensionEntry ||
+      _flow.feedback?.sourceCode == UserErrorCode.accountSuspended.code;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _journeyTracker = ref.read(loginJourneyEventTrackerProvider);
+    _flowController = LoginFlowController(
+      flowId:
+          'login-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${identityHashCode(this).toRadixString(36)}',
+    )..addListener(_handleFlowChanged);
     _phoneController = TextEditingController();
     _otpController = TextEditingController();
+    _armStateDwellWatchdog();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _trackLoginEvent('login_page_exposed');
+      if (!mounted) return;
+      _trackLoginFunnel('login_flow_exposed', result: 'exposed');
+      unawaited(_resolveEntryState());
     });
-    unawaited(_resolveEntryState());
+  }
+
+  void _handleFlowChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshCountdownFromDeadline(trackResume: true);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _activeAttempt = null;
     _entryResolutionGeneration += 1;
-    _otpCountdownTimer?.cancel();
+    _otpCountdownTicker?.cancel();
+    _stateDwellWatchdog?.cancel();
     _phoneController.dispose();
     _otpController.dispose();
+    _flowController
+      ..removeListener(_handleFlowChanged)
+      ..dispose();
     super.dispose();
-  }
-
-  void _updateState(VoidCallback update) {
-    if (!mounted) {
-      return;
-    }
-    setState(update);
   }
 
   @override
   Widget build(BuildContext context) {
-    final content = LoginFrame(
-      reason: widget.reason,
-      presentation: _presentation,
-      agreementAccepted: _agreementAccepted,
-      showAgreementError: _showAgreementError,
-      socialMethodAvailability: _socialMethodAvailability,
-      socialMethodFeedback: _socialMethodFeedback,
-      dismissPolicy: widget.dismissPolicy,
-      isInline: widget.surfaceMode == LoginSurfaceMode.inline,
-      phoneController: _phoneController,
-      otpController: _otpController,
-      onAgreementToggle: () => setState(() {
-        _agreementAccepted = !_agreementAccepted;
-        if (_agreementAccepted) {
-          _showAgreementError = false;
-        }
-      }),
-      onDismiss: _dismissAsGuest,
-      onPrimary: _handlePrimaryLogin,
-      onAgreementTap: () => context.push(AppRoutePaths.legalUserAgreement),
-      onPrivacyTap: () => context.push(AppRoutePaths.legalPrivacyPolicy),
-      onOtherMethod: _handleOtherMethod,
-      onPhoneChanged: _handlePhoneChanged,
-      onPhoneEditingComplete: _handlePhoneEditingComplete,
-      onOtpChanged: _handleOtpChanged,
-      onResendOtp: _resendPhoneOtp,
-      onChangePhone: _resetPhoneOtpToIdle,
+    final content = PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBackOrDismiss();
+      },
+      child: LoginFrame(
+        state: _flow,
+        phoneEntryHasParent:
+            _flow.step == LoginStep.phoneEntry && _rootStep == LoginStep.oneTap,
+        socialMethodAvailability: _socialMethodAvailability,
+        dismissPolicy: widget.dismissPolicy,
+        isInline: widget.surfaceMode == LoginSurfaceMode.inline,
+        phoneController: _phoneController,
+        otpController: _otpController,
+        onAgreementToggle: _toggleAgreement,
+        onNavigate: _handleBackOrDismiss,
+        onOneTap: () => unawaited(_runWithConsent(LoginPendingIntent.oneTap)),
+        onOtherPhone: () => _enterPhoneEntry(preserveRoot: true),
+        onPhonePrimary: () => unawaited(_requestOtp()),
+        onAgreementTap: () => context.push(AppRoutePaths.legalUserAgreement),
+        onPrivacyTap: () => context.push(AppRoutePaths.legalPrivacyPolicy),
+        onSocialMethod: _handleSocialMethod,
+        onPhoneChanged: _handlePhoneChanged,
+        onPhoneEditingComplete: _handlePhoneEditingComplete,
+        onOtpChanged: _handleOtpChanged,
+        onResendOtp: () => unawaited(_requestOtp(resend: true)),
+        onRetryOtpVerify: () => unawaited(_verifyOtp()),
+        onChangePhone: _changePhone,
+        onRetrySocial: () => unawaited(_retrySocialAuthorization()),
+        onCancelSocial: _cancelSocialAuthorization,
+        onAccountRestrictionSupport: () =>
+            unawaited(_openAccountRestrictionSupport()),
+        accountRestrictionSupportBusy: _openingAccountRestrictionSupport,
+      ),
     );
     if (widget.surfaceMode == LoginSurfaceMode.inline) {
       return content;

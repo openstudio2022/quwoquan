@@ -2,6 +2,7 @@
   "label": "传统节日",
   "labelEn": "Traditional Festivals",
   "description": "中国传统节日与民俗纪念日",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

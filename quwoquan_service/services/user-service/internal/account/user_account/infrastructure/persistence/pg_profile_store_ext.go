@@ -11,10 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	generated "quwoquan_service/services/user-service/generated/account/user_account/persistence/user/persistence"
 	userevent "quwoquan_service/services/user-service/internal/account/user_account/domain/user/event"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	repository "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
@@ -22,21 +20,16 @@ import (
 
 // PgProfileStore extends the object-local generated base with domain queries.
 type PgProfileStore struct {
-	*generated.PGUserAccountStoreBase
 	pool *pgxpool.Pool
 }
 
 var _ repository.UserProfileStore = (*PgProfileStore)(nil)
-var _ repository.UserProfileCommandStore = (*PgProfileStore)(nil)
 
 func NewPgProfileStore(pool *pgxpool.Pool) *PgProfileStore {
-	return &PgProfileStore{
-		PGUserAccountStoreBase: generated.NewPGUserAccountStoreBase(pool),
-		pool:                   pool,
-	}
+	return &PgProfileStore{pool: pool}
 }
 
-const userProfileNullableSafeCols = `user_id, COALESCE(account_state, 'active'), COALESCE(identity_origin, ''), logical_shard, COALESCE(anonymous_retention_policy, ''), COALESCE(phone, ''), COALESCE(nickname, ''), COALESCE(nickname_customized, false), COALESCE(avatar_url, ''), COALESCE(avatar_asset_id, ''), avatar_version, COALESCE(background_url, ''), COALESCE(background_asset_id, ''), COALESCE(bio, ''), COALESCE(identity_tags, ''), COALESCE(gender, ''), birth_date::text, COALESCE(region, ''), COALESCE(region_code, ''), COALESCE(status, 'active'), profile_version, follower_count, following_count, post_count, circle_count, like_count, COALESCE(owner_display_name, ''), sub_account_count, created_at, updated_at`
+const userProfileNullableSafeCols = `user_id, COALESCE(account_state, 'active'), COALESCE(identity_origin, ''), logical_shard, COALESCE(anonymous_retention_policy, ''), COALESCE(phone, ''), COALESCE(nickname, ''), COALESCE(nickname_customized, false), COALESCE(avatar_url, ''), COALESCE(avatar_asset_id, ''), avatar_version, COALESCE(background_url, ''), COALESCE(background_asset_id, ''), COALESCE(bio, ''), COALESCE(identity_tags, ''), COALESCE(gender, ''), birth_date::text, COALESCE(region, ''), COALESCE(region_code, ''), profile_version, follower_count, following_count, post_count, circle_count, like_count, COALESCE(owner_display_name, ''), persona_count, created_at, updated_at`
 
 type userProfileScanner interface {
 	Scan(dest ...any) error
@@ -64,7 +57,6 @@ func scanNullableSafeUserProfile(scanner userProfileScanner) (*model.UserProfile
 		&e.BirthDate,
 		&e.Region,
 		&e.RegionCode,
-		&e.Status,
 		&e.ProfileVersion,
 		&e.FollowerCount,
 		&e.FollowingCount,
@@ -72,7 +64,7 @@ func scanNullableSafeUserProfile(scanner userProfileScanner) (*model.UserProfile
 		&e.CircleCount,
 		&e.LikeCount,
 		&e.OwnerDisplayName,
-		&e.SubAccountCount,
+		&e.PersonaCount,
 		&e.CreatedAt,
 		&e.UpdatedAt,
 	)
@@ -93,335 +85,91 @@ func (s *PgProfileStore) FindByID(ctx context.Context, id string) (*model.UserPr
 	)
 }
 
-// Create overrides the generated Create to apply business defaults.
-func (s *PgProfileStore) Create(ctx context.Context, p *model.UserProfile) error {
-	if p == nil || strings.TrimSpace(p.UserID) == "" {
-		return errors.New("invalid UserProfile creation state")
+// CreateAccount creates only authoritative UserAccount state. Public profile
+// columns start as an empty projection and are populated exclusively by the
+// durable PersonaProfileProjector after Persona creation.
+func (s *PgProfileStore) CreateAccount(
+	ctx context.Context,
+	command repository.UserAccountCreate,
+) error {
+	if strings.TrimSpace(command.UserID) == "" {
+		return errors.New("invalid UserAccount creation state")
 	}
-	if p.AuthEpoch == 0 {
-		p.AuthEpoch = 1
-	}
-	if p.Status == "" {
-		p.Status = "active"
-	}
-	if p.ProfileVersion == 0 {
-		p.ProfileVersion = 1
-	}
-	if p.AvatarURL != "" && p.AvatarAssetID == "" {
-		p.AvatarAssetID = "ua_" + p.UserID
-	}
-	if p.AvatarURL != "" && p.AvatarVersion == 0 {
-		p.AvatarVersion = 1
+	if command.PersonaCount <= 0 {
+		command.PersonaCount = 1
 	}
 	now := time.Now().UTC()
-	p.CreatedAt = now
-	p.UpdatedAt = now
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("begin UserProfile creation transaction: %w", err)
+		return fmt.Errorf("begin UserAccount creation transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if err := insertUserProfileRow(ctx, tx, p); err != nil {
-		return err
-	}
-	if err := appendUserProfileSearchProjections(
-		ctx,
-		tx,
-		[]repository.UserProfileSearchProjection{{
-			UserID:         p.UserID,
-			ProfileVersion: int64(p.ProfileVersion),
-			EventType:      userevent.UserRegistered,
-			OccurredAt:     p.CreatedAt,
-		}},
-	); err != nil {
+	if err := insertUserAccountRow(ctx, tx, command, now); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit UserProfile creation: %w", err)
+		return fmt.Errorf("commit UserAccount creation: %w", err)
 	}
 	return nil
 }
 
-func insertUserProfileRow(
+func insertUserAccountRow(
 	ctx context.Context,
-	execer profileExecer,
-	p *model.UserProfile,
+	tx pgx.Tx,
+	command repository.UserAccountCreate,
+	now time.Time,
 ) error {
-	_, err := execer.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		INSERT INTO user_profiles (
-			user_id, account_state, auth_epoch, suspension_case_ref, suspended_at,
-			identity_origin, logical_shard, anonymous_retention_policy, phone,
-			nickname, nickname_customized, avatar_url, avatar_asset_id,
-			avatar_version, background_url, background_asset_id, bio, identity_tags,
-			gender, birth_date, region, region_code, status, profile_version,
-			follower_count, following_count, post_count, circle_count, like_count,
-			owner_display_name, sub_account_count, created_at, updated_at
+			user_id, account_state, auth_epoch, identity_origin, logical_shard,
+			anonymous_retention_policy, phone, nickname, nickname_customized,
+			avatar_version, profile_version, persona_count, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-			$16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-			$29, $30, $31, $32, $33
+			$1, $2, 1, $3, $4, $5, NULLIF($6, ''), '', false, 0, 0, $7, $8, $8
 		)`,
-		p.UserID, p.AccountState, p.AuthEpoch, p.SuspensionCaseRef, p.SuspendedAt,
-		p.IdentityOrigin, p.LogicalShard, p.AnonymousRetentionPolicy, p.Phone,
-		p.Nickname, p.NicknameCustomized, p.AvatarURL, p.AvatarAssetID,
-		p.AvatarVersion, p.BackgroundURL, p.BackgroundAssetID, p.Bio, p.IdentityTags,
-		p.Gender, p.BirthDate, p.Region, p.RegionCode, p.Status, p.ProfileVersion,
-		p.FollowerCount, p.FollowingCount, p.PostCount, p.CircleCount, p.LikeCount,
-		p.OwnerDisplayName, p.SubAccountCount, p.CreatedAt, p.UpdatedAt,
+		strings.TrimSpace(command.UserID),
+		strings.TrimSpace(command.AccountState),
+		strings.TrimSpace(command.IdentityOrigin),
+		command.LogicalShard,
+		strings.TrimSpace(command.AnonymousRetentionPolicy),
+		strings.TrimSpace(command.Phone),
+		command.PersonaCount,
+		now,
 	)
 	if err != nil {
-		return fmt.Errorf("insert UserProfile: %w", err)
+		return fmt.Errorf("insert UserAccount: %w", err)
 	}
 	return nil
 }
 
-// Update performs a selective update on editable profile fields and bumps version.
-func (s *PgProfileStore) Update(ctx context.Context, p *model.UserProfile) error {
-	p.UpdatedAt = time.Now().UTC()
-	return updateProfileRow(ctx, s.pool, p)
-}
-
-type profileExecer interface {
-	Exec(
-		ctx context.Context,
-		sql string,
-		arguments ...any,
-	) (pgconn.CommandTag, error)
-}
-
-func updateProfileRow(
+func (s *PgProfileStore) PromoteRegistration(
 	ctx context.Context,
-	execer profileExecer,
-	p *model.UserProfile,
+	command repository.RegistrationPromotion,
 ) error {
-	return updateProfileRowWithExpectedVersion(ctx, execer, p, nil)
-}
-
-func updateProfileRowVersioned(
-	ctx context.Context,
-	execer profileExecer,
-	p *model.UserProfile,
-	expectedVersion int64,
-) error {
-	return updateProfileRowWithExpectedVersion(
-		ctx,
-		execer,
-		p,
-		&expectedVersion,
-	)
-}
-
-func updateProfileRowWithExpectedVersion(
-	ctx context.Context,
-	execer profileExecer,
-	p *model.UserProfile,
-	expectedVersion *int64,
-) error {
-	if p.UpdatedAt.IsZero() {
-		p.UpdatedAt = time.Now().UTC()
+	userID := strings.TrimSpace(command.UserID)
+	if userID == "" {
+		return errors.New("registration promotion requires UserAccount identity")
 	}
-	query := `
+	phone := strings.TrimSpace(command.Phone)
+	tag, err := s.pool.Exec(ctx, `
 		UPDATE user_profiles
-			SET nickname=$2, nickname_customized=$3, avatar_url=$4, avatar_asset_id=$5, avatar_version=$6,
-			    background_url=$7, background_asset_id=$8, bio=$9, gender=$10, birth_date=$11,
-			    region=$12, region_code=$13, profile_version=$14, updated_at=$15,
-			    identity_tags=$16
-			WHERE user_id=$1`
-	arguments := []any{
-		p.UserID, p.Nickname, p.NicknameCustomized, p.AvatarURL, p.AvatarAssetID, p.AvatarVersion,
-		p.BackgroundURL, p.BackgroundAssetID, p.Bio, p.Gender, p.BirthDate, p.Region, p.RegionCode,
-		p.ProfileVersion, p.UpdatedAt, p.IdentityTags,
-	}
-	if expectedVersion != nil {
-		query += ` AND profile_version=$17`
-		arguments = append(arguments, *expectedVersion)
-	}
-	tag, err := execer.Exec(ctx, query, arguments...)
+			SET account_state=CASE WHEN account_state='anonymous' THEN 'active' ELSE account_state END,
+			    anonymous_retention_policy=CASE WHEN account_state='anonymous' THEN 'preserve' ELSE anonymous_retention_policy END,
+			    phone=CASE WHEN NULLIF(BTRIM(COALESCE(phone, '')), '') IS NULL AND $2 <> '' THEN $2 ELSE phone END,
+			    updated_at=NOW()
+			WHERE user_id=$1`,
+		userID,
+		phone,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("promote UserAccount registration: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		if expectedVersion != nil {
-			return repository.ErrUserProfileVersionConflict
-		}
-		return fmt.Errorf("profile not found: %s", p.UserID)
+		return fmt.Errorf("UserAccount not found: %s", userID)
 	}
 	return nil
-}
-
-type profileCommandQueryer interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
-
-func (s *PgProfileStore) ReplayUserProfileCommand(
-	ctx context.Context,
-	meta repository.UserProfileCommandMeta,
-) (repository.UserProfileCommandResult, bool, error) {
-	if err := validateUserProfileCommandMeta(meta); err != nil {
-		return repository.UserProfileCommandResult{}, false, err
-	}
-	return replayUserProfileCommand(ctx, s.pool, meta)
-}
-
-func (s *PgProfileStore) CommitUserProfileCommand(
-	ctx context.Context,
-	profile *model.UserProfile,
-	projection *repository.UserProfileTagProjection,
-	searchProjections []repository.UserProfileSearchProjection,
-	meta repository.UserProfileCommandMeta,
-) (repository.UserProfileCommandResult, error) {
-	if profile == nil || strings.TrimSpace(profile.UserID) == "" ||
-		profile.ProfileVersion <= 0 {
-		return repository.UserProfileCommandResult{},
-			errors.New("invalid user profile command state")
-	}
-	if err := validateUserProfileCommandMeta(meta); err != nil {
-		return repository.UserProfileCommandResult{}, err
-	}
-	if projection != nil && (strings.TrimSpace(projection.EventID) == "" ||
-		strings.TrimSpace(projection.UserID) == "" ||
-		strings.TrimSpace(projection.TaxonomyReleaseID) == "" ||
-		projection.ProfileVersion <= 0 ||
-		projection.OccurredAt.IsZero()) {
-		return repository.UserProfileCommandResult{},
-			errors.New("invalid user profile tag projection")
-	}
-	if len(searchProjections) == 0 {
-		return repository.UserProfileCommandResult{},
-			errors.New("user profile search projection is required")
-	}
-	for _, searchProjection := range searchProjections {
-		if strings.TrimSpace(searchProjection.UserID) != profile.UserID ||
-			searchProjection.ProfileVersion != int64(profile.ProfileVersion) ||
-			searchProjection.OccurredAt.IsZero() ||
-			!isUserProfileSearchProjectionEvent(searchProjection.EventType) {
-			return repository.UserProfileCommandResult{},
-				errors.New("invalid user profile search projection")
-		}
-	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return repository.UserProfileCommandResult{},
-			fmt.Errorf("begin user profile command transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(
-		ctx,
-		`SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
-		meta.IdempotencyKey,
-	); err != nil {
-		return repository.UserProfileCommandResult{},
-			fmt.Errorf("lock user profile command key: %w", err)
-	}
-	if result, replayed, err := replayUserProfileCommand(
-		ctx,
-		tx,
-		meta,
-	); err != nil || replayed {
-		if err != nil {
-			return repository.UserProfileCommandResult{}, err
-		}
-		if err := tx.Commit(ctx); err != nil {
-			return repository.UserProfileCommandResult{}, err
-		}
-		return result, nil
-	}
-	if err := updateProfileRowVersioned(
-		ctx,
-		tx,
-		profile,
-		int64(profile.ProfileVersion-1),
-	); err != nil {
-		return repository.UserProfileCommandResult{}, err
-	}
-	if err := appendUserProfileSearchProjections(
-		ctx,
-		tx,
-		searchProjections,
-	); err != nil {
-		return repository.UserProfileCommandResult{}, err
-	}
-	if projection != nil {
-		if err := appendUserProfileTagProjection(ctx, tx, *projection); err != nil {
-			return repository.UserProfileCommandResult{}, err
-		}
-	}
-	result := repository.UserProfileCommandResult{
-		ProfileVersion: int64(profile.ProfileVersion),
-	}
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return repository.UserProfileCommandResult{}, err
-	}
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO personas_command_receipts(
-			receipt_id, aggregate_id, idempotency_key, command_digest,
-			aggregate_version, result_json
-		) VALUES ($1,$2,$3,$4,$5,$6)`,
-		userProfileCommandReceiptID(meta.IdempotencyKey),
-		profile.UserID,
-		meta.IdempotencyKey,
-		meta.CommandDigest,
-		result.ProfileVersion,
-		resultJSON,
-	); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return repository.UserProfileCommandResult{},
-				repository.ErrUserProfileIdempotencyConflict
-		}
-		return repository.UserProfileCommandResult{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return repository.UserProfileCommandResult{},
-			fmt.Errorf("commit user profile command: %w", err)
-	}
-	return result, nil
-}
-
-func validateUserProfileCommandMeta(
-	meta repository.UserProfileCommandMeta,
-) error {
-	if strings.TrimSpace(meta.IdempotencyKey) == "" ||
-		strings.TrimSpace(meta.CommandDigest) == "" {
-		return repository.ErrUserProfileCommandMetaRequired
-	}
-	return nil
-}
-
-func replayUserProfileCommand(
-	ctx context.Context,
-	queryer profileCommandQueryer,
-	meta repository.UserProfileCommandMeta,
-) (repository.UserProfileCommandResult, bool, error) {
-	var (
-		storedDigest string
-		resultJSON   []byte
-	)
-	err := queryer.QueryRow(ctx, `
-		SELECT command_digest, result_json
-		FROM personas_command_receipts
-		WHERE idempotency_key=$1`,
-		meta.IdempotencyKey,
-	).Scan(&storedDigest, &resultJSON)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return repository.UserProfileCommandResult{}, false, nil
-	}
-	if err != nil {
-		return repository.UserProfileCommandResult{}, false, err
-	}
-	if storedDigest != meta.CommandDigest {
-		return repository.UserProfileCommandResult{}, false,
-			repository.ErrUserProfileIdempotencyConflict
-	}
-	var result repository.UserProfileCommandResult
-	if err := json.Unmarshal(resultJSON, &result); err != nil {
-		return repository.UserProfileCommandResult{}, false, err
-	}
-	result.Replayed = true
-	return result, true, nil
 }
 
 func appendUserProfileTagProjection(
@@ -523,13 +271,6 @@ func isUserProfileSearchProjectionEvent(eventType string) bool {
 	}
 }
 
-func userProfileCommandReceiptID(idempotencyKey string) string {
-	digest := sha256.Sum256(
-		[]byte("user-profile-command-receipt\x00" + idempotencyKey),
-	)
-	return hex.EncodeToString(digest[:])
-}
-
 func (s *PgProfileStore) FindByNickname(ctx context.Context, nickname string) (*model.UserProfile, error) {
 	row := s.pool.QueryRow(ctx,
 		`SELECT `+userProfileNullableSafeCols+` FROM user_profiles WHERE nickname = $1`, nickname)
@@ -617,22 +358,4 @@ func (s *PgProfileStore) ListProfilesForIndex(ctx context.Context, afterUserID s
 		return nil, err
 	}
 	return results, nil
-}
-
-func (s *PgProfileStore) IncrementCounter(ctx context.Context, userID, field string, delta int64) error {
-	allowed := map[string]bool{
-		"follower_count":  true,
-		"following_count": true,
-		"post_count":      true,
-		"circle_count":    true,
-		"like_count":      true,
-	}
-	if !allowed[field] {
-		return fmt.Errorf("invalid counter field: %s", field)
-	}
-	query := fmt.Sprintf(
-		`UPDATE user_profiles SET %s = GREATEST(%s + $1, 0), updated_at = NOW() WHERE user_id = $2`,
-		field, field)
-	_, err := s.pool.Exec(ctx, query, delta, userID)
-	return err
 }

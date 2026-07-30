@@ -1,8 +1,6 @@
 schema: quwoquan.works_classification
-# 作品 vs 随记判定的版本化配置（唯一真相源）。
-# version 写入每条 WorksClassificationVerdict.thresholdsVersion，可审计、可回滚。
-# 改判定行为：改本文件 version + 阈值，再跑判定与门禁；禁止在代码里散落魔数阈值。
-version: 1
+# 作品 vs 随记判定的唯一真相源。裁决写入由完整配置内容计算出的
+# policyDigest，用于精确审计与回滚；禁止人工维护版本号或在代码里散落魔数阈值。
 
 # ── 来源专业度分层权重（与 content_source_registry.yaml: sourceTierSignals 同源）──
 # 综合作品度得分中"来源先验"部分的权重贡献。

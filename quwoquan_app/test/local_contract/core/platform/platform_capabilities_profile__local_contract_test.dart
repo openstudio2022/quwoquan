@@ -30,6 +30,9 @@ bool shouldShowSystemCredentialLogin(PlatformCapabilities caps) =>
 
 bool shouldShowPhoneContactsEntry(PlatformCapabilities caps) => caps.contacts;
 
+bool canUseAdaptiveVideoPlayback(PlatformCapabilities caps) =>
+    caps.adaptiveVideoPlayback;
+
 PlatformCapabilities _resolve(PlatformCapabilities profile) {
   final container = ProviderContainer(
     overrides: [platformCapabilitiesProvider.overrideWithValue(profile)],
@@ -69,15 +72,14 @@ void main() {
           caps.contacts,
           reason: 'phone contacts entry must mirror contacts capability',
         );
+        expect(canUseAdaptiveVideoPlayback(caps), caps.adaptiveVideoPlayback);
       });
     }
 
     // Difference boundaries: assert only the cross-platform divergence.
     test('只有已有原生实现的 iOS 显示视频编辑，Android/Web/OHOS 降级', () {
       expect(
-        shouldShowVideoEditingEntry(
-          platformCapabilitiesFor(AppPlatform.ios),
-        ),
+        shouldShowVideoEditingEntry(platformCapabilitiesFor(AppPlatform.ios)),
         isTrue,
       );
       expect(
@@ -115,6 +117,13 @@ void main() {
       expect(canUseSystemShareSheet(CapabilityProfile.web), isTrue);
       expect(canUseTargetedWechatShare(CapabilityProfile.ohos), isFalse);
       expect(canUseSystemShareSheet(CapabilityProfile.ohos), isFalse);
+    });
+
+    test('HLS/CMAF ABR 只在已验证的 Android/iOS capability profile 启用', () {
+      expect(canUseAdaptiveVideoPlayback(CapabilityProfile.mobile), isTrue);
+      expect(canUseAdaptiveVideoPlayback(CapabilityProfile.web), isFalse);
+      expect(canUseAdaptiveVideoPlayback(CapabilityProfile.ohos), isFalse);
+      expect(canUseAdaptiveVideoPlayback(CapabilityProfile.desktop), isFalse);
     });
 
     test('Android 平台启用微信定向分享桥，iOS 仍降级系统分享', () {

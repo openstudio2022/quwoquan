@@ -2,16 +2,17 @@ part of 'app_router.dart';
 
 GoRoute _userProfileRoute(Ref ref) => GoRoute(
   path: AppRoutePaths.userProfilePathTemplate.replaceAll(
-    '{username}',
-    ':username',
+    '{userHandle}',
+    ':userHandle',
   ),
   pageBuilder: (context, state) {
-    final username = state.pathParameters['username'] ?? '';
+    final userHandle = state.pathParameters['userHandle'] ?? '';
     final currentUser = ref.read(userDataProvider);
     final isSelf =
         currentUser != null &&
-        (username == currentUser.id ||
-            (currentUser.username != null && username == currentUser.username));
+        (userHandle == currentUser.id ||
+            (currentUser.userHandle != null &&
+                userHandle == currentUser.userHandle));
     void onBack() {
       if (context.canPop()) {
         context.pop();
@@ -32,21 +33,23 @@ GoRoute _userProfileRoute(Ref ref) => GoRoute(
     } else if (state.extra is Map) {
       final m = state.extra! as Map;
       extra = UserProfileRouteExtra(
-        subAccountId: m['subAccountId']?.toString(),
+        personaId: m['personaId']?.toString(),
         avatar: m['avatar']?.toString(),
         displayName: m['displayName']?.toString(),
         backgroundImage: m['backgroundImage']?.toString(),
+        openMessageComposer: m['openMessageComposer'] == true,
       );
     }
     return appRoutePage<void>(
       state: state,
       child: OtherProfilePage(
-        username: username,
-        subAccountId: extra?.safeSubAccountId,
+        userHandle: userHandle,
+        personaId: extra?.safePersonaId,
         initialAvatarUrl: extra?.safeAvatar,
         initialDisplayName: extra?.safeDisplayName,
         initialBackgroundImageUrl: extra?.safeBackgroundImage,
         referralSource: ReferralSource.authorProfile,
+        openMessageComposerOnOpen: extra?.openMessageComposer ?? false,
         onBack: onBack,
       ),
     );

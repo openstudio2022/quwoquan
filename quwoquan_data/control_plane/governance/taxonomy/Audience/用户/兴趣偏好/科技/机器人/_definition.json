@@ -2,6 +2,10 @@
   "label": "机器人",
   "labelEn": "Robotics",
   "description": "关注机器人、自动化与智能硬件",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/科技/机器人"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

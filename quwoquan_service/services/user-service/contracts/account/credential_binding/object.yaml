@@ -30,8 +30,13 @@ business_rules:
 - revoked 绑定不可恢复，重新绑定创建新 identity
 - bind/revoke 与安全审计 outbox 在同一 PostgreSQL transaction 提交
 - 同账号重复绑定同一凭证为幂等 no-op，由全局唯一约束承载，不接收调用方幂等键
+- 社交首登未知 identity 只签发 hash-only、短 TTL、一次消费的 phone binding ticket，不得提前创建账号或 session
+- CompleteFederatedPhoneBinding 必须在一个 PostgreSQL transaction 内锁定 ticket 与其 bind_phone challenge，并原子创建账号、绑定 phone/social credential、登记设备与 consent、签发 session；ticket 不得跨 device、platform、appVersion 或 consent version 使用
+- 社交首登手机号已属于另一账号时返回 credential_conflict；禁止自动恢复旧账号、合并账号或签发 session，失败 transaction 不消费 ticket/challenge，允许用户更换手机号继续
 lifecycle:
-  states:
+  state_model: derived_boolean
+  state_source: isActive
+  derived_states:
   - active
   - revoked
   optimistic_concurrency: version

@@ -26,20 +26,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: 3000
-- key: sys.assistant-service.config.max_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 9.9.9
-- key: sys.assistant-service.config.min_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0.0.1
 - key: sys.assistant-service.content_service.base_url
   type: string
   scope: workload
@@ -68,6 +54,34 @@ configs:
   rollout: progressive
   sensitive: false
   default: 3000
+- key: sys.assistant-service.model.native_tool_calling
+  type: bool
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: false
+- key: sys.assistant-service.model.tier.balanced
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: mimo-v2-flash
+- key: sys.assistant-service.model.tier.fast
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: mimo-v2-flash
+- key: sys.assistant-service.model.tier.reasoning
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: mimo-v2-flash
 - key: sys.assistant-service.mongodb.database
   type: string
   scope: workload

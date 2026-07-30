@@ -131,7 +131,7 @@ class VideoCreatorAssignment:
     author_id: str
     creator_profile_id: str
     creator_archetype: str
-    creator_profile_version: str
+    creator_profile_digest: str
     disclosure_type: str
     disclosure_visible: bool
     disclosure_text: str
@@ -154,7 +154,7 @@ class VideoCreatorAssignment:
             author_id=_string(creator.get("authorId")),
             creator_profile_id=_string(creator.get("creatorProfileId")),
             creator_archetype=_string(creator.get("creatorArchetype")),
-            creator_profile_version=_string(creator.get("creatorProfileVersion")),
+            creator_profile_digest=_string(creator.get("creatorProfileDigest")),
             disclosure_type=_string(disclosure_map.get("type")),
             disclosure_visible=disclosure_map.get("visible") is True,
             disclosure_text=_string(disclosure_map.get("displayText")),
@@ -169,7 +169,7 @@ class VideoCreatorAssignment:
             "authorId": self.author_id,
             "creatorProfileId": self.creator_profile_id,
             "creatorArchetype": self.creator_archetype,
-            "creatorProfileVersion": self.creator_profile_version,
+            "creatorProfileDigest": self.creator_profile_digest,
             "creatorDisclosure": {
                 "type": self.disclosure_type,
                 "visible": self.disclosure_visible,

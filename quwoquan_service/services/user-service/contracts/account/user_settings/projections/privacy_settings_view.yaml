@@ -1,7 +1,7 @@
 read_model: PrivacySettingsView
 description: Account owner 的隐私设置 typed slice。
 source_entities:
-- UserSetting
+- UserSettings
 consumers:
 - app
 fields:
@@ -20,7 +20,7 @@ fields:
 - name: assistantEnabled
   type: bool
 - name: blockedKeywords
-  type: string[]
+  type: '[]string'
 - name: version
   type: int
 - name: updatedAt

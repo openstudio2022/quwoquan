@@ -1,0 +1,112 @@
+domain: CIRCLE
+aggregate: CircleFile
+description: 'CircleFile 对象专属错误码。格式：MODULE.KIND.REASON。'
+errors:
+- code: CIRCLE.USER.storage_quota_exceeded
+  kind: USER
+  reason: quota_exceeded
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateCircleFile
+  http_status: 413
+  recovery_action: surface
+  dart_const: storageQuotaExceeded
+  go_const: ErrStorageQuotaExceeded
+  user_message:
+    zh: 存储空间已满，无法上传
+    en: Storage quota exceeded
+- code: CIRCLE.USER.file_not_found
+  kind: USER
+  reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - DeleteCircleFile
+    - GetCircleFile
+    - UpdateCircleFile
+  http_status: 404
+  recovery_action: surface
+  dart_const: fileNotFound
+  go_const: ErrFileNotFound
+  user_message:
+    zh: 文件不存在
+    en: File not found
+- code: CIRCLE.USER.file_parent_invalid
+  kind: USER
+  reason: validation_failed
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateCircleFile
+    - UpdateCircleFile
+  http_status: 422
+  recovery_action: surface
+  dart_const: fileParentInvalid
+  go_const: ErrFileParentInvalid
+  user_message:
+    zh: 目标文件夹无效
+    en: Target folder is invalid
+- code: CIRCLE.USER.file_asset_invalid
+  kind: USER
+  reason: validation_failed
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateCircleFile
+  http_status: 422
+  recovery_action: resubmit
+  dart_const: fileAssetInvalid
+  go_const: ErrFileAssetInvalid
+  user_message:
+    zh: 媒体文件尚未就绪或不属于当前身份
+    en: Media asset is not ready or not owned by the active persona
+- code: CIRCLE.USER.file_version_conflict
+  kind: USER
+  reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - DeleteCircleFile
+    - UpdateCircleFile
+  http_status: 409
+  recovery_action: reload
+  dart_const: fileVersionConflict
+  go_const: ErrFileVersionConflict
+  user_message:
+    zh: 文件已被更新，请刷新后重试
+    en: File changed, reload and retry
+- code: CIRCLE.USER.file_idempotency_conflict
+  kind: USER
+  reason: conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateCircleFile
+    - DeleteCircleFile
+    - UpdateCircleFile
+  http_status: 409
+  recovery_action: resubmit
+  dart_const: fileIdempotencyConflict
+  go_const: ErrFileIdempotencyConflict
+  user_message:
+    zh: 重复请求内容不一致
+    en: Idempotency key was reused with a different command
+- code: CIRCLE.SYSTEM.file_storage_write_failed
+  kind: SYSTEM
+  reason: storage_write_failed
+  emitted_by:
+  - surface: http
+    operations:
+    - CreateCircleFile
+    - DeleteCircleFile
+    - GetCircleFile
+    - ListCircleFiles
+    - UpdateCircleFile
+  http_status: 503
+  recovery_action: retry
+  dart_const: fileStorageWriteFailed
+  go_const: ErrFileStorageWriteFailed
+  user_message:
+    zh: 文件服务暂不可用，请稍后重试
+    en: File service is temporarily unavailable

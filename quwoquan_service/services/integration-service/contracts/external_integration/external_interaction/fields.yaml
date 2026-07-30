@@ -124,6 +124,19 @@ fields:
   ops_exposure: read
   role: authoritative_state
 types:
+  ExternalInteractionResultReportedEvent:
+    description: provider attempt 与结果 outbox 同事务提交后，由 durable relay 发布的唯一外部交互结果事件。
+    fields:
+    - {name: eventId, source: eventId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: attemptId, source: attemptId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: requestId, source: requestId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: operation, source: operation, type: enum, enum_ref: ExternalInteractionOperation, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: status, source: status, type: enum, enum_ref: ExternalInteractionStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: provider, source: provider, type: enum, enum_ref: ExternalInteractionProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: providerRequestDigest, source: providerRequestDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
+    - {name: normalizedError, source: normalizedError, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
+    - {name: recoveryAction, source: recoveryAction, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
   ExternalInteractionAccepted:
     description: 可靠接收外部交互请求后的 202 Accepted 响应。
     fields:
@@ -188,6 +201,46 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
+  ExternalInteractionRecoveryReceipt:
+    description: 死信恢复命令的持久化幂等凭据；同一 Idempotency-Key 只能绑定一个 taskId。
+    fields:
+    - name: idempotencyKey
+      source: idempotencyKey
+      type: string
+      constraints:
+      - PK
+      - NOT_NULL
+      classification: PRIVATE
+      log_policy: hash
+      api_exposure: none
+      ops_exposure: read
+    - name: taskId
+      source: taskId
+      type: string
+      constraints:
+      - NOT_NULL
+      classification: PUBLIC
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: recoveredAt
+      source: recoveredAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
+    - name: expiresAt
+      source: expiresAt
+      type: timestamp
+      constraints:
+      - NOT_NULL
+      classification: INTERNAL
+      log_policy: allow
+      api_exposure: none
+      ops_exposure: read
   ExternalInteractionRequest:
     description: 指定外部交互请求的归一化当前状态。
     fields:
@@ -222,148 +275,6 @@ types:
       ops_exposure: read
     - name: updatedAt
       source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-  ExternalInteractionAttempt:
-    description: 外部 Provider 投递尝试的 append-only 审计行。
-    fields:
-    - name: attemptId
-      source: attemptId
-      type: string
-      constraints:
-      - PK
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: requestId
-      source: requestId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: taskId
-      source: taskId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: operation
-      source: operation
-      type: enum
-      enum_ref: ExternalInteractionOperation
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: provider
-      source: provider
-      type: enum
-      enum_ref: ExternalInteractionProvider
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: providerRequestId
-      source: providerRequestId
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: read
-    - name: providerRequestDigest
-      source: providerRequestDigest
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-      description: providerRequestId 的不可逆 SHA-256 摘要；跨服务 result event 只能传递此字段。
-    - name: maskedRecipient
-      source: maskedRecipient
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PII
-      log_policy: mask
-      api_exposure: read
-      ops_exposure: read
-    - name: latencyMs
-      source: latencyMs
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: status
-      source: status
-      type: enum
-      enum_ref: ExternalInteractionStatus
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: normalizedError
-      source: normalizedError
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-    - name: retryable
-      source: retryable
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: recoveryAction
-      source: recoveryAction
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: attributes
-      source: attributes
-      type: object
-      constraints:
-      - NULLABLE
-      classification: SENSITIVE
-      log_policy: redacted
-      api_exposure: read
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
       type: timestamp
       constraints:
       - NOT_NULL
@@ -515,65 +426,6 @@ types:
       log_policy: allow
       api_exposure: none
       ops_exposure: read
-  ExternalInteractionDeadLetter:
-    description: 不可恢复失败的 Provider 投递尝试投影。
-    fields:
-    - name: requestId
-      source: requestId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: operation
-      source: operation
-      type: enum
-      enum_ref: ExternalInteractionOperation
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: provider
-      source: provider
-      type: enum
-      enum_ref: ExternalInteractionProvider
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: finalError
-      source: finalError
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
-    - name: retryable
-      source: retryable
-      type: bool
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
   ExternalInteractionMetricsSnapshot:
     description: 可靠任务队列深度、重试与死信的权威指标快照。
     fields:
@@ -613,33 +465,3 @@ types:
       log_policy: allow
       api_exposure: read
       ops_exposure: read
-enums:
-  ExternalInteractionOperation:
-    values:
-    - sms_otp.send
-    - push_delivery.send
-    - one_tap_phone.resolve
-    - webhook.deliver
-  ExternalInteractionStatus:
-    values:
-    - accepted
-    - pending_dispatch
-    - processing
-    - sent_unconfirmed
-    - delivered
-    - failed
-    - dead_letter
-  ExternalInteractionSensitivity:
-    values:
-    - public
-    - private
-    - secret
-  ExternalInteractionProvider:
-    values:
-    - mock_sms
-    - aliyun_sms
-    - tencent_sms
-    - apns_voip
-    - fcm
-    - alpha_fake
-    - webhook

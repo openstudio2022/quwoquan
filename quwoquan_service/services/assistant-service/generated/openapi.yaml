@@ -2,7 +2,7 @@
 openapi: 3.0.3
 info:
     title: quwoquan assistant API
-    version: v1
+    version: canonical
 paths:
     /assistant/consents:
         get:
@@ -43,6 +43,17 @@ paths:
                 method: listConversations
                 reader: AssistantConversationReader
                 slice: AssistantConversationListView
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -191,6 +202,16 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -229,7 +250,7 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/AppendAssistantLearningFactRequest'
+                            $ref: '#/components/schemas/AssistantLearningFactAppendCommand'
             responses:
                 "200":
                     description: OK
@@ -323,6 +344,12 @@ paths:
                 method: getEntryPersonalization
                 reader: AssistantEntryPersonalizationReader
                 slice: AssistantEntryPersonalizationView
+            parameters:
+                - name: pageType
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -350,6 +377,22 @@ paths:
                 method: listPreferences
                 reader: AssistantPreferenceFactReader
                 slice: AssistantPreferenceFactListView
+            parameters:
+                - name: scope
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: conversationId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -376,7 +419,7 @@ paths:
                 method: setPreference
                 aggregateOwner: AssistantPreferenceFact
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -561,6 +604,11 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: resumeToken
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -621,6 +669,17 @@ paths:
                 method: listSubscriptions
                 reader: SkillSubscriptionListReader
                 slice: SkillSubscriptionListView
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -654,11 +713,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CreateSkillSubscriptionRequest'
+                            $ref: '#/components/schemas/CreateAssistantSkillSubscriptionCommand'
             responses:
                 "200":
                     description: OK
@@ -731,11 +790,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateSkillSubscriptionStatusRequest'
+                            $ref: '#/components/schemas/UpdateAssistantSkillSubscriptionStatusCommand'
             responses:
                 "200":
                     description: OK
@@ -754,15 +813,21 @@ paths:
     /assistant/skills:
         get:
             operationId: ListSkills
-            x-contract-operation-id: assistant.assistant_run.ListSkills
-            x-object-id: assistant.assistant_run
-            x-actor: none
+            x-contract-operation-id: assistant.skill_catalog.ListSkills
+            x-object-id: assistant.skill_catalog
+            x-actor: account
             x-application:
                 kind: query
-                facet: AssistantSkillCatalogQueryFacade
+                facet: SkillCatalogQueryFacade
                 method: listSkills
-                reader: AssistantSkillCatalogReader
+                reader: SkillCatalogReader
                 slice: AssistantSkillCatalogListView
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -776,6 +841,8 @@ paths:
                         application/json:
                             schema:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /assistant/skills/{skillId}/consent:
         post:
             operationId: GrantSkillConsent
@@ -894,6 +961,17 @@ paths:
                 method: getSuggestedActions
                 reader: AssistantSuggestedActionReader
                 slice: SuggestedActionListView
+            parameters:
+                - name: pageType
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: objectId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -921,6 +999,17 @@ paths:
                 method: listTasks
                 reader: AssistantTaskReader
                 slice: AssistantUserTaskListView
+            parameters:
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK
@@ -1121,11 +1210,11 @@ paths:
                   schema:
                     type: string
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/TickSkillSubscriptionCronRequest'
+                            $ref: '#/components/schemas/SkillSubscriptionCronTickRequest'
             responses:
                 "200":
                     description: OK
@@ -1146,11 +1235,6 @@ components:
         bearerAuth:
             $ref: ../_shared/openapi_common.yaml#/components/securitySchemes/bearerAuth
     schemas:
-        AppendAssistantLearningFactRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: AppendAssistantLearningFactRequest
-            x-contract-placeholder: true
         AppendAssistantServiceLearningFactRequest:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1185,6 +1269,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: AssistantEntryPersonalizationView
+            x-contract-placeholder: true
+        AssistantLearningFactAppendCommand:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: AssistantLearningFactAppendCommand
             x-contract-placeholder: true
         AssistantLearningFactReceipt:
             type: object
@@ -1266,10 +1355,10 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: CancelAssistantRunRequest
             x-contract-placeholder: true
-        CreateSkillSubscriptionRequest:
+        CreateAssistantSkillSubscriptionCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: CreateSkillSubscriptionRequest
+            x-contract-entity: CreateAssistantSkillSubscriptionCommand
             x-contract-placeholder: true
         GrantSkillConsentRequest:
             type: object
@@ -1306,6 +1395,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SkillSubscription
             x-contract-placeholder: true
+        SkillSubscriptionCronTickRequest:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: SkillSubscriptionCronTickRequest
+            x-contract-placeholder: true
         SkillSubscriptionCronTickResult:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -1321,13 +1415,8 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: SuggestedActionListView
             x-contract-placeholder: true
-        TickSkillSubscriptionCronRequest:
+        UpdateAssistantSkillSubscriptionStatusCommand:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: TickSkillSubscriptionCronRequest
-            x-contract-placeholder: true
-        UpdateSkillSubscriptionStatusRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: UpdateSkillSubscriptionStatusRequest
+            x-contract-entity: UpdateAssistantSkillSubscriptionStatusCommand
             x-contract-placeholder: true

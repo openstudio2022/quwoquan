@@ -19,14 +19,13 @@ import (
 const receiptTTL = 24 * time.Hour
 
 const (
-	EventCandidateIntaken     = "HomepageCandidateIntaken"
-	EventPublished            = "HomepagePublished"
-	EventBasicsUpdated        = "HomepageClaimedBasicsUpdated"
-	EventClaimProjection      = "HomepageClaimProjectionApplied"
-	EventClaimPending         = "HomepageClaimPendingApplied"
-	EventOffline              = "HomepageTakenOffline"
-	EventReviewSummaryApplied = "HomepageReviewSummaryApplied"
-	EventImported             = "HomepageImportedProjectionApplied"
+	EventCandidateIntaken = "HomepageCandidateIntaken"
+	EventPublished        = "HomepagePublished"
+	EventBasicsUpdated    = "HomepageClaimedBasicsUpdated"
+	EventClaimProjection  = "HomepageClaimProjectionApplied"
+	EventClaimPending     = "HomepageClaimPendingApplied"
+	EventOffline          = "HomepageTakenOffline"
+	EventImported         = "HomepageImportedProjectionApplied"
 )
 
 type CommandMeta struct {
@@ -48,6 +47,7 @@ type CommitObserver interface {
 type CommandFacade struct {
 	store    homepageports.AggregateStore
 	reader   homepageports.Reader
+	details  homepageports.DetailProjectionStore
 	observer CommitObserver
 	now      func() time.Time
 }
@@ -56,7 +56,11 @@ func NewCommandFacade(store homepageports.AggregateStore, reader homepageports.R
 	if store == nil || reader == nil {
 		return nil, errors.New("homepage command facade requires aggregate store and reader")
 	}
-	return &CommandFacade{store: store, reader: reader, now: time.Now}, nil
+	details, ok := store.(homepageports.DetailProjectionStore)
+	if !ok {
+		return nil, errors.New("homepage command facade requires detail projection store")
+	}
+	return &CommandFacade{store: store, reader: reader, details: details, now: time.Now}, nil
 }
 
 func (f *CommandFacade) WithObserver(observer CommitObserver) *CommandFacade {
@@ -171,7 +175,7 @@ func (f *CommandFacade) UpdateClaimedBasics(
 	input BasicInput,
 ) (View, error) {
 	return f.mutateWithCommand(ctx, meta, homepageID, "UpdateClaimedHomepageBasics", input, func(aggregate *homepagemodel.Homepage) (string, error) {
-		ownerPersonaID := strings.TrimSpace(aggregate.Snapshot().OwnerSubAccountID)
+		ownerPersonaID := strings.TrimSpace(aggregate.Snapshot().OwnerPersonaID)
 		if ownerPersonaID == "" || strings.TrimSpace(meta.ActorID) != ownerPersonaID {
 			return "", generated.AppErrorFromPermissionDenied(
 				"claimed homepage basics can only be updated by its owner persona",
@@ -198,16 +202,16 @@ func (f *CommandFacade) ApplyClaimApproved(
 	meta CommandMeta,
 	homepageID string,
 	ownerUserID string,
-	ownerSubAccountID string,
+	ownerPersonaID string,
 	approved bool,
 ) (View, error) {
 	command := struct {
-		OwnerUserID       string
-		OwnerSubAccountID string
-		Approved          bool
-	}{ownerUserID, ownerSubAccountID, approved}
+		OwnerUserID    string
+		OwnerPersonaID string
+		Approved       bool
+	}{ownerUserID, ownerPersonaID, approved}
 	return f.mutateWithCommand(ctx, meta, homepageID, "ApplyHomepageClaimApproved", command, func(aggregate *homepagemodel.Homepage) (string, error) {
-		err := aggregate.ApplyClaimApproved(ownerUserID, ownerSubAccountID, approved, f.now().UTC())
+		err := aggregate.ApplyClaimApproved(ownerUserID, ownerPersonaID, approved, f.now().UTC())
 		return EventClaimProjection, err
 	})
 }
@@ -252,15 +256,30 @@ func (f *CommandFacade) ApplyReviewSummary(
 	ratingCount int,
 	highlightTags []string,
 ) (View, error) {
-	command := struct {
-		AverageRating *float64
-		RatingCount   int
-		HighlightTags []string
-	}{averageRating, ratingCount, highlightTags}
-	return f.mutateWithCommand(ctx, meta, homepageID, "ApplyHomepageReviewSummary", command, func(aggregate *homepagemodel.Homepage) (string, error) {
-		err := aggregate.ApplyReviewSummary(averageRating, ratingCount, highlightTags, f.now().UTC())
-		return EventReviewSummaryApplied, err
-	})
+	if err := validateMeta(meta); err != nil {
+		return View{}, err
+	}
+	if ratingCount < 0 {
+		return View{}, generated.AppErrorFromInvalidArgument("homepage review rating count is negative")
+	}
+	aggregate, found, err := f.loadResolved(ctx, homepageID)
+	if err != nil {
+		return View{}, unavailable(err)
+	}
+	if !found {
+		return View{}, generated.AppErrorFromHomepageNotFound("homepage not found")
+	}
+	if err := f.details.UpsertReviewSummary(
+		ctx,
+		aggregate.ID(),
+		averageRating,
+		ratingCount,
+		highlightTags,
+		f.now().UTC(),
+	); err != nil {
+		return View{}, unavailable(err)
+	}
+	return f.detailView(ctx, aggregate.Snapshot())
 }
 
 func (f *CommandFacade) mutate(
@@ -358,7 +377,8 @@ func (f *CommandFacade) replay(
 	if result.Aggregate == nil {
 		return View{}, false, unavailable(errors.New("homepage receipt has no aggregate"))
 	}
-	return ViewFromSnapshot(result.Aggregate.Snapshot()), true, nil
+	view, viewErr := f.detailView(ctx, result.Aggregate.Snapshot())
+	return view, true, viewErr
 }
 
 func (f *CommandFacade) recordNoop(
@@ -382,7 +402,7 @@ func (f *CommandFacade) recordNoop(
 	if result.Aggregate == nil {
 		return View{}, unavailable(errors.New("homepage no-op receipt has no aggregate"))
 	}
-	return ViewFromSnapshot(result.Aggregate.Snapshot()), nil
+	return f.detailView(ctx, result.Aggregate.Snapshot())
 }
 
 func (f *CommandFacade) commit(
@@ -428,7 +448,22 @@ func (f *CommandFacade) commit(
 	if f.observer != nil && !result.Replayed {
 		f.observer.OnHomepageCommitted(ctx, CommittedEvent{Type: eventType, Snapshot: committed})
 	}
-	return ViewFromSnapshot(committed), nil
+	return f.detailView(ctx, committed)
+}
+
+func (f *CommandFacade) detailView(
+	ctx context.Context,
+	snapshot homepagemodel.Snapshot,
+) (View, error) {
+	view := ViewFromSnapshot(snapshot)
+	projection, found, err := f.details.LoadDetailProjection(ctx, snapshot.ID)
+	if err != nil {
+		return View{}, unavailable(err)
+	}
+	if found {
+		view = ApplyDetailProjection(view, projection)
+	}
+	return view, nil
 }
 
 func validateMeta(meta CommandMeta) error {

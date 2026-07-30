@@ -17,7 +17,7 @@ class UserProfileCacheService {
     }
   }
 
-  static const String _prefsKey = 'qwq.user_profile_cache.v1';
+  static const String _prefsKey = 'qwq.user_profile_cache';
 
   final int _maxMemory;
   final bool _persistToPreferences;

@@ -13,6 +13,12 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import validate_manifest
+
 
 def _api_get(repository: str, path: str, token: str) -> Any:
     request = urllib.request.Request(
@@ -34,18 +40,18 @@ def verify_release_governance(
     *,
     repository: str,
     git_sha: str,
-    manifest_digest: str,
+    artifact_digest: str,
     token: str,
     minimum_approvals: int = 1,
 ) -> dict[str, Any]:
     if (
         not repository
         or not git_sha
-        or not manifest_digest.startswith("sha256:")
+        or not artifact_digest.startswith("sha256:")
         or not token
     ):
         raise RuntimeError(
-            "repository, git SHA, manifest digest and GitHub token are required"
+            "repository, git SHA, artifact digest and GitHub token are required"
         )
     pulls = _api_get(
         repository,
@@ -99,7 +105,7 @@ def verify_release_governance(
         "schema": "prod-release-governance-receipt",
         "repository": repository,
         "gitSha": git_sha,
-        "manifestDigest": manifest_digest,
+        "artifactDigest": artifact_digest,
         "pullRequest": number,
         "author": author,
         "mergedBy": merger,
@@ -112,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", required=True)
     parser.add_argument("--git-sha", default="")
-    parser.add_argument("--manifest-digest", default="")
+    parser.add_argument("--artifact-digest", default="")
     parser.add_argument("--release-manifest", type=Path)
     parser.add_argument("--token-env", default="GITHUB_TOKEN")
     parser.add_argument("--minimum-approvals", type=int, default=1)
@@ -125,26 +131,34 @@ def main() -> int:
     token = os.environ.get(args.token_env, "").strip()
     try:
         git_sha = args.git_sha
-        manifest_digest = args.manifest_digest
+        artifact_digest = args.artifact_digest
         if args.release_manifest is not None:
             manifest = json.loads(
                 args.release_manifest.read_text(encoding="utf-8")
             )
+            if not isinstance(manifest, dict):
+                raise RuntimeError("release evidence manifest must be an object")
+            try:
+                validate_manifest(manifest, allowed_statuses={"deployable"})
+            except ValueError as error:
+                raise RuntimeError(
+                    f"release evidence manifest is invalid: {error}"
+                ) from error
             source = manifest.get("source") or {}
             derived_sha = str(source.get("gitSha") or "")
-            derived_digest = str(manifest.get("manifestDigest") or "")
+            derived_digest = str(manifest.get("artifactDigest") or "")
             if git_sha and git_sha != derived_sha:
                 raise RuntimeError("release governance git SHA disagrees with manifest")
-            if manifest_digest and manifest_digest != derived_digest:
+            if artifact_digest and artifact_digest != derived_digest:
                 raise RuntimeError(
                     "release governance digest disagrees with manifest"
                 )
             git_sha = derived_sha
-            manifest_digest = derived_digest
+            artifact_digest = derived_digest
         receipt = verify_release_governance(
             repository=args.repository,
             git_sha=git_sha,
-            manifest_digest=manifest_digest,
+            artifact_digest=artifact_digest,
             token=token,
             minimum_approvals=args.minimum_approvals,
         )

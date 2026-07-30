@@ -41,6 +41,8 @@ from content.post.article.draft_io import (  # noqa: E402
     write_prompt,
     write_writing_pack,
 )
+from content.templates.registry import TemplateRegistry  # noqa: E402
+from governance.creators.assignment import creator_profile_digest  # noqa: E402
 from core.io import read_json, write_json  # noqa: E402
 from core.control_types import (  # noqa: E402
     QueueBackend,
@@ -79,6 +81,9 @@ def test_fleet_request_rejects_carrier_different_from_execution_identity() -> No
 EXECUTION_ID = (
     "20260720--travel-article-reliabletask-evidence--"
     "test-region-b--pilot-901"
+)
+HIGHLAND_CREATOR_PROFILE_DIGEST = creator_profile_digest(
+    TemplateRegistry.load().creators["qwq_creator_highland_travel_blogger_001"]
 )
 
 
@@ -188,7 +193,7 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
             "authorId": "builtin_highland_travel_blogger",
             "creatorProfileId": "qwq_creator_highland_travel_blogger_001",
             "creatorArchetype": "travel_blogger",
-            "creatorProfileVersion": "1.0.0",
+            "creatorProfileDigest": HIGHLAND_CREATOR_PROFILE_DIGEST,
             "creatorDisclosure": {
                 "type": "platform_virtual_creator",
                 "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",

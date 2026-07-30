@@ -35,7 +35,7 @@ final class AlphaContentMediaFacet implements ContentMediaFacet {
       sessionId: id,
       assetId: null,
       status: ContentMediaUploadStatus.pending,
-      uploadUrl: Uri.parse('https://alpha-upload.invalid/$id'),
+      uploadUrl: Uri.parse('https://upload.alpha.example.invalid/$id'),
       expiresAt: expiresAt,
       replayed: false,
     );

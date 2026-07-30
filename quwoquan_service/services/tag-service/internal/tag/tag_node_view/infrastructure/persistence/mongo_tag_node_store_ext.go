@@ -11,8 +11,17 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	generated "quwoquan_service/services/tag-service/generated/tag/tag_node_view/persistence/tag/persistence"
+	"quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/lifecycle"
 	model "quwoquan_service/services/tag-service/internal/tag/tag_node_view/domain/model"
 )
+
+// usableLifecycleFilter selects every lifecycle status except deprecated as an
+// explicit value list. An $in of exact values keeps the compound
+// (releaseId, lifecycleStatus, ...) indexes usable for the sorted snapshot
+// scans; a $ne would turn the trailing index keys into non-contiguous bounds.
+func usableLifecycleFilter() bson.M {
+	return bson.M{"$in": lifecycle.UsableStatuses()}
+}
 
 // MongoTagNodeStore 是 TagNode 的只读 Mongo 存储（embed codegen base）。
 type MongoTagNodeStore struct {
@@ -86,12 +95,12 @@ func (s *MongoTagNodeStore) FindByReleaseAndTagRef(ctx context.Context, releaseI
 	return &node, nil
 }
 
-// ListChildrenInRelease reads active direct children within one snapshot.
+// ListChildrenInRelease reads usable direct children within one snapshot.
 func (s *MongoTagNodeStore) ListChildrenInRelease(ctx context.Context, releaseID, parentTagRef string, limit int64) ([]model.TagNode, error) {
 	filter := bson.M{
 		"releaseId":       releaseID,
 		"parentTagRef":    parentTagRef,
-		"lifecycleStatus": "active",
+		"lifecycleStatus": usableLifecycleFilter(),
 	}
 	findOptions := options.Find().SetSort(bson.D{{Key: "tagRef", Value: 1}})
 	if limit > 0 {
@@ -109,20 +118,21 @@ func (s *MongoTagNodeStore) ListChildrenInRelease(ctx context.Context, releaseID
 	return out, nil
 }
 
-// CountActiveChildrenInRelease returns the active direct child count for one snapshot.
-func (s *MongoTagNodeStore) CountActiveChildrenInRelease(ctx context.Context, releaseID, parentTagRef string) (int64, error) {
+// CountUsableChildrenInRelease returns the non-deprecated direct child count
+// for one snapshot.
+func (s *MongoTagNodeStore) CountUsableChildrenInRelease(ctx context.Context, releaseID, parentTagRef string) (int64, error) {
 	return s.coll.CountDocuments(ctx, bson.M{
 		"releaseId":       releaseID,
 		"parentTagRef":    parentTagRef,
-		"lifecycleStatus": "active",
+		"lifecycleStatus": usableLifecycleFilter(),
 	}, options.Count().SetLimit(1))
 }
 
-// ListAllInRelease reads active nodes from one snapshot for suggestion and search.
+// ListAllInRelease reads usable nodes from one snapshot for suggestion and search.
 func (s *MongoTagNodeStore) ListAllInRelease(ctx context.Context, releaseID string) ([]model.TagNode, error) {
 	cur, err := s.coll.Find(
 		ctx,
-		bson.M{"releaseId": releaseID, "lifecycleStatus": "active"},
+		bson.M{"releaseId": releaseID, "lifecycleStatus": usableLifecycleFilter()},
 		options.Find().SetSort(bson.D{
 			{Key: "group", Value: 1},
 			{Key: "depth", Value: 1},
@@ -150,7 +160,7 @@ func (s *MongoTagNodeStore) ListDimensionsInRelease(
 		ctx,
 		bson.M{
 			"releaseId":       releaseID,
-			"lifecycleStatus": "active",
+			"lifecycleStatus": usableLifecycleFilter(),
 			"nodeKind":        "dimension",
 		},
 		options.Find().SetSort(bson.D{
@@ -169,14 +179,14 @@ func (s *MongoTagNodeStore) ListDimensionsInRelease(
 	return out, nil
 }
 
-// IsActiveLeaf verifies a node and its direct children in one Mongo aggregate
+// IsUsableLeaf verifies a node and its direct children in one Mongo aggregate
 // request so ValidateTagRefs needs at most one storage query per distinct tagRef.
-func (s *MongoTagNodeStore) IsActiveLeaf(ctx context.Context, releaseID, tagRef string) (bool, error) {
+func (s *MongoTagNodeStore) IsUsableLeaf(ctx context.Context, releaseID, tagRef string) (bool, error) {
 	pipeline := mongo.Pipeline{
 		bson.D{{Key: "$match", Value: bson.D{
 			{Key: "releaseId", Value: releaseID},
 			{Key: "tagRef", Value: tagRef},
-			{Key: "lifecycleStatus", Value: "active"},
+			{Key: "lifecycleStatus", Value: usableLifecycleFilter()},
 		}}},
 		bson.D{{Key: "$lookup", Value: bson.D{
 			{Key: "from", Value: s.coll.Name()},
@@ -184,15 +194,15 @@ func (s *MongoTagNodeStore) IsActiveLeaf(ctx context.Context, releaseID, tagRef 
 			{Key: "pipeline", Value: mongo.Pipeline{
 				bson.D{{Key: "$match", Value: bson.D{
 					{Key: "releaseId", Value: releaseID},
-					{Key: "lifecycleStatus", Value: "active"},
+					{Key: "lifecycleStatus", Value: usableLifecycleFilter()},
 					{Key: "$expr", Value: bson.D{{Key: "$eq", Value: bson.A{"$parentTagRef", "$$parentTagRef"}}}},
 				}}},
 				bson.D{{Key: "$limit", Value: 1}},
 			}},
-			{Key: "as", Value: "activeChildren"},
+			{Key: "as", Value: "usableChildren"},
 		}}},
 		bson.D{{Key: "$match", Value: bson.D{
-			{Key: "activeChildren.0", Value: bson.D{{Key: "$exists", Value: false}}},
+			{Key: "usableChildren.0", Value: bson.D{{Key: "$exists", Value: false}}},
 		}}},
 		bson.D{{Key: "$limit", Value: 1}},
 	}
@@ -226,7 +236,7 @@ func (s *MongoTagNodeStore) HasCompleteSnapshot(
 	complete, err := s.coll.CountDocuments(ctx, bson.M{
 		"releaseId":       releaseID,
 		"tagRef":          bson.M{"$type": "string", "$ne": ""},
-		"lifecycleStatus": bson.M{"$in": bson.A{"active", "deprecated"}},
+		"lifecycleStatus": bson.M{"$in": lifecycle.AllStatuses()},
 	})
 	if err != nil {
 		return false, err

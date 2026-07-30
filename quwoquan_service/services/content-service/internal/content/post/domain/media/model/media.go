@@ -27,6 +27,15 @@ var (
 	ErrMediaProcessingRejected     = errors.New("media asset processing was rejected")
 )
 
+type MediaType string
+
+const (
+	MediaTypeImage MediaType = "image"
+	MediaTypeVideo MediaType = "video"
+	MediaTypeAudio MediaType = "audio"
+	MediaTypeFile  MediaType = "file"
+)
+
 type AccessPolicy string
 
 const (
@@ -44,6 +53,25 @@ const (
 	ProcessingStatusDeleted    ProcessingStatus = "deleted"
 )
 
+type VideoCodec string
+
+const VideoCodecH264 VideoCodec = "h264"
+
+type MediaContainer string
+
+const MediaContainerMP4 MediaContainer = "mp4"
+
+type AudioCodec string
+
+const AudioCodecAAC AudioCodec = "aac"
+
+type CoverStrategy string
+
+const (
+	CoverStrategyFirstFrame CoverStrategy = "first_frame"
+	CoverStrategyManual     CoverStrategy = "manual"
+)
+
 // MediaAssetSnapshot is the persistence boundary for MediaAsset.
 type MediaAssetSnapshot struct {
 	ID                            string
@@ -52,8 +80,8 @@ type MediaAssetSnapshot struct {
 	SourceSessionID               string
 	ObjectKey                     string
 	SHA256                        string
-	MediaType                     string
-	ContentType                   string
+	MediaType                     MediaType
+	MimeType                      string
 	FileSize                      int64
 	AccessPolicy                  AccessPolicy
 	ProcessingStatus              ProcessingStatus
@@ -62,7 +90,7 @@ type MediaAssetSnapshot struct {
 	ProcessorProfile              string
 	ImageWidth                    int
 	ImageHeight                   int
-	ImageDeliveryContentType      string
+	ImageDeliveryMimeType         string
 	ImageNormalizedObjectKey      string
 	ImagePublicSliceKey           string
 	ImageDominantColor            string
@@ -74,16 +102,20 @@ type MediaAssetSnapshot struct {
 	VerifiedDurationMs            int64
 	VideoWidth                    int
 	VideoHeight                   int
-	VideoCodec                    string
-	VideoContainer                string
-	VideoAudioCodec               string
+	VideoCodec                    VideoCodec
+	VideoContainer                MediaContainer
+	VideoAudioCodec               AudioCodec
 	VideoKeyframeIntervalMs       int
 	VideoFastStart                bool
 	VideoPublicSliceKey           string
 	CoverPublicSliceKey           string
 	PreviewTrackVersion           int
 	PreviewTrackManifestSliceKey  string
-	CoverStrategy                 string
+	HLSCMAFDescriptorVersion      int
+	HLSCMAFDescriptorSliceKey     string
+	HLSCMAFMasterManifestSliceKey string
+	HLSCMAFRenditionCount         int
+	CoverStrategy                 CoverStrategy
 	ManualCoverAssetID            string
 	CoverFrameTimeMs              int64
 	CreatedAt                     time.Time
@@ -96,19 +128,23 @@ type MediaAssetSnapshot struct {
 // accepted from a publishing client, and deliberately contains slice keys rather
 // than directly consumable URLs.
 type VideoProcessingDescriptor struct {
-	ProcessorProfile             string
-	VerifiedDurationMs           int64
-	VideoWidth                   int
-	VideoHeight                  int
-	VideoCodec                   string
-	VideoContainer               string
-	VideoAudioCodec              string
-	VideoKeyframeIntervalMs      int
-	VideoFastStart               bool
-	VideoPublicSliceKey          string
-	CoverPublicSliceKey          string
-	PreviewTrackVersion          int
-	PreviewTrackManifestSliceKey string
+	ProcessorProfile              string
+	VerifiedDurationMs            int64
+	VideoWidth                    int
+	VideoHeight                   int
+	VideoCodec                    VideoCodec
+	VideoContainer                MediaContainer
+	VideoAudioCodec               AudioCodec
+	VideoKeyframeIntervalMs       int
+	VideoFastStart                bool
+	VideoPublicSliceKey           string
+	CoverPublicSliceKey           string
+	PreviewTrackVersion           int
+	PreviewTrackManifestSliceKey  string
+	HLSCMAFDescriptorVersion      int
+	HLSCMAFDescriptorSliceKey     string
+	HLSCMAFMasterManifestSliceKey string
+	HLSCMAFRenditionCount         int
 }
 
 // ImageProcessingDescriptor is the trusted output produced by the image
@@ -120,7 +156,7 @@ type ImageProcessingDescriptor struct {
 	ProcessorProfile         string
 	ImageWidth               int
 	ImageHeight              int
-	ImageDeliveryContentType string
+	ImageDeliveryMimeType    string
 	ImageNormalizedObjectKey string
 	ImagePublicSliceKey      string
 	ImageDominantColor       string
@@ -157,8 +193,8 @@ type CreateMediaAssetParams struct {
 	SourceSessionID    string
 	ObjectKey          string
 	SHA256             string
-	MediaType          string
-	ContentType        string
+	MediaType          MediaType
+	MimeType           string
 	FileSize           int64
 	AccessPolicy       AccessPolicy
 	ProcessingRequired bool
@@ -174,8 +210,8 @@ type MediaAsset struct {
 	sourceSessionID               string
 	objectKey                     string
 	sha256                        string
-	mediaType                     string
-	contentType                   string
+	mediaType                     MediaType
+	mimeType                      string
 	fileSize                      int64
 	accessPolicy                  AccessPolicy
 	processingStatus              ProcessingStatus
@@ -184,7 +220,7 @@ type MediaAsset struct {
 	processorProfile              string
 	imageWidth                    int
 	imageHeight                   int
-	imageDeliveryContentType      string
+	imageDeliveryMimeType         string
 	imageNormalizedObjectKey      string
 	imagePublicSliceKey           string
 	imageDominantColor            string
@@ -196,16 +232,20 @@ type MediaAsset struct {
 	verifiedDurationMs            int64
 	videoWidth                    int
 	videoHeight                   int
-	videoCodec                    string
-	videoContainer                string
-	videoAudioCodec               string
+	videoCodec                    VideoCodec
+	videoContainer                MediaContainer
+	videoAudioCodec               AudioCodec
 	videoKeyframeIntervalMs       int
 	videoFastStart                bool
 	videoPublicSliceKey           string
 	coverPublicSliceKey           string
 	previewTrackVersion           int
 	previewTrackManifestSliceKey  string
-	coverStrategy                 string
+	hlsCMAFDescriptorVersion      int
+	hlsCMAFDescriptorSliceKey     string
+	hlsCMAFMasterManifestSliceKey string
+	hlsCMAFRenditionCount         int
+	coverStrategy                 CoverStrategy
 	manualCoverAssetID            string
 	coverFrameTimeMs              int64
 	createdAt                     time.Time
@@ -222,12 +262,12 @@ func CreateMediaAsset(params CreateMediaAssetParams) (*MediaAsset, error) {
 		sourceSessionID:  strings.TrimSpace(params.SourceSessionID),
 		objectKey:        strings.TrimSpace(params.ObjectKey),
 		sha256:           normalizeDigest(params.SHA256),
-		mediaType:        strings.TrimSpace(params.MediaType),
-		contentType:      strings.TrimSpace(params.ContentType),
+		mediaType:        MediaType(strings.ToLower(strings.TrimSpace(string(params.MediaType)))),
+		mimeType:         strings.TrimSpace(params.MimeType),
 		fileSize:         params.FileSize,
 		accessPolicy:     params.AccessPolicy,
 		processingStatus: ProcessingStatusReady,
-		coverStrategy:    "first_frame",
+		coverStrategy:    CoverStrategyFirstFrame,
 		createdAt:        now,
 		updatedAt:        now,
 	}
@@ -251,8 +291,8 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 		sourceSessionID:               strings.TrimSpace(snapshot.SourceSessionID),
 		objectKey:                     strings.TrimSpace(snapshot.ObjectKey),
 		sha256:                        normalizeDigest(snapshot.SHA256),
-		mediaType:                     strings.TrimSpace(snapshot.MediaType),
-		contentType:                   strings.TrimSpace(snapshot.ContentType),
+		mediaType:                     MediaType(strings.ToLower(strings.TrimSpace(string(snapshot.MediaType)))),
+		mimeType:                      strings.TrimSpace(snapshot.MimeType),
 		fileSize:                      snapshot.FileSize,
 		accessPolicy:                  snapshot.AccessPolicy,
 		processingStatus:              snapshot.ProcessingStatus,
@@ -261,7 +301,7 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 		processorProfile:              strings.TrimSpace(snapshot.ProcessorProfile),
 		imageWidth:                    snapshot.ImageWidth,
 		imageHeight:                   snapshot.ImageHeight,
-		imageDeliveryContentType:      strings.TrimSpace(snapshot.ImageDeliveryContentType),
+		imageDeliveryMimeType:         strings.TrimSpace(snapshot.ImageDeliveryMimeType),
 		imageNormalizedObjectKey:      strings.TrimSpace(snapshot.ImageNormalizedObjectKey),
 		imagePublicSliceKey:           strings.TrimSpace(snapshot.ImagePublicSliceKey),
 		imageDominantColor:            strings.TrimSpace(snapshot.ImageDominantColor),
@@ -273,16 +313,20 @@ func RestoreMediaAsset(snapshot MediaAssetSnapshot) (*MediaAsset, error) {
 		verifiedDurationMs:            snapshot.VerifiedDurationMs,
 		videoWidth:                    snapshot.VideoWidth,
 		videoHeight:                   snapshot.VideoHeight,
-		videoCodec:                    strings.TrimSpace(snapshot.VideoCodec),
-		videoContainer:                strings.TrimSpace(snapshot.VideoContainer),
-		videoAudioCodec:               strings.TrimSpace(snapshot.VideoAudioCodec),
+		videoCodec:                    VideoCodec(strings.ToLower(strings.TrimSpace(string(snapshot.VideoCodec)))),
+		videoContainer:                MediaContainer(strings.ToLower(strings.TrimSpace(string(snapshot.VideoContainer)))),
+		videoAudioCodec:               AudioCodec(strings.ToLower(strings.TrimSpace(string(snapshot.VideoAudioCodec)))),
 		videoKeyframeIntervalMs:       snapshot.VideoKeyframeIntervalMs,
 		videoFastStart:                snapshot.VideoFastStart,
 		videoPublicSliceKey:           strings.TrimSpace(snapshot.VideoPublicSliceKey),
 		coverPublicSliceKey:           strings.TrimSpace(snapshot.CoverPublicSliceKey),
 		previewTrackVersion:           snapshot.PreviewTrackVersion,
 		previewTrackManifestSliceKey:  strings.TrimSpace(snapshot.PreviewTrackManifestSliceKey),
-		coverStrategy:                 strings.TrimSpace(snapshot.CoverStrategy),
+		hlsCMAFDescriptorVersion:      snapshot.HLSCMAFDescriptorVersion,
+		hlsCMAFDescriptorSliceKey:     strings.TrimSpace(snapshot.HLSCMAFDescriptorSliceKey),
+		hlsCMAFMasterManifestSliceKey: strings.TrimSpace(snapshot.HLSCMAFMasterManifestSliceKey),
+		hlsCMAFRenditionCount:         snapshot.HLSCMAFRenditionCount,
+		coverStrategy:                 CoverStrategy(strings.ToLower(strings.TrimSpace(string(snapshot.CoverStrategy)))),
 		manualCoverAssetID:            strings.TrimSpace(snapshot.ManualCoverAssetID),
 		coverFrameTimeMs:              snapshot.CoverFrameTimeMs,
 		createdAt:                     snapshot.CreatedAt.UTC(),
@@ -313,9 +357,9 @@ func (a *MediaAsset) RecordProcessingResult(
 	if status == ProcessingStatusReady && strings.TrimSpace(failureReason) != "" {
 		return fmt.Errorf("%w: ready asset cannot carry failure reason", ErrInvalidMediaAsset)
 	}
-	// 处理产物 slice 绑定本次状态迁移后的聚合版本；worker 同样以
-	// current version + 1 构造 key。先校验再 advance 时必须显式传目标版本，
-	// 否则合法的 v2 产物会被错误地按当前 v1 拒绝。
+	// 处理产物 slice 绑定本次状态迁移后的聚合 revision；worker 同样以
+	// current revision + 1 构造 key。先校验再 advance 时必须显式传目标 revision，
+	// 否则本次迁移的产物会被错误地按迁移前 revision 拒绝。
 	if err := a.validateProcessingDescriptor(status, descriptor, a.version+1); err != nil {
 		return err
 	}
@@ -342,15 +386,19 @@ func (a *MediaAsset) RecordProcessingResult(
 			a.verifiedDurationMs = descriptor.Video.VerifiedDurationMs
 			a.videoWidth = descriptor.Video.VideoWidth
 			a.videoHeight = descriptor.Video.VideoHeight
-			a.videoCodec = strings.TrimSpace(descriptor.Video.VideoCodec)
-			a.videoContainer = strings.TrimSpace(descriptor.Video.VideoContainer)
-			a.videoAudioCodec = strings.TrimSpace(descriptor.Video.VideoAudioCodec)
+			a.videoCodec = descriptor.Video.VideoCodec
+			a.videoContainer = descriptor.Video.VideoContainer
+			a.videoAudioCodec = descriptor.Video.VideoAudioCodec
 			a.videoKeyframeIntervalMs = descriptor.Video.VideoKeyframeIntervalMs
 			a.videoFastStart = descriptor.Video.VideoFastStart
 			a.videoPublicSliceKey = strings.TrimSpace(descriptor.Video.VideoPublicSliceKey)
 			a.coverPublicSliceKey = strings.TrimSpace(descriptor.Video.CoverPublicSliceKey)
 			a.previewTrackVersion = descriptor.Video.PreviewTrackVersion
 			a.previewTrackManifestSliceKey = strings.TrimSpace(descriptor.Video.PreviewTrackManifestSliceKey)
+			a.hlsCMAFDescriptorVersion = descriptor.Video.HLSCMAFDescriptorVersion
+			a.hlsCMAFDescriptorSliceKey = strings.TrimSpace(descriptor.Video.HLSCMAFDescriptorSliceKey)
+			a.hlsCMAFMasterManifestSliceKey = strings.TrimSpace(descriptor.Video.HLSCMAFMasterManifestSliceKey)
+			a.hlsCMAFRenditionCount = descriptor.Video.HLSCMAFRenditionCount
 		}
 	}
 	a.processedAt = &processedAt
@@ -382,8 +430,8 @@ func (a *MediaAsset) validateProcessingDescriptor(
 			image.ImageHeight > MaxImageDeliveryDimension ||
 			pixels <= 0 ||
 			pixels > MaxImagePixels ||
-			(strings.TrimSpace(image.ImageDeliveryContentType) != "image/jpeg" &&
-				strings.TrimSpace(image.ImageDeliveryContentType) != "image/png") ||
+			(strings.TrimSpace(image.ImageDeliveryMimeType) != "image/jpeg" &&
+				strings.TrimSpace(image.ImageDeliveryMimeType) != "image/png") ||
 			strings.TrimSpace(image.ImageNormalizedObjectKey) == "" ||
 			strings.TrimSpace(image.ImagePublicSliceKey) == "" ||
 			!validImageDominantColor(image.ImageDominantColor) ||
@@ -399,7 +447,7 @@ func (a *MediaAsset) validateProcessingDescriptor(
 			"image",
 			a.id,
 			assetVersion,
-			image.ImageDeliveryContentType,
+			image.ImageDeliveryMimeType,
 		)
 		if strings.TrimSpace(image.ImagePublicSliceKey) != expectedPublicSlice {
 			return fmt.Errorf(
@@ -417,9 +465,9 @@ func (a *MediaAsset) validateProcessingDescriptor(
 			video.VerifiedDurationMs > MaxVideoDurationMs ||
 			video.VideoWidth <= 0 ||
 			video.VideoHeight <= 0 ||
-			!strings.EqualFold(strings.TrimSpace(video.VideoCodec), "h264") ||
-			!strings.EqualFold(strings.TrimSpace(video.VideoContainer), "mp4") ||
-			!strings.EqualFold(strings.TrimSpace(video.VideoAudioCodec), "aac") ||
+			video.VideoCodec != VideoCodecH264 ||
+			video.VideoContainer != MediaContainerMP4 ||
+			video.VideoAudioCodec != AudioCodecAAC ||
 			video.VideoKeyframeIntervalMs <= 0 ||
 			video.VideoKeyframeIntervalMs > MaxVideoKeyframeIntervalMs ||
 			!video.VideoFastStart ||
@@ -434,6 +482,17 @@ func (a *MediaAsset) validateProcessingDescriptor(
 			(video.PreviewTrackVersion == 0 && strings.TrimSpace(video.PreviewTrackManifestSliceKey) != "") ||
 			(video.PreviewTrackVersion > 0 && strings.TrimSpace(video.PreviewTrackManifestSliceKey) == "") {
 			return fmt.Errorf("%w: preview track version and manifest must be paired", ErrInvalidMediaAsset)
+		}
+		hlsDeclared := video.HLSCMAFDescriptorVersion != 0 ||
+			strings.TrimSpace(video.HLSCMAFDescriptorSliceKey) != "" ||
+			strings.TrimSpace(video.HLSCMAFMasterManifestSliceKey) != "" ||
+			video.HLSCMAFRenditionCount != 0
+		if hlsDeclared && (video.HLSCMAFDescriptorVersion <= 0 ||
+			strings.TrimSpace(video.HLSCMAFDescriptorSliceKey) == "" ||
+			strings.TrimSpace(video.HLSCMAFMasterManifestSliceKey) == "" ||
+			video.HLSCMAFRenditionCount < 1 ||
+			video.HLSCMAFRenditionCount > 4) {
+			return fmt.Errorf("%w: HLS/CMAF descriptor, master manifest and rendition count must be complete", ErrInvalidMediaAsset)
 		}
 		expectedVideoSlice := runtimemedia.BuildContentMediaPublicSliceKey(
 			"video",
@@ -452,6 +511,13 @@ func (a *MediaAsset) validateProcessingDescriptor(
 					expectedPrefix+"/preview/manifest.json") {
 			return fmt.Errorf(
 				"%w: ready video delivery slices must use canonical asset identity",
+				ErrInvalidMediaAsset,
+			)
+		}
+		if hlsDeclared && (strings.TrimSpace(video.HLSCMAFDescriptorSliceKey) != expectedPrefix+"/hls/descriptor.json" ||
+			strings.TrimSpace(video.HLSCMAFMasterManifestSliceKey) != expectedPrefix+"/hls/master.m3u8") {
+			return fmt.Errorf(
+				"%w: HLS/CMAF delivery slices must use canonical asset identity",
 				ErrInvalidMediaAsset,
 			)
 		}
@@ -526,7 +592,7 @@ func (a *MediaAsset) SelectAutoCover(ownerID string, now time.Time) error {
 	if err := a.advance(now); err != nil {
 		return err
 	}
-	a.coverStrategy = "first_frame"
+	a.coverStrategy = CoverStrategyFirstFrame
 	a.manualCoverAssetID = ""
 	a.coverFrameTimeMs = 0
 	return nil
@@ -548,7 +614,7 @@ func (a *MediaAsset) SelectManualCover(ownerID string, coverAssetID string, fram
 	if err := a.advance(now); err != nil {
 		return err
 	}
-	a.coverStrategy = "manual"
+	a.coverStrategy = CoverStrategyManual
 	a.manualCoverAssetID = coverAssetID
 	a.coverFrameTimeMs = frameTimeMs
 	return nil
@@ -659,14 +725,14 @@ func (a *MediaAsset) MediaType() string {
 	if a == nil {
 		return ""
 	}
-	return a.mediaType
+	return string(a.mediaType)
 }
 
-func (a *MediaAsset) ContentType() string {
+func (a *MediaAsset) MimeType() string {
 	if a == nil {
 		return ""
 	}
-	return a.contentType
+	return a.mimeType
 }
 
 func (a *MediaAsset) FileSize() int64 {
@@ -694,7 +760,7 @@ func (a *MediaAsset) CoverStrategy() string {
 	if a == nil {
 		return ""
 	}
-	return a.coverStrategy
+	return string(a.coverStrategy)
 }
 
 func (a *MediaAsset) ManualCoverAssetID() string {
@@ -716,19 +782,23 @@ func (a *MediaAsset) VideoProcessingDescriptor() VideoProcessingDescriptor {
 		return VideoProcessingDescriptor{}
 	}
 	return VideoProcessingDescriptor{
-		ProcessorProfile:             a.processorProfile,
-		VerifiedDurationMs:           a.verifiedDurationMs,
-		VideoWidth:                   a.videoWidth,
-		VideoHeight:                  a.videoHeight,
-		VideoCodec:                   a.videoCodec,
-		VideoContainer:               a.videoContainer,
-		VideoAudioCodec:              a.videoAudioCodec,
-		VideoKeyframeIntervalMs:      a.videoKeyframeIntervalMs,
-		VideoFastStart:               a.videoFastStart,
-		VideoPublicSliceKey:          a.videoPublicSliceKey,
-		CoverPublicSliceKey:          a.coverPublicSliceKey,
-		PreviewTrackVersion:          a.previewTrackVersion,
-		PreviewTrackManifestSliceKey: a.previewTrackManifestSliceKey,
+		ProcessorProfile:              a.processorProfile,
+		VerifiedDurationMs:            a.verifiedDurationMs,
+		VideoWidth:                    a.videoWidth,
+		VideoHeight:                   a.videoHeight,
+		VideoCodec:                    a.videoCodec,
+		VideoContainer:                a.videoContainer,
+		VideoAudioCodec:               a.videoAudioCodec,
+		VideoKeyframeIntervalMs:       a.videoKeyframeIntervalMs,
+		VideoFastStart:                a.videoFastStart,
+		VideoPublicSliceKey:           a.videoPublicSliceKey,
+		CoverPublicSliceKey:           a.coverPublicSliceKey,
+		PreviewTrackVersion:           a.previewTrackVersion,
+		PreviewTrackManifestSliceKey:  a.previewTrackManifestSliceKey,
+		HLSCMAFDescriptorVersion:      a.hlsCMAFDescriptorVersion,
+		HLSCMAFDescriptorSliceKey:     a.hlsCMAFDescriptorSliceKey,
+		HLSCMAFMasterManifestSliceKey: a.hlsCMAFMasterManifestSliceKey,
+		HLSCMAFRenditionCount:         a.hlsCMAFRenditionCount,
 	}
 }
 
@@ -740,7 +810,7 @@ func (a *MediaAsset) ImageProcessingDescriptor() ImageProcessingDescriptor {
 		ProcessorProfile:         a.processorProfile,
 		ImageWidth:               a.imageWidth,
 		ImageHeight:              a.imageHeight,
-		ImageDeliveryContentType: a.imageDeliveryContentType,
+		ImageDeliveryMimeType:    a.imageDeliveryMimeType,
 		ImageNormalizedObjectKey: a.imageNormalizedObjectKey,
 		ImagePublicSliceKey:      a.imagePublicSliceKey,
 		ImageDominantColor:       a.imageDominantColor,
@@ -776,7 +846,7 @@ func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 		ObjectKey:                     a.objectKey,
 		SHA256:                        a.sha256,
 		MediaType:                     a.mediaType,
-		ContentType:                   a.contentType,
+		MimeType:                      a.mimeType,
 		FileSize:                      a.fileSize,
 		AccessPolicy:                  a.accessPolicy,
 		ProcessingStatus:              a.processingStatus,
@@ -785,7 +855,7 @@ func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 		ProcessorProfile:              a.processorProfile,
 		ImageWidth:                    a.imageWidth,
 		ImageHeight:                   a.imageHeight,
-		ImageDeliveryContentType:      a.imageDeliveryContentType,
+		ImageDeliveryMimeType:         a.imageDeliveryMimeType,
 		ImageNormalizedObjectKey:      a.imageNormalizedObjectKey,
 		ImagePublicSliceKey:           a.imagePublicSliceKey,
 		ImageDominantColor:            a.imageDominantColor,
@@ -806,6 +876,10 @@ func (a *MediaAsset) Snapshot() MediaAssetSnapshot {
 		CoverPublicSliceKey:           a.coverPublicSliceKey,
 		PreviewTrackVersion:           a.previewTrackVersion,
 		PreviewTrackManifestSliceKey:  a.previewTrackManifestSliceKey,
+		HLSCMAFDescriptorVersion:      a.hlsCMAFDescriptorVersion,
+		HLSCMAFDescriptorSliceKey:     a.hlsCMAFDescriptorSliceKey,
+		HLSCMAFMasterManifestSliceKey: a.hlsCMAFMasterManifestSliceKey,
+		HLSCMAFRenditionCount:         a.hlsCMAFRenditionCount,
 		CoverStrategy:                 a.coverStrategy,
 		ManualCoverAssetID:            a.manualCoverAssetID,
 		CoverFrameTimeMs:              a.coverFrameTimeMs,
@@ -838,10 +912,10 @@ func (a *MediaAsset) validate() error {
 		a.sourceSessionID == "" ||
 		a.objectKey == "" ||
 		a.sha256 == "" ||
-		a.mediaType == "" ||
-		a.contentType == "" ||
+		!validMediaType(a.mediaType) ||
+		a.mimeType == "" ||
 		a.fileSize <= 0 ||
-		(a.coverStrategy != "first_frame" && a.coverStrategy != "manual") ||
+		(a.coverStrategy != CoverStrategyFirstFrame && a.coverStrategy != CoverStrategyManual) ||
 		a.coverFrameTimeMs < 0 ||
 		!validAccessPolicy(a.accessPolicy) ||
 		!validProcessingStatus(a.processingStatus) ||
@@ -890,6 +964,15 @@ func (a *MediaAsset) validate() error {
 		}
 	}
 	return nil
+}
+
+func validMediaType(value MediaType) bool {
+	switch value {
+	case MediaTypeImage, MediaTypeVideo, MediaTypeAudio, MediaTypeFile:
+		return true
+	default:
+		return false
+	}
 }
 
 func (a *MediaAsset) validateImageDescriptorRevisions() error {

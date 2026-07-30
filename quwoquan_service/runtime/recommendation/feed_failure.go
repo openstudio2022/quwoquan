@@ -11,16 +11,21 @@ import (
 type FailureStage string
 
 const (
-	FailureStageNone                     FailureStage = "none"
-	FailureStageRecallAllFailed          FailureStage = "recall_all_failed"
-	FailureStageRecallPartialFailed      FailureStage = "recall_partial_failed"
-	FailureStageRecallPartialFailedEmpty FailureStage = "recall_partial_failed_empty"
-	FailureStageRecallEmptyOutput        FailureStage = "recall_empty_output"
-	FailureStageScorerUnavailable        FailureStage = "scorer_unavailable"
-	FailureStageScorerEmptyOutput        FailureStage = "scorer_empty_output"
-	FailureStageActiveSupplyMissing      FailureStage = "active_supply_missing"
-	FailureStageHydrationFullMiss        FailureStage = "hydration_full_miss"
-	FailureStageExposureExhausted        FailureStage = "exposure_exhausted"
+	FailureStageNone                          FailureStage = "none"
+	FailureStageRecallAllFailed               FailureStage = "recall_all_failed"
+	FailureStageRecallPartialFailed           FailureStage = "recall_partial_failed"
+	FailureStageRecallPartialFailedEmpty      FailureStage = "recall_partial_failed_empty"
+	FailureStageRecallEmptyOutput             FailureStage = "recall_empty_output"
+	FailureStageScorerUnavailable             FailureStage = "scorer_unavailable"
+	FailureStageScorerEmptyOutput             FailureStage = "scorer_empty_output"
+	FailureStageActiveSupplyMissing           FailureStage = "active_supply_missing"
+	FailureStageHardExclusionStateUnavailable FailureStage = "hard_exclusion_state_unavailable"
+	FailureStagePersonalizationUnavailable    FailureStage = "personalization_unavailable"
+	FailureStageExposureMemoryUnavailable     FailureStage = "exposure_memory_unavailable"
+	FailureStageRankedWindowUnavailable       FailureStage = "ranked_window_unavailable"
+	FailureStageDeliveryPageUnavailable       FailureStage = "delivery_page_unavailable"
+	FailureStageHydrationFullMiss             FailureStage = "hydration_full_miss"
+	FailureStageExposureExhausted             FailureStage = "exposure_exhausted"
 )
 
 type FeedTerminalOutcome string
@@ -30,6 +35,19 @@ const (
 	FeedTerminalDegraded FeedTerminalOutcome = "degraded"
 	FeedTerminalEmpty    FeedTerminalOutcome = "empty"
 	FeedTerminalFailure  FeedTerminalOutcome = "failure"
+)
+
+// FeedTerminalEmptyReason mirrors the content feed wire contract as a bounded
+// observability label. It is intentionally not a public response DTO: the
+// owning content-service remains responsible for the HTTP envelope.
+type FeedTerminalEmptyReason string
+
+const (
+	FeedTerminalEmptyReasonNone              FeedTerminalEmptyReason = "none"
+	FeedTerminalEmptyReasonNoActiveRelease   FeedTerminalEmptyReason = "no_active_release"
+	FeedTerminalEmptyReasonNoEligibleContent FeedTerminalEmptyReason = "no_eligible_content"
+	FeedTerminalEmptyReasonFollowingEmpty    FeedTerminalEmptyReason = "following_empty"
+	FeedTerminalEmptyReasonContinuationEnd   FeedTerminalEmptyReason = "continuation_end"
 )
 
 type FeedRequestClass string
@@ -78,10 +96,39 @@ func FailureStageOf(err error) FailureStage {
 }
 
 func normalizeFailureStage(stage FailureStage) FailureStage {
-	if strings.TrimSpace(string(stage)) == "" {
+	switch FailureStage(strings.TrimSpace(string(stage))) {
+	case FailureStageNone,
+		FailureStageRecallAllFailed,
+		FailureStageRecallPartialFailed,
+		FailureStageRecallPartialFailedEmpty,
+		FailureStageRecallEmptyOutput,
+		FailureStageScorerUnavailable,
+		FailureStageScorerEmptyOutput,
+		FailureStageActiveSupplyMissing,
+		FailureStageHardExclusionStateUnavailable,
+		FailureStagePersonalizationUnavailable,
+		FailureStageExposureMemoryUnavailable,
+		FailureStageRankedWindowUnavailable,
+		FailureStageDeliveryPageUnavailable,
+		FailureStageHydrationFullMiss,
+		FailureStageExposureExhausted:
+		return FailureStage(strings.TrimSpace(string(stage)))
+	default:
 		return FailureStageNone
 	}
-	return stage
+}
+
+func normalizeFeedTerminalEmptyReason(reason FeedTerminalEmptyReason) FeedTerminalEmptyReason {
+	switch FeedTerminalEmptyReason(strings.TrimSpace(string(reason))) {
+	case FeedTerminalEmptyReasonNone,
+		FeedTerminalEmptyReasonNoActiveRelease,
+		FeedTerminalEmptyReasonNoEligibleContent,
+		FeedTerminalEmptyReasonFollowingEmpty,
+		FeedTerminalEmptyReasonContinuationEnd:
+		return FeedTerminalEmptyReason(strings.TrimSpace(string(reason)))
+	default:
+		return FeedTerminalEmptyReasonNone
+	}
 }
 
 // RecallSkipped 表示召回源在当前 feed/surface 上不适用，不等同于成功空结果。

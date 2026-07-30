@@ -7,7 +7,7 @@ class CreateCircleService {
   Future<List<CreateCircleOption>> listCircles(
     CircleQueryReader circleQuery,
   ) async {
-    final result = await circleQuery.list(const CircleListQuery(limit: 20));
+    final result = await circleQuery.list(CircleListQuery(limit: 20));
     final out = <CreateCircleOption>[];
     for (final circle in result.items) {
       if (circle.circleId.isEmpty || circle.name.isEmpty) continue;

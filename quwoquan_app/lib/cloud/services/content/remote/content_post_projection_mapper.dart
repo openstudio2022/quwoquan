@@ -48,6 +48,14 @@ final class ContentPostProjectionMapper {
         'articleFontPreset': projection.articleFontPreset,
       'imageUrls': isVideo ? const <String>[] : mediaUrls,
       'videoUrl': ?videoUrl,
+      if (projection.mediaAssetId != null)
+        'mediaAssetId': projection.mediaAssetId,
+      if (projection.mediaAssetVersion != null)
+        'mediaAssetVersion': projection.mediaAssetVersion,
+      if (projection.hlsCmafMasterManifestUrl != null)
+        'hlsCmafMasterManifestUrl': projection.hlsCmafMasterManifestUrl,
+      if (projection.hlsCmafDescriptorVersion != null)
+        'hlsCmafDescriptorVersion': projection.hlsCmafDescriptorVersion,
       if (projection.thumbnailUrl != null)
         'thumbnailUrl': projection.thumbnailUrl,
       if (projection.width != null) 'width': projection.width,

@@ -40,10 +40,10 @@ func TestPost_ResponseShape_NoPrivateFields(t *testing.T) {
 	}
 }
 
-// TestPost_WritableFields_UnknownFieldRejected verifies that POST /content/content/posts
+// TestPost_RequestEntity_UnknownFieldRejected verifies that POST /content/content/posts
 // rejects requests with unknown fields, returning 400 with structured error.
 // This protects against field injection attacks and enforces the field contract.
-func TestPost_WritableFields_UnknownFieldRejected(t *testing.T) {
+func TestPost_RequestEntity_UnknownFieldRejected(t *testing.T) {
 	req := newPostPublicationRequestForTest(
 		t,
 		"unknown-field-author",

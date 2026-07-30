@@ -44,7 +44,7 @@ func (r *CreatorRuntimeProfileReader) FindActiveByPublicIdentity(
 			"status": creatorRuntimeActive,
 			"$or": bson.A{
 				bson.M{"creatorId": identity},
-				bson.M{"subAccountId": identity},
+				bson.M{"personaId": identity},
 			},
 		},
 		2,

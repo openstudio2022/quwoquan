@@ -14,6 +14,9 @@ from content.release.canonical.object_transaction_contract import (
     _safe_id,
     _safe_rel,
 )
+from content.release.canonical.creator_avatar_rights import (
+    creator_avatar_rights_issue,
+)
 from core.io import write_json
 from core.media_asset_url import is_cas_media_object_key, sha256_file
 from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
@@ -118,6 +121,18 @@ def _avatar_asset_projection(
         raise ObjectTransactionError(
             "creator avatarAsset rights snapshot identity drift"
         )
+    rights_issue = creator_avatar_rights_issue(
+        rights,
+        asset_id=asset_id,
+        sha256=sha256,
+        object_key=object_key,
+        byte_count=byte_count,
+        mime_type=mime_type,
+    )
+    if rights_issue:
+        raise ObjectTransactionError(
+            f"creator avatarAsset commercial rights invalid: {rights_issue}"
+        )
     profile_ref = {"assetId": asset_id, "kind": kind, "sha256": sha256}
     asset_ref = {
         **profile_ref,
@@ -160,8 +175,8 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
         "creatorId": creator_ref,
         "userId": str(payload.get("authorId") or ""),
         "authorId": str(payload.get("authorId") or ""),
-        "subAccountId": str(
-            payload.get("subAccountId") or payload.get("authorId") or ""
+        "personaId": str(
+            payload.get("personaId") or payload.get("authorId") or ""
         ),
         "displayName": str(payload.get("displayName") or ""),
         "userHandle": str(payload.get("userHandle") or ""),

@@ -17,6 +17,7 @@
     "contentImportReportRef": {"type": "string"},
     "homepageImportReportRef": {"type": "string"},
     "postApiVerificationRef": {"type": "string"},
+    "releaseReadinessRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
     "tagConsumerVerificationRef": {"type": "string"},
     "homepageApiVerificationRef": {"type": "string"},
     "baselineApiVerificationRef": {"type": "string"},

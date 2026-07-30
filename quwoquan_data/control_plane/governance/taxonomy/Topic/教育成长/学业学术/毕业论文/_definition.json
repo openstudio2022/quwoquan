@@ -2,6 +2,7 @@
   "label": "毕业论文",
   "labelEn": "Thesis",
   "description": "毕业论文选题与写作",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

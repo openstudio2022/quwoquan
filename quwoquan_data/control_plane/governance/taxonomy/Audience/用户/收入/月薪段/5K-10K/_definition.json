@@ -2,6 +2,7 @@
   "label": "5K-10K",
   "labelEn": "5K-10K CNY",
   "description": "月薪5000-10000元",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

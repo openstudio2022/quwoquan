@@ -17,6 +17,10 @@ from quwoquan_ops.cli.lib.patrol_cli import (
     resolve_patrol_cli,
 )
 from quwoquan_ops.cli.smoke import run_environment_patrol_smoke as env_patrol
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
 
 
 INCOMPATIBLE_PATROL_CLI_VERSION = "4.5.1"
@@ -100,21 +104,24 @@ class PatrolCliResolutionTest(unittest.TestCase):
         self.assertIn(INSTALL_HINT, result.error)
 
     def test_environment_smoke_command_uses_resolved_executable(self) -> None:
+        public_bases = get_target(
+            load_environment_topology(), "prod-sim"
+        )["publicBases"]
         args = SimpleNamespace(
             runtime_env="prod",
             api_contract_env="prod",
-            gateway_base_url="https://api.example.test",
-            product_ops_base_url="https://ops.example.test",
+            gateway_base_url=public_bases["api"],
+            product_ops_base_url=public_bases["productOps"],
             media_base_url="",
-            media_avatar_base_url="https://avatar.example.test",
-            media_image_base_url="https://media.example.test",
-            media_video_base_url="https://video.example.test",
-            media_upload_base_url="https://upload.example.test",
-            rtc_media_connection_url="wss://rtc.example.test",
+            media_avatar_base_url=public_bases["mediaAvatar"],
+            media_image_base_url=public_bases["mediaImage"],
+            media_video_base_url=public_bases["mediaVideo"],
+            media_upload_base_url=public_bases["mediaUpload"],
+            rtc_media_connection_url=public_bases["rtc"],
             test_auth_token="access-token",
             test_refresh_token="refresh-token",
             current_owner_id="owner-1",
-            current_sub_account_id="persona-1",
+            current_persona_id="persona-1",
             target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
             env_name="prod-sim",
         )
@@ -129,8 +136,12 @@ class PatrolCliResolutionTest(unittest.TestCase):
         self.assertEqual(command[0], "/tmp/patrol")
         self.assertIn("--dart-define=APP_RUNTIME_ENV=prod", command)
         self.assertNotIn("APP_DATA_SOURCE", "\n".join(command))
-        self.assertIn(
+        self.assertNotIn(
             "--dart-define-from-file=/tmp/patrol-secrets.json",
+            command,
+        )
+        self.assertIn(
+            "--dart-define=QWQ_PATROL_SESSION_MODE=prod_sim_anonymous_runtime",
             command,
         )
         self.assertNotIn("access-token", "\n".join(command))

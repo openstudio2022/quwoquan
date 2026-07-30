@@ -1,4 +1,3 @@
-version: 1
 evidenceProfiles:
   travel_route:
     requiredFacts: [里程, 分段耗时, 路况, 油电补给, 停车点, 应急避险]

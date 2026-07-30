@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/cloud/circle/generated/circle_membership_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
@@ -221,6 +222,7 @@ void main() {
         'INTEGRATION.USER.location_unavailable': 'integration_location',
         'ASSISTANT.MIDDLEWARE.upstream_timeout': 'assistant',
         'CIRCLE.USER.not_found': 'circle',
+        CircleMembershipErrorCode.membershipNotFound.code: 'circle',
         'ENTITY.USER.homepage_not_found': 'entity',
       };
 

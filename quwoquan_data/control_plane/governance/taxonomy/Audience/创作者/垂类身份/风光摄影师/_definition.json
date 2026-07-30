@@ -1,0 +1,11 @@
+{
+  "label": "风光摄影师",
+  "labelEn": "Landscape Photographer",
+  "description": "专注自然与城市风光摄影的创作者",
+  "axisRole": "creatorIdentity",
+  "sameAsRefs": [
+    "Topic/摄影/风光摄影"
+  ],
+  "createdAt": "2026-07-28T13:31:34.168145+00:00",
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
+}

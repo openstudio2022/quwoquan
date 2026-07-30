@@ -1,7 +1,15 @@
 {
   "label": "HDR效果",
   "labelEn": "HDR Effect",
-  "description": "HDR效果风格的后期处理",
+  "description": "多帧合成或单帧提亮扩展动态范围",
+  "axisRole": "contentFormat",
+  "collectionChannel": "creator_chip",
+  "consumedBy": [
+    "recall",
+    "scorer",
+    "intersection",
+    "search_facet"
+  ],
   "createdAt": "2026-05-15T00:00:00+08:00",
-  "updatedAt": "2026-05-15T00:00:00+08:00"
+  "updatedAt": "2026-07-28T14:24:06.598276+00:00"
 }

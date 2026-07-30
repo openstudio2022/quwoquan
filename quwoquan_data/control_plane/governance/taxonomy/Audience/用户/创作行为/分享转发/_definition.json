@@ -2,6 +2,7 @@
   "label": "分享转发",
   "labelEn": "Sharer & Forwarder",
   "description": "喜欢分享转发内容",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

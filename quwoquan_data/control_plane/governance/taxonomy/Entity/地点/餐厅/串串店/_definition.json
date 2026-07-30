@@ -2,6 +2,7 @@
   "label": "串串店",
   "labelEn": "Skewer Shop",
   "description": "串串香钵钵鸡业态",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

@@ -192,7 +192,7 @@ final class _SearchJourneyHarness {
     await store.ensureReady();
 
     final persona = ActivePersonaContextViewData.fallback(
-      subAccountId: 'fixture_user_current',
+      personaId: 'fixture_user_current',
       ownerUserId: 'fixture_user_current',
       subjectType: 'owner',
       displayName: '契约当前用户',
@@ -232,7 +232,10 @@ final class _SearchJourneyHarness {
       store: store,
       tempDirectory: tempDirectory,
       searchRepository: HybridSearchRepository(
-        RemoteSearchRepository(remoteQuery: canonicalSearch),
+        RemoteSearchRepository(
+          remoteQuery: canonicalSearch,
+          sessionIdProvider: () => 'search-session',
+        ),
         store,
         sync,
         _EmptyCircleGroupSearchIndex(),
@@ -338,7 +341,7 @@ final class _FailOnceAssistantSearchFacet
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async {
     attempts += 1;
@@ -353,14 +356,14 @@ final class _AssistantSearchFacet implements AssistantXiaoquSearchFacet {
   @override
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   }) async => _assistantResult(query, searchIntensity);
 }
 
 AssistantSearchResultView _assistantResult(
   String query,
-  String searchIntensity,
+  SearchIntensity searchIntensity,
 ) => AssistantSearchResultView(
   queryEcho: query,
   summary: '$query 的小趣搜索结果',
@@ -379,7 +382,6 @@ final class _RecordingBehaviorRepository extends BehaviorRepository {
   @override
   Future<void> submitOnboardingInterest({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
@@ -388,7 +390,6 @@ final class _RecordingBehaviorRepository extends BehaviorRepository {
         contentId: '',
         action: BehaviorAction.onboardingInterest,
         clientEventId: clientEventId,
-        catalogVersion: catalogVersion,
         taxonomyReleaseId: taxonomyReleaseId,
         tags: tagRefs,
       ),

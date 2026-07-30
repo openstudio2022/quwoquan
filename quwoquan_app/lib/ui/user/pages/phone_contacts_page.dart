@@ -193,7 +193,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
   ) {
     final capability = match.relationshipCapability;
     return ContactCandidateVm(
-      subAccountId: match.subAccountId,
+      personaId: match.personaId,
       displayName: localName?.trim().isNotEmpty == true
           ? localName!.trim()
           : match.displayName,
@@ -211,15 +211,15 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
   }
 
   Future<void> _add(ContactCandidateVm candidate) async {
-    if (_pending.contains(candidate.subAccountId)) {
+    if (_pending.contains(candidate.personaId)) {
       return;
     }
-    setState(() => _pending.add(candidate.subAccountId));
+    setState(() => _pending.add(candidate.personaId));
     try {
       await ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowingWithSync(
-            candidate.subAccountId,
+            candidate.personaId,
             currentFollowing: false,
             shouldFollow: true,
             sourceSurface: AppUiSurfaces.addContactPhone,
@@ -230,7 +230,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
       setState(() {
         _matches = _matches
             .map(
-              (c) => c.subAccountId == candidate.subAccountId
+              (c) => c.personaId == candidate.personaId
                   ? c.copyWith(addState: ContactAddState.added)
                   : c,
             )
@@ -245,7 +245,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
               action: 'follow_contact_from_phone',
               pageName: 'PhoneContactsPage',
               targetType: 'user',
-              targetKey: candidate.subAccountId,
+              targetKey: candidate.personaId,
             ),
       );
     } catch (error) {
@@ -268,7 +268,7 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
       }
     } finally {
       if (mounted) {
-        setState(() => _pending.remove(candidate.subAccountId));
+        setState(() => _pending.remove(candidate.personaId));
       }
     }
   }
@@ -433,12 +433,12 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
         children.add(
           ContactCandidateRow(
             candidate: candidate,
-            pending: _pending.contains(candidate.subAccountId),
+            pending: _pending.contains(candidate.personaId),
             onAdd: () => unawaited(_add(candidate)),
             onTap: () => context.push(
               AppRoutePaths.addContactConfirm(
                 handle: candidate.userHandle,
-                userId: candidate.subAccountId,
+                userId: candidate.personaId,
                 source: 'phone',
               ),
             ),

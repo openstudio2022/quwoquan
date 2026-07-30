@@ -60,6 +60,7 @@
 - P0 拖动只更新虚拟 target，release 只提交一次 seek；切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
 - P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
 - P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
+- 同 asset/version 的 HLS/CMAF 与 progressive MP4 切换必须先绑定新 controller epoch 与 `VideoPlaybackSession`，再执行尾部安全 clamp 后的 typed seek；Android 只在 discontinuity 后渲染帧回执时记为 native settled，无该能力平台只能记为 position readback 且显式标记 native unsupported。命令失败、native settle 超时、readback 不可用与过期 epoch 必须进入强类型状态和 `video_playback_qoe.seekEvidenceSource`，不得仅写日志或把可播放 fallback 误判为媒体失败。
 - video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
 - canonical release media manifest 在生成时校验 media canary profile；ready 资产、版本、时长、public slice 与 preview track 必须同源，Alpha/Beta/Gamma/Prod 证据均绑定 release digest 和真实 Remote media consumer。
 
@@ -110,6 +111,7 @@
 - THEN P0 拖动只更新虚拟 target，release 只提交一次 seek；切集/dispose 的过期 generation、buffering、ended/replay 和 seek failure 均有确定状态与结构化恢复。
 - THEN P1-A previewTrack、缓存 key、帧访问和取消均绑定 asset/version/profile/access policy；缺轨或预览失败退化为时间浮标，不阻断 P0。
 - THEN P1-B HLS/CMAF descriptor、rendition set、codec ladder、segment/keyframe、MIME/CORS/鉴权/cache-control 和平台 capability matrix 独立验收；ABR 关闭或失败时回退 P0。
+- THEN 同资产 HLS/CMAF 与 MP4 切换只在新 controller 绑定 session 后执行一次 typed seek；成功、命令失败、native settle 超时、native unsupported/readback 不可用和过期 epoch 均可从状态与 QoE 低基数维度区分，且只有 Android 真实 rendered-frame 信号可计为 native settled。
 - THEN video_playback_qoe 只进入 Ops 强类型遥测，effective_play 只进入 content behavior；两条链路的字段、隐私和推荐消费者互不混用。
 - THEN canonical release 生成会拒绝缺失或状态不匹配的 media canary profile，asset/version/duration/public slice/preview track 保持同源；四环境均执行真实 Remote media UAT，不以 fixture smoke 替代。
 
@@ -130,5 +132,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：内容视频以 `{assetId, assetVersion, processorProfile}` 幂等处理，并且只允许 `processing -> ready | rejected`。
+- 影响或价值：仍缺 iOS/OHOS 与受控真机的 rendered-frame source-switch settle 证据，当前非 Android 只能证明 controller position readback，不得称为 native visual settle；四环境 HLS/CDN/弱网读回仍未完成。
 - 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效

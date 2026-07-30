@@ -5,6 +5,7 @@
   "required": [
     "schema",
     "releaseId",
+    "sourceOwner",
     "releaseKind",
     "canonicalMerkle",
     "executionIds",
@@ -14,6 +15,7 @@
   "properties": {
     "schema": {"const": "quwoquan_data.release"},
     "releaseId": {"type": "string", "minLength": 1},
+    "sourceOwner": {"const": "qwq_data"},
     "releaseKind": {"enum": ["content", "empty_baseline"]},
     "canonicalMerkle": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "executionIds": {

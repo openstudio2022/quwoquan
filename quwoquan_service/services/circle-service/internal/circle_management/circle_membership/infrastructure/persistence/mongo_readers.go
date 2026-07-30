@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	circlemodel "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 	membershipmodel "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/domain/model"
 	membershipports "quwoquan_service/services/circle-service/internal/circle_management/circle_membership/domain/ports"
 )
@@ -68,12 +69,14 @@ func (readers *MongoReaders) ReadCircleMembership(ctx context.Context, circleID,
 func (readers *MongoReaders) ListCircleMemberships(ctx context.Context, circleID string, limit int, cursor string) (membershipports.MembershipSlice, error) {
 	return readers.list(ctx, bson.M{
 		"circleId": strings.TrimSpace(circleID), "state": membershipmodel.CircleMembershipStateActive,
+		"accountRestricted": bson.M{"$ne": true},
 	}, limit, cursor)
 }
 
 func (readers *MongoReaders) ListPendingCircleMemberships(ctx context.Context, circleID string, limit int, cursor string) (membershipports.MembershipSlice, error) {
 	return readers.list(ctx, bson.M{
 		"circleId": strings.TrimSpace(circleID), "state": membershipmodel.CircleMembershipStatePending,
+		"accountRestricted": bson.M{"$ne": true},
 	}, limit, cursor)
 }
 
@@ -92,6 +95,7 @@ func (readers *MongoReaders) ListPersonaCircles(
 	match := bson.D{
 		{Key: "personaId", Value: personaID},
 		{Key: "state", Value: membershipmodel.CircleMembershipStateActive},
+		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
 	}
 	if cursor := strings.TrimSpace(query.Cursor); cursor != "" {
 		match = append(match, bson.E{Key: "_id", Value: bson.M{"$gt": cursor}})
@@ -143,31 +147,31 @@ func (readers *MongoReaders) ListPersonaCircles(
 	}
 	defer rows.Close(ctx)
 	type circleSummaryDocument struct {
-		ID                       string    `bson:"_id"`
-		Name                     string    `bson:"name"`
-		Description              string    `bson:"description"`
-		CoverURL                 string    `bson:"coverUrl"`
-		IconURL                  string    `bson:"iconUrl"`
-		OwnerPersonaID           string    `bson:"ownerId"`
-		OwnerDisplayNameSnapshot string    `bson:"ownerDisplayNameSnapshot"`
-		Category                 string    `bson:"category"`
-		SubCategory              string    `bson:"subCategory"`
-		Tags                     []string  `bson:"tags"`
-		MemberCount              int64     `bson:"memberCount"`
-		PostCount                int64     `bson:"postCount"`
-		WeeklyActiveCount        int64     `bson:"weeklyActiveCount"`
-		State                    string    `bson:"status"`
-		Visibility               string    `bson:"visibility"`
-		JoinPolicy               string    `bson:"joinPolicy"`
-		Kind                     string    `bson:"kind"`
-		DisplaySubjectType       string    `bson:"displaySubjectType"`
-		FollowEnabled            bool      `bson:"followEnabled"`
-		DefaultPublicGroupID     string    `bson:"defaultPublicGroupId"`
-		LinkedHomepageID         string    `bson:"linkedHomepageId"`
-		LinkedHomepageType       string    `bson:"linkedHomepageType"`
-		LinkedHomepageTitle      string    `bson:"linkedHomepageTitle"`
-		CreatedAt                time.Time `bson:"createdAt"`
-		UpdatedAt                time.Time `bson:"updatedAt"`
+		ID                       string                               `bson:"_id"`
+		Name                     string                               `bson:"name"`
+		Description              string                               `bson:"description"`
+		CoverURL                 string                               `bson:"coverUrl"`
+		IconURL                  string                               `bson:"iconUrl"`
+		OwnerPersonaID           string                               `bson:"ownerId"`
+		OwnerDisplayNameSnapshot string                               `bson:"ownerDisplayNameSnapshot"`
+		Category                 string                               `bson:"category"`
+		SubCategory              string                               `bson:"subCategory"`
+		Tags                     []string                             `bson:"tags"`
+		MemberCount              int64                                `bson:"memberCount"`
+		PostCount                int64                                `bson:"postCount"`
+		WeeklyActiveCount        int64                                `bson:"weeklyActiveCount"`
+		Status                   circlemodel.CircleStatus             `bson:"status"`
+		Visibility               circlemodel.CircleVisibility         `bson:"visibility"`
+		JoinPolicy               circlemodel.CircleJoinPolicy         `bson:"joinPolicy"`
+		Kind                     circlemodel.CircleKind               `bson:"kind"`
+		DisplaySubjectType       circlemodel.CircleDisplaySubjectType `bson:"displaySubjectType"`
+		FollowEnabled            bool                                 `bson:"followEnabled"`
+		DefaultPublicGroupID     string                               `bson:"defaultPublicGroupId"`
+		LinkedHomepageID         string                               `bson:"linkedHomepageId"`
+		LinkedHomepageType       circlemodel.HomepageType             `bson:"linkedHomepageType"`
+		LinkedHomepageTitle      string                               `bson:"linkedHomepageTitle"`
+		CreatedAt                time.Time                            `bson:"createdAt"`
+		UpdatedAt                time.Time                            `bson:"updatedAt"`
 	}
 	var documents []struct {
 		MembershipID string                `bson:"membershipId"`
@@ -196,7 +200,7 @@ func (readers *MongoReaders) ListPersonaCircles(
 			CoverURL: document.CoverURL, IconURL: document.IconURL, OwnerPersonaID: document.OwnerPersonaID,
 			OwnerDisplayNameSnapshot: document.OwnerDisplayNameSnapshot, Category: document.Category,
 			SubCategory: document.SubCategory, Tags: document.Tags, MemberCount: document.MemberCount,
-			PostCount: document.PostCount, WeeklyActiveCount: document.WeeklyActiveCount, State: document.State,
+			PostCount: document.PostCount, WeeklyActiveCount: document.WeeklyActiveCount, Status: document.Status,
 			Visibility: document.Visibility, JoinPolicy: document.JoinPolicy, Kind: document.Kind,
 			DisplaySubjectType: document.DisplaySubjectType, FollowEnabled: document.FollowEnabled,
 			DefaultPublicGroupID: document.DefaultPublicGroupID, LinkedHomepageID: document.LinkedHomepageID,

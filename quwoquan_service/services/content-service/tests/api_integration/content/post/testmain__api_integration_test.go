@@ -24,12 +24,14 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
+	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
+	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	deliveryredis "quwoquan_service/services/content-service/internal/content/feed_delivery_page/infrastructure/redis"
 	outboundshareapp "quwoquan_service/services/content-service/internal/content/outbound_share_fact/application/command"
 	outboundshareinfra "quwoquan_service/services/content-service/internal/content/outbound_share_fact/infrastructure/persistence"
 	contenhttp "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
-	behaviorapp "quwoquan_service/services/content-service/internal/content/post/application/behavior"
 	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
 	"quwoquan_service/services/content-service/internal/content/post/application/identity"
 	mediaapp "quwoquan_service/services/content-service/internal/content/post/application/media"
@@ -82,6 +84,13 @@ var (
 	testBehaviorProjectionRelay *recinfra.BehaviorProjectionRelay
 	testBehaviorProjectionMu    sync.Mutex
 	testPostgresFixture         *testinfra.PostgresFixture
+)
+
+const (
+	integrationEnvironment    = "api_integration"
+	integrationReleaseID      = "rel_api_integration"
+	integrationSupplyPostID   = "api_integration_active_supply_video"
+	integrationManifestDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 )
 
 type acceptingActiveTaxonomyLeafValidationPort struct{}
@@ -396,12 +405,74 @@ func TestMain(m *testing.M) {
 		DefaultScene: "general",
 	})
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec")))
-	source := recinfra.NewPostProjectionSource(postStore, postStore)
+	// Match the production Remote composition: recommendation recall owns the
+	// rm_discovery_feed projection, including immutable-release identity. The
+	// aggregate-backed PostProjectionSource is reserved for local/in-memory use.
+	source := recinfra.NewMongoCandidateSource(mongoDB)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
+	// Feed candidate recall, hydration and the active-release readback must observe
+	// the same materialized database as production. Test cleanup preserves only
+	// this fixed release-bound supply row; case-owned UGC remains isolated.
+	activeSupplyDB := mongoDB
+	if _, err := activeSupplyDB.Collection("data_release_state").UpdateOne(
+		ctx,
+		bson.M{"environment": integrationEnvironment, "sourceOwner": "qwq_data"},
+		bson.M{"$set": bson.M{
+			"environment": integrationEnvironment, "sourceOwner": "qwq_data",
+			"status": "active", "activeReleaseId": integrationReleaseID,
+			"manifestDigest": integrationManifestDigest,
+		}},
+		mongoopts.UpdateOne().SetUpsert(true),
+	); err != nil {
+		panic(fmt.Errorf("seed api integration active supply snapshot: %w", err))
+	}
+	activeSupplyNow := time.Now().UTC()
+	if _, err := activeSupplyDB.Collection("posts").UpdateOne(ctx,
+		bson.M{"_id": integrationSupplyPostID},
+		bson.M{"$set": bson.M{
+			"sourceOwner": "qwq_data", "releaseId": integrationReleaseID,
+			"manifestDigest":  integrationManifestDigest,
+			"lifecycleStatus": "active", "status": "published", "visibility": "public",
+			"moderationStatus": "approved", "contentIdentity": "work", "contentType": "video",
+			"videoUrl": "https://media.example.test/api-integration.mp4", "durationMs": int64(1000),
+		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
+		panic(fmt.Errorf("seed api integration active supply post: %w", err))
+	}
+	if _, err := activeSupplyDB.Collection("rm_discovery_feed").UpdateOne(ctx,
+		bson.M{"postId": integrationSupplyPostID},
+		bson.M{"$set": bson.M{
+			"sourceOwner": "qwq_data", "releaseId": integrationReleaseID,
+			"manifestDigest":  integrationManifestDigest,
+			"lifecycleStatus": "active", "status": "published", "visibility": "public",
+			"contentIdentity": "work", "contentType": "video", "supplySource": "data_engineering",
+			"authorId": "creator_api_integration", "title": "API integration canonical video",
+			"publishedAt": activeSupplyNow, "qualityScore": 0.95, "recScore": 0.95,
+		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
+		panic(fmt.Errorf("seed api integration active supply discovery post: %w", err))
+	}
+	if _, err := activeSupplyDB.Collection("rm_premium_pool").UpdateOne(ctx,
+		bson.M{"contentId": integrationSupplyPostID},
+		bson.M{"$set": bson.M{
+			"scope": "global", "status": "active", "eligibilityState": "eligible",
+			"qualityAdmission": "approved", "qualityScore": 0.95,
+			"expiresAt": activeSupplyNow.Add(24 * time.Hour), "takedownEjected": false,
+		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
+		panic(fmt.Errorf("seed api integration active supply premium video: %w", err))
+	}
 	feedService := feedapp.NewFeedService(
 		engine,
 		persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
 		feedapp.WithFeedViewerBlockReader(recinfra.NewPersonaBlockReader(mongoDB)),
+		feedapp.WithActiveSupplyReader(persistence.NewMongoActiveSupplyReader(
+			activeSupplyDB,
+			integrationEnvironment,
+			persistence.WithPremiumPlayableSupplyReader(
+				recinfra.NewMongoPremiumPoolCandidateReader(activeSupplyDB),
+			),
+		)),
+		feedapp.WithFeedDeliveryPageStore(
+			deliveryredis.NewStore(testRouter.Scene("rec")),
+		),
 	)
 	testFeedService = feedService
 
@@ -547,15 +618,13 @@ func TestMain(m *testing.M) {
 			CurrentCase: testModerationStore,
 		},
 	))
-	wishlistStore := persistence.NewMongoWishlistEventStore(mongoDB, slog.Default())
+	wishlistStore := behaviorpersistence.NewMongoWishlistEventStore(mongoDB, slog.Default())
 	behaviorService := behaviorapp.NewBehaviorService(
 		hotPath,
 		postStore,
-		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, slog.Default())),
+		behaviorapp.WithBehaviorEventStore(behaviorpersistence.NewMongoBehaviorEventStore(mongoDB, slog.Default())),
 		behaviorapp.WithOnboardingInterestTaxonomyValidator(
 			behaviorapp.CatalogBackedOnboardingInterestTaxonomy{
-				Version:           "v1",
-				TaxonomyReleaseID: "tag-taxonomy-test-001",
 				DimensionRoots: map[string]string{
 					"topic":    "Topic",
 					"audience": "Audience",
@@ -601,12 +670,12 @@ func TestMain(m *testing.M) {
 		contenhttp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 	).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
-			subAccountID := identity.AnonymousFallbackSubAccountID
+		if strings.TrimSpace(r.Header.Get("X-Client-Persona-Id")) == "" {
+			personaID := identity.AnonymousFallbackPersonaID
 			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
-				subAccountID = userID
+				personaID = userID
 			}
-			r.Header.Set("X-Client-Sub-Account-Id", subAccountID)
+			r.Header.Set("X-Client-Persona-Id", personaID)
 		}
 		if r.Method != http.MethodGet &&
 			r.Method != http.MethodHead &&
@@ -625,7 +694,7 @@ func TestMain(m *testing.M) {
 		// handler. Security negative cases use their own real auth middleware.
 		if _, verified := rtauth.PrincipalFromContext(r.Context()); !verified {
 			accountID := strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
-			personaID := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
+			personaID := strings.TrimSpace(r.Header.Get("X-Client-Persona-Id"))
 			if accountID == "" {
 				accountID = personaID
 			}
@@ -832,7 +901,14 @@ func cleanPosts(t *testing.T) {
 		"media_original_access_receipts",
 		"rm_behavior_events",
 	} {
-		if _, err := mongoDB.Collection(coll).DeleteMany(ctx, bson.M{}); err != nil {
+		filter := bson.M{}
+		switch coll {
+		case "posts":
+			filter = bson.M{"_id": bson.M{"$ne": integrationSupplyPostID}}
+		case "rm_discovery_feed":
+			filter = bson.M{"postId": bson.M{"$ne": integrationSupplyPostID}}
+		}
+		if _, err := mongoDB.Collection(coll).DeleteMany(ctx, filter); err != nil {
 			t.Logf("cleanPosts(%s): %v", coll, err)
 		}
 	}

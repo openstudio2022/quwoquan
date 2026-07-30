@@ -1,0 +1,28 @@
+read_model: RecommendationReplaySample
+description: 冻结评估数据集中的不可覆盖样本快照；账号注销时按 userId 物理删除，晚到事实由 closed_account_subjects 拒绝。
+storage_backend: mongodb
+collection: rec_replay_samples
+producers:
+- recommendation-service
+consumers:
+- recommendation-service
+fields:
+- {name: _id, type: ObjectId}
+- {name: datasetId, type: string}
+- {name: sourceSampleId, type: ObjectId}
+- {name: scenario, type: string}
+- {name: userId, type: string}
+- {name: targetId, type: string}
+- {name: userFeatures, type: object}
+- {name: itemFeatures, type: object}
+- {name: labels, type: object}
+- {name: ts, type: timestamp}
+indexes:
+- name: idx_rec_replay_dataset
+  keys: {datasetId: 1}
+- name: idx_rec_replay_user_dataset
+  keys: {userId: 1, datasetId: 1}
+privacy_lifecycle:
+  owner_field: userId
+  on_user_account_closed: delete
+  anti_resurrection_guard: closed_account_subjects

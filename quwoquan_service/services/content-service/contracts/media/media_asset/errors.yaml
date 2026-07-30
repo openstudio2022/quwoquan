@@ -12,6 +12,9 @@ errors:
   kind: USER
   reason: media_not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [RecordMediaProcessingResult, UpdateMediaAssetAccessPolicy, GetOwnedMediaAsset, GetMediaAssetReference, GetMediaAssetDeliveryReference, GetMediaAsset, DiscardMediaAsset, SelectAutoVideoCover, SelectManualVideoCover, content.post.SubmitPostPublication, content.media_original_access_fact.RequestOriginalImageAccess, content.media_upload_session.AbortMediaUpload, content.media_upload_session.CompleteMediaUpload, content.media_upload_session.GetMediaUploadSession]
   recovery_action: surface
   dart_const: mediaNotFound
   go_const: ErrMediaNotFound
@@ -22,6 +25,9 @@ errors:
   kind: USER
   reason: media_not_ready
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [UpdateMediaAssetAccessPolicy, GetOwnedMediaAsset, GetMediaAssetReference, GetMediaAssetDeliveryReference, SelectAutoVideoCover, SelectManualVideoCover, content.post.SubmitPostPublication]
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: mediaNotReady
@@ -33,6 +39,9 @@ errors:
   kind: USER
   reason: media_processing_rejected
   http_status: 422
+  emitted_by:
+  - surface: http
+    operations: [UpdateMediaAssetAccessPolicy, SelectAutoVideoCover, SelectManualVideoCover, content.post.SubmitPostPublication]
   recovery_action: surface
   dart_const: mediaProcessingRejected
   go_const: ErrMediaProcessingRejected
@@ -43,6 +52,9 @@ errors:
   kind: USER
   reason: media_in_use
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [DiscardMediaAsset]
   recovery_action: surface
   dart_const: mediaInUse
   go_const: ErrMediaInUse
@@ -52,7 +64,8 @@ errors:
 - code: CONTENT.SYSTEM.media_playback_network_unavailable
   kind: SYSTEM
   reason: media_playback_network_unavailable
-  http_status: 503
+  emitted_by:
+  - surface: player
   recovery_action: retry
   dart_const: mediaPlaybackNetworkUnavailable
   go_const: ErrMediaPlaybackNetworkUnavailable
@@ -62,7 +75,8 @@ errors:
 - code: CONTENT.SYSTEM.media_playback_temporarily_unavailable
   kind: SYSTEM
   reason: media_playback_temporarily_unavailable
-  http_status: 503
+  emitted_by:
+  - surface: player
   recovery_action: retry
   dart_const: mediaPlaybackTemporarilyUnavailable
   go_const: ErrMediaPlaybackTemporarilyUnavailable
@@ -72,7 +86,8 @@ errors:
 - code: CONTENT.SYSTEM.media_playback_service_busy
   kind: SYSTEM
   reason: media_playback_service_busy
-  http_status: 503
+  emitted_by:
+  - surface: player
   recovery_action: retry
   dart_const: mediaPlaybackServiceBusy
   go_const: ErrMediaPlaybackServiceBusy
@@ -82,7 +97,8 @@ errors:
 - code: CONTENT.USER.media_playback_unavailable
   kind: USER
   reason: media_playback_unavailable
-  http_status: 404
+  emitted_by:
+  - surface: player
   recovery_action: surface
   dart_const: mediaPlaybackUnavailable
   go_const: ErrMediaPlaybackUnavailable
@@ -92,7 +108,8 @@ errors:
 - code: CONTENT.SYSTEM.media_playback_unsupported
   kind: SYSTEM
   reason: media_playback_unsupported
-  http_status: 422
+  emitted_by:
+  - surface: player
   recovery_action: surface
   dart_const: mediaPlaybackUnsupported
   go_const: ErrMediaPlaybackUnsupported
@@ -102,7 +119,8 @@ errors:
 - code: CONTENT.SYSTEM.media_seek_failed
   kind: SYSTEM
   reason: media_seek_failed
-  http_status: 503
+  emitted_by:
+  - surface: player
   recovery_action: retry
   recovery_after_seconds: 0
   dart_const: mediaSeekFailed

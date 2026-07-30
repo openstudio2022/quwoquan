@@ -40,6 +40,7 @@ class _UnifiedMediaViewerPageState
         source: widget.extra.source,
         referralSource: widget.extra.referralSource,
         feedRequestId: widget.extra.feedRequestId,
+        policyDigest: widget.extra.policyDigest,
         initialFeedPosition: widget.extra.position,
         rawPostsById: widget.extra.rawPostsById,
         initialInteractionSnapshot: widget.extra.interactionSnapshot,
@@ -57,9 +58,9 @@ class _UnifiedMediaViewerPageState
               String? backgroundUrl,
             }) {
               context.push(
-                AppRoutePaths.userProfile(username: userId),
+                AppRoutePaths.userProfile(userHandle: userId),
                 extra: UserProfileRouteExtra(
-                  subAccountId: userId,
+                  personaId: userId,
                   avatar: avatarUrl,
                   displayName: displayName,
                   backgroundImage: backgroundUrl,

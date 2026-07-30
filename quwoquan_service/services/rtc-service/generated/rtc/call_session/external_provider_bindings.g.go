@@ -7,20 +7,20 @@ const ExternalProviderBindingOwner = "rtc-service"
 const ExternalProviderBindingObject = "rtc.rtc.call_session"
 
 type ExternalProviderBinding struct {
-	State string
-	AdapterID string
-	EndpointRef string
+	State                   string
+	AdapterID               string
+	EndpointRef             string
 	EndpointEnvironmentKeys map[string]string
-	SecretEnvironmentKeys []string
-	TimeoutMilliseconds int
-	RequiredRedisScenes []string
+	SecretEnvironmentKeys   []string
+	TimeoutMilliseconds     int
+	RequiredRedisScenes     []string
 }
 
 var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	"alpha": {
 		"rtc.room.transport": {
-			State: "enabled",
-			AdapterID: "infra.livekit_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "infra.livekit_protocol_fixture",
 			EndpointRef: "environment_binding:rtc.livekit_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"connection": "RTC_MEDIA_FIXTURE_CONNECTION_URL",
@@ -30,18 +30,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"RTC_MEDIA_FIXTURE_API_SECRET",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport_fixture",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport_fixture",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -50,8 +47,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"beta": {
 		"rtc.room.transport": {
-			State: "enabled",
-			AdapterID: "infra.livekit_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "infra.livekit_protocol_fixture",
 			EndpointRef: "environment_binding:rtc.livekit_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"connection": "RTC_MEDIA_FIXTURE_CONNECTION_URL",
@@ -61,18 +58,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"RTC_MEDIA_FIXTURE_API_SECRET",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -81,8 +75,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"gamma": {
 		"rtc.room.transport": {
-			State: "enabled",
-			AdapterID: "infra.livekit_protocol_fixture",
+			State:       "enabled",
+			AdapterID:   "infra.livekit_protocol_fixture",
 			EndpointRef: "environment_binding:rtc.livekit_fixture",
 			EndpointEnvironmentKeys: map[string]string{
 				"connection": "RTC_MEDIA_FIXTURE_CONNECTION_URL",
@@ -92,18 +86,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"RTC_MEDIA_FIXTURE_API_SECRET",
 			},
 			TimeoutMilliseconds: 1000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -112,8 +103,8 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 	},
 	"prod": {
 		"rtc.room.transport": {
-			State: "enabled",
-			AdapterID: "infra.livekit_sfu",
+			State:       "enabled",
+			AdapterID:   "infra.livekit_sfu",
 			EndpointRef: "environment_binding:rtc.livekit",
 			EndpointEnvironmentKeys: map[string]string{
 				"connection": "RTC_MEDIA_CONNECTION_URL",
@@ -123,18 +114,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 				"RTC_MEDIA_API_SECRET",
 			},
 			TimeoutMilliseconds: 10000,
-			RequiredRedisScenes: []string{
-			},
+			RequiredRedisScenes: []string{},
 		},
 		"runtime.message.transport": {
-			State: "enabled",
-			AdapterID: "infra.redis.message_transport",
-			EndpointRef: "",
-			EndpointEnvironmentKeys: map[string]string{
-			},
-			SecretEnvironmentKeys: []string{
-			},
-			TimeoutMilliseconds: 5000,
+			State:                   "enabled",
+			AdapterID:               "infra.redis.message_transport",
+			EndpointRef:             "",
+			EndpointEnvironmentKeys: map[string]string{},
+			SecretEnvironmentKeys:   []string{},
+			TimeoutMilliseconds:     5000,
 			RequiredRedisScenes: []string{
 				"general",
 				"realtime",
@@ -145,7 +133,9 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 
 func ExternalProviderBindingFor(environment, capabilityID string) (ExternalProviderBinding, bool) {
 	byCapability, ok := ExternalProviderBindings[environment]
-	if !ok { return ExternalProviderBinding{}, false }
+	if !ok {
+		return ExternalProviderBinding{}, false
+	}
 	binding, ok := byCapability[capabilityID]
 	return binding, ok
 }

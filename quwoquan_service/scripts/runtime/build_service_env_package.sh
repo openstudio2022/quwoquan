@@ -436,7 +436,7 @@ if materialized_resources:
     )
 manifest_path.write_text(yaml.safe_dump_all(documents, allow_unicode=True, sort_keys=False))
 provenance = {
-    "schema": "qwq.service_package.v1",
+    "schema": "qwq.service_package",
     "service": service,
     "environment": environment,
     "gitRevision": revision,

@@ -88,14 +88,14 @@ type AppearanceApplyScope string
 
 const (
 	AppearanceApplyScopeAllAccounts         AppearanceApplyScope = "all_accounts"
-	AppearanceApplyScopeCurrentSubAccount   AppearanceApplyScope = "current_sub_account"
+	AppearanceApplyScopeCurrentPersona      AppearanceApplyScope = "current_persona"
 	AppearanceApplyScopeInheritOwnerDefault AppearanceApplyScope = "inherit_owner_default"
 )
 
 func (value AppearanceApplyScope) Valid() bool {
 	switch value {
 	case AppearanceApplyScopeAllAccounts,
-		AppearanceApplyScopeCurrentSubAccount,
+		AppearanceApplyScopeCurrentPersona,
 		AppearanceApplyScopeInheritOwnerDefault:
 		return true
 	default:

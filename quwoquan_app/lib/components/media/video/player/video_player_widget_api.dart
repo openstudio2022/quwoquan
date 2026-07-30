@@ -9,6 +9,8 @@ enum VideoPlaybackOverlayMode { none, inlineFeed }
 class VideoPlayerWidget extends ConsumerStatefulWidget {
   /// 已在 mapper/边界验证的公开媒体交付引用；播放器不再解析业务 object key。
   final MediaDeliveryReference deliveryReference;
+  final MediaDeliveryReference? adaptiveDeliveryReference;
+  final int adaptiveDescriptorVersion;
   final MediaDeliveryReference? thumbnailReference;
   final bool initialize;
   final bool autoPlay;
@@ -35,6 +37,8 @@ class VideoPlayerWidget extends ConsumerStatefulWidget {
   const VideoPlayerWidget({
     super.key,
     required this.deliveryReference,
+    this.adaptiveDeliveryReference,
+    this.adaptiveDescriptorVersion = 0,
     this.thumbnailReference,
     this.initialize = true,
     this.autoPlay = false,

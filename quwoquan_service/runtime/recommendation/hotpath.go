@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"quwoquan_service/runtime/boundedrecord"
 )
 
 // RedisClient abstracts Redis operations for the hot path.
@@ -17,19 +19,25 @@ type RedisClient interface {
 	Del(ctx context.Context, keys ...string) error
 	SAdd(ctx context.Context, key string, members ...string) error
 	SRem(ctx context.Context, key string, members ...string) error
-	SMembers(ctx context.Context, key string) ([]string, error)
 	SIsMember(ctx context.Context, key string, member string) (bool, error)
 	HIncrByFloat(ctx context.Context, key, field string, incr float64) error
-	HGetAll(ctx context.Context, key string) (map[string]string, error)
 	Expire(ctx context.Context, key string, ttl time.Duration) error
 }
 
-// RedisPipeliner is optionally implemented by RedisClient adapters that
-// support pipelining multiple reads into a single RTT.
-// When HotPath detects this interface, GetSessionState sends all session and
-// cross-session reads in one pipeline instead of parallel goroutines.
+// RedisPipeliner is the required batched-read capability for recommendation
+// Redis adapters. Feed reads must not retain a sequential/parallel compatibility
+// path because that creates a second runtime composition with different latency
+// and failure semantics.
 type RedisPipeliner interface {
 	PipelineRead(ctx context.Context, ops []PipelineOp) error
+}
+
+// RedisPipelineClient is the single commercial HotPath Redis contract.
+// Requiring both command and pipeline capabilities at construction time makes
+// a non-pipelined adapter a compile-time composition error.
+type RedisPipelineClient interface {
+	RedisClient
+	RedisPipeliner
 }
 
 // PipelineOpType identifies the Redis command within a pipeline batch.
@@ -57,6 +65,21 @@ type PipelineOp struct {
 // Implemented by HotPath, SessionCache, etc.
 type SessionReader interface {
 	GetSessionState(ctx context.Context, userID, sessionID string) (*SessionState, error)
+}
+
+// RankedFeedWindowStoreProvider exposes the same rec-scene Redis already used
+// by the recommendation hot path. Engine discovery through this narrow port
+// prevents production from silently falling back to an in-process second cache.
+type RankedFeedWindowStoreProvider interface {
+	RankedFeedWindowStore() RankedFeedWindowStore
+}
+
+// HardExclusionReader reads the user-scoped facts that may never be bypassed:
+// explicit negative content, hidden authors and hidden content types. It is
+// intentionally separate from SessionReader so a soft personalization read
+// failure can degrade without turning hard exclusions into an empty set.
+type HardExclusionReader interface {
+	LoadHardExclusions(ctx context.Context, userID string) (FeedbackExclusions, error)
 }
 
 // SignalProcessor writes behavior signals.
@@ -171,11 +194,10 @@ type BehaviorSignal struct {
 	FeedRequestID   string    `json:"feedRequestId,omitempty"`
 	Position        int       `json:"position,omitempty"`
 	CommentLength   int       `json:"commentLength,omitempty"`
-	// 阶段五归因：feed 下发频道与精排版本，全事件携带，使 HotPath / served-impressed 双轨记账与
-	// 特征投影可按频道与精排版本分桶（AB / replay）。与 App BehaviorEvent.channelId/rankingVersion 对齐。
+	// feed 下发频道与唯一策略摘要，全事件携带，使 HotPath / served-impressed
+	// 记账与特征投影可按同一不可变策略身份归因。
 	ChannelID       string `json:"channelId,omitempty"`
-	RankingVersion  string `json:"rankingVersion,omitempty"`
-	ReasonVersion   string `json:"reasonVersion,omitempty"`
+	PolicyDigest    string `json:"policyDigest,omitempty"`
 	RecallPath      string `json:"recallPath,omitempty"`
 	ContentVertical string `json:"contentVertical,omitempty"`
 	SupplySource    string `json:"supplySource,omitempty"`
@@ -272,8 +294,9 @@ var DepthLevelCoefficient = [5]float64{0.0, 0.3, 0.7, 1.2, 2.0}
 
 // HotPath manages session-level recommendation state in Redis.
 type HotPath struct {
-	redis RedisClient
-	guard SubjectClosureGuard
+	redis             RedisPipelineClient
+	guard             SubjectClosureGuard
+	rankedWindowQuota boundedrecord.Policy
 }
 
 type HotPathOption func(*HotPath)
@@ -284,14 +307,32 @@ func WithSubjectClosureGuard(guard SubjectClosureGuard) HotPathOption {
 	}
 }
 
-func NewHotPath(redis RedisClient, options ...HotPathOption) *HotPath {
-	hotPath := &HotPath{redis: redis}
+func WithRankedFeedWindowQuotaPolicy(policy boundedrecord.Policy) HotPathOption {
+	return func(hotPath *HotPath) {
+		hotPath.rankedWindowQuota = policy
+	}
+}
+
+func NewHotPath(redis RedisPipelineClient, options ...HotPathOption) *HotPath {
+	hotPath := &HotPath{
+		redis:             redis,
+		rankedWindowQuota: DefaultRankedFeedWindowQuotaPolicy(),
+	}
 	for _, option := range options {
 		if option != nil {
 			option(hotPath)
 		}
 	}
 	return hotPath
+}
+
+// RankedFeedWindowStore returns a non-sliding immutable-window adapter over the
+// existing recommendation Redis scene.
+func (h *HotPath) RankedFeedWindowStore() RankedFeedWindowStore {
+	if h == nil || h.redis == nil {
+		return nil
+	}
+	return NewRedisRankedFeedWindowStore(h.redis, h.rankedWindowQuota)
 }
 
 func (h *HotPath) isSubjectClosed(
@@ -482,9 +523,8 @@ func (h *HotPath) ProcessSignalBatch(ctx context.Context, signals []BehaviorSign
 	return firstErr
 }
 
-// GetSessionState returns the full session state for the recommendation engine.
-// Prefers pipeline (single RTT) when the underlying RedisClient implements
-// RedisPipeliner; falls back to 3 parallel goroutines otherwise.
+// GetSessionState returns the full session state through the canonical
+// single-RTT pipeline.
 func (h *HotPath) GetSessionState(ctx context.Context, userID, sessionID string) (*SessionState, error) {
 	closed, err := h.isSubjectClosed(ctx, userID)
 	if err != nil {
@@ -498,11 +538,7 @@ func (h *HotPath) GetSessionState(ctx context.Context, userID, sessionID string)
 		}, nil
 	}
 	sk := sessionKey(userID, sessionID)
-
-	if pipeliner, ok := h.redis.(RedisPipeliner); ok {
-		return h.getSessionStatePipeline(ctx, pipeliner, sk, userID, sessionID)
-	}
-	return h.getSessionStateParallel(ctx, sk, userID, sessionID)
+	return h.getSessionStatePipeline(ctx, h.redis, sk, userID, sessionID)
 }
 
 // getSessionStatePipeline sends HGetAll + small user-level SMembers in a single RTT.
@@ -534,56 +570,6 @@ func (h *HotPath) getSessionStatePipeline(ctx context.Context, p RedisPipeliner,
 		NegativeIDs:        nil,
 		HiddenAuthorIDs:    ops[1].Set,
 		HiddenContentTypes: ops[2].Set,
-	}, nil
-}
-
-// getSessionStateParallel reads tag weights and small user-level hidden sets.
-func (h *HotPath) getSessionStateParallel(ctx context.Context, sk, userID, sessionID string) (*SessionState, error) {
-	var (
-		tagWeights       map[string]float64
-		hiddenAuthors    []string
-		hiddenTypes      []string
-		tagErr           error
-		hiddenAuthorsErr error
-		hiddenTypesErr   error
-	)
-
-	var wg sync.WaitGroup
-	wg.Add(3)
-
-	go func() {
-		defer wg.Done()
-		tagWeights, tagErr = h.getTagWeights(ctx, sk)
-	}()
-	go func() {
-		defer wg.Done()
-		hiddenAuthors, hiddenAuthorsErr = h.getHiddenAuthors(ctx, userID)
-	}()
-	go func() {
-		defer wg.Done()
-		hiddenTypes, hiddenTypesErr = h.getHiddenTypes(ctx, userID)
-	}()
-
-	wg.Wait()
-
-	if tagErr != nil {
-		return nil, tagErr
-	}
-	if hiddenAuthorsErr != nil {
-		return nil, hiddenAuthorsErr
-	}
-	if hiddenTypesErr != nil {
-		return nil, hiddenTypesErr
-	}
-
-	return &SessionState{
-		UserID:             userID,
-		SessionID:          sessionID,
-		TagWeights:         tagWeights,
-		ExposedIDs:         nil,
-		NegativeIDs:        nil,
-		HiddenAuthorIDs:    hiddenAuthors,
-		HiddenContentTypes: hiddenTypes,
 	}, nil
 }
 
@@ -680,21 +666,44 @@ func (h *HotPath) RestoreNegative(
 	)
 }
 
-// NegativeContentIDs returns the user's accumulated explicit-negative content
-// set (dislike / hide / report). Feed paths that bypass the recall pipeline
-// (repository fallback) read this so explicit negative feedback is honored on
-// every feed path, not only inside engine recall. The set is per-user (not
-// day-bucketed) and stays small by product semantics, so a single SMembers off
-// the hot recall path is acceptable.
-func (h *HotPath) NegativeContentIDs(ctx context.Context, userID string) ([]string, error) {
-	if strings.TrimSpace(userID) == "" {
-		return nil, nil
+// LoadHardExclusions resolves all non-bypassable user filters from one Redis
+// pipeline snapshot. Any read error is returned so the caller can fail closed.
+func (h *HotPath) LoadHardExclusions(
+	ctx context.Context,
+	userID string,
+) (FeedbackExclusions, error) {
+	exclusions := emptyFeedbackExclusions()
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return exclusions, nil
 	}
 	closed, err := h.isSubjectClosed(ctx, userID)
-	if err != nil || closed {
-		return nil, err
+	if err != nil {
+		return exclusions, err
 	}
-	return h.redis.SMembers(ctx, negativeKeyPrefix+userScopedKey(userID))
+	if closed {
+		return exclusions, nil
+	}
+	keys := []string{
+		negativeKeyPrefix + userScopedKey(userID),
+		hiddenAuthorsKeyPrefix + userHashKey(userID),
+		hiddenTypesKeyPrefix + userHashKey(userID),
+	}
+	sets := make([][]string, len(keys))
+	ops := make([]PipelineOp, 0, len(keys))
+	for _, key := range keys {
+		ops = append(ops, PipelineOp{Type: PipelineSMembers, Key: key})
+	}
+	if err := h.redis.PipelineRead(ctx, ops); err != nil {
+		return exclusions, err
+	}
+	for index := range ops {
+		sets[index] = ops[index].Set
+	}
+	exclusions.NegativeContentIDs = toSet(sets[0])
+	exclusions.HiddenAuthors = toSet(sets[1])
+	exclusions.HiddenContentTypes = toSet(sets[2])
+	return exclusions, nil
 }
 
 func (h *HotPath) AcceptEvent(ctx context.Context, signal BehaviorSignal) (bool, error) {
@@ -748,47 +757,16 @@ func (h *HotPath) FilterCandidates(ctx context.Context, userID string, candidate
 	servedDays := dayKeys(userID, at, int(servedTTL/(24*time.Hour)))
 	impressedDays := dayKeys(userID, at, int(impressedTTL/(24*time.Hour)))
 	negativeKey := negativeKeyPrefix + userScopedKey(userID)
-	// N3-2：支持 pipeline 的 client 单次 RTT 批量点查（消除 O(N×(1+served天+impressed天))
-	// 的逐条往返）；不支持时回退逐条路径，语义完全一致。
-	if pipeliner, ok := h.redis.(RedisPipeliner); ok {
-		return h.filterCandidatesPipeline(ctx, pipeliner, candidates, negativeKey, servedDays, impressedDays)
-	}
-	filtered := make([]ContentCandidate, 0, len(candidates))
-	// 重复曝光拦截度量：被 served/impressed 命中即「若不过滤就会再次曝光」的候选。
-	// served/impressed 双轨分开计数，喂 recommendation_feed_duplicate_exposure_total，
-	// 让重复曝光率 SLO（repeat_exposure_rate <= 0.01）可度量而非 objective_only。
-	// negative 命中走显式负反馈语义，不计入重复曝光。
-	dupServed, dupImpressed := 0, 0
-	for _, c := range candidates {
-		contentID := strings.TrimSpace(c.ContentID)
-		if contentID == "" {
-			continue
-		}
-		blocked, err := h.redis.SIsMember(ctx, negativeKey, contentID)
-		if err != nil {
-			return nil, err
-		}
-		if blocked {
-			feedNegativeCandidateSuppressedTotal.Inc()
-			continue
-		}
-		if served, err := h.memberOfAny(ctx, servedKeyPrefix, servedDays, contentID); err != nil {
-			return nil, err
-		} else if served {
-			dupServed++
-			continue
-		}
-		if impressed, err := h.memberOfAny(ctx, impressedKeyPrefix, impressedDays, contentID); err != nil {
-			return nil, err
-		} else if impressed {
-			dupImpressed++
-			continue
-		}
-		filtered = append(filtered, c)
-	}
-	RecordDuplicateExposureFiltered("served", dupServed)
-	RecordDuplicateExposureFiltered("impressed", dupImpressed)
-	return filtered, nil
+	// N3-2：canonical pipeline 单次 RTT 批量点查，消除
+	// O(N×(1+served天+impressed天)) 的逐条往返。
+	return h.filterCandidatesPipeline(
+		ctx,
+		h.redis,
+		candidates,
+		negativeKey,
+		servedDays,
+		impressedDays,
+	)
 }
 
 // FilterCandidatesRelaxedExposure relaxes only served/impressed history.
@@ -810,28 +788,19 @@ func (h *HotPath) FilterCandidatesRelaxedExposure(
 		return nil, nil
 	}
 	negativeKey := negativeKeyPrefix + userScopedKey(userID)
-	filtered := make([]ContentCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		contentID := strings.TrimSpace(candidate.ContentID)
-		if contentID == "" {
-			continue
-		}
-		blocked, readErr := h.redis.SIsMember(ctx, negativeKey, contentID)
-		if readErr != nil {
-			return nil, readErr
-		}
-		if blocked {
-			feedNegativeCandidateSuppressedTotal.Inc()
-			continue
-		}
-		filtered = append(filtered, candidate)
-	}
-	return filtered, nil
+	return h.filterCandidatesPipeline(
+		ctx,
+		h.redis,
+		candidates,
+		negativeKey,
+		nil,
+		nil,
+	)
 }
 
 // filterCandidatesPipeline 单次 pipeline 批量执行全部成员点查（N3-2，消除
 // O(N×(1+served天+impressed天)) 的逐条 RTT：全部 SISMEMBER 装进一个 pipeline，
-// 网络往返 1 次）。过滤语义与逐条路径逐位一致：negative 优先（计 suppressed）、
+// 网络往返 1 次）。过滤语义固定为 negative 优先（计 suppressed）、
 // served 次之、impressed 最后（served/impressed 分开计重复曝光）。
 func (h *HotPath) filterCandidatesPipeline(
 	ctx context.Context,
@@ -908,19 +877,6 @@ func (h *HotPath) filterCandidatesPipeline(
 	return filtered, nil
 }
 
-func (h *HotPath) memberOfAny(ctx context.Context, prefix string, dayKeys []string, contentID string) (bool, error) {
-	for _, keySuffix := range dayKeys {
-		ok, err := h.redis.SIsMember(ctx, prefix+keySuffix, contentID)
-		if err != nil {
-			return false, err
-		}
-		if ok {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func dayKeys(userID string, at time.Time, days int) []string {
 	if days <= 0 {
 		days = 1
@@ -969,27 +925,4 @@ func (h *HotPath) updateInterest(ctx context.Context, sk string, signal Behavior
 	key := interestKeyPrefix + sk
 	data, _ := json.Marshal(signal)
 	return h.redis.Set(ctx, key, string(data), sessionTTL)
-}
-
-func (h *HotPath) getTagWeights(ctx context.Context, sk string) (map[string]float64, error) {
-	key := signalKeyPrefix + sk
-	raw, err := h.redis.HGetAll(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	weights := make(map[string]float64, len(raw))
-	for k, v := range raw {
-		var f float64
-		fmt.Sscanf(v, "%f", &f)
-		weights[k] = f
-	}
-	return weights, nil
-}
-
-func (h *HotPath) getHiddenAuthors(ctx context.Context, userID string) ([]string, error) {
-	return h.redis.SMembers(ctx, hiddenAuthorsKeyPrefix+userHashKey(userID))
-}
-
-func (h *HotPath) getHiddenTypes(ctx context.Context, userID string) ([]string, error) {
-	return h.redis.SMembers(ctx, hiddenTypesKeyPrefix+userHashKey(userID))
 }

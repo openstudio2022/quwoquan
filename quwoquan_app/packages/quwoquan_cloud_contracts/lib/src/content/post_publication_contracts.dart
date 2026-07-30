@@ -1,5 +1,6 @@
 import '../operation_request_payload.dart';
 import 'post_reader_queries.dart';
+part '../generated/requests/content/post_publication_contracts.requests.g.dart';
 
 enum ContentPostType { image, video, micro, article }
 
@@ -13,83 +14,6 @@ enum ContentPostSourceType { original, repost, quote }
 
 String postPublicationIntentIdForLocalDraft(String localDraftId) =>
     'post-publication:${_requiredText(localDraftId, 'localDraftId')}';
-
-/// 本地草稿到已发布 Post 的唯一原子命令。
-final class SubmitContentPostPublicationCommand {
-  SubmitContentPostPublicationCommand({
-    required String publishIntentId,
-    required String localDraftId,
-    required this.contentType,
-    this.contentIdentity,
-    this.title,
-    this.body,
-    this.summary,
-    Iterable<ContentPostStructuredObject> semanticMentions = const [],
-    Iterable<String> mediaAssetIds = const [],
-    Iterable<ContentPostStructuredObject> mediaItems = const [],
-    this.articleMarkdown,
-    this.markdownDialect,
-    this.articleAssetManifest,
-    this.articleRenderProfile,
-    this.coverStrategy,
-    this.coverFrameTimeMs,
-    this.illustrationAssetId,
-    this.location,
-    this.locationName,
-    this.primaryHomepageId,
-    this.primaryHomepageType,
-    this.primaryHomepageSnapshot,
-    this.visibility,
-    this.assistantUsePolicy,
-    this.sourcePostId,
-    this.sourceType,
-    this.deviceInfo,
-    this.publishLocation,
-    this.authorDisplayNameSnapshot,
-    this.authorAvatarUrlSnapshot,
-    this.personaContextVersion,
-  }) : publishIntentId = _requiredText(publishIntentId, 'publishIntentId'),
-       localDraftId = _requiredText(localDraftId, 'localDraftId'),
-       semanticMentions = List<ContentPostStructuredObject>.unmodifiable(
-         semanticMentions,
-       ),
-       mediaAssetIds = List<String>.unmodifiable(
-         mediaAssetIds.map((value) => _requiredText(value, 'mediaAssetId')),
-       ),
-       mediaItems = List<ContentPostStructuredObject>.unmodifiable(mediaItems);
-
-  final String publishIntentId;
-  final String localDraftId;
-  final ContentPostType contentType;
-  final ContentPostIdentity? contentIdentity;
-  final String? title;
-  final String? body;
-  final String? summary;
-  final List<ContentPostStructuredObject> semanticMentions;
-  final List<String> mediaAssetIds;
-  final List<ContentPostStructuredObject> mediaItems;
-  final String? articleMarkdown;
-  final String? markdownDialect;
-  final ContentPostStructuredObject? articleAssetManifest;
-  final ContentPostStructuredObject? articleRenderProfile;
-  final String? coverStrategy;
-  final int? coverFrameTimeMs;
-  final String? illustrationAssetId;
-  final ContentPostStructuredObject? location;
-  final String? locationName;
-  final String? primaryHomepageId;
-  final String? primaryHomepageType;
-  final ContentPostStructuredObject? primaryHomepageSnapshot;
-  final ContentPostVisibility? visibility;
-  final ContentPostAssistantUsePolicy? assistantUsePolicy;
-  final String? sourcePostId;
-  final ContentPostSourceType? sourceType;
-  final ContentPostStructuredObject? deviceInfo;
-  final ContentPostStructuredObject? publishLocation;
-  final String? authorDisplayNameSnapshot;
-  final String? authorAvatarUrlSnapshot;
-  final int? personaContextVersion;
-}
 
 final class ContentPostPublicationReceipt {
   const ContentPostPublicationReceipt({
@@ -114,77 +38,6 @@ abstract interface class ContentPostPublicationWriter {
     SubmitContentPostPublicationCommand command,
   );
 }
-
-CloudOperationRequestPayload encodeSubmitContentPostPublicationCommand(
-  SubmitContentPostPublicationCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'publishIntentId': command.publishIntentId,
-    'localDraftId': command.localDraftId,
-    'contentType': command.contentType.name,
-    if (command.contentIdentity != null)
-      'contentIdentity': command.contentIdentity!.name,
-    if (_optionalText(command.title) case final value?) 'title': value,
-    if (_optionalText(command.body) case final value?) 'body': value,
-    if (_optionalText(command.summary) case final value?) 'summary': value,
-    if (command.semanticMentions.isNotEmpty)
-      'semanticMentions': command.semanticMentions
-          .map(_encodeStructuredValue)
-          .toList(growable: false),
-    if (command.mediaAssetIds.isNotEmpty)
-      'mediaAssetIds': command.mediaAssetIds,
-    if (command.mediaItems.isNotEmpty)
-      'mediaItems': command.mediaItems
-          .map(_encodeStructuredValue)
-          .toList(growable: false),
-    if (_optionalText(command.articleMarkdown) case final value?)
-      'articleMarkdown': value,
-    if (_optionalText(command.markdownDialect) case final value?)
-      'markdownDialect': value,
-    if (command.articleAssetManifest != null)
-      'articleAssetManifest': _encodeStructuredValue(
-        command.articleAssetManifest!,
-      ),
-    if (command.articleRenderProfile != null)
-      'articleRenderProfile': _encodeStructuredValue(
-        command.articleRenderProfile!,
-      ),
-    if (_optionalText(command.coverStrategy) case final value?)
-      'coverStrategy': value,
-    if (command.coverFrameTimeMs != null)
-      'coverFrameTimeMs': command.coverFrameTimeMs,
-    if (_optionalText(command.illustrationAssetId) case final value?)
-      'illustrationAssetId': value,
-    if (command.location != null)
-      'location': _encodeStructuredValue(command.location!),
-    if (_optionalText(command.locationName) case final value?)
-      'locationName': value,
-    if (_optionalText(command.primaryHomepageId) case final value?)
-      'primaryHomepageId': value,
-    if (_optionalText(command.primaryHomepageType) case final value?)
-      'primaryHomepageType': value,
-    if (command.primaryHomepageSnapshot != null)
-      'primaryHomepageSnapshot': _encodeStructuredValue(
-        command.primaryHomepageSnapshot!,
-      ),
-    if (command.visibility != null) 'visibility': command.visibility!.name,
-    if (command.assistantUsePolicy != null)
-      'assistantUsePolicy': command.assistantUsePolicy!.name,
-    if (_optionalText(command.sourcePostId) case final value?)
-      'sourcePostId': value,
-    if (command.sourceType != null) 'sourceType': command.sourceType!.name,
-    if (command.deviceInfo != null)
-      'deviceInfo': _encodeStructuredValue(command.deviceInfo!),
-    if (command.publishLocation != null)
-      'publishLocation': _encodeStructuredValue(command.publishLocation!),
-    if (_optionalText(command.authorDisplayNameSnapshot) case final value?)
-      'authorDisplayNameSnapshot': value,
-    if (_optionalText(command.authorAvatarUrlSnapshot) case final value?)
-      'authorAvatarUrlSnapshot': value,
-    if (command.personaContextVersion != null)
-      'personaContextVersion': command.personaContextVersion,
-  },
-);
 
 SubmitContentPostPublicationCommand decodeSubmitContentPostPublicationCommand(
   Object? encodedBody,
@@ -239,6 +92,8 @@ SubmitContentPostPublicationCommand decodeSubmitContentPostPublicationCommand(
     ),
     location: _structuredObjectOrNull(map['location'], 'location'),
     locationName: _optionalMapText(map['locationName'], 'locationName'),
+    geoTagRef: _optionalMapText(map['geoTagRef'], 'geoTagRef'),
+    visitedAt: _optionalTimestamp(map['visitedAt'], 'visitedAt'),
     primaryHomepageId: _optionalMapText(
       map['primaryHomepageId'],
       'primaryHomepageId',
@@ -314,20 +169,6 @@ ContentPostPublicationReceipt decodeContentPostPublicationReceipt(
   );
 }
 
-Object? _encodeStructuredValue(ContentPostStructuredValue value) =>
-    switch (value) {
-      ContentPostStructuredObject(:final fields) => <String, Object?>{
-        for (final entry in fields.entries)
-          entry.key: _encodeStructuredValue(entry.value),
-      },
-      ContentPostStructuredArray(:final values) =>
-        values.map(_encodeStructuredValue).toList(growable: false),
-      ContentPostStructuredText(:final value) => value,
-      ContentPostStructuredNumber(:final value) => value,
-      ContentPostStructuredBoolean(:final value) => value,
-      ContentPostStructuredNull() => null,
-    };
-
 String _requiredText(String value, String name) {
   final normalized = value.trim();
   if (normalized.isEmpty) {
@@ -342,11 +183,6 @@ String _requiredMapText(Map<String, Object?> map, String key) {
     throw FormatException('$key must be a non-empty string');
   }
   return value.trim();
-}
-
-String? _optionalText(String? value) {
-  final normalized = value?.trim() ?? '';
-  return normalized.isEmpty ? null : normalized;
 }
 
 T _requiredEnum<T extends Enum>(List<T> values, Object? raw, String name) {
@@ -379,6 +215,18 @@ String? _optionalMapText(Object? raw, String name) {
   }
   final normalized = raw.trim();
   return normalized.isEmpty ? null : normalized;
+}
+
+DateTime? _optionalTimestamp(Object? raw, String name) {
+  final normalized = _optionalMapText(raw, name);
+  if (normalized == null) {
+    return null;
+  }
+  final parsed = DateTime.tryParse(normalized);
+  if (parsed == null) {
+    throw FormatException('$name must be RFC3339');
+  }
+  return parsed.toUtc();
 }
 
 int? _optionalInt(Object? raw, String name) {

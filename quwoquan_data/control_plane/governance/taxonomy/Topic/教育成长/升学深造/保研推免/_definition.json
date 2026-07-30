@@ -2,6 +2,7 @@
   "label": "保研推免",
   "labelEn": "Graduate Recommendation",
   "description": "保研推免申请与准备",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

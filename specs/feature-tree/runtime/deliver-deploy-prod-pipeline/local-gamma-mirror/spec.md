@@ -8,7 +8,7 @@
 
 ## 1. 用户价值
 
-作为开发、测试或运维角色，我希望gamma-local 作为开发与提交前左移主验证链（gamma 仅本地，无远端 gamma）；真实远端复验由 prod gray-initial rollout stage 承接，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
+作为开发、测试或运维角色，我希望 gamma-local 同时承担开发与提交前左移验证，以及 main 受控 promotion 的正式阻断回执（gamma 仅本地，无远端 gamma）；真实远端复验由 prod gray-initial rollout stage 承接，从而让调用方获得稳定结果，并让维护者能够定位和恢复失败。
 
 ## 2. 范围与非目标
 
@@ -16,12 +16,13 @@
 
 - 本地 gamma 语义镜像栈（DB/Redis/核心服务/media/TLS 反代）启停与健康前置检查
 - 本地 local_contract->user_acceptance 左移：真实 HTTP API、存储副作用、错误码、RemoteRepository 解码与模拟器/真机 Patrol 核心旅程
-- 提交前报告 artifacts/local-gamma/report.json，指向 quwoquan_ops/environments/gamma/validation_suites.json
+- 提交前左移报告与 main 候选 release-fast 回执统一写入 `.qwq_output/env/gamma/runs/<run-id>/report.json` 和 `summary.md`，并指向 `quwoquan_ops/environments/gamma/validation_suites.json`
+- main 候选回执绑定同一 candidate digest；缺失、失败或摘要不一致均阻断 Prod
 - 与 prod 同构的工作负载图谱解释（同 Service 名、路由前缀、数据面 Service 名/DSN 变量）
 
 ### Out of Scope
 
-- 替代云侧 gamma 的 K8s/Ingress/Secret/云观测/多云 overlay
+- 新建托管 Gamma，或替代云侧 K8s/Ingress/Secret/云观测/多云 overlay
 - 替代云侧 prod 灰度流量、SLO 卡点、审批与回滚演练
 - 新增 local-gamma 环境枚举、APP_ENV 枚举或第四份 seed manifest
 - 在生产包引入 test fixture / seed reset / 本地 mirror URL
@@ -29,10 +30,11 @@
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 gamma-local 提交前左移主验证链
+### REQ-001 gamma-local 左移验证与 main 正式阻断回执
 
 - gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
-- gamma-local 通过仅证明提交前左移质量，不替代也不成为 main required check。
+- 提交前 gamma-local 通过只形成左移质量事实；main 受控 promotion 必须针对同一候选执行 release-fast，并以 canonical 环境回执作为 Prod 前置阻断门。
+- main 候选的 gamma-local 回执缺失、失败或 candidate digest 不一致时必须 `GATE_BLOCK`，不得申请 Prod approval。
 - 不新增运行环境枚举或第二套 seed manifest。
 - gamma-local 从各服务 `deploy/compose.yaml` 与 Ops external/infra Compose 扫描装配，不维护服务名册；recommendation 各环境统一以 `recommendation-service:8000` 调用。
 - edge-media（realtime-gateway/rtc-service/livekit-sfu/coturn）统一在本 compose 以 profile 按需组装；realtime-gateway 实现未就绪以 edge-media-pending 显式占位收敛。
@@ -45,12 +47,13 @@
 <a id="req-002"></a>
 ### REQ-002 远端复验只在 prod gray-initial 执行
 
-- 仓库不定义 hosted gamma 环境；真实远端复验只在 prod `gray-initial` rollout stage 执行，与 gamma-local 本地左移验证职责不重叠。
+- 仓库不定义 hosted gamma 环境；真实远端复验只在 prod `gray-initial` rollout stage 执行，与 gamma-local 的本地左移和正式候选阻断职责不重叠。
 
 <a id="req-003"></a>
-### REQ-003 本地左移验证与远端准出边界
+### REQ-003 本地阻断验证与远端准出边界
 
 - gamma-local 必须覆盖 `local_contract -> api_integration -> user_acceptance` 的本地可验证链路，但不得替代 prod gray-initial 的远端准出证据。
+- main 只接受绑定当前候选摘要的 gamma-local canonical 回执，不接受提交前报告、其他候选回执或远端复验证据代替该阶段。
 - 本地 `user_acceptance` runner 统一 App 与测试进程 endpoint，至少在一台模拟器或真机完成 Patrol 核心旅程。
 - gamma-local 服务名册与 prod `runtime.yaml` 及各服务真实环境部署目录一致。
 - recommendation 对外 DNS 名各环境统一为 `recommendation-service:8000`
@@ -72,14 +75,15 @@
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 gamma-local 提交前左移主验证链
+### GWT-001 gamma-local 左移验证与 main 正式阻断回执
 
 - GIVEN 开发机具备 Docker mirror 栈与至少一台模拟器/浏览器 runner。
 - GIVEN 服务以 APP_ENV=gamma 启动，端侧以 APP_RUNTIME_ENV=gamma 的 production Remote composition 接入本地 mirror endpoint，代码图中不存在运行时 Mock/Remote 开关。
 - GIVEN 测试数据仅来自 app_gamma_seed_manifest.json 与 metadata fixtures。
-- WHEN 提交前运行 make gate-local-gamma。
+- WHEN 提交前运行 make gate-local-gamma，或 main 受控 promotion 对当前 candidate digest 执行 gamma-local release-fast。
 - THEN 启动 gamma 语义镜像栈并完成 CONFIG_VERSION/依赖/health/DNS/TLS/media 前置检查。
-- THEN 依次执行 local_contract->user_acceptance 并生成 artifacts/local-gamma/report.json；缺 DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
+- THEN 依次执行 local_contract->user_acceptance，并在 `.qwq_output/env/gamma/runs/<run-id>/` 生成 canonical 报告与摘要；缺 DNS/TLS/设备/服务依赖时状态为 GATE_BLOCK。
+- THEN 提交前运行只形成左移报告；main 运行形成绑定当前 candidate digest 的正式 Gamma 环境回执，缺失、失败或摘要不一致均阻断 Prod。
 - THEN full health 覆盖 platform-ops、content、user、Elasticsearch 与 proxy；受保护 user route 经 canonical Caddy 上游抵达 user-service。
 - THEN content 等领域探针从 metadata 解析独立 verification principal，App user_acceptance principal 的推荐曝光与关系事实保持不变。
 - THEN `app-core-readback` 在同一 production Remote composition 中断言首页推荐非空、视频书只返回可播放 video work、Chat API contract 可发送/撤回/回读消息、`/me` 的 owner/persona/displayName/postCount 与本次 ephemeral principal 一致。
@@ -104,12 +108,12 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 gamma-local 提交前左移主验证链
+### OPEN-001 gamma-local 左移验证与 main 正式阻断回执
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
+- 准出影响：`block`
+- 影响或价值：尚缺真实 main 候选 Gamma 回执与直接 `spec_ref`；目标：gamma-local 既是开发与提交前的主验证链，也是绑定当前 candidate digest 的正式 Prod 前置阻断阶段。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>

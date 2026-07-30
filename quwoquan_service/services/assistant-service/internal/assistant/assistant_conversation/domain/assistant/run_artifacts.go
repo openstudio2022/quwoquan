@@ -94,7 +94,17 @@ type ReplayCase struct {
 	FakeDeviceContext    map[string]any        `json:"fakeDeviceContext,omitempty"`
 	ExpectedStreamEvents []map[string]any      `json:"expectedStreamEvents"`
 	ExpectedTraceEvents  []AssistantTraceEvent `json:"expectedTraceEvents"`
+	Expectations         ReplayExpectations    `json:"expectations"`
 	ExpectedRunResponse  AssistantRunResponse  `json:"expectedRunResponse"`
+}
+
+type ReplayExpectations struct {
+	SelectedSkillID              string   `json:"selectedSkillId"`
+	SelectedDomainID             string   `json:"selectedDomainId"`
+	ExpectedToolNames            []string `json:"expectedToolNames"`
+	ExpectedClarificationSlotIDs []string `json:"expectedClarificationSlotIds"`
+	ExpectedReferenceURLs        []string `json:"expectedReferenceUrls"`
+	FinalAnswerMode              string   `json:"finalAnswerMode"`
 }
 
 type ReplayRequest struct {

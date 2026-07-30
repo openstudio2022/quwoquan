@@ -131,15 +131,15 @@ func (s *MediaStore) FindMediaAssetForOwner(
 		SourceSessionID:  snapshot.SourceSessionID,
 		ObjectKey:        snapshot.ObjectKey,
 		SHA256:           snapshot.SHA256,
-		MediaType:        snapshot.MediaType,
-		ContentType:      snapshot.ContentType,
+		MediaType:        string(snapshot.MediaType),
+		MimeType:         snapshot.MimeType,
 		FileSize:         snapshot.FileSize,
 		AccessPolicy:     snapshot.AccessPolicy,
 		ProcessingStatus: snapshot.ProcessingStatus,
 		CreatedAt:        snapshot.CreatedAt,
 		UpdatedAt:        snapshot.UpdatedAt,
 		ProcessedAt:      cloneTime(snapshot.ProcessedAt),
-		CoverStrategy:    snapshot.CoverStrategy, ManualCoverAssetID: snapshot.ManualCoverAssetID,
+		CoverStrategy:    string(snapshot.CoverStrategy), ManualCoverAssetID: snapshot.ManualCoverAssetID,
 		CoverFrameTimeMs: snapshot.CoverFrameTimeMs,
 	}, true, nil
 }
@@ -157,8 +157,8 @@ func (s *MediaStore) FindMediaAssetForOriginalAccess(
 	return mediaapp.MediaAssetSlice{
 		AssetID: snapshot.ID, Version: snapshot.Version, OwnerID: snapshot.OwnerID,
 		SourceSessionID: snapshot.SourceSessionID, ObjectKey: snapshot.ObjectKey,
-		SHA256: snapshot.SHA256, MediaType: snapshot.MediaType,
-		ContentType: snapshot.ContentType, FileSize: snapshot.FileSize,
+		SHA256: snapshot.SHA256, MediaType: string(snapshot.MediaType),
+		MimeType: snapshot.MimeType, FileSize: snapshot.FileSize,
 		AccessPolicy: snapshot.AccessPolicy, ProcessingStatus: snapshot.ProcessingStatus,
 		CreatedAt: snapshot.CreatedAt, UpdatedAt: snapshot.UpdatedAt,
 		ProcessedAt: cloneTime(snapshot.ProcessedAt),
@@ -178,10 +178,10 @@ func (s *MediaStore) FindPublicMediaAsset(
 	return mediaapp.MediaAssetSlice{
 		AssetID: snapshot.ID, Version: snapshot.Version, OwnerID: snapshot.OwnerID,
 		SourceSessionID: snapshot.SourceSessionID, ObjectKey: snapshot.ObjectKey, SHA256: snapshot.SHA256,
-		MediaType: snapshot.MediaType, ContentType: snapshot.ContentType, FileSize: snapshot.FileSize,
+		MediaType: string(snapshot.MediaType), MimeType: snapshot.MimeType, FileSize: snapshot.FileSize,
 		AccessPolicy: snapshot.AccessPolicy, ProcessingStatus: snapshot.ProcessingStatus,
 		CreatedAt: snapshot.CreatedAt, UpdatedAt: snapshot.UpdatedAt, ProcessedAt: cloneTime(snapshot.ProcessedAt),
-		CoverStrategy: snapshot.CoverStrategy, ManualCoverAssetID: snapshot.ManualCoverAssetID,
+		CoverStrategy: string(snapshot.CoverStrategy), ManualCoverAssetID: snapshot.ManualCoverAssetID,
 		CoverFrameTimeMs: snapshot.CoverFrameTimeMs,
 	}, true, nil
 }

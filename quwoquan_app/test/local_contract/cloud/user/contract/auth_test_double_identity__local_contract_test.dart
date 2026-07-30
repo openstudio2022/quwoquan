@@ -16,8 +16,8 @@ void main() {
   test('测试专用对象 Facet 可逐一 override 且五种登录返回 metadata 当前身份', () async {
     final originalDirectory = Directory.current;
     final expectedUserId = AlphaFixtureUserResolver.currentUserVariantUserId;
-    final expectedSubAccountId =
-        AlphaFixtureUserResolver.currentUserVariantSubAccountId;
+    final expectedPersonaId =
+        AlphaFixtureUserResolver.currentUserVariantPersonaId;
     final isolatedDirectory = await Directory.systemTemp.createTemp(
       'qwq_auth_test_double_',
     );
@@ -51,7 +51,7 @@ void main() {
     expect(credentialWriter, same(facets));
     expect(credentialQuery, same(facets));
 
-    final results = <AuthSessionGrant>[
+    final directResults = <AuthSessionGrant>[
       await accountSession.loginWithPhone(
         LoginWithPhoneCommand(
           phone: '18013813909',
@@ -73,11 +73,15 @@ void main() {
           privacyVersion: '2026-07',
         ),
       ),
+    ];
+    final federatedResults = <FederatedLoginOutcome>[
       await accountSession.loginWithWechat(
         LoginWithWechatCommand(
           wechatCode: 'test-wechat-code',
           deviceId: 'device-1',
           platform: 'ios',
+          agreementVersion: '2026-07',
+          privacyVersion: '2026-07',
         ),
       ),
       await accountSession.loginWithQq(
@@ -85,6 +89,8 @@ void main() {
           qqAuthCode: 'test-qq-code',
           deviceId: 'device-1',
           platform: 'ios',
+          agreementVersion: '2026-07',
+          privacyVersion: '2026-07',
         ),
       ),
       await accountSession.loginWithAlipay(
@@ -92,13 +98,20 @@ void main() {
           alipayAuthCode: 'test-alipay-code',
           deviceId: 'device-1',
           platform: 'ios',
+          agreementVersion: '2026-07',
+          privacyVersion: '2026-07',
         ),
       ),
     ];
 
+    final results = <AuthSessionGrant>[
+      ...directResults,
+      ...federatedResults.map((outcome) => outcome.session!),
+    ];
+
     for (final result in results) {
       expect(result.ownerId, expectedUserId);
-      expect(result.activeSub?.subAccountId, expectedSubAccountId);
+      expect(result.activePersona?.personaId, expectedPersonaId);
     }
 
     final otp = await challenge.sendOtp(SendOtpCommand(phone: '18013813909'));
@@ -109,6 +122,21 @@ void main() {
     );
     expect(binding.credentialType, 'phone');
     expect(binding.isActive, isTrue);
+
+    final completed = await credentialWriter.completeFederatedPhoneBinding(
+      CompleteFederatedPhoneBindingCommand(
+        bindingTicket: 'test-binding-ticket',
+        phone: '18013813909',
+        otpCode: '000000',
+        challengeId: 'test-otp-challenge',
+        deviceId: 'device-1',
+        platform: 'ios',
+        appVersion: 'local-contract',
+        agreementVersion: '2026-07',
+        privacyVersion: '2026-07',
+      ),
+    );
+    expect(completed.ownerId, expectedUserId);
 
     final credentials = await credentialQuery.listCredentials(
       const ListCredentialsQuery(),

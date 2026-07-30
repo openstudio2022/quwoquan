@@ -10,9 +10,9 @@
 #     self-hosted runner 私有目录 / ssh-agent，禁止再把私钥正文注入 GitHub secrets。
 #
 # 用法（dry-run 预览，默认）：
-#   ROLLOUT_STAGE=gray-initial IMAGE_VERSION=<sha> CONFIG_VERSION=<cfg> quwoquan_ops/cli/prod/deploy_to_prod.sh
+#   ROLLOUT_STAGE=gray-initial IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> quwoquan_ops/cli/prod/deploy_to_prod.sh
 # 用法（真实发布）：
-#   DRY_RUN=false ROLLOUT_STAGE=gray-initial IMAGE_VERSION=<sha> CONFIG_VERSION=<cfg> \
+#   DRY_RUN=false ROLLOUT_STAGE=gray-initial IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> \
 #   PROD_SSH_KEY_DIR=~/.ssh/quwoquan-prod quwoquan_ops/cli/prod/deploy_to_prod.sh
 #   或显式指定：
 #   PROD_SERVICE_SSH_KEY_FILE=~/.ssh/quwoquan-prod/prod-service-svc quwoquan_ops/cli/prod/deploy_to_prod.sh
@@ -36,11 +36,11 @@ TOPOLOGY_MANIFEST="quwoquan_ops/environments/prod/runtime.yaml"
 
 DRY_RUN="${DRY_RUN:-true}"
 ROLLOUT_STAGE="${ROLLOUT_STAGE:-gray-initial}"
-IMAGE_VERSION="${IMAGE_VERSION:-}"
-CONFIG_VERSION="${CONFIG_VERSION:-}"
-PREVIOUS_IMAGE_VERSION="${PREVIOUS_IMAGE_VERSION:-}"
+IMAGE_TRANSPORT_TAG="${IMAGE_TRANSPORT_TAG:-}"
+CANDIDATE_DIGEST="${CANDIDATE_DIGEST:-}"
+PREVIOUS_IMAGE_TRANSPORT_TAG="${PREVIOUS_IMAGE_TRANSPORT_TAG:-}"
 RELEASE_MANIFEST="${RELEASE_MANIFEST:-}"
-RELEASE_MANIFEST_DIGEST="${RELEASE_MANIFEST_DIGEST:-}"
+RELEASE_EVIDENCE_DIGEST="${RELEASE_EVIDENCE_DIGEST:-}"
 ROLLOUT_TIMEOUT_SECONDS="${ROLLOUT_TIMEOUT_SECONDS:-300}"
 PROD_SSH_KEY_DIR="${PROD_SSH_KEY_DIR:-$HOME/.ssh/quwoquan-prod}"
 SERVICE_FILTER="${SERVICE:-}"
@@ -62,12 +62,12 @@ if [[ -n "${PROD_KUBECONFIG:-}" ]]; then
   exit 2
 fi
 
-if [[ "$DRY_RUN" != "true" && -z "$PREVIOUS_IMAGE_VERSION" ]]; then
-  echo "::error::真实发布必须显式提供 PREVIOUS_IMAGE_VERSION，禁止无旧版本回滚" >&2
+if [[ "$DRY_RUN" != "true" && -z "$PREVIOUS_IMAGE_TRANSPORT_TAG" ]]; then
+  echo "::error::真实发布必须显式提供 PREVIOUS_IMAGE_TRANSPORT_TAG，禁止无旧候选回滚" >&2
   exit 2
 fi
-if [[ "$DRY_RUN" != "true" && ! "$RELEASE_MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-  echo "::error::真实发布必须提供 canonical RELEASE_MANIFEST_DIGEST，配置 ACK 不允许脱离候选清单" >&2
+if [[ "$DRY_RUN" != "true" && ! "$RELEASE_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+  echo "::error::真实发布必须提供 canonical RELEASE_EVIDENCE_DIGEST，配置 ACK 不允许脱离候选清单" >&2
   exit 2
 fi
 if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RELEASE_MANIFEST" ]]; then
@@ -75,17 +75,10 @@ if [[ "$DRY_RUN" != "true" && "$PROD_IMAGE_DELIVERY_MODE" != "skip" && ! -s "$RE
   exit 2
 fi
 
-# SSH 目标主机：默认取 prod/runtime.yaml 的 prod-hosted publicBases.api，可由 PROD_SSH_HOST 覆盖。
-PROD_SSH_HOST="${PROD_SSH_HOST:-$(python3 - "$TOPOLOGY_MANIFEST" <<'PY'
-import sys, yaml
-from urllib.parse import urlparse
-m = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-api = (((m.get("targets") or {}).get("prod-hosted") or {}).get("publicBases") or {}).get("api", "")
-print(urlparse(api).hostname or "")
-PY
-)}"
+# SSH 属于受限管理面，不得从面向 App 的 publicBases 推导。
+PROD_SSH_HOST="${PROD_SSH_HOST:-}"
 if [[ -z "$PROD_SSH_HOST" ]]; then
-  echo "FAIL: 无法解析 prod SSH host（设置 PROD_SSH_HOST 或修正 topology prod-hosted.publicBases.api）" >&2
+  echo "FAIL: PROD_SSH_HOST is required for the production management plane" >&2
   exit 2
 fi
 
@@ -200,7 +193,7 @@ else
   INSTANCE_SUFFIX="prod"
 fi
 
-echo "[deploy] prod-hosted host=$PROD_SSH_HOST stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX image=$IMAGE_VERSION config=$CONFIG_VERSION DRY_RUN=$DRY_RUN"
+echo "[deploy] prod-hosted host=$PROD_SSH_HOST stage=$ROLLOUT_STAGE instance=$INSTANCE_SUFFIX imageTransportTag=$IMAGE_TRANSPORT_TAG candidateDigest=$CANDIDATE_DIGEST DRY_RUN=$DRY_RUN"
 
 # 凭据硬校验（缺失/非法即硬失败，禁止失败放通）。
 # 真实发布（DRY_RUN=false）必须硬失败；dry-run 预览给出告警但仍展示发布计划。
@@ -254,7 +247,7 @@ PY
         --host "$PROD_SSH_HOST"
         --key-dir "$PROD_SSH_KEY_DIR"
         --services "${governed_csv}"
-        --image-version "$IMAGE_VERSION"
+        --image-transport-tag "$IMAGE_TRANSPORT_TAG"
         --platform linux/amd64
         --dry-run
       )
@@ -268,9 +261,9 @@ PY
         --plane "$plane" \
         --instance "$INSTANCE_SUFFIX" \
         --rollout-stage "$ROLLOUT_STAGE" \
-        --config-version "$CONFIG_VERSION" \
-        --image-version "$IMAGE_VERSION" \
-        --release-manifest-digest "$RELEASE_MANIFEST_DIGEST" \
+        --candidate-digest "$CANDIDATE_DIGEST" \
+        --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
+        --release-evidence-digest "$RELEASE_EVIDENCE_DIGEST" \
         --output-dir "$render_dir" >/dev/null
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then
         echo "[skip] service plane image delivery skipped; assuming remote images are already prepared"
@@ -280,7 +273,7 @@ PY
           --host "$PROD_SSH_HOST" \
           --key-dir "$PROD_SSH_KEY_DIR" \
           --services "${governed_csv}" \
-          --image-version "$IMAGE_VERSION" \
+          --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
           --release-manifest "$RELEASE_MANIFEST" \
           --platform linux/amd64
       else
@@ -345,7 +338,7 @@ for service in ${governed_services}; do
   repository=\"localhost/quwoquan_service_\${service}\"
   while IFS= read -r image; do
     case \"\$image\" in
-      \"\$repository:${IMAGE_VERSION}\"|\"\$repository:${PREVIOUS_IMAGE_VERSION}\") ;;
+      \"\$repository:${IMAGE_TRANSPORT_TAG}\"|\"\$repository:${PREVIOUS_IMAGE_TRANSPORT_TAG}\") ;;
       \"\$repository:\"*) podman image rm \"\$image\" ;;
     esac
   done < <(podman images --format '{{.Repository}}:{{.Tag}}')
@@ -377,7 +370,7 @@ done"
 cd '${compose_root}'
 compose_file='docker-compose.prod-hosted.yaml'
 env_file='stack.env'
-export IMAGE_VERSION='${IMAGE_VERSION}' CONFIG_VERSION='${CONFIG_VERSION}' ROLLOUT_STAGE='${ROLLOUT_STAGE}'
+export ROLLOUT_STAGE='${ROLLOUT_STAGE}'
 ${runtime_credential_preflight}
 unit='quwoquan-${plane}-${INSTANCE_SUFFIX}.service'
 unit_source=\"systemd/\$unit\"
@@ -614,8 +607,8 @@ PY
     --plane service \
     --instance prod \
     --rollout-stage "$ROLLOUT_STAGE" \
-    --config-version "$CONFIG_VERSION" \
-    --image-version "$IMAGE_VERSION" \
+    --candidate-digest "$CANDIDATE_DIGEST" \
+    --image-transport-tag "$IMAGE_TRANSPORT_TAG" \
     --output-dir "$render_dir" >/dev/null
   bash quwoquan_ops/cli/prod/sync_prod_plane_stack.sh \
     --plane service \

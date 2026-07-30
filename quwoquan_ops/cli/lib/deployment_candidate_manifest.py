@@ -1,0 +1,249 @@
+"""Immutable local deployment candidate identity and release binding."""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+from quwoquan_ops.cli.lib.output_paths import (
+    app_deployment_package_dir,
+    deployment_candidate_dir,
+    legal_static_deployment_package_dir,
+    runtime_shared_deployment_package_dir,
+)
+
+
+CANDIDATE_MANIFEST_SCHEMA = "stackctl-deployment-candidate"
+SPEC_REFS = (
+    "AppRoot/JNY-002/SCN-005/UAT-003",
+    "runtime/runtime-config/environment-topology-and-packaging/GWT-001",
+    "runtime/runtime-config/environment-topology-and-packaging/GWT-002",
+    "runtime/runtime-config/environment-ops-cli-and-skill/GWT-001",
+    "runtime/deliver-deploy-prod-pipeline/SIT-001",
+    "runtime/system-architecture-and-engineering-guide/SIT-003",
+    "runtime/runtime-data-engineering/SIT-001",
+)
+_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _sha256_file(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _read_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is unreadable: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _release_binding(path_value: str, *, label: str) -> dict[str, str]:
+    path = Path(str(path_value or "").strip()).expanduser()
+    if not str(path_value or "").strip():
+        raise ValueError(f"{label} release attestation is required")
+    path = path.resolve()
+    value = _read_object(path, label=f"{label} release attestation")
+    release_id = str(value.get("releaseId") or "").strip()
+    release_digest = str(value.get("payloadSha256") or "").strip()
+    if value.get("schema") != "quwoquan_data.release_attestation":
+        raise ValueError(f"{label} release attestation schema mismatch")
+    if not release_id or _DIGEST.fullmatch(release_digest) is None:
+        raise ValueError(f"{label} release identity is invalid")
+    return {
+        "releaseId": release_id,
+        "releaseDigest": release_digest,
+        "attestationRef": str(path),
+        "attestationDigest": _sha256_file(path),
+    }
+
+
+def write_candidate_manifest(
+    env_name: str,
+    target_name: str,
+    *,
+    package_snapshot: dict[str, object],
+    release_attestation: str = "",
+    rollback_release_attestation: str = "",
+) -> Path:
+    """Write the only candidate manifest after every package digest is sealed."""
+
+    app_dir = app_deployment_package_dir(env_name, target=target_name)
+    candidate_root = app_dir.parent.parent
+    fingerprint = _read_object(
+        app_dir / "package-fingerprint.json",
+        label="package fingerprint",
+    )
+    app_report = _read_object(app_dir / "report.json", label="App package report")
+    environment_runtime_path = app_dir / "environment_runtime.yaml"
+    environment_runtime = _read_object(
+        environment_runtime_path,
+        label="packaged environment runtime",
+    )
+    if (
+        environment_runtime.get("environment") != env_name
+        or environment_runtime.get("target") != target_name
+    ):
+        raise ValueError("packaged environment runtime identity mismatch")
+    package_content = fingerprint.get("packageContent")
+    deployment_inputs = fingerprint.get("deploymentInputs")
+    if not isinstance(package_content, dict) or not isinstance(deployment_inputs, dict):
+        raise ValueError("package fingerprint digest bindings are missing")
+
+    oci_path = (
+        runtime_shared_deployment_package_dir(env_name, target=target_name)
+        / "oci-images.json"
+    )
+    oci = _read_object(oci_path, label="package OCI image manifest") if oci_path.is_file() else None
+    include_services = bool(fingerprint.get("includeServices"))
+    legal_static_root = legal_static_deployment_package_dir(
+        env_name,
+        target=target_name,
+    )
+    legal_static_current = legal_static_root / "current"
+    legal_static_required = (
+        legal_static_current / "release_metadata.json",
+        legal_static_current / "checksums.json",
+        legal_static_current / "public/legal/manifest.json",
+    )
+    if any(not path.is_file() for path in legal_static_required):
+        raise ValueError("deployment candidate has no complete legal-static package")
+    if include_services and oci is None:
+        raise ValueError("full candidate has no package-bound OCI image manifest")
+    release: dict[str, Any] | None = None
+    if include_services:
+        release = {
+            "candidate": _release_binding(release_attestation, label="candidate"),
+            "rollback": _release_binding(
+                rollback_release_attestation,
+                label="rollback",
+            ),
+        }
+
+    payload = {
+        "schema": CANDIDATE_MANIFEST_SCHEMA,
+        "environment": env_name,
+        "target": target_name,
+        "baselineId": package_snapshot["baselineId"],
+        "sourceRevision": package_snapshot["sourceRevision"],
+        "workspaceDigest": deployment_inputs.get("digest"),
+        "workspaceStatusDigest": package_snapshot["workspaceStatusDigest"],
+        "packageDigest": package_content.get("digest"),
+        "buildInputDigest": oci.get("buildInputDigest") if oci else None,
+        "imageDigest": oci.get("imageDigest") if oci else None,
+        "runtimeConfigDigest": app_report.get("runtimeConfigDigest"),
+        "environmentRuntimeDigest": _sha256_file(environment_runtime_path),
+        "release": release,
+        "specRefs": list(SPEC_REFS),
+    }
+    validate_candidate_manifest(
+        payload,
+        expected_environment=env_name,
+        expected_target=target_name,
+        require_full=include_services,
+    )
+    path = candidate_root / "manifest.json"
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
+
+
+def validate_candidate_manifest(
+    payload: object,
+    *,
+    expected_environment: str,
+    expected_target: str,
+    require_full: bool,
+) -> dict[str, Any]:
+    required = {
+        "schema",
+        "environment",
+        "target",
+        "baselineId",
+        "sourceRevision",
+        "workspaceDigest",
+        "workspaceStatusDigest",
+        "packageDigest",
+        "buildInputDigest",
+        "imageDigest",
+        "runtimeConfigDigest",
+        "environmentRuntimeDigest",
+        "release",
+        "specRefs",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("deployment candidate manifest fields mismatch")
+    if payload.get("schema") != CANDIDATE_MANIFEST_SCHEMA:
+        raise ValueError("deployment candidate manifest schema mismatch")
+    if (
+        payload.get("environment") != expected_environment
+        or payload.get("target") != expected_target
+    ):
+        raise ValueError("deployment candidate manifest target identity mismatch")
+    if re.fullmatch(r"[0-9a-f]{40}", str(payload.get("sourceRevision") or "")) is None:
+        raise ValueError("deployment candidate sourceRevision is invalid")
+    for field in (
+        "baselineId",
+        "workspaceDigest",
+        "workspaceStatusDigest",
+        "packageDigest",
+        "runtimeConfigDigest",
+        "environmentRuntimeDigest",
+    ):
+        if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
+            raise ValueError(f"deployment candidate {field} is invalid")
+    if payload.get("specRefs") != list(SPEC_REFS):
+        raise ValueError("deployment candidate specRefs mismatch")
+    if require_full:
+        for field in ("buildInputDigest", "imageDigest"):
+            if _DIGEST.fullmatch(str(payload.get(field) or "")) is None:
+                raise ValueError(f"full deployment candidate {field} is invalid")
+        release = payload.get("release")
+        if not isinstance(release, dict) or set(release) != {"candidate", "rollback"}:
+            raise ValueError("full deployment candidate release binding mismatch")
+        for label in ("candidate", "rollback"):
+            binding = release.get(label)
+            if not isinstance(binding, dict) or set(binding) != {
+                "releaseId",
+                "releaseDigest",
+                "attestationRef",
+                "attestationDigest",
+            }:
+                raise ValueError(f"deployment candidate {label} release fields mismatch")
+            if not str(binding.get("releaseId") or ""):
+                raise ValueError(f"deployment candidate {label} releaseId is invalid")
+            for field in ("releaseDigest", "attestationDigest"):
+                if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
+                    raise ValueError(
+                        f"deployment candidate {label} {field} is invalid"
+                    )
+    elif any(payload.get(field) is not None for field in ("buildInputDigest", "imageDigest")):
+        raise ValueError("App-only deployment candidate cannot carry OCI identity")
+    elif payload.get("release") is not None:
+        raise ValueError("App-only deployment candidate cannot carry release binding")
+    return payload
+
+
+def load_candidate_manifest(
+    env_name: str,
+    target_name: str,
+    baseline_id: str,
+    *,
+    require_full: bool,
+) -> dict[str, Any]:
+    path = deployment_candidate_dir(target_name, baseline_id) / "manifest.json"
+    payload = _read_object(path, label="deployment candidate manifest")
+    return validate_candidate_manifest(
+        payload,
+        expected_environment=env_name,
+        expected_target=target_name,
+        require_full=require_full,
+    )

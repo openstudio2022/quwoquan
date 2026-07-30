@@ -15,7 +15,6 @@ func startConfigSyncLoop(
 	imageVersion string,
 	instanceID string,
 	hotStore *controlplane.HotConfigStore,
-	rateLimiter controlplane.RateLimitSetter,
 ) {
 	baseURL := strings.TrimSpace(getenvOrDefault("PLATFORM_OPS_BASE_URL", ""))
 	if baseURL == "" {
@@ -38,6 +37,5 @@ func startConfigSyncLoop(
 		ReleaseManifestDigest: strings.TrimSpace(getenvOrDefault("RELEASE_MANIFEST_DIGEST", "")),
 		InstanceID:            instanceID,
 		HotStore:              hotStore,
-		RateLimiter:           rateLimiter,
 	})
 }

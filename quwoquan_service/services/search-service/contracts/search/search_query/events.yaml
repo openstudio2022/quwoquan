@@ -3,6 +3,7 @@ events:
   description: 一次搜索请求被记录，进入查询日志用于搜索词热力聚合（事实即存储，无独立事件通道）
   producer: search-service
   consumers: []
+  no_consumer_reason: SearchQuery 本身即 append-only 查询日志；热词聚合直接读取事实集合。
   channel: fact_collection
   payload_entity: SearchQuery
   payload_fields:
@@ -11,15 +12,15 @@ events:
   - mode
   - objectTypes
   - resultCount
-  - rankingVersion
   - experimentBucket
   - createdAt
 - name: SearchFeedbackRecorded
   description: 搜索结果交互反馈被记录，驱动 CTR/停留信号与去位置偏置（事实即存储，无独立事件通道）
   producer: search-service
   consumers: []
+  no_consumer_reason: FeedbackFact 本身即 append-only 反馈记录；排序评测直接读取事实集合。
   channel: fact_collection
-  payload_entity: SearchFeedbackEvent
+  payload_entity: FeedbackFact
   payload_fields:
   - searchRequestId
   - eventType
@@ -37,7 +38,7 @@ events:
   - content-service
   channel: redis_stream
   stream: events.search.recommendation_signals
-  payload_entity: SearchRecommendationSignal
+  payload_entity: RecommendationSignalFact
   payload_fields:
   - signalId
   - signalType
@@ -47,7 +48,6 @@ events:
   - normalizedQuery
   - relatedTerms
   - engagedObjectIds
-  - rankingVersion
   - experimentBucket
   - resultCount
   - createdAt

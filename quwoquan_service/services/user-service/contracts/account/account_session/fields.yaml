@@ -1,49 +1,301 @@
 description: 登录会话、刷新轮换与吊销的独立生命周期根
 fields:
-- name: id
-  type: string
-  constraints:
-  - PK
-  - NOT_NULL
-  role: authoritative_state
-- name: accountId
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-  reference: true
-- name: deviceId
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: refreshTokenHash
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: status
-  type: string
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: issuedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: expiresAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  role: authoritative_state
-- name: rotatedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  role: authoritative_state
-- name: revokedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  role: authoritative_state
+  - name: id
+    type: string
+    constraints:
+      - PK
+      - NOT_NULL
+    role: authoritative_state
+  - name: accountId
+    type: string
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+    reference: true
+  - name: deviceId
+    type: string
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: refreshTokenHash
+    type: string
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: status
+    type: enum
+    enum_ref: AccountSessionStatus
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: issuedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: expiresAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    role: authoritative_state
+  - name: rotatedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+  - name: revokedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    role: authoritative_state
+enums:
+  AccountSessionStatus:
+    - active
+    - rotated
+    - revoked
+    - expired
+types:
+  LoginOneTapCommand:
+    fields:
+      - name: vendor
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: carrierToken
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: agreementVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: privacyVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  LoginWithQqCommand:
+    fields:
+      - name: qqAuthCode
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: agreementVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: privacyVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  LoginAnonymousCommand:
+    fields:
+      - name: installId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceFingerprintHash
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  LoginWithPhoneCommand:
+    fields:
+      - name: phone
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: otpCode
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: agreementVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: privacyVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  LoginWithWechatCommand:
+    fields:
+      - name: wechatCode
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: agreementVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: privacyVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  LogoutCommand:
+    fields:
+      - name: refreshToken
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: deviceId
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+  LoginWithAlipayCommand:
+    fields:
+      - name: alipayAuthCode
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: platform
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: agreementVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: privacyVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  RefreshTokenCommand:
+    fields:
+      - name: refreshToken
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim

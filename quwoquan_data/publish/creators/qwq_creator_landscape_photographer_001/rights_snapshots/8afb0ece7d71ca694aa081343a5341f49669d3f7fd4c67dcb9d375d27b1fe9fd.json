@@ -1,0 +1,46 @@
+{
+  "assetId": "creator-avatar-qwq_creator_landscape_photographer_001-8afb0ece7d71ca69",
+  "commercialRights": {
+    "asset": {
+      "bytes": 428956,
+      "height": 1280,
+      "mimeType": "image/webp",
+      "ref": "cas/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.webp",
+      "sha256": "sha256:8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd",
+      "width": 1280
+    },
+    "assetId": "creator-avatar-qwq_creator_landscape_photographer_001-8afb0ece7d71ca69",
+    "attribution": "zhiyin586@163.com / CC BY 3.0",
+    "author": "zhiyin586@163.com",
+    "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E6%9D%AD%E5%B7%9E.%E8%A5%BF%E6%B9%96-%E5%B9%B3%E6%B9%96%E7%A7%8B%E6%9C%88%EF%BC%88%E8%A5%BF%E6%B9%96%E6%B8%B8%E8%88%B9._%E9%98%AE%E5%85%AC%E5%A2%A9%EF%BC%89_-_panoramio.jpg",
+    "canonicalFilePage": "https://commons.wikimedia.org/wiki/File:%E6%9D%AD%E5%B7%9E.%E8%A5%BF%E6%B9%96-%E5%B9%B3%E6%B9%96%E7%A7%8B%E6%9C%88%EF%BC%88%E8%A5%BF%E6%B9%96%E6%B8%B8%E8%88%B9._%E9%98%AE%E5%85%AC%E5%A2%A9%EF%BC%89_-_panoramio.jpg",
+    "caption": "平湖秋月的樱花",
+    "captionSource": "entities/地点/景区/杭州西湖/rights_snapshots/6648066914d0e5234748.json",
+    "fetchedAt": "2026-07-28T01:41:54Z",
+    "licenseName": "CC BY 3.0",
+    "licenseShortName": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "modelReleaseStatus": "not_required",
+    "modifications": "deterministic center-square crop [319, 0, 1601, 1282] from 1920x1282; RGB; LANCZOS 1280x1280; WebP quality=85 method=4; derivative_policy_version=1",
+    "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/7/7f/%E6%9D%AD%E5%B7%9E.%E8%A5%BF%E6%B9%96-%E5%B9%B3%E6%B9%96%E7%A7%8B%E6%9C%88%EF%BC%88%E8%A5%BF%E6%B9%96%E6%B8%B8%E8%88%B9._%E9%98%AE%E5%85%AC%E5%A2%A9%EF%BC%89_-_panoramio.jpg",
+    "pageRevision": "93458353",
+    "rightsAuditIssues": [],
+    "rightsAuditStatus": "verified",
+    "snapshot": {
+      "bytes": 4037,
+      "ref": "entities/地点/景区/杭州西湖/rights_snapshots/6648066914d0e5234748.json",
+      "sha256": "sha256:a0b4be19059b0e7586740eb601abc6681fcbd330c3181e018696583dbe16448d"
+    },
+    "snapshotUrl": "https://commons.wikimedia.org/wiki/File:%E6%9D%AD%E5%B7%9E.%E8%A5%BF%E6%B9%96-%E5%B9%B3%E6%B9%96%E7%A7%8B%E6%9C%88%EF%BC%88%E8%A5%BF%E6%B9%96%E6%B8%B8%E8%88%B9._%E9%98%AE%E5%85%AC%E5%A2%A9%EF%BC%89_-_panoramio.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:%E6%9D%AD%E5%B7%9E.%E8%A5%BF%E6%B9%96-%E5%B9%B3%E6%B9%96%E7%A7%8B%E6%9C%88%EF%BC%88%E8%A5%BF%E6%B9%96%E6%B8%B8%E8%88%B9._%E9%98%AE%E5%85%AC%E5%A2%A9%EF%BC%89_-_panoramio.jpg",
+    "sourceKind": "creator_avatar_derivative",
+    "sourceUseMode": "licensed_adaptation",
+    "usageScope": "app_publish"
+  },
+  "depictsIdentifiablePerson": false,
+  "manifestAsset": {
+    "assetId": "creator-avatar-qwq_creator_landscape_photographer_001-8afb0ece7d71ca69",
+    "sha256": "sha256:8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd"
+  },
+  "schema": "quwoquan_data.creator_avatar_rights_snapshot"
+}

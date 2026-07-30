@@ -18,8 +18,24 @@ func writeRtcCallSessionDtos(appDir, metadataDir string) error {
 	if !okS || !okP {
 		return fmt.Errorf("rtc fields: missing CallSession or CallParticipant entity")
 	}
-	out := renderRtcCallSessionDtosDartFromFields(metadataSourceLabel(fieldsPath), ff)
-	outPath := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "rtc", "call_session_dtos.g.dart")
+	shared, err := readShared(filepath.Join(metadataDir, "_shared", "types.yaml"))
+	if err != nil {
+		return fmt.Errorf("rtc read shared enum catalog: %w", err)
+	}
+	out := renderRtcCallSessionDtosDartFromFields(
+		metadataSourceLabel(fieldsPath),
+		ff,
+		shared.Enums,
+	)
+	outPath := filepath.Join(
+		appDir,
+		"packages",
+		"quwoquan_cloud_contracts",
+		"lib",
+		"src",
+		"rtc",
+		"call_session_dtos.g.dart",
+	)
 	writeFile(outPath, out)
 	return nil
 }

@@ -30,6 +30,28 @@ MASTER_LIST_SCHEMA_PATH = _REPO_DATA_ROOT / "schema" / "governance" / "master_li
 ADMIN_REGION_PREFIX = "Topic/地理/行政区"
 
 
+def leaf_coordinates(leaf: Any) -> dict[str, float] | None:
+    """主清单/发布态 coordinates 的唯一解析口径（selection、物化、统计共用）。
+
+    WGS84 合法域外、lat/lon 缺一、或 (0, 0) 缺省零点一律判为不可信并返回 None：
+    这些值一旦进入 Homepage.location，就会把「未知位置」变成附近召回里的一个
+    真实点位。坐标只能来自真实来源，缺失时保持缺失。
+    """
+    if not isinstance(leaf, dict):
+        return None
+    raw = leaf.get("coordinates")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        lat = float(raw["lat"])
+        lon = float(raw["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90) or not (-180 <= lon <= 180) or (lat == 0 and lon == 0):
+        return None
+    return {"lat": lat, "lon": lon}
+
+
 def coverage_identity_key(
     *,
     country: str,
@@ -155,11 +177,17 @@ def master_list_stats(
     provinces: list[str] | None = None,
     coverage_root: Path | None = None,
 ) -> dict[str, Any]:
-    """主清单统计：文件/区县/叶子规模、类型分布与跨省地点。"""
+    """主清单统计：文件/区县/叶子规模、类型分布、坐标覆盖与跨省地点。
+
+    坐标覆盖是「附近 / filters.near」链路的供给指标：leaf.coordinates 缺失时
+    Homepage.location 留空，该实体不参与附近召回。这里只报告真实覆盖率，
+    补齐由 `governance coverage discover` + `merge --apply` 回填。
+    """
     stats: dict[str, Any] = {
         "files": 0,
         "districts": 0,
         "leaves": 0,
+        "leavesWithCoordinates": 0,
         "byProvince": {},
         "byEntityType": {},
         "crossProvinceLeaves": [],
@@ -167,7 +195,10 @@ def master_list_stats(
     for path in master_list_files(provinces=provinces, coverage_root=coverage_root):
         data = load_master_list_file(path)
         province = str(data.get("province") or path.parent.name)
-        prov_stat = stats["byProvince"].setdefault(province, {"files": 0, "districts": 0, "leaves": 0})
+        prov_stat = stats["byProvince"].setdefault(
+            province,
+            {"files": 0, "districts": 0, "leaves": 0, "leavesWithCoordinates": 0},
+        )
         stats["files"] += 1
         prov_stat["files"] += 1
         seen_districts: set[str] = set()
@@ -177,6 +208,9 @@ def master_list_stats(
             prov_stat["leaves"] += 1
             etype = str(leaf.get("entityType") or "")
             stats["byEntityType"][etype] = stats["byEntityType"].get(etype, 0) + 1
+            if leaf_coordinates(leaf) is not None:
+                stats["leavesWithCoordinates"] += 1
+                prov_stat["leavesWithCoordinates"] += 1
             geo_refs = [str(g) for g in (leaf.get("geoTagRefs") or []) if str(g).strip()]
             ref_provinces = {ref.split("/")[4] for ref in geo_refs if len(ref.split("/")) > 4}
             if len(ref_provinces) > 1:

@@ -16,13 +16,9 @@ api_routes:
   method: POST
   operation: SetAssistantPreference
   path: /assistant/preferences
-  description: 为当前 owner 幂等设置 session 或 long_term 结构化偏好事实。
-  request_fields:
-  - scope
-  - conversationId
-  - kind
-  - value
-  - sourceType
+  description: 为当前 owner 幂等设置文风偏好或经显式确认的事实型长期记忆。
+  request_entity: SetAssistantPreferenceRequest
+  request_body_kind: object
   response_entity: AssistantPreferenceFact
   reliability:
     timeout_ms: 1500
@@ -71,10 +67,11 @@ api_routes:
   operation: ListAssistantPreferences
   path: /assistant/preferences
   description: 列出当前 owner 的偏好事实，可按 scope、conversationId 和 status 筛选。
-  query_params:
-  - scope
-  - conversationId
-  - status
+  request_bindings:
+    query:
+    - {name: scope, field: scope, required: false}
+    - {name: conversationId, field: conversationId, required: false}
+    - {name: status, field: status, required: false}
   response_entity: AssistantPreferenceFactListView
   reliability:
     timeout_ms: 1500
@@ -122,6 +119,9 @@ api_routes:
   method: POST
   operation: RevokeAssistantPreference
   path: /assistant/preferences/{preferenceId}/revoke
+  request_bindings:
+    path:
+    - {name: preferenceId, field: preferenceId}
   description: owner 遗忘偏好事实；重复调用保持 revoked，非 owner 返回 not_found。
   response_entity: AssistantPreferenceFact
   reliability:
@@ -168,6 +168,9 @@ api_routes:
   method: POST
   operation: RestoreAssistantPreference
   path: /assistant/preferences/{preferenceId}/restore
+  request_bindings:
+    path:
+    - {name: preferenceId, field: preferenceId}
   description: owner 在撤销窗口内恢复偏好事实；重复调用保持 active，非 owner 返回 not_found。
   response_entity: AssistantPreferenceFact
   reliability:

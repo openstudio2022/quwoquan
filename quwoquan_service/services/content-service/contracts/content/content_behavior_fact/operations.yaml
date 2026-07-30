@@ -1,0 +1,64 @@
+description: ContentBehaviorFact typed append sink。
+commercial_defaults:
+  status: blocked
+  block_reason: 对象归位后需补齐四环境真实行为回放与页面 UAT 证据
+  gap_id: CONTENT_BEHAVIOR_FACT_COMMERCIAL_CLOSURE
+  target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /content/behaviors
+    operation: ReportBehaviors
+    actor: persona_or_device
+    application:
+      kind: command
+      facet: ContentBehaviorCommandFacet
+      method: reportBehaviors
+      append_sink: ContentBehaviorFact
+      mutation_target: ContentBehaviorFact
+      invariant_target: ContentBehaviorFact
+    request_entity: ReportContentBehaviorsCommand
+    authorization:
+      principal: public
+      ownership_policy: authenticated_persona_or_derived_device_actor
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.required_dependency_unavailable
+      - CONTENT.SYSTEM.storage_write_failed
+      - CONTENT.MIDDLEWARE.upstream_timeout
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_behavior_batch_report
+      trace: true
+      attributes: [actor_dimension, event_count, outcome]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../content/content_behavior_contracts.dart
+      response_type: void
+      response_decoder: decodeEmptyContentBehaviorsResponse
+    description: 行为批量上报；Post 仅作为 contentId 引用，不拥有行为事实。
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: object
+consumers:
+  - name: app
+    capabilities: [report_behavior]
+  - name: recommendation-engine
+    capabilities: [read_behaviors]

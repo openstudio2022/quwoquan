@@ -9,8 +9,6 @@ usage() {
 Usage:
   quwoquan_ops/cli/prod/config_release_apply_stage.sh \
     --service <svc> --step <5|25|50|100> \
-    --from-image <old> --to-image <new> \
-    --from-config <old_cfg> --to-config <new_cfg> \
     --error-rate <float> --p95-ms <int> --redis-error-rate <float>
 
 Behavior:
@@ -21,10 +19,6 @@ EOF
 
 SERVICE=""
 STEP=""
-FROM_IMAGE=""
-TO_IMAGE=""
-FROM_CONFIG=""
-TO_CONFIG=""
 ERROR_RATE=""
 P95_MS=""
 REDIS_ERROR_RATE=""
@@ -33,10 +27,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --service) SERVICE="${2:-}"; shift 2 ;;
     --step) STEP="${2:-}"; shift 2 ;;
-    --from-image) FROM_IMAGE="${2:-}"; shift 2 ;;
-    --to-image) TO_IMAGE="${2:-}"; shift 2 ;;
-    --from-config) FROM_CONFIG="${2:-}"; shift 2 ;;
-    --to-config) TO_CONFIG="${2:-}"; shift 2 ;;
     --error-rate) ERROR_RATE="${2:-}"; shift 2 ;;
     --p95-ms) P95_MS="${2:-}"; shift 2 ;;
     --redis-error-rate) REDIS_ERROR_RATE="${2:-}"; shift 2 ;;
@@ -45,7 +35,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for v in SERVICE STEP FROM_IMAGE TO_IMAGE FROM_CONFIG TO_CONFIG ERROR_RATE P95_MS REDIS_ERROR_RATE; do
+for v in SERVICE STEP ERROR_RATE P95_MS REDIS_ERROR_RATE; do
   if [[ -z "${!v}" ]]; then
     echo "FAIL: missing required arg $v" >&2
     usage

@@ -12,8 +12,8 @@ import (
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/operation"
 	rtsearch "quwoquan_service/runtime/search"
-	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 	generated "quwoquan_service/services/circle-service/generated/circle_management/circle"
+	model "quwoquan_service/services/circle-service/internal/circle_management/circle/domain/model"
 )
 
 // CircleService 承载 Circle 聚合本体的具名查询 Reader/Slice。
@@ -306,7 +306,7 @@ func buildCircleMemberImpact(c *model.Circle) (rtimpact.Statement, bool) {
 	ownerName := strings.TrimSpace(c.OwnerDisplayNameSnapshot)
 	circleID := strings.TrimSpace(c.ID)
 	circleName := strings.TrimSpace(c.Name)
-	snapshotID := "circle:" + circleID + ":members:v1"
+	snapshotID := "circle:" + circleID + ":members"
 	return rtimpact.BuildStatement(rtimpact.StatementEvidence{
 		HelpType:              rtimpact.HelpCommunity,
 		Action:                "join_circle",

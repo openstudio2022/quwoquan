@@ -3,7 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
-/// 槽③ 交集对象封面/缩略图（架构基线 v2 §21.5.1 · 单行交集卡 trailing）。
+/// 槽③ 交集对象封面/缩略图（canonical 交集设计 · 单行交集卡 trailing）。
 ///
 /// 只读消费云侧 [IntersectionReason.objectVisual]——结论句所指向的「那一个对象」的封面：
 /// 内容用 cover/thumbnail（小圆角矩形），圈子/校/企用 circleAvatar/emblem/logo（圆形），

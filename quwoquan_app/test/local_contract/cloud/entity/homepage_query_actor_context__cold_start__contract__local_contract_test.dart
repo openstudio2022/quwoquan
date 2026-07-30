@@ -31,7 +31,7 @@ final class _ColdStartAuthenticatedSession extends AuthSessionController {
     accessToken: 'homepage-cold-start-token',
     refreshToken: 'homepage-cold-start-refresh-token',
     ownerId: _ownerId,
-    activeSubAccountId: _personaId,
+    activePersonaId: _personaId,
     accountState: 'active',
     installId: 'homepage-cold-start-install',
   );

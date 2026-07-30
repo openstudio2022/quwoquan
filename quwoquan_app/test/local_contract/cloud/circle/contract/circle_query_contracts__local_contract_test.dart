@@ -5,7 +5,7 @@ void main() {
   group('Circle generated query contracts', () {
     test('encodes list, search and object query parameters', () {
       expect(
-        encodeCircleListQuery(
+        encodeCircleCircleListCirclesGeneratedRequest(
           const CircleListQuery(
             category: 'interest',
             cursor: 'next',
@@ -19,25 +19,26 @@ void main() {
         },
       );
       expect(
-        encodeCircleSearchQuery(
+        encodeCircleCircleSearchCirclesGeneratedRequest(
           const CircleSearchQuery(query: '露营', limit: 10),
         ).queryParameters,
         <String, String>{'query': '露营', 'limit': '10'},
       );
       expect(
-        encodeCircleDetailQuery(
+        encodeCircleCircleGetCircleGeneratedRequest(
           const CircleDetailQuery(circleId: 'circle-1'),
         ).pathParameters,
         <String, String>{'circleId': 'circle-1'},
       );
-      final personaCircles = encodePersonaCircleListQuery(
-        PersonaCircleListQuery(
-          personaId: 'persona-1',
-          query: ' 摄影 ',
-          cursor: 'membership-20',
-          limit: 20,
-        ),
-      );
+      final personaCircles =
+          encodeCircleCircleMembershipListPersonaCirclesGeneratedRequest(
+            PersonaCircleListQuery(
+              personaId: 'persona-1',
+              query: ' 摄影 ',
+              cursor: 'membership-20',
+              limit: 20,
+            ),
+          );
       expect(personaCircles.pathParameters, <String, String>{
         'personaId': 'persona-1',
       });
@@ -47,7 +48,7 @@ void main() {
         'query': '摄影',
       });
       expect(
-        encodeCircleDiscoveryFeedQuery(
+        encodeCircleCircleListCircleDiscoveryFeedGeneratedRequest(
           const CircleDiscoveryFeedQuery(
             category: 'campus',
             subCategory: 'photography',
@@ -74,6 +75,11 @@ void main() {
         'ownerId': 'persona-1',
         'memberCount': 12,
         'tags': <Object?>['户外', '周末'],
+        'status': 'active',
+        'visibility': 'public',
+        'joinPolicy': 'open',
+        'kind': 'interest',
+        'displaySubjectType': 'circle',
       });
       final search = decodeCircleSearchResultSlice(<String, Object?>{
         'items': <Object?>[
@@ -150,6 +156,11 @@ void main() {
             'id': 'circle-1',
             'name': '城市露营',
             'ownerId': 'persona-1',
+            'status': 'active',
+            'visibility': 'public',
+            'joinPolicy': 'open',
+            'kind': 'interest',
+            'displaySubjectType': 'circle',
           },
         ],
         'items': <Object?>[

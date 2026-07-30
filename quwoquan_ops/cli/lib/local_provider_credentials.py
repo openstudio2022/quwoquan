@@ -62,7 +62,6 @@ _PLATFORM_OWNED_KEYS = frozenset(
         "CONTENT_OSS_ACCESS_KEY_SECRET",
         "CONTENT_OSS_BUCKET",
         "CONTENT_OSS_REGION",
-        "CONTENT_CDN_DOMAIN",
         "CONTENT_CDN_SIGN_KEY",
     }
 )

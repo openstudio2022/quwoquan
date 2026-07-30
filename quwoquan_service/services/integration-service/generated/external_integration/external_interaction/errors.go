@@ -11,20 +11,15 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrInvalidExternalRequest      = errors.New("INTEGRATION.USER.invalid_external_request")
-	ErrUnsupportedOperation        = errors.New("INTEGRATION.USER.unsupported_operation")
-	ErrPayloadNotAllowed           = errors.New("INTEGRATION.USER.payload_not_allowed")
-	ErrProviderTimeout             = errors.New("INTEGRATION.MIDDLEWARE.provider_timeout")
-	ErrProviderRejected            = errors.New("INTEGRATION.MIDDLEWARE.provider_rejected")
-	ErrCallbackSignatureInvalid    = errors.New("INTEGRATION.SYSTEM.callback_signature_invalid")
-	ErrDeadLetterCreated           = errors.New("INTEGRATION.SYSTEM.dead_letter_created")
-	ErrInternalError               = errors.New("INTEGRATION.SYSTEM.internal_error")
-	ErrSmsOtpInvalidPhone          = errors.New("INTEGRATION.USER.sms_otp_invalid_phone")
-	ErrSmsOtpRateLimited           = errors.New("INTEGRATION.USER.sms_otp_rate_limited")
-	ErrSmsProviderTimeout          = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_timeout")
-	ErrSmsProviderRejected         = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_rejected")
-	ErrSmsCallbackSignatureInvalid = errors.New("INTEGRATION.SYSTEM.sms_callback_signature_invalid")
-	ErrSmsOtpCodeRefInvalid        = errors.New("INTEGRATION.SYSTEM.sms_otp_code_ref_invalid")
+	ErrInvalidExternalRequest           = errors.New("INTEGRATION.USER.invalid_external_request")
+	ErrUnsupportedOperation             = errors.New("INTEGRATION.USER.unsupported_operation")
+	ErrDeadLetterRecoveryConflict       = errors.New("INTEGRATION.USER.dead_letter_recovery_conflict")
+	ErrProviderTimeout                  = errors.New("INTEGRATION.MIDDLEWARE.provider_timeout")
+	ErrProviderRejected                 = errors.New("INTEGRATION.MIDDLEWARE.provider_rejected")
+	ErrExternalInteractionInternalError = errors.New("INTEGRATION.SYSTEM.external_interaction_internal_error")
+	ErrSmsProviderTimeout               = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_timeout")
+	ErrSmsProviderRejected              = errors.New("INTEGRATION.MIDDLEWARE.sms_provider_rejected")
+	ErrSmsOtpCodeRefInvalid             = errors.New("INTEGRATION.SYSTEM.sms_otp_code_ref_invalid")
 )
 
 // AppErrorFromInvalidExternalRequest returns *AppError for INTEGRATION.USER.invalid_external_request (user_message from errors.yaml).
@@ -39,76 +34,46 @@ func AppErrorFromUnsupportedOperation(debugMessage string) *rerrors.AppError {
 	return rerrors.NewAppError(code, "暂不支持该外部交互能力", debugMessage).WithMetadata("unsupported_operation", 400).WithRecovery("surface", 0)
 }
 
-// AppErrorFromPayloadNotAllowed returns *AppError for INTEGRATION.USER.payload_not_allowed (user_message from errors.yaml).
-func AppErrorFromPayloadNotAllowed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrPayloadNotAllowed.Error()))
-	return rerrors.NewAppError(code, "外部请求包含未允许的字段", debugMessage).WithMetadata("payload_not_allowed", 400).WithRecovery("surface", 0)
+// AppErrorFromDeadLetterRecoveryConflict returns *AppError for INTEGRATION.USER.dead_letter_recovery_conflict (user_message from errors.yaml).
+func AppErrorFromDeadLetterRecoveryConflict(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrDeadLetterRecoveryConflict.Error()))
+	return rerrors.NewAppError(code, "该恢复请求与已确认的任务不一致", debugMessage).WithMetadata("dead_letter_recovery_conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromProviderTimeout returns *AppError for INTEGRATION.MIDDLEWARE.provider_timeout (user_message from errors.yaml).
 func AppErrorFromProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProviderTimeout.Error()))
-	return rerrors.NewAppError(code, "外部供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "外部供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecovery("retry", 5)
 }
 
 // AppErrorFromProviderRejected returns *AppError for INTEGRATION.MIDDLEWARE.provider_rejected (user_message from errors.yaml).
 func AppErrorFromProviderRejected(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrProviderRejected.Error()))
-	return rerrors.NewAppError(code, "外部供应商暂时拒绝请求，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 502).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "外部供应商暂时拒绝请求，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecovery("retry", 5)
 }
 
-// AppErrorFromCallbackSignatureInvalid returns *AppError for INTEGRATION.SYSTEM.callback_signature_invalid (user_message from errors.yaml).
-func AppErrorFromCallbackSignatureInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrCallbackSignatureInvalid.Error()))
-	return rerrors.NewAppError(code, "外部回调签名校验失败", debugMessage).WithMetadata("signature_invalid", 401).WithRecovery("surface", 0)
-}
-
-// AppErrorFromDeadLetterCreated returns *AppError for INTEGRATION.SYSTEM.dead_letter_created (user_message from errors.yaml).
-func AppErrorFromDeadLetterCreated(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrDeadLetterCreated.Error()))
-	return rerrors.NewAppError(code, "外部交互已进入死信等待处理", debugMessage).WithMetadata("dead_letter", 500).WithRecovery("escalate", 0)
-}
-
-// AppErrorFromInternalError returns *AppError for INTEGRATION.SYSTEM.internal_error (user_message from errors.yaml).
-func AppErrorFromInternalError(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrInternalError.Error()))
+// AppErrorFromExternalInteractionInternalError returns *AppError for INTEGRATION.SYSTEM.external_interaction_internal_error (user_message from errors.yaml).
+func AppErrorFromExternalInteractionInternalError(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrExternalInteractionInternalError.Error()))
 	return rerrors.NewAppError(code, "外部集成网关异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("retry", 5)
-}
-
-// AppErrorFromSmsOtpInvalidPhone returns *AppError for INTEGRATION.USER.sms_otp_invalid_phone (user_message from errors.yaml).
-func AppErrorFromSmsOtpInvalidPhone(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSmsOtpInvalidPhone.Error()))
-	return rerrors.NewAppError(code, "请输入有效手机号", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromSmsOtpRateLimited returns *AppError for INTEGRATION.USER.sms_otp_rate_limited (user_message from errors.yaml).
-func AppErrorFromSmsOtpRateLimited(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSmsOtpRateLimited.Error()))
-	return rerrors.NewAppError(code, "验证码发送太频繁，请稍后再试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 60)
 }
 
 // AppErrorFromSmsProviderTimeout returns *AppError for INTEGRATION.MIDDLEWARE.sms_provider_timeout (user_message from errors.yaml).
 func AppErrorFromSmsProviderTimeout(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSmsProviderTimeout.Error()))
-	return rerrors.NewAppError(code, "短信供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 5)
+	return rerrors.NewAppError(code, "短信供应商响应超时，请稍后重试", debugMessage).WithMetadata("timeout", 0).WithRecovery("retry", 5)
 }
 
 // AppErrorFromSmsProviderRejected returns *AppError for INTEGRATION.MIDDLEWARE.sms_provider_rejected (user_message from errors.yaml).
 func AppErrorFromSmsProviderRejected(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSmsProviderRejected.Error()))
-	return rerrors.NewAppError(code, "短信供应商暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 502).WithRecovery("retry", 5)
-}
-
-// AppErrorFromSmsCallbackSignatureInvalid returns *AppError for INTEGRATION.SYSTEM.sms_callback_signature_invalid (user_message from errors.yaml).
-func AppErrorFromSmsCallbackSignatureInvalid(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrSmsCallbackSignatureInvalid.Error()))
-	return rerrors.NewAppError(code, "短信回执签名校验失败", debugMessage).WithMetadata("signature_invalid", 401).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "短信供应商暂时不可用，请稍后重试", debugMessage).WithMetadata("upstream_rejected", 0).WithRecovery("retry", 5)
 }
 
 // AppErrorFromSmsOtpCodeRefInvalid returns *AppError for INTEGRATION.SYSTEM.sms_otp_code_ref_invalid (user_message from errors.yaml).
 func AppErrorFromSmsOtpCodeRefInvalid(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrSmsOtpCodeRefInvalid.Error()))
-	return rerrors.NewAppError(code, "验证码投递凭据无效，请重新获取验证码", debugMessage).WithMetadata("secret_invalid", 500).WithRecovery("surface", 0)
+	return rerrors.NewAppError(code, "验证码投递凭据无效，请重新获取验证码", debugMessage).WithMetadata("secret_invalid", 0).WithRecovery("surface", 0)
 }
 
 // IsTimeout reports context deadline exhaustion for provider calls.

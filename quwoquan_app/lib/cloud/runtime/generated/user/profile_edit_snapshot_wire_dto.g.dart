@@ -3,7 +3,7 @@
 
 class ProfileEditSnapshotWireDto {
   final String ownerUserId;
-  final String subAccountId;
+  final String personaId;
   final String avatarUrl;
   final String avatarAssetId;
   final int avatarVersion;
@@ -26,7 +26,7 @@ class ProfileEditSnapshotWireDto {
 
   ProfileEditSnapshotWireDto({
     this.ownerUserId = '',
-    this.subAccountId = '',
+    this.personaId = '',
     this.avatarUrl = '',
     this.avatarAssetId = '',
     this.avatarVersion = 0,
@@ -51,7 +51,7 @@ class ProfileEditSnapshotWireDto {
   factory ProfileEditSnapshotWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileEditSnapshotWireDto(
       ownerUserId: m['ownerUserId']?.toString() ?? '',
-      subAccountId: m['subAccountId']?.toString() ?? '',
+      personaId: m['personaId']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarAssetId: m['avatarAssetId']?.toString() ?? '',
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
@@ -77,7 +77,7 @@ class ProfileEditSnapshotWireDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'ownerUserId': ownerUserId,
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'avatarUrl': avatarUrl,
       'avatarAssetId': avatarAssetId,
       'avatarVersion': avatarVersion,
@@ -102,7 +102,7 @@ class ProfileEditSnapshotWireDto {
 
   ProfileEditSnapshotWireDto copyWith({
     String? ownerUserId,
-    String? subAccountId,
+    String? personaId,
     String? avatarUrl,
     String? avatarAssetId,
     int? avatarVersion,
@@ -125,7 +125,7 @@ class ProfileEditSnapshotWireDto {
   }) {
     return ProfileEditSnapshotWireDto(
       ownerUserId: ownerUserId ?? this.ownerUserId,
-      subAccountId: subAccountId ?? this.subAccountId,
+      personaId: personaId ?? this.personaId,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       avatarAssetId: avatarAssetId ?? this.avatarAssetId,
       avatarVersion: avatarVersion ?? this.avatarVersion,

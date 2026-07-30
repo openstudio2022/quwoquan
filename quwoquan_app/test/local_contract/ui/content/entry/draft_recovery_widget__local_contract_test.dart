@@ -24,9 +24,9 @@ import '../../../../support/recording_content_post_publication_writer.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
 
 const _resolvedActivePersona = ActivePersonaContextViewData(
-  subAccountId: 'user_001',
+  personaId: 'user_001',
   ownerUserId: 'user_001',
-  subjectType: 'subAccount',
+  subjectType: 'persona',
   displayName: '测试用户',
   avatarUrl: '',
   contextVersion: 1,
@@ -41,7 +41,7 @@ class _AuthedSessionStore implements AuthSessionStore {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -81,7 +81,7 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> softLogout() async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 }
 
 class _AuthWarmup extends ConsumerWidget {

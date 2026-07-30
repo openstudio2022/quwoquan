@@ -64,7 +64,7 @@ func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing
 	}
 	firstBody := parseJSON(t, first)
 	ownerID, _ := firstBody["ownerId"].(string)
-	if !strings.HasPrefix(ownerID, "uo_01_ad_") {
+	if !regexp.MustCompile(`^uo_01_ad_[0-3][0-9a-f]{3}_[0-9a-hjkmnp-tv-z]{26}$`).MatchString(ownerID) {
 		t.Fatalf("expected anonymous ownerId prefix, got %q", ownerID)
 	}
 	if firstBody["accountState"] != "anonymous" {
@@ -73,13 +73,13 @@ func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing
 	if firstBody["identityOrigin"] != "anonymous_device" {
 		t.Fatalf("expected anonymous_device origin, got %#v", firstBody["identityOrigin"])
 	}
-	if int(firstBody["subAccountCount"].(float64)) != 1 {
-		t.Fatalf("expected one sub account, got %#v", firstBody["subAccountCount"])
+	if int(firstBody["personaCount"].(float64)) != 1 {
+		t.Fatalf("expected one persona, got %#v", firstBody["personaCount"])
 	}
-	activeSub, _ := firstBody["activeSub"].(map[string]any)
-	subAccountID, _ := activeSub["subAccountId"].(string)
-	if !strings.HasPrefix(subAccountID, "us_01_") {
-		t.Fatalf("expected structured subAccountId, got %q", subAccountID)
+	activePersona, _ := firstBody["activePersona"].(map[string]any)
+	personaID, _ := activePersona["personaId"].(string)
+	if !regexp.MustCompile(`^us_01_[0-3][0-9a-f]{3}_[0-9a-hjkmnp-tv-z]{26}$`).MatchString(personaID) {
+		t.Fatalf("expected structured personaId, got %q", personaID)
 	}
 	logicalShard := int(firstBody["logicalShard"].(float64))
 	if logicalShard < 0 || logicalShard >= 16384 {
@@ -158,8 +158,8 @@ func TestAuth_AnonymousLogin_ReusesOwnerAndCreatesSingleDeviceBinding(t *testing
 func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	ownerID := "uo_01_ad_00aa_anonowner00000001"
-	subAccountID := "us_01_00aa_anonowner000000001"
+	ownerID := "uo_01_ad_3338_01j00000000000000000000002"
+	personaID := "us_01_3338_01j00000000000000000000003"
 	createTestProfile(t, ownerID, "anon-owner")
 	if _, err := pgPool.Exec(
 		context.Background(),
@@ -172,7 +172,7 @@ func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *tes
 	); err != nil {
 		t.Fatalf("update anonymous profile: %v", err)
 	}
-	createTestPersonaFull(t, "", ownerID, subAccountID, "AnonProfile", "open", true, true)
+	createTestPersonaFull(t, "", ownerID, personaID, "AnonProfile", "open", true, true)
 	createTestCredential(t, "cred_anonymous", ownerID, "anonymous_device", "fp_anonymous_device")
 
 	rec := doRequest(
@@ -399,6 +399,36 @@ func TestAuth_FirstLogin_UsesCloudDefaultNicknamePattern(t *testing.T) {
 	}
 	if nicknameCustomized {
 		t.Fatalf("expected first-login nicknameCustomized=false, got true")
+	}
+	var (
+		personaNickname string
+		projectedAt     *string
+	)
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT display_name FROM personas WHERE user_id=$1 AND is_active=true`,
+		ownerID,
+	).Scan(&personaNickname); err != nil {
+		t.Fatalf("query authoritative bootstrap Persona: %v", err)
+	}
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT profile_projected_at::text
+		 FROM personas_outbox
+		 WHERE payload_json->>'userId'=$1 AND event_type='PersonaCreated'
+		 ORDER BY aggregate_version DESC
+		 LIMIT 1`,
+		ownerID,
+	).Scan(&projectedAt); err != nil {
+		t.Fatalf("query bootstrap Persona projection checkpoint: %v", err)
+	}
+	if personaNickname != nickname || projectedAt == nil || *projectedAt == "" {
+		t.Fatalf(
+			"first-login profile must originate from durable Persona projection: Persona=%q projection=%q checkpoint=%v",
+			personaNickname,
+			nickname,
+			projectedAt,
+		)
 	}
 	accountHint, ok := loginBody["accountHint"].(map[string]any)
 	if !ok {

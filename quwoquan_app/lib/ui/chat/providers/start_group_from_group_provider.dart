@@ -177,6 +177,7 @@ Future<StartGroupContactMemberPage> loadGroupContactMemberPage(
     members.add(
       StartGroupPickableMember(
         userId: userId,
+        userHandle: contact.userHandle,
         displayName: contact.displayName.isNotEmpty
             ? contact.displayName
             : userId,

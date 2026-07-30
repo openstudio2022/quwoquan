@@ -46,7 +46,8 @@ fields:
   ops_exposure: read
   role: authoritative_state
 - name: status
-  type: string
+  type: enum
+  enum_ref: TagTaxonomyReleaseStatus
   constraints:
   - NOT_NULL
   classification: PUBLIC
@@ -72,3 +73,15 @@ fields:
   api_exposure: read
   ops_exposure: read
   role: authoritative_state
+types:
+  StageTagTaxonomyReleaseRequest:
+    description: Data publish Facade 提交不可变 taxonomy 发布批次的请求体。
+    fields:
+    - {name: releaseId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: write}
+    - {name: sourceOwner, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: canonicalDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: write}
+    - {name: releaseKind, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: write}
+    - {name: nodeCount, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: write}
+enums:
+  TagTaxonomyReleaseStatus:
+    values: [staged, active, retired, rejected]

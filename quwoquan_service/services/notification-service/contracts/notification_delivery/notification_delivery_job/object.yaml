@@ -87,6 +87,7 @@ business_rules:
   identifier 仅保存不可逆 digest，取消 push 使用独立的同等时间线
 - CallAnswered/CallEnded 将同 callId 其它未完成 Job CAS 为 cancelled；过期 Job 不再外送
 lifecycle:
+  state_field: status
   states:
   - pending
   - leased

@@ -1,5 +1,5 @@
 creatorProfileId: qwq_creator_pro_guide_001
-subAccountId: builtin_travel_pro_guide
+personaId: builtin_travel_pro_guide
 authorId: builtin_travel_pro_guide
 isSystemBuiltin: true
 displayName: 讲解员小周
@@ -26,7 +26,6 @@ publishCadence:
 qualityScore: 0.89
 fatigueScore: 0.2
 riskTier: low
-profileVersion: "1.0.0"
 publicProfileTagRefs:
   - Topic/旅行/玩法/博物馆展览
   - Topic/旅行/玩法/古迹寻访

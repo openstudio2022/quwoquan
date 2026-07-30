@@ -14,6 +14,10 @@ from content.release.canonical.object_transaction_contract import (
     _safe_id,
 )
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
+from content.release.canonical.release_operation_lock import (
+    release_operation_guard,
+    release_operation_lock_root,
+)
 from content.release.model import ReleaseKind
 from verify.verify_no_active_data_runtime import active_runtime_processes
 
@@ -65,40 +69,44 @@ def reset_canonical_publish(
     if active_runtime_processes():
         raise RuntimeError("GATE_BLOCK active task execute owns canonical publish")
 
-    release = release_root / release_id
-    header = read_json(payload_file(release, "release.json"))
-    desired_state = read_json(payload_file(release, "desired_state.json"))
-    if header.get("releaseKind") != ReleaseKind.EMPTY_BASELINE:
-        raise ValueError("emptyBaselineRelease must be an immutable empty baseline")
-    desired_refs = desired_state.get("desiredRefs")
-    if desired_refs != {"creators": [], "entities": [], "posts": [], "tags": []}:
-        raise ValueError("emptyBaselineRelease desired state must be empty")
-    if not _empty_baseline_is_applied(
-        output_root=output_root,
-        release_id=release_id,
-        environments=environments,
+    with release_operation_guard(
+        lock_root=release_operation_lock_root(release_root),
+        global_exclusive=True,
     ):
-        raise RuntimeError("GATE_BLOCK empty baseline is not applied in every requested environment")
+        release = release_root / release_id
+        header = read_json(payload_file(release, "release.json"))
+        desired_state = read_json(payload_file(release, "desired_state.json"))
+        if header.get("releaseKind") != ReleaseKind.EMPTY_BASELINE:
+            raise ValueError("emptyBaselineRelease must be an immutable empty baseline")
+        desired_refs = desired_state.get("desiredRefs")
+        if desired_refs != {"creators": [], "entities": [], "posts": [], "tags": []}:
+            raise ValueError("emptyBaselineRelease desired state must be empty")
+        if not _empty_baseline_is_applied(
+            output_root=output_root,
+            release_id=release_id,
+            environments=environments,
+        ):
+            raise RuntimeError("GATE_BLOCK empty baseline is not applied in every requested environment")
 
-    publish_root.mkdir(parents=True, exist_ok=True)
-    with canonical_publish_lock():
-        unknown_roots = sorted(
-            entry.name
-            for entry in publish_root.iterdir()
-            if entry.name not in ALLOWED_CANONICAL_ROOTS
-        )
-        if unknown_roots:
-            raise ValueError(
-                "canonical publish contains unknown roots; refusing destructive reset: "
-                + ", ".join(unknown_roots)
+        publish_root.mkdir(parents=True, exist_ok=True)
+        with canonical_publish_lock():
+            unknown_roots = sorted(
+                entry.name
+                for entry in publish_root.iterdir()
+                if entry.name not in ALLOWED_CANONICAL_ROOTS
             )
-        removed_roots = tuple(
-            root_name
-            for root_name in sorted(ALLOWED_CANONICAL_ROOTS)
-            if (publish_root / root_name).exists()
-        )
-        for root_name in removed_roots:
-            shutil.rmtree(publish_root / root_name)
+            if unknown_roots:
+                raise ValueError(
+                    "canonical publish contains unknown roots; refusing destructive reset: "
+                    + ", ".join(unknown_roots)
+                )
+            removed_roots = tuple(
+                root_name
+                for root_name in sorted(ALLOWED_CANONICAL_ROOTS)
+                if (publish_root / root_name).exists()
+            )
+            for root_name in removed_roots:
+                shutil.rmtree(publish_root / root_name)
     return removed_roots
 
 

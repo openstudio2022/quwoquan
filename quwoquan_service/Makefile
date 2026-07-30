@@ -1,5 +1,7 @@
-.PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-content-architecture codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
+.PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-content-architecture codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
+.PHONY: verify-link-templates-go codegen-link-templates-go
+.PHONY: verify-api-edge-errors codegen-api-edge-errors
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -18,18 +20,22 @@ QWQ_OUTPUT_ROOT := $(REPO_ROOT)/.qwq_output
 # 每个 Make 进程独占可删除编译视图，避免并发 codegen 在 ContractGraph 编译和对象
 # 生成之间删除另一进程的输入。
 CONTRACT_VIEW ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/service-contract-view/cache/view-$(shell printf %s "$$PPID")
+# ContractGraph 产物在两个 profile 下逐字节相同，profile 只决定必须通过哪一档校验。
+# 默认 commercial 保持准出门禁不被削弱；存量 commercial 债务未清期间，可显式
+# CONTRACT_GRAPH_PROFILE=baseline 重新生成 bundle，让下游 codegen 不被存量债务连坐。
+CONTRACT_GRAPH_PROFILE ?= commercial
 ML_REPORT_ROOT ?= $(QWQ_OUTPUT_ROOT)/env/repo/runs/ml
 QWQ_PYTHON_CACHE_ROOT ?= $(HOME)/.cache/quwoquan/python-envs
 DATA_PYTHON ?= $(QWQ_PYTHON_CACHE_ROOT)/quwoquan-data/bin/python
 ML_PYTHON ?= $(QWQ_PYTHON_CACHE_ROOT)/rec-model/bin/python
 ML_SCRIPTS := services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts
 PYTEST_FLAGS := -o cache_dir=$(QWQ_OUTPUT_ROOT)/env/repo/local/tests/cache/pytest
-DOMAIN_SERVICES := assistant-service chat-service circle-service content-service entity-service integration-service notification-service product-ops-service realtime-gateway recommendation-service rtc-service search-service tag-service user-service
+DOMAIN_SERVICES := $(sort $(notdir $(patsubst %/contracts/,%,$(dir $(wildcard services/*/contracts/domain.yaml)))))
 export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
-gate: verify-metadata verify-go-single-module verify-service-layering verify-production-wiring-purity
+gate: verify-metadata verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track
 	@PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/gate/verify_service_architecture.py
 	@set -e; for service in $(DOMAIN_SERVICES); do \
 		echo "[gate] $$service"; \
@@ -93,12 +99,18 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/trust_safety/report/domain/... ./services/content-service/internal/trust_safety/report/application
 
-verify-metadata: service-contract-view verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-citation-destinations verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance
+verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
+verify-actor-persona-vocabulary:
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/verify_actor_persona_vocabulary.py
+
 verify-observability-catalog: service-contract-view
 	go run ./tools/codegen_observability_catalog --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --check
+
+verify-api-edge-errors: service-contract-view
+	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain gateway --output-root services/api-edge/generated --check
 
 verify-assistant-service-errors: service-contract-view
 	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain assistant --output-root services/assistant-service/generated --check
@@ -108,6 +120,15 @@ verify-assistant-runtime-enums: service-contract-view
 
 verify-assistant-citation-destinations: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_conversation/citation_destinations.g.go --check-citation-destinations-go
+
+verify-link-templates-go: service-contract-view
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/contracts/generate_link_templates_go.py --metadata-dir "$(CONTRACT_VIEW)" --output generated/linktemplates/link_templates.g.go --check
+
+verify-shared-contract-enums: service-contract-view
+	go test ./tools/codegen_app_metadata -run 'TestCircleContractEnum|TestPersonaCircleSlice|TestUserContractEnum' -count=1
+
+verify-circle-service-errors: service-contract-view
+	go run ./tools/codegen_circle_domain --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/circle-service/generated/circle_management --check-errors
 
 verify-content-service-codegen: service-contract-view
 	go run ./tools/codegen_content_service --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/content-service/generated --aggregate Post --route-service content-service --check
@@ -139,6 +160,10 @@ verify-contract-graph-commercial: verify-openapi
 
 verify-contract-graph-single-track:
 	python3 scripts/verify/verify_contract_graph_single_track.py
+	# Service gate: block legacy route inputs, client-owned binding overrides,
+	# empty-green scans and path/binding drift. Fix the owning operations.yaml
+	# request_bindings; request type/encoder generation remains a separate gate.
+	go test ./internal/metadata/graph -run TestRepositoryRequestBindingsUseCanonicalSingleTrack -count=1
 
 verify-codegen-contract-graph-source:
 	python3 scripts/verify/verify_codegen_contract_graph_source.py
@@ -152,31 +177,38 @@ verify-service-layering:
 verify-production-wiring-purity:
 	python3 scripts/verify/verify_production_wiring_purity.py
 
+verify-api-edge-rate-limit-single-track:
+	python3 scripts/verify/verify_api_edge_rate_limit_single_track.py
+
 verify-content-architecture:
 	python3 scripts/verify/verify_content_application_boundaries.py
 
-codegen: codegen-contract-graph codegen-observability-catalog codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-citation-destinations codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
 
 codegen-openapi: service-contract-view
 	go run ./tools/qwq_contract generate-openapi --metadata-dir "$(CONTRACT_VIEW)"
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/contracts/sync_service_openapi.py --contract-view "$(CONTRACT_VIEW)"
 
 codegen-contract-graph: codegen-openapi
-	go run ./tools/qwq_contract generate --metadata-dir "$(CONTRACT_VIEW)" --profile commercial --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
+	go run ./tools/qwq_contract generate --metadata-dir "$(CONTRACT_VIEW)" --profile $(CONTRACT_GRAPH_PROFILE) --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
 
 codegen-observability-catalog codegen-rec-intersection codegen-impact \
 codegen-ops-portal codegen-control-plane-runtime \
-codegen-assistant-service-errors codegen-assistant-runtime-enums \
+codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums \
 codegen-assistant-citation-destinations codegen-content-service \
 codegen-circle-service codegen-entity-service codegen-notification-service \
 codegen-rtc-service codegen-realtime-gateway codegen-integration-service \
 codegen-product-ops-service codegen-platform-ops-service codegen-user-service \
-codegen-chat-domain-events codegen-rec-model-python codegen-storage: service-contract-view
+codegen-chat-service codegen-chat-domain-events codegen-rec-model-python \
+codegen-storage: service-contract-view
 
 codegen-app: codegen-contract-graph
 
 codegen-observability-catalog:
 	go run ./tools/codegen_observability_catalog --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
+
+codegen-api-edge-errors:
+	go run ./tools/codegen_service_errors --metadata-dir "$(CONTRACT_VIEW)" --domain gateway --output-root services/api-edge/generated
 
 codegen-rec-intersection:
 	go run ./tools/codegen_rec_intersection --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/content-service/generated/content/post
@@ -186,6 +218,9 @@ codegen-impact:
 
 codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --contract-graph generated/contract_graph.json --contract-graph-lock ../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json --app-dir ../quwoquan_app --generated-manifest ../quwoquan_app/tool/cloud_codegen/generated_manifest.json
+
+codegen-link-templates-go: service-contract-view
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/contracts/generate_link_templates_go.py --metadata-dir "$(CONTRACT_VIEW)" --output generated/linktemplates/link_templates.g.go
 
 codegen-ops-portal:
 	go run ./tools/codegen_ops_portal_metadata --metadata-dir "$(CONTRACT_VIEW)" --portal-dir ../quwoquan_ops/portal

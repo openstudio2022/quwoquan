@@ -2,6 +2,7 @@
   "label": "立秋",
   "labelEn": "Start of Autumn",
   "description": "二十四节气之立秋",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

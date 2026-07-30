@@ -385,6 +385,19 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     );
   }
 
+  /// 从交集「拉群约伴」进来时，新群按共同对象命名（如「老君山 · 约伴」）。
+  ///
+  /// 这是承接页对上游承诺的兑现：banner 说了「已带入共同对象」，那么建出来的群
+  /// 必须确实是关于这个对象的，否则用户只得到一个成员名拼接的普通群。
+  /// 拿不到对象名时退回成员名，不用 objectId 当群名。
+  String _createGroupTitle(String memberNameTitle) {
+    final objectName = widget.routeExtra?.safeTargetObjectName ?? '';
+    if (objectName.isEmpty) {
+      return memberNameTitle;
+    }
+    return ChatText.startGroupChatCompanionGroupTitle(objectName);
+  }
+
   void _recordCompanionContextEnter() {
     final extra = widget.routeExtra;
     if (extra == null || !extra.hasCompanionContext) {
@@ -423,11 +436,13 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     try {
       final repo = ref.read(chatConversationRepositoryProvider);
       if (widget.isCreateMode) {
-        final title = wizardState.selectedMembers.values
-            .map((member) => member.displayName)
-            .where((name) => name.isNotEmpty)
-            .take(3)
-            .join('、');
+        final title = _createGroupTitle(
+          wizardState.selectedMembers.values
+              .map((member) => member.displayName)
+              .where((name) => name.isNotEmpty)
+              .take(3)
+              .join('、'),
+        );
         final ChatConversationCreatedDto created = await repo
             .createConversation(
               type: 'group',
@@ -580,15 +595,16 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           if (normalizedQuery.isEmpty) {
             return true;
           }
-          // 拼音搜索（li→李）+ userId 兜底，与联系人列表同源。
+          // 拼音搜索（li→李）+ canonical userHandle，与联系人列表同源。
           return pinyinMatches(contact.displayName, normalizedQuery) ||
-              userId.toLowerCase().contains(normalizedQuery);
+              contact.userHandle.toLowerCase().contains(normalizedQuery);
         })
         .map((c) {
           final displayName = c.displayName;
           return StartGroupFriendLetterRow(
             displayName: displayName,
             userId: c.userId,
+            userHandle: c.userHandle,
             avatarUrl: c.avatarUrl,
             letter: chatContactInitial(displayName),
             metFrom: c.metFrom,
@@ -673,19 +689,21 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           Builder(
             builder: (context) {
               final m = grouped.map[letter]![index];
-              final username = m.userId;
-              final selected = wizardState.isSelected(username);
-              final locked = wizardState.isLocked(username);
+              final personaId = m.userId;
+              final userHandle = m.userHandle.trim();
+              final selected = wizardState.isSelected(personaId);
+              final locked = wizardState.isLocked(personaId);
               final pickable = StartGroupPickableMember(
-                userId: username,
+                userId: personaId,
+                userHandle: userHandle,
                 displayName: m.displayName.isNotEmpty
                     ? m.displayName
-                    : username,
+                    : personaId,
                 avatarUrl: m.avatarUrl,
               );
               return _RelatedFriendRow(
                 name: m.displayName,
-                username: username,
+                memberKey: personaId,
                 avatarUrl: m.avatarUrl,
                 selected: selected,
                 fgPrimary: fgPrimary,
@@ -698,16 +716,18 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                 onTap: selectionReady && !locked
                     ? () => _toggleSelectedMember(pickable)
                     : null,
-                onAvatarTap: () => context.push(
-                  AppRoutePaths.userProfile(username: username),
-                  extra: UserProfileRouteExtra(
-                    subAccountId: username,
-                    avatar: m.avatarUrl.isNotEmpty ? m.avatarUrl : null,
-                    displayName: m.displayName.isNotEmpty
-                        ? m.displayName
-                        : null,
-                  ),
-                ),
+                onAvatarTap: userHandle.isEmpty
+                    ? null
+                    : () => context.push(
+                        AppRoutePaths.userProfile(userHandle: userHandle),
+                        extra: UserProfileRouteExtra(
+                          personaId: personaId,
+                          avatar: m.avatarUrl.isNotEmpty ? m.avatarUrl : null,
+                          displayName: m.displayName.isNotEmpty
+                              ? m.displayName
+                              : null,
+                        ),
+                      ),
               );
             },
           ),

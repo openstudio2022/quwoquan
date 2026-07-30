@@ -131,6 +131,11 @@ def _is_generated_import_allowed(source_path: Path, target: str) -> bool:
         return True
     if target.startswith("package:quwoquan_app/cloud/runtime/generated/"):
         return True
+    if target.startswith("package:quwoquan_cloud_contracts/"):
+        # Generated runtime payloads may reuse enums and value objects from the
+        # pure generated-contract package.  Duplicating those definitions would
+        # create a second wire truth source.
+        return True
     if target.startswith("package:"):
         return False
     resolved = (source_path.parent / target).resolve()

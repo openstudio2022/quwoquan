@@ -6,6 +6,15 @@ description: 'GetMyFootprint 分页结果的单项私有读模型。分页 envel
   '
 consumers:
 - app
+source_entities:
+- ContentBehaviorFact
+- Post
 client_projection:
   dart_class: ContentFootprintEntry
+  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_queries.dart
   external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_queries.dart
+fields:
+- {name: postId}
+- {name: action}
+- {name: occurredAt}
+- {name: post}

@@ -1,5 +1,6 @@
-projection: AppReleaseRecoveryView
-source: AppRelease
+read_model: AppReleaseRecoveryView
+source_entities:
+- AppRelease
 description: 启动和运行时恢复页读取的平台当前发布版本与受信更新、恢复地址。
 fields:
 - latestVersion

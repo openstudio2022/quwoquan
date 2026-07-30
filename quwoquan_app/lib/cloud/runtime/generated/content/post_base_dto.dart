@@ -26,7 +26,7 @@ abstract class PostBaseDto {
   String get identity;
   String get displayFormat;
   String get authorId;
-  String get subAccountId => authorId;
+  String get personaId => authorId;
   String get displayName;
   String get avatarUrl;
 

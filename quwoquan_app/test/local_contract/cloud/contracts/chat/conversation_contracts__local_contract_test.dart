@@ -1,10 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/services/chat/remote/chat_contract_projection_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('Chat Conversation typed contract', () {
     test('keyset list query encodes only cursor and limit', () {
-      final payload = encodeChatListConversationsQuery(
+      final payload = encodeChatConversationListConversationsGeneratedRequest(
         ChatListConversationsQuery(cursor: 'opaque-token', limit: 25),
       );
 
@@ -43,22 +44,56 @@ void main() {
         }),
         throwsFormatException,
       );
+      for (final retiredField in <String>['bindingType', 'lifecyclePolicy']) {
+        expect(
+          () => decodeChatConversation(<String, Object?>{
+            ..._conversationWire(),
+            retiredField: 'retired',
+          }),
+          throwsFormatException,
+          reason: retiredField,
+        );
+      }
+    });
+
+    test('group home uses the same canonical origin contract', () {
+      final home = decodeChatGroupHome(_groupHomeWire());
+
+      expect(home.originType, 'circle_group');
+      expect(home.circleId, 'circle-1');
+      expect(home.circleGroupId, 'circle-group-1');
+      final appProjection = const ChatContractProjectionMapper().toGroupHome(
+        home,
+      );
+      expect(appProjection.originType, 'circle_group');
+      expect(appProjection.circleGroupId, 'circle-group-1');
+      expect(appProjection.toMap().containsKey('bindingType'), isFalse);
+      expect(appProjection.toMap().containsKey('lifecyclePolicy'), isFalse);
+
+      for (final retiredField in <String>['bindingType', 'lifecyclePolicy']) {
+        expect(
+          () => decodeChatGroupHome(<String, Object?>{
+            ..._groupHomeWire(),
+            retiredField: 'retired',
+          }),
+          throwsFormatException,
+          reason: retiredField,
+        );
+      }
     });
 
     test('encodes governance commands and decodes acknowledgements', () {
-      final updateAnnouncement = encodeChatUpdateAnnouncementCommand(
-        ChatUpdateAnnouncementCommand(
-          conversationId: 'conversation-1',
-          idempotencyKey: 'announcement-1',
-          announcement: '新的群公告',
-        ),
-      );
-      final dissolve = encodeChatDissolveConversationCommand(
-        ChatDissolveConversationCommand(
-          conversationId: 'conversation-1',
-          idempotencyKey: 'dissolve-1',
-        ),
-      );
+      final updateAnnouncement =
+          encodeChatConversationUpdateAnnouncementGeneratedRequest(
+            ChatUpdateAnnouncementCommand(
+              conversationId: 'conversation-1',
+              announcement: '新的群公告',
+            ),
+          );
+      final dissolve =
+          encodeChatConversationDissolveConversationGeneratedRequest(
+            ChatDissolveConversationCommand(conversationId: 'conversation-1'),
+          );
 
       expect(updateAnnouncement.pathParameters, <String, String>{
         'conversationId': 'conversation-1',
@@ -90,8 +125,6 @@ Map<String, Object?> _conversationWire() => <String, Object?>{
   'circleGroupId': '',
   'entityId': '',
   'originType': 'ad_hoc_group',
-  'bindingType': 'none',
-  'lifecyclePolicy': 'persistent',
   'maxSeq': 8,
   'memberCount': 2,
   'membersRosterRevision': 3,
@@ -107,4 +140,22 @@ Map<String, Object?> _conversationWire() => <String, Object?>{
   'status': 'active',
   'createdAt': '2026-07-20T06:00:00Z',
   'updatedAt': '2026-07-21T06:00:00Z',
+};
+
+Map<String, Object?> _groupHomeWire() => <String, Object?>{
+  'conversationId': 'conversation-1',
+  'title': '契约群聊',
+  'avatarUrl': 'https://cdn.example/conversation-1.png',
+  'groupAvatarVersion': 1,
+  'circleId': 'circle-1',
+  'circleGroupId': 'circle-group-1',
+  'entityId': '',
+  'sourceEntityTitle': '',
+  'sourceCircleTitle': '徒步圈',
+  'memberCount': 2,
+  'announcement': '',
+  'capabilities': <String>['member'],
+  'originType': 'circle_group',
+  'canManageMembers': true,
+  'canDissolve': false,
 };

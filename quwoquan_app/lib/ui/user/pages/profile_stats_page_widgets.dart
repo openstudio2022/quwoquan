@@ -404,9 +404,12 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   Widget? _buildFollowButton(
     BuildContext context,
     ProfileSocialRelationRowViewData row,
-    RelationshipCapabilityDto capability,
+    RelationshipCapabilityDto? capability,
     bool isDark,
   ) {
+    if (capability == null) {
+      return null;
+    }
     if (capability.isSelf || capability.isBlocked || capability.isBlockedBy) {
       return null;
     }
@@ -474,14 +477,14 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
 
   String _relationSecondaryText(
     ProfileSocialRelationRowViewData row,
-    RelationshipCapabilityDto capability,
+    RelationshipCapabilityDto? capability,
   ) {
     final segments = <String>[];
-    if (capability.relationState == 'mutual') {
+    if (capability?.relationState == 'mutual') {
       segments.add(ContactText.relatedMutualFollow);
-    } else if (capability.relationState == 'followed_by') {
+    } else if (capability?.relationState == 'followed_by') {
       segments.add(ProfileText.profileStatsFollowedBy);
-    } else if (capability.relationState == 'following') {
+    } else if (capability?.relationState == 'following') {
       segments.add(FoundationText.following);
     }
     final visibility = _profileVisibilityText(row.profileVisibility);
@@ -511,17 +514,12 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
     }
   }
 
-  String _circleVisibilityText(String raw) {
-    switch (raw) {
-      case 'members':
-        return CommunityText.visibilityMembers;
-      case 'private':
-        return ProfileText.profileStatsVisibilitySelfOnly;
-      case 'public':
-      default:
-        return CreationText.visibilityPublic;
-    }
-  }
+  String _circleVisibilityText(CircleVisibility visibility) =>
+      switch (visibility) {
+        CircleVisibility.private => CommunityText.visibilityMembers,
+        CircleVisibility.inviteOnly => CommunityText.visibilityInviteOnly,
+        CircleVisibility.public => CreationText.visibilityPublic,
+      };
 
   Widget _buildEmptyCard(bool isDark, _ProfileStatsTab tab) {
     final title = switch (tab) {

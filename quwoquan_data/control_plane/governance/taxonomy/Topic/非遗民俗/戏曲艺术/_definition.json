@@ -2,6 +2,7 @@
   "label": "戏曲艺术",
   "labelEn": "Traditional Opera",
   "description": "京剧川剧豫剧等戏曲艺术",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

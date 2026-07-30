@@ -1,0 +1,87 @@
+role: authoritative
+domain: OPS
+aggregate: AccountEnforcementCase
+description: AccountEnforcementCase 命令、并发、审批与真实存储的稳定错误语义。
+errors:
+- code: OPS.USER.account_enforcement_case_invalid_argument
+  kind: USER
+  reason: account_enforcement_case_invalid_argument
+  http_status: 400
+  emitted_by:
+  - {surface: http, operations: [OpenAccountModerationCase, OpenAccountAppealCase, ReviewAccountEnforcementCase, RetryAccountEnforcementDelivery, GetAccountEnforcementCase]}
+  recovery_action: surface
+  dart_const: accountEnforcementCaseInvalidArgument
+  go_const: ErrAccountEnforcementCaseInvalidArgument
+  user_message: {zh: 账号治理请求无效, en: Invalid account enforcement request}
+- code: OPS.USER.account_enforcement_case_not_found
+  kind: USER
+  reason: account_enforcement_case_not_found
+  http_status: 404
+  emitted_by:
+  - {surface: http, operations: [ReviewAccountEnforcementCase, RetryAccountEnforcementDelivery, GetAccountEnforcementCase]}
+  recovery_action: refresh
+  dart_const: accountEnforcementCaseNotFound
+  go_const: ErrAccountEnforcementCaseNotFound
+  user_message: {zh: 账号治理记录不存在, en: Account enforcement case not found}
+- code: OPS.USER.account_enforcement_idempotency_conflict
+  kind: USER
+  reason: account_enforcement_idempotency_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [OpenAccountModerationCase, OpenAccountAppealCase, ReviewAccountEnforcementCase, RetryAccountEnforcementDelivery]}
+  recovery_action: refresh
+  dart_const: accountEnforcementIdempotencyConflict
+  go_const: ErrAccountEnforcementIdempotencyConflict
+  user_message: {zh: 重复账号治理请求与原操作不一致, en: Repeated account enforcement request conflicts with the original}
+- code: OPS.USER.account_enforcement_case_closed
+  kind: USER
+  reason: account_enforcement_case_closed
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [ReviewAccountEnforcementCase]}
+  recovery_action: refresh
+  dart_const: accountEnforcementCaseClosed
+  go_const: ErrAccountEnforcementCaseClosed
+  user_message: {zh: 账号治理记录已关闭, en: Account enforcement case is closed}
+- code: OPS.USER.account_enforcement_review_conflict
+  kind: USER
+  reason: account_enforcement_review_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [ReviewAccountEnforcementCase]}
+  recovery_action: refresh
+  dart_const: accountEnforcementReviewConflict
+  go_const: ErrAccountEnforcementReviewConflict
+  user_message: {zh: 审核人与既有决定冲突, en: Reviewer conflicts with the existing decision}
+- code: OPS.USER.account_enforcement_source_decision_conflict
+  kind: USER
+  reason: account_enforcement_source_decision_conflict
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [OpenAccountModerationCase, OpenAccountAppealCase, ReviewAccountEnforcementCase, RetryAccountEnforcementDelivery]}
+  recovery_action: refresh
+  dart_const: accountEnforcementSourceDecisionConflict
+  go_const: ErrAccountEnforcementSourceDecisionConflict
+  user_message: {zh: 账号治理决策前置状态不一致, en: Account enforcement decision prerequisite conflicts}
+- code: OPS.SYSTEM.account_enforcement_case_storage_read_failed
+  kind: SYSTEM
+  reason: account_enforcement_case_storage_read_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [ReviewAccountEnforcementCase, RetryAccountEnforcementDelivery, GetAccountEnforcementCase]}
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: accountEnforcementCaseStorageReadFailed
+  go_const: ErrAccountEnforcementCaseStorageReadFailed
+  user_message: {zh: 账号治理记录读取失败，请稍后重试, en: Account enforcement case read failed, please retry}
+- code: OPS.SYSTEM.account_enforcement_case_storage_write_failed
+  kind: SYSTEM
+  reason: account_enforcement_case_storage_write_failed
+  http_status: 500
+  emitted_by:
+  - {surface: http, operations: [OpenAccountModerationCase, OpenAccountAppealCase, ReviewAccountEnforcementCase, RetryAccountEnforcementDelivery]}
+  recovery_action: retry
+  recovery_after_seconds: 2
+  dart_const: accountEnforcementCaseStorageWriteFailed
+  go_const: ErrAccountEnforcementCaseStorageWriteFailed
+  user_message: {zh: 账号治理操作失败，请稍后重试, en: Account enforcement operation failed, please retry}

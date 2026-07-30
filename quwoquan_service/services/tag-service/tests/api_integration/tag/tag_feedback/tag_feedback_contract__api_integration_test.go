@@ -41,7 +41,7 @@ func feedbackRequest(t *testing.T, handler http.Handler, persona, idemKey string
 	request := httptest.NewRequest(http.MethodPost, "/tag/feedback", strings.NewReader(string(payload)))
 	request.Header.Set("Content-Type", "application/json")
 	if persona != "" {
-		request.Header.Set("X-Client-Sub-Account-Id", "forged-"+persona)
+		request.Header.Set("X-Client-Persona-Id", "forged-"+persona)
 		request = request.WithContext(rtauth.WithPrincipal(
 			request.Context(),
 			rtauth.Principal{Actor: operation.ActorContext{

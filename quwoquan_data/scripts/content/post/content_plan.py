@@ -154,7 +154,7 @@ def load_writing_intent_overrides(execution_id: str) -> dict[str, dict[str, Any]
             "authorId",
             "creatorProfileId",
             "creatorArchetype",
-            "creatorProfileVersion",
+            "creatorProfileDigest",
             "creatorDisclosure",
             "experienceClaimMode",
             "authorQualitySignals",

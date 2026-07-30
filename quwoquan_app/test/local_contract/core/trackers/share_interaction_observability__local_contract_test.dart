@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/spec.md#gwt-008
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-008
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/core/trackers/share_interaction_observability.dart';
@@ -23,7 +23,7 @@ void main() {
     for (final eventName in events) {
       tracker.track(
         eventName: eventName,
-        subAccountId: 'persona-a',
+        personaId: 'persona-a',
         direction: ShareInteractionDirection.received,
         item: item,
         result: 'success',
@@ -64,10 +64,10 @@ ShareInteractionItem _item() {
   return ShareInteractionItem(
     interactionId: 'share-1',
     direction: ShareInteractionDirection.received,
-    displaySubAccountId: 'actor',
+    displayPersonaId: 'actor',
     displayName: '山海来信',
     displayAvatarUrl: '',
-    targetSubAccountId: 'persona-a',
+    targetPersonaId: 'persona-a',
     targetContentId: 'target',
     targetContentType: 'image',
     targetSummary: '川西晨光',

@@ -2,7 +2,7 @@
 services:
   assistant-service:
     profiles: ["assistant-runtime"]
-    image: "${QWQ_COMPOSE_ASSISTANT_SERVICE_IMAGE:-localhost/quwoquan_service_assistant-service:latest}"
+    image: "${QWQ_COMPOSE_ASSISTANT_SERVICE_IMAGE:?fixed assistant-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/assistant-service/build/Dockerfile
@@ -15,7 +15,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_ASSISTANT_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       ASSISTANT_SERVICE_ADDR: ":18087"
       ASSISTANT_POLICY_RESOURCE_ROOT: /app/resources/policies
       MONGODB_URI: mongodb://mongodb:27017

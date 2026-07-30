@@ -12,20 +12,6 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.rtc-service.config.max_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 9.9.9
-- key: sys.rtc-service.config.min_image_version
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: 0.0.1
 - key: sys.rtc-service.livekit.api_key
   type: string
   scope: workload

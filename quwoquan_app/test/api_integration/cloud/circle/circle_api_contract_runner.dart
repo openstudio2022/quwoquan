@@ -11,7 +11,7 @@
 ///   ```
 ///   flutter test test/api_integration/cloud/circle/circle_api_contract_runner.dart \
 ///     --dart-define=API_CONTRACT_ENV=gamma \
-///     --dart-define=API_CONTRACT_BASE_URL=https://gamma-api.quwoquan.com
+///     --dart-define=API_CONTRACT_BASE_URL=https://api.gamma.quwoquan.com
 ///   ```
 ///
 /// Runner 通过公开匿名登录取得短期 bearer；不接收外部 token。
@@ -67,12 +67,10 @@ Future<http.Response> _patch(
     )
     .timeout(const Duration(seconds: 10));
 
-Future<http.Response> _delete(
-  String path, {
-  required String idempotencyKey,
-}) => _client
-    .delete(Uri.parse('$_apiBase$path'), headers: _headers(idempotencyKey))
-    .timeout(const Duration(seconds: 10));
+Future<http.Response> _delete(String path, {required String idempotencyKey}) =>
+    _client
+        .delete(Uri.parse('$_apiBase$path'), headers: _headers(idempotencyKey))
+        .timeout(const Duration(seconds: 10));
 
 Map<String, dynamic> _json(http.Response response) =>
     jsonDecode(response.body) as Map<String, dynamic>;
@@ -96,7 +94,7 @@ void main() {
     _session = await LocalGammaAnonymousSession.login(
       client: _client,
       baseUrl: _apiBase,
-      subject: 'circle-api-contract-v1',
+      subject: 'circle-api-contract',
     );
     _apiAvailable = true;
   });
@@ -110,10 +108,13 @@ void main() {
   //                circle_archive_named_transition
   group('circle_lifecycle_end_to_end', () {
     late String circleId;
-    final createKey = 'l3-circle-create-${DateTime.now().microsecondsSinceEpoch}';
+    final createKey =
+        'l3-circle-create-${DateTime.now().microsecondsSinceEpoch}';
 
     test('CreateCircle 返回稳定回执且同 key 重放', () async {
-      if (!_apiAvailable) return markTestSkipped('$_apiContractEnv unavailable');
+      if (!_apiAvailable) {
+        return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final body = <String, Object?>{
         'name': 'L3 契约圈 $createKey',
         'category': 'tech',
@@ -122,11 +123,12 @@ void main() {
       final created = await _post('/circles', body, idempotencyKey: createKey);
       expect(created.statusCode, 201, reason: created.body);
       final receipt = _json(created);
-      expect(
-        receipt.keys.toSet(),
-        {'circleId', 'version', 'status', 'idempotentReplay'},
-        reason: '命令回执必须是稳定形状（无多余键）',
-      );
+      expect(receipt.keys.toSet(), {
+        'circleId',
+        'version',
+        'status',
+        'idempotentReplay',
+      }, reason: '命令回执必须是稳定形状（无多余键）');
       circleId = receipt['circleId'] as String;
       expect(circleId, isNotEmpty);
       expect(receipt['version'], 1);
@@ -141,12 +143,12 @@ void main() {
     });
 
     test('UpdateCircle 服务端 CAS 推进版本且详情回读一致', () async {
-      if (!_apiAvailable) return markTestSkipped('$_apiContractEnv unavailable');
-      final updated = await _patch(
-        '/circles/$circleId',
-        {'description': 'L3 更新描述'},
-        idempotencyKey: 'l3-circle-update-$circleId',
-      );
+      if (!_apiAvailable) {
+        return markTestSkipped('$_apiContractEnv unavailable');
+      }
+      final updated = await _patch('/circles/$circleId', {
+        'description': 'L3 更新描述',
+      }, idempotencyKey: 'l3-circle-update-$circleId');
       expect(updated.statusCode, 200, reason: updated.body);
       final receipt = _json(updated);
       expect(receipt['version'], 2);
@@ -165,7 +167,9 @@ void main() {
     });
 
     test('ArchiveCircle 命名迁移；已归档时 no-op receipt 不递增版本', () async {
-      if (!_apiAvailable) return markTestSkipped('$_apiContractEnv unavailable');
+      if (!_apiAvailable) {
+        return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final archived = await _delete(
         '/circles/$circleId',
         idempotencyKey: 'l3-circle-archive-$circleId',
@@ -216,7 +220,9 @@ void main() {
     });
 
     test('JoinCircle / LeaveCircle 回执与重放语义', () async {
-      if (!_apiAvailable) return markTestSkipped('$_apiContractEnv unavailable');
+      if (!_apiAvailable) {
+        return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final joinKey = 'l3-join-$circleId';
       final joined = await _post(
         '/circles/$circleId/memberships',

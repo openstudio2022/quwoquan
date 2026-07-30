@@ -59,7 +59,6 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
-import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -74,12 +73,16 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/components/media/video/player/video_playback_center_glyph.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_layout_policy.dart';
+import 'package:quwoquan_app/ui/discovery/models/home_feed_impression_sampling_clock.dart';
+import 'package:quwoquan_app/ui/discovery/models/home_feed_scroll_anchor.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_focus_coordinator.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
+import 'package:quwoquan_app/ui/discovery/providers/home_feed_scroll_anchor_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/following_subject_strip.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/home_intersection_spotlight_rail.dart';
 
 part 'home_multi_form_feed_scroll.dart';
 part 'home_multi_form_feed_channel_config.dart';
@@ -140,7 +143,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(postInteractionStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(channelId));
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final articleDistributionEnabled = ref.watch(
@@ -177,6 +179,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final blockingError = feedAsync.value?.blockingError;
     final appendError = feedAsync.value?.appendError;
     final staleDataError = feedAsync.value?.staleDataError;
+    final emptyReason = feedAsync.value?.emptyReason;
     final isFeedLoading =
         feedAsync.isLoading || (feedAsync.value?.isLoading ?? false);
     final effectiveBlockingError =
@@ -184,8 +187,8 @@ class HomeMultiFormFeed extends ConsumerWidget {
         (!isFeedLoading &&
                 feedAsync.value != null &&
                 feedPosts.isEmpty &&
-                channelId != 'following'
-            ? discoveryFeedInitialEmptyPageFailure(channelId)
+                emptyReason == null
+            ? discoveryFeedInitialPageProtocolFailure(channelId)
             : null);
     final hasBlockingError = effectiveBlockingError != null;
     if (isFeedLoading && feedPosts.isEmpty && !hasBlockingError) {
@@ -262,8 +265,8 @@ class HomeMultiFormFeed extends ConsumerWidget {
                   final refreshed = ref.read(discoveryFeedProvider(channelId));
                   final refreshedValue = refreshed.value;
                   if (refreshedValue?.blockingError != null ||
-                      (channelId != 'following' &&
-                          (refreshedValue?.items.isEmpty ?? true))) {
+                      ((refreshedValue?.items.isEmpty ?? true) &&
+                          refreshedValue?.emptyReason == null)) {
                     throw StateError(
                       'feed recovery did not leave blocking error',
                     );
@@ -274,8 +277,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
 
     if (feedPosts.isEmpty && !isFeedLoading && !hasBlockingError) {
-      // 关注频道允许成功空列表；推荐频道的空首屏已在上方收敛为可重试错误。
-      return _HomeFollowingFeedEmptyState(isDark: isDark);
+      return channelId == 'following'
+          ? _HomeFollowingFeedEmptyState(isDark: isDark)
+          : _HomeFeedCompletedEmptyState(isDark: isDark);
     }
 
     // 任务 B · 首屏 TTI：内容首帧落地时上报首屏可交互耗时（每 channel 一次）。
@@ -309,12 +313,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
         ? AppSpacing.feedContentHorizontal(context)
         : AppSpacing.zero;
     // Impression gate 可能在子树 dispose 时补报弱曝光。此处捕获与本批卡片同源的
-    // tracker/session 快照，禁止在 deactivated element 的回调里再次通过 ref 查祖先。
+    // tracker/频道归因快照，禁止在 deactivated element 的回调里再次通过 ref 查祖先。
     final behaviorTracker = ref.read(contentBehaviorTrackerProvider);
-    final feedSession = ref.read(feedSessionProvider.notifier);
-    final impressionFeedRequestId = feedSession.currentFeedRequestId;
-    final impressionRankingVersion = feedSession.currentRankingVersion;
-    final impressionReasonVersion = feedSession.currentReasonVersion;
+    final impressionFeedRequestId = feedAsync.value?.feedRequestId;
+    final impressionPolicyDigest = feedAsync.value?.policyDigest;
 
     Widget buildCard(
       PostBaseDto dto,
@@ -338,8 +340,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
               referralSource: ReferralSource.organicFeed,
               feedRequestId: impressionFeedRequestId,
               channelId: channelId,
-              rankingVersion: impressionRankingVersion,
-              reasonVersion: impressionReasonVersion,
+              policyDigest: impressionPolicyDigest,
               recallPath: dto.recallPath,
               contentVertical: dto.contentVertical,
               supplySource: dto.supplySource,
@@ -353,8 +354,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
               referralSource: ReferralSource.organicFeed,
               feedRequestId: impressionFeedRequestId,
               channelId: channelId,
-              rankingVersion: impressionRankingVersion,
-              reasonVersion: impressionReasonVersion,
+              policyDigest: impressionPolicyDigest,
               recallPath: dto.recallPath,
               contentVertical: dto.contentVertical,
               supplySource: dto.supplySource,
@@ -375,18 +375,16 @@ class HomeMultiFormFeed extends ConsumerWidget {
               summaryLineLimit:
                   _followingArticleDistributionProfile.summaryLineLimit,
               onTap: () {
-                final feedSession = ref.read(feedSessionProvider.notifier);
                 ref
                     .read(contentBehaviorTrackerProvider)
                     .trackClick(
                       dto.id,
                       contentType: dto.identity,
-                      feedRequestId: feedSession.currentFeedRequestId,
+                      feedRequestId: impressionFeedRequestId,
                       position: index,
                       referralSource: ReferralSource.organicFeed,
                       channelId: channelId,
-                      rankingVersion: feedSession.currentRankingVersion,
-                      reasonVersion: feedSession.currentReasonVersion,
+                      policyDigest: impressionPolicyDigest,
                       recallPath: dto.recallPath,
                       contentVertical: dto.contentVertical,
                       supplySource: dto.supplySource,
@@ -414,22 +412,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
             wideLayout: isMultiColumn,
             item: dto,
             isDark: isDark,
-            isLiked: effectivePostLiked(ref, dto.id),
-            likeCount: effectivePostLikeCount(
-              ref,
-              dto.id,
-              fallback: dto.likeCount,
-            ),
-            shareCount: effectivePostShareCount(
-              ref,
-              dto.id,
-              fallback: dto.shareCount,
-            ),
-            commentCount: effectivePostCommentCount(
-              ref,
-              dto.id,
-              fallback: dto.commentCount,
-            ),
             inlineImageCarousel: effectiveInlineCarousel,
             videoScrollSignal: videoScrollSignal,
             isFocused: index == 0,
@@ -440,18 +422,16 @@ class HomeMultiFormFeed extends ConsumerWidget {
               backgroundUrl: dto.authorBackgroundUrl,
             ),
             onImageTap: (imgIndex) {
-              final feedSession = ref.read(feedSessionProvider.notifier);
               ref
                   .read(contentBehaviorTrackerProvider)
                   .trackClick(
                     dto.id,
                     contentType: dto.identity,
-                    feedRequestId: feedSession.currentFeedRequestId,
+                    feedRequestId: impressionFeedRequestId,
                     position: index,
                     referralSource: ReferralSource.organicFeed,
                     channelId: channelId,
-                    rankingVersion: feedSession.currentRankingVersion,
-                    reasonVersion: feedSession.currentReasonVersion,
+                    policyDigest: impressionPolicyDigest,
                     recallPath: dto.recallPath,
                     contentVertical: dto.contentVertical,
                     supplySource: dto.supplySource,
@@ -525,9 +505,21 @@ class HomeMultiFormFeed extends ConsumerWidget {
 
     final shouldShowFollowingSubjects =
         channelId == 'following' && layoutPolicy.isSingleColumnRelations;
-    final Widget? headerSliver = shouldShowFollowingSubjects
-        ? FollowingSubjectStrip(isDark: isDark)
-        : null;
+    // 交集 spotlight 只在频道配置声明 spotlightSegment 且 viewer 已登录时出现：
+    // 游客没有「我的交集」这个事实面，模块必须整体缺席而不是显示空壳。
+    final shouldShowIntersectionSpotlight =
+        layoutPolicy.hasIntersectionSpotlight &&
+        ref.watch(authSessionControllerProvider).isAuthenticated;
+    final Widget? headerSliver = switch (true) {
+      _ when shouldShowFollowingSubjects => FollowingSubjectStrip(
+        isDark: isDark,
+      ),
+      _ when shouldShowIntersectionSpotlight => HomeIntersectionSpotlightRail(
+        isDark: isDark,
+        channelId: channelId,
+      ),
+      _ => null,
+    };
 
     final topPad = isMultiColumn ? AppSpacing.sm : AppSpacing.zero;
     final resourceProfile = ref.watch(appResourceCacheProfileProvider);
@@ -537,6 +529,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
       feedPosts,
       feedAsync.value?.objectCards ?? const <FeedObjectCardDto>[],
     );
+    final feedEntryIdentities = feedEntries
+        .map((entry) => entry.stableIdentity)
+        .toList(growable: false);
     Widget buildEntry(
       int entryIndex,
       ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
@@ -549,15 +544,23 @@ class HomeMultiFormFeed extends ConsumerWidget {
           videoScrollSignal,
         ),
         _HomeFeedObjectCardEntry(:final card) => _HomeEntityObjectCard(
-          key: ValueKey<String>('home-object-card-entry-$entryIndex'),
+          key: ValueKey<String>(
+            'home-object-card-entry-${entry.stableIdentity}',
+          ),
           card: card,
           isDark: isDark,
           channelId: channelId,
+          feedRequestId: impressionFeedRequestId,
+          policyDigest: impressionPolicyDigest,
         ),
       };
     }
 
     final scrollView = _HomeFeedScrollView(
+      key: ValueKey<String>('home-feed-scroll-$channelId'),
+      channelId: channelId,
+      anchorStore: ref.read(homeFeedScrollAnchorStoreProvider),
+      entryIdentities: feedEntryIdentities,
       pageBackground: pageBackground,
       isDark: isDark,
       resourceProfile: resourceProfile,
@@ -577,8 +580,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
       fullSpanBuilder: buildEntry,
       segmentBuilder: null,
       dividerColor: listDividerColor,
-      isLoadingMore: feedAsync.value?.isLoading ?? false,
-      hasMore: feedAsync.value?.nextCursor?.isNotEmpty ?? false,
+      isLoadingMore: feedAsync.value?.isAppending ?? false,
+      hasMore: feedAsync.value?.hasMore ?? false,
+      canRestorePreviousPage: feedAsync.value?.canRestorePreviousPage ?? false,
       appendError: appendError,
       staleDataError: staleDataError,
       onRetryInitialLoad: () => ref
@@ -588,6 +592,11 @@ class HomeMultiFormFeed extends ConsumerWidget {
       headerSliver: headerSliver,
       onReachBottom: () =>
           ref.read(discoveryFeedMapProvider.notifier).appendNextPage(channelId),
+      onReachTop: () => unawaited(
+        ref
+            .read(discoveryFeedMapProvider.notifier)
+            .prependPreviousPage(channelId),
+      ),
       onResourceSample: () {
         final imageCache = PaintingBinding.instance.imageCache;
         final downloadCache = ref.read(mediaDownloadCacheProvider);
@@ -705,18 +714,17 @@ class HomeMultiFormFeed extends ConsumerWidget {
           ),
         ),
         onNotInterested: () {
-          final feedSession = ref.read(feedSessionProvider.notifier);
+          final attribution = _currentFeedAttribution(ref);
           ref
               .read(contentBehaviorTrackerProvider)
               .trackDislike(
                 post.id,
                 contentType: post.type,
                 authorId: post.authorId,
-                feedRequestId: feedSession.currentFeedRequestId,
+                feedRequestId: attribution.feedRequestId,
                 referralSource: ReferralSource.organicFeed,
                 channelId: channelId,
-                rankingVersion: feedSession.currentRankingVersion,
-                reasonVersion: feedSession.currentReasonVersion,
+                policyDigest: attribution.policyDigest,
                 recallPath: post.recallPath,
                 contentVertical: post.contentVertical,
                 supplySource: post.supplySource,
@@ -734,11 +742,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                     post.id,
                     contentType: post.type,
                     authorId: post.authorId,
-                    feedRequestId: feedSession.currentFeedRequestId,
+                    feedRequestId: attribution.feedRequestId,
                     referralSource: ReferralSource.organicFeed,
                     channelId: channelId,
-                    rankingVersion: feedSession.currentRankingVersion,
-                    reasonVersion: feedSession.currentReasonVersion,
+                    policyDigest: attribution.policyDigest,
                     recallPath: post.recallPath,
                     contentVertical: post.contentVertical,
                     supplySource: post.supplySource,
@@ -753,6 +760,16 @@ class HomeMultiFormFeed extends ConsumerWidget {
             unawaited(_requestHomeBlockKeyword(context, ref, post)),
         onReport: () => unawaited(_requestHomePostReport(context, ref, post)),
       ),
+    );
+  }
+
+  ({String? feedRequestId, String? policyDigest}) _currentFeedAttribution(
+    WidgetRef ref,
+  ) {
+    final feed = ref.read(discoveryFeedProvider(channelId)).value;
+    return (
+      feedRequestId: feed?.feedRequestId,
+      policyDigest: feed?.policyDigest,
     );
   }
 
@@ -814,19 +831,18 @@ class HomeMultiFormFeed extends ConsumerWidget {
     try {
       await ref
           .read(personaRelationshipBlockWriterProvider(AppUiSurfaces.homeFeed))
-          .blockUser(BlockUserCommand(targetSubAccountId: post.authorId));
-      final feedSession = ref.read(feedSessionProvider.notifier);
+          .blockUser(BlockUserCommand(targetPersonaId: post.authorId));
+      final attribution = _currentFeedAttribution(ref);
       ref
           .read(contentBehaviorTrackerProvider)
           .trackHideAuthor(
             post.id,
             authorId: post.authorId,
             contentType: post.type,
-            feedRequestId: feedSession.currentFeedRequestId,
+            feedRequestId: attribution.feedRequestId,
             referralSource: ReferralSource.organicFeed,
             channelId: channelId,
-            rankingVersion: feedSession.currentRankingVersion,
-            reasonVersion: feedSession.currentReasonVersion,
+            policyDigest: attribution.policyDigest,
             recallPath: post.recallPath,
             contentVertical: post.contentVertical,
             supplySource: post.supplySource,
@@ -907,18 +923,17 @@ class HomeMultiFormFeed extends ConsumerWidget {
   ) async {
     try {
       await ref.read(blockedKeywordWriterProvider).add(keyword);
-      final feedSession = ref.read(feedSessionProvider.notifier);
+      final attribution = _currentFeedAttribution(ref);
       ref
           .read(contentBehaviorTrackerProvider)
           .trackHideContentType(
             post.id,
             contentType: post.type,
             authorId: post.authorId,
-            feedRequestId: feedSession.currentFeedRequestId,
+            feedRequestId: attribution.feedRequestId,
             referralSource: ReferralSource.organicFeed,
             channelId: channelId,
-            rankingVersion: feedSession.currentRankingVersion,
-            reasonVersion: feedSession.currentReasonVersion,
+            policyDigest: attribution.policyDigest,
             recallPath: post.recallPath,
             contentVertical: post.contentVertical,
             supplySource: post.supplySource,

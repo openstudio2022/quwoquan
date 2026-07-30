@@ -26,7 +26,7 @@ const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
 
 enum IntersectionStatementHighlight { blue, gray }
 
-/// 一条交集结论行（统一交互子契约 · A–E 横切复用，Phase 0 §20.7 + 架构基线 v2 §21.5）。
+/// 一条交集结论行（canonical 交互子契约 · A–E 横切复用）。
 ///
 /// [primaryText] 为单通道真相源（云侧 primaryText / briefText），[spans] 为同一句话的
 /// 结构化富文本切分（云侧产出，端不拼装，G2）；端侧降级链 spans → primaryText → 隐藏。
@@ -52,6 +52,8 @@ class IntersectionStatementItem {
     this.iconKey = '',
     this.sourceRef = '',
     this.dimension = '',
+    this.tone = '',
+    this.typeIconUrl = '',
     this.objectVisual,
     this.actionHints = const <IntersectionActionHint>[],
     this.onActionHintTap,
@@ -91,6 +93,12 @@ class IntersectionStatementItem {
   /// 槽① 类型图标末级回退用维度（5 维闭集）。
   final String dimension;
 
+  /// 槽① 云侧指派的色板 token 名（`IntersectionReason.tone`）；空则按 iconKey 查本地表。
+  final String tone;
+
+  /// 槽① 云侧下发的远程图标资源（alpha 蒙版图）；空/失败退回本地 glyph。
+  final String typeIconUrl;
+
   /// 槽③ 对象封面（结论句所指对象的封面/缩略图）；非空时走四槽布局。
   final IntersectionVisual? objectVisual;
 
@@ -121,7 +129,8 @@ class IntersectionStatementItem {
   bool get _hasTypeIcon =>
       iconKey.trim().isNotEmpty ||
       sourceRef.trim().isNotEmpty ||
-      dimension.trim().isNotEmpty;
+      dimension.trim().isNotEmpty ||
+      typeIconUrl.trim().isNotEmpty;
 
   bool get _hasObjectCover => objectVisual != null;
 
@@ -273,6 +282,8 @@ class IntersectionStatementRow extends StatelessWidget {
                 iconKey: item.iconKey,
                 sourceRef: item.sourceRef,
                 dimension: item.dimension,
+                tone: item.tone,
+                assetUrl: item.typeIconUrl,
               ),
               SizedBox(width: AppSpacing.intraGroupSm),
             ],
@@ -334,13 +345,21 @@ class IntersectionStatementRow extends StatelessWidget {
 /// - `navigate`：有真实可导航 target 才展示（关注 / 加入 / 进入讨论 / 看共同来源等）。
 ///   `login` 等 requiredGates 由承接页承接续接（§15），不在本层隐藏，否则已登录用户
 ///   也会失去行动入口；
-/// - `companion`：结伴同行类有真实承接（进发起群聊页，见
-///   `IntersectionTargetNavigator._openCompanion`），available + 有对象上下文（target 非空）时
+/// - `gathering`：结伴同行类有真实承接（进发起群聊页，见
+///   `IntersectionTargetNavigator._openGathering`），available + 有对象上下文（target 非空）时
 ///   展示成可点「发起结伴」pill，兑现「共同想去→约伴」北极星闭环（C0）；target 空则不展示，
 ///   避免无对象上下文的空发起；
 /// - `commerce`：必须有 target，且默认受 feature flag 关闭；真实商务渠道未接入时不展示；
-/// - `message` / `connect`：端侧尚无真实私信/心动破冰状态机，不展示成可执行 pill
-///   （§24.10 诚实红线，不伪造重社交行动，宁可不展示也不伪装成对象下钻）。
+/// - `message`：打招呼 / 私信有真实承接（对方主页的破冰状态机，见
+///   `IntersectionTargetNavigator._openMessage`），target 是真实 person 时展示；
+///   非 person target 不展示，避免「打招呼」退化成对象下钻；
+/// - `connect`：话题房 / 语音房没有落地页，注册表里该类别成员全部
+///   `targetAvailability: deferred`（心动打招呼已归回 `message`，复用打招呼请求状态机）。
+///   端对没有落点的 dispatch 一律 fail-closed 不渲染，避免退化成对象下钻
+///   （§24.10 诚实红线，不伪造重社交行动）；
+/// - **未登记的新 dispatch**：按 fail-open 处理，有 target 就渲染并交给 navigator 的
+///   通用下钻。云侧已用 `targetAvailability` 表达落点是否就绪，端侧再判一次闭集，
+///   只会让新行动在旧版本上永不出现。
 bool isDisplayableIntersectionActionHint(
   IntersectionActionHint hint, {
   bool commerceActionsEnabled = _defaultIntersectionCommerceActionsEnabled,
@@ -355,13 +374,28 @@ bool isDisplayableIntersectionActionHint(
     case 'assistant':
       return true;
     case 'navigate':
-    case 'companion':
+    case 'gathering':
       return hint.target?.objectId.trim().isNotEmpty ?? false;
+    case 'message':
+      final target = hint.target;
+      if (target == null || target.objectId.trim().isEmpty) {
+        return false;
+      }
+      return target.objectKind.trim() == 'person' ||
+          target.objectType.trim() == 'user' ||
+          target.routeId.trim() == 'userProfile';
     case 'commerce':
       return commerceActionsEnabled &&
           (hint.target?.objectId.trim().isNotEmpty ?? false);
-    default:
+    case 'connect':
+      // 话题房 / 语音房没有落地页，navigator 对该类别显式返回 unsupported。
+      // 这是「已登记但确实无落点」，与下面的「端侧还不认识」是两回事。
       return false;
+    default:
+      // 未知 dispatch：云侧已用 targetAvailability 表达「有没有落点」，上面那道
+      // deferred 闸就是诚实红线。这里再 fail-closed 一次的后果是新 dispatch 的
+      // 行动 pill 在旧版本上永不出现——那不是诚实，是静默失能。
+      return hint.target?.objectId.trim().isNotEmpty ?? false;
   }
 }
 

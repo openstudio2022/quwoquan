@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
+import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 
@@ -97,7 +98,7 @@ class IntersectionTargetNavigator {
     final objectKind = reason.objectKind.trim();
     final routeId = intersectionRouteIdForObjectKind(objectKind);
     return IntersectionTarget(
-      objectType: _objectTypeForTarget(
+      objectType: objectTypeForTarget(
         objectKind: objectKind,
         routeId: routeId,
       ),
@@ -131,7 +132,7 @@ class IntersectionTargetNavigator {
     }
     switch (route) {
       case 'userProfile':
-        return AppRoutePaths.userProfile(username: id);
+        return AppRoutePaths.userProfile(userHandle: id);
       case 'circleDetail':
         return AppRoutePaths.circleDetail(id: id, sourceTheme: sourceTheme);
       case 'homepageDetail':
@@ -150,7 +151,11 @@ class IntersectionTargetNavigator {
     }
   }
 
-  static String _objectTypeForTarget({
+  /// objectKind + routeId → 导航/埋点用的粗粒度 objectType 桶。
+  ///
+  /// 上游 objectType 是开放词汇（每个垂类主页一个值），这里只回落到路由能区分的
+  /// 少数几个桶；新增垂类由注册表 objectTypeBindings 承接，本方法无需改动。
+  static String objectTypeForTarget({
     required String objectKind,
     required String routeId,
   }) {
@@ -244,12 +249,14 @@ class IntersectionTargetNavigator {
   ///   `requiredGates`（login 等）不在本层拦截——承接页复用既有 gate + AuthContinuation
   ///   续接完成关注 / 加入 / 讨论等写操作（§15 登录入口无死循环），避免在交集组件内
   ///   重造第二套登录逻辑（R24），也避免登录用户看不到行动入口；
-  /// - `companion`：进入既有发起群聊页作为「结伴同行」最薄承接，必须携带
+  /// - `gathering`：进入既有发起群聊页作为「结伴同行」最薄承接，必须携带
   ///   target/attribution route extra；无对象上下文时不执行，避免退化成普通建群；
   /// - `commerce`：仅在 `INTERSECTION_COMMERCE_ACTIONS_ENABLED=true` 且 target 可路由时
   ///   执行；真实渠道未接入时默认 featureDisabled，不伪造交易；
-  /// - `message` / `connect`：需要专属私信/破冰状态机，端侧尚无真实
-  ///   卡内 handler 时不可执行，宁可不执行也不伪装成对象下钻（§24.10 诚实红线）。
+  /// - `message`：进入对方主页并直接拉起主页既有的「私信 / 打招呼」分流，陌生人
+  ///   走 greeting 破冰状态机；target 非 person 时不执行，不退化成普通对象下钻；
+  /// - `connect`：心动 / 语音房破冰状态机尚未上线，不可执行，宁可不执行也不伪装
+  ///   （§24.10 诚实红线）。
   IntersectionActionDispatchResult openActionHint(
     BuildContext context,
     IntersectionActionHint hint, {
@@ -285,12 +292,13 @@ class IntersectionTargetNavigator {
                 IntersectionActionDispatchStatus.missingTarget,
               );
       case 'message':
+        return _openMessage(context, hint, attribution);
       case 'connect':
         return const IntersectionActionDispatchResult(
           IntersectionActionDispatchStatus.unsupported,
         );
-      case 'companion':
-        return _openCompanion(context, hint, attribution);
+      case 'gathering':
+        return _openGathering(context, hint, attribution, evidenceReason);
       case 'commerce':
         return _openCommerce(
           context,
@@ -370,10 +378,85 @@ class IntersectionTargetNavigator {
     );
   }
 
-  IntersectionActionDispatchResult _openCompanion(
+  /// `dispatch: message`（打招呼 / 私信）承接：进入对方主页并直接拉起主页既有的
+  /// 「私信 / 打招呼」分流。
+  ///
+  /// 陌生人走 greeting 破冰（`POST /user/greeting-request`），对方回复后才升级为
+  /// 正式会话；能力位、频控、拉黑、登录续接全部由主页实现承接，交集组件不重造
+  /// 第二套私信状态机。target 必须是真实 person，否则不执行。
+  IntersectionActionDispatchResult _openMessage(
     BuildContext context,
     IntersectionActionHint hint,
     IntersectionNavAttribution? attribution,
+  ) {
+    final target = hint.target;
+    final userId = target?.objectId.trim() ?? '';
+    if (target == null || userId.isEmpty || !_isPersonTarget(target)) {
+      return const IntersectionActionDispatchResult(
+        IntersectionActionDispatchStatus.missingTarget,
+      );
+    }
+    final router = GoRouter.maybeOf(context);
+    if (router == null) {
+      return const IntersectionActionDispatchResult(
+        IntersectionActionDispatchStatus.missingRouter,
+      );
+    }
+    if (attribution != null) {
+      onTrack?.call(target, attribution);
+    }
+    router.push(
+      AppRoutePaths.userProfile(userHandle: userId),
+      extra: UserProfileRouteExtra(
+        personaId: userId,
+        openMessageComposer: true,
+      ),
+    );
+    return const IntersectionActionDispatchResult(
+      IntersectionActionDispatchStatus.opened,
+    );
+  }
+
+  bool _isPersonTarget(IntersectionTarget target) {
+    if (target.objectKind.trim() == 'person') {
+      return true;
+    }
+    if (target.objectType.trim() == 'user') {
+      return true;
+    }
+    return target.routeId.trim() == 'userProfile';
+  }
+
+  /// 从云侧主句里取出该 target 的渲染名（如「老君山」）。
+  ///
+  /// 结伴承接页要用共同对象命名新群，名字必须与用户刚读到的那句话同源：主句 span
+  /// 是云侧唯一真相源，端不另查一次对象名，也不用 objectId 冒充名字。
+  static String gatheringObjectName(
+    IntersectionReason? reason,
+    IntersectionTarget target,
+  ) {
+    final objectId = target.objectId.trim();
+    if (reason == null || objectId.isEmpty) {
+      return '';
+    }
+    for (final span in reason.primarySpans) {
+      if (span.target?.objectId.trim() != objectId) {
+        continue;
+      }
+      // 主句里的对象名带书名号（云侧 host_plain 合同），群名不需要。
+      final text = span.text.trim().replaceAll('「', '').replaceAll('」', '');
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  IntersectionActionDispatchResult _openGathering(
+    BuildContext context,
+    IntersectionActionHint hint,
+    IntersectionNavAttribution? attribution,
+    IntersectionReason? evidenceReason,
   ) {
     final target = hint.target;
     if (target == null || target.objectId.trim().isEmpty) {
@@ -397,6 +480,7 @@ class IntersectionTargetNavigator {
         actionLabel: hint.label.trim(),
         targetObjectId: target.objectId.trim(),
         targetObjectKind: target.objectKind.trim(),
+        targetObjectName: gatheringObjectName(evidenceReason, target),
         targetRouteId: target.routeId.trim(),
         intersectionId: attribution?.intersectionId.trim() ?? '',
         dimension: attribution?.dimension.trim() ?? '',

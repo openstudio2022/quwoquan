@@ -1,0 +1,12 @@
+{
+  "label": "新南威尔士州",
+  "labelEn": "New South Wales",
+  "description": "人口第一大州",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

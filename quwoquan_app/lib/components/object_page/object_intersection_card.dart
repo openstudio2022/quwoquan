@@ -408,6 +408,8 @@ class _EvidenceRow extends StatelessWidget {
         iconKey: reason.iconKey,
         sourceRef: resolvedIntersectionReasonKind(reason),
         dimension: reason.dimension,
+        tone: reason.tone,
+        typeIconUrl: reason.typeVisual?.imageUrl ?? '',
         objectVisual: reason.objectVisual,
         actionHints: reason.actionHints,
         onActionHintTap: onActionHintTap,

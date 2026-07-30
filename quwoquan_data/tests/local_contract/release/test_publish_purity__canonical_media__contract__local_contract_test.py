@@ -20,3 +20,13 @@ def test_publish_media_only_accepts_content_addressed_objects(tmp_path: Path):
     retired.mkdir()
     issues = publish_purity_issues(tmp_path)
     assert any("content-addressed objects" in issue for issue in issues)
+
+
+def test_publish_post_requires_explicit_work_identity(tmp_path: Path):
+    manifest = tmp_path / "posts" / "article" / "攻略" / "西湖" / "1" / "manifest.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text('{"contentType":"article","assets":[]}', encoding="utf-8")
+
+    issues = publish_purity_issues(tmp_path)
+
+    assert any("post_content_identity_invalid" in issue for issue in issues)

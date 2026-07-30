@@ -1,0 +1,12 @@
+{
+  "label": "苏黎世州",
+  "labelEn": "Canton of Zurich",
+  "description": "最大城市与金融核心所在",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

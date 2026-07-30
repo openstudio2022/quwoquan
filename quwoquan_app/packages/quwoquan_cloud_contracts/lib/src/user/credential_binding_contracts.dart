@@ -1,5 +1,6 @@
 import '../operation_request_payload.dart';
 import 'account_session_contracts.dart';
+part '../generated/requests/user/credential_binding_contracts.requests.g.dart';
 
 /// CredentialBinding 聚合查询/命令的 pure contracts。
 /// 真相源：quwoquan_service/services/user-service/contracts/account/credential_binding/{service,fields}.yaml。
@@ -16,81 +17,6 @@ final class CredentialBindingNotFoundException implements Exception {
 /// Alpha/test 对齐 USER.AUTH.last_credential 的强类型边界信号。
 final class LastCredentialUnbindException implements Exception {
   const LastCredentialUnbindException();
-}
-
-final class BindPhoneCredentialCommand {
-  BindPhoneCredentialCommand({
-    required String phone,
-    required String otpCode,
-    this.displayLabel,
-  }) : phone = _required(phone, 'phone'),
-       otpCode = _required(otpCode, 'otpCode');
-
-  final String phone;
-  final String otpCode;
-  final String? displayLabel;
-}
-
-final class BindCarrierPhoneCredentialCommand {
-  BindCarrierPhoneCredentialCommand({
-    required String vendor,
-    required String carrierToken,
-    required String deviceId,
-    required String platform,
-    this.displayLabel,
-  }) : vendor = _required(vendor, 'vendor'),
-       carrierToken = _required(carrierToken, 'carrierToken'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform');
-
-  final String vendor;
-  final String carrierToken;
-  final String deviceId;
-  final String platform;
-  final String? displayLabel;
-}
-
-final class CompleteFederatedPhoneBindingCommand {
-  CompleteFederatedPhoneBindingCommand({
-    required String bindingTicket,
-    required String phone,
-    required String otpCode,
-    required String challengeId,
-    required String deviceId,
-    required String platform,
-    required String appVersion,
-    required String agreementVersion,
-    required String privacyVersion,
-  }) : bindingTicket = _required(bindingTicket, 'bindingTicket'),
-       phone = _required(phone, 'phone'),
-       otpCode = _required(otpCode, 'otpCode'),
-       challengeId = _required(challengeId, 'challengeId'),
-       deviceId = _required(deviceId, 'deviceId'),
-       platform = _required(platform, 'platform'),
-       appVersion = _required(appVersion, 'appVersion'),
-       agreementVersion = _required(agreementVersion, 'agreementVersion'),
-       privacyVersion = _required(privacyVersion, 'privacyVersion');
-
-  final String bindingTicket;
-  final String phone;
-  final String otpCode;
-  final String challengeId;
-  final String deviceId;
-  final String platform;
-  final String appVersion;
-  final String agreementVersion;
-  final String privacyVersion;
-}
-
-final class UnbindCredentialCommand {
-  UnbindCredentialCommand({required String credentialType})
-    : credentialType = _required(credentialType, 'credentialType');
-
-  final String credentialType;
-}
-
-final class ListCredentialsQuery {
-  const ListCredentialsQuery();
 }
 
 /// 当前账号可见的脱敏凭证行；不包含 SECRET credentialKey。
@@ -164,54 +90,6 @@ abstract interface class CredentialBindingCommandWriter {
 /// 兼容现有 composition root 的语义别名；不额外暴露通用 bind。
 abstract interface class AppCredentialBindingCommandWriter
     implements CredentialBindingCommandWriter {}
-
-CloudOperationRequestPayload encodeListCredentialsQuery(
-  ListCredentialsQuery query,
-) => const CloudOperationRequestPayload(body: null);
-
-CloudOperationRequestPayload encodeBindPhoneCredentialCommand(
-  BindPhoneCredentialCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'phone': command.phone,
-    'otpCode': command.otpCode,
-    if (command.displayLabel != null) 'displayLabel': command.displayLabel,
-  },
-);
-
-CloudOperationRequestPayload encodeCompleteFederatedPhoneBindingCommand(
-  CompleteFederatedPhoneBindingCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'bindingTicket': command.bindingTicket,
-    'phone': command.phone,
-    'otpCode': command.otpCode,
-    'challengeId': command.challengeId,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    'appVersion': command.appVersion,
-    'agreementVersion': command.agreementVersion,
-    'privacyVersion': command.privacyVersion,
-  },
-);
-
-CloudOperationRequestPayload encodeBindCarrierPhoneCredentialCommand(
-  BindCarrierPhoneCredentialCommand command,
-) => CloudOperationRequestPayload(
-  body: <String, Object?>{
-    'vendor': command.vendor,
-    'carrierToken': command.carrierToken,
-    'deviceId': command.deviceId,
-    'platform': command.platform,
-    if (command.displayLabel != null) 'displayLabel': command.displayLabel,
-  },
-);
-
-CloudOperationRequestPayload encodeUnbindCredentialCommand(
-  UnbindCredentialCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'credentialType': command.credentialType},
-);
 
 ListCredentialsSlice decodeListCredentialsSlice(Object? value) {
   final map = _object(value, 'ListCredentialsSlice');
@@ -334,10 +212,4 @@ DateTime _dateTime(Map<String, Object?> map, String key) {
     throw FormatException('$key must be an ISO-8601 timestamp');
   }
   return parsed.toUtc();
-}
-
-String _required(String value, String name) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
-  return normalized;
 }

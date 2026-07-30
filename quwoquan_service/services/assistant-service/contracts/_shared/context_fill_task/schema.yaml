@@ -4,6 +4,10 @@ output_path: assistant/generated/contracts/context_fill_task.g.dart
 contract: context_fill_task
 kind: runtime_protocol_contract
 fields:
+  - name: slotId
+    source: slotId
+    type: string
+    default: ''
   - name: fillType
     source: fillType
     type: enum
@@ -18,6 +22,18 @@ fields:
     source: reason
     type: string
     default: ''
+  - name: prompt
+    source: prompt
+    type: string
+    default: ''
+  - name: required
+    source: required
+    type: bool
+    default: true
+  - name: suggestions
+    source: suggestions
+    type: list<string>
+    default: []
   - name: generatedQueryConditions
     source: generatedQueryConditions
     type: list<string>

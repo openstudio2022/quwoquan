@@ -23,7 +23,7 @@ type PipelineMetrics struct {
 	SourceBreakdown    map[string]int `json:"sourceBreakdown,omitempty"`
 	ModelUsed          string         `json:"modelUsed,omitempty"`
 	ExperimentBucket   string         `json:"experimentBucket,omitempty"`
-	PolicyVersion      string         `json:"policyVersion,omitempty"`
+	PolicyDigest       string         `json:"policyDigest,omitempty"`
 	ScoringPreset      string         `json:"scoringPreset,omitempty"`
 	Segment            string         `json:"segment,omitempty"`
 	TopicEntropy       float64        `json:"topicEntropy,omitempty"`
@@ -45,8 +45,7 @@ var (
 		"vertical",
 		"supply_source",
 		"recall_path",
-		"ranking_version",
-		"reason_version",
+		"policy_digest",
 		"intersection_class",
 		"experiment_bucket",
 	}
@@ -133,16 +132,16 @@ var (
 	})
 
 	// pipelinePolicyAttribution attributes every served request to its
-	// resolved policy version, scoring preset, and population segment so the
+	// resolved policy digest, scoring preset, and population segment so the
 	// large-loop feedback dashboard can compare KPI by policy×preset×segment.
-	// All label values are bounded (policyVersion ∈ released versions, preset ∈
+	// All label values are bounded (policyDigest is sha256, preset ∈
 	// weightPresets, segment ∈ segments.yaml ∪ {"none"}).
 	pipelinePolicyAttribution = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "rec",
 		Subsystem: "pipeline",
 		Name:      "requests_by_policy_total",
-		Help:      "Requests attributed by resolved policy version, scoring preset, and segment.",
-	}, []string{"policy_version", "preset", "segment"})
+		Help:      "Requests attributed by resolved policy digest, scoring preset, and segment.",
+	}, []string{"policy_digest", "preset", "segment"})
 
 	feedStateTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "recommendation_feed_state_total",
@@ -221,11 +220,6 @@ var (
 	hotPathDroppedTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "rec_hotpath_dropped_total",
 		Help: "Total behavior signals dropped by BufferedHotPath due to backpressure.",
-	})
-
-	exposureFilterSMembersFallbackTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "recommendation_exposure_filter_smembers_fallback_total",
-		Help: "Total exposure filter fallbacks to SMembers. Should stay zero on commercial path.",
 	})
 
 	dynamicBudgetSelectedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -363,11 +357,11 @@ var (
 		Help: "Recommendation policy hot-reload outcomes.",
 	}, []string{"outcome"})
 
-	// policyVersionInfo 当前生效的 policy 版本（value 恒 1，版本经 label 暴露）。
-	policyVersionInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "recommendation_policy_version_info",
-		Help: "Currently active recommendation policy version (value is always 1; version via label).",
-	}, []string{"version"})
+	// policyDigestInfo 当前生效 policy 的内容摘要（value 恒 1）。
+	policyDigestInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "recommendation_policy_digest_info",
+		Help: "Currently active recommendation policy content digest (value is always 1).",
+	}, []string{"digest"})
 )
 
 // RecordObjectCardsAssembled 记录一次 feed 响应注入的对象卡数量。
@@ -437,18 +431,18 @@ func RecordRedisDegraded(op string) {
 	redisDegradedTotal.WithLabelValues(op).Inc()
 }
 
-// RecordPolicyReload 记录 policy 热更结果；成功时同步刷新版本 gauge。
-func RecordPolicyReload(version string, err error) {
+// RecordPolicyReload 记录 policy 热更结果；成功时同步刷新内容摘要 gauge。
+func RecordPolicyReload(digest string, err error) {
 	if err != nil {
 		policyReloadTotal.WithLabelValues("failure").Inc()
 		return
 	}
 	policyReloadTotal.WithLabelValues("success").Inc()
-	policyVersionInfo.Reset()
-	if strings.TrimSpace(version) == "" {
-		version = "unknown"
+	policyDigestInfo.Reset()
+	if strings.TrimSpace(digest) == "" {
+		digest = "unknown"
 	}
-	policyVersionInfo.WithLabelValues(version).Set(1)
+	policyDigestInfo.WithLabelValues(digest).Set(1)
 }
 
 // RecordFeedPatchEmitted 记录一次成功发射的实时 patch（patch 类型 + 原因码）。
@@ -551,9 +545,9 @@ func RecordMetrics(m PipelineMetrics) {
 	pipelineCandidates.Observe(float64(m.CandidateCount))
 	pipelineResults.Observe(float64(m.ResultCount))
 
-	policyVersion := strings.TrimSpace(m.PolicyVersion)
-	if policyVersion == "" {
-		policyVersion = "unknown"
+	policyDigest := strings.TrimSpace(m.PolicyDigest)
+	if policyDigest == "" {
+		policyDigest = "unknown"
 	}
 	preset := strings.TrimSpace(m.ScoringPreset)
 	if preset == "" {
@@ -563,7 +557,7 @@ func RecordMetrics(m PipelineMetrics) {
 	if segment == "" {
 		segment = "none"
 	}
-	pipelinePolicyAttribution.WithLabelValues(policyVersion, preset, segment).Inc()
+	pipelinePolicyAttribution.WithLabelValues(policyDigest, preset, segment).Inc()
 }
 
 // RecordModelTimeout increments the model timeout counter.
@@ -578,15 +572,14 @@ func RecordServedItems(count int) {
 	}
 }
 
-func RecordServedItemsByAttribution(items []FeedItem, channelID string, rankingVersion string, reasonVersion string, experimentBucket string) {
+func RecordServedItemsByAttribution(items []FeedItem, channelID string, policyDigest string, experimentBucket string) {
 	for _, item := range items {
 		feedServedByAttributionTotal.WithLabelValues(attributionLabels(
 			channelID,
 			item.ContentVertical,
 			item.SupplySource,
 			item.RecallPath,
-			rankingVersion,
-			reasonVersion,
+			policyDigest,
 			"",
 			experimentBucket,
 		)...).Inc()
@@ -639,21 +632,19 @@ func attributionLabelsFromSignal(signal BehaviorSignal) []string {
 		signal.ContentVertical,
 		signal.SupplySource,
 		signal.RecallPath,
-		signal.RankingVersion,
-		signal.ReasonVersion,
+		signal.PolicyDigest,
 		signal.IntersectionClass,
 		signal.ExperimentBucket,
 	)
 }
 
-func attributionLabels(channelID, vertical, supplySource, recallPath, rankingVersion, reasonVersion, intersectionClass, experimentBucket string) []string {
+func attributionLabels(channelID, vertical, supplySource, recallPath, policyDigest, intersectionClass, experimentBucket string) []string {
 	return []string{
 		boundedAttributionLabel(channelID, "unknown"),
 		boundedAttributionLabel(vertical, "general"),
 		boundedAttributionLabel(supplySource, "unknown"),
 		boundedAttributionLabel(recallPath, "unknown"),
-		boundedAttributionLabel(rankingVersion, "unknown"),
-		boundedAttributionLabel(reasonVersion, "unknown"),
+		boundedAttributionLabel(policyDigest, "unknown"),
 		boundedAttributionLabel(intersectionClass, "none"),
 		boundedAttributionLabel(experimentBucket, "unknown"),
 	}
@@ -664,7 +655,7 @@ func boundedAttributionLabel(value string, fallback string) string {
 	if value == "" {
 		return fallback
 	}
-	if len(value) > 64 {
+	if len(value) > 96 {
 		return "other"
 	}
 	return value
@@ -692,10 +683,6 @@ func RecordBehaviorIngestDropped(reason string) {
 
 func RecordHotPathDrop() {
 	hotPathDroppedTotal.Inc()
-}
-
-func RecordExposureSMembersFallback() {
-	exposureFilterSMembersFallbackTotal.Inc()
 }
 
 func RecordDynamicBudgetSelection(pool string, bucket string, count int) {
@@ -753,8 +740,8 @@ func LogMetrics(logger *slog.Logger, m PipelineMetrics) {
 	if m.ExperimentBucket != "" {
 		attrs = append(attrs, slog.String("bucket", m.ExperimentBucket))
 	}
-	if m.PolicyVersion != "" {
-		attrs = append(attrs, slog.String("policyVersion", m.PolicyVersion))
+	if m.PolicyDigest != "" {
+		attrs = append(attrs, slog.String("policyDigest", m.PolicyDigest))
 	}
 	if m.ScoringPreset != "" {
 		attrs = append(attrs, slog.String("preset", m.ScoringPreset))

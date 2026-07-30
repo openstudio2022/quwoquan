@@ -44,14 +44,16 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"subAccountId":  "user_a",
+						"personaId":     "user_a",
+						"userHandle":    "alice_follow",
 						"displayName":   "Alice Follow",
 						"avatarUrl":     "https://avatar/a.png",
 						"followedAt":    "2026-06-06T12:00:00Z",
 						"relationState": "following",
 					},
 					{
-						"subAccountId":  "user_b",
+						"personaId":     "user_b",
+						"userHandle":    "bob_mutual",
 						"displayName":   "Bob Mutual",
 						"avatarUrl":     "https://avatar/b.png",
 						"followedAt":    "2026-06-06T12:05:00Z",
@@ -64,14 +66,16 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{
 					{
-						"subAccountId":  "user_a",
+						"personaId":     "user_a",
+						"userHandle":    "alice_follow",
 						"displayName":   "Alice Follow",
 						"avatarUrl":     "https://avatar/a.png",
 						"followedAt":    "2026-06-06T12:06:00Z",
 						"relationState": "followed_by",
 					},
 					{
-						"subAccountId":  "user_c",
+						"personaId":     "user_c",
+						"userHandle":    "cora_follower",
 						"displayName":   "Cora Follower",
 						"avatarUrl":     "https://avatar/c.png",
 						"followedAt":    "2026-06-06T12:07:00Z",
@@ -82,10 +86,10 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 			})
 		case strings.HasSuffix(r.URL.Path, "/contact-discovery/latest"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":                   "discovery_1",
-				"matchedSubAccountIds": []string{"user_b", "user_d"},
-				"status":               "completed",
-				"createdAt":            time.Date(2026, 6, 6, 12, 8, 0, 0, time.UTC),
+				"id":                "discovery_1",
+				"matchedPersonaIds": []string{"user_b", "user_d"},
+				"status":            "completed",
+				"createdAt":         time.Date(2026, 6, 6, 12, 8, 0, 0, time.UTC),
 			})
 		default:
 			writeRuntimeNotFound(w, r, "unexpected "+r.Method+" "+r.URL.Path)
@@ -112,6 +116,7 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 	byID := map[string]map[string]any{}
 	for _, item := range items {
 		byID[item.UserID] = map[string]any{
+			"userHandle":      item.UserHandle,
 			"displayName":     item.DisplayName,
 			"avatarUrl":       item.AvatarURL,
 			"relationState":   item.RelationState,
@@ -123,6 +128,9 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 
 	if got := byID["user_a"]["relationState"]; got != "mutual" {
 		t.Fatalf("expected user_a mutual, got %v", got)
+	}
+	if got := byID["user_a"]["userHandle"]; got != "alice_follow" {
+		t.Fatalf("expected user_a canonical userHandle, got %v", got)
 	}
 	if got := byID["user_a"]["source"]; got != "mutual" {
 		t.Fatalf("expected user_a source mutual, got %v", got)
@@ -141,6 +149,38 @@ func TestUserSocialContactResolverListContactsMergesSources(t *testing.T) {
 	}
 	if got := byID["user_d"]["metFrom"]; got != "通讯录匹配" {
 		t.Fatalf("expected user_d metFrom 通讯录匹配, got %v", got)
+	}
+}
+
+func TestUserProfileResolverUsesPublicPersonaIdentity(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/persona_a" {
+			writeRuntimeNotFound(w, r, "unexpected "+r.Method+" "+r.URL.Path)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"personaId":     "persona_a",
+			"userHandle":    "alice_public",
+			"displayName":   "Alice",
+			"avatarUrl":     "media/avatar/s/alice/persona/persona_a/avatar.png",
+			"avatarVersion": 7,
+			"bio":           "Public bio",
+		})
+	}))
+	defer server.Close()
+
+	resolver := NewUserProfileResolver(server.URL, server.Client())
+	profiles, err := resolver.ResolveMany(context.Background(), []string{"persona_a"})
+	if err != nil {
+		t.Fatalf("ResolveMany failed: %v", err)
+	}
+	profile := profiles["persona_a"]
+	if profile.UserHandle != "alice_public" {
+		t.Fatalf("expected canonical userHandle, got %q", profile.UserHandle)
+	}
+	if profile.DisplayName != "Alice" || profile.AvatarVersion != 7 {
+		t.Fatalf("unexpected public profile snapshot: %#v", profile)
 	}
 }
 

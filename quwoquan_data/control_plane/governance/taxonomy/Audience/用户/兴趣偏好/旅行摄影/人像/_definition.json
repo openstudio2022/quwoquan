@@ -2,6 +2,10 @@
   "label": "人像",
   "labelEn": "Portrait",
   "description": "喜欢人像拍摄与人物表达",
+  "axisRole": "userInterest",
+  "sameAsRefs": [
+    "Topic/摄影/人像摄影"
+  ],
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
-  "updatedAt": "2026-06-24T17:35:21.933367+00:00"
+  "updatedAt": "2026-07-28T13:45:38.217620+00:00"
 }

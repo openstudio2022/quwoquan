@@ -20,26 +20,25 @@ final class RemoteChatConversationUserStateCommandWriter
 
   @override
   Future<ChatCommandAck> markMessageRead(
-    ChatMarkConversationMessageReadCommand command,
-  ) {
+    ChatMarkConversationMessageReadCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationUserStateMarkAsRead(
       command,
-      context: invocationContext(
-        ChatRequestPageIds.markAsRead,
-        command.idempotencyKey,
-      ),
+      context: invocationContext(ChatRequestPageIds.markAsRead, idempotencyKey),
     );
   }
 
   @override
   Future<ChatCommandAck> updateConversationSettings(
-    ChatUpdateConversationSettingsCommand command,
-  ) {
+    ChatUpdateConversationSettingsCommand command, {
+    required String idempotencyKey,
+  }) {
     return client.chatConversationUserStateUpdateConversationSettings(
       command,
       context: invocationContext(
         ChatRequestPageIds.updateConversationSettings,
-        command.idempotencyKey,
+        idempotencyKey,
       ),
     );
   }

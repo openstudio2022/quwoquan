@@ -57,6 +57,7 @@ func TestPostModerationWorkflowEligibilityAndIdempotency(t *testing.T) {
 	if _, err := service.DecidePostModerationCase(
 		moderationContext("decide-before-review"),
 		moderationapp.DecidePostModerationCaseCommand{
+			PostID:         "post-1",
 			CaseID:         opened.CaseID,
 			ReviewerID:     "reviewer-1",
 			Decision:       moderationmodel.DecisionApprove,
@@ -81,7 +82,7 @@ func TestPostModerationWorkflowEligibilityAndIdempotency(t *testing.T) {
 	reviewed, err := service.ReviewPostModerationCase(
 		moderationContext("review-approved"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "reviewer-1",
+			PostID: "post-1", CaseID: opened.CaseID, ReviewerID: "reviewer-1",
 		},
 	)
 	if err != nil {
@@ -93,7 +94,7 @@ func TestPostModerationWorkflowEligibilityAndIdempotency(t *testing.T) {
 	if _, err := service.DecidePostModerationCase(
 		moderationContext("decide-wrong-reviewer"),
 		moderationapp.DecidePostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "reviewer-2",
+			PostID: "post-1", CaseID: opened.CaseID, ReviewerID: "reviewer-2",
 			Decision: moderationmodel.DecisionApprove, DecisionReason: "safe",
 		},
 	); err == nil || !strings.Contains(err.Error(), "unauthorized") {
@@ -104,7 +105,7 @@ func TestPostModerationWorkflowEligibilityAndIdempotency(t *testing.T) {
 	decided, err := service.DecidePostModerationCase(
 		decisionContext,
 		moderationapp.DecidePostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "reviewer-1",
+			PostID: "post-1", CaseID: opened.CaseID, ReviewerID: "reviewer-1",
 			Decision: moderationmodel.DecisionApprove, DecisionReason: "safe",
 		},
 	)
@@ -114,7 +115,7 @@ func TestPostModerationWorkflowEligibilityAndIdempotency(t *testing.T) {
 	replayed, err := service.DecidePostModerationCase(
 		decisionContext,
 		moderationapp.DecidePostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "reviewer-1",
+			PostID: "post-1", CaseID: opened.CaseID, ReviewerID: "reviewer-1",
 			Decision: moderationmodel.DecisionApprove, DecisionReason: "safe",
 		},
 	)
@@ -180,7 +181,7 @@ func TestRejectedPostRemainsPublicationIneligible(t *testing.T) {
 	if _, err := service.ReviewPostModerationCase(
 		moderationContext("review-rejected"),
 		moderationapp.ReviewPostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "reviewer-3",
+			PostID: "post-reject", CaseID: opened.CaseID, ReviewerID: "reviewer-3",
 		},
 	); err != nil {
 		t.Fatalf("review rejected case: %v", err)
@@ -188,7 +189,7 @@ func TestRejectedPostRemainsPublicationIneligible(t *testing.T) {
 	if _, err := service.DecidePostModerationCase(
 		moderationContext("reject-case"),
 		moderationapp.DecidePostModerationCaseCommand{
-			CaseID: opened.CaseID, ReviewerID: "reviewer-3",
+			PostID: "post-reject", CaseID: opened.CaseID, ReviewerID: "reviewer-3",
 			Decision: moderationmodel.DecisionReject, DecisionReason: "policy",
 		},
 	); err != nil {
@@ -406,7 +407,7 @@ func TestConcurrentModerationCommandsConvergeToSingleTargetTransitions(t *testin
 		return service.ReviewPostModerationCase(
 			moderationContext(fmt.Sprintf("concurrent-review-%d", index)),
 			moderationapp.ReviewPostModerationCaseCommand{
-				CaseID: caseID, ReviewerID: "reviewer-concurrent",
+				PostID: "post-concurrent", CaseID: caseID, ReviewerID: "reviewer-concurrent",
 			},
 		)
 	})
@@ -420,6 +421,7 @@ func TestConcurrentModerationCommandsConvergeToSingleTargetTransitions(t *testin
 		return service.DecidePostModerationCase(
 			moderationContext(fmt.Sprintf("concurrent-decide-%d", index)),
 			moderationapp.DecidePostModerationCaseCommand{
+				PostID:         "post-concurrent",
 				CaseID:         caseID,
 				ReviewerID:     "reviewer-concurrent",
 				Decision:       moderationmodel.DecisionApprove,
@@ -436,7 +438,9 @@ func TestConcurrentModerationCommandsConvergeToSingleTargetTransitions(t *testin
 	supersedeResults := runModerationCommands(workers, func(index int) (moderationapp.PostModerationCaseCommandResult, error) {
 		return service.SupersedePostModerationCase(
 			moderationContext(fmt.Sprintf("concurrent-supersede-%d", index)),
-			moderationapp.SupersedePostModerationCaseCommand{CaseID: caseID},
+			moderationapp.SupersedePostModerationCaseCommand{
+				PostID: "post-concurrent", CaseID: caseID,
+			},
 		)
 	})
 	for _, outcome := range supersedeResults {

@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/chat/message_home_contracts.requests.g.dart';
 
 abstract interface class ChatMessageHomeQuery {
   Future<ChatMessageHomePageSlice> listMessageHome(
@@ -6,48 +7,9 @@ abstract interface class ChatMessageHomeQuery {
   );
 }
 
-final class ChatListMessageHomeQuery {
-  ChatListMessageHomeQuery({
-    this.filter = 'all',
-    this.cursor,
-    this.limit = 20,
-  }) {
-    if (!const <String>{
-      'all',
-      'unread',
-      'group',
-      'direct',
-      'notification',
-    }.contains(filter)) {
-      throw ArgumentError.value(
-        filter,
-        'filter',
-        'unsupported message-home filter',
-      );
-    }
-    if (limit < 1 || limit > 100) {
-      throw ArgumentError.value(limit, 'limit', 'must be in 1..100');
-    }
-    _optionalNonBlankText(cursor, 'cursor');
-  }
 
-  final String filter;
-  final String? cursor;
-  final int limit;
-}
 
-CloudOperationRequestPayload encodeChatListMessageHomeQuery(
-  ChatListMessageHomeQuery query,
-) {
-  final cursor = _optionalNonBlankText(query.cursor, 'cursor');
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      'filter': query.filter,
-      'limit': '${query.limit}',
-      if (cursor case final value?) 'cursor': value,
-    },
-  );
-}
+
 
 final class ChatMessageHomeItem {
   const ChatMessageHomeItem({

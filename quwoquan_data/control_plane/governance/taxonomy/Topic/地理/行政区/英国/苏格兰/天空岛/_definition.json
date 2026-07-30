@@ -1,0 +1,12 @@
+{
+  "label": "天空岛",
+  "labelEn": "Isle of Skye",
+  "description": "内赫布里底群岛地貌胜地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

@@ -8,7 +8,7 @@ final class RecordingContentPostPublicationWriter
 
   Map<String, Object?>? get lastSubmitPayload {
     if (submitCommands.isEmpty) return null;
-    final body = encodeSubmitContentPostPublicationCommand(
+    final body = encodeContentPostSubmitPostPublicationGeneratedRequest(
       submitCommands.last,
     ).body;
     if (body is! Map) {

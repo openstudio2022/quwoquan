@@ -14,11 +14,10 @@ import (
 	"quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application"
 )
 
-// MemoryTelemetryStore 仅用于 local_contract；生产装配为 MongoVisitStore +
-// SLSEventLogStore + RedisEventBatchLedger。
+// MemoryTelemetryStore 仅用于 EventRecord local_contract；生产装配为
+// provider-specific EventLogStore + RedisEventBatchLedger。VisitRecord 不在本对象内。
 type MemoryTelemetryStore struct {
 	mu             sync.Mutex
-	visits         map[string]application.VisitRecord
 	events         []application.EventRecord
 	batchStates    map[string]application.BatchLedgerState
 	batchCounts    map[string]int
@@ -30,49 +29,11 @@ type MemoryTelemetryStore struct {
 
 func NewMemoryTelemetryStore() *MemoryTelemetryStore {
 	return &MemoryTelemetryStore{
-		visits:         map[string]application.VisitRecord{},
 		batchStates:    map[string]application.BatchLedgerState{},
 		batchCounts:    map[string]int{},
 		startupBatches: map[string]int{},
 		runtimeBatches: map[string]int{},
 	}
-}
-
-func (s *MemoryTelemetryStore) RecordVisit(_ context.Context, input application.VisitInput) (application.VisitRecord, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key := input.UserID + ":" + input.TargetType + ":" + input.TargetKey
-	record := s.visits[key]
-	record.UserID, record.TargetType, record.TargetKey = input.UserID, input.TargetType, input.TargetKey
-	record.VisitCount++
-	record.LastSeenAt = time.Now().UTC().Format(time.RFC3339Nano)
-	record.SessionID, record.Source = input.SessionID, input.Source
-	s.visits[key] = record
-	return record, nil
-}
-
-func (s *MemoryTelemetryStore) GetVisit(_ context.Context, userID, targetType, targetKey string) (application.VisitRecord, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	record, ok := s.visits[userID+":"+targetType+":"+targetKey]
-	return record, ok, nil
-}
-
-func (s *MemoryTelemetryStore) GetVisitStats(_ context.Context, query application.VisitStatsQuery) (application.VisitStats, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := application.VisitStats{}
-	for _, item := range s.visits {
-		if query.TargetType != "" && item.TargetType != query.TargetType {
-			continue
-		}
-		if query.TargetKey != "" && item.TargetKey != query.TargetKey {
-			continue
-		}
-		out.TotalVisits += item.VisitCount
-		out.Items = append(out.Items, item)
-	}
-	return out, nil
 }
 
 func (s *MemoryTelemetryStore) Begin(_ context.Context, batchKey string, count int) (application.BatchLedgerState, error) {
@@ -586,7 +547,6 @@ func maskSessionID(value string) string {
 	return "s.***" + value[separator:]
 }
 
-var _ application.VisitTelemetryStore = (*MemoryTelemetryStore)(nil)
 var _ application.EventLogStore = (*MemoryTelemetryStore)(nil)
 var _ application.EventBatchLedger = (*MemoryTelemetryStore)(nil)
 var _ application.RuntimeLogStore = (*MemoryTelemetryStore)(nil)

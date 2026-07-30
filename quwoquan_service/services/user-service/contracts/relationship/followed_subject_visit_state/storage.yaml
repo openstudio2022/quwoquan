@@ -3,13 +3,13 @@ collections:
   followed_subject_visit_states:
     entity: FollowedSubjectVisitState
     indexes:
-    - name: idx_viewer_subject_unique
+    - name: uq_visit_identity
       keys:
         personaId: 1
         subjectType: 1
         subjectId: 1
       unique: true
-    - name: idx_viewer_updated
+    - name: idx_visit_persona_updated
       keys:
         personaId: 1
         updatedAt: -1

@@ -35,7 +35,7 @@ func TestMediaUploadSessionLifecycleCreatesIndependentAssetAtomically(t *testing
 
 	initContext := commandmeta.WithIdempotencyKey(context.Background(), "upload-init-1")
 	initialized, err := service.Init(initContext, sessionapp.InitCommand{
-		OwnerID: "persona-1", MediaType: "image", ContentType: "image/jpeg",
+		OwnerID: "persona-1", MediaType: "image", MimeType: "image/jpeg",
 		FileSize: 128, ExpectedSHA256: testSHA256,
 	})
 	if err != nil {
@@ -49,7 +49,7 @@ func TestMediaUploadSessionLifecycleCreatesIndependentAssetAtomically(t *testing
 	}
 
 	replayed, err := service.Init(initContext, sessionapp.InitCommand{
-		OwnerID: "persona-1", MediaType: "image", ContentType: "image/jpeg",
+		OwnerID: "persona-1", MediaType: "image", MimeType: "image/jpeg",
 		FileSize: 128, ExpectedSHA256: testSHA256,
 	})
 	if err != nil {
@@ -130,7 +130,7 @@ func TestExpiredUploadInitRequiresANewDurableAttemptKey(t *testing.T) {
 	)
 	command := sessionapp.InitCommand{
 		OwnerID: "persona-expiry", MediaType: "image",
-		ContentType: "image/jpeg", FileSize: 128, ExpectedSHA256: testSHA256,
+		MimeType: "image/jpeg", FileSize: 128, ExpectedSHA256: testSHA256,
 	}
 	first, err := service.Init(
 		commandmeta.WithIdempotencyKey(context.Background(), "upload-expired-0"),
@@ -174,18 +174,22 @@ func TestMediaUploadSessionAdmissionRejectsUnsupportedOrOversizedMediaBeforeObje
 	t.Parallel()
 
 	for _, scenario := range []struct {
-		name        string
-		mediaType   string
-		contentType string
-		fileSize    int64
+		name      string
+		mediaType string
+		mimeType  string
+		fileSize  int64
 	}{
 		{
 			name:      "unsupported content type",
-			mediaType: "image", contentType: "video/mp4", fileSize: 128,
+			mediaType: "image", mimeType: "video/mp4", fileSize: 128,
 		},
 		{
 			name:      "oversized file",
-			mediaType: "image", contentType: "image/jpeg", fileSize: 1 << 62,
+			mediaType: "image", mimeType: "image/jpeg", fileSize: 1 << 62,
+		},
+		{
+			name:      "unknown media type",
+			mediaType: "archive", mimeType: "application/zip", fileSize: 128,
 		},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
@@ -198,7 +202,7 @@ func TestMediaUploadSessionAdmissionRejectsUnsupportedOrOversizedMediaBeforeObje
 				sessionapp.InitCommand{
 					OwnerID:        "persona-1",
 					MediaType:      scenario.mediaType,
-					ContentType:    scenario.contentType,
+					MimeType:       scenario.mimeType,
 					FileSize:       scenario.fileSize,
 					ExpectedSHA256: testSHA256,
 				},
@@ -211,6 +215,43 @@ func TestMediaUploadSessionAdmissionRejectsUnsupportedOrOversizedMediaBeforeObje
 				t.Fatalf("rejected admission must not prepare an upload grant, got %d", objects.prepareCalls)
 			}
 		})
+	}
+}
+
+func TestFileUploadCompletesAsFormalReadyMediaAsset(t *testing.T) {
+	now := time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+	store := newMemoryStore()
+	sequence := 0
+	service := sessionapp.NewUseCases(
+		store,
+		&memoryObjectStore{now: now},
+		sessionapp.WithClock(func() time.Time { return now }),
+		sessionapp.WithIdentifierGenerator(func(prefix string) (string, error) {
+			sequence++
+			return fmt.Sprintf("%s_file_%d", prefix, sequence), nil
+		}),
+	)
+	initialized, err := service.Init(
+		commandmeta.WithIdempotencyKey(context.Background(), "file-init"),
+		sessionapp.InitCommand{
+			OwnerID: "persona-file", MediaType: "file", MimeType: "application/pdf",
+			FileSize: 128, ExpectedSHA256: testSHA256,
+		},
+	)
+	if err != nil {
+		t.Fatalf("init file upload: %v", err)
+	}
+	completed, err := service.Complete(
+		commandmeta.WithIdempotencyKey(context.Background(), "file-complete"),
+		sessionapp.CompleteCommand{
+			SessionID: initialized.SessionID, OwnerID: "persona-file", AccessPolicy: "public",
+		},
+	)
+	if err != nil {
+		t.Fatalf("complete file upload: %v", err)
+	}
+	if completed.AssetProcessingStatus != "ready" || store.completedAssetMediaType != "file" {
+		t.Fatalf("file must become formal ready MediaAsset: result=%+v mediaType=%q", completed, store.completedAssetMediaType)
 	}
 }
 
@@ -233,7 +274,7 @@ func TestMediaUploadAbortPersistsIntentAndRetriesTemporaryCleanup(t *testing.T) 
 		commandmeta.WithIdempotencyKey(context.Background(), "upload-init-abort"),
 		sessionapp.InitCommand{
 			OwnerID: "persona-abort", MediaType: "image",
-			ContentType: "image/jpeg", FileSize: 128,
+			MimeType: "image/jpeg", FileSize: 128,
 			ExpectedSHA256: testSHA256,
 		},
 	)
@@ -318,10 +359,11 @@ func (s *memoryObjectStore) DeleteTemporaryUpload(context.Context, string) error
 }
 
 type memoryStore struct {
-	sessions           map[string]*sessionmodel.Session
-	receipts           map[string]sessionports.Receipt
-	completedAssetID   string
-	completeEventCount int
+	sessions                map[string]*sessionmodel.Session
+	receipts                map[string]sessionports.Receipt
+	completedAssetID        string
+	completedAssetMediaType string
+	completeEventCount      int
 }
 
 func newMemoryStore() *memoryStore {
@@ -362,6 +404,7 @@ func (s *memoryStore) Commit(_ context.Context, commit sessionports.Commit) (ses
 func (s *memoryStore) Complete(_ context.Context, commit sessionports.CompleteCommit) (sessionports.Receipt, error) {
 	s.sessions[commit.Session.ID()] = commit.Session
 	s.completedAssetID = commit.Asset.ID
+	s.completedAssetMediaType = commit.Asset.MediaType
 	s.completeEventCount = len(commit.Events)
 	receipt := sessionports.Receipt{
 		Session:               commit.Session,

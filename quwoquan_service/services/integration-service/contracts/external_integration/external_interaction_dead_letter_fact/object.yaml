@@ -18,3 +18,7 @@ relationships:
   reference_fields:
   - requestId
   target_object: integration.ExternalInteraction
+lifecycle:
+  immutable: true
+local_identity_reasons:
+  taskId: reliable-task terminal work item key scoped to this dead-letter fact; it is not a business-object reference

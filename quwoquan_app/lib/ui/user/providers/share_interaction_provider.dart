@@ -10,21 +10,21 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 @immutable
 class ShareInteractionBucketKey {
   const ShareInteractionBucketKey({
-    required this.subAccountId,
+    required this.personaId,
     required this.direction,
   });
 
-  final String subAccountId;
+  final String personaId;
   final ShareInteractionDirection direction;
 
   @override
   bool operator ==(Object other) =>
       other is ShareInteractionBucketKey &&
-      other.subAccountId == subAccountId &&
+      other.personaId == personaId &&
       other.direction == direction;
 
   @override
-  int get hashCode => Object.hash(subAccountId, direction);
+  int get hashCode => Object.hash(personaId, direction);
 }
 
 @immutable
@@ -93,7 +93,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
   @override
   ShareInteractionState build() {
     ref.listen(authSessionControllerProvider, (previous, next) {
-      if (previous?.activeSubAccountId != next.activeSubAccountId) {
+      if (previous?.activePersonaId != next.activePersonaId) {
         _generation += 1;
         state = ShareInteractionState(generation: _generation);
       }
@@ -103,7 +103,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
   }
 
   Future<void> ensureLoaded() async {
-    if (!_ownsActiveSubAccount) return;
+    if (!_ownsActivePersona) return;
     final fetchedAt = state.lastFetchedAt;
     final isFresh =
         fetchedAt != null && DateTime.now().difference(fetchedAt) < cacheTtl;
@@ -122,7 +122,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
   }
 
   Future<void> _fetchFirstPage({required bool background}) async {
-    if (!_ownsActiveSubAccount) return;
+    if (!_ownsActivePersona) return;
     final requestGeneration = ++_generation;
     state = state.copyWith(
       isInitialLoading: !background && state.items.isEmpty,
@@ -135,7 +135,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
           .read(profileInteractionQueryFacetProvider)
           .listActivities(
             ContentProfileInteractionPageQuery(
-              subAccountId: key.subAccountId,
+              personaId: key.personaId,
               type: ContentProfileInteractionType.share,
               limit: pageSize,
             ),
@@ -168,7 +168,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
   }
 
   Future<void> loadMore() async {
-    if (!_ownsActiveSubAccount || state.isLoadingMore || !state.hasMore) return;
+    if (!_ownsActivePersona || state.isLoadingMore || !state.hasMore) return;
     final requestGeneration = _generation;
     final cursor = state.nextCursor;
     state = state.copyWith(isLoadingMore: true, clearError: true);
@@ -177,7 +177,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
           .read(profileInteractionQueryFacetProvider)
           .listActivities(
             ContentProfileInteractionPageQuery(
-              subAccountId: key.subAccountId,
+              personaId: key.personaId,
               type: ContentProfileInteractionType.share,
               cursor: cursor,
               limit: pageSize,
@@ -233,7 +233,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
   }
 
   Future<void> _markState(ShareInteractionItem item, String writeState) async {
-    if (!_ownsActiveSubAccount) return;
+    if (!_ownsActivePersona) return;
     final telemetryAction = switch (writeState) {
       'seen' => 'mark_seen',
       'read' => 'mark_read',
@@ -262,7 +262,7 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
           .read(profileInteractionReadFactAppendFacetProvider)
           .appendReadFact(
             AppendContentProfileInteractionReadFactCommand(
-              subAccountId: key.subAccountId,
+              personaId: key.personaId,
               activityId: item.interactionId,
               state: writeState == 'read'
                   ? ContentProfileInteractionReadState.read
@@ -312,9 +312,9 @@ class ShareInteractionNotifier extends Notifier<ShareInteractionState> {
     return null;
   }
 
-  bool get _ownsActiveSubAccount =>
-      ref.read(authSessionControllerProvider).activeSubAccountId.trim() ==
-      key.subAccountId.trim();
+  bool get _ownsActivePersona =>
+      ref.read(authSessionControllerProvider).activePersonaId.trim() ==
+      key.personaId.trim();
 }
 
 final shareInteractionProvider =

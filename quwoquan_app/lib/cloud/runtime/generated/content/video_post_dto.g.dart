@@ -32,6 +32,8 @@ class VideoPostDto extends PostBaseDto {
   final int? mediaAssetVersion;
   final String? previewTrackManifestUrl;
   final int? previewTrackVersion;
+  final String? hlsCmafMasterManifestUrl;
+  final int? hlsCmafDescriptorVersion;
   @override final int likeCount;
   @override final int commentCount;
   @override final int shareCount;
@@ -69,6 +71,8 @@ class VideoPostDto extends PostBaseDto {
     this.mediaAssetVersion,
     this.previewTrackManifestUrl,
     this.previewTrackVersion,
+    this.hlsCmafMasterManifestUrl,
+    this.hlsCmafDescriptorVersion,
     required this.likeCount,
     required this.commentCount,
     required this.shareCount,
@@ -108,6 +112,8 @@ class VideoPostDto extends PostBaseDto {
       mediaAssetVersion: (m['mediaAssetVersion'] as num?)?.toInt() ?? null,
       previewTrackManifestUrl: m['previewTrackManifestUrl']?.toString() ?? null,
       previewTrackVersion: (m['previewTrackVersion'] as num?)?.toInt() ?? null,
+      hlsCmafMasterManifestUrl: m['hlsCmafMasterManifestUrl']?.toString() ?? null,
+      hlsCmafDescriptorVersion: (m['hlsCmafDescriptorVersion'] as num?)?.toInt() ?? null,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       commentCount: (m['commentCount'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? 0,
@@ -148,6 +154,8 @@ class VideoPostDto extends PostBaseDto {
       'mediaAssetVersion': source['mediaAssetVersion'],
       'previewTrackManifestUrl': source['previewTrackManifestUrl'],
       'previewTrackVersion': source['previewTrackVersion'],
+      'hlsCmafMasterManifestUrl': source['hlsCmafMasterManifestUrl'],
+      'hlsCmafDescriptorVersion': source['hlsCmafDescriptorVersion'],
       'likeCount': source['likeCount'],
       'commentCount': source['commentCount'],
       'shareCount': source['shareCount'],
@@ -189,6 +197,8 @@ class VideoPostDto extends PostBaseDto {
       'mediaAssetVersion': mediaAssetVersion,
       'previewTrackManifestUrl': previewTrackManifestUrl,
       'previewTrackVersion': previewTrackVersion,
+      'hlsCmafMasterManifestUrl': hlsCmafMasterManifestUrl,
+      'hlsCmafDescriptorVersion': hlsCmafDescriptorVersion,
       'likeCount': likeCount,
       'commentCount': commentCount,
       'shareCount': shareCount,
@@ -228,6 +238,8 @@ class VideoPostDto extends PostBaseDto {
     int? mediaAssetVersion,
     String? previewTrackManifestUrl,
     int? previewTrackVersion,
+    String? hlsCmafMasterManifestUrl,
+    int? hlsCmafDescriptorVersion,
     int? likeCount,
     int? commentCount,
     int? shareCount,
@@ -265,6 +277,8 @@ class VideoPostDto extends PostBaseDto {
       mediaAssetVersion: mediaAssetVersion ?? this.mediaAssetVersion,
       previewTrackManifestUrl: previewTrackManifestUrl ?? this.previewTrackManifestUrl,
       previewTrackVersion: previewTrackVersion ?? this.previewTrackVersion,
+      hlsCmafMasterManifestUrl: hlsCmafMasterManifestUrl ?? this.hlsCmafMasterManifestUrl,
+      hlsCmafDescriptorVersion: hlsCmafDescriptorVersion ?? this.hlsCmafDescriptorVersion,
       likeCount: likeCount ?? this.likeCount,
       commentCount: commentCount ?? this.commentCount,
       shareCount: shareCount ?? this.shareCount,

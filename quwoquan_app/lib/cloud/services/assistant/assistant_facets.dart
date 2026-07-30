@@ -16,14 +16,18 @@ import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_even
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
+    hide AssistantLearningFactAppendCommand;
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        AssistantLearningFactAppendCommand,
+        AssistantLearningFactAppendReceipt,
+        AssistantSkillCatalogItemProjection;
 
 export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart'
     show
-        AppendAssistantLearningFactRequest,
         AssistantIntersectionEvidenceRef,
-        AssistantLearningFactReceipt,
         AssistantPreferenceFact,
         AssistantPreferenceFactListView,
         AssistantEntryPersonalizationChipView,
@@ -47,7 +51,6 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantStartRunRequest,
         AssistantSearchXiaoquRequestWire,
         AssistantSuggestedHomepageView,
-        AssistantSkillCatalogItemView,
         AssistantTurnListView,
         AssistantTurnSummaryView,
         AssistantUserActionGroundingView,
@@ -56,6 +59,11 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         PageContextAck,
         SuggestedAction,
         SuggestedActionListView;
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        AssistantLearningFactAppendCommand,
+        AssistantLearningFactAppendReceipt,
+        AssistantSkillCatalogItemProjection;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
     show AssistantConversationWire;
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
@@ -73,6 +81,8 @@ export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.
         SkillSubscriptionSearchQueryPlanWire,
         SkillSubscriptionTriggerWire,
         SkillSubscriptionWire;
+export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
+    show AssistantPageContextType, SearchIntensity;
 export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
     show ToolUseWire;
 export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
@@ -162,7 +172,7 @@ AssistantContextSnapshot assistantContextSnapshotFromOpenContext(
   final normalizedAction = userAction?.trim() ?? '';
   return AssistantContextSnapshot(
     capturedAt: now,
-    pageType: pageType.wireName,
+    pageType: pageType,
     pageObjects: <AssistantObjectGroundingView>[
       if (objectType.isNotEmpty && objectId.isNotEmpty)
         AssistantObjectGroundingView(
@@ -306,8 +316,8 @@ abstract class AssistantSkillConsentFacet {
 
 /// 用户学习事实的单轨 append command。
 abstract class AssistantLearningFactAppendFacet {
-  Future<AssistantLearningFactReceipt> appendUserFact({
-    required AppendAssistantLearningFactRequest request,
+  Future<AssistantLearningFactAppendReceipt> appendUserFact({
+    required AssistantLearningFactAppendCommand request,
   });
 }
 
@@ -336,7 +346,7 @@ abstract class AssistantPersonalDataFacet {
   });
 
   /// GET /assistant/skills
-  Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
+  Future<List<AssistantSkillCatalogItemProjection>> listSkillCatalog({
     int limit = kAssistantSkillCatalogDefaultLimit,
   });
 }
@@ -370,7 +380,7 @@ abstract class AssistantPreferenceFactFacet {
 abstract class AssistantXiaoquSearchFacet {
   Future<AssistantSearchResultView> searchXiaoquResults({
     required String query,
-    String searchIntensity = 'balanced',
+    SearchIntensity searchIntensity = SearchIntensity.medium,
     AssistantContextSnapshot? contextSnapshot,
   });
 }

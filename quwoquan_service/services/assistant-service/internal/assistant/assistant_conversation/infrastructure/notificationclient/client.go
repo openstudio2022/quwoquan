@@ -17,7 +17,7 @@ import (
 	serviceclients "quwoquan_service/generated/serviceclients"
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 const responseBodyLimit = 1 << 20
@@ -53,10 +53,10 @@ func NewClient(
 
 func (c *Client) CreateAppMessage(
 	ctx context.Context,
-	command application.NotificationAppMessageCommand,
-) (application.NotificationAppMessageReceipt, error) {
+	command ports.NotificationAppMessageCommand,
+) (ports.NotificationAppMessageReceipt, error) {
 	if c == nil || c.http == nil || c.credentials == nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("notification command client is not initialized")
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("notification command client is not initialized")
 	}
 	body, err := json.Marshal(createAppMessageRequest{
 		UserID:      command.UserID,
@@ -78,41 +78,41 @@ func (c *Client) CreateAppMessage(
 		Provenance: appMessageProvenanceRequest(command.Provenance),
 	})
 	if err != nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("encode notification command: %w", err)
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("encode notification command: %w", err)
 	}
 	authorization, err := c.credentials.AuthorizationHeader(ctx)
 	if err != nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("issue notification service credential: %w", err)
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("issue notification service credential: %w", err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("build notification command request: %w", err)
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("build notification command request: %w", err)
 	}
 	request.Header.Set("Authorization", authorization)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", strings.TrimSpace(command.IdempotencyKey))
 	response, err := c.http.Do(request)
 	if err != nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("execute notification command: %w", err)
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("execute notification command: %w", err)
 	}
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, responseBodyLimit))
 	if err != nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("read notification command response: %w", err)
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("read notification command response: %w", err)
 	}
 	if response.StatusCode != http.StatusCreated {
-		return application.NotificationAppMessageReceipt{}, decodeRuntimeFailure(response.StatusCode, raw)
+		return ports.NotificationAppMessageReceipt{}, decodeRuntimeFailure(response.StatusCode, raw)
 	}
 	var message appMessageResponse
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&message); err != nil {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("decode notification command response: %w", err)
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("decode notification command response: %w", err)
 	}
 	if strings.TrimSpace(message.MessageID) == "" {
-		return application.NotificationAppMessageReceipt{}, fmt.Errorf("notification command response is missing messageId")
+		return ports.NotificationAppMessageReceipt{}, fmt.Errorf("notification command response is missing messageId")
 	}
-	return application.NotificationAppMessageReceipt{MessageID: message.MessageID}, nil
+	return ports.NotificationAppMessageReceipt{MessageID: message.MessageID}, nil
 }
 
 func decodeRuntimeFailure(status int, raw []byte) error {

@@ -156,7 +156,8 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   void initState() {
     super.initState();
     _filterRepository =
-        widget.filterRepository ?? ref.read(imageEditorFilterRepositoryProvider);
+        widget.filterRepository ??
+        ref.read(imageEditorFilterRepositoryProvider);
     _observability = ref.read(pageLifecycleObservabilityProvider);
     _analytics = ref.read(analyticsProvider);
     _pageEnterTime = DateTime.now();
@@ -164,7 +165,6 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     _initialPaths = List<String>.of(_paths);
     _primeInitialFilterSelection();
     _loadImageAspectRatio(_currentPath);
-    _initFilterConfig();
     _observability.recordPageState(
       pageName: _kPageName,
       phase: 'enter',
@@ -289,7 +289,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   final Map<String, int> _filterUsageCountByPresetId = <String, int>{};
   Map<String, double> _filterSnapshotStrengthByPresetId = <String, double>{};
   late final ImageEditorFilterRepository _filterRepository;
-  bool _filterCatalogLoading = true;
+  bool _filterCatalogLoading = false;
   bool _filterCatalogLoadFailed = false;
   final ImageEditorFilterFeatureExtractor _filterFeatureExtractor =
       const ImageEditorFilterFeatureExtractor();
@@ -741,7 +741,11 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       }
     });
     if (index == kImageEditorToolFilter) {
-      _rebuildFilterData();
+      if (_filterConfig == null && !_filterCatalogLoading) {
+        unawaited(_initFilterConfig());
+      } else {
+        unawaited(_rebuildFilterData());
+      }
     }
   }
 }

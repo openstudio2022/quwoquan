@@ -5,6 +5,9 @@ errors:
   kind: USER
   reason: media_image_reprocess_invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [StartMediaImageReprocessRun]
   recovery_action: surface
   go_const: ErrMediaImageReprocessInvalidArgument
   dart_const: mediaImageReprocessInvalidArgument
@@ -15,6 +18,9 @@ errors:
   kind: USER
   reason: media_image_reprocess_run_not_found
   http_status: 404
+  emitted_by:
+  - surface: http
+    operations: [PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun, GetMediaImageReprocessRun]
   recovery_action: surface
   go_const: ErrMediaImageReprocessRunNotFound
   dart_const: mediaImageReprocessRunNotFound
@@ -25,6 +31,9 @@ errors:
   kind: USER
   reason: media_image_reprocess_invalid_transition
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun]
   recovery_action: refresh
   go_const: ErrMediaImageReprocessInvalidTransition
   dart_const: mediaImageReprocessInvalidTransition
@@ -35,6 +44,9 @@ errors:
   kind: USER
   reason: media_image_reprocess_version_conflict
   http_status: 409
+  emitted_by:
+  - surface: http
+    operations: [StartMediaImageReprocessRun, PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun]
   recovery_action: refresh
   go_const: ErrMediaImageReprocessVersionConflict
   dart_const: mediaImageReprocessVersionConflict
@@ -45,6 +57,9 @@ errors:
   kind: SYSTEM
   reason: media_image_reprocess_storage_unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations: [StartMediaImageReprocessRun, PauseMediaImageReprocessRun, ResumeMediaImageReprocessRun, RollbackMediaImageReprocessRun, GetMediaImageReprocessRun]
   recovery_action: retry
   recovery_after_seconds: 3
   go_const: ErrMediaImageReprocessStorageUnavailable

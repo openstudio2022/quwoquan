@@ -7,7 +7,6 @@ events:
   payload_entity: AssistantPolicyRelease
   payload_fields:
   - policyId
-  - releaseVersion
-  - canonicalDigest
+  - releaseDigest
   - defaultTemplateId
   - stagedAt

@@ -2,6 +2,7 @@
   "label": "视频创作者",
   "labelEn": "Video Creator",
   "description": "以视频拍摄、剪辑或内容制作为主要方向",
+  "axisRole": "userAttribute",
   "createdAt": "2026-06-24T17:35:21.933367+00:00",
   "updatedAt": "2026-06-24T17:35:21.933367+00:00"
 }

@@ -8,6 +8,34 @@ errors:
   kind: USER
   reason: unauthorized
   http_status: 401
+  emitted_by:
+  - surface: http
+    operations:
+    - GrantSkillConsent
+    - RevokeSkillConsent
+    - ListConsents
+    - assistant.assistant_conversation.CreateAssistantConversation
+    - assistant.assistant_conversation.GetAssistantConversation
+    - assistant.assistant_conversation.ListAssistantConversations
+    - assistant.assistant_preference_fact.ListAssistantPreferences
+    - assistant.assistant_preference_fact.RestoreAssistantPreference
+    - assistant.assistant_preference_fact.RevokeAssistantPreference
+    - assistant.assistant_preference_fact.SetAssistantPreference
+    - assistant.assistant_run.CancelAssistantRun
+    - assistant.assistant_run.GetAssistantRun
+    - assistant.assistant_run.GetEntryPersonalization
+    - assistant.assistant_run.GetSuggestedActions
+    - assistant.assistant_run.ListAssistantTasks
+    - assistant.assistant_run.ListConversationTurns
+    - assistant.assistant_run.ReportPageContext
+    - assistant.assistant_run.SearchXiaoquResults
+    - assistant.assistant_run.StartAssistantRun
+    - assistant.assistant_run.StreamAssistantRunEvents
+    - assistant.assistant_run.SuggestCreationAssistance
+    - assistant.skill_subscription.CreateSkillSubscription
+    - assistant.skill_subscription.GetSkillSubscription
+    - assistant.skill_subscription.ListSkillSubscriptions
+    - assistant.skill_subscription.UpdateSkillSubscriptionStatus
   recovery_action: surface
   dart_const: unauthorized
   go_const: ErrUnauthorized
@@ -19,6 +47,9 @@ errors:
   kind: USER
   reason: invalid_argument
   http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [GrantSkillConsent, RevokeSkillConsent]
   recovery_action: surface
   dart_const: consentInvalidArgument
   go_const: ErrConsentInvalidArgument
@@ -30,6 +61,12 @@ errors:
   kind: SYSTEM
   reason: unavailable
   http_status: 503
+  emitted_by:
+  - surface: http
+    operations:
+    - GrantSkillConsent
+    - RevokeSkillConsent
+    - ListConsents
   recovery_action: retry
   recovery_after_seconds: 3
   dart_const: consentUnavailable

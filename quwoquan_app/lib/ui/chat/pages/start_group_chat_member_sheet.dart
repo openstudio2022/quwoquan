@@ -407,12 +407,13 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
           Builder(
             builder: (context) {
               final member = _members[index];
-              final memberId = _memberId(member);
-              final selected = wizardState.isSelected(memberId);
-              final locked = wizardState.isLocked(memberId);
+              final personaId = _memberId(member);
+              final userHandle = member.userHandle.trim();
+              final selected = wizardState.isSelected(personaId);
+              final locked = wizardState.isLocked(personaId);
               return _RelatedFriendRow(
                 name: member.displayName,
-                username: memberId,
+                memberKey: personaId,
                 avatarUrl: member.avatarUrl,
                 selected: selected,
                 fgPrimary: fgPrimary,
@@ -421,18 +422,20 @@ class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
                 rowBackground: rowBackground,
                 dividerColor: rowDividerColor,
                 onTap: locked ? null : () => _toggleMember(member),
-                onAvatarTap: () => context.push(
-                  AppRoutePaths.userProfile(username: memberId),
-                  extra: UserProfileRouteExtra(
-                    subAccountId: memberId,
-                    avatar: member.avatarUrl.isNotEmpty
-                        ? member.avatarUrl
-                        : null,
-                    displayName: member.displayName.isNotEmpty
-                        ? member.displayName
-                        : null,
-                  ),
-                ),
+                onAvatarTap: userHandle.isEmpty
+                    ? null
+                    : () => context.push(
+                        AppRoutePaths.userProfile(userHandle: userHandle),
+                        extra: UserProfileRouteExtra(
+                          personaId: personaId,
+                          avatar: member.avatarUrl.isNotEmpty
+                              ? member.avatarUrl
+                              : null,
+                          displayName: member.displayName.isNotEmpty
+                              ? member.displayName
+                              : null,
+                        ),
+                      ),
               );
             },
           ),

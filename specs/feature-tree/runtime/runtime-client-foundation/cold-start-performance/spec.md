@@ -29,7 +29,7 @@
 - 只有启动等待超时但没有捕获到致命异常的情形。
 - 启动恢复页的重试、自动重启、自动重复跳转商店或下载页。
 - 应用内 APK 下载器、iOS 应用内安装、强制退出应用。
-- 启动尝试 ID、诊断编号、异常指纹和启动检查点列表。
+- 在恢复页向用户展示启动尝试 ID、诊断编号、异常指纹和启动检查点列表。
 
 ## 3. 行为要求
 
@@ -39,6 +39,7 @@
 - 正常启动目标仍为 3 秒进入 Shell；启动时限只用于性能观测和告警，不作为致命异常判定。
 - 登录页、首页、新用户流程或明确可安全运行的降级 Shell 首帧完成后，当前 Build 标记为已进入安全 Shell并清除该 Build 的启动失败状态。
 - 普通网络、登录、权限、业务接口或非关键依赖失败必须留在应用内按所属错误语义降级。
+- API、Media、登录或内容服务不可达只产生 readiness 诊断和应用内恢复状态，不得创建、更新或推广启动 fatal marker。
 - 系统 Splash 之后的原生静态帧与 Flutter Welcome 终态必须消费同一品牌视觉源；受支持手机视口切换时，花瓣、slogan、渐变和底部品牌名不得跳位、拉伸或回退为纯色过渡。
 
 <a id="req-002"></a>
@@ -49,6 +50,8 @@
 - Android 的 exported launcher 必须是 Flutter Engine、`FlutterFragmentActivity` 和插件装配之前的原生 gate：先完成平台强证据与制品身份核对，有确认致命异常时直接承载原生恢复页，无确认致命异常时才单向进入 Flutter 主 Activity。恢复分支不得创建 Flutter Engine，正常分支不得并行保留第二套启动状态机。
 - iOS 必须在 `FlutterAppDelegate` 的 `willFinish`/`didFinish` 主线和 implicit Flutter Engine 之前核对同制品致命证据；恢复分支必须在 `configurationForConnecting` 阶段移除 `Main.storyboard` 并改用纯原生 recovery scene，且不得调用 Flutter AppDelegate 生命周期或注册插件，正常分支才进入唯一 Flutter 主线。
 - Android 只依据同一制品身份的 Java 未处理异常或 `ApplicationExitInfo` 最近一次退出明确为 crash/native crash；iOS 当前只依据同一制品身份的未处理 NSException 判定上一进程启动崩溃。无法与上轮启动窗口可靠关联的 MetricKit signal/crash diagnostic 不得直接触发恢复，边界由 `OPEN-002` 持续跟踪。
+- Dart 只能以当前原生 `attemptId + canonical failureCode` 请求写入 fatal marker；原生层仅在非 Hot Restart、尚未进入安全 Shell、startup build identity 与当前 artifact identity 一致且 safe-shell 明确为 false 时接受。Hot Restart、attempt 不匹配、运行期 recovery 或安全 Shell 后请求均必须拒绝。
+- 同一 artifact 若同时存在 `safeShell=true` 与 fatal marker，原生 gate 必须删除 fatal/fatalAt/queuedIdentity 并继续正常启动；artifact identity 不匹配的旧 marker 同样自愈清理。只有 `safeShell=false + 同制品 fatal` 可进入原生恢复页。
 - 用户强制结束、系统回收、低内存终止、设备关机或只有未完成标记不得判为启动崩溃。
 
 <a id="req-003"></a>
@@ -87,16 +90,19 @@
 <a id="req-007"></a>
 ### REQ-007 环境构建、安装与运行证据必须绑定同一启动清单
 
-- 每次受支持构建必须生成 immutable effective launch manifest，至少绑定 `environment`、`target`、`entrypoint`、`launchMode`、完整 Dart defines 摘要、runtime config 摘要、恢复/公网 URL、本地 transport 需求与 receipt；字段不一致时在构建或安装前 fail closed。
+- 每次受支持构建必须生成符合 `app_launch_manifest.app_effective_launch_manifest` 共享协议的 immutable effective launch manifest；构建、安装、启动与发布证据不满足 canonical target/environment、摘要或 transport 约束时必须 fail closed。
+- iOS/Android 开发启动只支持 `quwoquan_app/run.sh -d <device>`；它必须把完整 handoff、entrypoint 和全部 `--dart-define` 直接交给 Flutter CLI，使冷启动、Hot Reload 与 Hot Restart 消费同一配置。裸 `flutter run` 必须在 Xcode/Gradle backend 安装前返回唯一恢复动作，禁止 native build phase 临时补入环境 defines。
 - Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 必须内嵌 effective launch manifest 摘要；启动失败标记、runtime probe 和制品 provenance 必须回报同一摘要，禁止跨 target、跨环境或重打包复用。
 - package-only 四环境编译只能证明组件可构建，不得标记为 runtime UAT。运行证据必须来自真实 `MAIN/LAUNCHER` 或 iOS scene 启动，且包含非 `unknown` 的本次 attempt ID、当前 motion contract、safe terminal、Gate/Main 或 scene 结果和单一 task。
 - Prod Android AAB/APK 与 iOS IPA 必须先验证平台签名、禁止 Mock/test/local transport 泄漏，并证明内嵌清单摘要与发布 handoff 一致，才可从 component-ready 推进到 deployable。
 
 ## 4. 契约引用
 
+- 启动清单：`quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml`
 - 版本与下载：`quwoquan_service/services/product-ops-service/contracts/product_ops/app_release/operations.yaml`
+- 版本与下载字段：`quwoquan_service/services/product-ops-service/contracts/product_ops/app_release/fields.yaml`
+- 版本与下载配置：`quwoquan_service/services/product-ops-service/config/schema.yaml`
 - 恢复异常：`quwoquan_service/services/product-ops-service/contracts/product_ops/recovery_failure/operations.yaml`
-- 受信公开链接：`quwoquan_service/contracts/metadata/_shared/link_templates.yaml`
 
 ## 5. 验收场景
 
@@ -116,6 +122,7 @@
 - THEN Android 在创建 Flutter Engine 和注册插件前由原生 gate 进入恢复页；无确认致命异常时 gate 只进入 Flutter 主 Activity且不显示恢复页。
 - AND iOS 在调用 Flutter AppDelegate 启动生命周期和创建 implicit Flutter Engine 前进入原生恢复 root；恢复分支不初始化 Flutter 或商业插件。
 - AND 缺失 runtime package 的 Android/iOS 构建在安装前失败；恢复页、safeRecovery 或 Flutter 首帧均不得作为构建入口可用性的成功证据。
+- AND 连续冷启动、Hot Restart 与再次冷启动中，每个 attempt 均为 `launchMode=canonical_launcher` 且 `configurationState=complete`；Hot Restart 的 fatal 请求被拒绝，安全 Shell 与 fatal 矛盾 marker 在 Flutter Engine 创建前自愈清理。
 - AND 首帧立即提供网页版。有新版且存在当前平台可安装通道时，Android 经官网 HTTPS 端点下载正式签名 APK，公众 iOS 继续使用 PWA/网页版。已最新、没有合规原生通道或检查未完成时提供网页版且不存在启动重试。
 
 <a id="gwt-003"></a>
@@ -142,14 +149,14 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 正式 PWA、签名 APK 与真机故障证据
+### OPEN-001 真机致命异常消费正式恢复通道证据
 
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前缺少正式 iOS PWA 的 Safari 安装与 standalone 启动证据、Android 生产签名密钥、官网 CDN 正式 APK URL，以及 Android/iPhone 真机硬崩溃与外部跳转录像证据。
-- 完成判定：`GWT-002` 在 Alpha、Beta、Gamma 和 Prod 对应真实端点完成；Prod APK 签名、SHA-256、包名与发布配置一致，公众 iOS PWA 可由 Safari 添加到主屏幕并独立启动。
-- 依赖：Android 生产签名 Secret、官方域名/CDN、PWA 公网 TLS、实体设备与发布权限。
+- 影响或价值：当前缺少 Android/iPhone 真机硬崩溃后消费正式 app release 与 Web/PWA 发布回执的恢复分流、外部跳转和无重试录像证据；生产签名、CDN、DNS/TLS 与 PWA 材料分别由协作 Story 拥有，本 Story 不复制其发布事实。
+- 完成判定：`GWT-002` 在 Alpha、Beta、Gamma 和 Prod 对应真实端点完成；每个 CaseResult 绑定 `app-release-recovery-routing` 与 `public-content-web-entry` 的正式回执，并证明 Android/iPhone 真机只消费 canonical 恢复通道。
+- 依赖：[`app-release-recovery-routing`](../../../product-ops-growth/product-control-plane-foundation/app-release-recovery-routing/spec.md) `OPEN-001`、[`public-content-web-entry`](../public-content-web-entry/spec.md) `OPEN-004`、实体设备与发布权限。
 
 <a id="open-002"></a>
 ### OPEN-002 iOS signal 类崩溃即时分类边界

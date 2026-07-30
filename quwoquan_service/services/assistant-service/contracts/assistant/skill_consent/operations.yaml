@@ -16,6 +16,14 @@ api_routes:
   method: POST
   operation: GrantSkillConsent
   path: /assistant/skills/{skillId}/consent
+  commercial:
+    status: blocked
+    block_reason: command ignores Idempotency-Key and persists neither command receipt nor declared SkillConsentGranted outbox event; store/domain model remain under AssistantConversation
+    gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  request_bindings:
+    path:
+    - {name: skillId, field: skillId}
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -62,6 +70,14 @@ api_routes:
   method: DELETE
   operation: RevokeSkillConsent
   path: /assistant/skills/{skillId}/consent
+  commercial:
+    status: blocked
+    block_reason: command ignores Idempotency-Key and persists neither command receipt nor declared SkillConsentRevoked outbox event; store/domain model remain under AssistantConversation
+    gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  request_bindings:
+    path:
+    - {name: skillId, field: skillId}
   reliability:
     timeout_ms: 1500
     cancellation: supported
@@ -107,6 +123,11 @@ api_routes:
   method: GET
   operation: ListConsents
   path: /assistant/consents
+  commercial:
+    status: blocked
+    block_reason: query has real PostgreSQL evidence but SkillConsent domain model, store and HTTP adapter remain physically owned by AssistantConversation
+    gap_id: ASSISTANT_SKILL_CONSENT_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   reliability:
     timeout_ms: 1500
     cancellation: supported

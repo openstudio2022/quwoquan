@@ -95,12 +95,12 @@ class ContentSurfaceViewMapper {
     final authorAvatar = resolver?.tryResolve(
       dto.avatarUrl,
       kind: MediaDeliveryKind.avatar,
-      assetId: dto.subAccountId,
+      assetId: dto.personaId,
     );
     final authorBackground = resolver?.tryResolve(
       dto.authorBackgroundUrl,
       kind: MediaDeliveryKind.background,
-      assetId: dto.subAccountId,
+      assetId: dto.personaId,
     );
 
     return ContentSurfaceView(
@@ -109,7 +109,7 @@ class ContentSurfaceViewMapper {
       contentType: dto.type,
       contentIdentity: dto.identity,
       author: ContentAuthorRef(
-        id: dto.subAccountId,
+        id: dto.personaId,
         displayName: dto.displayName,
         avatar: authorAvatar,
         background: authorBackground,

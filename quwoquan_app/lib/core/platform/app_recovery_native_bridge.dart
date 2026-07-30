@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/core/links/trusted_endpoint_policy.dart';
 
 class AppRecoveryNativeContext {
   const AppRecoveryNativeContext({
@@ -9,6 +10,7 @@ class AppRecoveryNativeContext {
     required this.deviceModel,
     required this.recoveryBaseUrl,
     required this.publicWebUrl,
+    required this.appDownloadBaseUrl,
   });
 
   final String platform;
@@ -18,6 +20,7 @@ class AppRecoveryNativeContext {
   final String deviceModel;
   final String recoveryBaseUrl;
   final String publicWebUrl;
+  final String appDownloadBaseUrl;
 }
 
 /// 启动恢复的最小原生能力；不依赖登录、业务 Router 或普通插件注册。
@@ -26,6 +29,7 @@ final class AppRecoveryNativeBridge {
     : _channel = channel ?? const MethodChannel('quwoquan/app_recovery');
 
   final MethodChannel _channel;
+  final List<String> _trustedBaseUrls = <String>[];
 
   Future<AppRecoveryNativeContext?> context() async {
     try {
@@ -39,6 +43,8 @@ final class AppRecoveryNativeBridge {
       final deviceModel = raw?['deviceModel']?.toString().trim() ?? '';
       final recoveryBaseUrl = raw?['recoveryBaseUrl']?.toString().trim() ?? '';
       final publicWebUrl = raw?['publicWebUrl']?.toString().trim() ?? '';
+      final appDownloadBaseUrl =
+          raw?['appDownloadBaseUrl']?.toString().trim() ?? '';
       if ((platform != 'ios' && platform != 'android') ||
           appVersion.isEmpty ||
           buildNumber == null ||
@@ -46,9 +52,13 @@ final class AppRecoveryNativeBridge {
           osVersion.isEmpty ||
           deviceModel.isEmpty ||
           !_isTrustedHttps(recoveryBaseUrl) ||
-          !_isTrustedHttps(publicWebUrl)) {
+          !_isTrustedHttps(publicWebUrl) ||
+          !_isTrustedHttps(appDownloadBaseUrl)) {
         return null;
       }
+      _trustedBaseUrls
+        ..clear()
+        ..addAll(<String>[recoveryBaseUrl, publicWebUrl, appDownloadBaseUrl]);
       return AppRecoveryNativeContext(
         platform: platform,
         appVersion: appVersion,
@@ -57,6 +67,7 @@ final class AppRecoveryNativeBridge {
         deviceModel: deviceModel,
         recoveryBaseUrl: recoveryBaseUrl,
         publicWebUrl: publicWebUrl,
+        appDownloadBaseUrl: appDownloadBaseUrl,
       );
     } on PlatformException {
       return null;
@@ -67,10 +78,7 @@ final class AppRecoveryNativeBridge {
 
   Future<bool> openTrustedExternalUrl(String rawUrl) async {
     final uri = Uri.tryParse(rawUrl.trim());
-    if (uri == null ||
-        uri.scheme.toLowerCase() != 'https' ||
-        uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty) {
+    if (uri == null || !isTrustedHttpsUrl(rawUrl, _trustedBaseUrls)) {
       return false;
     }
     try {
@@ -86,13 +94,30 @@ final class AppRecoveryNativeBridge {
     }
   }
 
-  Future<void> recordFatalStartup() async {
+  Future<bool> recordFatalStartup({
+    required String attemptId,
+    required String failureCode,
+  }) async {
+    final normalizedAttemptId = attemptId.trim();
+    final normalizedFailureCode = failureCode.trim();
+    if (normalizedAttemptId.isEmpty || normalizedFailureCode.isEmpty) {
+      return false;
+    }
     try {
-      await _channel.invokeMethod<void>('recordFatalStartup');
+      return await _channel.invokeMethod<bool>(
+            'recordFatalStartup',
+            <String, String>{
+              'attemptId': normalizedAttemptId,
+              'failureCode': normalizedFailureCode,
+            },
+          ) ??
+          false;
     } on PlatformException {
       // 状态持久化失败不得阻断恢复页。
+      return false;
     } on MissingPluginException {
       // 原生桥不可用时仍展示 Flutter 恢复页。
+      return false;
     }
   }
 
@@ -161,8 +186,6 @@ final class AppRecoveryNativeBridge {
         uri.userInfo.isNotEmpty) {
       return false;
     }
-    final host = uri.host.toLowerCase();
-    return host == 'quwoquan.com' ||
-        host.endsWith('.quwoquan.com');
+    return uri.fragment.isEmpty;
   }
 }

@@ -2,6 +2,8 @@
 
 // ignore_for_file: avoid_classes_with_only_static_members
 
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+
 class AssistantSkillToolPolicyWire {
   const AssistantSkillToolPolicyWire({
     this.allowedTools = const <String>[],
@@ -57,6 +59,7 @@ class AssistantSkillManifestWire {
     required this.displayName,
     this.description = "",
     required this.domainId,
+    this.problemClass = ProblemClass.general,
     this.tagRefs = const <String>[],
     this.executionTarget = "cloud",
     this.routingHints = const <String>[],
@@ -69,6 +72,7 @@ class AssistantSkillManifestWire {
   final String displayName;
   final String description;
   final String domainId;
+  final ProblemClass problemClass;
   final List<String> tagRefs;
   final String executionTarget;
   final List<String> routingHints;
@@ -81,6 +85,7 @@ class AssistantSkillManifestWire {
         'displayName': displayName,
         'description': description,
         'domainId': domainId,
+        'problemClass': problemClass.wireName,
         'tagRefs': tagRefs,
         'executionTarget': executionTarget,
         'routingHints': routingHints,
@@ -95,6 +100,7 @@ class AssistantSkillManifestWire {
       displayName: (json['displayName'] as String?)?.trim() ?? "",
       description: (json['description'] as String?)?.trim() ?? "",
       domainId: (json['domainId'] as String?)?.trim() ?? "",
+      problemClass: parseProblemClass((json['problemClass'] as String?)?.trim() ?? "general"),
       tagRefs: _assistantStringList(json['tagRefs']),
       executionTarget: (json['executionTarget'] as String?)?.trim() ?? "cloud",
       routingHints: _assistantStringList(json['routingHints']),
@@ -117,6 +123,7 @@ class AssistantSkillManifestWireFields {
   static const String displayName = 'displayName';
   static const String description = 'description';
   static const String domainId = 'domainId';
+  static const String problemClass = 'problemClass';
   static const String tagRefs = 'tagRefs';
   static const String executionTarget = 'executionTarget';
   static const String routingHints = 'routingHints';

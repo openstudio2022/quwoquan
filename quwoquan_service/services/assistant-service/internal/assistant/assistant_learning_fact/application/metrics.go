@@ -15,6 +15,14 @@ var assistantLearningFactAppendTotal = promauto.NewCounterVec(
 	[]string{"source", "fact_type", "outcome"},
 )
 
+var assistantLearningOpsQueryTotal = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "assistant_learning_ops_query_total",
+		Help: "Assistant learning summary query outcomes.",
+	},
+	[]string{"outcome"},
+)
+
 func recordLearningFactAppend(source string, factType string, outcome string) {
 	source = strings.TrimSpace(source)
 	if source != "user" && source != "service" {
@@ -35,4 +43,13 @@ func recordLearningFactAppend(source string, factType string, outcome string) {
 		factType,
 		outcome,
 	).Inc()
+}
+
+func recordLearningOpsQuery(outcome string) {
+	switch strings.TrimSpace(outcome) {
+	case "success", "unauthorized", "store_failed":
+	default:
+		outcome = "unknown"
+	}
+	assistantLearningOpsQueryTotal.WithLabelValues(outcome).Inc()
 }

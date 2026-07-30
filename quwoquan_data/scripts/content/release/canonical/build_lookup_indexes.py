@@ -18,12 +18,12 @@ from core.paths import (
     REPO_ROOT,
 )
 from core.release_layout import payload_file
+from content.release.environment.topology import resolve_environment_release_target
 
 HOMEPAGE_SERVICE_YAML = (
     REPO_ROOT
     / "quwoquan_service/services/entity-service/contracts/entity_homepage/homepage/operations.yaml"
 )
-ENVIRONMENTS_ROOT = REPO_ROOT / "quwoquan_ops/environments"
 COVERAGE_ENVIRONMENTS = ("alpha", "beta", "gamma", "prod")
 
 
@@ -142,17 +142,10 @@ def _introduction_path_template() -> str:
 
 
 def _environment_api_bases() -> dict[str, str]:
-    bases: dict[str, str] = {}
-    for env in COVERAGE_ENVIRONMENTS:
-        runtime_path = ENVIRONMENTS_ROOT / env / "runtime.yaml"
-        doc = yaml.safe_load(runtime_path.read_text(encoding="utf-8")) or {}
-        if doc.get("schema") != "environment-runtime" or doc.get("environment") != env:
-            raise ValueError(f"环境 runtime 身份不一致: {runtime_path}")
-        node = doc.get("publicBases") or {}
-        base = str(node.get("api") or "").strip().rstrip("/")
-        if base:
-            bases[env] = base
-    return bases
+    return {
+        env: resolve_environment_release_target(env).api_base_url
+        for env in COVERAGE_ENVIRONMENTS
+    }
 
 
 def _latest_env_homepage_imports(release_base: Path) -> dict[str, dict[str, Any]]:

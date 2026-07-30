@@ -2,6 +2,7 @@
   "label": "法律常识",
   "labelEn": "Legal Knowledge",
   "description": "日常法律知识普及",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

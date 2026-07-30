@@ -36,9 +36,7 @@ void main() {
 
   group('VoiceSendNotifier', () {
     test('上传完成后只用 MediaAsset identity 发送 audio 消息', () async {
-      final uploadManager = _ImmediateUploadManager(
-        assetId: 'media_001',
-      );
+      final uploadManager = _ImmediateUploadManager(assetId: 'media_001');
       final analytics = _FakeAnalyticsService();
       final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
@@ -54,7 +52,7 @@ void main() {
           currentUserIdProvider.overrideWithValue('user_001'),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'user_001',
+              personaId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '语音发送测试用户',
               avatarUrl: '',
@@ -81,7 +79,7 @@ void main() {
       expect(writer.lastCommand?.type, 'audio');
       expect(writer.lastCommand?.mediaAssetId, 'media_001');
       final wire =
-          encodeChatSendMessageCommand(writer.lastCommand!).body
+          encodeChatMessageSendMessageGeneratedRequest(writer.lastCommand!).body
               as Map<String, Object?>;
       expect(wire['mediaAssetId'], 'media_001');
       expect(wire, isNot(contains('media')));
@@ -100,9 +98,7 @@ void main() {
     });
 
     test('无效录音文件不会上传或发送', () async {
-      final uploadManager = _ImmediateUploadManager(
-        assetId: 'media_001',
-      );
+      final uploadManager = _ImmediateUploadManager(assetId: 'media_001');
       final analytics = _FakeAnalyticsService();
       final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
@@ -117,7 +113,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'voice_invalid_user',
+              personaId: 'voice_invalid_user',
               ownerUserId: 'voice_invalid_user',
               displayName: '无效录音测试用户',
               avatarUrl: '',
@@ -170,7 +166,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'voice_upload_failure_user',
+              personaId: 'voice_upload_failure_user',
               ownerUserId: 'voice_upload_failure_user',
               displayName: '上传失败测试用户',
               avatarUrl: '',
@@ -204,9 +200,7 @@ void main() {
     });
 
     test('消息发送失败不会误判为完成', () async {
-      final uploadManager = _ImmediateUploadManager(
-        assetId: 'media_001',
-      );
+      final uploadManager = _ImmediateUploadManager(assetId: 'media_001');
       final analytics = _FakeAnalyticsService();
       final writer = _TrackingMessageWriter(shouldFail: true);
       final container = ProviderContainer(
@@ -221,7 +215,7 @@ void main() {
           ),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'voice_send_failure_user',
+              personaId: 'voice_send_failure_user',
               ownerUserId: 'voice_send_failure_user',
               displayName: '发送失败测试用户',
               avatarUrl: '',

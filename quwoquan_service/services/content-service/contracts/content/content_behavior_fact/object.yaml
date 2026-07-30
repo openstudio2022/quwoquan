@@ -1,0 +1,46 @@
+kind: append_only_fact
+description: 内容曝光、点击、停留、负反馈与归因信号的不可变事实；Post 只作为被引用对象，不拥有行为事实生命周期。
+identity:
+  fields:
+  - clientEventId
+  version_source: immutable
+access:
+  commands: append_only_sink
+  cross_context: event_only
+  queries: named_reader
+relationships:
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: content
+  on_delete: retain
+  reference_fields:
+  - contentId
+  target_object: content.Post
+- access: event
+  cardinality: N:1
+  consistency: eventual
+  kind: event_source
+  name: personaActor
+  on_delete: retain
+  reference_fields:
+  - personaId
+  target_object: user.Persona
+local_identity_reasons:
+  deviceActorId: trusted runtime install-derived actor coordinate for anonymous behavior, not a DeviceRegistration or ContentBehaviorFact identity
+  feedRequestId: immutable feed delivery correlation key, not a business-object identity
+  sessionId: runtime session correlation key injected by the trusted invocation context
+capabilities:
+- append_only
+- idempotent_append
+- queryable
+business_rules:
+- personaId/deviceActorId 与 sessionId 只来自可信 Runtime Context，业务请求体不得伪造主体。
+- 同一主体与 clientEventId 只能追加一条语义一致的事实；不同语义重用幂等键必须冲突。
+- Post 删除不删除历史行为事实；读取和训练侧必须按当前内容可用性独立过滤。
+- 事实不可更新；推荐、分析与足迹读模型只能由 checkpoint 重放物化。
+lifecycle:
+  states:
+  - recorded
+  immutable: true

@@ -28,8 +28,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
   /// 按 asset id 展开工具条（多图同页时优先于 [_revealArticleImageToolbarForPageId]）。
   final ValueNotifier<String?> _revealArticleImageToolbarForAssetId =
       ValueNotifier<String?>(null);
-  bool get _unifiedCreateEditorEnabled =>
-      ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
+  bool _unifiedCreateEditorEnabled = false;
   bool _useImmersiveArticleExperience(CreateEditorState state) {
     return widget.initialAction == EditorStartAction.write &&
         state.editorKind == CreateEditorKind.text;
@@ -723,6 +722,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   @override
   Widget build(BuildContext context) {
+    _unifiedCreateEditorEnabled = ref.watch(
+      contentFeatureFlagProvider('enable_unified_create_editor'),
+    );
     ref.listen<AuthSessionState>(authSessionControllerProvider, (
       AuthSessionState? previous,
       AuthSessionState next,

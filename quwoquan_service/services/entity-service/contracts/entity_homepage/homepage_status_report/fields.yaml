@@ -1,128 +1,174 @@
 description: 共享主页下线或纠错上报及其审核状态
 fields:
-- name: reportId
-  source: _id
-  type: ObjectId
-  constraints:
-  - PK
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: homepageId
-  type: ObjectId
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: reporterPersonaId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PRIVATE
-  log_policy: hash
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: reason
-  type: enum
-  enum_ref: HomepageStatusReportReason
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: description
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PRIVATE
-  log_policy: mask
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-- name: evidenceUrls
-  type: '[]string'
-  constraints:
-  - NULLABLE
-  classification: SENSITIVE
-  log_policy: drop
-  api_exposure: read_write
-  ops_exposure: read
-  role: authoritative_state
-  description: 可选的状态上报证据地址；每项仅允许无用户信息的绝对 HTTPS URL。
-- name: status
-  type: enum
-  enum_ref: HomepageStatusReportStatus
-  constraints:
-  - NOT_NULL
-  - DEFAULT_PENDING_REVIEW
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read_write
-  role: authoritative_state
-- name: reviewerAccountId
-  type: string
-  constraints:
-  - NULLABLE
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: reviewNote
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PRIVATE
-  log_policy: mask
-  api_exposure: read
-  ops_exposure: read_write
-  role: authoritative_state
-- name: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
-- name: reviewedAt
-  type: timestamp
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: read
-  ops_exposure: read
-  role: authoritative_state
+  - name: reportId
+    source: _id
+    type: ObjectId
+    constraints:
+      - PK
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: homepageId
+    type: ObjectId
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: reporterPersonaId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PRIVATE
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: reason
+    type: enum
+    enum_ref: HomepageStatusReportReason
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: description
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PRIVATE
+    log_policy: mask
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+  - name: evidenceUrls
+    type: '[]string'
+    constraints:
+      - NULLABLE
+    classification: SENSITIVE
+    log_policy: drop
+    api_exposure: read_write
+    ops_exposure: read
+    role: authoritative_state
+    description: 可选的状态上报证据地址；每项仅允许无用户信息的绝对 HTTPS URL。
+  - name: status
+    type: enum
+    enum_ref: HomepageStatusReportStatus
+    constraints:
+      - NOT_NULL
+      - DEFAULT_PENDING_REVIEW
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    role: authoritative_state
+  - name: reviewerAccountId
+    type: string
+    constraints:
+      - NULLABLE
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: reviewNote
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PRIVATE
+    log_policy: mask
+    api_exposure: read
+    ops_exposure: read_write
+    role: authoritative_state
+  - name: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+  - name: reviewedAt
+    type: timestamp
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    role: authoritative_state
+types:
+  ReviewHomepageStatusReportCommand:
+    fields:
+      - name: homepageId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: reportId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: status
+        type: enum
+        enum_ref: HomepageStatusReportStatus
+        constraints:
+          - NOT_NULL
+      - name: reviewNote
+        type: string
+        constraints:
+          - NULLABLE
+  CreateHomepageStatusReportCommand:
+    fields:
+      - name: homepageId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: reason
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: description
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+        client_normalization: trim_to_null
+      - name: evidenceUrls
+        type: '[]string'
+        client_dart_type: List<String>
+        client_default: const <String>[]
+        client_normalization: trim_drop_empty
+        client_omit_empty: true

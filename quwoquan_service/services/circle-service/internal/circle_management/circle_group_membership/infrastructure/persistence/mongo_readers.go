@@ -81,6 +81,7 @@ func (readers *MongoReaders) ListGroupMemberships(ctx context.Context, groupID, 
 		limit = 100
 	}
 	filter := bson.M{"groupId": strings.TrimSpace(groupID)}
+	filter["accountRestricted"] = bson.M{"$ne": true}
 	if state = strings.TrimSpace(state); state != "" {
 		switch model.CircleGroupMembershipState(state) {
 		case model.CircleGroupMembershipStatePending, model.CircleGroupMembershipStateActive,

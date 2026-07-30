@@ -50,6 +50,7 @@
 ### REQ-004 社交首登创建账号并同步昵称头像
 
 - 社交首登必须先返回一次性手机号 binding ticket；手机号绑定完成后原子创建身份事实并签发会话，二次登录复用既有账号并恢复原 Persona。
+- 首登绑定的手机号已属于另一账号时必须返回 `credential_conflict`；不得恢复或合并旧账号，不得签发 session，且 ticket/challenge 保持可恢复，使用户可以更换手机号继续。
 - owner、primary persona、credential 与昵称头像初始化结果可在真实存储验证。
 
 <a id="req-005"></a>
@@ -81,8 +82,8 @@
 
 - 登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
 - provider 非 2xx 比率超过 2%，或挑战/登录 P95 超过 1.2s/1.5s，连续两个 5 分钟窗口后触发告警。
-- `sys.user.auth.*` 声明成功明细采样、30 天原始明细和 180 天聚合指标保留，并支持 progressive rollout。
-- 登录观测不得依赖已退役的 product-ops `event_records` Mongo 集合；运行时采样和保留必须由正式单轨实现证明。
+- `sys.user.auth.success_detail_sample_ratio` 只拥有登录成功明细采样策略并支持 progressive rollout；物理 Logstore 保留期只引用 product-ops `event_record/storage.yaml`，user-service 不复制或覆盖。
+- 登录观测不得依赖已退役的 product-ops `event_records` Mongo 集合；运行时采样和 product-ops 保留合同必须由正式单轨实现证明。
 
 <a id="req-009"></a>
 ### REQ-009 四环境端到端与商用纯净证据
@@ -105,7 +106,7 @@
 - 端侧文案统一走云端 userMessage 优先 → `UserErrorCode` baseline → 通用兜底；不直接读取原始异常字符串。
 - user-service 客户端响应和日志必须脱敏 OAuth URL、authCode、token、secret 与 provider 原始 body；客户端默认不接收 debugMessage。
 - `SendOtp`、手机号、微信、QQ、支付宝、一键登录与 hint 操作必须在 metadata 同源声明 commercial/security/privacy/reliability/telemetry/SLO；正式 provider 未取得生产凭据、受控 SDK 与真机 UAT 时保持 `blocked`，不得用本地协议测试改写为 ready。
-- 当前只完成上述 `sys.user.auth.*` 配置契约、环境种子和事件 TTL；在 product-ops 运行时消费采样比例并形成 180 天聚合保留的证据补齐前，不得把静态配置声明视为采样策略已生效。
+- 当前只完成 `sys.user.auth.success_detail_sample_ratio` 配置契约与环境种子；事件 TTL 由 product-ops `event_record/storage.yaml` 统一拥有。在 product-ops 运行时消费采样比例的证据补齐前，不得把静态配置声明视为采样策略已生效。
 - 微信、QQ、支付宝、阿里云一键登录在生产凭据、受控 SDK、真实网络真机 UAT、provider 后台结果与回滚演练齐全前保持 `GATE_BLOCK`。
 - prod 用户协议/隐私政策必须由法务/运营提供真实获批主体信息并通过 legal-static CLI 生成与线上 URL 探测；不得猜测主体、地址、电话、ICP备案号，也不得把占位包当作登录商用证据。
 
@@ -169,16 +170,15 @@
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-002"></a>
-### OPEN-002 登录商业可观测、采样与保留契约
+### OPEN-002 登录成功明细采样控制面闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
-- 完成判定：登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
-- provider 非 2xx 比率超过 2%，或挑战/登录 P95 超过 1.2s/1.5s，连续两个 5 分钟窗口后触发告警。
-- `sys.user.auth.*` 声明成功明细采样、30 天原始明细和 180 天聚合指标保留，并支持 progressive rollout。
+- 当前事实：登录漏斗、操作失败率、状态停留、绑定放弃率已进入 L2 大盘与告警；物理保留统一服从 product-ops `event_record/storage.yaml`，不再由 user-service 声明第二套 TTL。
+- 影响或价值：尚缺 product-ops 正式运行时消费 `sys.user.auth.success_detail_sample_ratio` 的实现与环境验收证据；成功运维明细仍按事件目录全量采集，静态配置尚不能证明采样策略生效。
+- 目标：在不削弱失败、terminal、stalled 事件全量观测和 Prometheus 分母的前提下，由正式配置单轨驱动登录成功明细的确定性采样。
+- 完成判定：运行时读取 `sys.user.auth.success_detail_sample_ratio`，成功明细按稳定键确定性采样，失败、terminal、stalled 保持 100%，并由 local contract、环境配置探针和聚合指标证明实际采样率与回滚路径。
 
 <a id="open-003"></a>
 ### OPEN-003 四环境端到端与商用纯净证据

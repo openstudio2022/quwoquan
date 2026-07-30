@@ -235,14 +235,14 @@ func trustedServiceOperationContext(
 	if !containsGrant(principal.Roles, "service") ||
 		!containsGrant(strings.Fields(principal.Scope), requiredScope) {
 		writeHTTPError(w, r, generated.AppErrorFromForbidden(
-			"service principal lacks the required push endpoint scope",
+			"service principal lacks the required operation scope",
 		))
 		return nil, false
 	}
 	if requiredAccountID != "" &&
 		strings.TrimSpace(principal.Actor.AccountID) != requiredAccountID {
 		writeHTTPError(w, r, generated.AppErrorFromForbidden(
-			"service principal is not allowed to access push endpoint secrets",
+			"service principal is not allowed to execute this operation",
 		))
 		return nil, false
 	}

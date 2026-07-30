@@ -137,20 +137,62 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-- key: sys.product-ops-service.config.max_image_version
-  type: string
+- key: sys.product-ops-service.account_enforcement.request_timeout_ms
+  type: int
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 9.9.9
-- key: sys.product-ops-service.config.min_image_version
-  type: string
+  default: 3000
+- key: sys.product-ops-service.account_enforcement.poll_interval_ms
+  type: int
   scope: workload
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 0.0.1
+  default: 500
+- key: sys.product-ops-service.account_enforcement.lease_duration_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 10000
+- key: sys.product-ops-service.account_enforcement.initial_backoff_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 1000
+- key: sys.product-ops-service.account_enforcement.max_backoff_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 30000
+- key: sys.product-ops-service.account_enforcement.max_pending_age_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 60000
+- key: sys.product-ops-service.account_enforcement.max_attempts
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 5
+- key: sys.product-ops-service.account_enforcement.batch_size
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 20
 - key: sys.product-ops-service.elasticsearch.aggregate_index
   type: string
   scope: workload

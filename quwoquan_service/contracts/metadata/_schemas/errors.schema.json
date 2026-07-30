@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/errors.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["errors"],
+  "properties": {
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["code"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "http_status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "emitted_by": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["surface"],
+                  "properties": {
+                    "surface": { "type": "string", "minLength": 1 },
+                    "operation": { "type": "string", "minLength": 1 },
+                    "operations": {
+                      "type": "array",
+                      "uniqueItems": true,
+                      "items": { "type": "string", "minLength": 1 }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -151,6 +151,7 @@ abstract interface class StartupJournalStore {
 
 final class SharedPreferencesStartupJournalStore
     implements StartupJournalStore {
+  // SharedPreferences keys are frozen canonical bytes for existing installs.
   static const _eventsKey = 'startup_telemetry_journal_v1';
   static const _proofKey = 'startup_telemetry_proof_v1';
 

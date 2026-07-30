@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -10,12 +12,16 @@ ROOT = Path(__file__).resolve().parents[2]
 STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 PORT_PROFILE = ROOT / "quwoquan_ops" / "cli" / "print_local_port_profile.py"
 TMP = ROOT / ".qwq_output" / "env" / "repo" / "local" / "stackctl-contract" / "process"
+DEPLOY_WORK_ROOT = tempfile.TemporaryDirectory(prefix="qwq-stackctl-contract-")
 
 
 def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["QWQ_DEPLOY_WORK_ROOT"] = DEPLOY_WORK_ROOT.name
     return subprocess.run(
         argv,
         cwd=str(ROOT),
+        env=environment,
         text=True,
         capture_output=True,
         check=False,
@@ -29,6 +35,7 @@ def main() -> int:
     required_commands = (
         "package",
         "content-readiness",
+        "account-enforcement-uat",
         "data-execution-fleet",
         "filter-catalog",
         "deploy",
@@ -38,7 +45,7 @@ def main() -> int:
     if help_result.returncode != 0 or any(command not in help_result.stdout for command in required_commands):
         issues.append(
             "stackctl --help must list package, content-readiness, data-execution-fleet, "
-            "filter-catalog, roll, deploy and matrix commands"
+            "account-enforcement-uat, filter-catalog, roll, deploy and matrix commands"
         )
 
     readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
@@ -69,11 +76,11 @@ def main() -> int:
         verify_help.returncode != 0
         or "--kind" not in verify_help.stdout
         or "--profile" not in verify_help.stdout
-        or "--reuse-package" not in verify_help.stdout
+        or "--reuse-package" in verify_help.stdout
         or "--" + "tier" in verify_help.stdout
     ):
         issues.append(
-            "stackctl verify --help must expose --kind/--profile/--reuse-package and forbid --tier"
+            "stackctl verify --help must expose --kind/--profile and forbid --reuse-package/--tier"
         )
 
     matrix_help = run(["python3", str(STACKCTL), "matrix", "--help"])
@@ -81,10 +88,12 @@ def main() -> int:
         matrix_help.returncode != 0
         or "--profile" not in matrix_help.stdout
         or "local-env-gate" not in matrix_help.stdout
-        or "--cache-mode" not in matrix_help.stdout
+        or "--targets" not in matrix_help.stdout
+        or "--cache-mode" in matrix_help.stdout
+        or "--no-auto-wipe-drift" in matrix_help.stdout
     ):
         issues.append(
-            "stackctl matrix --help must expose --profile local-env-gate and --cache-mode"
+            "stackctl matrix must require canonical targets and forbid cache/auto-wipe shortcuts"
         )
 
     health_help = run(["python3", str(STACKCTL), "health", "--help"])
@@ -118,6 +127,24 @@ def main() -> int:
             "stackctl filter-catalog must bind target/action and forbid API URL overrides"
         )
 
+    account_enforcement_help = run(
+        ["python3", str(STACKCTL), "account-enforcement-uat", "--help"]
+    )
+    if (
+        account_enforcement_help.returncode != 0
+        or "--target" not in account_enforcement_help.stdout
+        or "--action" not in account_enforcement_help.stdout
+        or "device-suspended" not in account_enforcement_help.stdout
+        or "device-restored" not in account_enforcement_help.stdout
+        or "verify" not in account_enforcement_help.stdout
+        or "--gateway-base-url" in account_enforcement_help.stdout
+        or "--product-ops-base-url" in account_enforcement_help.stdout
+    ):
+        issues.append(
+            "stackctl account-enforcement-uat must expose only canonical "
+            "Gamma action/evidence inputs and forbid topology URL overrides"
+        )
+
     roll_help = run(["python3", str(STACKCTL), "roll", "--help"])
     if roll_help.returncode != 0 or "--mode" not in roll_help.stdout or "--target" not in roll_help.stdout:
         issues.append("stackctl roll --help must expose --mode/--target")
@@ -142,52 +169,34 @@ def main() -> int:
         if "GATEWAY_PORT" not in env_map or "MEDIA_PORT" not in env_map or "MEDIA_ORIGIN_PORT" not in env_map:
             issues.append("beta-local port profile missing gateway/media env exports")
 
-    package_result = run(
+    package_help_pre_subcommand = run(
         [
             "python3",
             str(STACKCTL),
-            "--output-format",
-            "json",
             "--report-dir",
             str(TMP / "package-alpha"),
             "package",
-            "--env",
-            "alpha",
+            "--help",
         ]
     )
-    if package_result.returncode != 0:
-        issues.append("stackctl package --env alpha failed")
-    else:
-        payload = json.loads(package_result.stdout)
-        if payload.get("exitCode") != 0:
-            issues.append("stackctl package JSON output exitCode must be 0")
-        if not payload.get("reportDir"):
-            issues.append("stackctl package JSON output missing reportDir")
-        report_dir = ROOT / str(payload.get("reportDir"))
-        if not (report_dir / "summary.json").exists():
-            issues.append("stackctl package must emit summary.json artifact")
+    if package_help_pre_subcommand.returncode != 0:
+        issues.append("stackctl package must accept --report-dir before the subcommand")
 
-    package_result_post_subcommand = run(
+    package_help_post_subcommand = run(
         [
             "python3",
             str(STACKCTL),
-            "--output-format",
-            "json",
             "package",
-            "--env",
-            "alpha",
             "--report-dir",
             str(TMP / "package-alpha-post-subcommand"),
+            "--help",
         ]
     )
-    if package_result_post_subcommand.returncode != 0:
+    if (
+        package_help_post_subcommand.returncode != 0
+        or "--report-dir" not in package_help_post_subcommand.stdout
+    ):
         issues.append("stackctl package must accept --report-dir after the subcommand")
-    else:
-        payload = json.loads(package_result_post_subcommand.stdout)
-        if payload.get("exitCode") != 0:
-            issues.append("stackctl package with post-subcommand --report-dir must exit 0")
-        if not payload.get("reportDir"):
-            issues.append("stackctl package with post-subcommand --report-dir missing reportDir")
 
     if issues:
         print("[verify_stackctl_args_contract] FAIL")

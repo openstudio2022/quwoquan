@@ -55,6 +55,7 @@ class MostUsedSearchItem {
 class ContactSearchSuggestion {
   const ContactSearchSuggestion({
     required this.contactId,
+    required this.userHandle,
     required this.displayName,
     required this.conversationId,
     this.avatarUrl,
@@ -62,6 +63,7 @@ class ContactSearchSuggestion {
   });
 
   final String contactId;
+  final String userHandle;
   final String displayName;
   final String conversationId;
   final String? avatarUrl;

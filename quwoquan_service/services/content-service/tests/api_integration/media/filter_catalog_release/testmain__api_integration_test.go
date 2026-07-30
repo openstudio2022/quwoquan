@@ -9,11 +9,14 @@ import (
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"quwoquan_service/internal/platform/testinfra"
 )
 
 var filterCatalogMongoDB *mongo.Database
 
 func TestMain(m *testing.M) {
+	testinfra.ConfigureLocalContainerRuntime()
 	ctx := context.Background()
 	mongoURI := os.Getenv("TEST_MONGO_URI")
 	var mongoContainer *mongomod.MongoDBContainer

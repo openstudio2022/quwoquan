@@ -3,7 +3,9 @@ events:
   description: Skill 授权
   producer: assistant-service
   consumers: []
+  no_consumer_reason: aggregate_audit_journal_only
   channel: event_store
+  payload_entity: SkillConsent
   payload_fields:
   - id
   - userId
@@ -13,7 +15,9 @@ events:
   description: Skill 授权撤销
   producer: assistant-service
   consumers: []
+  no_consumer_reason: aggregate_audit_journal_only
   channel: event_store
+  payload_entity: SkillConsent
   payload_fields:
   - id
   - userId

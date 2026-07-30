@@ -1,55 +1,34 @@
 package recommendation
 
-import "strings"
+import (
+	"strings"
 
-func normalizedObjectType(objectID, objectType string) string {
-	normalized := strings.TrimSpace(objectType)
-	if normalized != "" && normalized != "homepage" && normalized != "entity" {
-		return normalized
-	}
-	id := strings.TrimSpace(objectID)
-	switch {
-	case strings.Contains(id, "_university_"):
-		return "university"
-	case strings.Contains(id, "_school_"):
-		return "school"
-	case strings.Contains(id, "_travel_route_"):
-		return "route"
-	case strings.Contains(id, "_travel_spot_") || strings.Contains(id, "_photo_spot_"):
-		return "photo_spot"
-	case strings.Contains(id, "_travel_gear_"):
-		return "gear"
-	case strings.Contains(id, "_travel_place_"), strings.HasPrefix(id, "homepage_sight_"), strings.HasPrefix(id, "fixture_homepage_poi"):
-		return "sight"
-	default:
-		return normalized
-	}
+	"quwoquan_service/services/content-service/generated/content/post"
+)
+
+// 本文件把调用方给的开放 objectType 词汇翻译成交集侧的闭集语义。
+// 唯一真相源是 intersection_kind_registry.yaml：objectTypeBindings 声明
+// objectType → objectKind，objectKinds[].dimension / .label 声明该 kind 的
+// 交集维度与兜底称谓，两者经 codegen 落成 generated.Intersection* 查表。
+//
+// 这里不得再出现按具体垂类或具体标签展开的 switch，也不得从 objectId 子串
+// 反推类型：新增一个 HomepageType 应当只改注册表并重跑 codegen，而不是发 Go 版本。
+
+// objectKindForObjectType 将开放 objectType 收口到闭集 objectKind（人/圈/校/地/企角标真相源）。
+// 未登记 objectType 返回空串；覆盖完整性由 verify_intersection_kind_registry.py 阻断，
+// 使「静默落进 default 再被下游当成人物」不可能发生。
+func objectKindForObjectType(objectType string) string {
+	return generated.IntersectionObjectKindByObjectType[strings.TrimSpace(objectType)]
 }
 
+// objectDimension 返回该对象上共享标签 reason 归属的交集维度。
 func objectDimension(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "university", "school":
-		return "identity"
-	case "travel_photo", "sight", "place", "route", "photo_spot", "gear", "homepage":
-		return "location"
-	case "circle":
-		return "relationship"
-	default:
-		return "interest"
-	}
+	return generated.IntersectionDimensionByObjectKind[objectKindForObjectType(objectType)]
 }
 
+// objectLabel 返回对象展示名缺失时的兜底称谓（同校 / 同游 / 同圈 / 同好）。
 func objectLabel(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "university", "school":
-		return "同校"
-	case "travel_photo", "sight", "place", "route", "photo_spot", "gear", "homepage":
-		return "同游"
-	case "circle":
-		return "同圈"
-	default:
-		return "同好"
-	}
+	return generated.IntersectionLabelByObjectKind[objectKindForObjectType(objectType)]
 }
 
 func concreteObjectDisplayName(objectID, objectType string) string {
@@ -64,8 +43,12 @@ func concreteObjectDisplayName(objectID, objectType string) string {
 	if len(parts) > 0 {
 		candidate = strings.TrimSpace(parts[len(parts)-1])
 	}
-	switch candidate {
-	case "", objectLabel(objectType), "这里", "这个对象":
+	// 兜底称谓与注册表登记的通用占位词都不是具名对象
+	// （registry.presentationText.placeholderObjectNames）。
+	if _, placeholder := generated.IntersectionPlaceholderObjectNames[candidate]; placeholder {
+		return ""
+	}
+	if candidate == "" || candidate == objectLabel(objectType) {
 		return ""
 	}
 	if strings.Contains(candidate, "_") {
@@ -74,35 +57,10 @@ func concreteObjectDisplayName(objectID, objectType string) string {
 	return candidate
 }
 
+// relationActionType 决定点击落点语义：只有人物开个人主页，其余一律查看对象。
 func relationActionType(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "user", "person":
+	if objectKindForObjectType(objectType) == "person" {
 		return "open_profile"
-	default:
-		return "view_object"
 	}
-}
-
-// objectKindForObjectType 将开放 objectType 收口到闭集 objectKind（人/圈/校/地/企角标真相源）。
-func objectKindForObjectType(objectType string) string {
-	switch strings.TrimSpace(objectType) {
-	case "user", "person":
-		return "person"
-	case "circle":
-		return "circle"
-	case "university", "school":
-		return "school"
-	case "route":
-		return "route"
-	case "photo_spot":
-		return "photo_spot"
-	case "gear":
-		return "gear"
-	case "sight", "travel_photo", "place", "entity", "homepage":
-		return "place"
-	case "brand", "enterprise", "company":
-		return "enterprise"
-	default:
-		return ""
-	}
+	return "view_object"
 }

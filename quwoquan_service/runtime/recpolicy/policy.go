@@ -3,7 +3,7 @@
 // coefficients, AB experiment definitions, segment targeting, and guardrails.
 //
 // The canonical data lives in metadata
-// (services/recommendation-service/contracts/recommendation/recommendation_model_release/policy.yaml). codegen_rec_policy
+// (services/content-service/resources/policies/content/post/recommendation_policy.yaml). codegen_rec_policy
 // captures a compile-time snapshot as the fail-safe Baseline (rec_policy_baseline.gen.go),
 // and Store hot-loads the live YAML at runtime with validate-before-swap and
 // last-good retention. No scoring weight / coefficient / experiment is ever
@@ -22,7 +22,7 @@ import (
 const (
 	ExpScoringWeights = "rec_scoring_weights"
 	ExpModelVsRule    = "rec_model_vs_rule"
-	ExpModelVersion   = "rec_model_version"
+	ExpModelChannel   = "rec_model_channel"
 )
 
 // GuardrailActionSuggestOnly is the only permitted guardrail action: guardrails
@@ -216,12 +216,11 @@ type ExposureReportingConfig struct {
 
 // ExposureMemoryConfig controls Redis day-bucket windows and cardinality budget.
 type ExposureMemoryConfig struct {
-	ServedTTLHours             int  `yaml:"servedTtlHours" json:"servedTtlHours"`
-	ImpressedTTLHours          int  `yaml:"impressedTtlHours" json:"impressedTtlHours"`
-	NegativeTTLHours           int  `yaml:"negativeTtlHours" json:"negativeTtlHours"`
-	FatigueHalfLifeHours       int  `yaml:"fatigueHalfLifeHours" json:"fatigueHalfLifeHours"`
-	DayBucketCardinalityBudget int  `yaml:"dayBucketCardinalityBudget" json:"dayBucketCardinalityBudget"`
-	SMembersFallbackAllowed    bool `yaml:"smembersFallbackAllowed" json:"smembersFallbackAllowed"`
+	ServedTTLHours             int `yaml:"servedTtlHours" json:"servedTtlHours"`
+	ImpressedTTLHours          int `yaml:"impressedTtlHours" json:"impressedTtlHours"`
+	NegativeTTLHours           int `yaml:"negativeTtlHours" json:"negativeTtlHours"`
+	FatigueHalfLifeHours       int `yaml:"fatigueHalfLifeHours" json:"fatigueHalfLifeHours"`
+	DayBucketCardinalityBudget int `yaml:"dayBucketCardinalityBudget" json:"dayBucketCardinalityBudget"`
 }
 
 // DynamicExposureBudgetConfig is the P1 traffic-pool control surface.
@@ -355,8 +354,7 @@ type ObjectCardConfig struct {
 
 // RecPolicy is the full recommendation scoring policy.
 type RecPolicy struct {
-	Version       int                     `yaml:"version" json:"version"`
-	PolicyVersion string                  `yaml:"policyVersion" json:"policyVersion"`
+	effectiveHash string
 	DefaultPreset string                  `yaml:"defaultPreset" json:"defaultPreset"`
 	WeightPresets map[string]WeightPreset `yaml:"weightPresets" json:"weightPresets"`
 	// ScenarioRouting maps a feed scenario (FeedType, e.g. homepage/circle/search)
@@ -381,7 +379,7 @@ type RecPolicy struct {
 type ResolvedPolicy struct {
 	Weights        WeightPreset
 	Scorer         ScorerConfig
-	PolicyVersion  string
+	PolicyDigest   string
 	Preset         string // resolved preset name (bucket or segment override)
 	AppliedSegment string // segment that drove the override/deltas, "" if none
 }
@@ -396,6 +394,7 @@ func Parse(raw []byte) (*RecPolicy, error) {
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
+	p.effectiveHash = policyHash(&p)
 	return &p, nil
 }
 
@@ -403,9 +402,6 @@ func Parse(raw []byte) (*RecPolicy, error) {
 func (p *RecPolicy) Validate() error {
 	if p == nil {
 		return errors.New("recpolicy: nil policy")
-	}
-	if p.PolicyVersion == "" {
-		return errors.New("recpolicy: policyVersion required")
 	}
 	if len(p.WeightPresets) == 0 {
 		return errors.New("recpolicy: weightPresets required")
@@ -457,21 +453,19 @@ func (p *RecPolicy) Validate() error {
 		return errors.New("recpolicy: scorer.searchIntentFactor must be >= 0")
 	}
 	for _, exp := range p.Experiments {
-		if exp.ID == "" {
-			return errors.New("recpolicy: experiment id required")
-		}
-		sum := 0
-		for _, b := range exp.Buckets {
-			if b.Name == "" {
-				return fmt.Errorf("recpolicy: experiment %s has empty bucket name", exp.ID)
+		buckets := make([]runtimeexperiments.BucketDef, len(exp.Buckets))
+		for index, bucket := range exp.Buckets {
+			buckets[index] = runtimeexperiments.BucketDef{
+				Name:      bucket.Name,
+				WeightPct: bucket.WeightPct,
 			}
-			if b.WeightPct < 0 {
-				return fmt.Errorf("recpolicy: experiment %s bucket %s weightPct < 0", exp.ID, b.Name)
-			}
-			sum += b.WeightPct
 		}
-		if exp.Enabled && sum != 100 {
-			return fmt.Errorf("recpolicy: experiment %s bucket weightPct sum=%d, want 100", exp.ID, sum)
+		if err := runtimeexperiments.ValidateExperiment(&runtimeexperiments.Experiment{
+			ID:      exp.ID,
+			Buckets: buckets,
+			Enabled: exp.Enabled,
+		}); err != nil {
+			return fmt.Errorf("recpolicy: experiment %q: %w", exp.ID, err)
 		}
 	}
 	for _, t := range p.SegmentTargeting {
@@ -757,7 +751,11 @@ func (p *RecPolicy) ResolveBucket(expID, subjectKey string, segments []string) (
 	for i, b := range exp.Buckets {
 		buckets[i] = runtimeexperiments.BucketDef{Name: b.Name, WeightPct: b.WeightPct}
 	}
-	return runtimeexperiments.AssignBucket(expID, subjectKey, buckets), true
+	bucket, err := runtimeexperiments.AssignBucket(expID, subjectKey, buckets)
+	if err != nil {
+		return "", false
+	}
+	return bucket, true
 }
 
 // ResolveBucketOr is ResolveBucket with a fallback bucket when not assigned.
@@ -818,7 +816,7 @@ func (p *RecPolicy) ResolveWeights(bucket string, segments []string) ResolvedPol
 	return ResolvedPolicy{
 		Weights:        w,
 		Scorer:         p.Scorer,
-		PolicyVersion:  p.PolicyVersion,
+		PolicyDigest:   p.effectiveHash,
 		Preset:         presetName,
 		AppliedSegment: appliedSegment,
 	}

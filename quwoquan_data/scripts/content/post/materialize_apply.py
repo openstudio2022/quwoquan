@@ -253,6 +253,7 @@ def materialize_posts(
             "schema": "quwoquan_data.post_manifest",
             "topicId": ref,
             "contentType": content_type,
+            "contentIdentity": "work",
             "vertical": compose_payload.get("vertical"),
             "entityRefs": entity_refs,
             "normalizedEntityRefs": normalized_entity_refs,
@@ -262,8 +263,8 @@ def materialize_posts(
             "authorId": compose_payload.get("authorId") or creator_payload.get("authorId"),
             "creatorProfileId": compose_payload.get("creatorProfileId") or creator_payload.get("creatorProfileId"),
             "creatorArchetype": compose_payload.get("creatorArchetype") or creator_payload.get("creatorArchetype"),
-            "creatorProfileVersion": compose_payload.get("creatorProfileVersion")
-            or creator_payload.get("creatorProfileVersion"),
+            "creatorProfileDigest": compose_payload.get("creatorProfileDigest")
+            or creator_payload.get("creatorProfileDigest"),
             "creatorDisclosure": compose_payload.get("creatorDisclosure") or creator_payload.get("creatorDisclosure"),
             "experienceClaimMode": compose_payload.get("experienceClaimMode")
             or creator_payload.get("experienceClaimMode"),
@@ -351,7 +352,7 @@ def materialize_posts(
             "authorId",
             "creatorProfileId",
             "creatorArchetype",
-            "creatorProfileVersion",
+            "creatorProfileDigest",
             "creatorDisclosure",
             "experienceClaimMode",
             "authorQualitySignals",

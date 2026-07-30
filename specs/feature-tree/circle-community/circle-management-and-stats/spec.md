@@ -45,6 +45,14 @@
 ### REQ-002 跨边界字段、operation 与错误语义只引用所属服务 contracts
 
 - 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
+- 对象专属错误由产生该业务失败的 Circle 对象唯一拥有；同域通用错误保持单一 canonical owner，兄弟对象只通过完整 operation 身份显式引用，不得复制 code 定义或把兄弟对象错误聚合回 Circle 主对象。
+
+<a id="req-003"></a>
+### REQ-003 PersonaCircleSlice 保持 Circle canonical 类型语义
+
+- `PersonaCircleSlice` 必须使用 canonical `status`，不得保留 `state` alias；`status`、`visibility`、`joinPolicy`、`kind`、`displaySubjectType` 与 `linkedHomepageType` 必须分别引用 Circle 聚合及共享主页类型所属的 canonical enum。
+- App 契约枚举必须由 metadata 生成；`PersonaCircleSlice`、Circle 查询投影及页面只读模型不得重新声明字符串值域，未知枚举值必须失败关闭。
+- metadata 校验必须比较 `PersonaCircleSlice` 与 Circle 聚合的同名 enum_ref；任何投影降级为裸 string 或改绑其他值域都阻断生成。
 
 ## 6. 契约与依赖
 
@@ -59,7 +67,14 @@
 
 - GIVEN 执行“circle management and stats 能力”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“circle management and stats 能力”对应动作。
-- THEN 直属 Story 共同交付“为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图”，失败终态可区分且不产生伪成功事实。
+- THEN 直属 Story 共同交付“为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图”，失败终态可区分且不产生伪成功事实；每个对象专属错误可追溯到唯一 owner，同域共享错误仅由 canonical owner 定义并精确绑定实际 producer。
+
+<a id="sit-002"></a>
+### SIT-002 PersonaCircleSlice typed projection 单轨验收
+
+- GIVEN Circle 聚合和 `PersonaCircleSlice` 声明 canonical enum_ref，且 App 仅消费 metadata 生成的枚举。
+- WHEN `GET /personas/{personaId}/circles` 返回 canonical `status` 与其余 typed 字段。
+- THEN 服务端、纯 Dart 契约和页面模型保持同一值域；旧 `state` alias、未知枚举值或投影 enum_ref 漂移均失败关闭，不得补默认值伪造成功分支。
 
 ## 8. 开放事项
 

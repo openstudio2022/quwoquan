@@ -2,6 +2,7 @@ package reliabletask
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -45,8 +46,36 @@ func TestDLQRecoveryAndRetentionCleanup(t *testing.T) {
 	if len(dead) != 1 || dead[0].TaskID != task.TaskID {
 		t.Fatalf("unexpected dead tasks: %#v", dead)
 	}
-	if err := store.RecoverDeadTask(ctx, task.TaskID, now.Add(time.Second)); err != nil {
-		t.Fatalf("recover task: %v", err)
+	receipt, replayed, err := store.RecoverDeadTaskIdempotently(
+		ctx,
+		task.TaskID,
+		"recover-req-1",
+		now.Add(time.Second),
+	)
+	if err != nil || replayed || receipt.TaskID != task.TaskID {
+		t.Fatalf("recover task receipt=%#v replayed=%t err=%v", receipt, replayed, err)
+	}
+	replayedReceipt, replayed, err := store.RecoverDeadTaskIdempotently(
+		ctx,
+		task.TaskID,
+		"recover-req-1",
+		now.Add(2*time.Second),
+	)
+	if err != nil || !replayed || replayedReceipt != receipt {
+		t.Fatalf(
+			"replay recovery receipt=%#v replayed=%t err=%v",
+			replayedReceipt,
+			replayed,
+			err,
+		)
+	}
+	if _, _, err := store.RecoverDeadTaskIdempotently(
+		ctx,
+		"another-task",
+		"recover-req-1",
+		now.Add(2*time.Second),
+	); !errors.Is(err, ErrRecoveryIdempotencyConflict) {
+		t.Fatalf("same recovery key with another task error=%v", err)
 	}
 	recovered, err := store.ClaimReadyTask(ctx, []string{"integration.sms_otp.send"}, "worker-2", time.Second, now.Add(time.Second))
 	if err != nil {

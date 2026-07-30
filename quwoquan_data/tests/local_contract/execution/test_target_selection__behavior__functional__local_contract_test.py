@@ -452,7 +452,7 @@ def test_write_selected_execution_creates_only_canonical_plan_and_shared_evidenc
         {
             "executionId": EXECUTION_ID,
             "selectedCount": 1,
-            "discoveryPath": str(DATA_ROOT / "reference/travel/entities/china/test-region-a"),
+            "discoveryPath": str(DATA_ROOT / "reference/travel/entities/china/浙江省"),
         },
     )
     root = path.parent.parent

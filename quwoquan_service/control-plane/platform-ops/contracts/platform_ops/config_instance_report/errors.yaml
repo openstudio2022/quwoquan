@@ -6,6 +6,8 @@ errors:
   kind: USER
   reason: config_instance_report_invalid
   http_status: 400
+  emitted_by:
+  - {surface: http, operations: [ReportConfigInstance]}
   recovery_action: configure
   dart_const: configInstanceReportInvalid
   go_const: ErrConfigInstanceReportInvalid
@@ -14,6 +16,8 @@ errors:
   kind: USER
   reason: config_instance_report_conflict
   http_status: 409
+  emitted_by:
+  - {surface: http, operations: [ReportConfigInstance]}
   recovery_action: refresh
   dart_const: configInstanceReportConflict
   go_const: ErrConfigInstanceReportConflict
@@ -22,6 +26,8 @@ errors:
   kind: SYSTEM
   reason: config_instance_report_candidate_unavailable
   http_status: 503
+  emitted_by:
+  - {surface: http, operations: [ReportConfigInstance]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: configInstanceReportCandidateUnavailable
@@ -31,6 +37,8 @@ errors:
   kind: SYSTEM
   reason: config_instance_report_storage_failed
   http_status: 500
+  emitted_by:
+  - {surface: http, operations: [ListConfigInstanceReports, ReportConfigInstance]}
   recovery_action: retry
   recovery_after_seconds: 2
   dart_const: configInstanceReportStorageFailed

@@ -2,6 +2,7 @@
   "label": "避寒游",
   "labelEn": "Winter Escape",
   "description": "以避寒过冬为目的的旅行",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

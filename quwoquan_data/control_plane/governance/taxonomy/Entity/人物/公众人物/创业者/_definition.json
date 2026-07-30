@@ -2,6 +2,7 @@
   "label": "创业者",
   "labelEn": "Entrepreneur",
   "description": "知名创业者类型",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

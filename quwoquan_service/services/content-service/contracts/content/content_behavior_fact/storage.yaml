@@ -1,0 +1,34 @@
+backend: mongodb
+collections:
+  rm_behavior_events:
+    entity: ContentBehaviorFact
+    role: append_only
+    indexes:
+    - name: uq_behavior_events_persona_client_event
+      keys:
+        personaId: 1
+        clientEventId: 1
+      unique: true
+      partial_filter:
+        clientEventId:
+          type: string
+    - name: idx_behavior_content_time
+      keys:
+        contentId: 1
+        createdAt: -1
+    - name: idx_behavior_persona_action_time
+      keys:
+        personaId: 1
+        action: 1
+        createdAt: -1
+    - name: idx_behavior_feed_attribution
+      keys:
+        feedRequestId: 1
+        channelId: 1
+        recallPath: 1
+        createdAt: -1
+    - name: idx_behavior_expire
+      keys:
+        createdAt: 1
+      expireAfterSeconds: 2592000
+role: append_only

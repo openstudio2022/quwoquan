@@ -1,559 +1,593 @@
 description: Account 维度的设备登记聚合根；不保存 push token。
 fields:
-- name: id
-  source: id
-  type: string
-  constraints:
-  - PK
-  classification: INTERNAL
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: accountId
-  source: accountId
-  type: string
-  constraints:
-  - FK_user_profiles_CASCADE
-  classification: PRIVATE
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-  reference: true
-- name: deviceId
-  source: deviceId
-  type: string
-  constraints:
-  - NOT_NULL
-  classification: PRIVATE
-  log_policy: hash
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: appVersion
-  source: appVersion
-  type: string
-  constraints:
-  - NULLABLE
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: pushEndpoints
-  source: pushEndpoints
-  type: '[]DevicePushEndpoint'
-  constraints:
-  - NOT_NULL
-  - MAX_2
-  classification: SECRET
-  log_policy: metadata_only
-  api_exposure: drop
-  ops_exposure: drop
-  role: owned_value
-- name: lastActiveAt
-  source: lastActiveAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: createdAt
-  source: createdAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: status
-  source: status
-  type: enum
-  enum_ref: DeviceRegistrationStatus
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: version
-  source: version
-  type: int
-  constraints:
-  - NOT_NULL
-  - DEFAULT_1
-  classification: INTERNAL
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
-- name: updatedAt
-  source: updatedAt
-  type: timestamp
-  constraints:
-  - NOT_NULL
-  classification: PUBLIC
-  log_policy: allow
-  api_exposure: drop
-  ops_exposure: read
-  role: authoritative_state
+  - name: id
+    source: id
+    type: string
+    constraints:
+      - PK
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: accountId
+    source: accountId
+    type: string
+    constraints:
+      - FK_user_profiles_CASCADE
+    classification: PRIVATE
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+    reference: true
+  - name: deviceId
+    source: deviceId
+    type: string
+    constraints:
+      - NOT_NULL
+    classification: PRIVATE
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: appVersion
+    source: appVersion
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: pushEndpoints
+    source: pushEndpoints
+    type: '[]DevicePushEndpoint'
+    constraints:
+      - NOT_NULL
+      - MAX_2
+    classification: SECRET
+    log_policy: metadata_only
+    api_exposure: drop
+    ops_exposure: drop
+    role: owned_value
+  - name: lastActiveAt
+    source: lastActiveAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: createdAt
+    source: createdAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: status
+    source: status
+    type: enum
+    enum_ref: DeviceRegistrationStatus
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: version
+    source: version
+    type: int
+    constraints:
+      - NOT_NULL
+      - DEFAULT_1
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
+  - name: updatedAt
+    source: updatedAt
+    type: timestamp
+    constraints:
+      - NOT_NULL
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: drop
+    ops_exposure: read
+    role: authoritative_state
 members:
   DevicePushEndpoint:
     kind: owned_entity
     fields:
-    - name: endpointRef
-      source: endpointRef
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: accountId
-      source: accountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: deviceId
-      source: deviceId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: endpointKind
-      source: endpointKind
-      type: enum
-      enum_ref: DevicePushEndpointKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: tokenCiphertext
-      source: tokenCiphertext
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-      description: token 的 AES-256-GCM 密文；AAD 绑定 accountId/deviceId/endpointKind
-      role: authoritative_state
-    - name: tokenFingerprint
-      source: tokenFingerprint
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: read
-      description: keyed HMAC-SHA256 fingerprint；active endpoint 全局唯一
-      role: authoritative_state
-    - name: status
-      source: status
-      type: enum
-      enum_ref: DeviceRegistrationStatus
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: invalidationReason
-      source: invalidationReason
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: version
-      source: version
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_1
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-      role: authoritative_state
+      - name: endpointRef
+        source: endpointRef
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: accountId
+        source: accountId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: endpointKind
+        source: endpointKind
+        type: enum
+        enum_ref: DevicePushEndpointKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: tokenCiphertext
+        source: tokenCiphertext
+        type: string
+        constraints:
+          - NULLABLE
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: token 的 AES-256-GCM 密文；AAD 绑定 accountId/deviceId/endpointKind
+        role: authoritative_state
+      - name: tokenFingerprint
+        source: tokenFingerprint
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: read
+        description: keyed HMAC-SHA256 fingerprint；active endpoint 全局唯一
+        role: authoritative_state
+      - name: status
+        source: status
+        type: enum
+        enum_ref: DeviceRegistrationStatus
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: invalidationReason
+        source: invalidationReason
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: version
+        source: version
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_1
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: createdAt
+        source: createdAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        role: authoritative_state
     description: DeviceRegistration owned entity；token 只以密文与 keyed fingerprint 持久化。
 types:
   DevicePushEndpoint:
     description: DeviceRegistration owned entity；token 只以密文与 keyed fingerprint 持久化。
     fields:
-    - name: endpointRef
-      source: endpointRef
-      type: string
-      constraints:
-      - PK
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-    - name: accountId
-      source: accountId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-    - name: deviceId
-      source: deviceId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: drop
-      ops_exposure: read
-    - name: endpointKind
-      source: endpointKind
-      type: enum
-      enum_ref: DevicePushEndpointKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: tokenCiphertext
-      source: tokenCiphertext
-      type: string
-      constraints:
-      - NULLABLE
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
-      description: token 的 AES-256-GCM 密文；AAD 绑定 accountId/deviceId/endpointKind
-    - name: tokenFingerprint
-      source: tokenFingerprint
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: read
-      description: keyed HMAC-SHA256 fingerprint；active endpoint 全局唯一
-    - name: status
-      source: status
-      type: enum
-      enum_ref: DeviceRegistrationStatus
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: invalidationReason
-      source: invalidationReason
-      type: string
-      constraints:
-      - NULLABLE
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: drop
-      ops_exposure: read
-    - name: version
-      source: version
-      type: int
-      constraints:
-      - NOT_NULL
-      - DEFAULT_1
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: createdAt
-      source: createdAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: drop
-      ops_exposure: read
+      - name: endpointRef
+        source: endpointRef
+        type: string
+        constraints:
+          - PK
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: accountId
+        source: accountId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: drop
+        ops_exposure: read
+      - name: endpointKind
+        source: endpointKind
+        type: enum
+        enum_ref: DevicePushEndpointKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: tokenCiphertext
+        source: tokenCiphertext
+        type: string
+        constraints:
+          - NULLABLE
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: token 的 AES-256-GCM 密文；AAD 绑定 accountId/deviceId/endpointKind
+      - name: tokenFingerprint
+        source: tokenFingerprint
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: read
+        description: keyed HMAC-SHA256 fingerprint；active endpoint 全局唯一
+      - name: status
+        source: status
+        type: enum
+        enum_ref: DeviceRegistrationStatus
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: invalidationReason
+        source: invalidationReason
+        type: string
+        constraints:
+          - NULLABLE
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: drop
+        ops_exposure: read
+      - name: version
+        source: version
+        type: int
+        constraints:
+          - NOT_NULL
+          - DEFAULT_1
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: createdAt
+        source: createdAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
     unique_constraints:
-    - columns:
-      - accountId
-      - deviceId
-      - endpointKind
-      description: owned endpoint 的自然 identity
-    - columns:
-      - endpointRef
-      description: 供内部 secret reader 使用的不透明稳定引用
+      - columns:
+          - accountId
+          - deviceId
+          - endpointKind
+        description: owned endpoint 的自然 identity
+      - columns:
+          - endpointRef
+        description: 供内部 secret reader 使用的不透明稳定引用
   DevicePushEndpointUpsertRequest:
     description: Public account command 输入；accountId 必须由 trusted principal 注入。
     fields:
-    - name: deviceId
-      source: deviceId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: write
-      ops_exposure: drop
-    - name: endpointKind
-      source: endpointKind
-      type: enum
-      enum_ref: DevicePushEndpointKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
-    - name: token
-      source: token
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SECRET
-      log_policy: drop
-      api_exposure: write
-      ops_exposure: drop
-    - name: appVersion
-      source: appVersion
-      type: string
-      constraints:
-      - NULLABLE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: write
-      ops_exposure: read
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: write
+        ops_exposure: drop
+      - name: endpointKind
+        source: endpointKind
+        type: enum
+        enum_ref: DevicePushEndpointKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
+      - name: token
+        source: token
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: SECRET
+        log_policy: drop
+        api_exposure: write
+        ops_exposure: drop
+      - name: appVersion
+        source: appVersion
+        type: string
+        constraints:
+          - NULLABLE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: write
+        ops_exposure: read
   DevicePushEndpointCommandResult:
     description: 不含 token/fingerprint 的版本化 endpoint 命令回执。
     fields:
-    - name: endpointRef
-      source: endpointRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-    - name: deviceId
-      source: deviceId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-    - name: endpointKind
-      source: endpointKind
-      type: enum
-      enum_ref: DevicePushEndpointKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: status
-      source: status
-      type: enum
-      enum_ref: DeviceRegistrationStatus
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: version
-      source: version
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: aggregateVersion
-      source: aggregateVersion
-      type: int
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: idempotentReplay
-      source: idempotentReplay
-      type: bool
-      constraints:
-      - NOT_NULL
-      - DEFAULT_FALSE
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: updatedAt
-      source: updatedAt
-      type: timestamp
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: endpointRef
+        source: endpointRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: endpointKind
+        source: endpointKind
+        type: enum
+        enum_ref: DevicePushEndpointKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: status
+        source: status
+        type: enum
+        enum_ref: DeviceRegistrationStatus
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: version
+        source: version
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: aggregateVersion
+        source: aggregateVersion
+        type: int
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: idempotentReplay
+        source: idempotentReplay
+        type: bool
+        constraints:
+          - NOT_NULL
+          - DEFAULT_FALSE
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        source: updatedAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   IncomingCallPushDestination:
     description: 来电投递只读引用；绝不包含 token。
     fields:
-    - name: endpointRef
-      source: endpointRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-    - name: deviceId
-      source: deviceId
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-    - name: endpointKind
-      source: endpointKind
-      type: enum
-      enum_ref: DevicePushEndpointKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
+      - name: endpointRef
+        source: endpointRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: deviceId
+        source: deviceId
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: endpointKind
+        source: endpointKind
+        type: enum
+        enum_ref: DevicePushEndpointKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
   IncomingCallPushDestinationSlice:
     description: Persona owner account 的 active push destination refs。
     fields:
-    - name: destinations
-      source: destinations
-      type: '[]IncomingCallPushDestination'
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: metadata_only
-      api_exposure: read
-      ops_exposure: read
+      - name: destinations
+        source: destinations
+        type: '[]IncomingCallPushDestination'
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: metadata_only
+        api_exposure: read
+        ops_exposure: read
   PushEndpointSecret:
     description: 仅 integration-service 可读的单次内存 secret DTO。
     fields:
-    - name: endpointRef
-      source: endpointRef
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: PRIVATE
-      log_policy: hash
-      api_exposure: read
-      ops_exposure: read
-    - name: endpointKind
-      source: endpointKind
-      type: enum
-      enum_ref: DevicePushEndpointKind
-      constraints:
-      - NOT_NULL
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: read
-      ops_exposure: read
-    - name: token
-      source: token
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: SECRET
-      log_policy: drop
-      api_exposure: drop
-      ops_exposure: drop
+      - name: endpointRef
+        source: endpointRef
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: PRIVATE
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: endpointKind
+        source: endpointKind
+        type: enum
+        enum_ref: DevicePushEndpointKind
+        constraints:
+          - NOT_NULL
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: token
+        source: token
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
   InvalidateDevicePushEndpointRequest:
     description: Provider 永久失效原因；禁止包含 provider 原始响应或 token。
     fields:
-    - name: reason
-      source: reason
-      type: string
-      constraints:
-      - NOT_NULL
-      classification: INTERNAL
-      log_policy: metadata_only
-      api_exposure: write
-      ops_exposure: read
+      - name: reason
+        source: reason
+        type: string
+        constraints:
+          - NOT_NULL
+        classification: INTERNAL
+        log_policy: metadata_only
+        api_exposure: write
+        ops_exposure: read
+  DevicePushEndpointRemoveCommand:
+    fields:
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: endpointKind
+        type: DevicePushEndpointKind
+        enum_ref: DevicePushEndpointKind
+        client_dart_type: DevicePushEndpointKind
+        client_wire: canonicalEnum
+  DevicePushEndpointUpsertCommand:
+    fields:
+      - name: deviceId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: endpointKind
+        type: DevicePushEndpointKind
+        enum_ref: DevicePushEndpointKind
+        client_dart_type: DevicePushEndpointKind
+        client_wire: canonicalEnum
+      - name: token
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: appVersion
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
 enums:
-  DevicePushEndpointKind:
-    values:
-    - apns_voip
-    - fcm
   DeviceRegistrationStatus:
     values:
-    - active
-    - revoked
-    - stale
+      - active
+      - revoked
+      - stale

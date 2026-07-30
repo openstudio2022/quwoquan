@@ -6,6 +6,13 @@ description: 'GetEntityWishlistState 的私有单对象读模型。它只回答�
   '
 consumers:
 - app
+source_entities:
+- ContentBehaviorFact
 client_projection:
   dart_class: EntityWishlistState
-  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post_queries.dart
+  output_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/entity_wishlist_state.dart
+  external_dart_path: quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/entity_wishlist_state.dart
+fields:
+- {name: objectId}
+- {name: objectKind}
+- {name: wishlisted}

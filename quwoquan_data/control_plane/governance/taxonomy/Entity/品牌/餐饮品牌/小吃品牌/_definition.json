@@ -2,6 +2,7 @@
   "label": "小吃品牌",
   "labelEn": "Snack Brand",
   "description": "地方小吃连锁品牌",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

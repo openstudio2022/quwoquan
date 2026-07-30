@@ -1,0 +1,12 @@
+{
+  "label": "育空地区",
+  "labelEn": "Yukon",
+  "description": "西北极光与淘金史腹地",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

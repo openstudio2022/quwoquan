@@ -1,107 +1,10 @@
 import '../operation_request_payload.dart';
+import '../generated/circle_contract_enums.g.dart';
+part '../generated/requests/circle/membership_contracts.requests.g.dart';
 
 enum CircleMembershipRole { owner, admin, member }
 
 enum CircleMembershipState { pending, active, rejected, left, removed }
-
-final class JoinCircleMembershipCommand {
-  JoinCircleMembershipCommand({required String circleId})
-    : circleId = _required(circleId, 'circleId');
-
-  final String circleId;
-}
-
-final class LeaveCircleMembershipCommand {
-  LeaveCircleMembershipCommand({required String circleId})
-    : circleId = _required(circleId, 'circleId');
-
-  final String circleId;
-}
-
-final class UpdateCircleMembershipRoleCommand {
-  UpdateCircleMembershipRoleCommand({
-    required String circleId,
-    required String personaId,
-    required this.role,
-  }) : circleId = _required(circleId, 'circleId'),
-       personaId = _required(personaId, 'personaId') {
-    if (role == CircleMembershipRole.owner) {
-      throw ArgumentError.value(
-        role,
-        'role',
-        'owner transfer is not a role update',
-      );
-    }
-  }
-
-  final String circleId;
-  final String personaId;
-  final CircleMembershipRole role;
-}
-
-final class CircleMembershipListQuery {
-  CircleMembershipListQuery({
-    required String circleId,
-    this.cursor,
-    this.limit = 20,
-  }) : circleId = _required(circleId, 'circleId') {
-    _limit(limit);
-  }
-
-  final String circleId;
-  final String? cursor;
-  final int limit;
-}
-
-/// 圈子级审批命令（Approve/Reject 共用输入；operation 由 encoder 区分）。
-final class DecideCircleMembershipCommand {
-  DecideCircleMembershipCommand({
-    required String circleId,
-    required String personaId,
-  }) : circleId = _required(circleId, 'circleId'),
-       personaId = _required(personaId, 'personaId');
-
-  final String circleId;
-  final String personaId;
-}
-
-/// owner/admin 待审批队列查询（state=pending）。
-final class PendingCircleMembershipListQuery {
-  PendingCircleMembershipListQuery({
-    required String circleId,
-    this.cursor,
-    this.limit = 20,
-  }) : circleId = _required(circleId, 'circleId') {
-    _limit(limit);
-  }
-
-  final String circleId;
-  final String? cursor;
-  final int limit;
-}
-
-final class MyCircleMembershipQuery {
-  MyCircleMembershipQuery({required String circleId})
-    : circleId = _required(circleId, 'circleId');
-
-  final String circleId;
-}
-
-final class PersonaCircleListQuery {
-  PersonaCircleListQuery({
-    required String personaId,
-    this.query,
-    this.cursor,
-    this.limit = 20,
-  }) : personaId = _required(personaId, 'personaId') {
-    _limit(limit);
-  }
-
-  final String personaId;
-  final String? query;
-  final String? cursor;
-  final int limit;
-}
 
 final class CircleMembershipCommandResult {
   const CircleMembershipCommandResult({
@@ -174,7 +77,7 @@ final class PersonaCircleSummary {
     required this.memberCount,
     required this.postCount,
     required this.weeklyActiveCount,
-    required this.state,
+    required this.status,
     required this.visibility,
     required this.joinPolicy,
     required this.kind,
@@ -201,15 +104,15 @@ final class PersonaCircleSummary {
   final int memberCount;
   final int postCount;
   final int weeklyActiveCount;
-  final String state;
-  final String visibility;
-  final String joinPolicy;
-  final String kind;
-  final String displaySubjectType;
+  final CircleStatus status;
+  final CircleVisibility visibility;
+  final CircleJoinPolicy joinPolicy;
+  final CircleKind kind;
+  final CircleDisplaySubjectType displaySubjectType;
   final bool followEnabled;
   final String defaultPublicGroupId;
   final String linkedHomepageId;
-  final String linkedHomepageType;
+  final HomepageType? linkedHomepageType;
   final String linkedHomepageTitle;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -258,76 +161,6 @@ abstract interface class PendingCircleMembershipQuery {
     PendingCircleMembershipListQuery query,
   );
 }
-
-CloudOperationRequestPayload encodeMyCircleMembershipQuery(
-  MyCircleMembershipQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': query.circleId},
-);
-
-CloudOperationRequestPayload encodeJoinCircleMembershipCommand(
-  JoinCircleMembershipCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': command.circleId},
-);
-
-CloudOperationRequestPayload encodeLeaveCircleMembershipCommand(
-  LeaveCircleMembershipCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': command.circleId},
-);
-
-CloudOperationRequestPayload encodeUpdateCircleMembershipRoleCommand(
-  UpdateCircleMembershipRoleCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'personaId': command.personaId,
-  },
-  body: <String, Object?>{'role': command.role.name},
-);
-
-CloudOperationRequestPayload encodeCircleMembershipListQuery(
-  CircleMembershipListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': query.circleId},
-  queryParameters: _pageQuery(query.cursor, query.limit),
-);
-
-CloudOperationRequestPayload encodeApproveCircleMembershipCommand(
-  DecideCircleMembershipCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'personaId': command.personaId,
-  },
-);
-
-CloudOperationRequestPayload encodeRejectCircleMembershipCommand(
-  DecideCircleMembershipCommand command,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{
-    'circleId': command.circleId,
-    'personaId': command.personaId,
-  },
-);
-
-CloudOperationRequestPayload encodePendingCircleMembershipListQuery(
-  PendingCircleMembershipListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'circleId': query.circleId},
-  queryParameters: _pageQuery(query.cursor, query.limit),
-);
-
-CloudOperationRequestPayload encodePersonaCircleListQuery(
-  PersonaCircleListQuery query,
-) => CloudOperationRequestPayload(
-  pathParameters: <String, String>{'personaId': query.personaId},
-  queryParameters: <String, String>{
-    ..._pageQuery(query.cursor, query.limit),
-    if (_optionalString(query.query) case final value?) 'query': value,
-  },
-);
 
 CircleMembershipCommandResult decodeCircleMembershipCommandResult(
   Object? value,
@@ -424,7 +257,7 @@ PersonaCircleSummary _decodePersonaCircleSummary(Object? value) {
     'memberCount',
     'postCount',
     'weeklyActiveCount',
-    'state',
+    'status',
     'visibility',
     'joinPolicy',
     'kind',
@@ -457,21 +290,22 @@ PersonaCircleSummary _decodePersonaCircleSummary(Object? value) {
     memberCount: _nonNegativeInt(map, 'memberCount'),
     postCount: _nonNegativeInt(map, 'postCount'),
     weeklyActiveCount: _nonNegativeInt(map, 'weeklyActiveCount'),
-    state: _string(map, 'state'),
-    visibility: _string(map, 'visibility'),
-    joinPolicy: _string(map, 'joinPolicy'),
-    kind: _string(map, 'kind'),
-    displaySubjectType: _string(map, 'displaySubjectType'),
+    status: CircleStatus.fromWire(map['status']),
+    visibility: CircleVisibility.fromWire(map['visibility']),
+    joinPolicy: CircleJoinPolicy.fromWire(map['joinPolicy']),
+    kind: CircleKind.fromWire(map['kind']),
+    displaySubjectType: CircleDisplaySubjectType.fromWire(
+      map['displaySubjectType'],
+    ),
     followEnabled: _bool(map, 'followEnabled'),
     defaultPublicGroupId: _stringValue(
       map['defaultPublicGroupId'],
       'defaultPublicGroupId',
     ),
     linkedHomepageId: _stringValue(map['linkedHomepageId'], 'linkedHomepageId'),
-    linkedHomepageType: _stringValue(
-      map['linkedHomepageType'],
-      'linkedHomepageType',
-    ),
+    linkedHomepageType: map['linkedHomepageType'] == null
+        ? null
+        : HomepageType.fromWire(map['linkedHomepageType']),
     linkedHomepageTitle: _stringValue(
       map['linkedHomepageTitle'],
       'linkedHomepageTitle',
@@ -480,11 +314,6 @@ PersonaCircleSummary _decodePersonaCircleSummary(Object? value) {
     updatedAt: _date(map, 'updatedAt'),
   );
 }
-
-Map<String, String> _pageQuery(String? cursor, int limit) => <String, String>{
-  'limit': '$limit',
-  if (_optionalString(cursor) case final cursor?) 'cursor': cursor,
-};
 
 Map<String, Object?> _object(Object? value, String name) {
   if (value is! Map) throw FormatException('$name must be an object');
@@ -576,10 +405,4 @@ String _required(String value, String name) {
   final normalized = value.trim();
   if (normalized.isEmpty) throw ArgumentError.value(value, name, 'required');
   return normalized;
-}
-
-void _limit(int value) {
-  if (value < 1 || value > 100) {
-    throw ArgumentError.value(value, 'limit', 'must be between 1 and 100');
-  }
 }

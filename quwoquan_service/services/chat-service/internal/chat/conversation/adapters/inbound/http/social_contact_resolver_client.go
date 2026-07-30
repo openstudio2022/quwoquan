@@ -33,7 +33,8 @@ type socialContactPageCursor struct {
 }
 
 type socialContactItem struct {
-	SubAccountID  string `json:"subAccountId"`
+	PersonaID     string `json:"personaId"`
+	UserHandle    string `json:"userHandle"`
 	DisplayName   string `json:"displayName"`
 	AvatarURL     string `json:"avatarUrl"`
 	FollowedAt    string `json:"followedAt"`
@@ -41,10 +42,10 @@ type socialContactItem struct {
 }
 
 type contactDiscoveryResponse struct {
-	MatchedSubAccountIds []string   `json:"matchedSubAccountIds"`
-	Status               string     `json:"status"`
-	CreatedAt            time.Time  `json:"createdAt"`
-	CompletedAt          *time.Time `json:"completedAt"`
+	MatchedPersonaIds []string   `json:"matchedPersonaIds"`
+	Status            string     `json:"status"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	CompletedAt       *time.Time `json:"completedAt"`
 }
 
 func NewUserSocialContactResolver(baseURL string, client *http.Client) *UserSocialContactResolver {
@@ -273,12 +274,13 @@ func (r *UserSocialContactResolver) collectFollowContacts(
 func socialContactItemToSeed(
 	item socialContactItem,
 ) (application.SocialContactSeed, bool) {
-	id := strings.TrimSpace(item.SubAccountID)
+	id := strings.TrimSpace(item.PersonaID)
 	if id == "" {
 		return application.SocialContactSeed{}, false
 	}
 	return application.SocialContactSeed{
 		UserID:          id,
+		UserHandle:      strings.TrimSpace(item.UserHandle),
 		DisplayName:     strings.TrimSpace(item.DisplayName),
 		AvatarURL:       strings.TrimSpace(item.AvatarURL),
 		MetFrom:         "关注",
@@ -293,7 +295,7 @@ func (r *UserSocialContactResolver) fetchFollowPage(
 	userID, mode, cursor string,
 	limit int,
 ) (*socialContactPage, error) {
-	path := fmt.Sprintf("%s/user/sub-accounts/%s/%s", r.baseURL, url.PathEscape(userID), mode)
+	path := fmt.Sprintf("%s/user/personas/%s/%s", r.baseURL, url.PathEscape(userID), mode)
 	reqURL, err := url.Parse(path)
 	if err != nil {
 		return nil, err
@@ -378,7 +380,7 @@ func (r *UserSocialContactResolver) discoveryContactSeeds(
 		lastInteraction = payload.CreatedAt.UTC().Format(time.RFC3339)
 	}
 	byID := make(map[string]application.SocialContactSeed)
-	for _, rawID := range payload.MatchedSubAccountIds {
+	for _, rawID := range payload.MatchedPersonaIds {
 		id := strings.TrimSpace(rawID)
 		if id == "" {
 			continue
@@ -477,6 +479,9 @@ func mergeSocialContactSeedValues(
 ) application.SocialContactSeed {
 	if strings.TrimSpace(base.DisplayName) == "" {
 		base.DisplayName = next.DisplayName
+	}
+	if strings.TrimSpace(base.UserHandle) == "" {
+		base.UserHandle = next.UserHandle
 	}
 	if strings.TrimSpace(base.AvatarURL) == "" {
 		base.AvatarURL = next.AvatarURL

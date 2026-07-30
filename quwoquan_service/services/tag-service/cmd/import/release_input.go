@@ -111,6 +111,8 @@ func collectReleaseTaxonomyNodes(releaseRoot string) (string, string, []taxonomy
 			labelEn:      def.LabelEn,
 			description:  firstNonEmpty(def.Description, def.Semantics),
 			aliases:      normalizedStrings(def.Aliases),
+			axisRole:     strings.TrimSpace(def.AxisRole),
+			sameAsRefs:   normalizedStrings(def.SameAsRefs),
 			parentTagRef: parentTagRef,
 			ancestors:    ancestors,
 			depth:        len(segments) - 1,

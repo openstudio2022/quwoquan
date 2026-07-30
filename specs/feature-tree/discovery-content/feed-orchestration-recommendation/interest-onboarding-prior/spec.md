@@ -22,7 +22,7 @@
   session HotPath，使首个推荐请求可进入 TagRecall。
 - 游客可跳过；选择后以安装级加密草稿保留同一 `clientEventId`，登录成功恢复同一 intent，
   登录关闭回安全首页且不形成登录循环。
-- 四维目录（topic/audience/format/entity）、版本、根节点和数量边界只由
+- 四维目录（topic/audience/format/entity）、唯一不可变 taxonomy 发布身份、根节点和数量边界只由
   `content/post/ui_config.yaml` 声明；页面只查询 Tag Catalog，不维护标签常量，并只把
   live catalog 解析得到的 active leaf 作为可选项，禁止把根或分类节点显示为可提交兴趣。
 - 确认型提交只有在服务端成功处理后才标记 submitted；失败保留 pending 草稿，同一
@@ -50,11 +50,14 @@
 <a id="req-003"></a>
 ### REQ-003 首启提交必须可信且可重试
 
-- `catalogVersion`、路径制 tagRefs、四维根节点与数量边界必须在任何 HotPath、raw event
+- `taxonomyReleaseId`、路径制 tagRefs、四维根节点与数量边界必须在任何 HotPath、raw event
   或长期投影写入前 fail-closed 校验；客户端传入的空白、重复或目录外标签不得产生成功事实。
-- `catalogVersion` 与 `taxonomyReleaseId` 是不同且必须同时由客户端携带的发布身份；
-  服务端必须将二者与 `onboarding_interest_catalog` 的绑定精确比较，并把已确认的绑定随
-  raw event 持久化。不得由服务端替客户端补写 taxonomy release。
+- `taxonomyReleaseId` 是客户端本次实际浏览的 taxonomy snapshot 身份：客户端必须回显目录节点
+  （`TagChild.releaseId`）随身携带的发布号，服务端必须把它原样转交 tag-service 与 active release
+  比对，并把已确认身份随 raw event 持久化。发布身份的唯一真相源是 tag-service 的活跃发布，
+  不是任何一侧的编译常量：content-service 与 App 均不得固化 release 号，也不得由服务端替客户端
+  补写 taxonomy release。旧 `catalogVersion` 输入必须由严格 decoder 直接拒绝，不得忽略、
+  alias、fallback 或双读。
 - 首次接收的每批兴趣事件必须在任何去重、HotPath 或 raw event 写入前，针对客户端绑定
   release 的 active leaf snapshot 完成一次权威校验。父节点、inactive、旧 release、不存在
   标签、无 active release 及依赖失效均不得产生部分成功事实。
@@ -65,11 +68,11 @@
 ## 4. 契约引用
 
 - canonical：`quwoquan_service/services/content-service/observability/slo/recommendation_slo.yaml`
-- canonical：`quwoquan_service/services/content-service/contracts/content/post/behaviors.yaml`
+- canonical：`quwoquan_service/services/content-service/contracts/content/content_behavior_fact/behaviors.yaml`
 - canonical：`quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml`
 - canonical：`quwoquan_service/contracts/metadata/_shared/{app_routes,ui_surfaces,page_object_contract}.yaml`
 - canonical：`quwoquan_service/services/user-service/contracts/account/user_account/fields.yaml`
-- canonical：`quwoquan_service/services/content-service/tests/local_contract/content/post/application/behavior/onboarding_interest_taxonomy__local_contract_test.go`
+- canonical：`quwoquan_service/services/content-service/tests/local_contract/content/content_behavior_fact/application/onboarding_interest_taxonomy__local_contract_test.go`
 - canonical：`quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/taxonomyvalidation/http_active_leaf_validator__local_contract_test.go`
 - canonical：`quwoquan_service/services/content-service/tests/api_integration/content/post/post_behavior_contract__api_integration_test.go`
 - canonical：`quwoquan_app/test/api_integration/cloud/content/onboarding_author_impact_gamma__api_integration_test.dart`
@@ -86,14 +89,15 @@
 - AND 相同 `clientEventId` 的重放不得重复累加权重；空白或重复 `tagRefs` 必须先
   canonicalize，最终没有有效标签时返回 `CONTENT.USER.invalid_argument`，且不得写入
   HotPath 成功事实。
-- AND 目录版本未知、根节点不匹配、根节点或一层分类路径、或超过数量边界必须在成功事实之前返回
+- AND taxonomy 发布身份未知、根节点不匹配、根节点或一层分类路径、或超过数量边界必须在成功事实之前返回
   `CONTENT.USER.invalid_argument`；确认提交失败后重试必须复用同一 `clientEventId`。
-- AND 每个 tagRef 仅在 `onboarding_interest_catalog.taxonomy_release_id` 指向的 active
-  snapshot 内是 active leaf 时可接受；parent、inactive、旧 release、缺失或无 active
-  release 的标签均不得写入成功事实。
-- AND 请求中的 `taxonomyReleaseId` 必须精确等于该 catalog 的发布绑定，且成功事实保留
-  `catalogVersion + taxonomyReleaseId`；相同 catalogVersion 的旧 snapshot 不得被服务端
-  重解释为当前 snapshot。
+- AND 每个 tagRef 仅在 tag-service 当前 active snapshot 内是 active leaf 时可接受；
+  parent、inactive、旧 release、缺失或无 active release 的标签均不得写入成功事实。
+- AND 请求中的 `taxonomyReleaseId` 必须来自客户端加载目录时云侧下发的 `TagChild.releaseId`，
+  由 tag-service 与活跃发布比对；空值或与活跃发布不一致（客户端目录已过期）必须在成功事实之前
+  返回 `CONTENT.USER.invalid_argument`，成功事实只保留该 `taxonomyReleaseId`。发新的 tag
+  taxonomy 发布不得需要重发端或重发 content-service。携带旧 `catalogVersion` 字段的请求必须在
+  任何去重、HotPath 或 raw event 写入前拒绝。
 - AND 同一批中任一兴趣标签无效或 taxonomy 依赖不可用时，dedup、HotPath 与 raw event
   均保持零写入；首次有效批次只进行一次 taxonomy 校验，已确认重放不再调用依赖且只保留
   一份事实。

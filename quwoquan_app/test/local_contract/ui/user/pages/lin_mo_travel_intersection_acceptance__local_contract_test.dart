@@ -329,8 +329,8 @@ GoRouter _router() {
     routes: [
       GoRoute(path: '/', builder: (_, _) => const MyIntersectionInboxPage()),
       GoRoute(
-        path: '/user/:username',
-        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+        path: '/user/:userHandle',
+        builder: (_, state) => Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -343,7 +343,7 @@ class _AuthedSession extends AuthSessionController {
       status: AuthSessionStatus.authenticated,
       accessToken: 'test-token',
       ownerId: 'fixture_user_travel_curator',
-      activeSubAccountId: 'fixture_user_travel_curator',
+      activePersonaId: 'fixture_user_travel_curator',
       accountState: 'active',
       identityOrigin: 'test',
       installId: 'test-install',
@@ -415,8 +415,8 @@ class _LinMoTravelRepository implements IntersectionRepository {
         repName: '',
         repId: '',
         lifecycleState: 'archived',
-        primaryText: '你和周屿等2人都去过老君山观景台',
-        leadPlain: '你和周屿等2人都去过',
+        primaryText: '你和周屿等2人都看过老君山观景台',
+        leadPlain: '你和周屿等2人都看过',
         midPlain: '',
       ),
       _travelReason(
@@ -435,7 +435,6 @@ class _LinMoTravelRepository implements IntersectionRepository {
     // 与 Mock/Remote 同源：默认列表剔除 archived/expired。
     return filterDefaultInboxLifecycle(all);
   }
-
 
   @override
   Future<List<IntersectionReason>> getObjectIntersections({

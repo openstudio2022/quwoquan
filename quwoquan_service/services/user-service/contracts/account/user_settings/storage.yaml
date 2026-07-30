@@ -1,7 +1,7 @@
 backend: postgres
 tables:
   user_settings:
-    entity: UserSetting
+    entity: UserSettings
     role: authoritative
     description: 服务端 version CAS + LWW；同值重写幂等，不设独立 receipt 表。
     columns:
@@ -93,8 +93,8 @@ tables:
       - NOT_NULL
       default: NOW()
   user_settings_outbox:
-    entity: UserSetting
+    entity: UserSettings
     role: append_only
     infrastructure_only: true
-    description: 设置变更审计事实（settings-audit），与 aggregate state 同一 postgres transaction 提交。
+    description: 与 aggregate state 同一 PostgreSQL transaction 提交的设置变更审计事实；当前无独立 relay consumer。
 role: authoritative

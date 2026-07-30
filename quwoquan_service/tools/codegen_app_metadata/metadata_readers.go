@@ -23,6 +23,9 @@ func readFields(path string) (*fieldsFile, error) {
 	for name, definition := range parsed.Types {
 		parsed.Entities[name] = definition
 	}
+	for name, definition := range parsed.Members {
+		parsed.Entities[name] = definition
+	}
 	if len(parsed.Fields) > 0 {
 		objectName := filepath.Base(filepath.Dir(path))
 		parsed.Entities[objectTypeName(objectName)] = entityDef{
@@ -58,6 +61,19 @@ func readProjection(path string) (*projectionFile, error) {
 	if err := decodeMetadataDocument(path, &parsed); err != nil {
 		return &parsed, err
 	}
+	parsed.clientProjectionFieldsDeclared = len(parsed.ClientProjection.Fields) > 0
+	hasClientProjection :=
+		strings.TrimSpace(parsed.ClientProjection.DartClass) != "" ||
+			strings.TrimSpace(parsed.ClientProjection.BaseClass) != "" ||
+			strings.TrimSpace(parsed.ClientProjection.OutputPath) != "" ||
+			strings.TrimSpace(parsed.ClientProjection.ExternalDartPath) != "" ||
+			len(parsed.ClientProjection.Fields) > 0 ||
+			len(parsed.ClientProjection.ComputedGetters) > 0
+	if !hasClientProjection {
+		// Backend-only projections may use storage-specific field shapes. They are
+		// not App DTO declarations and must not be reinterpreted by App codegen.
+		return &parsed, nil
+	}
 	if externalPath := strings.TrimSpace(parsed.ClientProjection.ExternalDartPath); externalPath != "" {
 		if strings.TrimSpace(parsed.ClientProjection.DartClass) == "" {
 			return &parsed, fmt.Errorf(
@@ -90,6 +106,87 @@ func readProjection(path string) (*projectionFile, error) {
 		}
 	}
 	return &parsed, nil
+}
+
+func readValidatedProjection(
+	path string,
+	canonicalEnums map[string][]string,
+) (*projectionFile, error) {
+	parsed, err := readProjection(path)
+	if err != nil {
+		return parsed, err
+	}
+	if err := validateClientProjectionEnums(path, parsed, canonicalEnums); err != nil {
+		return parsed, err
+	}
+	return parsed, nil
+}
+
+// validateClientProjectionEnums prevents an explicitly typed App DTO field
+// from inventing a second enum class or silently degrading to String. A field
+// that intentionally remains String may still carry enum_ref as validation
+// metadata, but a typed enum must be the exact _shared/types.yaml class and
+// have one wire representation with no client-side default.
+func validateClientProjectionEnums(
+	path string,
+	projection *projectionFile,
+	canonicalEnums map[string][]string,
+) error {
+	if projection == nil || !projection.clientProjectionFieldsDeclared {
+		return nil
+	}
+	for _, field := range projection.ClientProjection.Fields {
+		enumRef := strings.TrimSpace(field.EnumRef)
+		dartType := strings.TrimSuffix(strings.TrimSpace(field.DartType), "?")
+		wireType := strings.TrimSpace(field.WireType)
+		_, dartTypeIsCanonicalEnum := canonicalEnums[dartType]
+		typedEnum := dartTypeIsCanonicalEnum || (enumRef != "" && dartType == enumRef)
+
+		if enumRef != "" {
+			if values := canonicalEnums[enumRef]; len(values) == 0 {
+				return fmt.Errorf(
+					"%s client_projection field %s enum_ref %s is absent from _shared/types.yaml",
+					path,
+					field.Name,
+					enumRef,
+				)
+			}
+		}
+		if !typedEnum {
+			if wireType == "enum" {
+				return fmt.Errorf(
+					"%s client_projection field %s type=enum must use dart_type matching enum_ref",
+					path,
+					field.Name,
+				)
+			}
+			continue
+		}
+		if enumRef == "" || dartType != enumRef {
+			return fmt.Errorf(
+				"%s client_projection field %s typed enum %s must use the same enum_ref",
+				path,
+				field.Name,
+				dartType,
+			)
+		}
+		if wireType != "enum" {
+			return fmt.Errorf(
+				"%s client_projection field %s typed enum %s requires type=enum",
+				path,
+				field.Name,
+				dartType,
+			)
+		}
+		if strings.TrimSpace(field.Default) != "" {
+			return fmt.Errorf(
+				"%s client_projection field %s typed enum must not declare a default",
+				path,
+				field.Name,
+			)
+		}
+	}
+	return nil
 }
 
 func readProjectionBinding(path string) (*projectionBinding, error) {
@@ -228,6 +325,8 @@ func contentDomainErrorsPaths(metadataDir string) []string {
 		filepath.Join(metadataDir, "content", "content", "comment", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "content", "content_reaction", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "content", "deleted_post_tombstone", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "profile_interaction_activity_view", "errors.yaml"),
+		filepath.Join(metadataDir, "content", "content", "profile_interaction_read_fact", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "media", "filter_catalog_release", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "media", "media_asset", "errors.yaml"),
 		filepath.Join(metadataDir, "content", "media", "media_original_access_fact", "errors.yaml"),
@@ -258,20 +357,16 @@ func readUIConfig(
 	}
 	catalog := parsed.OnboardingInterestCatalog
 	if !requireOnboardingInterestCatalog &&
-		strings.TrimSpace(catalog.Version) == "" &&
-		strings.TrimSpace(catalog.TaxonomyReleaseID) == "" &&
 		catalog.MinSelectionCount == 0 &&
 		catalog.MaxSelectionCount == 0 &&
 		len(catalog.Dimensions) == 0 {
 		return &parsed, nil
 	}
-	if strings.TrimSpace(catalog.Version) == "" ||
-		strings.TrimSpace(catalog.TaxonomyReleaseID) == "" ||
-		catalog.MinSelectionCount <= 0 ||
+	if catalog.MinSelectionCount <= 0 ||
 		catalog.MaxSelectionCount < catalog.MinSelectionCount ||
 		len(catalog.Dimensions) == 0 {
 		return nil, fmt.Errorf(
-			"onboarding_interest_catalog requires version, taxonomy_release_id, valid selection bounds, and dimensions",
+			"onboarding_interest_catalog requires valid selection bounds and dimensions",
 		)
 	}
 	dimensionIDs := make(map[string]struct{}, len(catalog.Dimensions))

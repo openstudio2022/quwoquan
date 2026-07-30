@@ -96,7 +96,7 @@ void main() {
           currentUserIdProvider.overrideWithValue(''),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'persona_entity_uat',
+              personaId: 'persona_entity_uat',
               ownerUserId: 'user_entity_uat',
               subjectType: 'persona',
               displayName: '实体旅程用户',
@@ -205,8 +205,9 @@ final class _AuthenticatedEntitySession extends AuthSessionController {
   AuthSessionState build() => const AuthSessionState(
     status: AuthSessionStatus.authenticated,
     accessToken: 'entity-uat-token',
+    refreshToken: 'entity-uat-refresh-token',
     ownerId: 'user_entity_uat',
-    activeSubAccountId: 'persona_entity_uat',
+    activePersonaId: 'persona_entity_uat',
   );
 }
 

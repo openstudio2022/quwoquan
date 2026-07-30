@@ -2,6 +2,7 @@
   "label": "米其林之钥",
   "labelEn": "MICHELIN Key",
   "description": "米其林奢华酒店评级体系（2024）",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

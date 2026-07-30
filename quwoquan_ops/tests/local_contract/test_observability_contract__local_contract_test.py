@@ -8,6 +8,14 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from quwoquan_ops.cli.alpha.content_release_runtime import (
+    _materialize_observability_run,
+)
+from quwoquan_ops.cli.alpha.content_release_runtime import (
+    _paths as alpha_content_release_paths,
+)
+from quwoquan_ops.cli.lib.common import artifact_run_dir
+from quwoquan_ops.cli.lib.local_run import resolve_local_run
 from quwoquan_ops.cli.lib.observability import (
     append_log_line,
     canonical_log_record,
@@ -16,12 +24,6 @@ from quwoquan_ops.cli.lib.observability import (
     validate_log_payload,
     write_run_manifest,
 )
-from quwoquan_ops.cli.alpha.content_release_runtime import (
-    _materialize_observability_run,
-    _paths as alpha_content_release_paths,
-)
-from quwoquan_ops.cli.lib.common import artifact_run_dir
-from quwoquan_ops.cli.lib.local_run import resolve_local_run
 from quwoquan_ops.cli.lib.runtime_log_process import run_logged_process
 from quwoquan_ops.gate.verify_observability_envelope import envelope_issues
 from quwoquan_ops.gate.verify_observability_layout import layout_issues
@@ -197,6 +199,31 @@ def test_local_run_uses_immutable_id_and_persists_manifest(tmp_path: Path) -> No
     assert set(manifest).isdisjoint(forbidden_envelope_fields)
     assert manifest["runId"] == started.run_id
     assert manifest["target"] == "alpha-local"
+
+
+def test_repeated_local_up_runs_cannot_overwrite_prior_evidence(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / ".qwq_output"
+
+    first = resolve_local_run(
+        env="alpha",
+        target="alpha-local",
+        action="up",
+        root=output_root,
+    )
+    second = resolve_local_run(
+        env="alpha",
+        target="alpha-local",
+        action="up",
+        root=output_root,
+    )
+
+    assert first.run_id != second.run_id
+    assert first.run_root != second.run_root
+    assert first.observability_root != second.observability_root
+    assert (first.observability_root / "manifest.json").is_file()
+    assert (second.observability_root / "manifest.json").is_file()
 
 
 def test_alpha_content_release_materializes_manifest_before_runtime_logs(

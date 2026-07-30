@@ -2,26 +2,19 @@
 // ignore_for_file: constant_identifier_names
 
 enum ContentErrorCode {
+  contentDeleted('CONTENT.USER.content_deleted', 'surface', 0, 410),
   postNotFound('CONTENT.USER.post_not_found', 'surface', 0, 404),
   forbiddenEdit('CONTENT.USER.forbidden_edit', 'surface', 0, 403),
   forbiddenDelete('CONTENT.USER.forbidden_delete', 'surface', 0, 403),
   unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
   invalidArgument('CONTENT.USER.invalid_argument', 'surface', 0, 400),
-  interactionTypeInvalid('CONTENT.USER.interaction_type_invalid', 'surface', 0, 400),
-  interactionCursorInvalid('CONTENT.USER.interaction_cursor_invalid', 'refresh', 0, 400),
-  interactionOwnerForbidden('CONTENT.USER.interaction_owner_forbidden', 'surface', 0, 403),
-  interactionReadModelUnavailable('CONTENT.SYSTEM.interaction_read_model_unavailable', 'retry', 3, 503),
-  assistantMentionContextMissing('CONTENT.USER.assistant_mention_context_missing', 'surface', 0, 400),
   invalidContentType('CONTENT.USER.invalid_content_type', 'surface', 0, 400),
   rateLimited('CONTENT.USER.rate_limited', 'retry', 60, 429),
+  feedCapacityUnavailable('CONTENT.SYSTEM.feed_capacity_unavailable', 'retry', 1, 503),
   contentTooLong('CONTENT.USER.content_too_long', 'surface', 0, 400),
   publicationRejected('CONTENT.USER.publication_rejected', 'surface', 0, 422),
-  postImmutableAfterPublish('CONTENT.USER.post_immutable_after_publish', 'surface', 0, 409),
-  publicRequiredForCircleDistribution('CONTENT.USER.public_required_for_circle_distribution', 'surface', 0, 400),
-  invalidMomentPayload('CONTENT.USER.invalid_moment_payload', 'surface', 0, 400),
   versionConflict('CONTENT.USER.version_conflict', 'refresh', 0, 409),
   idempotencyConflict('CONTENT.USER.idempotency_conflict', 'refresh', 0, 409),
-  circleDistributionForbidden('CONTENT.USER.circle_distribution_forbidden', 'surface', 0, 403),
   storageWriteFailed('CONTENT.SYSTEM.storage_write_failed', 'retry', 5, 500),
   storageReadFailed('CONTENT.SYSTEM.storage_read_failed', 'retry', 5, 500),
   requiredDependencyUnavailable('CONTENT.SYSTEM.required_dependency_unavailable', 'retry', 5, 503),
@@ -39,9 +32,13 @@ enum ContentErrorCode {
   commentModerationForbidden('CONTENT.USER.comment_moderation_forbidden', 'surface', 0, 403),
   commentStatusTransitionInvalid('CONTENT.USER.comment_status_transition_invalid', 'refresh', 0, 409),
   commentSortInvalid('CONTENT.USER.comment_sort_invalid', 'surface', 0, 400),
-  commentLikeDuplicate('CONTENT.USER.comment_like_duplicate', 'surface', 0, 409),
-  commentReactionForbidden('CONTENT.USER.comment_reaction_forbidden', 'surface', 0, 403),
-  contentDeleted('CONTENT.USER.content_deleted', 'surface', 0, 410),
+  contentReactionTargetNotFound('CONTENT.USER.content_reaction_target_not_found', 'surface', 0, 404),
+  interactionTypeInvalid('CONTENT.USER.interaction_type_invalid', 'surface', 0, 400),
+  interactionCursorInvalid('CONTENT.USER.interaction_cursor_invalid', 'refresh', 0, 400),
+  interactionOwnerForbidden('CONTENT.USER.interaction_owner_forbidden', 'surface', 0, 403),
+  interactionReadModelUnavailable('CONTENT.SYSTEM.interaction_read_model_unavailable', 'retry', 3, 503),
+  profileInteractionReadFactOwnerForbidden('CONTENT.USER.profile_interaction_read_fact_owner_forbidden', 'surface', 0, 403),
+  profileInteractionReadFactTargetUnavailable('CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable', 'retry', 3, 503),
   filterCatalogReleaseNotFound('CONTENT.USER.filter_catalog_release_not_found', 'surface', 0, 404),
   filterCatalogInvalidArgument('CONTENT.USER.filter_catalog_invalid_argument', 'surface', 0, 400),
   filterCatalogDigestMismatch('CONTENT.USER.filter_catalog_digest_mismatch', 'surface', 0, 400),
@@ -53,20 +50,18 @@ enum ContentErrorCode {
   mediaNotReady('CONTENT.USER.media_not_ready', 'retry', 3, 400),
   mediaProcessingRejected('CONTENT.USER.media_processing_rejected', 'surface', 0, 422),
   mediaInUse('CONTENT.USER.media_in_use', 'surface', 0, 409),
-  mediaPlaybackNetworkUnavailable('CONTENT.SYSTEM.media_playback_network_unavailable', 'retry', 0, 503),
-  mediaPlaybackTemporarilyUnavailable('CONTENT.SYSTEM.media_playback_temporarily_unavailable', 'retry', 0, 503),
-  mediaPlaybackServiceBusy('CONTENT.SYSTEM.media_playback_service_busy', 'retry', 0, 503),
-  mediaPlaybackUnavailable('CONTENT.USER.media_playback_unavailable', 'surface', 0, 404),
-  mediaPlaybackUnsupported('CONTENT.SYSTEM.media_playback_unsupported', 'surface', 0, 422),
-  mediaSeekFailed('CONTENT.SYSTEM.media_seek_failed', 'retry', 0, 503),
+  mediaPlaybackNetworkUnavailable('CONTENT.SYSTEM.media_playback_network_unavailable', 'retry', 0, 0),
+  mediaPlaybackTemporarilyUnavailable('CONTENT.SYSTEM.media_playback_temporarily_unavailable', 'retry', 0, 0),
+  mediaPlaybackServiceBusy('CONTENT.SYSTEM.media_playback_service_busy', 'retry', 0, 0),
+  mediaPlaybackUnavailable('CONTENT.USER.media_playback_unavailable', 'surface', 0, 0),
+  mediaPlaybackUnsupported('CONTENT.SYSTEM.media_playback_unsupported', 'surface', 0, 0),
+  mediaSeekFailed('CONTENT.SYSTEM.media_seek_failed', 'retry', 0, 0),
   originalAccessDenied('CONTENT.USER.original_access_denied', 'surface', 0, 403),
   originalAccessRateLimited('CONTENT.USER.original_access_rate_limited', 'retry', 60, 429),
   mediaFileTooLarge('CONTENT.USER.media_file_too_large', 'surface', 0, 413),
   mediaTypeUnsupported('CONTENT.USER.media_type_unsupported', 'surface', 0, 415),
   mediaUploadSessionExpired('CONTENT.USER.media_upload_session_expired', 'retry', 0, 409),
   moderationCaseNotFound('CONTENT.USER.moderation_case_not_found', 'refresh', 0, 404),
-  moderationApprovalRequired('CONTENT.USER.moderation_approval_required', 'retry', 3, 409),
-  moderationDecisionStale('CONTENT.USER.moderation_decision_stale', 'refresh', 0, 409),
   reportNotFound('CONTENT.USER.report_not_found', 'surface', 0, 404),
   unknown('', '', 0, 500);
 
@@ -79,6 +74,8 @@ enum ContentErrorCode {
 
   static ContentErrorCode fromCode(String code) {
     switch (code) {
+      case 'CONTENT.USER.content_deleted':
+        return ContentErrorCode.contentDeleted;
       case 'CONTENT.USER.post_not_found':
         return ContentErrorCode.postNotFound;
       case 'CONTENT.USER.forbidden_edit':
@@ -89,36 +86,20 @@ enum ContentErrorCode {
         return ContentErrorCode.unauthorized;
       case 'CONTENT.USER.invalid_argument':
         return ContentErrorCode.invalidArgument;
-      case 'CONTENT.USER.interaction_type_invalid':
-        return ContentErrorCode.interactionTypeInvalid;
-      case 'CONTENT.USER.interaction_cursor_invalid':
-        return ContentErrorCode.interactionCursorInvalid;
-      case 'CONTENT.USER.interaction_owner_forbidden':
-        return ContentErrorCode.interactionOwnerForbidden;
-      case 'CONTENT.SYSTEM.interaction_read_model_unavailable':
-        return ContentErrorCode.interactionReadModelUnavailable;
-      case 'CONTENT.USER.assistant_mention_context_missing':
-        return ContentErrorCode.assistantMentionContextMissing;
       case 'CONTENT.USER.invalid_content_type':
         return ContentErrorCode.invalidContentType;
       case 'CONTENT.USER.rate_limited':
         return ContentErrorCode.rateLimited;
+      case 'CONTENT.SYSTEM.feed_capacity_unavailable':
+        return ContentErrorCode.feedCapacityUnavailable;
       case 'CONTENT.USER.content_too_long':
         return ContentErrorCode.contentTooLong;
       case 'CONTENT.USER.publication_rejected':
         return ContentErrorCode.publicationRejected;
-      case 'CONTENT.USER.post_immutable_after_publish':
-        return ContentErrorCode.postImmutableAfterPublish;
-      case 'CONTENT.USER.public_required_for_circle_distribution':
-        return ContentErrorCode.publicRequiredForCircleDistribution;
-      case 'CONTENT.USER.invalid_moment_payload':
-        return ContentErrorCode.invalidMomentPayload;
       case 'CONTENT.USER.version_conflict':
         return ContentErrorCode.versionConflict;
       case 'CONTENT.USER.idempotency_conflict':
         return ContentErrorCode.idempotencyConflict;
-      case 'CONTENT.USER.circle_distribution_forbidden':
-        return ContentErrorCode.circleDistributionForbidden;
       case 'CONTENT.SYSTEM.storage_write_failed':
         return ContentErrorCode.storageWriteFailed;
       case 'CONTENT.SYSTEM.storage_read_failed':
@@ -153,12 +134,20 @@ enum ContentErrorCode {
         return ContentErrorCode.commentStatusTransitionInvalid;
       case 'CONTENT.USER.comment_sort_invalid':
         return ContentErrorCode.commentSortInvalid;
-      case 'CONTENT.USER.comment_like_duplicate':
-        return ContentErrorCode.commentLikeDuplicate;
-      case 'CONTENT.USER.comment_reaction_forbidden':
-        return ContentErrorCode.commentReactionForbidden;
-      case 'CONTENT.USER.content_deleted':
-        return ContentErrorCode.contentDeleted;
+      case 'CONTENT.USER.content_reaction_target_not_found':
+        return ContentErrorCode.contentReactionTargetNotFound;
+      case 'CONTENT.USER.interaction_type_invalid':
+        return ContentErrorCode.interactionTypeInvalid;
+      case 'CONTENT.USER.interaction_cursor_invalid':
+        return ContentErrorCode.interactionCursorInvalid;
+      case 'CONTENT.USER.interaction_owner_forbidden':
+        return ContentErrorCode.interactionOwnerForbidden;
+      case 'CONTENT.SYSTEM.interaction_read_model_unavailable':
+        return ContentErrorCode.interactionReadModelUnavailable;
+      case 'CONTENT.USER.profile_interaction_read_fact_owner_forbidden':
+        return ContentErrorCode.profileInteractionReadFactOwnerForbidden;
+      case 'CONTENT.SYSTEM.profile_interaction_read_fact_target_unavailable':
+        return ContentErrorCode.profileInteractionReadFactTargetUnavailable;
       case 'CONTENT.USER.filter_catalog_release_not_found':
         return ContentErrorCode.filterCatalogReleaseNotFound;
       case 'CONTENT.USER.filter_catalog_invalid_argument':
@@ -205,10 +194,6 @@ enum ContentErrorCode {
         return ContentErrorCode.mediaUploadSessionExpired;
       case 'CONTENT.USER.moderation_case_not_found':
         return ContentErrorCode.moderationCaseNotFound;
-      case 'CONTENT.USER.moderation_approval_required':
-        return ContentErrorCode.moderationApprovalRequired;
-      case 'CONTENT.USER.moderation_decision_stale':
-        return ContentErrorCode.moderationDecisionStale;
       case 'CONTENT.USER.report_not_found':
         return ContentErrorCode.reportNotFound;
       default:
@@ -222,26 +207,19 @@ class ContentErrorMessages {
   const ContentErrorMessages._();
 
   static const Map<ContentErrorCode, String> zh = <ContentErrorCode, String>{
+    ContentErrorCode.contentDeleted: '内容已删除',
     ContentErrorCode.postNotFound: '内容不存在或已删除',
     ContentErrorCode.forbiddenEdit: '无权编辑此内容',
     ContentErrorCode.forbiddenDelete: '无权删除此内容',
     ContentErrorCode.unauthorized: '请先登录',
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
-    ContentErrorCode.interactionTypeInvalid: '不支持的互动类型',
-    ContentErrorCode.interactionCursorInvalid: '列表状态已更新，请刷新后重试',
-    ContentErrorCode.interactionOwnerForbidden: '无权查看该互动记录',
-    ContentErrorCode.interactionReadModelUnavailable: '互动记录暂时不可用，请稍后重试',
-    ContentErrorCode.assistantMentionContextMissing: '小趣暂时无法识别这条评论的上下文',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
+    ContentErrorCode.feedCapacityUnavailable: '内容服务繁忙，请稍后重试',
     ContentErrorCode.contentTooLong: '内容超出长度限制',
     ContentErrorCode.publicationRejected: '内容未通过发布安全检查，请修改后重试',
-    ContentErrorCode.postImmutableAfterPublish: '内容发布后不可修改',
-    ContentErrorCode.publicRequiredForCircleDistribution: '发布到圈子前需设置为公开',
-    ContentErrorCode.invalidMomentPayload: '微趣内容为空，正文/图片/视频至少填写一项',
     ContentErrorCode.versionConflict: '内容已更新，请刷新后重试',
     ContentErrorCode.idempotencyConflict: '重复请求与原操作不一致，请刷新后重试',
-    ContentErrorCode.circleDistributionForbidden: '无权修改圈子分发关系',
     ContentErrorCode.storageWriteFailed: '操作失败，请稍后重试',
     ContentErrorCode.storageReadFailed: '读取内容失败，请稍后重试',
     ContentErrorCode.requiredDependencyUnavailable: '内容服务依赖暂时不可用，请稍后重试',
@@ -259,9 +237,13 @@ class ContentErrorMessages {
     ContentErrorCode.commentModerationForbidden: '无权执行评论治理操作',
     ContentErrorCode.commentStatusTransitionInvalid: '评论状态已变更，无法执行该操作',
     ContentErrorCode.commentSortInvalid: '不支持的评论排序方式',
-    ContentErrorCode.commentLikeDuplicate: '已经点过赞了',
-    ContentErrorCode.commentReactionForbidden: '当前无法评价这条评论',
-    ContentErrorCode.contentDeleted: '内容已删除',
+    ContentErrorCode.contentReactionTargetNotFound: '互动目标不存在或已失效',
+    ContentErrorCode.interactionTypeInvalid: '不支持的互动类型',
+    ContentErrorCode.interactionCursorInvalid: '列表状态已更新，请刷新后重试',
+    ContentErrorCode.interactionOwnerForbidden: '无权查看该互动记录',
+    ContentErrorCode.interactionReadModelUnavailable: '互动记录暂时不可用，请稍后重试',
+    ContentErrorCode.profileInteractionReadFactOwnerForbidden: '无权更新该互动记录',
+    ContentErrorCode.profileInteractionReadFactTargetUnavailable: '互动记录暂时不可用，请稍后重试',
     ContentErrorCode.filterCatalogReleaseNotFound: '滤镜目录发布不存在',
     ContentErrorCode.filterCatalogInvalidArgument: '滤镜目录内容不合法',
     ContentErrorCode.filterCatalogDigestMismatch: '滤镜目录校验失败',
@@ -285,32 +267,23 @@ class ContentErrorMessages {
     ContentErrorCode.mediaTypeUnsupported: '暂不支持这种媒体格式',
     ContentErrorCode.mediaUploadSessionExpired: '上传凭证已过期，正在重新准备',
     ContentErrorCode.moderationCaseNotFound: '未找到当前内容的审核记录',
-    ContentErrorCode.moderationApprovalRequired: '内容尚未通过当前版本审核',
-    ContentErrorCode.moderationDecisionStale: '内容已编辑，请基于最新版本重新审核',
     ContentErrorCode.reportNotFound: '举报不存在',
   };
 
   static const Map<ContentErrorCode, String> en = <ContentErrorCode, String>{
+    ContentErrorCode.contentDeleted: 'Content has been deleted',
     ContentErrorCode.postNotFound: 'Post not found or deleted',
     ContentErrorCode.forbiddenEdit: 'Not allowed to edit this post',
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
-    ContentErrorCode.interactionTypeInvalid: 'Unsupported interaction type',
-    ContentErrorCode.interactionCursorInvalid: 'The list changed, refresh and retry',
-    ContentErrorCode.interactionOwnerForbidden: 'You cannot view this interaction history',
-    ContentErrorCode.interactionReadModelUnavailable: 'Interaction history is temporarily unavailable',
-    ContentErrorCode.assistantMentionContextMissing: 'Xiaoqu cannot resolve this comment context yet',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
+    ContentErrorCode.feedCapacityUnavailable: 'Content service is busy, please retry shortly',
     ContentErrorCode.contentTooLong: 'Content exceeds length limit',
     ContentErrorCode.publicationRejected: 'Content did not pass publication safety checks',
-    ContentErrorCode.postImmutableAfterPublish: 'Published content is immutable',
-    ContentErrorCode.publicRequiredForCircleDistribution: 'Post must be public before distributing to circles',
-    ContentErrorCode.invalidMomentPayload: 'Moment payload is empty; at least body/image/video is required',
     ContentErrorCode.versionConflict: 'Content changed, refresh and retry',
     ContentErrorCode.idempotencyConflict: 'The repeated request differs from the original operation',
-    ContentErrorCode.circleDistributionForbidden: 'Not allowed to modify circle distribution',
     ContentErrorCode.storageWriteFailed: 'Operation failed, please retry',
     ContentErrorCode.storageReadFailed: 'Unable to read content, please retry',
     ContentErrorCode.requiredDependencyUnavailable: 'A required content dependency is unavailable',
@@ -328,9 +301,13 @@ class ContentErrorMessages {
     ContentErrorCode.commentModerationForbidden: 'Not allowed to moderate this comment',
     ContentErrorCode.commentStatusTransitionInvalid: 'Comment state changed; the action is no longer valid',
     ContentErrorCode.commentSortInvalid: 'Unsupported comment sort',
-    ContentErrorCode.commentLikeDuplicate: 'Already liked',
-    ContentErrorCode.commentReactionForbidden: 'Not allowed to react to this comment',
-    ContentErrorCode.contentDeleted: 'Content has been deleted',
+    ContentErrorCode.contentReactionTargetNotFound: 'The reaction target is missing or unavailable',
+    ContentErrorCode.interactionTypeInvalid: 'Unsupported interaction type',
+    ContentErrorCode.interactionCursorInvalid: 'The list changed, refresh and retry',
+    ContentErrorCode.interactionOwnerForbidden: 'You cannot view this interaction history',
+    ContentErrorCode.interactionReadModelUnavailable: 'Interaction history is temporarily unavailable',
+    ContentErrorCode.profileInteractionReadFactOwnerForbidden: 'You cannot update this interaction record',
+    ContentErrorCode.profileInteractionReadFactTargetUnavailable: 'The interaction record is temporarily unavailable',
     ContentErrorCode.filterCatalogReleaseNotFound: 'Filter catalog release not found',
     ContentErrorCode.filterCatalogInvalidArgument: 'Invalid filter catalog',
     ContentErrorCode.filterCatalogDigestMismatch: 'Filter catalog digest verification failed',
@@ -354,8 +331,6 @@ class ContentErrorMessages {
     ContentErrorCode.mediaTypeUnsupported: 'This media format is not supported.',
     ContentErrorCode.mediaUploadSessionExpired: 'The upload grant expired and will be prepared again.',
     ContentErrorCode.moderationCaseNotFound: 'No current moderation case was found',
-    ContentErrorCode.moderationApprovalRequired: 'The current content version is not approved',
-    ContentErrorCode.moderationDecisionStale: 'Content changed; review the latest version',
     ContentErrorCode.reportNotFound: 'Report not found',
   };
 }

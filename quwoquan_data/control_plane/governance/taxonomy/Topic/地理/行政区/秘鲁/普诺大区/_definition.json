@@ -1,0 +1,12 @@
+{
+  "label": "普诺大区",
+  "labelEn": "Puno Region",
+  "description": "的的喀喀湖岸",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

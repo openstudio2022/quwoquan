@@ -110,12 +110,12 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
       if (_runtimeState.session?.callId == expectedCallId &&
           session.callId == expectedCallId &&
           _runtimeState.status != CallStatus.ended) {
-        if (session.status == 'in_call') {
+        if (session.status == CallStatus.inCall) {
           _markMediaConnected();
         }
         _runtimeState = _runtimeState.copyWith(
           session: session,
-          status: CallStatus.fromString(session.status),
+          status: session.status,
           clearFailure: true,
         );
         _syncParticipantRoster(session);
@@ -225,7 +225,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
     if (session == null) return;
     final terminal = _mediaQoe.finish(
       callId: session.callId,
-      callType: session.callType,
+      callType: session.callType.toApiString(),
       participantCount: session.participantCount,
       abandonedBeforeAcceptance:
           _runtimeState.status == CallStatus.initiated ||
@@ -292,7 +292,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
             .read(appTelemetryReporterProvider)
             .record(
               AppTelemetryPayload.rtcCallOutcome(
-                callType: session.callType,
+                callType: session.callType.toApiString(),
                 result: result,
                 durationMs: endedInCall && startedAt != null
                     ? DateTime.now().difference(startedAt).inMilliseconds

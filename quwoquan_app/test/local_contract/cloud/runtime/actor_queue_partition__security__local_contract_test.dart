@@ -38,8 +38,11 @@ void main() {
 
     expect(base.canPersist, isTrue);
     expect(variants.map((item) => item.key), everyElement(isNot(base.key)));
-    expect(base.boxName('events'), isNot(contains('account-a')));
-    expect(base.boxName('events'), isNot(contains('persona-a')));
+    final boxName = base.boxName('events');
+    expect(boxName, 'events_actor_${base.key}');
+    expect(boxName, isNot(matches(RegExp(r'_v\d+_'))));
+    expect(boxName, isNot(contains('account-a')));
+    expect(boxName, isNot(contains('persona-a')));
     expect(base.acceptsEnvelope(base.key), isTrue);
     expect(base.acceptsEnvelope(variants.first.key), isFalse);
   });
@@ -69,6 +72,10 @@ void main() {
     expect(
       actorA.boxName('behavior_queue'),
       isNot(actorB.boxName('behavior_queue')),
+    );
+    expect(
+      actorA.boxName('behavior_queue'),
+      isNot(actorA.boxName('ops_queue')),
     );
   });
 

@@ -10,17 +10,14 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrInvalidArgument        = errors.New("ENTITY.USER.invalid_argument")
-	ErrHomepageNotFound       = errors.New("ENTITY.USER.homepage_not_found")
-	ErrHomepageAttachRequired = errors.New("ENTITY.USER.homepage_attach_required")
-	ErrClaimMaterialMissing   = errors.New("ENTITY.USER.claim_material_missing")
-	ErrAlreadyClaimed         = errors.New("ENTITY.USER.already_claimed")
-	ErrHomepageOffline        = errors.New("ENTITY.USER.homepage_offline")
-	ErrInvalidHomepageType    = errors.New("ENTITY.USER.invalid_homepage_type")
-	ErrPermissionDenied       = errors.New("ENTITY.USER.permission_denied")
-	ErrVersionConflict        = errors.New("ENTITY.USER.version_conflict")
-	ErrIdempotencyConflict    = errors.New("ENTITY.USER.idempotency_conflict")
-	ErrInternalError          = errors.New("ENTITY.SYSTEM.internal_error")
+	ErrInvalidArgument     = errors.New("ENTITY.USER.invalid_argument")
+	ErrHomepageNotFound    = errors.New("ENTITY.USER.homepage_not_found")
+	ErrHomepageOffline     = errors.New("ENTITY.USER.homepage_offline")
+	ErrInvalidHomepageType = errors.New("ENTITY.USER.invalid_homepage_type")
+	ErrPermissionDenied    = errors.New("ENTITY.USER.permission_denied")
+	ErrVersionConflict     = errors.New("ENTITY.USER.version_conflict")
+	ErrIdempotencyConflict = errors.New("ENTITY.USER.idempotency_conflict")
+	ErrInternalError       = errors.New("ENTITY.SYSTEM.internal_error")
 )
 
 // AppErrorFromInvalidArgument returns *AppError for ENTITY.USER.invalid_argument (user_message from errors.yaml).
@@ -33,24 +30,6 @@ func AppErrorFromInvalidArgument(debugMessage string) *rerrors.AppError {
 func AppErrorFromHomepageNotFound(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrHomepageNotFound.Error()))
 	return rerrors.NewAppError(code, "主页不存在或已下线", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
-}
-
-// AppErrorFromHomepageAttachRequired returns *AppError for ENTITY.USER.homepage_attach_required (user_message from errors.yaml).
-func AppErrorFromHomepageAttachRequired(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrHomepageAttachRequired.Error()))
-	return rerrors.NewAppError(code, "口碑必须绑定一个主页", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromClaimMaterialMissing returns *AppError for ENTITY.USER.claim_material_missing (user_message from errors.yaml).
-func AppErrorFromClaimMaterialMissing(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrClaimMaterialMissing.Error()))
-	return rerrors.NewAppError(code, "认领材料不完整，请补充后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
-}
-
-// AppErrorFromAlreadyClaimed returns *AppError for ENTITY.USER.already_claimed (user_message from errors.yaml).
-func AppErrorFromAlreadyClaimed(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrAlreadyClaimed.Error()))
-	return rerrors.NewAppError(code, "该主页已被认领", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromHomepageOffline returns *AppError for ENTITY.USER.homepage_offline (user_message from errors.yaml).

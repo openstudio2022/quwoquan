@@ -70,10 +70,6 @@ void main() {
       final httpClient = _buildGammaHttpClient();
       final telemetry = RecordingCloudOperationTelemetrySink();
       addTearDown(httpClient.close);
-      final conversationFacet = RemoteAssistantRepository(
-        httpClient: httpClient,
-        consentActorScope: 'gamma-assistant-learning-api-integration',
-      );
       final generatedClient = buildGeneratedCloudOperationClient(
         httpClient: httpClient,
         clientContextProvider: const _GammaAssistantClientContext(),
@@ -82,6 +78,21 @@ void main() {
           environment: CloudEnvironment.gamma,
           gatewayBaseUri: Uri.parse(_gatewayUrl),
         ),
+      );
+      final conversationFacet = RemoteAssistantRepository(
+        httpClient: httpClient,
+        operationClient: generatedClient,
+        conversationInvocationContext: (clientPageId) =>
+            CloudOperationInvocationContext(
+              surfaceId: AppUiSurfaces.personalAssistantDialog.id,
+              routeId: AppUiSurfaces.personalAssistantDialog.routeId,
+              clientPageId: clientPageId,
+              actor: const CloudOperationActorContext(
+                personaId: _personaId,
+                deviceActorId: 'gamma-assistant-learning-device',
+              ),
+            ),
+        consentActorScope: 'gamma-assistant-learning-api-integration',
       );
       final learningFacet = RemoteAssistantLearningFactAppendAdapter(
         client: generatedClient,
@@ -108,17 +119,16 @@ void main() {
         text: '请给出一句简短的商用验证回复',
         clientRequestId: 'run-$identity',
       );
-      final request = AppendAssistantLearningFactRequest(
+      final request = AssistantLearningFactAppendCommand(
         eventId: 'learning-$identity',
-        eventVersion: 1,
-        factType: AssistantLearningFactType.userFeedback,
+        factType: AssistantLearningFactType.userFeedback.wireName,
         assistantTurnId: run.turnId,
-        referralSource: AssistantReferralSource.assistantConversation,
+        referralSource: AssistantReferralSource.assistantConversation.wireName,
         domainId: 'assistant',
-        feedbackType: FeedbackType.useful,
+        feedbackType: FeedbackType.useful.wireName,
         queryText: '该原始文本只能留在受控事实中',
         trainingEligible: false,
-        occurredAt: DateTime.now().toUtc().toIso8601String(),
+        occurredAt: DateTime.now().toUtc(),
       );
 
       final first = await learningFacet.appendUserFact(request: request);
@@ -137,12 +147,11 @@ void main() {
       expect(telemetry.events.every((event) => event.succeeded), isTrue);
 
       await _writeRemoteEvidence(<String, Object?>{
-        'schema': 'assistant-learning-remote-api-evidence-v1',
+        'schema': 'assistant-learning-remote-api-evidence',
         'status': 'passed',
         'conversationId': conversation.conversationId,
         'turnId': run.turnId,
         'eventId': first.eventId,
-        'eventVersion': first.eventVersion,
         'appendSequence': first.appendSequence,
         'payloadDigest': first.payloadDigest,
         'replayDeduplicated': replay.deduplicated,
@@ -168,9 +177,8 @@ Future<void> _writeRemoteEvidence(Map<String, Object?> evidence) async {
   await output.writeAsString('${jsonEncode(evidence)}\n');
 }
 
-CloudHttpClient _buildGammaHttpClient() => CloudHttpClient(
-  authTokenProvider: _StaticTokenProvider(_accessToken),
-);
+CloudHttpClient _buildGammaHttpClient() =>
+    CloudHttpClient(authTokenProvider: _StaticTokenProvider(_accessToken));
 
 final class _StaticTokenProvider implements CloudAuthTokenProvider {
   const _StaticTokenProvider(this.token);

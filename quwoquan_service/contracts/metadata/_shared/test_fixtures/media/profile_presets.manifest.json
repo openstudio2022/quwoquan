@@ -1,5 +1,5 @@
 {
-  "presetSetId": "profile_presets_travel_photo_v1",
+  "presetSetId": "profile_presets_travel_photo",
   "mediaPolicy": "system_profile_preset_id_only",
   "brandPaletteSource": "quwoquan_app WelcomeAppearance.petalColors",
   "avatars": [

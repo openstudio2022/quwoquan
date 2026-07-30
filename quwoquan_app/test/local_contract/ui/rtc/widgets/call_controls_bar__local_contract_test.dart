@@ -232,8 +232,8 @@ final class _ScreenShareCallSessionNotifier extends CallSessionNotifier {
     return CallSessionState(
       session: CallSessionDto(
         callId: 'call-controls',
-        callType: 'video',
-        status: 'in_call',
+        callType: CallType.video,
+        status: CallStatus.inCall,
         initiatorId: 'user-a',
         roomId: 'rtc-room-call-controls',
         participantCount: 2,

@@ -16,7 +16,7 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
   @override
   Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
     final projection = await editSnapshotQuery.getProfileEditSnapshot(
-      const GetProfileEditSnapshotQuery(),
+      GetProfileEditSnapshotQuery(),
     );
     return ProfileEditSnapshotData.fromProjection(projection);
   }
@@ -24,7 +24,7 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
   @override
   Future<ProfileQrCardData> getProfileQrCard() async {
     final projection = await publicProfileQuery.getProfileQrCard(
-      const GetProfileQrCardQuery(),
+      GetProfileQrCardQuery(),
     );
     return ProfileQrCardData.fromProjection(projection);
   }
@@ -46,7 +46,7 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
       ),
     );
     return ProfileQrResolveWireDto(
-      subAccountId: projection.subAccountId,
+      personaId: projection.personaId,
       userHandle: projection.userHandle,
       publicProfileUrl: projection.publicProfileUrl,
       scanStatus: projection.scanStatus,

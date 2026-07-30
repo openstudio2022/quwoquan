@@ -13,8 +13,9 @@ import (
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 const (
@@ -38,8 +39,8 @@ type Client struct {
 	objectPath    string
 }
 
-var _ application.IntersectionInboxReader = (*Client)(nil)
-var _ application.IntersectionEvidenceReader = (*Client)(nil)
+var _ ports.IntersectionInboxReader = (*Client)(nil)
+var _ ports.IntersectionEvidenceReader = (*Client)(nil)
 
 func New(config Config) (*Client, error) {
 	baseURL, err := url.Parse(strings.TrimSpace(config.BaseURL))
@@ -79,10 +80,10 @@ func (c *Client) ListNewIntersectionReasons(
 	userID string,
 	since time.Time,
 	limit int,
-) ([]application.IntersectionReminderReason, error) {
+) ([]ports.IntersectionReminderReason, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return []application.IntersectionReminderReason{}, nil
+		return []ports.IntersectionReminderReason{}, nil
 	}
 	if limit <= 0 {
 		limit = 20
@@ -131,7 +132,7 @@ func (c *Client) ListNewIntersectionReasons(
 	if err := decoder.Decode(&payload); err != nil {
 		return nil, fmt.Errorf("decode content intersection response: %w", err)
 	}
-	reasons := make([]application.IntersectionReminderReason, 0, len(payload.Items))
+	reasons := make([]ports.IntersectionReminderReason, 0, len(payload.Items))
 	for _, item := range payload.Items {
 		freshAt, ok := parseFreshAt(item.FreshAt)
 		if !since.IsZero() && (!ok || !freshAt.After(since)) {
@@ -142,7 +143,7 @@ func (c *Client) ListNewIntersectionReasons(
 			targetID = strings.TrimSpace(item.ActionTargetID)
 		}
 		class := strings.TrimSpace(item.IntersectionClass)
-		reasons = append(reasons, application.IntersectionReminderReason{
+		reasons = append(reasons, ports.IntersectionReminderReason{
 			ReasonID:    strings.TrimSpace(item.IntersectionID),
 			UserID:      userID,
 			TargetID:    targetID,
@@ -166,7 +167,7 @@ func (c *Client) ResolveAuthorizedIntersectionEvidence(
 ) ([]assistant.AuthorizedIntersectionEvidence, error) {
 	personaID = strings.TrimSpace(personaID)
 	if personaID == "" {
-		return nil, application.ErrIntersectionEvidenceNotFound
+		return nil, orchestration.ErrIntersectionEvidenceNotFound
 	}
 	resolved := make([]assistant.AuthorizedIntersectionEvidence, 0, len(refs))
 	for _, ref := range refs {
@@ -176,7 +177,7 @@ func (c *Client) ResolveAuthorizedIntersectionEvidence(
 		}
 		match, found := matchIntersectionEvidence(ref, items)
 		if !found {
-			return nil, application.ErrIntersectionEvidenceNotFound
+			return nil, orchestration.ErrIntersectionEvidenceNotFound
 		}
 		resolved = append(resolved, assistant.AuthorizedIntersectionEvidence{
 			IntersectionID: strings.TrimSpace(match.IntersectionID),
@@ -215,29 +216,29 @@ func (c *Client) listObjectIntersectionEvidence(
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("%w: build object intersection request: %v", application.ErrIntersectionEvidenceUnavailable, err)
+		return nil, fmt.Errorf("%w: build object intersection request: %v", orchestration.ErrIntersectionEvidenceUnavailable, err)
 	}
 	authorization, err := c.authorization.AuthorizationHeaderForPersona(ctx, personaID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: authorize object intersection request: %v", application.ErrIntersectionEvidenceUnavailable, err)
+		return nil, fmt.Errorf("%w: authorize object intersection request: %v", orchestration.ErrIntersectionEvidenceUnavailable, err)
 	}
 	request.Header.Set("Authorization", authorization)
 	request.Header.Set("Accept", "application/json")
 	response, err := c.http.Do(request)
 	if err != nil {
-		return nil, fmt.Errorf("%w: call content object intersections: %v", application.ErrIntersectionEvidenceUnavailable, err)
+		return nil, fmt.Errorf("%w: call content object intersections: %v", orchestration.ErrIntersectionEvidenceUnavailable, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusUnauthorized ||
 		response.StatusCode == http.StatusForbidden ||
 		response.StatusCode == http.StatusNotFound ||
 		response.StatusCode == http.StatusBadRequest {
-		return nil, application.ErrIntersectionEvidenceNotFound
+		return nil, orchestration.ErrIntersectionEvidenceNotFound
 	}
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"%w: content object intersections status=%d",
-			application.ErrIntersectionEvidenceUnavailable,
+			orchestration.ErrIntersectionEvidenceUnavailable,
 			response.StatusCode,
 		)
 	}
@@ -246,7 +247,7 @@ func (c *Client) listObjectIntersectionEvidence(
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, maxResponseBytes))
 	if err := decoder.Decode(&payload); err != nil {
-		return nil, fmt.Errorf("%w: decode content object intersections: %v", application.ErrIntersectionEvidenceUnavailable, err)
+		return nil, fmt.Errorf("%w: decode content object intersections: %v", orchestration.ErrIntersectionEvidenceUnavailable, err)
 	}
 	return payload.Items, nil
 }

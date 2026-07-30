@@ -30,10 +30,17 @@ func (p *CommentOutboxPublisher) Publish(ctx context.Context, event commentports
 		return fmt.Errorf("decode Comment outbox payload: %w", err)
 	}
 	return p.publisher.Publish(ctx, runtimemessaging.DomainEvent{
-		EventID: event.EventID, Type: event.EventType, AggregateType: "Comment",
+		EventID: event.EventID, Type: event.EventType, AggregateType: commentEventAggregateType(event.EventType),
 		AggregateID: event.AggregateID, Payload: payload,
 		OccurredAt: event.OccurredAt.UTC().Format(time.RFC3339Nano),
 	})
+}
+
+func commentEventAggregateType(eventType string) string {
+	if eventType == "CommentsTombstoned" {
+		return "Post"
+	}
+	return "Comment"
 }
 
 var _ commentports.OutboxPublisher = (*CommentOutboxPublisher)(nil)

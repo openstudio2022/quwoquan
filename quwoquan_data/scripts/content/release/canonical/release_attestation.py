@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from core.codec import JsonObject, JsonObjectDecodeError
 from core.source_digest import SourceDigest, SourceDigestError
-from content.release.model import ReleaseKind
+from content.release.model import DataSourceOwner, ReleaseKind
 
 
 _SCHEMA = "quwoquan_data.release_attestation"
@@ -24,6 +24,7 @@ class ReleaseAttestation:
     """
 
     release_id: str
+    source_owner: DataSourceOwner
     release_kind: ReleaseKind
     execution_ids: tuple[str, ...]
     entity_count: int
@@ -38,6 +39,8 @@ class ReleaseAttestation:
     def __post_init__(self) -> None:
         if not self.release_id.strip():
             raise ReleaseAttestationError("releaseId is required")
+        if self.source_owner is not DataSourceOwner.QWQ_DATA:
+            raise ReleaseAttestationError("sourceOwner must be qwq_data")
         if not self.canonical_merkle.startswith("sha256:"):
             raise ReleaseAttestationError("canonicalMerkle must be a sha256 digest")
         if not self.payload_sha256.startswith("sha256:"):
@@ -74,6 +77,7 @@ class ReleaseAttestation:
         return {
             "schema": _SCHEMA,
             "releaseId": self.release_id,
+            "sourceOwner": self.source_owner.value,
             "releaseKind": self.release_kind.value,
             "executionIds": list(self.execution_ids),
             "entityCount": self.entity_count,
@@ -99,6 +103,7 @@ class ReleaseAttestation:
             )
             return cls(
                 release_id=document.string("releaseId"),
+                source_owner=DataSourceOwner(document.string("sourceOwner")),
                 release_kind=ReleaseKind(document.string("releaseKind")),
                 execution_ids=document.string_sequence("executionIds"),
                 entity_count=document.integer("entityCount"),

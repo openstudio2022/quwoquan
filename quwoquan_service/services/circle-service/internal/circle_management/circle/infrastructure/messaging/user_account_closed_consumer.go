@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"quwoquan_service/runtime/accountrestriction"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	"quwoquan_service/services/circle-service/internal/circle_management/circle/application"
 )
@@ -88,16 +89,27 @@ func normalizeUserAccountClosedConsumerConfig(
 }
 
 type UserAccountClosedConsumer struct {
-	transport  runtimemessaging.DurableDeliveryTransport
-	projection application.UserAccountClosedProjection
-	failures   UserAccountClosedFailureStore
-	consumer   string
-	config     UserAccountClosedConsumerConfig
-	logger     *slog.Logger
+	transport    runtimemessaging.DurableDeliveryTransport
+	projection   application.UserAccountClosedProjection
+	restrictions application.UserAccountRestrictionProjection
+	failures     UserAccountClosedFailureStore
+	consumer     string
+	config       UserAccountClosedConsumerConfig
+	logger       *slog.Logger
 
 	mu                sync.RWMutex
 	lastSuccess       time.Time
 	lastFailureDigest string
+}
+
+func (consumer *UserAccountClosedConsumer) WithUserAccountRestrictionProjection(
+	projection application.UserAccountRestrictionProjection,
+) *UserAccountClosedConsumer {
+	if consumer == nil || projection == nil {
+		panic("circle user account restriction projection is required")
+	}
+	consumer.restrictions = projection
+	return consumer
 }
 
 func NewUserAccountClosedConsumer(
@@ -264,6 +276,41 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 		return nil
 	}
 	values := durableFieldValues(message.Fields)
+	if restrictionEvent, restrictionErr := accountrestriction.Decode(
+		values,
+	); restrictionErr == nil {
+		if consumer.restrictions == nil {
+			return consumer.handleMessageFailure(
+				ctx,
+				message,
+				values,
+				errors.New(
+					"circle user account restriction projection is not configured",
+				),
+			)
+		}
+		result, err := consumer.restrictions.Apply(ctx, restrictionEvent)
+		if err != nil {
+			return consumer.handleMessageFailure(ctx, message, values, err)
+		}
+		if ackErr := consumer.ackAndClear(ctx, message.ID); ackErr != nil {
+			return ackErr
+		}
+		outcome := "restriction_applied"
+		if result.Replayed {
+			outcome = "restriction_replayed"
+		}
+		recordUserAccountClosedOutcome(outcome)
+		observeUserAccountClosedDuration(time.Since(startedAt))
+		return nil
+	} else if !errors.Is(restrictionErr, accountrestriction.ErrUnsupportedEvent) {
+		return consumer.handleMessageFailure(
+			ctx,
+			message,
+			values,
+			restrictionErr,
+		)
+	}
 	event, err := decodeUserAccountClosed(values)
 	if errors.Is(err, errUnsupportedUserAccountEvent) {
 		if ackErr := consumer.ackAndClear(ctx, message.ID); ackErr != nil {
@@ -288,7 +335,15 @@ func (consumer *UserAccountClosedConsumer) processMessage(
 			return nil
 		}
 	}
+	return consumer.handleMessageFailure(ctx, message, values, err)
+}
 
+func (consumer *UserAccountClosedConsumer) handleMessageFailure(
+	ctx context.Context,
+	message runtimemessaging.StreamDelivery,
+	values map[string]string,
+	err error,
+) error {
 	attempts, recordErr := consumer.failures.RecordUserAccountClosedFailure(
 		ctx,
 		message.ID,

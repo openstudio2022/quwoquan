@@ -2,6 +2,7 @@
   "label": "长曝光",
   "labelEn": "Long Exposure",
   "description": "延长快门时间记录运动轨迹",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

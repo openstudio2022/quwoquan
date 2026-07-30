@@ -3,23 +3,43 @@ package identity
 import "strings"
 
 const (
-	AnonymousFallbackOwnerID      = "uo_01_ad_0000_00000000000000000000000000"
-	AnonymousFallbackSubAccountID = "us_01_0000_00000000000000000000000000"
+	// Frozen reserved identities already persisted in content/recommendation
+	// state. The `01` bytes are part of the sole canonical ID, not a version fork.
+	AnonymousFallbackOwnerID   = "uo_01_ad_0000_00000000000000000000000000"
+	AnonymousFallbackPersonaID = "us_01_0000_00000000000000000000000000"
 )
 
-func NormalizeAnonymousSubAccountID(subAccountID string) string {
-	trimmed := strings.TrimSpace(subAccountID)
+func NormalizeAnonymousPersonaID(personaID string) string {
+	trimmed := strings.TrimSpace(personaID)
 	if trimmed == "" {
-		return AnonymousFallbackSubAccountID
+		return AnonymousFallbackPersonaID
 	}
 	return trimmed
 }
 
-func IsAnonymousFallbackSubAccountID(subAccountID string) bool {
-	return NormalizeAnonymousSubAccountID(subAccountID) == AnonymousFallbackSubAccountID
+func IsAnonymousFallbackPersonaID(personaID string) bool {
+	return NormalizeAnonymousPersonaID(personaID) == AnonymousFallbackPersonaID
 }
 
-// deviceActorKeyPrefix 命名空间化派生设备标识，避免与账号 subAccountID 维度冲突。
+// RankedFeedWindowSubjectID returns the private storage/quota subject for an
+// immutable recommendation window. Named personas and verified device actors
+// share the canonical actor quota across their sessions. Identity-less public
+// traffic must instead be isolated by session: using the global anonymous
+// fallback actor here would let one visitor's ninth window evict another
+// visitor's still-valid continuation.
+func RankedFeedWindowSubjectID(actorID, sessionID string) string {
+	actorID = NormalizeAnonymousPersonaID(actorID)
+	if actorID != AnonymousFallbackPersonaID {
+		return "actor\x00" + actorID
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return ""
+	}
+	return "anonymous-session\x00" + sessionID
+}
+
+// deviceActorKeyPrefix 命名空间化派生设备标识，避免与账号 personaID 维度冲突。
 // 注意：不得含 ':'，否则会破坏 shareActorID 的 ':' 分段解析（分享 key 形如
 // "direct:<actorKey>"）。真实账号 ID 不会以此前缀开头，故键空间天然不相交。
 const DeviceActorKeyPrefix = "devactor_"
@@ -37,5 +57,5 @@ func ShareActorKey(userID, deviceActorID string) string {
 	if d := strings.TrimSpace(deviceActorID); d != "" {
 		return DeviceActorKeyPrefix + d
 	}
-	return AnonymousFallbackSubAccountID
+	return AnonymousFallbackPersonaID
 }

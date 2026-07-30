@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"quwoquan_service/runtime/accountrestriction"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
 	consumer "quwoquan_service/services/search-service/internal/search/search_query/adapters/inbound/mq"
@@ -23,6 +24,27 @@ func (failingClosureProjection) ApplyUserAccountClosed(
 ) (application.UserAccountClosedProjectionResult, error) {
 	return application.UserAccountClosedProjectionResult{},
 		errors.New("projection failed for private subject")
+}
+
+type noopClosureProjection struct{}
+
+func (noopClosureProjection) ApplyUserAccountClosed(
+	context.Context,
+	application.UserAccountClosedEvent,
+) (application.UserAccountClosedProjectionResult, error) {
+	return application.UserAccountClosedProjectionResult{}, nil
+}
+
+type recordingRestrictionProjection struct {
+	events []accountrestriction.Event
+}
+
+func (projection *recordingRestrictionProjection) Apply(
+	_ context.Context,
+	event accountrestriction.Event,
+) (application.UserAccountRestrictionProjectionResult, error) {
+	projection.events = append(projection.events, event)
+	return application.UserAccountRestrictionProjectionResult{}, nil
 }
 
 type closureFailureStore struct {
@@ -143,6 +165,51 @@ func TestUserAccountClosedTerminalDLQRetainsSourcePELForRecovery(t *testing.T) {
 	}
 	if failures.dead[messageID] {
 		t.Fatal("recovery must clear terminal marker")
+	}
+}
+
+func TestUserAccountRestrictionEventIsAppliedAndAcknowledged(t *testing.T) {
+	ctx := t.Context()
+	redis := rtredis.NewMemoryClient()
+	transport, err := runtimemessaging.NewRedisMessageTransport(redis, redis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection := &recordingRestrictionProjection{}
+	instance, err := consumer.NewUserAccountClosedConsumer(
+		transport,
+		noopClosureProjection{},
+		&closureFailureStore{},
+		"search-account-restriction-contract",
+		nil,
+		consumer.UserAccountClosedConsumerConfig{
+			BatchSize: 10, MaxAttempts: 3, MinIdle: 0,
+			PollInterval: time.Millisecond,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance.WithUserAccountRestrictionProjection(projection)
+	payload := `{"userId":"account-suspended","personaIds":["persona-suspended"],"accountState":"suspended","authEpoch":4,"decisionRef":"decision-4","occurredAt":"2026-07-28T12:00:00Z"}`
+	if _, err := transport.AppendDurable(ctx, runtimemessaging.DurableMessage{
+		Stream: consumer.UserAccountEventStream,
+		Fields: []runtimemessaging.DurableField{
+			{Name: "eventId", Value: "event-suspended-4"},
+			{Name: "eventName", Value: accountrestriction.UserSuspendedEventName},
+			{Name: "accountId", Value: "account-suspended"},
+			{Name: "accountVersion", Value: "4"},
+			{Name: "occurredAt", Value: "2026-07-28T12:00:00Z"},
+			{Name: "payload", Value: payload},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := instance.ProcessOnce(ctx); err != nil || processed != 1 {
+		t.Fatalf("restriction event: processed=%d err=%v", processed, err)
+	}
+	if len(projection.events) != 1 || !projection.events[0].Restricted() {
+		t.Fatalf("restriction projection events: %+v", projection.events)
 	}
 }
 

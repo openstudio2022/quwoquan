@@ -19,6 +19,8 @@ const (
 	accountSecurityHealthOperationID = "user.user_account.CheckAccountSecurityAuthority"
 	accountSecurityReadScope         = "user.account.security.read"
 	accountSecurityHealthProbeID     = "__account_security_authority_readiness_probe__"
+	accountEnforcementWriteScope     = "user.account.enforcement.write"
+	productOpsServicePrincipal       = "service:product-ops-service"
 )
 
 func isAuthorizedAccountSecurityAuthorityCaller(accountID string) bool {
@@ -242,6 +244,16 @@ func (h *UserHandler) handleAccountEnforcement(
 		))
 		return
 	}
+	trustedContext, ok := trustedServiceOperationContext(
+		w,
+		r,
+		expectedOperationID,
+		accountEnforcementWriteScope,
+		productOpsServicePrincipal,
+	)
+	if !ok {
+		return
+	}
 	accountID := strings.TrimSpace(r.PathValue("userId"))
 	if accountID == "" {
 		writeHTTPError(w, r, generated.AppErrorFromAccountEnforcementDecisionInvalid(
@@ -253,6 +265,13 @@ func (h *UserHandler) handleAccountEnforcement(
 	if err := decodeStrictJSON(r, &request); err != nil {
 		writeHTTPError(w, r, generated.AppErrorFromAccountEnforcementDecisionInvalid(
 			"invalid account enforcement request",
+		))
+		return
+	}
+	if strings.TrimSpace(invocation.IdempotencyKey) !=
+		strings.TrimSpace(request.DecisionID) {
+		writeHTTPError(w, r, generated.AppErrorFromAccountEnforcementDecisionInvalid(
+			"Idempotency-Key must equal the approved decision id",
 		))
 		return
 	}
@@ -271,9 +290,9 @@ func (h *UserHandler) handleAccountEnforcement(
 		err     error
 	)
 	if action == accountports.EnforcementActionSuspend {
-		outcome, err = h.accountEnforcement.SuspendAccount(r.Context(), command)
+		outcome, err = h.accountEnforcement.SuspendAccount(trustedContext, command)
 	} else {
-		outcome, err = h.accountEnforcement.RestoreAccount(r.Context(), command)
+		outcome, err = h.accountEnforcement.RestoreAccount(trustedContext, command)
 	}
 	if err != nil {
 		writeHTTPError(w, r, err)

@@ -1,0 +1,12 @@
+{
+  "label": "米尔福德峡湾",
+  "labelEn": "Milford Sound",
+  "description": "冰川峡湾景观核心",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

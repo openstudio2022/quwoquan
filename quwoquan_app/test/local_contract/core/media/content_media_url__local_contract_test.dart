@@ -4,9 +4,9 @@ import 'package:quwoquan_app/core/media/media_delivery_reference.dart';
 
 void main() {
   const imageKey =
-      'media/image/s/image-primary-0001/post/content-image-0001/cover.png';
+      'media/image/s/image-primary-0001/post/content-image-0001/v7/cover.png';
   const videoKey =
-      'media/video/s/video-primary-0001/post/video-content-0001/source.mp4';
+      'media/video/s/video-primary-0001/post/video-content-0001/v1/source.mp4';
 
   MediaEndpointConfig endpoints({
     required String image,
@@ -29,7 +29,7 @@ void main() {
         ),
       ).resolve(imageKey, kind: MediaDeliveryKind.image, version: 7);
 
-      expect(resolved.url, 'https://image.example.com/$imageKey?v=7');
+      expect(resolved.url, 'https://image.example.com/$imageKey');
       expect(resolved.kind, MediaDeliveryKind.image);
       expect(resolved.version, 7);
     });
@@ -40,9 +40,9 @@ void main() {
           image: 'https://image.example.com',
           video: 'https://video.example.com',
         ),
-      ).resolve(videoKey, kind: MediaDeliveryKind.video, version: 3);
+      ).resolve(videoKey, kind: MediaDeliveryKind.video, version: 1);
 
-      expect(resolved.url, 'https://video.example.com/$videoKey?v=3');
+      expect(resolved.url, 'https://video.example.com/$videoKey');
       expect(resolved.kind, MediaDeliveryKind.video);
     });
 
@@ -136,10 +136,28 @@ void main() {
         resolver.tryResolve(imageKey, kind: MediaDeliveryKind.video),
         isNull,
       );
+      expect(
+        resolver.tryResolve(
+          '$imageKey?sign=untrusted&t=1',
+          kind: MediaDeliveryKind.image,
+        ),
+        isNull,
+      );
+      expect(
+        resolver.tryResolve(
+          'media/image/s/image-primary-0001/post/content-image-0001/cover.png',
+          kind: MediaDeliveryKind.image,
+        ),
+        isNull,
+      );
+      expect(
+        resolver.tryResolve('$imageKey?v=7', kind: MediaDeliveryKind.image),
+        isNull,
+      );
     });
   });
 
-  group('legacy string bridge', () {
+  group('string facade', () {
     test('未注入运行时端点时不构造网络候选', () {
       expect(
         resolveContentMediaUrlCandidates(

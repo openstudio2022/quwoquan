@@ -28,7 +28,7 @@ fields:
   ops_exposure: read
   role: projection
 - name: files
-  type: array
+  type: '[]ConfigSnapshotFile'
   constraints:
   - NOT_NULL
   classification: SENSITIVE
@@ -37,7 +37,7 @@ fields:
   ops_exposure: read
   role: projection
 - name: releaseVersions
-  type: array
+  type: '[]string'
   constraints:
   - NOT_NULL
   classification: INTERNAL
@@ -93,7 +93,7 @@ types:
       api_exposure: drop
       ops_exposure: read
     - name: files
-      type: array
+      type: '[]ConfigSnapshotFile'
       constraints:
       - NOT_NULL
       classification: SENSITIVE
@@ -101,7 +101,7 @@ types:
       api_exposure: drop
       ops_exposure: read
     - name: releaseVersions
-      type: array
+      type: '[]string'
       constraints:
       - NOT_NULL
       classification: INTERNAL
@@ -124,11 +124,23 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
+  ConfigKeyDescriptor:
+    description: metadata 生成的单个配置键治理描述，不承载在线可编辑状态。
+    fields:
+    - {name: key, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: kind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: owner, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: scope, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: reload, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: rollout, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: riskLevel, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: uiEditable, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: default, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: redacted, api_exposure: drop, ops_exposure: read}
   ConfigKeyCatalogSlice:
     description: metadata 生成的配置键目录
     fields:
     - name: items
-      type: array
+      type: '[]ConfigKeyDescriptor'
       constraints:
       - NOT_NULL
       classification: INTERNAL
@@ -139,7 +151,7 @@ types:
     description: 自治服务 package 快照解析出的 sys.* 有效配置值及来源文件
     fields:
     - name: scope
-      type: object
+      type: ConfigResolutionScope
       constraints:
       - NOT_NULL
       classification: INTERNAL
@@ -155,7 +167,7 @@ types:
       api_exposure: drop
       ops_exposure: read
     - name: values
-      type: array
+      type: '[]ResolvedConfigValue'
       constraints:
       - NOT_NULL
       classification: SENSITIVE
@@ -186,6 +198,21 @@ types:
       log_policy: allow
       api_exposure: drop
       ops_exposure: read
+  ConfigResolutionScope:
+    description: 一次有效配置解析的环境、集群与服务边界。
+    fields:
+    - {name: environment, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: cluster, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: service, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+  ResolvedConfigValue:
+    description: 单个配置键的解析值及唯一来源层。
+    fields:
+    - {name: key, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: value, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: redacted, api_exposure: drop, ops_exposure: read}
+    - {name: scopeLevel, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: scopeId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: sourceLayer, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: metadata, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: redacted, api_exposure: drop, ops_exposure: read}
   ConfigSnapshotFile:
     description: 快照内单个配置文件的路径、内容与摘要
     fields:
@@ -221,11 +248,18 @@ types:
       log_policy: redacted
       api_exposure: drop
       ops_exposure: read
+  ConfigDomainItem:
+    description: 可查看配置域中的具名服务集合。
+    fields:
+    - {name: domain, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: label, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
+    - {name: services, type: '[]string', constraints: [NULLABLE], classification: INTERNAL, log_policy: metadata_only, api_exposure: drop, ops_exposure: read}
+    - {name: description, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read}
   ConfigDomainSlice:
     description: 可查看的配置域清单（云侧服务、端侧 App、数据工程、平台自身）
     fields:
     - name: items
-      type: array
+      type: '[]ConfigDomainItem'
       constraints:
       - NOT_NULL
       classification: INTERNAL

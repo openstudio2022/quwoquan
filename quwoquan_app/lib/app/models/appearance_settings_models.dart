@@ -50,14 +50,14 @@ enum AppearanceSettingsSource {
 
 enum AppearanceApplyScope {
   allAccounts,
-  currentSubAccount,
+  currentPersona,
   inheritOwnerDefault;
 
   contracts.AppearanceApplyScope get contract => switch (this) {
     AppearanceApplyScope.allAccounts =>
       contracts.AppearanceApplyScope.allAccounts,
-    AppearanceApplyScope.currentSubAccount =>
-      contracts.AppearanceApplyScope.currentSubAccount,
+    AppearanceApplyScope.currentPersona =>
+      contracts.AppearanceApplyScope.currentPersona,
     AppearanceApplyScope.inheritOwnerDefault =>
       contracts.AppearanceApplyScope.inheritOwnerDefault,
   };
@@ -70,7 +70,7 @@ class AppearanceSettingsSnapshot {
     required this.source,
     required this.ownerDefaultThemeMode,
     required this.ownerDefaultFontSizePreset,
-    required this.hasSubAccountOverride,
+    required this.hasPersonaOverride,
     required this.version,
     required this.updatedAt,
     this.pendingSync = false,
@@ -81,7 +81,7 @@ class AppearanceSettingsSnapshot {
   final AppearanceSettingsSource source;
   final AppearanceThemeMode ownerDefaultThemeMode;
   final AppearanceFontSizePreset ownerDefaultFontSizePreset;
-  final bool hasSubAccountOverride;
+  final bool hasPersonaOverride;
   final int version;
   final DateTime updatedAt;
   final bool pendingSync;
@@ -100,7 +100,7 @@ class AppearanceSettingsSnapshot {
     ownerDefaultFontSizePreset: AppearanceFontSizePreset.fromWire(
       view.ownerDefaultFontSizePreset.wireValue,
     ),
-    hasSubAccountOverride: view.hasSubAccountOverride,
+    hasPersonaOverride: view.hasPersonaOverride,
     version: view.version,
     updatedAt: view.updatedAt,
   );
@@ -111,7 +111,7 @@ class AppearanceSettingsSnapshot {
     AppearanceSettingsSource? source,
     AppearanceThemeMode? ownerDefaultThemeMode,
     AppearanceFontSizePreset? ownerDefaultFontSizePreset,
-    bool? hasSubAccountOverride,
+    bool? hasPersonaOverride,
     int? version,
     DateTime? updatedAt,
     bool? pendingSync,
@@ -122,7 +122,7 @@ class AppearanceSettingsSnapshot {
     ownerDefaultThemeMode: ownerDefaultThemeMode ?? this.ownerDefaultThemeMode,
     ownerDefaultFontSizePreset:
         ownerDefaultFontSizePreset ?? this.ownerDefaultFontSizePreset,
-    hasSubAccountOverride: hasSubAccountOverride ?? this.hasSubAccountOverride,
+    hasPersonaOverride: hasPersonaOverride ?? this.hasPersonaOverride,
     version: version ?? this.version,
     updatedAt: updatedAt ?? this.updatedAt,
     pendingSync: pendingSync ?? this.pendingSync,

@@ -72,7 +72,6 @@ class AlphaAuthPublicPlaneApiIntegrationTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["hits"], [])
         self.assertTrue(payload["requestId"])
-        self.assertTrue(payload["rankingVersion"])
         self.assertTrue(payload["mockBoundary"])
 
     def test_bare_alpha_send_and_login_routes_are_json_and_metadata_aligned(self) -> None:

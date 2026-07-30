@@ -16,10 +16,7 @@ import 'package:quwoquan_app/cloud/services/content/intersection_visit_writer.da
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 const _runSmoke = bool.fromEnvironment('RUN_LOCAL_GAMMA_REMOTE_SMOKE');
-const _baseUrl = String.fromEnvironment(
-  'LOCAL_GAMMA_CONTENT_BASE_URL',
-  defaultValue: 'http://127.0.0.1:19220',
-);
+const _baseUrl = String.fromEnvironment('LOCAL_GAMMA_CONTENT_BASE_URL');
 const _viewerId = String.fromEnvironment(
   'APP_CURRENT_USER_ID',
   defaultValue: 'fixture_user_current',
@@ -178,8 +175,8 @@ void main() {
         wishlistReason.intersectionPoints.map((point) => point.sourceRef),
         contains('coWishlistedEntity'),
       );
-      expect(wishlistReason.actionHints.first.actionKey, 'start_companion');
-      expect(wishlistReason.actionHints.first.dispatch, 'companion');
+      expect(wishlistReason.actionHints.first.actionKey, 'start_gathering');
+      expect(wishlistReason.actionHints.first.dispatch, 'gathering');
       expect(
         wishlistReason.actionHints.first.target?.objectId,
         wishlistReason.actionTargetId,
@@ -198,10 +195,10 @@ void main() {
         '$_baseUrl${ContentApiMetadata.getFeedPath}'
         '?sort=recommend&channelId=recommend&limit=5',
       ),
-      headers: CloudRequestHeaders.withOwnerSubAccountContext(
+      headers: CloudRequestHeaders.withOwnerPersonaContext(
         CloudRequestHeaders.forPage(ContentRequestPageIds.getFeed),
         ownerUserId: _viewerId,
-        subAccountId: _viewerId,
+        personaId: _viewerId,
       ),
     );
     final body = CloudResponseDecoder.asObject(
@@ -212,8 +209,7 @@ void main() {
       body['feedRequestId'],
       isA<String>().having((v) => v, 'value', isNotEmpty),
     );
-    expect(body['rankingVersion'], isA<String>());
-    expect(body['reasonVersion'], isA<String>());
+    expect(body['policyDigest'], isA<String>());
     expect(CloudResponseDecoder.mapList(body, 'items'), isNotEmpty);
   });
 }

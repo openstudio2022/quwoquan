@@ -2,8 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/impact_help_type_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
-/// 交集类型图标语义解析器（架构基线 v2 §21.5.2 · A–E 横切复用）。
+/// 交集类型图标语义解析器（canonical 交集设计 · A–E 横切复用）。
 ///
 /// 唯一真相源是云侧下发的 `iconKey`（注册表 `intersection_kind_registry.iconKey`
 /// 与 author/circle impact 的 `iconKey`）。端只做「语义键 → 设计系统图标」映射，
@@ -101,7 +102,15 @@ class IntersectionIconResolver {
     String iconKey = '',
     String sourceRef = '',
     String dimension = '',
+    String tone = '',
   }) {
+    // 云侧直出色号优先（IntersectionReason.tone）。云侧只指派色板 token 名，
+    // 具体色值由端持 light/dark 成对调色板决定——同一色值在明暗两种模式下明度是
+    // 反的，下发色值必然在某一模式下不可读。给新 kind 指派已有色调因此零发版。
+    final explicit = tone.trim();
+    if (explicit.isNotEmpty) {
+      return explicit;
+    }
     final viaSource = _iconKeyForSourceRef(sourceRef);
     final resolvedKey = iconKey.trim().isNotEmpty
         ? iconKey.trim()
@@ -124,12 +133,14 @@ class IntersectionIconResolver {
     String iconKey = '',
     String sourceRef = '',
     String dimension = '',
+    String tone = '',
   }) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return switch (_toneKey(
       iconKey: iconKey,
       sourceRef: sourceRef,
       dimension: dimension,
+      tone: tone,
     )) {
       'tea' =>
         isDark
@@ -165,12 +176,22 @@ class IntersectionTypeIcon extends StatelessWidget {
     this.iconKey = '',
     this.sourceRef = '',
     this.dimension = '',
+    this.tone = '',
+    this.assetUrl = '',
     this.size,
   });
 
   final String iconKey;
   final String sourceRef;
   final String dimension;
+
+  /// 云侧指派的色板 token 名（`IntersectionReason.tone`）；空则按 iconKey 查本地表。
+  final String tone;
+
+  /// 云侧下发的远程图标资源（`IntersectionReason.typeVisual.imageUrl`，alpha 蒙版图）。
+  /// 空、加载中或加载失败一律退回本地 glyph，冷缓存与断网表现与改造前一致。
+  final String assetUrl;
+
   final double? size;
 
   @override
@@ -182,8 +203,19 @@ class IntersectionTypeIcon extends StatelessWidget {
       iconKey: iconKey,
       sourceRef: sourceRef,
       dimension: dimension,
+      tone: tone,
     );
     final fill = iconColor.withValues(alpha: isDark ? 0.20 : 0.13);
+    final glyphSize = diameter * 0.5;
+    final glyph = Icon(
+      IntersectionIconResolver.resolve(
+        iconKey: iconKey,
+        sourceRef: sourceRef,
+        dimension: dimension,
+      ),
+      size: glyphSize,
+      color: iconColor,
+    );
     return Container(
       width: diameter,
       height: diameter,
@@ -196,14 +228,25 @@ class IntersectionTypeIcon extends StatelessWidget {
           width: AppSpacing.hairline,
         ),
       ),
-      child: Icon(
-        IntersectionIconResolver.resolve(
-          iconKey: iconKey,
-          sourceRef: sourceRef,
-          dimension: dimension,
-        ),
-        size: diameter * 0.5,
-        color: iconColor,
+      child: _glyphOrRemote(glyph, glyphSize, iconColor),
+    );
+  }
+
+  Widget _glyphOrRemote(Widget glyph, double glyphSize, Color iconColor) {
+    final url = assetUrl.trim();
+    if (url.isEmpty) return glyph;
+    // 远程图标是 alpha 蒙版图：用 srcIn 把 tone 刷进不透明像素，让远程新图标与
+    // 圆底填充/描边保持同一套设计语言，而不是变成一枚全彩贴纸。
+    return ColorFiltered(
+      colorFilter: ColorFilter.mode(iconColor, BlendMode.srcIn),
+      child: AppCachedNetworkImage(
+        imageUrl: url,
+        width: glyphSize,
+        height: glyphSize,
+        fit: BoxFit.contain,
+        cdnPreset: CdnImagePreset.avatar,
+        placeholder: glyph,
+        errorWidget: glyph,
       ),
     );
   }

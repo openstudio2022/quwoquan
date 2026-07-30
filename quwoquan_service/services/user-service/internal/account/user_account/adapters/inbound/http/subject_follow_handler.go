@@ -45,7 +45,7 @@ func (h *UserHandler) executeSubjectFollow(w http.ResponseWriter, r *http.Reques
 		writeHTTPError(w, r, generated.AppErrorFromInternalError("subject follow service is unavailable"))
 		return
 	}
-	personaID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	personaID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -93,7 +93,7 @@ func (h *UserHandler) handleMarkFollowedSubjectVisited(w http.ResponseWriter, r 
 		writeInvalidArg(w, r, "path must be {subjectId}:mark-visited")
 		return
 	}
-	personaID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	personaID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -133,7 +133,7 @@ func (h *UserHandler) handleListFollowingSubjects(w http.ResponseWriter, r *http
 		writeHTTPError(w, r, generated.AppErrorFromInternalError("following subject query service is unavailable"))
 		return
 	}
-	personaID, err := h.resolveActorSubAccountID(r.Context(), r, "")
+	personaID, err := h.resolveActorPersonaID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

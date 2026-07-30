@@ -35,6 +35,8 @@ from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT, NOW_ISO
+from governance.taxonomy.axis_roles import axis_role_for
+from governance.taxonomy.same_as_bridges import same_as_refs_for
 
 TAGS_ROOT = CONTROL_PLANE_TAXONOMY_ROOT
 
@@ -43,8 +45,31 @@ _stats: dict[str, int] = {}
 
 
 def write_json(path: Path, data: dict):
+    """幂等写盘：保留既有 createdAt，内容未变则不改 updatedAt 也不落盘。
+
+    生成器必须可以反复执行而不产生 diff，否则每次 bootstrap 都会把全部标签的
+    createdAt 刷成当次运行时间，创建历史被抹平，也让真实变更淹没在时间戳噪音里。
+    """
     if DRY_RUN:
         return
+    existing: dict | None = None
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            existing = None
+
+    if existing is not None:
+        created_at = existing.get("createdAt")
+        if created_at:
+            data["createdAt"] = created_at
+        # 只比较业务字段：updatedAt 是结果而不是输入。
+        if {k: v for k, v in existing.items() if k != "updatedAt"} == \
+                {k: v for k, v in data.items() if k != "updatedAt"}:
+            return
+        if "updatedAt" in existing:
+            data["updatedAt"] = NOW_ISO
+
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -88,25 +113,42 @@ def dim(path: str, label: str, label_en: str, desc: str,
 
 
 def tag(path: str, label: str, label_en: str, desc: str,
-        aliases: list[str] | None = None):
+        aliases: list[str] | None = None,
+        collection_channel: str | None = None,
+        consumed_by: list[str] | None = None,
+        same_as_refs: list[str] | None = None):
     group_key = path.split("/")[0]
     _stats[group_key] = _stats.get(group_key, 0) + 1
     data: dict = {
         "label": label, "labelEn": label_en,
         "description": desc,
-        "createdAt": NOW_ISO, "updatedAt": NOW_ISO,
     }
+    axis_role = axis_role_for(path)
+    if axis_role:
+        data["axisRole"] = axis_role
+    bridged = list(same_as_refs or ()) + same_as_refs_for(path)
+    if bridged:
+        data["sameAsRefs"] = sorted(set(bridged))
+    if collection_channel:
+        data["collectionChannel"] = collection_channel
+    if consumed_by:
+        data["consumedBy"] = consumed_by
+    data["createdAt"] = NOW_ISO
+    data["updatedAt"] = NOW_ISO
     if aliases:
         data["aliases"] = aliases
     write_json(_def_file(path), data)
 
 
-def tags_list(prefix: str, items: list[tuple]):
+def tags_list(prefix: str, items: list[tuple],
+              collection_channel: str | None = None,
+              consumed_by: list[str] | None = None):
     """批量生成叶子标签。items = [(中文名, 英文名, 描述[, aliases])]"""
     for item in items:
         cn, en, desc = item[0], item[1], item[2]
         aliases = item[3] if len(item) > 3 else None
-        tag(f"{prefix}/{cn}", cn, en, desc, aliases)
+        tag(f"{prefix}/{cn}", cn, en, desc, aliases,
+            collection_channel=collection_channel, consumed_by=consumed_by)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

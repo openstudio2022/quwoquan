@@ -24,9 +24,11 @@ fields:
 - name: activityId
   type: string
 - name: activityType
-  type: string
+  type: enum
+  enum_ref: InteractionActivityType
 - name: direction
-  type: string
+  type: enum
+  enum_ref: InteractionDirection
 - name: commentKind
   type: string
 - name: commentId
@@ -36,8 +38,9 @@ fields:
   type: string
   nullable: true
 - name: viewerReaction
-  type: string
-- name: actorSubAccountId
+  type: enum
+  enum_ref: CommentReactionType
+- name: actorPersonaId
   type: string
 - name: actorDisplayName
   type: string
@@ -46,7 +49,7 @@ fields:
   nullable: true
 - name: actorAvatarVersion
   type: int
-- name: counterpartSubAccountId
+- name: counterpartPersonaId
   type: string
   nullable: true
 - name: counterpartDisplayName
@@ -55,7 +58,7 @@ fields:
 - name: counterpartAvatarUrl
   type: string
   nullable: true
-- name: targetSubAccountId
+- name: targetPersonaId
   type: string
 - name: targetContentId
   type: string
@@ -70,7 +73,7 @@ fields:
   type: string
 - name: targetReplyCount
   type: int
-- name: displaySubAccountId
+- name: displayPersonaId
   type: string
 - name: displayName
   type: string

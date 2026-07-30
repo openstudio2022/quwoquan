@@ -1,0 +1,147 @@
+description: AccountAppealIntake 对象专属 command packet。
+api_routes:
+- method: POST
+  path: /account-appeals/credentials
+  operation: IssueAccountAppealCredential
+  actor: none
+  application:
+    kind: command
+    facet: AccountAppealIntakeCommandFacade
+    method: issueCredential
+    aggregate_owner: AccountAppealIntake
+    mutation_target: AccountAppealIntake
+    invariant_target: AccountAppealIntake
+  description: 以 account_appeal OTP challenge 和 active phone binding 核验 suspended 身份并一次性签发十分钟 credential
+  request_entity: IssueAccountAppealCredentialCommand
+  request_body_kind: object
+  response_entity: AccountAppealCredentialIssueResult
+  response_fields: [appealCredential, expiresAt]
+  authorization:
+    principal: public
+    ownership_policy: verified_suspended_identity_challenge
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: none
+    max_attempts: 1
+    idempotency: none
+  error_codes: [USER.USER.invalid_argument, USER.AUTH.otp_expired, USER.AUTH.otp_mismatch, USER.AUTH.otp_attempts_exceeded, USER.AUTH.challenge_consumed, USER.ACCOUNT.account_appeal_credential_invalid, USER.ACCOUNT.account_appeal_not_suspended, USER.ACCOUNT.account_appeal_rate_limited, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: SECRET
+    response_classification: SECRET
+    log_policy: none
+  telemetry:
+    metric: user_account_appeal_credential_command
+    trace: true
+    attributes: [operation, outcome, error_code]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: immutable public entry release, production OTP credentials and controlled user acceptance evidence are absent
+    gap_id: USER_ACCOUNT_APPEAL_OFFICIAL_ENTRY
+    target_story: account-suspension-and-appeal-lifecycle
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: private
+- method: POST
+  path: /account-appeals/intakes
+  operation: SubmitAccountAppealIntake
+  actor: none
+  application:
+    kind: command
+    facet: AccountAppealIntakeCommandFacade
+    method: submitIntake
+    aggregate_owner: AccountAppealIntake
+    mutation_target: AccountAppealIntake
+    invariant_target: AccountAppealIntake
+  description: 原子消费单用途 appeal credential 并创建当前 suspension authEpoch 唯一 intake
+  request_entity: SubmitAccountAppealIntakeCommand
+  request_body_kind: object
+  response_entity: AccountAppealIntakeSubmissionResult
+  response_fields: [intakeRef, submittedAt, deleteAfter, idempotentReplay]
+  authorization:
+    principal: public
+    ownership_policy: single_use_account_appeal_credential
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes: [USER.USER.invalid_argument, USER.ACCOUNT.account_appeal_credential_invalid, USER.ACCOUNT.account_appeal_credential_expired, USER.ACCOUNT.account_appeal_credential_consumed, USER.ACCOUNT.account_appeal_not_suspended, USER.ACCOUNT.account_appeal_idempotency_conflict, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: SECRET
+    response_classification: SENSITIVE
+    log_policy: none
+  telemetry:
+    metric: user_account_appeal_intake_command
+    trace: true
+    attributes: [operation, outcome, error_code, idempotent_replay]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  commercial:
+    status: blocked
+    block_reason: immutable public entry release and controlled user acceptance evidence are absent
+    gap_id: USER_ACCOUNT_APPEAL_OFFICIAL_ENTRY
+    target_story: account-suspension-and-appeal-lifecycle
+  security:
+    auth_mode: public
+    principal: public
+    token_transport: none
+    anonymous_policy: allow
+    visibility: private
+- method: POST
+  path: /internal/user/account-appeal-intakes/{intakeRef}:claim
+  operation: ClaimAccountAppealIntake
+  actor: none
+  application:
+    kind: command
+    facet: AccountAppealIntakeCommandFacade
+    method: claimIntake
+    aggregate_owner: AccountAppealIntake
+    mutation_target: AccountAppealIntake
+    invariant_target: AccountAppealIntake
+  description: Product Ops 以最小 tuple 原子认领真实 User-owned intake；同 tuple 重放成功，跨 account/case 拒绝
+  request_entity: ClaimAccountAppealIntakeCommand
+  request_body_kind: object
+  request_bindings:
+    path:
+    - {name: intakeRef, field: intakeRef}
+  response_entity: AccountAppealIntakeClaimResult
+  response_fields: [intakeRef, accountId, caseId, status, claimedAt, idempotentReplay]
+  authorization:
+    principal: service
+    scopes: [user.account.appeal_intake.claim]
+    ownership_policy: product_ops_account_appeal_claim_only
+  reliability:
+    timeout_ms: 500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: required
+  error_codes: [USER.USER.unauthorized, USER.USER.forbidden, USER.USER.invalid_argument, USER.ACCOUNT.account_appeal_intake_not_found, USER.ACCOUNT.account_appeal_intake_account_mismatch, USER.ACCOUNT.account_appeal_intake_claimed, USER.ACCOUNT.account_appeal_not_suspended, USER.ACCOUNT.account_appeal_idempotency_conflict, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: none
+  telemetry:
+    metric: user_account_appeal_intake_claim_command
+    trace: true
+    attributes: [operation, outcome, error_code, idempotent_replay]
+  slo:
+    latency_p95_ms: 200
+    availability_percent: 99.95
+  commercial:
+    status: ready
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal

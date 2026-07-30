@@ -1,4 +1,3 @@
-rule_version: '01'
 slot_count: 16384
 hash_fn: xxhash64
 default_physical_shard: user-primary-a

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
@@ -22,6 +24,7 @@ final class _CapturingCloudHttpClient extends CloudHttpClient {
   _CapturingCloudHttpClient() : super(client: http.Client());
 
   Map<String, String>? lastHeaders;
+  List<int>? lastBody;
   final headersHistory = <Map<String, String>>[];
 
   @override
@@ -31,6 +34,7 @@ final class _CapturingCloudHttpClient extends CloudHttpClient {
     required List<int> body,
   }) async {
     lastHeaders = Map<String, String>.from(headers);
+    lastBody = List<int>.from(body);
     headersHistory.add(lastHeaders!);
     return http.Response('', 204);
   }
@@ -92,7 +96,6 @@ void main() {
       () async {
         await repo.submitOnboardingInterest(
           clientEventId: 'onboarding:release-bound',
-          catalogVersion: 'v1',
           taxonomyReleaseId: 'tag-taxonomy-20260723-001',
           tagRefs: const <String>['Topic/兴趣/旅行'],
         );
@@ -127,23 +130,26 @@ void main() {
 
         await remote.submitOnboardingInterest(
           clientEventId: 'onboarding:actor-bound',
-          catalogVersion: 'v1',
-          taxonomyReleaseId: 'tag-taxonomy-20260723-001',
+          taxonomyReleaseId: ' tag-taxonomy-20260723-001 ',
           tagRefs: const <String>['Topic/兴趣/旅行'],
         );
 
         expect(httpClient.lastHeaders, isNotNull);
         expect(httpClient.lastHeaders!['X-Client-User-Id'], 'account-1');
-        expect(httpClient.lastHeaders!['X-Client-Sub-Account-Id'], 'persona-1');
+        expect(httpClient.lastHeaders!['X-Client-Persona-Id'], 'persona-1');
         expect(httpClient.lastHeaders!['X-Client-Device-Actor-Id'], 'device-1');
         expect(
           httpClient.lastHeaders!['Idempotency-Key'],
           matches(RegExp(r'^behavior-batch-[0-9a-f]{64}$')),
         );
+        final payload = jsonDecode(utf8.decode(httpClient.lastBody!)) as Map;
+        final event = (payload['events'] as List).single as Map;
+        expect(event['taxonomyReleaseId'], 'tag-taxonomy-20260723-001');
+        // Retired catalogVersion must not be emitted on the canonical wire.
+        expect(event.keys, isNot(contains('catalogVersion')));
 
         await remote.submitOnboardingInterest(
           clientEventId: 'onboarding:actor-bound',
-          catalogVersion: 'v1',
           taxonomyReleaseId: 'tag-taxonomy-20260723-001',
           tagRefs: const <String>['Topic/兴趣/旅行'],
         );
@@ -330,8 +336,8 @@ void main() {
         referralSource: ReferralSource.organicFeed,
         position: 7,
         channelId: 'following',
-        rankingVersion: 'rank-v3',
-        reasonVersion: 'reason-v2',
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         recallPath: 'collab_i2i',
         contentVertical: 'travel_photography',
         supplySource: 'data_engineering',
@@ -340,30 +346,52 @@ void main() {
       expect(json['referralSource'], 'organic_feed');
       expect(json['position'], 7);
       expect(json['channelId'], 'following');
-      expect(json['rankingVersion'], 'rank-v3');
-      expect(json['reasonVersion'], 'reason-v2');
+      expect(
+        json['policyDigest'],
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      );
       expect(json['recallPath'], 'collab_i2i');
       expect(json['contentVertical'], 'travel_photography');
       expect(json['supplySource'], 'data_engineering');
     });
 
-    test('空推荐归因字段不写入 JSON（避免脏空串污染归因）', () {
+    test('来源未提供推荐归因时不写入 JSON', () {
       final json = BehaviorEvent(
         contentId: 'post_1',
         action: BehaviorAction.impression,
         channelId: '',
-        rankingVersion: '',
-        reasonVersion: '',
         recallPath: '',
         contentVertical: '',
         supplySource: '',
       ).toJson();
       expect(json.containsKey('channelId'), isFalse);
-      expect(json.containsKey('rankingVersion'), isFalse);
-      expect(json.containsKey('reasonVersion'), isFalse);
+      expect(json.containsKey('policyDigest'), isFalse);
       expect(json.containsKey('recallPath'), isFalse);
       expect(json.containsKey('contentVertical'), isFalse);
       expect(json.containsKey('supplySource'), isFalse);
+    });
+
+    test('非空 policyDigest 必须精确匹配唯一 canonical 形态', () {
+      const canonical =
+          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      for (final invalid in <String>[
+        '',
+        'rank-v3',
+        ' $canonical',
+        '$canonical ',
+        'sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ]) {
+        expect(
+          () => BehaviorEvent(
+            contentId: 'post_1',
+            action: BehaviorAction.impression,
+            policyDigest: invalid,
+          ),
+          throwsFormatException,
+          reason: 'must reject <$invalid> without trimming or fallback',
+        );
+      }
     });
 
     test('hide_author / hide_content_type 透传 authorId 与 contentType', () {

@@ -66,7 +66,7 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
-    test('local_draft_repository_preserves_flow_kind_and_order', () async {
+    test('canonical scoped storage preserves flow kind and order', () async {
       final scopeKey = CreateDraftLocalStorage.scopeKeyForUser('user_001');
       final articleDraft = _buildDraft(
         id: 'draft_article',
@@ -81,14 +81,22 @@ void main() {
         flowKind: CreateDraftFlowKind.image,
         body: '只剩配文',
       );
-      final priorImageMap = imageDraft.toStorageMap()..remove('draftFlowKind');
 
       SharedPreferences.setMockInitialValues(<String, Object>{
-        CreateDraftLocalStorage.draftsKey: jsonEncode(<Object?>[
-          articleDraft.toStorageMap(),
-          priorImageMap,
+        CreateDraftLocalStorage.scopedIndexKey(scopeKey): jsonEncode(<String>[
+          'draft_article',
+          'draft_image',
         ]),
-        CreateDraftLocalStorage.currentDraftIdKey: 'draft_image',
+        CreateDraftLocalStorage.scopedDraftPayloadKey(
+          scopeKey,
+          articleDraft.id,
+        ): jsonEncode(
+          articleDraft.toStorageMap(),
+        ),
+        CreateDraftLocalStorage.scopedDraftPayloadKey(scopeKey, imageDraft.id):
+            jsonEncode(imageDraft.toStorageMap()),
+        CreateDraftLocalStorage.scopedCurrentDraftIdKey(scopeKey):
+            'draft_image',
       });
 
       final repository = SharedPreferencesCreateDraftRepository(
@@ -107,10 +115,11 @@ void main() {
         CreateDraftFlowKind.image,
       );
       expect(snapshot.draftById('draft_image')?.state.imagePaths, isEmpty);
-      expect(prefs.getString(CreateDraftLocalStorage.draftsKey), isNull);
       expect(
-        prefs.getString(CreateDraftLocalStorage.currentDraftIdKey),
-        isNull,
+        prefs.getString(
+          CreateDraftLocalStorage.scopedCurrentDraftIdKey(scopeKey),
+        ),
+        'draft_image',
       );
       expect(
         prefs.getString(CreateDraftLocalStorage.scopedIndexKey(scopeKey)),

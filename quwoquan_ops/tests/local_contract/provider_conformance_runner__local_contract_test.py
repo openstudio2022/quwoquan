@@ -170,7 +170,6 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
                     "}), encoding='utf-8')",
                     "payload = {",
                     "  'schema': 'provider-conformance-case-results',",
-                    "  'version': 1,",
                     "  'status': 'passed',",
                     "  'adapterId': os.environ['QWQ_PROVIDER_CONFORMANCE_ADAPTER_ID'],",
                     "  'capabilityId': os.environ['QWQ_PROVIDER_CONFORMANCE_CAPABILITY_ID'],",
@@ -314,6 +313,8 @@ def test_runner_emits_evidence_only_from_test_owned_case_results() -> None:
     assert runner_environment["adapterDigest"] == evidence["adapterDigest"]
     assert evidence["testTarget"] == "assistant-model-real-adapter-harness"
     assert evidence["observabilityRefs"]["metrics"] == ["metric:provider-test"]
+    assert "version" not in evidence
+    assert "version" not in execution_report
 
 
 def test_runner_rejects_static_derived_source_without_emitting_evidence() -> None:

@@ -97,7 +97,7 @@ void main() {
     expect(find.text(DiscoveryFeedText.intersectionViewAll), findsOneWidget);
     expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
     expect(find.text('你和王然等8位用户都参与「黄金投资圈」'), findsOneWidget);
-    expect(find.text('你和张可等5位校友都去过「西湖」'), findsOneWidget);
+    expect(find.text('你和张可等5位校友都看过「西湖」'), findsOneWidget);
     expect(find.text('你和周屿等2位用户都在「城市漫游圈」'), findsNothing);
     expect(find.text(DiscoveryFeedText.intersectionExpandMore), findsNothing);
 
@@ -268,8 +268,8 @@ GoRouter _router({required Widget Function() builder}) {
         },
       ),
       GoRoute(
-        path: '/user/:username',
-        builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
+        path: '/user/:userHandle',
+        builder: (_, state) => Text('USER:${state.pathParameters['userHandle']}'),
       ),
     ],
   );
@@ -284,7 +284,7 @@ List<IntersectionReason> _items(int count) {
       strength: 0.88,
       timeBucket: 'yesterday',
     ),
-    _item(id: 'ix_loc_1', text: '你和张可等5位校友都去过「西湖」', strength: 0.76),
+    _item(id: 'ix_loc_1', text: '你和张可等5位校友都看过「西湖」', strength: 0.76),
     _item(
       id: 'ix_circle_1',
       text: '你和周屿等2位用户都在「城市漫游圈」',

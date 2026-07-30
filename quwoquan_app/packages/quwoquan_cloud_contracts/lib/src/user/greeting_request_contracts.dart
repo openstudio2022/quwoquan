@@ -1,4 +1,5 @@
 import '../operation_request_payload.dart';
+part '../generated/requests/user/greeting_request_contracts.requests.g.dart';
 
 abstract interface class GreetingRequestCommandWriter {
   Future<GreetingRequestRecord> sendGreeting(SendGreetingCommand command);
@@ -20,56 +21,11 @@ abstract interface class GreetingRequestQuery {
   );
 }
 
-final class SendGreetingCommand {
-  SendGreetingCommand({
-    required String targetSubAccountId,
-    this.requestMessage,
-    this.source = 'profile',
-  }) : targetSubAccountId = _required(targetSubAccountId, 'targetSubAccountId');
-
-  final String targetSubAccountId;
-  final String? requestMessage;
-  final String source;
-}
-
-final class ReplyGreetingCommand {
-  ReplyGreetingCommand({required String requestId})
-    : requestId = _required(requestId, 'requestId');
-
-  final String requestId;
-}
-
-final class IgnoreGreetingCommand {
-  IgnoreGreetingCommand({required String requestId})
-    : requestId = _required(requestId, 'requestId');
-
-  final String requestId;
-}
-
-final class CancelGreetingCommand {
-  CancelGreetingCommand({required String requestId})
-    : requestId = _required(requestId, 'requestId');
-
-  final String requestId;
-}
-
-final class ListGreetingRequestsQuery {
-  const ListGreetingRequestsQuery({
-    this.status = 'pending',
-    this.cursor,
-    this.limit = 20,
-  });
-
-  final String status;
-  final String? cursor;
-  final int limit;
-}
-
 final class GreetingRequestRecord {
   const GreetingRequestRecord({
     required this.id,
-    required this.requesterSubAccountId,
-    required this.targetSubAccountId,
+    required this.requesterPersonaId,
+    required this.targetPersonaId,
     required this.status,
     required this.source,
     required this.createdAt,
@@ -81,8 +37,8 @@ final class GreetingRequestRecord {
   });
 
   final String id;
-  final String requesterSubAccountId;
-  final String targetSubAccountId;
+  final String requesterPersonaId;
+  final String targetPersonaId;
   final String? requestMessage;
   final String status;
   final String source;
@@ -100,53 +56,12 @@ final class GreetingRequestSlice {
   final String? nextCursor;
 }
 
-CloudOperationRequestPayload encodeSendGreetingCommand(
-  SendGreetingCommand command,
-) {
-  final message = command.requestMessage?.trim();
-  return CloudOperationRequestPayload(
-    body: <String, Object?>{
-      'targetSubAccountId': command.targetSubAccountId,
-      if (message != null && message.isNotEmpty) 'requestMessage': message,
-      'source': command.source.trim().isEmpty
-          ? 'profile'
-          : command.source.trim(),
-    },
-  );
-}
-
-CloudOperationRequestPayload encodeReplyGreetingCommand(
-  ReplyGreetingCommand command,
-) => _requestIdPayload(command.requestId);
-
-CloudOperationRequestPayload encodeIgnoreGreetingCommand(
-  IgnoreGreetingCommand command,
-) => _requestIdPayload(command.requestId);
-
-CloudOperationRequestPayload encodeCancelGreetingCommand(
-  CancelGreetingCommand command,
-) => _requestIdPayload(command.requestId);
-
-CloudOperationRequestPayload encodeListGreetingRequestsQuery(
-  ListGreetingRequestsQuery query,
-) {
-  final status = query.status.trim();
-  final cursor = query.cursor?.trim() ?? '';
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (status.isNotEmpty) 'status': status,
-      if (cursor.isNotEmpty) 'cursor': cursor,
-      'limit': '${query.limit.clamp(1, 100)}',
-    },
-  );
-}
-
 GreetingRequestRecord decodeGreetingRequestRecord(Object? response) {
   final root = _object(response, 'GreetingRequestRecord');
   return GreetingRequestRecord(
     id: _requiredField(root, 'id'),
-    requesterSubAccountId: _requiredField(root, 'requesterSubAccountId'),
-    targetSubAccountId: _requiredField(root, 'targetSubAccountId'),
+    requesterPersonaId: _requiredField(root, 'requesterPersonaId'),
+    targetPersonaId: _requiredField(root, 'targetPersonaId'),
     requestMessage: _optionalString(root['requestMessage']),
     status: _requiredField(root, 'status'),
     source: _requiredField(root, 'source'),
@@ -173,12 +88,6 @@ GreetingRequestSlice decodeGreetingRequestSlice(Object? response) {
         .map<GreetingRequestRecord>(decodeGreetingRequestRecord)
         .toList(growable: false),
     nextCursor: cursor,
-  );
-}
-
-CloudOperationRequestPayload _requestIdPayload(String requestId) {
-  return CloudOperationRequestPayload(
-    pathParameters: <String, String>{'requestId': requestId},
   );
 }
 
@@ -210,12 +119,4 @@ DateTime _requiredTimestamp(Map<Object?, Object?> root, String key) {
 DateTime? _optionalTimestamp(Object? value) {
   final text = _optionalString(value);
   return text == null ? null : DateTime.parse(text).toUtc();
-}
-
-String _required(String value, String name) {
-  final text = value.trim();
-  if (text.isEmpty) {
-    throw ArgumentError.value(value, name, 'must not be empty');
-  }
-  return text;
 }

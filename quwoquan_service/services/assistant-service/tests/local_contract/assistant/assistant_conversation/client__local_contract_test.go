@@ -11,7 +11,7 @@ import (
 	. "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/chatclient"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/ports"
 )
 
 func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
@@ -98,7 +98,7 @@ func TestClientReadsGroundingAndSendsAssistantMessage(t *testing.T) {
 	if len(messages) != 1 || messages[0].Content != "我们周末去哪里？" {
 		t.Fatalf("messages=%#v", messages)
 	}
-	err = client.SendMessage(ctx, application.ChatGroundingSendMessageRequest{
+	err = client.SendMessage(ctx, ports.ChatGroundingSendMessageRequest{
 		ConversationID:   "conv-1",
 		CreatorPersonaID: "user-a",
 		AssistantSkillID: "general",

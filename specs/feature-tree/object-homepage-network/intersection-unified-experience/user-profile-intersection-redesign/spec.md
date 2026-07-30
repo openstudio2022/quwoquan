@@ -42,7 +42,7 @@
 <a id="req-003"></a>
 ### REQ-003 他人主页交集列表入口 GWT（S2a）
 
-- 文案口径与 intersection-definition §17 一致。
+- 文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 
 <a id="req-004"></a>
 ### REQ-004 我的主页交集与打动 GWT（S2b）
@@ -50,9 +50,10 @@
 - 红点聚合进「查看更多」；主标题固定为「我的交集」，时间窗口不写死为“今日”。
 
 <a id="req-005"></a>
-### REQ-005 林墨「我的交集」旅行三元组 inbox 渲染 + lifecycle 单源显隐 GWT（WS-ACC §22.10）
+### REQ-005 林墨「我的交集」旅行三元组 inbox 渲染 + lifecycle 单源显隐 GWT
 
 - Widget 与契约测试必须直接证明 inbox 三元组渲染和 lifecycle 单源显隐过滤。
+- 展示合同口径锚定父能力 [`REQ-007 Display Contract / §17`](../spec.md#display-contract)（历史文档曾称 WS-ACC §22.10，仓内无独立 WS-ACC 文件）。
 
 <a id="req-006"></a>
 ### REQ-006 打动文案去好友化（认识了新朋友 → 建立了新连接），无收藏文案；他人/我的标题统一为 TA打动的人 / 我打动的人
@@ -115,7 +116,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：文案口径与 intersection-definition §17 一致。
+- 目标：文案口径与 `intersection_kind_registry.yaml` 登记的 kind / dimension / actionHint 口径一致。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-004"></a>

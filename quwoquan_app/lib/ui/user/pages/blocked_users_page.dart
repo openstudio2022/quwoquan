@@ -89,7 +89,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
   }
 
   Future<void> _confirmUnblock(BlockedUserListItem item) async {
-    if (_unblocking.contains(item.targetSubAccountId)) {
+    if (_unblocking.contains(item.targetPersonaId)) {
       return;
     }
     final confirmed = await showAppCupertinoDialog<bool>(
@@ -117,14 +117,14 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
   }
 
   Future<void> _unblock(BlockedUserListItem item) async {
-    setState(() => _unblocking.add(item.targetSubAccountId));
+    setState(() => _unblocking.add(item.targetPersonaId));
     try {
       final result = await ref
           .read(
             personaRelationshipBlockWriterProvider(AppUiSurfaces.blockedUsers),
           )
           .unblockUser(
-            UnblockUserCommand(targetSubAccountId: item.targetSubAccountId),
+            UnblockUserCommand(targetPersonaId: item.targetPersonaId),
           );
       if (!mounted) {
         return;
@@ -132,8 +132,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       if (!result.blocked) {
         setState(() {
           _items.removeWhere(
-            (candidate) =>
-                candidate.targetSubAccountId == item.targetSubAccountId,
+            (candidate) => candidate.targetPersonaId == item.targetPersonaId,
           );
         });
       }
@@ -145,7 +144,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
               action: 'unblock_user',
               pageName: 'BlockedUsersPage',
               targetType: 'user',
-              targetKey: item.targetSubAccountId,
+              targetKey: item.targetPersonaId,
             ),
       );
       AppToast.show(context, ContentText.blockedUsersUnblockSuccess);
@@ -170,7 +169,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       );
     } finally {
       if (mounted) {
-        setState(() => _unblocking.remove(item.targetSubAccountId));
+        setState(() => _unblocking.remove(item.targetPersonaId));
       }
     }
   }
@@ -260,7 +259,7 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
                 _BlockedUserRow(
                   item: _items[index],
                   isDark: isDark,
-                  busy: _unblocking.contains(_items[index].targetSubAccountId),
+                  busy: _unblocking.contains(_items[index].targetPersonaId),
                   onUnblock: () => _confirmUnblock(_items[index]),
                 ),
                 if (index != _items.length - 1)

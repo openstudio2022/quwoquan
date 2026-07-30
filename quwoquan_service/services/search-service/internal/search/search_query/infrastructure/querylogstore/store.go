@@ -64,7 +64,6 @@ func (s *Store) Log(
 		"viewerId":         query.ViewerID,
 		"objectTypes":      query.ObjectTypes,
 		"resultCount":      query.ResultCount,
-		"rankingVersion":   query.RankingVersion,
 		"experimentBucket": query.ExperimentBucket,
 	}
 	_, err := s.queries.UpdateOne(

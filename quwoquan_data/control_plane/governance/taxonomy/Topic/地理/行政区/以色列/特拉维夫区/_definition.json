@@ -1,0 +1,12 @@
+{
+  "label": "特拉维夫区",
+  "labelEn": "Tel Aviv District",
+  "description": "地中海海岸都会",
+  "collectionChannel": "poi",
+  "consumedBy": [
+    "recall",
+    "intersection"
+  ],
+  "createdAt": "2026-07-28T14:10:32.425342+00:00",
+  "updatedAt": "2026-07-28T14:10:32.425342+00:00"
+}

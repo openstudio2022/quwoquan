@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show SemanticsFlag;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_telemetry_catalog.g.dart';
@@ -119,7 +117,7 @@ void main() {
     final semantics = tester.getSemantics(
       find.text(SearchText.recoveryReloadLaterTitle),
     );
-    expect(semantics.hasFlag(SemanticsFlag.isLiveRegion), isTrue);
+    expect(semantics.flagsCollection.isLiveRegion, isTrue);
   });
 
   testWidgets('429 主操作在 Retry-After 倒计时结束前不可触发', (tester) async {
@@ -233,6 +231,7 @@ void main() {
             scope: UiErrorScope.page,
             title: SearchText.recoveryReloadLaterTitle,
             message: SearchText.recoveryReloadLaterMessage,
+            sourceCode: 'CONTENT.SYSTEM.read_unavailable',
             sourceSurfaceId: 'home_feed',
             recoveryAction: RuntimeRecoveryAction.retry,
             primaryAction: UiErrorAction(

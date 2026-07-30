@@ -131,7 +131,7 @@ class ProfileActionBar extends StatelessWidget {
         onPressed: onMessage,
       ),
     ];
-    final targetUserId = capability?.targetSubAccountId ?? '';
+    final targetUserId = capability?.targetPersonaId ?? '';
     final voiceAvailable = RtcCallEntryIntent.direct(
       mediaType: RtcCallEntryMediaType.audio,
       targetUserId: targetUserId,

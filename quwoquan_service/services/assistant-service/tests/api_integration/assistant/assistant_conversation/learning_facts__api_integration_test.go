@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/feedback-aggregation/spec.md#gwt-001
 package api_integration
 
 import (
@@ -8,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,12 +41,15 @@ func newLearningFactIntegrationHandler(t *testing.T) http.Handler {
 		nil,
 	)
 	mux := http.NewServeMux()
-	learninghttp.NewHandler(service).RegisterRoutes(mux)
+	learninghttp.NewHandler(
+		service,
+		learningapplication.NewOpsQueryService(integrationLearningProjector),
+	).RegisterRoutes(mux)
 	mux.Handle("/", assistanthttp.NewHandler(newIntegrationAssistantService()).Routes())
 	return mux
 }
 
-func TestAssistantLearningProjectorReplacesObsoleteReceiptSequenceIndex(
+func TestAssistantLearningProjectorReplacesNoncanonicalReceiptSequenceIndex(
 	t *testing.T,
 ) {
 	resetIntegrationState(t)
@@ -59,7 +64,7 @@ func TestAssistantLearningProjectorReplacesObsoleteReceiptSequenceIndex(
 	}
 	if _, err := collection.Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{
-			{Key: "definitionVersion", Value: 1},
+			{Key: "eventId", Value: 1},
 			{Key: "appendSequence", Value: 1},
 		},
 		Options: options.Index().SetName(indexName).SetUnique(true),
@@ -149,7 +154,6 @@ func learningFactRequest(
 ) map[string]any {
 	return map[string]any{
 		"eventId":          eventID,
-		"eventVersion":     1,
 		"factType":         "user_feedback",
 		"assistantTurnId":  assistantTurnID,
 		"referralSource":   "article",
@@ -190,7 +194,7 @@ func TestAssistantLearningFactHTTPContract(t *testing.T) {
 	}
 	var fact learningmodel.Fact
 	if err := integrationMongoDB.Collection("assistant_learning_facts").
-		FindOne(ctx, bson.M{"eventId": "fact-http-1", "eventVersion": 1}).
+		FindOne(ctx, bson.M{"eventId": "fact-http-1"}).
 		Decode(&fact); err != nil {
 		t.Fatalf("load learning fact: %v", err)
 	}
@@ -214,15 +218,29 @@ func TestAssistantLearningFactHTTPContract(t *testing.T) {
 			err,
 		)
 	}
-	summary, err := newIntegrationAssistantService().GetLearningOpsSummary(
-		ctx,
+	summaryResponse := assistantAPIRequest(
+		t,
+		handler,
+		http.MethodGet,
+		"/assistant/ops/learning-summary",
 		"learn-user",
+		nil,
 	)
-	if err != nil ||
-		summary.TotalFeedbackCount != 1 ||
+	if summaryResponse.Code != http.StatusOK {
+		t.Fatalf(
+			"learning projection summary status=%d body=%s",
+			summaryResponse.Code,
+			summaryResponse.Body.String(),
+		)
+	}
+	var summary learningmodel.AssistantLearningOpsSummaryView
+	if err := json.Unmarshal(summaryResponse.Body.Bytes(), &summary); err != nil {
+		t.Fatalf("decode learning projection summary: %v", err)
+	}
+	if summary.TotalFeedbackCount != 1 ||
 		summary.PositiveFeedbackCount != 1 ||
 		summary.LastFeedbackType != "useful" {
-		t.Fatalf("learning projection summary=%+v err=%v", summary, err)
+		t.Fatalf("learning projection summary=%+v", summary)
 	}
 	if projected, err := integrationLearningProjector.ProjectAvailable(ctx, 32); err != nil || projected != 0 {
 		t.Fatalf(
@@ -289,7 +307,7 @@ func TestAssistantLearningFactAppendDedupe(t *testing.T) {
 		}
 	}
 	count, err := integrationMongoDB.Collection("assistant_learning_facts").
-		CountDocuments(ctx, bson.M{"eventId": "fact-dedupe-1", "eventVersion": 1})
+		CountDocuments(ctx, bson.M{"eventId": "fact-dedupe-1"})
 	if err != nil || count != 1 {
 		t.Fatalf("dedupe must keep one fact: count=%d err=%v", count, err)
 	}
@@ -505,6 +523,25 @@ func TestAssistantLearningProjectionRebuildActivatesEquivalentGeneration(
 	if err != nil || before == nil {
 		t.Fatalf("read initial projection=%+v err=%v", before, err)
 	}
+	if _, err := integrationMongoDB.Collection(
+		"assistant_learning_projection_watermarks",
+	).ReplaceOne(
+		ctx,
+		bson.M{"_id": "active"},
+		bson.M{
+			"_id":          "active",
+			"generationId": before.GenerationID,
+			"updatedAt":    time.Now().UTC(),
+		},
+	); err != nil {
+		t.Fatalf("install noncanonical active projection fixture: %v", err)
+	}
+	if _, err := integrationLearningProjector.GetLearningProjection(
+		ctx,
+		"rebuild-user",
+	); !errors.Is(err, learningprojection.ErrDefinitionMismatch) {
+		t.Fatalf("noncanonical active projection must fail closed: %v", err)
+	}
 
 	rebuilt, err := integrationLearningProjector.Rebuild(ctx)
 	if err != nil || rebuilt != 2 {
@@ -520,25 +557,48 @@ func TestAssistantLearningProjectionRebuildActivatesEquivalentGeneration(
 	if before.TotalFeedbackCount != after.TotalFeedbackCount ||
 		before.PositiveFeedbackCount != after.PositiveFeedbackCount ||
 		before.WatermarkSequence != after.WatermarkSequence ||
-		before.DefinitionVersion != after.DefinitionVersion {
+		before.DefinitionDigest != after.DefinitionDigest {
 		t.Fatalf("rebuild changed canonical aggregates: before=%+v after=%+v", before, after)
 	}
 	if before.StorageID == after.StorageID {
 		t.Fatalf("rebuild did not activate a distinct shadow generation: %q", after.StorageID)
 	}
 	var active struct {
-		DefinitionVersion string `bson:"definitionVersion"`
-		GenerationID      string `bson:"generationId"`
+		DefinitionDigest string `bson:"definitionDigest"`
+		GenerationID     string `bson:"generationId"`
 	}
 	if err := integrationMongoDB.Collection(
 		"assistant_learning_projection_watermarks",
 	).FindOne(ctx, bson.M{"_id": "active"}).Decode(&active); err != nil {
 		t.Fatalf("read active projection generation: %v", err)
 	}
-	if active.DefinitionVersion != learningmodel.LearningProjectionDefinitionVersion ||
-		active.GenerationID == "" ||
-		active.GenerationID == learningmodel.LearningProjectionDefinitionVersion {
+	if active.DefinitionDigest != learningmodel.LearningProjectionDefinitionDigest ||
+		!strings.HasPrefix(active.GenerationID, "rebuild:") ||
+		!learningmodel.IsLearningProjectionGenerationID(active.GenerationID) ||
+		active.GenerationID == learningmodel.LearningProjectionDefinitionDigest {
 		t.Fatalf("unexpected active definition=%+v", active)
+	}
+	for collectionName, filter := range map[string]bson.M{
+		"rm_assistant_learning_projection": {
+			"generationId": bson.M{"$ne": active.GenerationID},
+		},
+		"assistant_learning_projection_receipts": {
+			"generationId": bson.M{"$ne": active.GenerationID},
+		},
+		"assistant_learning_projection_watermarks": {
+			"_id": bson.M{"$nin": bson.A{"active", active.GenerationID}},
+		},
+	} {
+		count, countErr := integrationMongoDB.Collection(collectionName).
+			CountDocuments(ctx, filter)
+		if countErr != nil || count != 0 {
+			t.Fatalf(
+				"non-active generation remained in %s: count=%d err=%v",
+				collectionName,
+				count,
+				countErr,
+			)
+		}
 	}
 }
 
@@ -621,7 +681,6 @@ func TestAssistantServiceLearningFactRequiresServicePrincipal(t *testing.T) {
 	)
 	payload, err := json.Marshal(map[string]any{
 		"eventId":          "service-scorecard-1",
-		"eventVersion":     1,
 		"factType":         "service_scorecard",
 		"assistantTurnId":  turnID,
 		"referralSource":   "assistant_conversation",
@@ -690,7 +749,6 @@ func TestAssistantLearningProjectionSeparatesPersonaOwners(t *testing.T) {
 		fact, err := learningmodel.Build(
 			learningmodel.AppendCommand{
 				EventID:          eventID,
-				EventVersion:     1,
 				FactType:         learningmodel.FactTypeUserFeedback,
 				AssistantTurnID:  "turn-" + personaID,
 				ReferralSource:   "assistant_conversation",

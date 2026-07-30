@@ -121,9 +121,9 @@ class _ContactSearchResultPageState
   ContactCandidateVm _toCandidate(SocialRelationSearchItemView item) {
     final cap = item.relationshipCapability;
     return ContactCandidateVm(
-      subAccountId: item.subAccountId,
+      personaId: item.personaId,
       displayName: item.displayName,
-      userHandle: item.username,
+      userHandle: item.userHandle,
       avatarUrl: item.avatarUrl,
       avatarVersion: item.avatarVersion,
       subtitle: item.headline,
@@ -136,15 +136,15 @@ class _ContactSearchResultPageState
   }
 
   Future<void> _add(ContactCandidateVm candidate) async {
-    if (_pending.contains(candidate.subAccountId)) {
+    if (_pending.contains(candidate.personaId)) {
       return;
     }
-    setState(() => _pending.add(candidate.subAccountId));
+    setState(() => _pending.add(candidate.personaId));
     try {
       await ref
           .read(userRelationshipStateProvider.notifier)
           .setFollowingWithSync(
-            candidate.subAccountId,
+            candidate.personaId,
             currentFollowing: false,
             shouldFollow: true,
             sourceSurface: AppUiSurfaces.addContactSearch,
@@ -155,7 +155,7 @@ class _ContactSearchResultPageState
       setState(() {
         _results = _results
             .map(
-              (c) => c.subAccountId == candidate.subAccountId
+              (c) => c.personaId == candidate.personaId
                   ? c.copyWith(addState: ContactAddState.added)
                   : c,
             )
@@ -170,7 +170,7 @@ class _ContactSearchResultPageState
               action: 'follow_contact_from_search',
               pageName: 'ContactSearchResultPage',
               targetType: 'user',
-              targetKey: candidate.subAccountId,
+              targetKey: candidate.personaId,
             ),
       );
     } catch (error) {
@@ -193,7 +193,7 @@ class _ContactSearchResultPageState
       }
     } finally {
       if (mounted) {
-        setState(() => _pending.remove(candidate.subAccountId));
+        setState(() => _pending.remove(candidate.personaId));
       }
     }
   }
@@ -273,12 +273,12 @@ class _ContactSearchResultPageState
         final candidate = _results[index];
         return ContactCandidateRow(
           candidate: candidate,
-          pending: _pending.contains(candidate.subAccountId),
+          pending: _pending.contains(candidate.personaId),
           onAdd: () => unawaited(_add(candidate)),
           onTap: () => context.push(
             AppRoutePaths.addContactConfirm(
               handle: candidate.userHandle,
-              userId: candidate.subAccountId,
+              userId: candidate.personaId,
               source: 'search',
             ),
           ),

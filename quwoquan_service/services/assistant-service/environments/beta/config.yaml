@@ -5,8 +5,8 @@ overrides:
   sys.assistant-service.content_service.base_url: http://127.0.0.1:18080
   sys.assistant-service.entity_service.base_url: http://127.0.0.1:18084
   sys.assistant-service.notification_service.base_url: http://127.0.0.1:18088
-  sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/2026-07-26.1.json
-  sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/2026-07-26.1.json
+  sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/95f06f8e01d2023c814eb50e1f394642ac563905b68ae0fff5a010e322c5c7bc.json
+  sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/revision-2.json
   sys.assistant-service.redis.general.addr: 127.0.0.1:6379
   sys.assistant-service.redis.rec.addr: 127.0.0.1:6379
   sys.assistant-service.search_service.base_url: http://127.0.0.1:18095

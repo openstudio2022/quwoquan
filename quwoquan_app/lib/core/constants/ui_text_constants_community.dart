@@ -102,8 +102,13 @@ abstract final class CommunityText {
   static const String circleTagsPlaceholder = '用空格分隔标签，如 摄影 胶片 城市漫步';
   static const String circleVisibilityLabel = '可见范围';
   static const String visibilityMembers = '成员可见';
+  static const String visibilityInviteOnly = '仅受邀者可见';
   static const String circleVisibilityPublicDescription = '公开展示，所有人都可发现';
   static const String circleVisibilityMembersDescription = '仅成员可见，更适合小范围共创';
+  static const String circleVisibilityInviteOnlyDescription =
+      '仅受邀成员可见，未受邀用户无法主动加入';
+  static const String circleJoinInviteOnly = '仅邀请加入';
+  static const String circleJoinInviteOnlyDescription = '由圈子管理员发出邀请后才可加入';
   static const String circleJoinPolicyLabel = '加入方式';
   static const String circleJoinApproval = '申请加入';
   static const String circleJoinOpenDescription = '可直接加入，降低新成员进入门槛';

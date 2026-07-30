@@ -2,6 +2,7 @@
   "label": "跳伞极限",
   "labelEn": "Skydiving & Extreme",
   "description": "跳伞蹦极等极限体验",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

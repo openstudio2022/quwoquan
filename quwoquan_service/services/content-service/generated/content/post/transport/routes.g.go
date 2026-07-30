@@ -7,13 +7,13 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+
 	"strings"
 )
 
 var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/config/app", operation: "GetAppConfig"},
 	{method: "POST", pathTemplate: "/content/articles/summary:generate", operation: "GenerateArticleSummary"},
-	{method: "POST", pathTemplate: "/content/behaviors", operation: "ReportBehaviors"},
 	{method: "GET", pathTemplate: "/content/entity-wishlist-state", operation: "GetEntityWishlistState"},
 	{method: "GET", pathTemplate: "/content/feed", operation: "GetFeed"},
 	{method: "GET", pathTemplate: "/content/footprint", operation: "GetMyFootprint"},
@@ -21,16 +21,15 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/content/intersections", operation: "ListMyIntersections"},
 	{method: "GET", pathTemplate: "/content/intersections/object", operation: "GetObjectIntersections"},
 	{method: "GET", pathTemplate: "/content/intersections/summary", operation: "GetMyIntersectionSummary"},
+	{method: "GET", pathTemplate: "/content/personas/{personaId}/author-impact", operation: "GetAuthorImpact"},
+	{method: "GET", pathTemplate: "/content/personas/{personaId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
+	{method: "GET", pathTemplate: "/content/personas/{personaId}/posts", operation: "ListUserPosts"},
 	{method: "DELETE", pathTemplate: "/content/posts/{postId}", operation: "DeletePost"},
 	{method: "GET", pathTemplate: "/content/posts/{postId}", operation: "GetPost"},
 	{method: "GET", pathTemplate: "/content/posts/{postId}/counters", operation: "GetCounters"},
 	{method: "PATCH", pathTemplate: "/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
 	{method: "POST", pathTemplate: "/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/content/posts:publish", operation: "SubmitPostPublication"},
-	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
-	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
-	{method: "GET", pathTemplate: "/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
-	{method: "POST", pathTemplate: "/internal/content/account-closure/dead-letters:recover", operation: "RecoverContentAccountClosureDeadLetter"},
 }
 
 type generatedRouteDef struct {
@@ -145,36 +144,50 @@ type GeneratedGetFeedParams struct {
 	Sort          string
 	Cursor        string
 	SubCategory   string
-	FeedRequestId string
 	ChannelId     string
+	SessionId     string
+	FeedRequestId string
 	Limit         int
 }
 
-func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetFeedParams {
-	out := GeneratedGetFeedParams{Limit: defaultLimit}
+const (
+	GeneratedGetFeedDefaultItems = 20
+	GeneratedGetFeedMaximumItems = 20
+)
+
+func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error) {
+	out := GeneratedGetFeedParams{Limit: GeneratedGetFeedDefaultItems}
 	q := r.URL.Query()
-	_ = q
-	_ = strconv.IntSize
 	out.Identity = strings.TrimSpace(q.Get("identity"))
 	out.Type = strings.TrimSpace(q.Get("type"))
 	out.Sort = strings.TrimSpace(q.Get("sort"))
 	out.Cursor = strings.TrimSpace(q.Get("cursor"))
 	out.SubCategory = strings.TrimSpace(q.Get("subCategory"))
-	out.FeedRequestId = strings.TrimSpace(q.Get("feedRequestId"))
 	out.ChannelId = strings.TrimSpace(q.Get("channelId"))
+	out.SessionId = strings.TrimSpace(q.Get("sessionId"))
+	out.FeedRequestId = strings.TrimSpace(q.Get("feedRequestId"))
 	rawLimit := strings.TrimSpace(q.Get("limit"))
 	if rawLimit != "" {
-		if parsed, err := strconv.Atoi(rawLimit); err == nil {
-			out.Limit = parsed
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil {
+			return GeneratedGetFeedParams{}, fmt.Errorf("limit must be an integer")
 		}
+		out.Limit = parsed
 	}
-	if out.Limit <= 0 {
-		out.Limit = defaultLimit
+	if out.Limit <= 0 || out.Limit > GeneratedGetFeedMaximumItems {
+		return GeneratedGetFeedParams{}, fmt.Errorf(
+			"limit must be between 1 and %d",
+			GeneratedGetFeedMaximumItems,
+		)
 	}
-	return out
+	return out, nil
 }
 
-var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
+var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
+	"GenerateArticleSummary": {
+		"title": {},
+		"body":  {},
+	},
 	"PromotePostToWork": {
 		"contentType":             {},
 		"title":                   {},
@@ -211,6 +224,8 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"illustrationAssetId":       {},
 		"location":                  {},
 		"locationName":              {},
+		"geoTagRef":                 {},
+		"visitedAt":                 {},
 		"primaryHomepageId":         {},
 		"primaryHomepageType":       {},
 		"primaryHomepageSnapshot":   {},
@@ -233,8 +248,8 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 	},
 }
 
-func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
-	allowed, ok := generatedWritableFieldSetByOperation[operation]
+func BindGeneratedRequestBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
+	allowed, ok := generatedRequestBodyFieldSetByOperation[operation]
 	if !ok {
 		return nil, nil
 	}
@@ -252,7 +267,7 @@ func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (ma
 	sanitized := make(map[string]any, len(input))
 	for key, value := range input {
 		if _, allowedKey := allowed[key]; !allowedKey {
-			return nil, fmt.Errorf("field %q is not writable for operation %s", key, operation)
+			return nil, fmt.Errorf("field %q is not part of request body for operation %s", key, operation)
 		}
 		sanitized[key] = value
 	}

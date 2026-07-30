@@ -1,7 +1,7 @@
-// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
-// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
-// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
-// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-001
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -259,7 +259,7 @@ void main() {
     final store = _FakeLocalChatSearchStore();
     final namespace = LocalSearchNamespace.fromActivePersonaContext(
       ActivePersonaContextViewData.fallback(
-        subAccountId: 'user_001',
+        personaId: 'user_001',
         ownerUserId: 'user_001',
         displayName: '测试用户',
         avatarUrl: '',
@@ -283,7 +283,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'user_001',
+              personaId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -347,7 +347,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'user_001',
+              personaId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -383,7 +383,7 @@ void main() {
     final store = _FakeLocalChatSearchStore();
     final namespace = LocalSearchNamespace.fromActivePersonaContext(
       ActivePersonaContextViewData.fallback(
-        subAccountId: 'user_001',
+        personaId: 'user_001',
         ownerUserId: 'user_001',
         displayName: '测试用户',
         avatarUrl: '',
@@ -410,7 +410,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'user_001',
+              personaId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -469,7 +469,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'user_001',
+              personaId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -509,7 +509,7 @@ void main() {
     final store = _FakeLocalChatSearchStore();
     final namespace = LocalSearchNamespace.fromActivePersonaContext(
       ActivePersonaContextViewData.fallback(
-        subAccountId: 'user_001',
+        personaId: 'user_001',
         ownerUserId: 'user_001',
         displayName: '测试用户',
         avatarUrl: '',
@@ -533,7 +533,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              subAccountId: 'user_001',
+              personaId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',

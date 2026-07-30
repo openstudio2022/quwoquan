@@ -9,8 +9,8 @@ import (
 	reviewapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_review/application"
 )
 
-// reviewRequestBody 与 services/entity-service/contracts/entity_homepage/homepage_review/operations.yaml
-// 的 writable_fields 对齐；actor 只来自可信 operation.Context，不接收 body 身份。
+// reviewRequestBody 与 services/entity-service/contracts/entity_homepage/homepage_review/fields.yaml
+// 的 operation-specific request entity 对齐；actor 只来自可信 operation.Context，不接收 body 身份。
 type reviewRequestBody struct {
 	Rating                    int      `json:"rating"`
 	Body                      string   `json:"body,omitempty"`

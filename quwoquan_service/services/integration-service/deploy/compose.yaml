@@ -1,7 +1,7 @@
 # 第一方工作负载 Compose 基线；环境值由环境入口/启动器注入。
 services:
   integration-service:
-    image: "${QWQ_COMPOSE_INTEGRATION_SERVICE_IMAGE:-localhost/quwoquan_service_integration-service:latest}"
+    image: "${QWQ_COMPOSE_INTEGRATION_SERVICE_IMAGE:?fixed integration-service source image reference is required}"
     build:
       context: ../../../quwoquan_service
       dockerfile: services/integration-service/build/Dockerfile
@@ -14,7 +14,7 @@ services:
       APP_ENV: "${QWQ_COMPOSE_ENV:-gamma}"
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_INTEGRATION_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_INTEGRATION_SERVICE_CONFIG_VERSION is required}"
-      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:-0.0.1}"
+      IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
       INTEGRATION_SERVICE_ADDR: ":18086"
       INTEGRATION_MONGO_URI: mongodb://mongodb:27017
       INTEGRATION_MONGO_DATABASE: quwoquan_integration

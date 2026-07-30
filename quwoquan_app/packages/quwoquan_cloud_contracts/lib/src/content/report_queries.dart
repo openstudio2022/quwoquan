@@ -1,5 +1,6 @@
 import '../operation_request_payload.dart';
 import 'report_commands.dart';
+part '../generated/requests/content/report_queries.requests.g.dart';
 
 /// 举报聚合对举报人公开的生命周期状态。
 enum ContentReportStatus { pending, reviewing, resolved, dismissed }
@@ -29,12 +30,7 @@ final class ContentMyReportItem {
   final DateTime? resolvedAt;
 }
 
-final class ContentMyReportsQuery {
-  const ContentMyReportsQuery({this.cursor, this.limit = 20});
 
-  final String? cursor;
-  final int limit;
-}
 
 final class ContentMyReportPage {
   ContentMyReportPage({
@@ -50,19 +46,7 @@ abstract interface class ContentMyReportQueryFacet {
   Future<ContentMyReportPage> listMyReports(ContentMyReportsQuery query);
 }
 
-CloudOperationRequestPayload encodeContentMyReportsQuery(
-  ContentMyReportsQuery query,
-) {
-  if (query.limit < 1 || query.limit > 100) {
-    throw RangeError.range(query.limit, 1, 100, 'limit');
-  }
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      if (_optionalText(query.cursor) case final cursor?) 'cursor': cursor,
-      'limit': '${query.limit}',
-    },
-  );
-}
+
 
 ContentMyReportPage decodeContentMyReportPage(Object? response) {
   final root = _expectObject(response, 'My reports response');

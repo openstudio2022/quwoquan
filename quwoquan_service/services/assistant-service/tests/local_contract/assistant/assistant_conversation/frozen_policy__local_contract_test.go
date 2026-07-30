@@ -4,12 +4,12 @@ package local_contract
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/domain/assistant"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
+	modeldouble "quwoquan_service/services/assistant-service/tests/support/modeldouble"
 )
 
 type countingFrozenPolicyResolver struct {
@@ -29,7 +29,7 @@ func (resolver *countingFrozenPolicyResolver) ResolveFrozenPolicy(
 		return assistant.AssistantFrozenPolicySelection{}, resolver.err
 	}
 	selection := testFrozenPolicySelection(policyID, skillID, domainID)
-	selection.ReleaseVersion = fmt.Sprintf("release-call-%d", resolver.calls)
+	selection.ReleaseDigest = testPolicyReleaseDigest
 	return selection, nil
 }
 
@@ -37,15 +37,15 @@ func TestStartRunFreezesPolicyBeforeInsertAndReplayNeverRebuckets(t *testing.T) 
 	t.Parallel()
 	store := persistence.NewMemoryConversationRunStore()
 	resolver := &countingFrozenPolicyResolver{}
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		nil,
-		application.WithConversationRunStore(store),
-		application.WithFrozenPolicyResolver(resolver),
-		application.WithAgentLoop(application.NewAgentLoop(
+		orchestration.WithConversationRunStore(store),
+		orchestration.WithFrozenPolicyResolver(resolver),
+		orchestration.WithAgentLoop(orchestration.NewAgentLoop(
 			nil,
-			application.ReactRuntime{
-				Model: application.DeterministicModelProvider{},
+			orchestration.ReactRuntime{
+				Model: modeldouble.DeterministicModelProvider{},
 			},
 			nil,
 		)),
@@ -85,8 +85,8 @@ func TestStartRunFreezesPolicyBeforeInsertAndReplayNeverRebuckets(t *testing.T) 
 	}
 	if resolver.calls != 1 ||
 		first.TurnID != replay.TurnID ||
-		first.FrozenPolicySelection.ReleaseVersion != "release-call-1" ||
-		replay.FrozenPolicySelection.ReleaseVersion != "release-call-1" {
+		first.FrozenPolicySelection.ReleaseDigest != testPolicyReleaseDigest ||
+		replay.FrozenPolicySelection.ReleaseDigest != testPolicyReleaseDigest {
 		t.Fatalf("calls=%d first=%+v replay=%+v", resolver.calls, first, replay)
 	}
 
@@ -99,7 +99,7 @@ func TestStartRunFreezesPolicyBeforeInsertAndReplayNeverRebuckets(t *testing.T) 
 	}
 	if completed.TerminalSnapshot == nil ||
 		completed.TerminalSnapshot.SelectedPolicyRef == nil ||
-		completed.TerminalSnapshot.SelectedPolicyRef.Version != "release-call-1" {
+		completed.TerminalSnapshot.SelectedPolicyRef.ReleaseDigest != testPolicyReleaseDigest {
 		t.Fatalf("terminal policy ref=%+v", completed.TerminalSnapshot)
 	}
 }
@@ -107,11 +107,11 @@ func TestStartRunFreezesPolicyBeforeInsertAndReplayNeverRebuckets(t *testing.T) 
 func TestPolicyResolverFailureDoesNotWriteRun(t *testing.T) {
 	t.Parallel()
 	store := persistence.NewMemoryConversationRunStore()
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		nil,
 		nil,
-		application.WithConversationRunStore(store),
-		application.WithFrozenPolicyResolver(&countingFrozenPolicyResolver{
+		orchestration.WithConversationRunStore(store),
+		orchestration.WithFrozenPolicyResolver(&countingFrozenPolicyResolver{
 			err: errors.New("rollout storage unavailable"),
 		}),
 	)

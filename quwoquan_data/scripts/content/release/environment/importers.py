@@ -8,7 +8,7 @@ from typing import Any
 
 from core.io import read_json
 from core.paths import REPO_ROOT
-from core.release_layout import payload_file
+from core.release_layout import payload_digest, payload_file
 from core.schema import assert_valid
 from content.release.model import DeletePolicy, ImportMode
 
@@ -26,6 +26,7 @@ def assert_import_report_contract(
     *,
     source: Path | None = None,
     expected_release_id: str | None = None,
+    expected_manifest_digest: str | None = None,
 ) -> dict[str, Any]:
     if isinstance(report, Path):
         source = report
@@ -50,6 +51,16 @@ def assert_import_report_contract(
         raise RuntimeError(
             f"import report releaseId 不一致：expected={expected_release_id} "
             f"actual={payload.get('releaseId')}"
+        )
+    if (
+        expected_manifest_digest is not None
+        and schema == "quwoquan.content_import_report"
+        and payload.get("manifestDigest") != expected_manifest_digest
+    ):
+        raise RuntimeError(
+            "content import report manifestDigest 不一致："
+            f"expected={expected_manifest_digest} "
+            f"actual={payload.get('manifestDigest')}"
         )
     return payload
 
@@ -100,7 +111,11 @@ def run_content_importer(
     )
     if result.returncode != 0:
         raise SystemExit(f"[ship] importer failed: exit={result.returncode}")
-    assert_import_report_contract(report_path, expected_release_id=release.name)
+    assert_import_report_contract(
+        report_path,
+        expected_release_id=release.name,
+        expected_manifest_digest=payload_digest(release),
+    )
 
 
 def run_creator_importer(

@@ -2,6 +2,7 @@
   "label": "自然景观",
   "labelEn": "Natural Feature",
   "description": "山岳、水体、生态带等自然地物骨架，承接由 Topic/自然风光 与 Topic/地理/地形地貌 下沉的具体实例",
+  "axisRole": "entityType",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

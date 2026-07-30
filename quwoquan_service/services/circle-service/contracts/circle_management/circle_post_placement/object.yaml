@@ -58,6 +58,7 @@ business_rules:
 - pinned 与 featured 只能作用于 active placement
 - 所有命令使用服务端内部 CAS 与 idempotency receipt，公开接口不接收调用方版本字段
 lifecycle:
+  state_field: state
   states:
   - active
   - removed

@@ -64,9 +64,9 @@ business_rules:
 - __all__ 只允许群 owner/admin 使用；assistant 只在助手成员已加入时合法
 - 只有 sender 或有权限 moderator 可在策略时间窗内撤回
 lifecycle:
+  state_field: status
   states:
   - sent
   - recalled
-  - deleted
   optimistic_concurrency: version
   idempotency: command_receipt

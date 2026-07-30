@@ -8,10 +8,10 @@ final class AlphaSubjectFollowFacet implements SubjectFollowCommandWriter {
   final String _activePersonaId;
   final Set<String> _following = <String>{};
 
-  static String _key(SubjectFollowSubjectType type, String id) =>
-      '${type.wire}\u0000$id';
+  static String _key(FollowSubjectKind type, String id) =>
+      '${type.wireValue}\u0000$id';
 
-  bool isFollowing(SubjectFollowSubjectType type, String subjectId) =>
+  bool isFollowing(FollowSubjectKind type, String subjectId) =>
       _following.contains(_key(type, subjectId));
 
   @override
@@ -22,7 +22,7 @@ final class AlphaSubjectFollowFacet implements SubjectFollowCommandWriter {
     final replayed = !_following.add(key);
     return SubjectFollowCommandResult(
       personaId: _activePersonaId,
-      subjectType: command.subjectType.wire,
+      subjectType: command.subjectType,
       subjectId: command.subjectId,
       state: 'following',
       idempotentReplay: replayed,
@@ -38,7 +38,7 @@ final class AlphaSubjectFollowFacet implements SubjectFollowCommandWriter {
     final removed = _following.remove(key);
     return SubjectFollowCommandResult(
       personaId: _activePersonaId,
-      subjectType: command.subjectType.wire,
+      subjectType: command.subjectType,
       subjectId: command.subjectId,
       state: 'unfollowed',
       idempotentReplay: !removed,

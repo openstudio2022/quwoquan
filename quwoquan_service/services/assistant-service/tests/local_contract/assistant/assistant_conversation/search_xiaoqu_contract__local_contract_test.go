@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	rtredis "quwoquan_service/runtime/redis"
 	rtsearch "quwoquan_service/runtime/search"
 	assistanthttp "quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/adapters/inbound/http"
-	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_conversation/infrastructure/persistence"
 )
 
@@ -34,16 +35,16 @@ func (fixedSearchReader) Retrieve(
 }
 
 func TestSearchXiaoquContractApiIntegration(t *testing.T) {
-	service := application.NewAssistantService(
+	service := orchestration.NewAssistantService(
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
-		application.WithXiaoquSearchReader(fixedSearchReader{}),
+		orchestration.WithXiaoquSearchReader(fixedSearchReader{}),
 	)
 	handler := assistanthttp.NewHandler(service).Routes()
 
 	payload, err := json.Marshal(map[string]any{
 		"userQuery":        "四川露营攻略",
-		"searchIntensity":  "balanced",
+		"searchIntensity":  "medium",
 		"sourceSurfaceId":  "assistant_dialog",
 		"fromGlobalSearch": true,
 	})
@@ -67,8 +68,8 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 	if got := stringField(result, "queryEcho"); got != "四川露营攻略" {
 		t.Fatalf("queryEcho=%q, want 四川露营攻略", got)
 	}
-	if got := stringField(result, "searchIntensity"); got != "balanced" {
-		t.Fatalf("searchIntensity=%q, want balanced", got)
+	if got := stringField(result, "searchIntensity"); got != "medium" {
+		t.Fatalf("searchIntensity=%q, want medium", got)
 	}
 
 	rawCitations, ok := result["citations"].([]any)
@@ -143,6 +144,38 @@ func TestSearchXiaoquContractApiIntegration(t *testing.T) {
 		if !seenTargets[target] {
 			t.Fatalf("missing citation target %q in %#v", target, result["citations"])
 		}
+	}
+}
+
+func TestSearchXiaoquRejectsNonCanonicalSearchIntensity(t *testing.T) {
+	service := orchestration.NewAssistantService(
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+		orchestration.WithXiaoquSearchReader(fixedSearchReader{}),
+	)
+	handler := assistanthttp.NewHandler(service).Routes()
+	payload, err := json.Marshal(map[string]any{
+		"userQuery":       "四川露营攻略",
+		"searchIntensity": "balanced",
+	})
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/assistant/search/xiaoqu",
+		bytes.NewReader(payload),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_xiaoqu_invalid_intensity")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "ASSISTANT.USER.run_invalid_argument") {
+		t.Fatalf("expected canonical run_invalid_argument, body=%s", rec.Body.String())
 	}
 }
 

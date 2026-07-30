@@ -2,11 +2,9 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class PersonaManagementItemWireDto {
-  final String subAccountId;
+  final String personaId;
   final String displayName;
   final String userHandle;
-  final String phone;
-  final String email;
   final String avatarUrl;
   final int avatarVersion;
   final String isolationLevel;
@@ -25,11 +23,9 @@ class PersonaManagementItemWireDto {
   final int version;
 
   PersonaManagementItemWireDto({
-    this.subAccountId = '',
+    this.personaId = '',
     this.displayName = '',
     this.userHandle = '',
-    this.phone = '',
-    this.email = '',
     this.avatarUrl = '',
     this.avatarVersion = 0,
     this.isolationLevel = 'open',
@@ -50,11 +46,9 @@ class PersonaManagementItemWireDto {
 
   factory PersonaManagementItemWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaManagementItemWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? '',
+      personaId: m['personaId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? '',
-      phone: m['phone']?.toString() ?? '',
-      email: m['email']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       avatarVersion: (m['avatarVersion'] as num?)?.toInt() ?? 0,
       isolationLevel: m['isolationLevel']?.toString() ?? 'open',
@@ -76,11 +70,9 @@ class PersonaManagementItemWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'subAccountId': subAccountId,
+      'personaId': personaId,
       'displayName': displayName,
       'userHandle': userHandle,
-      'phone': phone,
-      'email': email,
       'avatarUrl': avatarUrl,
       'avatarVersion': avatarVersion,
       'isolationLevel': isolationLevel,
@@ -101,11 +93,9 @@ class PersonaManagementItemWireDto {
   }
 
   PersonaManagementItemWireDto copyWith({
-    String? subAccountId,
+    String? personaId,
     String? displayName,
     String? userHandle,
-    String? phone,
-    String? email,
     String? avatarUrl,
     int? avatarVersion,
     String? isolationLevel,
@@ -124,11 +114,9 @@ class PersonaManagementItemWireDto {
     int? version,
   }) {
     return PersonaManagementItemWireDto(
-      subAccountId: subAccountId ?? this.subAccountId,
+      personaId: personaId ?? this.personaId,
       displayName: displayName ?? this.displayName,
       userHandle: userHandle ?? this.userHandle,
-      phone: phone ?? this.phone,
-      email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       avatarVersion: avatarVersion ?? this.avatarVersion,
       isolationLevel: isolationLevel ?? this.isolationLevel,

@@ -35,7 +35,7 @@ func TestIntersectionService_SummaryNewCountAndVisitClears(t *testing.T) {
 	source := operationIntersectionSource{
 		facts: []intersectionapp.IntersectionReasonView{
 			contractDisplayReadyReason("ix_summary_a", "sharedFollowees", "identity", "u1", "person", "林清越", 0.9, freshAt),
-			contractDisplayReadyReason("ix_summary_b", "commonContact", "identity", "u2", "person", "周屿", 0.8, freshAt),
+			contractDisplayReadyReason("ix_summary_b", "commonFollower", "identity", "u2", "person", "周屿", 0.8, freshAt),
 			contractDisplayReadyReason("ix_summary_c", "coCommented", "content", "p1", "content", "摄影路线", 0.7, freshAt),
 		},
 	}
@@ -65,7 +65,7 @@ func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 	freshAt := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
 	relationA := contractDisplayReadyReason("ix_list_a", "sharedFollowees", "relationship", "u1", "person", "林清越", 0.9, freshAt)
 	relationA.TimeBucket = "today"
-	relationB := contractDisplayReadyReason("ix_list_b", "commonContact", "relationship", "u2", "person", "周屿", 0.8, freshAt)
+	relationB := contractDisplayReadyReason("ix_list_b", "commonFollower", "relationship", "u2", "person", "周屿", 0.8, freshAt)
 	relationB.TimeBucket = "today"
 	content := contractDisplayReadyReason("ix_list_c", "coCommented", "content", "p1", "content", "摄影路线", 0.7, freshAt)
 	content.TimeBucket = "last7Days"

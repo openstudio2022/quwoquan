@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,6 +35,7 @@ void main() {
               'deviceModel': 'Pixel',
               'recoveryBaseUrl': 'https://api.quwoquan.com',
               'publicWebUrl': 'https://quwoquan.com',
+              'appDownloadBaseUrl': 'https://cdn.quwoquan.com/download',
             };
           }
           if (call.method == 'openTrustedExternalUrl') return true;
@@ -47,7 +50,7 @@ void main() {
           versionCalls += 1;
           return http.Response(
             '{"latestVersion":"1.8.2","latestBuild":"${versionCalls == 1 ? '18201' : '18100'}",'
-            '"updateUrl":"https://cdn.quwoquan.com/downloads/android/latest.json",'
+            '"updateUrl":"https://cdn.quwoquan.com/download/android/latest.json",'
             '"recoveryUrl":"https://quwoquan.com/"}',
             200,
           );
@@ -110,4 +113,46 @@ void main() {
       controller.dispose();
     },
   );
+
+  testWidgets('version timeout enters S3 without recording a fatal marker', (
+    tester,
+  ) async {
+    var fatalMarkerRequests = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'getRecoveryContext') {
+            return <String, Object>{
+              'platform': 'ios',
+              'appVersion': '1.8.1',
+              'buildNumber': 18100,
+              'osVersion': '26.3',
+              'deviceModel': 'iPhone',
+              'recoveryBaseUrl': 'https://api.quwoquan.com',
+              'publicWebUrl': 'https://quwoquan.com',
+              'appDownloadBaseUrl': 'https://cdn.quwoquan.com/download',
+            };
+          }
+          if (call.method == 'recordFatalStartup') {
+            fatalMarkerRequests += 1;
+          }
+          return null;
+        });
+    final controller = StartupRecoveryController(
+      nativeBridge: AppRecoveryNativeBridge(channel: channel),
+      recoveryBaseUrl: 'https://api.quwoquan.com',
+      versionClient: RecoveryVersionClient(
+        client: MockClient((_) async => throw TimeoutException('offline')),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: StartupRecoveryPage(controller: controller)),
+    );
+    await tester.pump(const Duration(milliseconds: 1600));
+
+    expect(controller.snapshot.phase, RecoveryPhase.startupVersionUnavailable);
+    expect(find.text('应用暂时无法启动'), findsOneWidget);
+    expect(fatalMarkerRequests, 0);
+    controller.dispose();
+  });
 }

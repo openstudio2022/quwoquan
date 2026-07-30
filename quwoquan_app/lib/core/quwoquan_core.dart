@@ -68,7 +68,6 @@ export 'package:quwoquan_app/core/errors/runtime_error_display.dart'
         ensureRetryUiErrorSemantic,
         runtimeErrorDisplayMessage,
         runtimeErrorSemantic;
-export 'services/assistant_chat_store.dart';
 export 'services/search_recent_history_store.dart';
 export 'services/app_page_load_arbiter.dart';
 
@@ -76,6 +75,7 @@ export 'services/app_page_load_arbiter.dart';
 export 'utils/chat_time_formatter.dart';
 
 // Models
+export 'package:quwoquan_app/core/models/object_relation_edge_type.dart';
 export 'package:quwoquan_app/core/models/post_models.dart';
 export 'package:quwoquan_app/core/models/search_models.dart';
 export 'package:quwoquan_app/core/models/story_models.dart';

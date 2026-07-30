@@ -76,21 +76,18 @@ BETA_POSTGRES_PORT="${BETA_POSTGRES_PORT}"
 BETA_MONGO_PORT="${BETA_MONGO_PORT}"
 BETA_REDIS_PORT="${BETA_REDIS_PORT}"
 OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${BETA_POSTGRES_PORT}/quwoquan?sslmode=disable}"
-BETA_OBJECT_STORAGE_CDN_DOMAIN="${BETA_OBJECT_STORAGE_CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
 SKIP_BUILD=0
 AUTO_OPEN_OPS="${AUTO_OPEN_OPS:-1}"
 PRODUCT_TELEMETRY_AVAILABLE="${QWQ_PRODUCT_TELEMETRY_AVAILABLE:-1}"
 WORKLOAD="${QWQ_WORKLOAD:-full}"
-SEED_VERIFY_MODE="${SEED_VERIFY_MODE:-}"
-MEDIA_MODE="${MEDIA_MODE:-}"
-LOCAL_PUBLIC_HOST="${LOCAL_PUBLIC_HOST:-}"
 BETA_BACKEND_READY_TIMEOUT_SECONDS="${BETA_BACKEND_READY_TIMEOUT_SECONDS:-1200}"
 MEDIA_AVATAR_BASE_URL="${MEDIA_AVATAR_BASE_URL:-$CANONICAL_MEDIA_AVATAR_BASE_URL}"
 MEDIA_IMAGE_BASE_URL="${MEDIA_IMAGE_BASE_URL:-$CANONICAL_MEDIA_IMAGE_BASE_URL}"
 MEDIA_VIDEO_BASE_URL="${MEDIA_VIDEO_BASE_URL:-$CANONICAL_MEDIA_VIDEO_BASE_URL}"
 MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-$CANONICAL_MEDIA_UPLOAD_BASE_URL}"
+MEDIA_DELIVERY_BASE_URL="${MEDIA_IMAGE_BASE_URL%/media/image}"
 GATEWAY_BASE_URL_OVERRIDE="${GATEWAY_BASE_URL_OVERRIDE:-$CANONICAL_GATEWAY_BASE_URL}"
 DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 
@@ -107,15 +104,11 @@ Options for "up":
   --skip-build             复用已构建镜像，禁止 Compose 隐式重建。
   --with-app               显式开启 Flutter 端启动（默认开启）。
   --no-open-ops            不自动打开 Ops Portal 页面。
-  --seed-verify <mode>     透传给 start_app_beta_manual.sh。
-  --media-mode <mode>      透传给 start_app_beta_manual.sh。
-  --local-public-host <h>  透传给 start_app_beta_manual.sh。
   --media-avatar-base-url <url>  透传头像 authority。
   --media-image-base-url <url>   透传图片 authority。
   --media-video-base-url <url>   透传视频 authority。
   --media-upload-base-url <url>  透传上传 authority。
   --gateway-base-url <u>   透传给 start_app_beta_manual.sh。
-  --full-matrix            等价于 --seed-verify full --media-mode copy。
 EOF
 }
 
@@ -148,18 +141,6 @@ while [[ $# -gt 0 ]]; do
       AUTO_OPEN_OPS=0
       shift
       ;;
-    --seed-verify)
-      SEED_VERIFY_MODE="${2:-}"
-      shift 2
-      ;;
-    --media-mode)
-      MEDIA_MODE="${2:-}"
-      shift 2
-      ;;
-    --local-public-host)
-      LOCAL_PUBLIC_HOST="${2:-}"
-      shift 2
-      ;;
     --media-avatar-base-url)
       MEDIA_AVATAR_BASE_URL="${2:-}"
       shift 2
@@ -179,11 +160,6 @@ while [[ $# -gt 0 ]]; do
     --gateway-base-url)
       GATEWAY_BASE_URL_OVERRIDE="${2:-}"
       shift 2
-      ;;
-    --full-matrix)
-      SEED_VERIFY_MODE="full"
-      MEDIA_MODE="copy"
-      shift
       ;;
     -h|--help)
       usage
@@ -233,7 +209,8 @@ fi
 write_env() {
   cat > "$ENV_FILE" <<EOF
 APP_RUNTIME_ENV=beta
-CONTENT_CDN_DOMAIN=${BETA_OBJECT_STORAGE_CDN_DOMAIN}
+CONTENT_MEDIA_DELIVERY_BASE_URL=${MEDIA_DELIVERY_BASE_URL}
+CONTENT_MEDIA_UPLOAD_BASE_URL=${MEDIA_UPLOAD_BASE_URL}
 GATEWAY_BASE_URL=${CANONICAL_GATEWAY_BASE_URL}
 PRODUCT_OPS_BASE_URL=${CANONICAL_PRODUCT_OPS_BASE_URL}
 PLATFORM_OPS_BASE_URL=http://127.0.0.1:${PLATFORM_OPS_PORT}
@@ -395,31 +372,17 @@ build_app_beta_command() {
     QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT"
     QWQ_OBSERVABILITY_RUN_ROOT="$QWQ_OBSERVABILITY_RUN_ROOT"
     QWQ_RUN_ROOT="$QWQ_RUN_ROOT"
-    CONTENT_CDN_DOMAIN="${BETA_OBJECT_STORAGE_CDN_DOMAIN}"
+    CONTENT_MEDIA_DELIVERY_BASE_URL="${MEDIA_DELIVERY_BASE_URL}"
+    CONTENT_MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL}"
     "$APP_BETA"
     --restart
   )
-  if [[ "$START_APP" != "1" ]]; then
-    APP_BETA_CMD+=(--skip-app)
-  fi
   if [[ "$SKIP_BUILD" == "1" ]]; then
     APP_BETA_CMD+=(--skip-build)
   fi
-  if [[ "$WORKLOAD" == "content-release" ]]; then
-    APP_BETA_CMD+=(--content-release)
-  fi
-  if [[ -n "$DEVICE_ID" ]]; then
-    APP_BETA_CMD+=(--device-id "$DEVICE_ID")
-  fi
-  if [[ -n "$SEED_VERIFY_MODE" ]]; then
-    APP_BETA_CMD+=(--seed-verify "$SEED_VERIFY_MODE")
-  fi
-  if [[ -n "$MEDIA_MODE" ]]; then
-    APP_BETA_CMD+=(--media-mode "$MEDIA_MODE")
-  fi
-  if [[ -n "$LOCAL_PUBLIC_HOST" ]]; then
-    APP_BETA_CMD+=(--local-public-host "$LOCAL_PUBLIC_HOST")
-  fi
+  # Both workloads consume the same immutable-release data plane. The full
+  # workload only adds Ops/telemetry processes after this backend is ready.
+  APP_BETA_CMD+=(--content-release)
   if [[ -n "$MEDIA_AVATAR_BASE_URL" ]]; then
     APP_BETA_CMD+=(--media-avatar-base-url "$MEDIA_AVATAR_BASE_URL")
   fi
@@ -460,9 +423,8 @@ case "$ACTION" in
     if [[ "$START_APP" == "1" ]]; then
       resolve_device_id_if_needed
     fi
-    # `app-beta` owns the local beta gateway/chat/assistant stack. When START_APP=0
-    # we still launch it in `--skip-app` backend-only mode so stackctl can keep the
-    # beta services alive while launching Flutter separately.
+    # `app-beta` owns only the release-consumer backend. stackctl launches the
+    # production Remote App separately after readiness and release activation.
     build_app_beta_command
     start_bg app-beta "${APP_BETA_CMD[@]}"
     # 冷缓存下 `docker compose up --build` 会先完成 Go 镜像构建，再创建内容数据面。

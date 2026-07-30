@@ -51,12 +51,12 @@
 
 - 编辑资料页必须采用 iOS 分组列表：封面/头像为独立紧凑媒体区块，基础资料、账号社交、扩展资料拆分为独立区块；普通字段的右侧值、图标和 chevron 必须在同一右侧槽位对齐。
 - 编辑资料读取必须使用本人私有 `ProfileEditSnapshotWire`，公开主页资料不得暴露手机号、生日等私有字段；手机号只展示 owner credential 脱敏摘要。
-- 我的二维码由服务端 `ProfileQrCardWire` 生成公开主页 HTTPS payload，并附可撤销 `qrTokenId/styleVersion`；payload 禁止编码手机号、ownerId 或 bearer token。App 侧必须使用真实二维码 SDK 渲染 payload，不得用静态占位图或模拟图案。
+- 我的二维码由服务端 `ProfileQrCardWire` 生成唯一公开主页 HTTPS payload，并附可撤销 `qrTokenId`；payload 禁止编码手机号、ownerId、样式版本或 bearer token。App 侧必须使用真实二维码 SDK 渲染 payload，不得用静态占位图或模拟图案。
 - 标签选择必须进入 tag-service 标签体系：职业 V1 单选，兴趣 V1 多选；`identityTags` 只作为展示摘要和兼容投影，不作为 App 侧第二套标签真相源。
 - 跨边界字段、operation 与错误语义只引用所属服务 contracts；本节点不得复制 wire 定义。
 - 资料编辑字段、错误码、请求上下文、route/surface、DTO projection 先走 metadata，再由 codegen/verify 闭合；禁止手改生成物作为契约来源。
 - 手机号绑定必须复用登录域 OTP/运营商一键能力：`SendOtp(sourceOperation=bind_phone)` + `BindPhoneCredential` 或 `BindCarrierPhoneCredential`；通用 `BindCredential` 不再承担手机号验证。
-- 用户资料读侧缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 `object-cache-policy.yaml` 中 `UserProfile` 为准。
+- 用户资料读侧缓存必须遵守 [`runtime-client-foundation/local-cache-architecture`](../../../runtime/runtime-client-foundation/local-cache-architecture/spec.md)，并只从 user-service canonical [`user_profile_view`](../../../../../quwoquan_service/services/user-service/contracts/account/user_account/projections/user_profile_view.yaml) 派生，不维护对象策略台账。
 - 当前用户、关注用户、互相关注用户、聊天联系人、最近互动作者进入 `pinned` 或 `recent` 缓存；仅 feed 中偶遇的作者不得升级为长期保留对象。
 - 普通缓存清理不得删除当前用户最小资料、关注/联系人关系、待同步关系 outbox。
 
@@ -87,7 +87,7 @@
 <a id="gwt-001"></a>
 ### GWT-001 资料读取、编辑保存与聊天快照一致
 
-- GIVEN 用户首次登录并创建 owner/profile/subAccount。
+- GIVEN 用户首次登录并创建 owner/profile/persona。
 - GIVEN 用户在 App 我的主页进入编辑资料页。
 - GIVEN 聊天消息已有发送者名称与头像记录快照。
 - WHEN 云侧生成默认昵称与 ownerId。

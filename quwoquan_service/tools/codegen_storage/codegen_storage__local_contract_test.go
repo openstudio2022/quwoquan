@@ -35,8 +35,62 @@ func TestSourceRoutesGeneratedOwnershipToObjectPacket(t *testing.T) {
 func TestFieldTypeToGoTypeAcceptsCanonicalStringSlice(t *testing.T) {
 	t.Parallel()
 
-	if got := fieldTypeToGoType(nil, "Persona", "OverriddenProfileFields", "[]string", false); got != "[]string" {
+	if got := fieldTypeToGoType(nil, "OverriddenProfileFields", "[]string", false); got != "[]string" {
 		t.Fatalf("canonical []string mapped to %q, want []string", got)
+	}
+}
+
+func TestFieldTypeToGoTypeResolvesSharedCompositeInsteadOfDegradingToString(t *testing.T) {
+	t.Parallel()
+
+	nested := newNestedCollector(&genContext{
+		fields: &FieldsYAML{},
+		sharedTypes: map[string]EntityFieldsDef{
+			"TagHeatWindow": {
+				Description: "标签的热度生效窗口。\n第二行说明不进注释。",
+				Fields: []FieldDef{
+					{Name: "startAt", Type: "timestamp"},
+					{Name: "endAt", Type: "timestamp"},
+					{Name: "recurrence", Type: "enum"},
+				},
+			},
+		},
+	})
+
+	if got := fieldTypeToGoType(nested, "heatWindow", "TagHeatWindow", false); got != "*TagHeatWindow" {
+		t.Fatalf("nullable composite mapped to %q, want *TagHeatWindow", got)
+	}
+	if got := fieldTypeToGoType(nested, "heatWindow", "TagHeatWindow", true); got != "TagHeatWindow" {
+		t.Fatalf("non-null composite mapped to %q, want TagHeatWindow", got)
+	}
+
+	types, needsTime := nested.materialize()
+	if len(types) != 1 {
+		t.Fatalf("materialized %d composite types, want 1", len(types))
+	}
+	if !needsTime {
+		t.Fatal("composite carrying a timestamp must pull in the time import")
+	}
+	if got, want := types[0].Description, "标签的热度生效窗口。"; got != want {
+		t.Fatalf("description = %q, want %q", got, want)
+	}
+	if got, want := types[0].Fields[0].GoType, "time.Time"; got != want {
+		t.Fatalf("startAt = %q, want %q", got, want)
+	}
+	if got, want := types[0].Fields[2].GoType, "string"; got != want {
+		t.Fatalf("recurrence = %q, want %q", got, want)
+	}
+}
+
+func TestNestedCollectorLeavesUnknownTypeToScalarFallback(t *testing.T) {
+	t.Parallel()
+
+	nested := newNestedCollector(&genContext{fields: &FieldsYAML{}})
+	if got := fieldTypeToGoType(nested, "lifecycleStatus", "enum", false); got != "string" {
+		t.Fatalf("enum mapped to %q, want string", got)
+	}
+	if types, _ := nested.materialize(); len(types) != 0 {
+		t.Fatalf("materialized %d composite types, want 0", len(types))
 	}
 }
 
@@ -45,7 +99,6 @@ func TestFieldTypeToGoTypePreservesInt64ProjectionVersion(t *testing.T) {
 
 	if got := fieldTypeToGoType(
 		nil,
-		"ObjectTagIndex",
 		"sourceAggregateVersion",
 		"int64",
 		false,

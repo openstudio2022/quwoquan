@@ -14,7 +14,6 @@ class MockBehaviorRepository extends BehaviorRepository {
   @override
   Future<void> submitOnboardingInterest({
     required String clientEventId,
-    required String catalogVersion,
     required String taxonomyReleaseId,
     required List<String> tagRefs,
   }) async {
@@ -23,7 +22,6 @@ class MockBehaviorRepository extends BehaviorRepository {
         contentId: '',
         action: BehaviorAction.onboardingInterest,
         clientEventId: clientEventId,
-        catalogVersion: catalogVersion,
         taxonomyReleaseId: taxonomyReleaseId,
         sourceSurface: 'interest_onboarding',
         tags: tagRefs,

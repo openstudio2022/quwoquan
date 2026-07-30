@@ -1,0 +1,14 @@
+backend: redis
+description: >-
+  Redis admission scene 是所有 api-edge 副本及 prod stable/gray 的唯一共享状态；
+  Lua 在一个 key 上原子执行 INCR、计数封顶和 PEXPIRE，不存在进程内 fallback。
+redis_cache:
+- key: edge:rate:{environment}:{subjectDigest}:{operationDigest}
+  ttl_seconds: 86400
+  type: string
+  scene: admission
+  description: >-
+    value 为当前窗口计数且最多保持 limit+1；实际 TTL 由 operation policy window_seconds
+    决定并受 86400 秒硬上限约束。subjectDigest 与 operationDigest 均为完整 SHA-256 十六进制，
+    key 不含 instance 或 rollout stage，stable/gray 因而共享总阈值。
+role: runtime

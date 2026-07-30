@@ -3,9 +3,9 @@ description: 'POST /search 响应 envelope。服务端返回 runtime/search.Retr
 
   的 hits/citations/facets/degradeSignals/provenance，并补充 requestId、
 
-  rankingVersion、experimentBucket、relatedTerms。App 结果模式按 hits 平铺消费，
+  experimentBucket、relatedTerms。App 结果模式按 hits 平铺消费，
 
-  搜索反馈与推荐信号回流以 requestId/rankingVersion 归因。content.post 命中由
+  搜索反馈与推荐信号回流以 requestId/experimentBucket 归因。content.post 命中由
 
   CanonicalSearchHit.content typed slice 承载；PostSearchItemView 不再是独立对象。
 
@@ -20,8 +20,8 @@ consumers:
 - recommendation-engine
 fields:
 - name: hits
-  type: '[]object'
-  description: 统一检索命中列表；公共字段及 content typed slice 由 CanonicalSearchHit 单一解码
+  type: '[]CanonicalSearchHit'
+  description: 统一检索命中列表；公共字段及 content typed slice 由 search-service 的 CanonicalSearchHit 单一解码
 - name: citations
   type: '[]object'
   description: 检索证据/引用，透传 runtime/search.RetrieveResponse
@@ -37,9 +37,6 @@ fields:
 - name: relatedTerms
   type: '[]string'
   description: 相关搜索词，空表示未产生建议
-- name: rankingVersion
-  type: string
-  description: 搜索排序版本，反馈和推荐回流归因使用
 - name: experimentBucket
   type: string
   nullable: true

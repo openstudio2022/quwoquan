@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import '../../../../support/cloud_services/repository_mock_reexports.dart';
+import '../../../../support/cloud_services/homepage_alpha_test_adapter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -27,11 +28,13 @@ import '../../../../support/recording_content_media_facet.dart';
 import '../../../../support/recording_content_post_publication_writer.dart';
 import '../../../../support/recording_circle_post_placement_writer.dart';
 import '../../../../support/cloud_services/content/mock_content_repository.dart';
+import '../../../../support/fake_location_gateway.dart';
+import '../../../../support/fake_location_readers.dart';
 
 const _resolvedActivePersona = ActivePersonaContextViewData(
-  subAccountId: 'user_001',
+  personaId: 'user_001',
   ownerUserId: 'user_001',
-  subjectType: 'subAccount',
+  subjectType: 'persona',
   displayName: '测试用户',
   avatarUrl: '',
   contextVersion: 1,
@@ -46,7 +49,7 @@ class _AuthedSessionStore implements AuthSessionStore {
     accessToken: 'access-token',
     refreshToken: 'refresh-token',
     ownerId: 'user_001',
-    activeSubAccountId: 'user_001',
+    activePersonaId: 'user_001',
     accountState: 'active',
     identityOrigin: 'phone',
     installId: 'install-id',
@@ -74,7 +77,7 @@ class _AuthedSessionStore implements AuthSessionStore {
   ) async {}
 
   @override
-  Future<void> updateActiveSubAccount(String subAccountId) async {}
+  Future<void> updateActivePersona(String personaId) async {}
 
   @override
   Future<void> clearSession({required bool manualLogout}) async {}
@@ -97,7 +100,7 @@ class _AuthenticatedSession extends AuthSessionController {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
       ownerId: 'user_001',
-      activeSubAccountId: 'user_001',
+      activePersonaId: 'user_001',
       accountState: 'active',
       identityOrigin: 'phone',
       installId: 'install-id',
@@ -151,6 +154,13 @@ List<Override> _createPublishOverrides(
   RecordingContentMediaFacet media,
 ) => <Override>[
   ...mockContentFacetOverrides(repository),
+  createLocationNearbyReaderProvider.overrideWithValue(
+    FakeLocationQueryAdapter(),
+  ),
+  createLocationSearchReaderProvider.overrideWithValue(
+    FakeLocationQueryAdapter(),
+  ),
+  locationGatewayProvider.overrideWithValue(FakeLocationGateway()),
   createContentPostPublicationWriterProvider.overrideWithValue(postPublication),
   createContentMediaFacetProvider.overrideWithValue(media),
   contentMediaStreamObjectUploadProvider.overrideWithValue(
@@ -184,6 +194,7 @@ Widget _buildApp(
           placements,
         ),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
+      homepageQueryProvider.overrideWithValue(MockHomepageRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],
@@ -234,6 +245,7 @@ Widget _buildRouterApp(
         RecordingContentMediaFacet(),
       ),
       circlesListQueryProvider.overrideWithValue(AlphaCircleQueryReader()),
+      homepageQueryProvider.overrideWithValue(MockHomepageRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],

@@ -299,6 +299,8 @@ def operation_snapshots(
                 ),
                 "commercial": operation.get("commercial", {}),
                 "reliability": operation.get("reliability", {}),
+                "pagination": operation.get("pagination"),
+                "responseAdmission": operation.get("responseAdmission"),
                 "concurrency": operation.get("concurrency", {}),
                 "errorCodes": list(operation.get("errorCodes", [])),
                 "privacy": operation.get("privacy", {}),
@@ -309,6 +311,8 @@ def operation_snapshots(
                 "requestBodyKind": str(
                     operation.get("requestBodyKind", "")
                 ),
+                "requestBindings": operation.get("requestBindings"),
+                "requestConstants": operation.get("requestConstants"),
                 "responseEntity": str(operation.get("responseEntity", "")),
                 "responseBody": str(operation.get("responseBody", "")),
                 "responseBodyKind": str(
@@ -355,6 +359,8 @@ def compare_operations(
         "ownershipPolicy",
         "commercial",
         "reliability",
+        "pagination",
+        "responseAdmission",
         "concurrency",
         "errorCodes",
         "privacy",
@@ -363,6 +369,8 @@ def compare_operations(
         "clientContract",
         "requestEntity",
         "requestBodyKind",
+        "requestBindings",
+        "requestConstants",
         "responseEntity",
         "responseBody",
         "responseBodyKind",

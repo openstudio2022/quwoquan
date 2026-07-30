@@ -1,0 +1,30 @@
+read_model: RecommendationReplayDataset
+description: 跨模型版本评估的冻结数据集清单；隐私失效后不得用于 evaluate、train、发布证据或以同一 datasetId 重新冻结。
+storage_backend: mongodb
+collection: rec_replay_datasets
+producers:
+- recommendation-service
+consumers:
+- recommendation-service
+fields:
+- {name: _id, type: string}
+- {name: scenario, type: string}
+- {name: frozenAt, type: timestamp}
+- {name: sampleCount, type: int}
+- {name: snapshotCollection, type: string}
+- name: privacyStatus
+  type: enum
+  values: [building, active, privacy_invalidated]
+- {name: privacyInvalidatedAt, type: timestamp, nullable: true}
+- name: privacyInvalidationReason
+  type: enum
+  values: [account_closed]
+  nullable: true
+indexes:
+- name: idx_rec_replay_scenario_frozen
+  keys: {scenario: 1, frozenAt: -1}
+- name: idx_rec_replay_privacy_status
+  keys: {privacyStatus: 1, frozenAt: -1}
+privacy_lifecycle:
+  on_user_account_closed: transition_to_privacy_invalidated
+  anti_resurrection_guard: closed_account_subjects

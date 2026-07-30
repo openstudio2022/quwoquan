@@ -2,6 +2,7 @@
   "label": "合拍",
   "labelEn": "Duet",
   "description": "与他人内容合拍互动",
+  "axisRole": "contentFormat",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

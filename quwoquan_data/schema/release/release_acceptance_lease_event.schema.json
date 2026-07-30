@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/release_acceptance_lease_event.schema.json",
+  "title": "Append-only release acceptance lease event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "sourceOwner",
+    "manifestDigest",
+    "leaseId",
+    "eventId",
+    "action",
+    "holder",
+    "purpose",
+    "importRunId",
+    "verifyRunId",
+    "readinessRef",
+    "predecessorEventRef",
+    "recordedAt",
+    "verificationChecksum"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.release_acceptance_lease_event"},
+    "environment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "sourceOwner": {"const": "qwq_data"},
+    "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "leaseId": {"type": "string", "minLength": 1},
+    "eventId": {"type": "string", "minLength": 1},
+    "action": {"enum": ["acquire", "revoke"]},
+    "holder": {"const": "stackctl.content-uat"},
+    "purpose": {"const": "user_acceptance"},
+    "importRunId": {"type": "string", "minLength": 1},
+    "verifyRunId": {"type": "string", "minLength": 1},
+    "readinessRef": {"type": "string", "pattern": "^env/(alpha|beta|gamma|prod)/runs/data-release/"},
+    "predecessorEventRef": {"type": "string"},
+    "recordedAt": {"type": "string", "minLength": 1},
+    "verificationChecksum": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

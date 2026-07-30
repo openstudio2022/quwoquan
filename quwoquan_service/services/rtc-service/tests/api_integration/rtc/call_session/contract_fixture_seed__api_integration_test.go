@@ -36,18 +36,24 @@ func TestContractFixtureSeed_RtcReadsViaHandler(t *testing.T) {
 		t.Fatalf("rtc_core has no sessions")
 	}
 	for _, session := range seed.Sessions {
+		// Fixture sessions share personas but CallSession enforces one active call
+		// per actor/participant; verify each scenario against an isolated store.
+		cleanAll(t)
 		callType := "audio"
 		if session.Type == "video" {
 			callType = "video"
 		}
 		invitee := "fixture_user_invitee"
-		if len(session.ParticipantUserIDs) > 1 {
-			invitee = session.ParticipantUserIDs[1]
+		for _, participantID := range session.ParticipantUserIDs {
+			if participantID != session.CallerUserID {
+				invitee = participantID
+				break
+			}
 		}
 		resp := doPost(
 			t,
 			"/rtc/calls",
-			fmt.Sprintf(`{"callType":%q,"inviteeIds":[%q]}`, callType, invitee),
+			fmt.Sprintf(`{"callType":%q,"inviteeIds":[%q],"maxParticipants":2}`, callType, invitee),
 			session.CallerUserID,
 			http.StatusCreated,
 		)

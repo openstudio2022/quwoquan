@@ -2,6 +2,7 @@
   "label": "酒店式公寓",
   "labelEn": "Serviced Apartment",
   "description": "含酒店服务的长租型公寓",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

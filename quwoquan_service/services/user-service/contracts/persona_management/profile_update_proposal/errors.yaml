@@ -4,6 +4,16 @@ errors:
 - code: USER.PROFILE_PROPOSAL.not_found
   kind: PROFILE_PROPOSAL
   reason: not_found
+  emitted_by:
+  - surface: http
+    operations:
+    - ApplyProposal
+    - ConfirmProposal
+    - CreateProfileUpdateProposal
+    - GetProfileUpdateProposal
+    - ListProfileUpdateProposals
+    - RejectProposal
+    - RollbackProposal
   http_status: 404
   recovery_action: surface
   dart_const: profileProposalNotFound
@@ -14,6 +24,16 @@ errors:
 - code: USER.PROFILE_PROPOSAL.invalid_argument
   kind: PROFILE_PROPOSAL
   reason: invalid_argument
+  emitted_by:
+  - surface: http
+    operations:
+    - ApplyProposal
+    - ConfirmProposal
+    - CreateProfileUpdateProposal
+    - GetProfileUpdateProposal
+    - ListProfileUpdateProposals
+    - RejectProposal
+    - RollbackProposal
   http_status: 400
   recovery_action: surface
   dart_const: profileProposalInvalidArgument
@@ -24,6 +44,16 @@ errors:
 - code: USER.PROFILE_PROPOSAL.invalid_transition
   kind: PROFILE_PROPOSAL
   reason: invalid_transition
+  emitted_by:
+  - surface: http
+    operations:
+    - ApplyProposal
+    - ConfirmProposal
+    - CreateProfileUpdateProposal
+    - GetProfileUpdateProposal
+    - ListProfileUpdateProposals
+    - RejectProposal
+    - RollbackProposal
   http_status: 409
   recovery_action: refresh
   dart_const: profileProposalInvalidTransition
@@ -34,6 +64,16 @@ errors:
 - code: USER.PROFILE_PROPOSAL.version_conflict
   kind: PROFILE_PROPOSAL
   reason: version_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ApplyProposal
+    - ConfirmProposal
+    - CreateProfileUpdateProposal
+    - GetProfileUpdateProposal
+    - ListProfileUpdateProposals
+    - RejectProposal
+    - RollbackProposal
   http_status: 409
   recovery_action: refresh
   dart_const: profileProposalVersionConflict
@@ -44,6 +84,16 @@ errors:
 - code: USER.PROFILE_PROPOSAL.idempotency_conflict
   kind: PROFILE_PROPOSAL
   reason: idempotency_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - ApplyProposal
+    - ConfirmProposal
+    - CreateProfileUpdateProposal
+    - GetProfileUpdateProposal
+    - ListProfileUpdateProposals
+    - RejectProposal
+    - RollbackProposal
   http_status: 409
   recovery_action: surface
   dart_const: profileProposalIdempotencyConflict
@@ -54,6 +104,10 @@ errors:
 - code: USER.PROFILE_PROPOSAL.rollback_expired
   kind: PROFILE_PROPOSAL
   reason: rollback_expired
+  emitted_by:
+  - surface: http
+    operations:
+    - RollbackProposal
   http_status: 409
   recovery_action: refresh
   dart_const: profileProposalRollbackExpired

@@ -2,6 +2,7 @@
   "label": "跳伞",
   "labelEn": "Skydiving",
   "description": "高空跳伞与翼装等",
+  "axisRole": "topic",
   "createdAt": "2026-05-15T00:00:00+08:00",
   "updatedAt": "2026-05-15T00:00:00+08:00"
 }

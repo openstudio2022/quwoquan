@@ -35,6 +35,7 @@ FORBIDDEN_TOP_LEVEL = frozenset(
         "node_modules",
         ".pytest_cache",
         ".mainline-release-artifact",
+        ".release-evidence-manifest",
     }
 )
 

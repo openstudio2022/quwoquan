@@ -50,6 +50,11 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             outputs,
         )
         self.assertIn(
+            "packages/quwoquan_cloud_contracts/lib/src/rtc/"
+            "call_session_dtos.g.dart",
+            outputs,
+        )
+        self.assertIn(
             "lib/app/navigation/generated/app_route_paths.g.dart",
             outputs,
         )

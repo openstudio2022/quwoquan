@@ -6,10 +6,14 @@ import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show
+        AssistantLearningFactAppendCommand,
+        encodeAssistantAssistantLearningFactAppendAssistantLearningFactGeneratedRequest;
 
 /// Actor-scoped encrypted pending-confirmation queue for assistant learning
 /// facts. A record is removed only after the server receipt confirms the exact
-/// event identity and version.
+/// event identity and a canonical payload digest.
 final class AssistantLearningFactOutbox {
   AssistantLearningFactOutbox(
     this._partition,
@@ -26,7 +30,7 @@ final class AssistantLearningFactOutbox {
   bool _disposed = false;
   int _nextEnqueueSequence = 0;
 
-  Future<bool> enqueue(AppendAssistantLearningFactRequest fact) async {
+  Future<bool> enqueue(AssistantLearningFactAppendCommand fact) async {
     if (_disposed) return false;
     final enqueueSequence = ++_nextEnqueueSequence;
     final box = await _storage.open(
@@ -39,7 +43,7 @@ final class AssistantLearningFactOutbox {
     if (existingRaw != null) {
       final existing = _decodeFact(existingRaw);
       if (existing == null ||
-          jsonEncode(existing.toJson()) != jsonEncode(fact.toJson())) {
+          jsonEncode(_encodeFact(existing)) != jsonEncode(_encodeFact(fact))) {
         developer.log(
           'learning fact local identity conflict',
           name: 'AssistantLearningFactOutbox',
@@ -58,7 +62,7 @@ final class AssistantLearningFactOutbox {
         'actorPartitionKey': _partition.key,
         'enqueuedAt': DateTime.now().toUtc().toIso8601String(),
         'enqueueSequence': enqueueSequence,
-        'fact': fact.toJson(),
+        'fact': _encodeFact(fact),
       }),
     );
     return box.containsKey(key);
@@ -124,7 +128,7 @@ final class AssistantLearningFactOutbox {
         if (_disposed) return;
         if (!receipt.accepted ||
             receipt.eventId != fact.eventId ||
-            receipt.eventVersion != fact.eventVersion) {
+            !_sha256DigestPattern.hasMatch(receipt.payloadDigest)) {
           developer.log(
             'learning fact receipt mismatch',
             name: 'AssistantLearningFactOutbox',
@@ -163,7 +167,7 @@ final class AssistantLearningFactOutbox {
     }
   }
 
-  AppendAssistantLearningFactRequest? _decodeFact(String? raw) {
+  AssistantLearningFactAppendCommand? _decodeFact(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -173,8 +177,31 @@ final class AssistantLearningFactOutbox {
       }
       final value = decoded['fact'];
       if (value is! Map) return null;
-      return AppendAssistantLearningFactRequest.fromJson(
-        value.cast<String, dynamic>(),
+      final fact = value.cast<String, dynamic>();
+      // Retired eventVersion records must be rejected; local persistence does
+      // not keep a legacy-shape read path.
+      if (fact.containsKey('eventVersion')) return null;
+      return AssistantLearningFactAppendCommand(
+        eventId: fact['eventId'] as String,
+        factType: fact['factType'] as String,
+        assistantTurnId: fact['assistantTurnId'] as String,
+        triggerMessageId: fact['triggerMessageId'] as String?,
+        referralSource: fact['referralSource'] as String,
+        domainId: fact['domainId'] as String,
+        eventType: fact['eventType'] as String?,
+        feedbackType: fact['feedbackType'] as String?,
+        feedbackScore: (fact['feedbackScore'] as num?)?.toDouble(),
+        reasonCodes: ((fact['reasonCodes'] as List?) ?? const <Object?>[])
+            .cast<String>(),
+        actionType: fact['actionType'] as String?,
+        suggestedActionId: fact['suggestedActionId'] as String?,
+        durationMs: (fact['durationMs'] as num?)?.toInt(),
+        queryText: fact['queryText'] as String?,
+        answerText: fact['answerText'] as String?,
+        feedbackText: fact['feedbackText'] as String?,
+        correctionText: fact['correctionText'] as String?,
+        trainingEligible: fact['trainingEligible'] as bool,
+        occurredAt: DateTime.parse(fact['occurredAt'] as String),
       );
     } catch (_) {
       return null;
@@ -219,8 +246,21 @@ final class AssistantLearningFactOutbox {
     }
   }
 
-  String _keyFor(AppendAssistantLearningFactRequest fact) =>
-      'fact.${fact.eventId}:${fact.eventVersion}';
+  String _keyFor(AssistantLearningFactAppendCommand fact) =>
+      'fact.${fact.eventId}';
+}
+
+final RegExp _sha256DigestPattern = RegExp(r'^[0-9a-f]{64}$');
+
+Map<String, Object?> _encodeFact(AssistantLearningFactAppendCommand fact) {
+  final body =
+      encodeAssistantAssistantLearningFactAppendAssistantLearningFactGeneratedRequest(
+        fact,
+      ).body;
+  if (body is! Map<String, Object?>) {
+    throw StateError('Assistant learning fact encoder must produce an object');
+  }
+  return body;
 }
 
 final class _EnqueueOrder {

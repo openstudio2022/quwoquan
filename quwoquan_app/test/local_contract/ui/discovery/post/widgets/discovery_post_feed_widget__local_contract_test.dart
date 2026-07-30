@@ -1,6 +1,9 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-009
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-002
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-002
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
@@ -153,6 +156,8 @@ void main() {
       expect(feed.staleDataError, isNull);
       expect(feed.appendError, isNull);
       expect(feed.isLoading, isFalse);
+      expect(feed.isRefreshing, isFalse);
+      expect(feed.isAppending, isFalse);
     });
 
     test('appendNextPage 会在存在 nextCursor 时追加下一页并推进 cursor', () async {
@@ -222,6 +227,44 @@ void main() {
       expect(after.appendError, isNotNull);
       expect(after.blockingError, isNull);
       expect(after.staleDataError, isNull);
+    });
+
+    test('分页远端失败命中 QuerySnapshot 时追加可见缓存但不伪报在线成功', () async {
+      final analytics = _CapturingAnalyticsService();
+      final container = _container(
+        _CachedContinuationFallbackContentRepository(),
+        analytics: analytics,
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      await notifier.load('recommend');
+      final before = container
+          .read(discoveryFeedMapProvider)['recommend']!
+          .value!;
+      await notifier.appendNextPage('recommend');
+      final after = container
+          .read(discoveryFeedMapProvider)['recommend']!
+          .value!;
+
+      expect(after.items.length, greaterThan(before.items.length));
+      expect(after.appendError, isA<CloudException>());
+      expect(after.blockingError, isNull);
+      expect(after.staleDataError, isNull);
+      final appendTerminal = analytics.events.lastWhere(
+        (event) => event.eventName == 'list_append_state',
+      );
+      expect(appendTerminal.properties['result'], 'cacheFallback');
+      expect(appendTerminal.properties['copyKey'], 'appendFailedRetry');
+      expect(appendTerminal.properties['sourceCode'], isNotNull);
+      final cacheTerminal = analytics.events.lastWhere(
+        (event) =>
+            event.eventName == 'page_lifecycle_state' &&
+            event.properties['phase'] == 'cacheFallback',
+      );
+      expect(cacheTerminal.properties['source'], 'cache');
+      expect(cacheTerminal.properties['hasCache'], isTrue);
+      expect(cacheTerminal.properties['cacheAgeMs'], 5000);
     });
 
     test(
@@ -310,6 +353,338 @@ void main() {
       },
     );
 
+    test('推荐首屏在 6000ms 取消 transport 并进入唯一超时终态', () {
+      fakeAsync((async) {
+        final repo = _NeverCompletingContentRepository();
+        final container = _container(repo);
+        addTearDown(container.dispose);
+
+        unawaited(
+          container.read(discoveryFeedMapProvider.notifier).load('recommend'),
+        );
+        async.flushMicrotasks();
+
+        expect(repo.cancellation, isNotNull);
+        expect(repo.deadlineAt, isNotNull);
+        expect(
+          repo.deadlineAt!.difference(repo.requestedAt!).inMilliseconds,
+          inInclusiveRange(5900, 6100),
+        );
+
+        async.elapse(const Duration(milliseconds: 5999));
+        async.flushMicrotasks();
+        final beforeDeadline = container
+            .read(discoveryFeedMapProvider)['recommend']!
+            .value!;
+        expect(beforeDeadline.isLoading, isTrue);
+        expect(beforeDeadline.blockingError, isNull);
+        expect(repo.cancellation!.isCancelled, isFalse);
+
+        async.elapse(const Duration(milliseconds: 1));
+        async.flushMicrotasks();
+        final afterDeadline = container
+            .read(discoveryFeedMapProvider)['recommend']!
+            .value!;
+        expect(repo.cancellation!.isCancelled, isTrue);
+        expect(afterDeadline.isLoading, isFalse);
+        expect(afterDeadline.blockingError, isA<CloudException>());
+        expect(
+          (afterDeadline.blockingError! as CloudException).runtimeFailure.kind,
+          RuntimeFailureKind.timeout,
+        );
+        expect(afterDeadline.staleDataError, isNull);
+        expect(afterDeadline.appendError, isNull);
+        expect(afterDeadline.isRefreshing, isFalse);
+        expect(afterDeadline.isAppending, isFalse);
+      });
+    });
+
+    test('新首刷 supersede 旧请求，旧 transport 即使晚返回也不得回写', () async {
+      final repo = _SupersedingContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      final first = notifier.load('photo', force: true);
+      await container.pump();
+      expect(repo.requests, hasLength(1));
+
+      final second = notifier.load('photo', force: true);
+      await container.pump();
+      expect(repo.requests, hasLength(2));
+      expect(repo.requests.first.cancellation?.isCancelled, isTrue);
+
+      repo.complete(1, feedRequestId: 'feed-request-new');
+      await second;
+      expect(
+        container.read(discoveryFeedMapProvider)['photo']!.value!.feedRequestId,
+        'feed-request-new',
+      );
+
+      repo.complete(0, feedRequestId: 'feed-request-old');
+      await first;
+      final finalState = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(finalState.feedRequestId, 'feed-request-new');
+      expect(finalState.items, isNotEmpty);
+      expect(finalState.blockingError, isNull);
+      expect(finalState.staleDataError, isNull);
+    });
+
+    test('refresh supersede 旧 append，新 append 不得反向取消 refresh', () async {
+      final repo = _SupersedingContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      final initial = notifier.load('photo', force: true);
+      await container.pump();
+      repo.complete(0, feedRequestId: 'feed-request-initial');
+      await initial;
+
+      final append = notifier.appendNextPage('photo');
+      await container.pump();
+      expect(repo.requests, hasLength(2));
+      expect(repo.requests[1].cursor, isNotNull);
+      final duringAppend = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(duringAppend.isLoading, isTrue);
+      expect(duringAppend.isRefreshing, isFalse);
+      expect(duringAppend.isAppending, isTrue);
+
+      final refresh = notifier.load('photo', force: true);
+      await container.pump();
+      expect(repo.requests, hasLength(3));
+      expect(repo.requests[1].cancellation?.isCancelled, isTrue);
+      expect(repo.requests[2].cursor, isNull);
+      expect(repo.requests[2].cancellation?.isCancelled, isFalse);
+
+      final duringRefresh = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(duringRefresh.items, isNotEmpty);
+      expect(duringRefresh.isLoading, isFalse);
+      expect(duringRefresh.isRefreshing, isTrue);
+      expect(duringRefresh.isAppending, isFalse);
+
+      await notifier.appendNextPage('photo');
+      expect(repo.requests, hasLength(3));
+      expect(repo.requests[2].cancellation?.isCancelled, isFalse);
+
+      repo.complete(2, feedRequestId: 'feed-request-refreshed');
+      await refresh;
+      repo.complete(1, feedRequestId: 'feed-request-stale-append');
+      await append;
+
+      final finalState = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(finalState.feedRequestId, 'feed-request-refreshed');
+      expect(finalState.isLoading, isFalse);
+      expect(finalState.isRefreshing, isFalse);
+      expect(finalState.isAppending, isFalse);
+      expect(finalState.appendError, isNull);
+    });
+
+    test('append 超时取消 transport，超时后晚到结果不回写', () {
+      fakeAsync((async) {
+        final repo = _PendingAppendContentRepository();
+        final container = _container(repo);
+        addTearDown(container.dispose);
+        final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+        unawaited(notifier.load('photo'));
+        async.flushMicrotasks();
+        final before = container
+            .read(discoveryFeedMapProvider)['photo']!
+            .value!;
+        expect(before.items, isNotEmpty);
+        expect(before.hasMore, isTrue);
+
+        unawaited(notifier.appendNextPage('photo'));
+        async.flushMicrotasks();
+        final pending = container
+            .read(discoveryFeedMapProvider)['photo']!
+            .value!;
+        expect(pending.isLoading, isTrue);
+        expect(pending.isRefreshing, isFalse);
+        expect(pending.isAppending, isTrue);
+        expect(repo.cancellation?.isCancelled, isFalse);
+
+        async.elapse(const Duration(seconds: 6));
+        async.flushMicrotasks();
+        final timedOut = container
+            .read(discoveryFeedMapProvider)['photo']!
+            .value!;
+        expect(repo.cancellation?.isCancelled, isTrue);
+        expect(timedOut.items, same(before.items));
+        expect(timedOut.isLoading, isFalse);
+        expect(timedOut.isRefreshing, isFalse);
+        expect(timedOut.isAppending, isFalse);
+        expect(timedOut.appendError, isA<CloudException>());
+        expect(
+          (timedOut.appendError! as CloudException).runtimeFailure.kind,
+          RuntimeFailureKind.timeout,
+        );
+
+        repo.completeLate();
+        async.flushMicrotasks();
+        final afterLateCompletion = container
+            .read(discoveryFeedMapProvider)['photo']!
+            .value!;
+        expect(afterLateCompletion.items, same(before.items));
+        expect(afterLateCompletion.appendError, same(timedOut.appendError));
+        expect(afterLateCompletion.isAppending, isFalse);
+      });
+    });
+
+    test('频道离开会取消该频道 append 并保留可恢复正文与 cursor', () async {
+      final repo = _PendingAppendContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      await notifier.load('photo');
+      final before = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      final append = notifier.appendNextPage('photo');
+      await container.pump();
+      expect(repo.cancellation?.isCancelled, isFalse);
+
+      notifier.deactivateChannel('photo');
+      final deactivated = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(repo.cancellation?.isCancelled, isTrue);
+      expect(deactivated.items, same(before.items));
+      expect(deactivated.nextCursor, before.nextCursor);
+      expect(deactivated.isLoading, isFalse);
+      expect(deactivated.isRefreshing, isFalse);
+      expect(deactivated.isAppending, isFalse);
+
+      repo.completeLate();
+      await append;
+      final afterLate = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(afterLate.items, same(before.items));
+      expect(afterLate.nextCursor, before.nextCursor);
+    });
+
+    test('频道离开会清除空的半成品 load，晚到 generation 不回写', () async {
+      final repo = _SupersedingContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      final load = notifier.load('recommend', force: true);
+      await container.pump();
+      expect(repo.requests, hasLength(1));
+
+      notifier.deactivateChannel('recommend');
+      expect(repo.requests.single.cancellation?.isCancelled, isTrue);
+      expect(
+        container.read(discoveryFeedMapProvider).containsKey('recommend'),
+        isFalse,
+      );
+
+      repo.complete(0, feedRequestId: 'feed-request-too-late');
+      await load;
+      expect(
+        container.read(discoveryFeedMapProvider).containsKey('recommend'),
+        isFalse,
+      );
+    });
+
+    test('SWR 首屏先展示 stale snapshot，同 generation 再原子采纳远端', () async {
+      final repo = _StaleWhileRevalidateContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      final load = notifier.load('photo');
+      await container.pump();
+      expect(repo.requests, hasLength(1));
+
+      final stale = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(stale.items, isNotEmpty);
+      expect(stale.feedRequestId, 'feed-request-cached-0');
+      expect(stale.isLoading, isFalse);
+      expect(stale.isRefreshing, isTrue);
+      expect(stale.isAppending, isFalse);
+      expect(stale.blockingError, isNull);
+      expect(stale.staleDataError, isNull);
+
+      repo.completeRemote(0, feedRequestId: 'feed-request-remote-0');
+      await load;
+      final fresh = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(fresh.feedRequestId, 'feed-request-remote-0');
+      expect(fresh.isLoading, isFalse);
+      expect(fresh.isRefreshing, isFalse);
+      expect(fresh.isAppending, isFalse);
+      expect(fresh.staleDataError, isNull);
+    });
+
+    test('SWR 再验证被新刷新 supersede 后，旧远端晚到不回写', () async {
+      final repo = _StaleWhileRevalidateContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      final first = notifier.load('photo', force: true);
+      await container.pump();
+      expect(repo.requests, hasLength(1));
+      expect(
+        container.read(discoveryFeedMapProvider)['photo']!.value!.feedRequestId,
+        'feed-request-cached-0',
+      );
+
+      final second = notifier.load('photo', force: true);
+      await container.pump();
+      expect(repo.requests, hasLength(2));
+      expect(repo.requests[0].cancellation?.isCancelled, isTrue);
+      expect(repo.requests[1].cancellation?.isCancelled, isFalse);
+
+      repo.completeRemote(1, feedRequestId: 'feed-request-remote-new');
+      await second;
+      repo.completeRemote(0, feedRequestId: 'feed-request-remote-old');
+      await first;
+
+      final finalState = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(finalState.feedRequestId, 'feed-request-remote-new');
+      expect(finalState.isRefreshing, isFalse);
+      expect(finalState.staleDataError, isNull);
+    });
+
+    test('SWR 远端再验证失败保留 stale snapshot 并进入非阻塞错误态', () async {
+      final repo = _StaleWhileRevalidateContentRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
+      final notifier = container.read(discoveryFeedMapProvider.notifier);
+
+      final load = notifier.load('photo');
+      await container.pump();
+      final stale = container.read(discoveryFeedMapProvider)['photo']!.value!;
+
+      repo.completeRemote(
+        0,
+        feedRequestId: 'feed-request-cached-0',
+        error: StateError('remote revalidation failed'),
+      );
+      await load;
+
+      final fallback = container
+          .read(discoveryFeedMapProvider)['photo']!
+          .value!;
+      expect(fallback.items, orderedEquals(stale.items));
+      expect(fallback.isRefreshing, isFalse);
+      expect(fallback.blockingError, isNull);
+      expect(fallback.staleDataError, isA<CloudException>());
+    });
+
     test('缓存命中后台刷新时保留正文且不闪回首屏 loading', () async {
       final repo = _ControllableContentRepository();
       final container = _container(repo);
@@ -327,13 +702,16 @@ void main() {
       final during = container.read(discoveryFeedMapProvider)['photo']!.value!;
       expect(during.items, before.items);
       expect(during.isLoading, isFalse);
+      expect(during.isRefreshing, isTrue);
+      expect(during.isAppending, isFalse);
 
       repo.release();
       await refresh;
-      expect(
-        container.read(discoveryFeedMapProvider)['photo']!.value!.items,
-        isNotEmpty,
-      );
+      final after = container.read(discoveryFeedMapProvider)['photo']!.value!;
+      expect(after.items, isNotEmpty);
+      expect(after.isLoading, isFalse);
+      expect(after.isRefreshing, isFalse);
+      expect(after.isAppending, isFalse);
     });
   });
 
@@ -463,6 +841,13 @@ class _EmptyDiscoveryFeedContentRepository extends MockContentRepository {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async {
+    if (category == 'following' || channelId == 'following') {
+      return const DiscoveryFeedPage(
+        items: <PostBaseDto>[],
+        outcome: ContentDiscoveryFeedOutcome.empty,
+        emptyReason: ContentDiscoveryFeedEmptyReason.followingEmpty,
+      );
+    }
     return const DiscoveryFeedPage(items: <PostBaseDto>[]);
   }
 }
@@ -484,7 +869,14 @@ class _EmptyContinuationContentRepository extends MockContentRepository {
     DateTime? deadlineAt,
   }) async {
     if (cursor != null) {
-      return const DiscoveryFeedPage(items: <PostBaseDto>[]);
+      return DiscoveryFeedPage(
+        items: const <PostBaseDto>[],
+        feedRequestId: feedRequestId,
+        policyDigest:
+            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        outcome: ContentDiscoveryFeedOutcome.empty,
+        emptyReason: ContentDiscoveryFeedEmptyReason.continuationEnd,
+      );
     }
     final page = await super.listDiscoveryFeedPage(
       category: category,
@@ -504,8 +896,8 @@ class _EmptyContinuationContentRepository extends MockContentRepository {
       items: page.items.take(1).toList(growable: false),
       nextCursor: 'continuation-1',
       feedRequestId: page.feedRequestId,
-      rankingVersion: page.rankingVersion,
-      reasonVersion: page.reasonVersion,
+      policyDigest: page.policyDigest,
+      outcome: ContentDiscoveryFeedOutcome.content,
     );
   }
 }
@@ -543,6 +935,64 @@ class _FailingAppendContentRepository
       feedRequestId: feedRequestId,
       cancellation: cancellation,
       deadlineAt: deadlineAt,
+    );
+  }
+}
+
+class _CachedContinuationFallbackContentRepository
+    extends _EmptyContinuationContentRepository {
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    if (cursor == null) {
+      return super.listDiscoveryFeedPage(
+        category: category,
+        channelId: channelId,
+        identity: identity,
+        type: type,
+        subCategory: subCategory,
+        limit: limit,
+        cursor: cursor,
+        sort: sort,
+        sessionId: sessionId,
+        feedRequestId: feedRequestId,
+        cancellation: cancellation,
+        deadlineAt: deadlineAt,
+      );
+    }
+    final page = await MockContentRepository().listDiscoveryFeedPage(
+      category: category,
+      channelId: channelId,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: cancellation,
+      deadlineAt: deadlineAt,
+    );
+    return DiscoveryFeedPage(
+      items: page.items,
+      nextCursor: page.nextCursor,
+      feedRequestId: page.feedRequestId,
+      policyDigest: page.policyDigest,
+      cacheFallbackError: StateError('offline continuation cache fallback'),
+      cacheAgeMs: 5000,
     );
   }
 }
@@ -630,6 +1080,228 @@ class _ControllableContentRepository extends MockContentRepository {
   void release() {
     _pending?.complete(_heldPage!);
   }
+}
+
+class _NeverCompletingContentRepository extends MockContentRepository {
+  final Completer<DiscoveryFeedPage> _pending = Completer<DiscoveryFeedPage>();
+  CloudOperationCancellationSignal? cancellation;
+  DateTime? deadlineAt;
+  DateTime? requestedAt;
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) {
+    requestedAt = DateTime.now();
+    this.cancellation = cancellation;
+    this.deadlineAt = deadlineAt;
+    return _pending.future;
+  }
+}
+
+class _PendingAppendContentRepository extends MockContentRepository {
+  final Completer<DiscoveryFeedPage> _pending = Completer<DiscoveryFeedPage>();
+  DiscoveryFeedPage? _heldPage;
+  CloudOperationCancellationSignal? cancellation;
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final page = await super.listDiscoveryFeedPage(
+      category: category,
+      channelId: channelId,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: null,
+      deadlineAt: deadlineAt,
+    );
+    if (cursor == null) return page;
+    _heldPage = page;
+    this.cancellation = cancellation;
+    return _pending.future;
+  }
+
+  void completeLate() {
+    _pending.complete(_heldPage!);
+  }
+}
+
+class _StaleWhileRevalidateContentRepository extends MockContentRepository {
+  final List<_PendingRevalidationRequest> requests =
+      <_PendingRevalidationRequest>[];
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final basePage = await super.listDiscoveryFeedPage(
+      category: category,
+      channelId: channelId,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: null,
+      deadlineAt: deadlineAt,
+    );
+    final index = requests.length;
+    final request = _PendingRevalidationRequest(
+      basePage: basePage,
+      cancellation: cancellation,
+    );
+    requests.add(request);
+    return DiscoveryFeedPage(
+      items: basePage.items,
+      objectCards: basePage.objectCards,
+      nextCursor: basePage.nextCursor,
+      feedRequestId: 'feed-request-cached-$index',
+      policyDigest: basePage.policyDigest,
+      cacheAgeMs: 3000,
+      revalidation: request.completer.future,
+    );
+  }
+
+  void completeRemote(
+    int index, {
+    required String feedRequestId,
+    Object? error,
+  }) {
+    final request = requests[index];
+    request.completer.complete(
+      DiscoveryFeedPage(
+        items: request.basePage.items,
+        objectCards: request.basePage.objectCards,
+        nextCursor: request.basePage.nextCursor,
+        feedRequestId: feedRequestId,
+        policyDigest: request.basePage.policyDigest,
+        cacheFallbackError: error,
+        cacheAgeMs: error == null ? null : 3000,
+      ),
+    );
+  }
+}
+
+final class _PendingRevalidationRequest {
+  _PendingRevalidationRequest({
+    required this.basePage,
+    required this.cancellation,
+  });
+
+  final DiscoveryFeedPage basePage;
+  final CloudOperationCancellationSignal? cancellation;
+  final Completer<DiscoveryFeedPage> completer = Completer<DiscoveryFeedPage>();
+}
+
+class _SupersedingContentRepository extends MockContentRepository {
+  final List<_PendingFeedRequest> requests = <_PendingFeedRequest>[];
+
+  @override
+  Future<DiscoveryFeedPage> listDiscoveryFeedPage({
+    required String category,
+    String? channelId,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+    CloudOperationCancellationSignal? cancellation,
+    DateTime? deadlineAt,
+  }) async {
+    final basePage = await super.listDiscoveryFeedPage(
+      category: category,
+      channelId: channelId,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+      cancellation: null,
+      deadlineAt: deadlineAt,
+    );
+    final request = _PendingFeedRequest(
+      basePage: basePage,
+      cancellation: cancellation,
+      cursor: cursor,
+    );
+    requests.add(request);
+    return request.completer.future;
+  }
+
+  void complete(int index, {required String feedRequestId}) {
+    final request = requests[index];
+    request.completer.complete(
+      DiscoveryFeedPage(
+        items: request.basePage.items,
+        objectCards: request.basePage.objectCards,
+        nextCursor: request.basePage.nextCursor,
+        feedRequestId: feedRequestId,
+        policyDigest: request.basePage.policyDigest,
+      ),
+    );
+  }
+}
+
+final class _PendingFeedRequest {
+  _PendingFeedRequest({
+    required this.basePage,
+    required this.cancellation,
+    required this.cursor,
+  });
+
+  final DiscoveryFeedPage basePage;
+  final CloudOperationCancellationSignal? cancellation;
+  final String? cursor;
+  final Completer<DiscoveryFeedPage> completer = Completer<DiscoveryFeedPage>();
 }
 
 class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {
