@@ -47,6 +47,8 @@ from content.source.gate import (  # noqa: E402
 from content.execution.recovery.download_gate import _download_repair_active_issues  # noqa: E402
 from content.execution.recovery.download_repair import _record_download_repair  # noqa: E402
 from content.execution.recovery.download_research_gate import _download_research_lane_issues  # noqa: E402
+from content.execution.recovery.download_unresolved import absorb_download_shortfall_if_quota_met  # noqa: E402
+from content.execution.controller.content_plan_prep import _content_capacity_gate_for_entity  # noqa: E402
 from content.execution.context import ExecutionContext  # noqa: E402
 from governance.content_supply_policy import load_content_supply_policy  # noqa: E402
 from support.execution_manifest_fixture import ExecutionFixtureBuilder  # noqa: E402
@@ -54,14 +56,17 @@ from support.image_fixture import jpeg_bytes  # noqa: E402
 
 TASK = "20260711--travel-homepage-download-gate--test-region-b--pilot-001"
 VIDEO_TASK = "20260711--travel-video-download-gate--test-region-b--pilot-001"
+ARTICLE_TASK = "20260711--travel-article-download-gate--test-region-b--pilot-001"
 
 
 @pytest.fixture(autouse=True)
 def _clean_execution_root():
     shutil.rmtree(execution_root(TASK), ignore_errors=True)
+    shutil.rmtree(execution_root(ARTICLE_TASK), ignore_errors=True)
     ExecutionFixtureBuilder(TASK).build()
     yield
     shutil.rmtree(execution_root(TASK), ignore_errors=True)
+    shutil.rmtree(execution_root(ARTICLE_TASK), ignore_errors=True)
 
 
 def test_homepage_only_download_requires_one_verified_text_source(monkeypatch):
@@ -438,6 +443,100 @@ def test_gate_download_blocks_reject_only_units():
     )
     issues = gate_download(TASK)
     assert any(issue.code is DataIssueCode.SOURCE_RETAINED_SHORTFALL for issue in issues), issues
+
+
+def test_article_capacity_requires_quality_receipts_not_rejects_cache_or_manual_probes():
+    entity = "文章来源景区"
+    fixture = ExecutionFixtureBuilder(
+        ARTICLE_TASK,
+        targets=({"entityType": "地点/景区", "name": entity},),
+    )
+    fixture.build()
+    entity_dir = execution_entity_object_dir(ARTICLE_TASK, "地点", "景区", entity)
+    body = f"# {entity}\n\n" + (f"{entity} 的旅行正文。 " * 400)
+    for ordinal, source_id, quality in (
+        (1, "article_rejected", {"sourceId": "article_rejected", "quality": "Reject", "score": 0}),
+        (
+            2,
+            "article_cached",
+            {
+                "sourceId": "article_cached",
+                "quality": "A-story",
+                "score": 9,
+                "retainedFromCache": True,
+            },
+        ),
+        (3, "article_manual", {"sourceId": "article_manual", "quality": "A-story", "score": 9}),
+    ):
+        write_source_unit(
+            entity_dir,
+            ordinal=ordinal,
+            source_id=source_id,
+            source_md=body,
+            quality=quality,
+            platform="旅行平台",
+            source_category="travelogue",
+            source_role="base",
+            research_lane="article",
+            url=f"https://example.com/{source_id}",
+            title=f"{entity}游记{ordinal}",
+            target_ref=f"/entity/地点/景区/{entity}",
+        )
+    manual_unit = next(
+        unit
+        for unit in iter_source_units(entity_dir)
+        if read_json(unit / "meta.json").get("sourceId") == "article_manual"
+    )
+    manual_meta = read_json(manual_unit / "meta.json")
+    manual_meta["manualProbe"] = True
+    write_json(manual_unit / "meta.json", manual_meta)
+    context = ExecutionContext(
+        execution_id=ARTICLE_TASK,
+        entity_ids=(entity,),
+        spec=fixture.spec(),
+    )
+
+    passed, issues, diagnostics = _content_capacity_gate_for_entity(context, entity)
+
+    assert not passed
+    assert any("article base source shortfall" in issue for issue in issues)
+    assert diagnostics["entityType"] == "地点/景区"
+    assert diagnostics["qualifiedArticleBaseSources"] == 0
+    assert diagnostics["articleSourceClosure"] == []
+    assert diagnostics["articleRejects"] == {
+        "manual_probe": 1,
+        "quality_rejected": 1,
+        "retained_from_cache": 1,
+    }
+
+
+def test_article_source_shortfall_cannot_be_absorbed_as_oversample_discard():
+    entity = "文章短缺景区"
+    fixture = ExecutionFixtureBuilder(
+        ARTICLE_TASK,
+        targets=(
+            {"entityType": "地点/景区", "name": entity},
+            {"entityType": "地点/遗址", "name": "文章短缺遗址"},
+        ),
+        approved_quota=1,
+    )
+    fixture.build()
+    context = ExecutionContext(
+        execution_id=ARTICLE_TASK,
+        entity_ids=(entity, "文章短缺遗址"),
+        spec=fixture.spec(),
+    )
+
+    absorbed = absorb_download_shortfall_if_quota_met(
+        context,
+        {"readyTargetCount": 1, "ineligibleTargetCount": 1},
+        stage=DataIssueStage.DOWNLOAD_FETCH,
+        stage_enum=object,
+        auto_mode=object,
+        done_status=object,
+    )
+
+    assert absorbed is None
 
 
 def test_gate_download_blocks_missing_homepage_lane_text_unit():

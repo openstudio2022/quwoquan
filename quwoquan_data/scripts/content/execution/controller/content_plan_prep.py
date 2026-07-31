@@ -149,6 +149,7 @@ def _content_capacity_gate_for_entity(
             or bool(collection_id and collection_id in used_collections)
         )
     article_candidates: list[dict[str, Any]] = []
+    article_source_closure: list[dict[str, str]] = []
     image_candidates: list[dict[str, Any]] = []
     article_raw_count = 0
     image_raw_count = 0
@@ -163,12 +164,15 @@ def _content_capacity_gate_for_entity(
     )
     for source_dir in source_units:
         meta_path = source_dir / "meta.json"
+        quality_path = source_dir / "source.quality.json"
         if not meta_path.is_file() or not (source_dir / "source.md").is_file():
             continue
         try:
             meta = read_json(meta_path)
         except (OSError, ValueError, TypeError):
-            meta = {}
+            continue
+        if not isinstance(meta, Mapping):
+            continue
         source_id = str(meta.get("sourceId") or source_dir.name).strip()
         lane = str(meta.get("researchLane") or "").strip()
         rows = _asset_rows(source_dir)
@@ -178,6 +182,26 @@ def _content_capacity_gate_for_entity(
             if "support" in source_id.lower() or "support" in source_dir.name.lower():
                 continue
             article_raw_count += 1
+            if not quality_path.is_file():
+                article_rejects["quality_receipt_missing"] += 1
+                continue
+            try:
+                quality = read_json(quality_path)
+            except (OSError, ValueError, TypeError):
+                article_rejects["quality_receipt_invalid"] += 1
+                continue
+            if not isinstance(quality, Mapping):
+                article_rejects["quality_receipt_invalid"] += 1
+                continue
+            if str(quality.get("quality") or "") == "Reject":
+                article_rejects["quality_rejected"] += 1
+                continue
+            if bool(quality.get("retainedFromCache")):
+                article_rejects["retained_from_cache"] += 1
+                continue
+            if bool(meta.get("manualProbe")) or bool(quality.get("manualProbe")):
+                article_rejects["manual_probe"] += 1
+                continue
             if bool(meta.get("hasVideo")):
                 # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
                 article_rejects["contains_video"] += 1
@@ -214,6 +238,17 @@ def _content_capacity_gate_for_entity(
                 continue
             if not rows:
                 article_image_soft_warnings["no_source_assets"] += 1
+            article_source_closure.append(
+                {
+                    "sourceId": source_id,
+                    "provider": str(meta.get("platform") or "").strip(),
+                "siteId": str(meta.get("articleSiteId") or "").strip(),
+                "profileDigest": str(
+                    meta.get("sourceDiscoveryProfileDigest") or ""
+                ).strip(),
+                    "sourceRef": source_ref,
+                }
+            )
             article_candidates.append(
                 {
                     "sourceDir": source_dir,
@@ -312,11 +347,13 @@ def _content_capacity_gate_for_entity(
             if picked_images >= image_pick_limit:
                 break
     diagnostics = {
+        "entityType": etype,
         "desiredArticleSources": desired_articles,
         "minimumRequiredArticleSources": required_articles,
         "rawArticleBaseSources": article_raw_count,
         "qualifiedArticleBaseSources": len(article_candidates),
         "pickedArticleBaseSources": picked_articles,
+        "articleSourceClosure": article_source_closure,
         "desiredImageSources": desired_images,
         "minimumRequiredImageSources": required_images,
         "rawImageAssets": image_raw_count,

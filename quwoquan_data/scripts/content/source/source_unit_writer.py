@@ -467,6 +467,19 @@ def write_source_unit(
         },
         "assetCount": len(asset_index),
     }
+    article_site_id = str(source_payload.get("articleSiteId") or "").strip()
+    article_profile_digest = str(
+        source_payload.get("sourceDiscoveryProfileDigest") or ""
+    ).strip()
+    article_admission = str(
+        source_payload.get("articleCommercialAdmission") or ""
+    ).strip()
+    if article_site_id:
+        manifest["articleSiteId"] = article_site_id
+    if article_profile_digest:
+        manifest["sourceDiscoveryProfileDigest"] = article_profile_digest
+    if article_admission:
+        manifest["articleCommercialAdmission"] = article_admission
     requested_title = str(source_payload.get("requestedTitle") or "").strip()
     resolved_title = str(source_payload.get("resolvedTitle") or "").strip()
     redirect_chain = source_payload.get("redirectChain")

@@ -401,6 +401,9 @@ def build_execution_spec(
         "targetObjectCount": target_object_count,
         "approvedQuota": approved_quota,
         "oversampleFactor": float(oversample_factor),
+        # Scale article source plans must use the registry-admitted commercial
+        # frontier; they may not fall back to uncontrolled platform sources.
+        "articleCommercialClosure": carriers == ["article"],
     }
     spec["queuePolicy"] = {
         "backend": "reliabletask",

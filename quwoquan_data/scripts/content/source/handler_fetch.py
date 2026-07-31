@@ -11,6 +11,8 @@ from core.data_issue import (
     data_issue,
 )
 from core.paths import execution_source_unit_dir
+from core.article_commercial_policy import article_commercial_closure_enabled
+from content.execution import store
 from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
 from content.source.source_unit import (
     find_source_unit_raw_snapshot,
@@ -85,6 +87,9 @@ def _fetch_download_entity(
         selected_lanes=selected_lanes,
     )
     object_dir, target_ref, sources = plan.object_dir, plan.target_ref, plan.sources
+    commercial_article_closure = article_commercial_closure_enabled(
+        store.load_spec(execution_id)
+    )
     existing_image_source_dirs = _image_lane_source_unit_dirs(object_dir)
     written_source_dirs: set[Path] = set()
     written_rejected_source_dirs: set[Path] = set()
@@ -93,6 +98,7 @@ def _fetch_download_entity(
     video_lane_selected = plan.video_lane_selected
     sourced_video_candidates = plan.sourced_video_candidates
     sourced_video_evidence = plan.sourced_video_evidence
+    sourced_video_failure = plan.sourced_video_failure
     written_source_dirs.update(
         evidence_path.parent
         for evidence_path in sourced_video_evidence
@@ -117,6 +123,21 @@ def _fetch_download_entity(
         plannedVideos=len(sourced_video_candidates),
         admittedVideos=len(sourced_video_evidence),
     )
+    if sourced_video_failure:
+        _write_download_progress(
+            execution_id,
+            status="running",
+            entity_id=entity_id,
+            entity_index=entity_index,
+            entity_count=entity_count,
+            sources=0,
+            images=0,
+            message="direct video admission failed; retained frame sequence will be evaluated",
+            lane="video",
+            plannedVideos=len(sourced_video_candidates),
+            admittedVideos=0,
+            sourcedVideoFailure=sourced_video_failure[:800],
+        )
     image_result = prepare_entity_images(
         execution_id=execution_id,
         entity_id=entity_id,
@@ -151,7 +172,10 @@ def _fetch_download_entity(
 
     for ordinal, source in enumerate(sources, start=1):
         try:
-            require_source_candidate_admission(source)
+            require_source_candidate_admission(
+                source,
+                require_commercial_article_binding=commercial_article_closure,
+            )
         except ValueError as exc:
             raise DataIssueError(
                 (
@@ -415,9 +439,16 @@ def _fetch_download_entity(
                 target_category = category_map.get(str(category), "other")
                 rejected_by_category[target_category] += int(count or 0)
         source_for_unit = dict(source)
-        for key in ("requestedTitle", "resolvedTitle", "redirectChain"):
+        for key in (
+            "requestedTitle",
+            "resolvedTitle",
+            "redirectChain",
+            "fetchFinalUrl",
+        ):
             if key in fetch_runtime:
-                source_for_unit[key] = fetch_runtime[key]
+                source_for_unit[
+                    "finalUrl" if key == "fetchFinalUrl" else key
+                ] = fetch_runtime[key]
         manifest = write_source_unit(
             object_dir,
             ordinal=ordinal,
@@ -555,6 +586,7 @@ def _fetch_download_entity(
         "fetchedSources": fetched_sources,
         "qualityRows": quality_rows,
         "failedImage": failed_image,
+        "sourcedVideoFailure": sourced_video_failure,
     }
 
 __all__ = [name for name in globals() if not name.startswith("__")]

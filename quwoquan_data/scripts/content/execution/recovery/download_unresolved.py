@@ -200,6 +200,48 @@ def _download_artifact_issues(ctx: ExecutionContext) -> dict[str, tuple[DataIssu
     }
 
 
+def absorb_download_shortfall_if_quota_met(
+    ctx: ExecutionContext,
+    availability: Mapping[str, Any] | None,
+    *,
+    stage: DataIssueStage,
+    stage_enum: Any,
+    auto_mode: Any,
+    done_status: Any,
+) -> Any | None:
+    """Absorb only non-article oversample shortfall once its quota is met.
+
+    Article authoring has no runtime replacement path: every frozen candidate
+    must already carry a retained, quality-receipted base source before author
+    work begins.  Treating an article source shortfall as a normal discard
+    would turn a source-ready M100/M1000 contract into an unbounded discovery
+    retry after the execution has been frozen.
+    """
+    from content.execution.spec_contract import approved_quota
+    from content.execution.support import StageResult
+
+    article_quota = int(
+        getattr(getattr(ctx.spec.content, "quotas", None), "entity_articles_per_target", 0)
+        or 0
+    )
+    if article_quota > 0:
+        return None
+    ready_count = int((availability or {}).get("readyTargetCount") or 0)
+    quota = approved_quota(ctx.execution_id)
+    if ready_count < quota:
+        return None
+    ineligible_count = int((availability or {}).get("ineligibleTargetCount") or 0)
+    return StageResult(
+        stage_enum,
+        auto_mode,
+        done_status,
+        (
+            f"{stage.value} 过采候选源缺口已吸收为丢弃池"
+            f"（ready={ready_count}/quota={quota}, ineligible={ineligible_count}）"
+        ),
+    )
+
+
 def _write_download_availability(
     ctx: ExecutionContext,
     unresolved: Mapping[str, Mapping[str, list[str]]],

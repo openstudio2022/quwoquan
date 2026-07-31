@@ -13,6 +13,7 @@ from core.data_issue import (
     DataRecoveryAction,
     data_issue,
 )
+from core.control_types import ContentType
 from content.source.contracts import SourceCandidate
 
 
@@ -95,11 +96,29 @@ def source_fetch_failure_issue(
     )
 
 
-def require_source_candidate_admission(source: Mapping[str, Any]) -> SourceCandidate:
+def require_source_candidate_admission(
+    source: Mapping[str, Any],
+    *,
+    require_commercial_article_binding: bool = False,
+) -> SourceCandidate:
     """Decode a planned candidate and refuse a rejected match before fetch."""
 
     candidate = SourceCandidate.from_mapping(source)
     candidate.require_accepted()
+    if require_commercial_article_binding and candidate.lane is ContentType.ARTICLE:
+        from content.source.research.article_frontier_profile import (
+            resolve_article_source_binding,
+        )
+
+        if str(source.get("articleCommercialAdmission") or "") != "commercial_release":
+            raise ValueError(
+                "commercial article source is not registry-admitted for release"
+            )
+        resolve_article_source_binding(
+            candidate.url,
+            site_id=str(source.get("articleSiteId") or ""),
+            profile_digest=str(source.get("sourceDiscoveryProfileDigest") or ""),
+        )
     return candidate
 
 

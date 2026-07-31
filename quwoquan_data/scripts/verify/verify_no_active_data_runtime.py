@@ -35,7 +35,41 @@ def _process_lines() -> list[str]:
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
+def _process_worktree_root(pid: str) -> Path | None:
+    """Resolve a runtime process's Git worktree without trusting its argv."""
+    try:
+        cwd_probe = subprocess.run(
+            ["lsof", "-a", "-p", pid, "-d", "cwd", "-Fn"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    cwd = next(
+        (
+            line[1:]
+            for line in cwd_probe.stdout.splitlines()
+            if line.startswith("n") and line[1:]
+        ),
+        "",
+    )
+    if not cwd:
+        return None
+    try:
+        root_probe = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return Path(root_probe.stdout.strip()).resolve()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 def active_runtime_processes(process_lines: list[str] | None = None) -> list[str]:
+    supplied_lines = process_lines is not None
     lines = process_lines if process_lines is not None else _process_lines()
     active: list[str] = []
     for line in lines:
@@ -56,6 +90,12 @@ def active_runtime_processes(process_lines: list[str] | None = None) -> list[str
             for index in range(len(argv))
         ):
             continue
+        # Full gates only require the *current* worktree to be quiet. Other
+        # detached campaign worktrees may legitimately generate in parallel.
+        if not supplied_lines:
+            worktree_root = _process_worktree_root(_pid)
+            if worktree_root is not None and worktree_root != REPO_ROOT.resolve():
+                continue
         active.append(line)
     return active
 

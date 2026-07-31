@@ -4,7 +4,6 @@ from core.control_types import ExecutionStage, StageStatus
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, CHECKPOINT, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Sequence, StageResult, _active_spec, _entity_homepages_per_target, _is_homepage_only_execution, data_issue, execution_root, issue_messages, stage_issues, write_json
 
-
 def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
     """Validate the complete frozen media pool before network download starts."""
     from content.source.image_scale_proof import (
@@ -44,7 +43,6 @@ def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
         "download_plan frozen media pool is not release-ready",
         issue_records=(issue,),
     )
-
 def _download_plan_network_outage_result(
     ctx: ExecutionContext,
     auto_report: Mapping[str, Any],
@@ -81,12 +79,15 @@ def _download_plan_network_outage_result(
             attributes={"detail": detail},
         )],
     )
-
 def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
     from content.execution.agent.auto_research import _run_download_auto_research
     from content.execution.recovery.download_gate import _download_retry_entity_ids, _stale_source_plan_entities
-    from content.execution.recovery.download_unresolved import _build_prepare_homepage_unresolved_entities, _download_plan_repair_exhausted_unresolved, _download_plan_unresolved_entities, _format_download_unresolved, _homepage_source_failure_entities, _write_download_availability
+    from content.execution.recovery.download_unresolved import _build_prepare_homepage_unresolved_entities, _download_plan_repair_exhausted_unresolved, _download_plan_unresolved_entities, _format_download_unresolved, _homepage_source_failure_entities, _write_download_availability, absorb_download_shortfall_if_quota_met
     from content.execution.recovery.stage_reset import _source_plan_filled, _source_plan_issue_records
+    from content.execution.controller.checkpoint_binding import source_plan_binding_failure
+
+    if binding_failure := source_plan_binding_failure(ctx):
+        return binding_failure
     ok, missing = _source_plan_filled(ctx)
     current_unresolved = _download_plan_unresolved_entities(ctx)
     build_prepare_unresolved = _build_prepare_homepage_unresolved_entities(ctx)
@@ -255,12 +256,22 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
             for issue in issues:
                 if issue not in lane_rows:
                     lane_rows.append(issue)
-    _write_download_availability(ctx, unresolved)
+    availability = _write_download_availability(ctx, unresolved)
     full_missing = _format_download_unresolved(unresolved, prefix="source_plan")
     if full_missing:
         missing = full_missing
     deterministic = _download_plan_repair_exhausted_unresolved(ctx, unresolved)
     if deterministic:
+        absorbed = absorb_download_shortfall_if_quota_met(
+            ctx,
+            availability,
+            stage=DataIssueStage.DOWNLOAD_PLAN,
+            stage_enum=ExecutionStage.DOWNLOAD_PLAN,
+            auto_mode=CHECKPOINT,
+            done_status=StageStatus.DONE,
+        )
+        if absorbed is not None:
+            return absorbed
         return StageResult(
             ExecutionStage.DOWNLOAD_PLAN,
             CHECKPOINT,
@@ -299,7 +310,6 @@ def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
             recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
         ),
     )
-
 def _checkpoint_content_plan(ctx: ExecutionContext) -> StageResult:
     from content.execution.controller.content_plan import _auto_content_plan
     from content.execution.controller.content_plan_prep import _clean_content_plan_outputs
@@ -371,7 +381,6 @@ def _checkpoint_content_plan(ctx: ExecutionContext) -> StageResult:
         "  完成后: 由当前 task execute 调度器继续执行，不得调用其它工作流入口"
     )
     return StageResult(ExecutionStage.CONTENT_PLAN, CHECKPOINT, StageStatus.WAITING, "等待 Agent 证据驱动篇目规划", hint)
-
 def _strict_source_unavailable_issues(ctx: ExecutionContext, issues: Sequence[DataIssue]) -> bool:
     """True when issues are deterministic source gaps that the stage Agent cannot fix."""
     if not issues:

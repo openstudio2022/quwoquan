@@ -78,6 +78,12 @@ def test_all_family_recipes_lint_clean() -> None:
         assert recipe.load_recipe(ref)["recipeId"] == ref
 
 
+def test_article_recipe_does_not_narrow_selection_to_scenic_subtype() -> None:
+    article = recipe.load_recipe("content/travel/article/article")
+
+    assert article["selection"]["category"] == "地点"
+
+
 def test_execution_facade_invokes_the_canonical_data_cli() -> None:
     assert recipe._CLI_PATH == SCRIPTS_ROOT / "cli.py"
     assert recipe._CLI_PATH.is_file()
