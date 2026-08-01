@@ -319,6 +319,48 @@ def test_retry_without_predecessor_requires_explicit_targets(monkeypatch) -> Non
     ) == ("测试实体乙", "测试实体甲")
 
 
+def test_existing_homepage_retry_does_not_reopen_predecessor_evidence(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    reference_root = tmp_path / "quwoquan_data/reference/travel/entities/test-region-a"
+    reference_root.mkdir(parents=True)
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(recipe, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(recipe.store, "spec_exists", lambda _execution_id: True)
+    monkeypatch.setattr(
+        recipe,
+        "load_frozen_target_set",
+        lambda _execution_id: (_ for _ in ()).throw(FileNotFoundError("discarded")),
+    )
+    monkeypatch.setattr(
+        recipe,
+        "_run_execution",
+        lambda args, **_kwargs: captured.update(vars(args)),
+    )
+
+    recipe.handle_execute(
+        argparse.Namespace(
+            execution_id="20260722--travel-homepage-coverage--test-region-a--pilot-002",
+            retry_of="20260722--travel-homepage-coverage--test-region-a--pilot-001",
+            family="content/travel/homepage/homepage",
+            region_ref="test-region-a",
+            selector="source-ready-priority",
+            count=1,
+            quota=1,
+            target_names=["测试实体甲"],
+            topic=None,
+            source_providers=[],
+            stage="submit-only",
+            recover_stage=None,
+            recovery_reason=None,
+        )
+    )
+
+    assert captured["inherited_targets"] == ()
+
+
 def test_plan_only_checks_workspace_before_creating_a_work_package(monkeypatch) -> None:
     args = argparse.Namespace(
         execution_id=EXECUTION_ID,

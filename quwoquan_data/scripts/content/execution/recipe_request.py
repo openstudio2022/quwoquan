@@ -187,12 +187,18 @@ def handle_execute(
         quota=quota,
         requested_target_names=tuple(getattr(args, "target_names", ()) or ()),
     )
-    inherited_targets = retry_target_rows(
+    execution_exists = owner.store.spec_exists(execution_id)
+    inherited_targets = () if execution_exists else retry_target_rows(
         retry_of,
         target_names=target_names,
         load_frozen_target_set=owner.load_frozen_target_set,
     )
-    if retry_of and identity.content_type.value == "homepage" and not inherited_targets:
+    if (
+        retry_of
+        and identity.content_type.value == "homepage"
+        and not execution_exists
+        and not inherited_targets
+    ):
         raise SystemExit(
             f"[task execute] GATE_BLOCK retryOf={retry_of}: homepage retry requires "
             "the predecessor frozen target-set evidence"
