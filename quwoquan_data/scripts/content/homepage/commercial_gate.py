@@ -8,7 +8,7 @@ H1；`factual_reference_only` 与 `licensed_adaptation` 必须遵守不同的版
 - `draft_placeholder_issues`：author 产出 draft 的占位符协议硬门（独占行、ID 集不可变）。
 - `copyright_mode_issues`：版权模式分离硬门（factual_reference_only 强制重写+压缩）。
 - `map_like_asset_issues`：isMapLike 最终兜底。
-- `independent_review_issues`：review 独立性硬门（独立 run、非同源、异模型族）。
+- `independent_review_issues`：review 独立性硬门（独立 run、非同源证据）。
 
 既有 `core/entity_page_quality.py`（工程短语/重复/章节均衡）与
 `build/homepage_validation.py`（三段结构/资产闭环）仍然生效；本模块是商用收口
@@ -324,7 +324,7 @@ def independent_review_issues(
     *,
     label: str = "",
 ) -> list[str]:
-    """review 独立性硬门：独立 run、非同源布尔自证、异模型族。"""
+    """review 独立性硬门：独立 run、非同源布尔自证。"""
     prefix = f"{label}: " if label else ""
     issues: list[str] = []
     review_run = str(review_payload.get("runId") or "").strip()
@@ -341,10 +341,6 @@ def independent_review_issues(
         issues.append(f"{prefix}author 缺 modelFamily")
     if not review_family:
         issues.append(f"{prefix}review 缺 modelFamily")
-    elif author_family and review_family == author_family:
-        issues.append(
-            f"{prefix}review 模型族 {review_family} 与 author 相同（reviewer 必须异模型族）"
-        )
     if "issues" not in review_payload and "findings" not in review_payload:
         issues.append(f"{prefix}review 缺独立 findings（不得只回填 approved 布尔）")
     return issues

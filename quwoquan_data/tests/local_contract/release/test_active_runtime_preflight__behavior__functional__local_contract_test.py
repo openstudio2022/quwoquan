@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from verify import verify_no_active_data_runtime
-from verify.verify_no_active_data_runtime import active_runtime_processes
+from verify.verify_no_active_data_runtime import active_runtime_processes, retired_launch_agents
 
 
 def test_active_runtime_preflight_blocks_long_running_recipe_process():
@@ -67,3 +67,37 @@ def test_active_runtime_preflight_ignores_other_git_worktree(monkeypatch, tmp_pa
     )
 
     assert verify_no_active_data_runtime.active_runtime_processes() == []
+
+
+def test_active_runtime_preflight_blocks_retired_supervisor_and_fleet() -> None:
+    lines = [
+        (
+            "12345 python3 /repo/quwoquan_data/.qwq_output/data/video/"
+            "run_video_m100_supervisor.py"
+        ),
+        (
+            "12346 /opt/homebrew/bin/mongod --dbpath "
+            "/repo/quwoquan_data/.qwq_output/data/video/fleet-native/mongo"
+        ),
+        "12347 /bin/zsh -c 'run_video_m100_supervisor.py is only diagnostic text'",
+    ]
+
+    active = active_runtime_processes(lines)
+
+    assert active == lines[:2]
+
+
+def test_active_runtime_preflight_blocks_launch_agent_that_can_revive_retired_root(
+    tmp_path,
+) -> None:
+    launch_agents = tmp_path / "Library/LaunchAgents"
+    launch_agents.mkdir(parents=True)
+    retired = launch_agents / "custom-data-guard.plist"
+    retired.write_text(
+        "<string>/repo/quwoquan_data/.qwq_output/data/supervisor.py</string>",
+        encoding="utf-8",
+    )
+    unrelated = launch_agents / "unrelated.plist"
+    unrelated.write_text("<string>/tmp/healthy.py</string>", encoding="utf-8")
+
+    assert retired_launch_agents(tmp_path) == [str(retired)]

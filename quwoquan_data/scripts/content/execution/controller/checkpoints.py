@@ -3,6 +3,11 @@ from __future__ import annotations
 from core.control_types import ExecutionStage, StageStatus
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, CHECKPOINT, DataIssue, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, Sequence, StageResult, _active_spec, _entity_homepages_per_target, _is_homepage_only_execution, data_issue, execution_root, issue_messages, stage_issues, write_json
+from content.execution.controller.checkpoint_helpers import (
+    checkpoint_post_author as _checkpoint_post_author,
+    download_plan_network_outage_result as _download_plan_network_outage_result,
+    strict_source_unavailable_issues as _strict_source_unavailable_issues,
+)
 
 def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
     """Validate the complete frozen media pool before network download starts."""
@@ -42,42 +47,6 @@ def _download_plan_scale_readiness(ctx: ExecutionContext) -> StageResult | None:
         StageStatus.FAILED,
         "download_plan frozen media pool is not release-ready",
         issue_records=(issue,),
-    )
-def _download_plan_network_outage_result(
-    ctx: ExecutionContext,
-    auto_report: Mapping[str, Any],
-) -> StageResult | None:
-    """auto research 判定为网络出口故障且零有效进展 → 网络类可自愈失败。
-    failedObjects 文案携带 network_unreachable / retry_source_discovery 标记，
-    与 recipe._NETWORK_FAILURE_MARKERS 同源：execute resume 循环据此分类为
-    网络类 manual_required，等待出口自愈后自动 resume（实体无 plan payload，
-    resume 会重新检索，不烧 Agent token）。
-    """
-    outage = auto_report.get("networkOutage") if isinstance(auto_report, Mapping) else None
-    if not isinstance(outage, Mapping):
-        return None
-    updated = [item for item in (auto_report.get("updated") or []) if item]
-    if updated:
-        # 部分成功：网络退化但仍有进展，交由常规缺口修复通道处理。
-        return None
-    open_hosts = [str(host) for host in (outage.get("openHosts") or [])]
-    no_progress = bool(outage.get("noProgress"))
-    detail = (
-        f"openHosts={','.join(open_hosts) or 'none'}; "
-        f"noProgress={str(no_progress).lower()}"
-    )
-    return StageResult(
-        ExecutionStage.DOWNLOAD_PLAN,
-        CHECKPOINT,
-        StageStatus.FAILED,
-        "download_plan network outage: network_unreachable with zero research progress",
-        issue_records=[data_issue(
-            DataIssueCode.NETWORK_UNREACHABLE,
-            stage=DataIssueStage.DOWNLOAD_PLAN,
-            recovery=DataRecoveryAction.RETRY_SOURCE_DISCOVERY,
-            message="auto research network outage with zero progress",
-            attributes={"detail": detail},
-        )],
     )
 def _checkpoint_download_plan(ctx: ExecutionContext) -> StageResult:
     from content.execution.agent.auto_research import _run_download_auto_research
@@ -432,17 +401,6 @@ def _checkpoint_content_plan(ctx: ExecutionContext) -> StageResult:
         "  完成后: 由当前 task execute 调度器继续执行，不得调用其它工作流入口"
     )
     return StageResult(ExecutionStage.CONTENT_PLAN, CHECKPOINT, StageStatus.WAITING, "等待 Agent 证据驱动篇目规划", hint)
-def _strict_source_unavailable_issues(ctx: ExecutionContext, issues: Sequence[DataIssue]) -> bool:
-    """True when issues are deterministic source gaps that the stage Agent cannot fix."""
-    if not issues:
-        return False
-    deterministic_codes = {
-        DataIssueCode.SOURCE_MISSING,
-        DataIssueCode.SOURCE_RETAINED_SHORTFALL,
-        DataIssueCode.MEDIA_PUBLISHABLE_SHORTFALL,
-    }
-    return bool(issues) and all(issue.code in deterministic_codes for issue in issues)
-
 def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
     from content.execution.recovery.download_unresolved import _format_download_unresolved, _homepage_source_failure_entities
     from content.execution.controller.homepage_authoring import _homepages_done
@@ -539,29 +497,3 @@ def _checkpoint_build_homepage(ctx: ExecutionContext) -> StageResult:
         hint,
         issue_records=stage_issues(ExecutionStage.BUILD_HOMEPAGE, combined_issues),
     )
-
-def _checkpoint_post_author(ctx: ExecutionContext) -> StageResult:
-    from content.execution.controller.homepage_authoring import _drafts_authored
-    if _is_homepage_only_execution(ctx):
-        return StageResult(
-            ExecutionStage.POST_AUTHOR,
-            CHECKPOINT,
-            StageStatus.DONE,
-            "homepage-only 批次主页正文已在 build_homepage 由 Agent 创作，post_author 确定性跳过",
-        )
-    ok, pending = _drafts_authored(ctx)
-    if ok:
-        return StageResult(ExecutionStage.POST_AUTHOR, CHECKPOINT, StageStatus.DONE, "文章/主页正文已由 Agent 创作，图片作品采用结构化证据包")
-    from content.execution.reliabletask_jobs import prepare_reliable_author_jobs
-
-    prepare_reliable_author_jobs(ctx, "post_author")
-    hint = (
-        f"[CHECKPOINT post_author] Agent 逐篇创作文章/主页正文(generator=agent)：\n"
-        f"  草稿目录: posts/<type>/<angle>/<title>/<seq>/4.draft/\n"
-        f"  读 <ref>/prompt.md + <ref>/writing_pack.json，文章/主页写回 <ref>/draft.article.md\n"
-        f"  图片作品不得生成 draft.article.md，只能使用 sourceCollection/assets/caption 结构化证据包\n"
-        f"  draft_meta 记 model/styleFamily/openingStrategy/extractedEntities\n"
-        f"  待创作: {pending}\n"
-        "  完成后: 由当前 task execute 调度器继续执行，不得调用其它工作流入口"
-    )
-    return StageResult(ExecutionStage.POST_AUTHOR, CHECKPOINT, StageStatus.WAITING, "等待 Agent 创作正文", hint)

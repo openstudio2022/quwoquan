@@ -227,7 +227,7 @@ def test_map_like_asset_final_backstop():
 
 
 def test_independent_review_hard_gate():
-    """review 必须独立 run + 异模型族 + 自带 findings（禁同源 issues 自证）。"""
+    """review 必须独立 run + 自带 findings（禁同源 issues 自证）。"""
     author = {"runId": "run_author_1", "modelFamily": "composer"}
     same_run = {"runId": "run_author_1", "modelFamily": "gpt", "findings": []}
     issues = independent_review_issues(same_run, author)
@@ -235,7 +235,7 @@ def test_independent_review_hard_gate():
 
     same_family = {"runId": "run_rev_2", "modelFamily": "composer", "findings": []}
     issues2 = independent_review_issues(same_family, author)
-    assert any("异模型族" in i for i in issues2)
+    assert issues2 == []
 
     bool_only = {"runId": "run_rev_3", "modelFamily": "gpt"}
     issues3 = independent_review_issues(bool_only, author)

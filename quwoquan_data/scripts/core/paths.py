@@ -11,9 +11,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 
 # 代码仓库 data 根：schema 是受版本控制、不可手改的契约真相源，必须跟代码走，
@@ -278,7 +280,17 @@ def execution_lock_path(execution_id: str) -> Path:
 
 
 def publish_lock_path() -> Path:
-    return PUBLISH_ROOT / ".promote.lock"
+    """Return one process lock shared by every clone of the same publish root.
+
+    The lock cannot live in an execution output root because detached campaign
+    lanes use different output roots. It also cannot live inside canonical
+    ``publish/`` because that tree is audited and version controlled. A stable
+    digest of the resolved publish root gives all clones the same external
+    fence without adding a second publish artifact.
+    """
+
+    digest = hashlib.sha256(str(PUBLISH_ROOT.resolve()).encode("utf-8")).hexdigest()
+    return Path(tempfile.gettempdir()) / f"qwq-canonical-publish-{digest[:20]}.lock"
 
 
 # ─── publish 单一主线（已去版本化）───────────────────────────────

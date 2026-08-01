@@ -28,12 +28,6 @@ _PROMOTION_SCHEMA_BY_CARRIER = {
 _M100_QUOTA = 100
 _M100_SOURCE_READY_MINIMUM = 120
 _M100_CANDIDATE_MINIMUM = 180
-_GROK_FAST_PARAMETERS = (
-    {"id": "effort", "value": "high"},
-    {"id": "fast", "value": "true"},
-)
-
-
 def _promotion_schema(carrier: str) -> str:
     try:
         return _PROMOTION_SCHEMA_BY_CARRIER[carrier]
@@ -254,14 +248,12 @@ def _model_readiness(
         raise ValueError(
             f"{carrier} M100 model readiness does not match the frozen model binding"
         )
-    if (
-        binding.get("provider") != "cursor_sdk"
-        or binding.get("authorModel") != "grok-4.5"
-        or binding.get("authorModelFamily") != "grok"
-        or binding.get("authorModelParameters") != list(_GROK_FAST_PARAMETERS)
-    ):
+    # The frozen source digest owns the active recipe.  Promotion therefore
+    # validates readiness against that exact manifest binding instead of
+    # hard-coding a concrete Cursor model that can be retired or exhausted.
+    if binding.get("provider") != "cursor_sdk":
         raise ValueError(
-            f"{carrier} M100 author is not the verified Grok Fast binding"
+            f"{carrier} M100 model binding is not owned by Cursor SDK"
         )
     return payload
 

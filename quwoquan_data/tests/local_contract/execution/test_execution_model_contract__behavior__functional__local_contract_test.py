@@ -44,9 +44,22 @@ def test_execution_model_contract__requires_explicit_model_families__local_contr
         execution_model_pair(recipe)
 
 
-def test_execution_model_contract__rejects_same_family_reviewer__local_contract() -> None:
-    with pytest.raises(ValueError, match="must differ"):
-        execution_model_pair(_recipe(reviewer_family="grok"))
+def test_execution_model_contract__allows_provider_routed_same_family__local_contract() -> None:
+    recipe = {
+        "execution": {
+            "model": "auto",
+            "modelFamily": "auto",
+            "modelParameters": [],
+            "reviewModel": "auto",
+            "reviewModelFamily": "auto",
+            "reviewModelParameters": [],
+        }
+    }
+
+    pair = execution_model_pair(recipe)
+
+    assert pair.author.model_id == pair.reviewer.model_id == "auto"
+    assert pair.author.family.value == pair.reviewer.family.value == "auto"
 
 
 def test_execution_model_contract__keeps_model_and_family_separate__local_contract() -> None:

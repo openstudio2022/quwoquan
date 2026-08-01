@@ -86,16 +86,14 @@ def test_article_recipe_does_not_narrow_selection_to_scenic_subtype() -> None:
     assert article["selection"]["category"] == "地点"
 
 
-def test_travel_video_recipe_uses_the_verified_grok_fast_binding() -> None:
+def test_travel_video_recipe_uses_the_verified_auto_binding() -> None:
     video = recipe.load_recipe("content/travel/video/video")
     author = execution_model_pair(video).author
     runtime = load_runtime_policy(str(video["runtimeProfile"]))
-    expected_parameters = [
-        {"id": "effort", "value": "high"},
-        {"id": "fast", "value": "true"},
-    ]
+    expected_parameters: list[dict[str, str]] = []
 
-    assert author.model_id == "grok-4.5"
+    assert author.model_id == "auto"
+    assert author.family.value == "auto"
     assert author.selection.parameters_document() == expected_parameters
     assert runtime.cursor_model_selection.to_sdk_document() == {
         "id": author.model_id,
@@ -103,16 +101,14 @@ def test_travel_video_recipe_uses_the_verified_grok_fast_binding() -> None:
     }
 
 
-def test_travel_image_recipe_uses_the_verified_grok_fast_binding() -> None:
+def test_travel_image_recipe_uses_the_verified_auto_binding() -> None:
     image = recipe.load_recipe("content/travel/image/image")
     author = execution_model_pair(image).author
     runtime = load_runtime_policy(str(image["runtimeProfile"]))
-    expected_parameters = [
-        {"id": "effort", "value": "high"},
-        {"id": "fast", "value": "true"},
-    ]
+    expected_parameters: list[dict[str, str]] = []
 
-    assert author.model_id == "grok-4.5"
+    assert author.model_id == "auto"
+    assert author.family.value == "auto"
     assert author.selection.parameters_document() == expected_parameters
     assert runtime.cursor_model_selection.to_sdk_document() == {
         "id": author.model_id,

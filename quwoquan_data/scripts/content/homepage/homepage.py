@@ -90,6 +90,7 @@ from content.homepage.homepage_refs import (
     safe_ref as _safe_ref,
     same_source_unit as _same_source_unit,
 )
+from content.homepage.homepage_tags import homepage_tag_refs as _homepage_tag_refs
 from content.homepage.homepage_assets import (
     copy_homepage_asset,
     select_homepage_assets,
@@ -581,33 +582,3 @@ def _homepage_gate_body(page_text: str) -> str:
     body = re.sub(r"\{asset://[^}]*\}", "", body)
     body = re.sub(r"^#{1,6}\s*", "", body, flags=re.MULTILINE)
     return body.strip()
-
-
-
-
-
-
-
-def _homepage_tag_refs(domain: str, etype: str, name: str, payload: dict[str, Any]) -> list[str]:
-    """Project only source-independent homepage tags.
-
-    A coverage leaf's ``typeTagRefs`` is a discovery classification, not
-    evidence that every fine-grained fact is stated by the selected homepage
-    source.  Materializing it verbatim can turn a coverage hint such as ``5A``
-    into an unsupported public claim.  The canonical object therefore keeps
-    the declared entity kind, administrative ownership, and neutral delivery
-    tags.  Evidence-backed fine-grained tags must be produced by the source
-    qualification lane with their own cited evidence; this homepage projection
-    never promotes a static coverage hint into a fact.
-    """
-    from core.content_tags import resolved_content_tag_refs
-    provided: list[str] = [f"Entity/{domain}/{etype}"]
-    if isinstance(payload, dict):
-        geo_tag_ref = str(payload.get("geoTagRef") or "").strip()
-        if geo_tag_ref:
-            provided.append(geo_tag_ref)
-        provided.extend(
-            str(item).strip() for item in (payload.get("geoTagRefs") or []) if str(item).strip()
-        )
-    brief: dict[str, Any] = {"tagRefs": list(dict.fromkeys(provided))} if provided else {}
-    return resolved_content_tag_refs(brief, "article")

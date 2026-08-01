@@ -1,8 +1,9 @@
 """Typed author/reviewer model contract for one content execution.
 
 The recipe, rather than a model-id prefix heuristic, declares both model IDs
-and their provider families.  This keeps independent-review eligibility a
-fail-closed execution input that can be checked before any source work starts.
+and provider families. Review independence is proven by the object-level
+Cursor run identity, so provider-routed ``auto`` may serve both roles without
+pretending that a concrete backing family was frozen in advance.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from core.runtime_policy import active_runtime_policy
 
 
 class ModelFamily(StrEnum):
+    AUTO = "auto"
     CLAUDE = "claude"
     COMPOSER = "composer"
     GEMINI = "gemini"
@@ -89,12 +91,6 @@ class ExecutionModel:
 class ExecutionModelPair:
     author: ExecutionModel
     reviewer: ExecutionModel
-
-    def __post_init__(self) -> None:
-        if self.author.family == self.reviewer.family:
-            raise ValueError(
-                "independent reviewer model family must differ from author model family"
-            )
 
 
 def execution_model_pair(recipe: Mapping[str, Any]) -> ExecutionModelPair:

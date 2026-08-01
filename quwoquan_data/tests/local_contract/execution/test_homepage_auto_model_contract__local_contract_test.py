@@ -1,4 +1,4 @@
-"""Homepage author model must exactly match the active Grok Fast policy."""
+"""Homepage author and reviewer use the active Cursor auto policy."""
 from __future__ import annotations
 
 import sys
@@ -20,20 +20,17 @@ from content.execution.model_contract import execution_model_pair  # noqa: E402
 from core.runtime_policy import load_runtime_policy  # noqa: E402
 
 
-def test_homepage_author_uses_the_runtime_grok_fast_selection() -> None:
+def test_homepage_uses_the_runtime_auto_selection() -> None:
     homepage = recipe.load_recipe("content/travel/homepage/homepage")
     models = execution_model_pair(homepage)
     runtime = load_runtime_policy(str(homepage["runtimeProfile"]))
 
-    assert models.author.model_id == "grok-4.5"
-    assert models.author.family.value == "grok"
+    assert models.author.model_id == "auto"
+    assert models.author.family.value == "auto"
     assert models.author.selection == runtime.cursor_model_selection
     assert models.author.selection.to_sdk_document() == {
-        "id": "grok-4.5",
-        "params": [
-            {"id": "effort", "value": "high"},
-            {"id": "fast", "value": "true"},
-        ],
+        "id": "auto",
+        "params": [],
     }
-    assert models.reviewer.model_id == "composer-2.5"
-    assert models.reviewer.family != models.author.family
+    assert models.reviewer.model_id == "auto"
+    assert models.reviewer.family.value == "auto"

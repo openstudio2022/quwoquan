@@ -237,13 +237,8 @@ def _review_homepage_target(
 
 
 def independent_reviewer_precondition_issues(execution_id: str) -> list[str]:
-    """审阅装配前置条件：属批次级配置事实，不可被过采候选池吸收。"""
-    model_pair = execution_model_pair_for_execution(execution_id)
-    if (
-        model_pair.reviewer.model_id == model_pair.author.model_id
-        or model_pair.reviewer.family is model_pair.author.family
-    ):
-        return ["independent reviewer model family must differ from author model family"]
+    """Validate the frozen pair; per-object run IDs prove review independence."""
+    execution_model_pair_for_execution(execution_id)
     return []
 
 
